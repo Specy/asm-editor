@@ -38,7 +38,7 @@ it('gives a frame the tooltip its name shortens, and none to one it does not', (
     })
     flushSync()
     dispose = () => {
-        unmount(app)
+        void unmount(app)
         target.remove()
     }
     // the innermost frame first

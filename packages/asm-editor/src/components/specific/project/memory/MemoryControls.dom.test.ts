@@ -74,7 +74,7 @@ function render(
     })
     flushSync()
     dispose = () => {
-        unmount(app)
+        void unmount(app)
         target.remove()
     }
     const input = target.querySelector<HTMLInputElement>('[aria-label="Address or label"]')!

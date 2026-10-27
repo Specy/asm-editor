@@ -32,7 +32,7 @@ function render<Props extends Record<string, unknown>>(
     })
     flushSync()
     dispose = () => {
-        unmount(mounted)
+        void unmount(mounted)
         target.remove()
     }
     const notice = target.querySelector<HTMLElement>('.read-only-notice[role="status"]')!

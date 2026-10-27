@@ -112,7 +112,7 @@ function render(
         values: () => [...target.querySelectorAll<HTMLElement>('.register-hex')],
         menu: () => document.querySelector<HTMLElement>('[role="menu"]'),
         close: () => {
-            unmount(app)
+            void unmount(app)
             target.remove()
         }
     }

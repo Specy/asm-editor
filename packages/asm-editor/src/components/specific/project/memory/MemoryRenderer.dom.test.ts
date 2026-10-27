@@ -123,7 +123,7 @@ function render(
             flushSync()
         },
         close: () => {
-            unmount(app)
+            void unmount(app)
             target.remove()
         }
     }

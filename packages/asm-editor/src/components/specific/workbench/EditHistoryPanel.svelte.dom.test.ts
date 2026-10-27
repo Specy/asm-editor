@@ -57,7 +57,7 @@ function historyPanel() {
     session.selectFile('blob.bin')
     flushSync()
     disposers.push(() => {
-        unmount(app)
+        void unmount(app)
         fixture.dispose()
     })
     const rows = () => [...target.querySelectorAll<HTMLButtonElement>('button.step')]

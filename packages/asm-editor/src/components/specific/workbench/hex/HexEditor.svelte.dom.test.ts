@@ -124,7 +124,7 @@ function setup(
             target.querySelector<HTMLElement>(`[data-column="${column}"][data-offset="${offset}"]`),
         status: () => target.querySelector('.hex-status')!.textContent!.replace(/\s+/g, ' '),
         bytes: () => [...fs.readBytes('blob')],
-        unmount: () => unmount(editor)
+        unmount: () => void unmount(editor)
     }
 }
 
@@ -682,7 +682,7 @@ describe('typing before a Build', () => {
         }
         let mounted = true
         const close = () => {
-            if (mounted) unmount(editor)
+            if (mounted) void unmount(editor)
             mounted = false
         }
         return {

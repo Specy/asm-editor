@@ -27,7 +27,9 @@
             //focus on that button.
             //After a tick, so the element of the prompt now being asked is the one focused. A
             //message has no input, so its Ok takes the keyboard and Enter dismisses it
-            tick().then(() => (Prompt.type === PromptType.Alert ? alertOkEl : inputEl)?.focus())
+            void tick().then(() =>
+                (Prompt.type === PromptType.Alert ? alertOkEl : inputEl)?.focus()
+            )
         }
     })
 </script>

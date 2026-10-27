@@ -126,7 +126,7 @@
     }
 
     onMount(() => {
-        loadProject()
+        void loadProject()
         //started early; an editor that asks for Monaco loads it again if this fails
         Monaco.load().catch(() => undefined)
         return () => {
@@ -164,7 +164,7 @@
             }
             //in place of the link in the history: the page is not loaded again for the link's
             //address, so Back to it would go on showing the saved Project under that address
-            goto(resolve('/projects/[project]', { project: project.id }), { replace: true })
+            void goto(resolve('/projects/[project]', { project: project.id }), { replace: true })
         } else {
             const result = await ProjectStore.save(project, journals)
             if (result.local === 'failed') {
@@ -291,7 +291,7 @@
                 if (!(await saveChanges(false))) return
                 toast.logPill('Project saved')
             }
-            goto(page)
+            return goto(page)
         } catch (e) {
             console.error(e)
             toast.error('Error updating project')

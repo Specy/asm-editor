@@ -94,7 +94,7 @@ function setup(path: string, bytes: Uint8Array, kind: PreviewKind) {
         }
     })
     flushSync()
-    return { target, props, onUnavailable, dispose: () => unmount(preview) }
+    return { target, props, onUnavailable, dispose: () => void unmount(preview) }
 }
 
 describe('the Preview', () => {
@@ -223,7 +223,7 @@ describe('the Preview', () => {
         expect(made).toHaveLength(1)
         expect(revoked).toEqual([])
         expect(target.querySelector('iframe')!.getAttribute('src')).toBe(made[0].url)
-        unmount(preview)
+        void unmount(preview)
     })
 
     it('asks for the Hex editor where the browser cannot show the File, for its current bytes', () => {

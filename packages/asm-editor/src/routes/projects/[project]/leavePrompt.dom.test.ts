@@ -121,7 +121,7 @@ it('lets a saved Project go without asking, and asks while changes wait for Save
         project.button('Save').click()
         await vi.waitFor(() => expect(project.asks()).toBe(false))
     } finally {
-        project.dispose()
+        await project.dispose()
     }
 })
 
@@ -131,7 +131,7 @@ it('asks before leaving a shared Project, which is nobody’s until saved', asyn
     try {
         expect(project.asks()).toBe(true)
     } finally {
-        project.dispose()
+        await project.dispose()
     }
 })
 
@@ -157,7 +157,7 @@ it('asks before going to another page of the site while changes wait for Save', 
         expect(project.navigates('link', true)).toBe(true)
         expect(confirm).not.toHaveBeenCalled()
     } finally {
-        project.dispose()
+        await project.dispose()
     }
 })
 
@@ -185,7 +185,7 @@ it('keeps changes the browser did not store unsaved, and says no save happened',
         expect(toast.logPill).not.toHaveBeenCalledWith('Project saved')
         expect(project.asks()).toBe(true)
     } finally {
-        project.dispose()
+        await project.dispose()
     }
 })
 
@@ -205,7 +205,7 @@ it('stays on the page when the save its Back asked for was not stored', async ()
         expect(goto).not.toHaveBeenCalled()
         expect(project.asks()).toBe(true)
     } finally {
-        project.dispose()
+        await project.dispose()
     }
 })
 
@@ -242,7 +242,7 @@ it('puts a saved shared Project in place of its link in the history', async () =
         const saved = ProjectStore.projects.find((project) => project.name === 'kept')!
         expect(goto).toHaveBeenCalledWith(`/projects/${saved.id}`, { replace: true })
     } finally {
-        project.dispose()
+        await project.dispose()
     }
 })
 
@@ -267,7 +267,7 @@ it('keeps a shared Project unsaved when the browser does not store it', async ()
         vi.spyOn(window, 'confirm').mockReturnValue(false)
         expect(project.navigates('popstate')).toBe(false)
     } finally {
-        project.dispose()
+        await project.dispose()
     }
 })
 
@@ -284,6 +284,6 @@ it('offers to save again, on Back, a Project deleted in another tab', async () =
         )
         expect(ProjectStore.projects.map((saved) => saved.name)).toEqual(['deleted'])
     } finally {
-        project.dispose()
+        await project.dispose()
     }
 })

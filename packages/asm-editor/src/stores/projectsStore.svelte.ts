@@ -27,7 +27,7 @@ function createProjectStore() {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Promise serialization is internal and has no tracked consumer.
     const saveTails = new Map<string, Promise<SaveResult>>()
     if (browser) {
-        load()
+        void load()
     }
 
     /** Reads the stored projects again; a read that fails keeps the list and sets `loadFailed`. */

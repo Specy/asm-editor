@@ -9,7 +9,7 @@ import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 let app: ReturnType<typeof mount> | null = null
 
 afterEach(() => {
-    if (app) unmount(app)
+    if (app) void unmount(app)
     app = null
     document.body.innerHTML = ''
 })

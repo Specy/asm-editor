@@ -53,7 +53,7 @@
             language,
             code
         })
-        goto(resolve(`projects/share?project=${createSharePayload(project)}`))
+        void goto(resolve(`projects/share?project=${createSharePayload(project)}`))
     }
 </script>
 

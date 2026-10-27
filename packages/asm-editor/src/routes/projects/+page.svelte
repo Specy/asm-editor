@@ -100,7 +100,7 @@
             }
         }
 
-        run()
+        void run()
         return () => {
             if ('launchQueue' in window) {
                 //@ts-expect-error launchQueue is not in the types

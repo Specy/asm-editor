@@ -75,7 +75,7 @@ it('shows the exam link to copy by hand when the browser will not copy it', asyn
     const exam = new URL(builder.shown()!).searchParams.get('exam')!
     expect(decodeExamPayload(exam)?.title).toBe('Untitled exam')
     expect(toast.error).toHaveBeenCalledWith("Couldn't copy the exam link to the clipboard.")
-    builder.dispose()
+    await builder.dispose()
 })
 
 it('copies the exam link and shows nothing more when the browser lets it', async () => {
@@ -85,5 +85,5 @@ it('copies the exam link and shows nothing more when the browser lets it', async
         expect(toast.logPill).toHaveBeenCalledWith('Exam link copied to clipboard')
     )
     expect(builder.shown()).toBeUndefined()
-    builder.dispose()
+    await builder.dispose()
 })

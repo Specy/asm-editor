@@ -210,10 +210,10 @@
         })
     }
 
-    async function moveTo(index: number) {
+    function moveTo(index: number) {
         activeIndex = index
-        await tick()
-        scrollActiveIntoView()
+        //once the list has drawn it as the active option
+        void tick().then(scrollActiveIntoView)
     }
 
     /** Type ahead: letters typed close together jump to the option that starts with them. */
@@ -241,12 +241,12 @@
             case 'ArrowDown':
                 event.preventDefault()
                 if (open) moveTo(step(activeIndex, 1))
-                else openList()
+                else void openList()
                 return
             case 'ArrowUp':
                 event.preventDefault()
                 if (open) moveTo(step(activeIndex, -1))
-                else openList()
+                else void openList()
                 return
             case 'Home':
                 if (!open) return
@@ -262,7 +262,7 @@
             case ' ':
                 event.preventDefault()
                 if (open) commit(activeIndex)
-                else openList()
+                else void openList()
                 return
             case 'Escape':
                 if (!open) return

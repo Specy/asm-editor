@@ -50,7 +50,7 @@ function render(writes: PokeWrite[]) {
             ),
         text: () => target.textContent ?? '',
         close: () => {
-            unmount(app)
+            void unmount(app)
             target.remove()
         }
     }
@@ -90,7 +90,7 @@ function renderInstruction(mutations: MutationOperation[], pc = 0x1000) {
             flushSync()
         },
         close: () => {
-            unmount(app)
+            void unmount(app)
             target.remove()
         }
     }
@@ -251,7 +251,7 @@ describe('the flags of an instruction row', () => {
             flag.textContent?.trim()
         )
         expect(lit).toEqual(['CF', 'PF', 'ZF'])
-        unmount(app)
+        void unmount(app)
         target.remove()
     })
 })

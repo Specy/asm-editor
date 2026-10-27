@@ -984,8 +984,8 @@ describe("a C++ Executable's Pseudocode", () => {
             props: { group: pane, onRetry: () => {} }
         })
         disposers.push(() => {
-            unmount(status)
-            unmount(notice)
+            void unmount(status)
+            void unmount(notice)
         })
         flushSync()
         return host

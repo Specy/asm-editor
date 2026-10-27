@@ -12,7 +12,7 @@ import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 let app: ReturnType<typeof mount> | null = null
 
 afterEach(() => {
-    if (app) unmount(app)
+    if (app) void unmount(app)
     app = null
     document.body.innerHTML = ''
     vi.restoreAllMocks()
@@ -138,7 +138,7 @@ describe('a console on the page', () => {
         props.visible = true
         flushSync()
         expect(terminal.consoleAttached).toBe(true)
-        unmount(app!)
+        void unmount(app!)
         app = null
         expect(terminal.consoleAttached).toBe(false)
     })
@@ -191,7 +191,7 @@ describe('a host revealing a pending read', () => {
         const read = terminal.readAsync('q', execution).catch(() => {})
         flushSync()
         if (change === 'unmounted console') {
-            unmount(app!)
+            void unmount(app!)
             app = null
         }
         terminal.cancelPendingInput()

@@ -32,7 +32,7 @@ function editorLink() {
             'Open the editor'
     )!
     const found = { href: link.getAttribute('href'), text: link.textContent?.trim() }
-    unmount(app)
+    void unmount(app)
     return found
 }
 
