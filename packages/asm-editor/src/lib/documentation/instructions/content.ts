@@ -33,7 +33,9 @@ export function instructionDescription(
 
 /**
  * Raw assembly files are the authored programs; a language's registry names their execution
- * Target and presentation. This helper neither loads Cores nor infers instruction semantics.
+ * Target and presentation. Markdown files beside them, `./instructions/<name>.md`, are authored
+ * descriptions, keyed like the programs by their file name. This helper neither loads Cores nor
+ * infers instruction semantics.
  */
 export function instructionContentFromFiles(
     files: Record<string, string>,
@@ -52,7 +54,9 @@ export function instructionContentFromFiles(
     for (const name of Object.keys(metadata)) {
         if (!content[name]) throw new Error(`Instruction example ${name} has no source`)
     }
-    for (const [name, description] of Object.entries(descriptions)) {
+    for (const [path, description] of Object.entries(descriptions)) {
+        const name = path.slice(path.lastIndexOf('/') + 1).replace(/\.md$/, '')
+        if (!description.trim()) throw new Error(`Instruction description ${name} is empty`)
         content[name] = { ...content[name], description }
     }
     return content

@@ -279,6 +279,21 @@ describe('RISC-V instruction documents', () => {
         expect(rows(riscv('csrrw'))).toEqual(['csrrw t0, csr, t1'])
         expect(rows(riscv('slli'))).toEqual(['slli t1, t2, imm6'])
     })
+
+    it("links the manual's rule for the instruction, and a pseudo-instruction's for what it becomes", () => {
+        expect(riscv('sra').reference).toEqual({
+            label: 'RISC-V manual: sra',
+            href: 'https://docs.riscv.org/reference/isa/v20260120/unpriv/rv32.html#norm:sll_srl_sra_op'
+        })
+        expect(riscv('mv').reference?.label).toBe('RISC-V manual: add')
+        expect(riscv('fcvt.w.s').reference?.href).toMatch(
+            /f-st-ext\.html#norm:fcvt-l-s_fcvt-w-s_op$/
+        )
+        expect(riscv('ld').reference?.href).toMatch(/rv64\.html#norm:ld_op_rv64i$/)
+        // the N extension's return, which the manual dropped
+        expect(riscv('uret').reference).toBeUndefined()
+        expect(mips('add').reference).toBeUndefined()
+    })
 })
 
 describe('the names', () => {

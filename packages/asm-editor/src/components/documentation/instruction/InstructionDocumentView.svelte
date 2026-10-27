@@ -28,6 +28,7 @@
      * its row, puts each fact line under its syntax and cuts a long section by count (decision 9).
      */
     import { tick, type Snippet } from 'svelte'
+    import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import type { InstructionLesson } from '#lib/content/lectureInstructions.ts'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import InstructionTagBadge from '#cmp/documentation/entries/InstructionTagBadge.svelte'
@@ -189,6 +190,21 @@
                         source={`Also written as: ${aliases.map((alias) => `\`${alias}\``).join(', ')}`}
                     />
                 </p>
+            {/if}
+            {#if document.reference && !disableLinks}
+                <!-- eslint-disable svelte/no-navigation-without-resolve -- a page on another site, which resolve() has no part in -->
+                <p class="header-facts">
+                    <a
+                        class="reference"
+                        href={document.reference.href}
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        {document.reference.label}
+                        <span class="external" aria-hidden="true"><FaExternalLinkAlt /></span>
+                    </a>
+                </p>
+                <!-- eslint-enable svelte/no-navigation-without-resolve -->
             {/if}
             {#if lessons.length > 0 && language}
                 <InstructionLessons {lessons} {language} />
@@ -365,6 +381,23 @@
         margin: 0;
         font-size: 0.9rem;
         color: var(--background-text-muted);
+    }
+    /* a page on another site: the link colour and underline, and the icon for leaving */
+    .reference {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: var(--accent);
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
+    }
+    .reference:hover {
+        text-decoration-thickness: 2px;
+    }
+    .external {
+        display: flex;
+        width: 0.7rem;
+        height: 0.7rem;
     }
     .sections {
         display: flex;

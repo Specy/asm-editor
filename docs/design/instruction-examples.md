@@ -183,7 +183,8 @@ as part of the documentation rewrite.
 
 The rewrite is complete when all MIPS/RISC-V mnemonics have focused, validated examples and
 the shared content path is connected to the pages, panel and search. Rich descriptions and
-example rewrites for the other architectures remain deferred.
+example rewrites for the other architectures remain deferred. (Descriptions for MIPS and RISC-V
+started on 2026-10-27: [mips-riscv-references.md](./mips-riscv-references.md).)
 
 ## Implementation validation
 

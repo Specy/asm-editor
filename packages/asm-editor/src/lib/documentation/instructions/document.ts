@@ -28,7 +28,12 @@ export type InstructionDocument = {
     operands: OperandSymbol[]
     /** Markdown, when the language has more to say than the summary. */
     description?: string
+    /** The instruction's page in its architecture's own manual, where a link to one exists (x86). */
+    reference?: InstructionReference
 }
+
+/** A page elsewhere, with its link text: "Intel's reference: SAL/SAR/SHL/SHR". */
+export type InstructionReference = { label: string; href: string }
 
 export type FormSection = {
     /** The tags every Form pattern of the section has, besides the mnemonic's own. */

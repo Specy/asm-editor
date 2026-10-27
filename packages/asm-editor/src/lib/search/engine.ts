@@ -19,7 +19,7 @@ import { shardsOf, type SearchScope, type ShardId } from './scope'
 
 /** Values tuned against the golden queries in `golden/`; see the plan's phase 3. */
 export const RANKING = {
-    boost: { names: 3, title: 2, context: 1.2, text: 1, code: 0.4 },
+    boost: { names: 3, title: 2, context: 1.2, text: 1, detail: 0.5, code: 0.4 },
     /** The least cosine similarity a vector match needs. Right answers measured 0.30 to 0.48. */
     similarity: 0.15,
     /** Hits asked of Orama before the fixed rules, so that collapsing windows still fills a page. */
@@ -159,6 +159,7 @@ type Unit = {
     title: string
     context: string
     text: string
+    detail: string
     code: string
     embedding?: number[]
 }
@@ -172,6 +173,7 @@ const SCHEMA = {
     title: 'string',
     context: 'string',
     text: 'string',
+    detail: 'string',
     code: 'string',
     embedding: `vector[${VECTOR_DIMS}]`
 } as const
@@ -272,6 +274,7 @@ export class SearchEngine {
                     .filter(Boolean)
                     .join(' '),
                 text: `${entry.summary}\n${entry.text}`,
+                detail: entry.detail ?? '',
                 code: entry.code,
                 embedding: vectors ? Array.from(vectors[ref]) : undefined
             })
@@ -305,6 +308,7 @@ export class SearchEngine {
                 title: section.title,
                 context: `${section.courseName} ${section.lectureName}`,
                 text: window.text,
+                detail: '',
                 code,
                 embedding: vectors ? Array.from(vectors[payload.entries.length + ref]) : undefined
             })
@@ -326,7 +330,7 @@ export class SearchEngine {
         const textTerm = expandedTerms(term)
         const base = {
             term: textTerm,
-            properties: ['names', 'title', 'context', 'text', 'code'],
+            properties: ['names', 'title', 'context', 'text', 'detail', 'code'],
             boost: RANKING.boost,
             tolerance: toleranceOf(textTerm),
             where: { shard: { in: shards } },

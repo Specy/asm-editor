@@ -67,9 +67,11 @@ describe('authored instruction content', () => {
         }
         const resolved = withInstructionContent(entry, content)
         expect(resolved.instructionContent).toBe(content)
-        expect(resolved.summary).toBe('Authored explanation.')
-        expect(resolved.searchText).toContain('Core explanation.')
-        expect(resolved.searchText).toContain(content.description)
+        // an authored description follows the summary, which stays
+        expect(resolved.summary).toBe('Core summary.')
+        expect(resolved.searchText).toBe('Core explanation.')
+        // search reads the description too, as a field of its own with a lower weight
+        expect(resolved.detailText).toBe(content.description)
         expect(resolved.code).toContain(content.example.code)
         expect(resolved.view).toBe(entry.view)
         expect(resolved.id).toBe(entry.id)

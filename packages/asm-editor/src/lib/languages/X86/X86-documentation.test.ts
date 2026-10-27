@@ -22,6 +22,7 @@ import {
     hasX86InstructionPage,
     x86DocumentedNames,
     x86InstructionMap,
+    x86IntelReference,
     x86SyscallArgs,
     x86SyscallMap
 } from './X86-documentation'
@@ -159,6 +160,36 @@ describe('the documented set', () => {
         for (const name of ['cdqe', 'cqo', 'movabs', 'movsxd', 'syscall']) {
             expect(hasX86Description(name), name).toBe(true)
         }
+    })
+})
+
+describe("Intel's reference", () => {
+    it('links a documented mnemonic to the page of its XED class, shared pages and all', () => {
+        expect(x86IntelReference('add')).toEqual({
+            label: "Intel's reference: ADD",
+            href: 'https://intel.github.io/SDM/instruction/ADD.html'
+        })
+        expect(x86IntelReference('sal')?.label).toBe("Intel's reference: SAL/SAR/SHL/SHR")
+        expect(x86IntelReference('jne')?.href).toMatch(/\/Jcc\.html$/)
+        expect(x86IntelReference('retq')?.href).toMatch(/\/RET\.html$/)
+        expect(x86IntelReference('CMOVG')?.href).toMatch(/\/CMOVcc\.html$/)
+    })
+
+    it('links the rest by the syntax Intel writes, a vector form to its legacy page', () => {
+        expect(x86IntelReference('vaddps')?.href).toMatch(/\/ADDPS\.html$/)
+    })
+
+    it('has no link where the preview has no page, rather than a wrong one', () => {
+        // the string compare, whose spelling the SSE2 compare's page also uses
+        expect(x86IntelReference('cmpsd')).toBeUndefined()
+        expect(x86IntelReference('nop')).toBeUndefined()
+        // the string move and the SSE2 move share the spelling, and each has a page
+        expect(x86IntelReference('movsd')).toBeUndefined()
+    })
+
+    it('covers nearly every documented instruction', () => {
+        const linked = x86DocumentedNames.filter((name) => x86IntelReference(name))
+        expect(linked.length / x86DocumentedNames.length).toBeGreaterThan(0.9)
     })
 })
 

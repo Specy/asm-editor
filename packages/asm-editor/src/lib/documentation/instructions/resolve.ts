@@ -1,8 +1,12 @@
-import { summaryOf, type DocumentationEntry } from '../entries'
-import { instructionDescription, type InstructionContent } from './content'
+import type { DocumentationEntry } from '../entries'
+import type { InstructionContent } from './content'
 import { mnemonicTags, type InstructionCategory, type InstructionTag } from './categories'
 
-/** Pages, the panel and search receive the same authored supplement on the existing entry. */
+/**
+ * Pages, the panel and search receive the same authored supplement on the existing entry. An
+ * authored description follows the entry's summary rather than restating it, so the summary stays
+ * and the description joins what search reads.
+ */
 export function withInstructionContent(
     entry: DocumentationEntry,
     content: InstructionContent | undefined
@@ -11,12 +15,7 @@ export function withInstructionContent(
     return {
         ...entry,
         instructionContent: content,
-        summary: content.description
-            ? summaryOf(instructionDescription(content, entry.summary))
-            : entry.summary,
-        searchText: [...new Set([content.description, entry.searchText].filter(Boolean))].join(
-            '\n'
-        ),
+        ...(content.description ? { detailText: content.description } : {}),
         code:
             [...new Set([entry.code, content.example?.code].filter(Boolean))].join('\n') ||
             undefined

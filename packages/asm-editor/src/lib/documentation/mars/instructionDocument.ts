@@ -6,6 +6,7 @@ import {
     documentPatterns,
     type FormPattern,
     type InstructionDocument,
+    type InstructionReference,
     type OperandSymbol
 } from '../instructions/document'
 import {
@@ -20,6 +21,7 @@ import { mipsInstructionCategories } from '../mips/categories'
 import { mipsInstructionNames } from '../mips/instructionNames'
 import { riscvInstructionCategories } from '../riscv/categories'
 import { riscvInstructionNames } from '../riscv/instructionNames'
+import { riscvManualReference } from '../riscv/manualReference'
 import { rewriteExpansion, type ExpansionOperand } from './expansion'
 import {
     immediateMeaning,
@@ -67,6 +69,8 @@ type Dialect = {
     tags: (form: MarsForm) => InstructionTag[]
     categories: CategoryTable
     names: InstructionNames
+    /** The architecture's own page for a mnemonic, where the language links one. */
+    reference?: (mnemonic: string) => InstructionReference | undefined
 }
 
 const MIPS_DIALECT: Dialect = {
@@ -96,6 +100,7 @@ const RISCV_DIALECT: Dialect = {
     meanings: RISCV_OPERAND_MEANINGS,
     tags: (form) => riscvFormTags({ isPseudo: form.isPseudo, isRv64Only: !!form.isRv64Only }),
     categories: riscvInstructionCategories,
+    reference: riscvManualReference,
     names: riscvInstructionNames
 }
 
@@ -332,15 +337,15 @@ function marsDocument(
         main && (!main.isPseudo || bodies.size === 1)
             ? mainDescription.body || undefined
             : undefined
-    const authored = content?.description?.trim() ? content.description : undefined
+    // An authored description follows the header's summary, so it is shown whole; MARS's starts
+    // with the sentence the summary stands for.
+    const authored = content?.description?.trim() ? content.description.trim() : undefined
     const source = authored ?? mainSource
 
     const names = dialect.names[mnemonic]
     const longName = names?.longName ?? (main ? longNameOf(mnemonic, main, forms) : mnemonic)
-    const derived = summaryOf(
-        authored ?? (mainDescription.body || mainDescription.title || longName)
-    )
-    const summary = names?.summary ?? asSentence(derived)
+    const derived = summaryOf(mainDescription.body || mainDescription.title || longName)
+    const summary = names?.summary ?? asSentence(authored ? summaryOf(authored) : derived)
 
     const seen = new Set<string>()
     const built = forms
@@ -372,7 +377,8 @@ function marsDocument(
         operands: legend(dialect, mnemonic, patterns, built),
         // MARS's first sentence is what the header's summary stands for, whether the table
         // rewrote it or not
-        description: descriptionAfterSummary(source, derived, plainText)
+        description: authored ?? descriptionAfterSummary(mainSource, derived, plainText),
+        reference: dialect.reference?.(mnemonic)
     }
 }
 

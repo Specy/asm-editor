@@ -86,7 +86,12 @@ export function documentHover(
         document.summary,
         flagsLine(document),
         lines.join('  \n'),
-        ...(options.href ? [`[Documentation](${options.href})`] : [])
+        [
+            ...(options.href ? [`[Documentation](${options.href})`] : []),
+            ...(document.reference
+                ? [`[${document.reference.label}](${document.reference.href})`]
+                : [])
+        ].join(' · ')
     ]
         .filter(Boolean)
         .map(absoluteDocumentationLinks)

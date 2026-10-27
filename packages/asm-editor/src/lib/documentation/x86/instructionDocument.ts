@@ -1,8 +1,10 @@
 import {
     describeX86Instruction,
+    X86_FIRST_PROCESSOR,
     formatX86Cpu,
     formatX86Form,
     x86InstructionTitle,
+    x86IntelReference,
     type X86Instruction,
     type X86InstructionForm
 } from '#lib/languages/X86/X86-documentation.ts'
@@ -53,8 +55,12 @@ const NOTE_FACTS: Record<string, string> = {
 // These NASM operand-size restrictions are not carried by the table's NOLONG flag.
 const LEGACY_32_BIT_STACK_INSTRUCTIONS = new Set(['pushfd', 'popfd', 'enterd', 'leaved'])
 
+// JMPE ran only on Itanium's IA-32 layer; NASM accepts it, and x86 processors fault on it.
+const ITANIUM_ONLY = new Set(['jmpe'])
+
 function availableIn64BitMode(name: string, form: X86InstructionForm): boolean {
     if (form.notes.includes('NOLONG') || LEGACY_32_BIT_STACK_INSTRUCTIONS.has(name)) return false
+    if (ITANIUM_ONLY.has(name)) return false
     if (name === 'push' || name === 'pop') {
         return !form.operands.some((operand) => /^(?:reg|r\/m|mem)32$/.test(operand))
     }
@@ -257,8 +263,10 @@ export function x86InstructionDocument(instruction: X86Instruction): Instruction
     const result = buildFormPatterns(unique, { rank })
 
     const headerFacts = [...result.headerFacts]
-    const since = `${formatX86Cpu(instruction.cpu)} and later`
-    if (!headerFacts.some((fact) => fact.endsWith('and later'))) headerFacts.unshift(since)
+    const since = X86_FIRST_PROCESSOR[name] ?? `${formatX86Cpu(instruction.cpu)} and later`
+    const level = headerFacts.findIndex((fact) => fact.endsWith('and later'))
+    if (level === -1) headerFacts.unshift(since)
+    else if (name in X86_FIRST_PROCESSOR) headerFacts[level] = since
     // A row's processor says something only when it is newer than the instruction's, and never
     // "x86-64": every 64-bit form needs it, which its size already says.
     const trivial = new Set([since, `${formatX86Cpu('X86_64')} and later`])
@@ -304,6 +312,7 @@ export function x86InstructionDocument(instruction: X86Instruction): Instruction
             described === instruction.summary ? undefined : described,
             summaryOf(described),
             plainText
-        )
+        ),
+        reference: x86IntelReference(name)
     }
 }

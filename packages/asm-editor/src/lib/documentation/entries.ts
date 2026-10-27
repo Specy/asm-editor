@@ -111,6 +111,12 @@ export type DocumentationEntry = {
     tags?: InstructionTag[]
     /** Markdown the index reads besides the title and the summary. */
     searchText: string
+    /**
+     * An authored description that follows the summary: a page's longer prose, which the index
+     * reads with a lower weight than `searchText`, so that it adds matches without outweighing the
+     * words that name and summarise the entry.
+     */
+    detailText?: string
     /** Example code the index reads, with a lower weight than text. */
     code?: string
 }

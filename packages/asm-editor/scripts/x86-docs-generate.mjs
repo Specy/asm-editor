@@ -4,7 +4,7 @@
  * `docs/design/x86-documentation.md`. The output is committed, so this runs when NASM or blink is
  * updated, not as part of the build:
  *
- *   node scripts/x86-docs-generate.mjs [--fetch] [--xed <checkout>]
+ *   node scripts/x86-docs-generate.mjs [--fetch] [--xed <checkout>] [--sdm <checkout>]
  *
  * `--fetch` downloads the two prose sources into `.cache/x86-docs` the first time. Everything else
  * is read out of the x86 Core's checkout, `packages/x86`, which means the instruction table always
@@ -15,6 +15,8 @@
  * The flags come from Intel XED through `x86-docs/xed-flags.txt`, an extract committed beside this
  * script. `--xed <checkout>` rewrites that extract, and the licence beside it, from a clone of
  * https://github.com/intelxed/xed (`git clone --depth 1`); without it the run needs no network.
+ * The link to Intel's own page of an instruction works the same way: `--sdm <checkout>` rewrites
+ * `x86-docs/intel-sdm-pages.txt` from a clone of https://github.com/intel/SDM.
  *
  * What comes out is deliberately dumb: lists and records, no curation. Which instructions are worth
  * a page, which syscalls a beginner needs and what the registers mean are decisions, and decisions
@@ -25,6 +27,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import {
     checkNotesUsed,
+    checkXedCorrections,
     checkXedNames,
     FLAG_ORDER,
     flagsOf,
@@ -57,6 +60,16 @@ import {
     xedFlagsPath,
     xedLicencePath
 } from './x86-docs/xed.mjs'
+import {
+    formatSdmPages,
+    readSdmCheckout,
+    readSdmPages,
+    SDM_PAGE_URL,
+    SDM_REPOSITORY,
+    sdmPageRecords,
+    sdmPagesOf,
+    sdmPagesPath
+} from './x86-docs/sdm.mjs'
 
 const outDir = join(projectRoot, 'src/lib/languages/X86/generated')
 const fetchAllowed = process.argv.includes('--fetch')
@@ -64,6 +77,10 @@ const xedCheckout = process.argv.includes('--xed')
     ? process.argv[process.argv.indexOf('--xed') + 1]
     : null
 if (process.argv.includes('--xed') && !xedCheckout) throw new Error('--xed needs a checkout')
+const sdmCheckout = process.argv.includes('--sdm')
+    ? process.argv[process.argv.indexOf('--sdm') + 1]
+    : null
+if (process.argv.includes('--sdm') && !sdmCheckout) throw new Error('--sdm needs a checkout')
 
 /** Assembler pseudo-ops. They are directives that happen to live in the instruction table. */
 const PSEUDO = /^(d[bwdqtoyz]|res[bwdqtoyz]|incbin|equ)$/
@@ -178,7 +195,8 @@ function formsOf(entry) {
     const byShape = new Map()
     for (const form of entry.forms) {
         const operands = form.operands.map(normaliseOperand)
-        const cpu = form.flags.find((flag) => groupOf(flag) === 'cpu') ?? ''
+        // an encoding can carry two levels, `386,X86_64` for `lodsq`, and needs the later one
+        const cpu = latestCpu(form.flags.filter((flag) => groupOf(flag) === 'cpu'))
         const features = form.flags.filter(
             (flag) => groupOf(flag) === 'feature' && !NOT_EXTENSIONS.has(flag)
         )
@@ -238,6 +256,16 @@ const CPU_ORDER = [...flagMeanings.entries()]
 const cpuIndex = (cpu) => {
     const index = CPU_ORDER.indexOf(cpu)
     return index === -1 ? Number.POSITIVE_INFINITY : index
+}
+
+/**
+ * The latest of an encoding's processor levels. `AMD` and `CYRIX` share the group but name a
+ * vendor, not a level, so they count only when nothing else is there (`syscall` is `P6,AMD`).
+ */
+function latestCpu(flags) {
+    const levels = flags.filter((flag) => cpuIndex(flag) <= cpuIndex('FUTURE'))
+    if (levels.length === 0) return flags[0] ?? ''
+    return levels.reduce((latest, level) => (cpuIndex(level) > cpuIndex(latest) ? level : latest))
 }
 
 function lowestCpu(forms) {
@@ -433,6 +461,7 @@ for (const record of xed.records) {
 }
 const xedClasses = new Set(xedRecords.keys())
 checkXedNames(xedClasses)
+checkXedCorrections(xedRecords)
 const notesUsed = new Set()
 const flags = {}
 for (const instruction of documented) {
@@ -442,6 +471,35 @@ for (const instruction of documented) {
 }
 checkNotesUsed(notesUsed)
 const unflagged = documented.map((instruction) => instruction.name).filter((name) => !flags[name])
+
+// --- Intel's pages -------------------------------------------------------------------------------
+
+if (sdmCheckout) {
+    const checkout = readSdmCheckout(sdmCheckout)
+    if (checkout.relicensed) {
+        console.warn(
+            `${SDM_REPOSITORY}/blob/main/License.md no longer forbids derivatives; more of it may now be usable`
+        )
+    }
+    writeFileSync(
+        sdmPagesPath,
+        formatSdmPages({ ...checkout, records: sdmPageRecords(checkout, xedClasses) })
+    )
+}
+
+const sdm = readSdmPages()
+// a documented mnemonic without a strip has no class, and so no page: it does not go by name
+const documentedClasses = Object.fromEntries(
+    documented.map((instruction) => [instruction.name, flags[instruction.name]?.xed[0] ?? ''])
+)
+const intelPages = sdmPagesOf(
+    instructions.map((instruction) => instruction.name),
+    documentedClasses,
+    sdm.records
+)
+const unlinked = documented
+    .map((instruction) => instruction.name)
+    .filter((name) => !intelPages[name])
 
 // --- write ---------------------------------------------------------------------------------------
 
@@ -594,6 +652,32 @@ ${Object.entries(flags)
 )
 
 writeFileSync(
+    join(outDir, 'x86IntelPages.ts'),
+    `${header(
+        "The page of Intel's manual that documents each instruction, for the link to it.",
+        wrap(
+            `Page names: Intel's SDM preview (${SDM_REPOSITORY}), ia-spec ${sdm.version}, commit ${sdm.commit}, through the extract \`${relative(projectRoot, sdmPagesPath)}\`. Names only; the preview's notice allows no copy of its text but an unmodified one.`
+        )
+    )}
+/** Where Intel serves a page: \`\${X86_INTEL_PAGE_URL}\${page}.html\`. */
+export const X86_INTEL_PAGE_URL = ${JSON.stringify(SDM_PAGE_URL)}
+
+/**
+${wrap(
+    `Per mnemonic, the page it is on, which can cover several (\`sal\` is on \`SAL-SAR-SHL-SHR\`). The documented instructions the preview has no page for (\`${unlinked.join('`, `')}\`) have no entry, and neither does a mnemonic two pages spell.`
+)
+    .map((line) => ` * ${line}`)
+    .join('\n')}
+ */
+export const X86_INTEL_PAGES: Record<string, string> = {
+${Object.entries(intelPages)
+    .map(([name, page]) => `    ${JSON.stringify(name)}: ${JSON.stringify(page)}`)
+    .join(',\n')}
+}
+`
+)
+
+writeFileSync(
     join(outDir, 'x86Syscalls.ts'),
     `${header(
         'The Linux syscalls this emulator implements, which is a shorter list than Linux defines.',
@@ -692,6 +776,9 @@ console.log(`x86Mnemonics.ts     ${instructions.length} names`)
 console.log(`x86Descriptions.ts  ${Object.keys(descriptions).length} descriptions`)
 console.log(
     `x86Flags.ts         ${Object.keys(flags).length} of ${documented.length} documented instructions; no XED record: ${unflagged.join(', ')}`
+)
+console.log(
+    `x86IntelPages.ts    ${Object.keys(intelPages).length} mnemonics; ${documented.length - unlinked.length} of ${documented.length} documented, none for: ${unlinked.join(', ')}`
 )
 console.log(`x86Syscalls.ts      ${syscalls.length} syscalls exported by the built Core`)
 console.log(

@@ -15,6 +15,7 @@ import {
     formatX86Form,
     hasX86InstructionPage,
     x86InstructionMap,
+    x86IntelReference,
     type X86Instruction
 } from './X86-documentation'
 import {
@@ -367,6 +368,8 @@ export function createX86HoverProvider(monacoInstance: MonacoType): monaco.langu
                 if (description && description !== instruction.summary) {
                     contents.push({ value: description })
                 }
+                const reference = x86IntelReference(word)
+                if (reference) contents.push({ value: `[${reference.label}](${reference.href})` })
             } else if (registerSet.has(word)) {
                 contents.push({ value: `**Register:** \`${original}\`` })
             } else if (directiveSet.has(word) || directiveSet.has(`%${word}`)) {

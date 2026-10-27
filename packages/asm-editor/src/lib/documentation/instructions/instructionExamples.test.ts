@@ -102,7 +102,14 @@ function validateRegistry(
                 `${label} ${name}: named instruction appears in source`
             ).toBe(true)
         }
-        expect(item.description, `${label} ${name}: rich description deferred`).toBeUndefined()
+        // an authored description links only instruction pages of its own language that exist
+        const base = language === 'riscv' ? 'risc-v' : 'mips'
+        for (const [, path, target] of item.description?.matchAll(
+            /\]\(\/documentation\/([^/)]+)\/instruction\/([^)#\s]+)\)/g
+        ) ?? []) {
+            expect(path, `${label} ${name}: description links ${path}`).toBe(base)
+            expect(names, `${label} ${name}: description links ${target}`).toContain(target)
+        }
         const expected = expectations[name]
         expect(expected, `${label} ${name}: expectation`).toBeDefined()
         expect(

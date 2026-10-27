@@ -312,3 +312,52 @@ started out assuming it ran nothing with an extension flag. What changed:
   operands and alignment, and FMA, and the lecture "AVX and 256-bit vectors" teaches them. The
   Instructions Chapter's per-form "omitted" line is still not drawn (the owner removed it in
   539d69db); the integer pages show what runs and say nothing of the rest.
+
+## Intel's SDM preview (2026-10-27)
+
+In August 2026 Intel published a preview of its manual as data, [intel/SDM](https://github.com/intel/SDM),
+served at [intel.github.io/SDM](https://intel.github.io/SDM/sdm.html). Each instruction page has
+an XML file with the XED form of every encoding, its validity per mode, its exception checks and
+executable pseudocode, plus the manual's prose and opcode table in DocBook. The licence is the
+same as the PDF's: nothing but an unmodified copy may be published ("No rights are granted to
+create modifications or derivatives"), and every file says its code is not the 0BSD "Sample Code".
+So it stays a source to link to and to check against, never one to copy. Two uses were built:
+
+- **A link on every page.** `x86-docs-generate.mjs --sdm <checkout>` writes the extract
+  `scripts/x86-docs/intel-sdm-pages.txt` (page names, the XED classes on each, the mnemonics its
+  syntax spells: names only), and the generator joins it into `x86IntelPages.ts`. A documented
+  mnemonic finds its page through the first XED class of its flags strip; anything else through
+  the syntax, and a name two pages spell (`movsd`) gets none. 257 of the 273 documented
+  instructions and 1513 mnemonics in all have a link: "Intel's reference: SAL/SAR/SHL/SHR" in the
+  page header and in the hover, vector instructions included. The preview has no page for `nop`,
+  `popf`, the string compares or `sysret`.
+- **An audit.** `node scripts/x86-docs-sdm-audit.mjs <checkout>` compares each documented page
+  with Intel's encodings of the same XED classes: every flag on the strip, 64-bit availability
+  (read from the opcode table, because the XML's own `valid64` says `V` for BOUND and PUSHA),
+  and `lock`. Differences that are ours on purpose sit in its `EXPECTED` list with the reason. It
+  prints and writes nothing.
+
+The first run, plus one reading of all 130 distinct descriptions against Intel's pages, changed:
+
+- **Flags.** XED marks SBB's AF undefined and gives INT1 no flags at all; `flags.mjs` now
+  replaces both through `XED_CORRECTIONS`, which fails the run once XED agrees. `shld`/`shrd`
+  say that a 16-bit operand shifted by more than 16 leaves every flag undefined, and `popf` and
+  `iret` say IF is loaded only with a privilege a Linux program lacks.
+- **Processor levels.** An encoding tagged with two levels (`386,X86_64` for `lodsq`) now takes
+  the later one, so 18 forms that exist only in 64-bit mode stopped saying "386 and later".
+  `X86_FIRST_PROCESSOR` corrects the levels NASM gives for reasons of its own: `movsx` and `bswap`
+  from the 8086 (its aliases), `cmpxchg` from the Pentium, `syscall`/`sysret` from the P6,
+  `sysenter`/`sysexit`, `movbe`, `movrs` and `jmpe`, which is Itanium only and now says it is not
+  available in 64-bit mode.
+- **Prose**, rewritten in `X86_WRITTEN_DESCRIPTIONS` and `instructionNames.ts`: `bound`'s upper
+  bound is inclusive; NASM does not fold a large `bt` immediate into the displacement; a 32-bit
+  `cmov` clears the upper half even when it does not move, and reads its source either way;
+  `cmpxchg` uses `rax` too; `cli` and `sti` fault in a Linux program; `cwde` and `cdq` clear the
+  upper halves of `rax` and `rdx`; `cmp` writes no operand; `bsf`/`bsr` on a zero source; the
+  `iret` sizes in 64-bit mode, and `iret` there being `iretd`; `cmpxchg16b` needs 16-byte
+  alignment; `int1` is documented now; `imul`'s CF and OF for one operand; `xchg eax, eax` is not a
+  NOP in 64-bit code, and `xchg` with memory is atomic without `lock`; `sahf` copies five bits; the
+  system-call returns and `retw` in 64-bit code.
+
+One reported gap was not one: `add`, `or` and the other ALU instructions do say they take `lock`,
+on their memory-destination rows rather than in the header.

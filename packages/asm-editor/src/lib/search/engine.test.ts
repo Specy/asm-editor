@@ -77,6 +77,28 @@ async function engineWith() {
 }
 
 describe('SearchEngine', () => {
+    it('finds a word only an authored description has, below the same word in the text', async () => {
+        const engine = SearchEngine.create()
+        const entries = [
+            entry('lw', 'Loads a word.', { detail: 'The address must be aligned to four bytes.' }),
+            entry('lwa', 'Loads a word from an aligned address.')
+        ]
+        await engine.add(
+            createPayload(
+                { shard: 'docs-m68k', entries, sections: [], windows: [] },
+                [axis(0), axis(1)],
+                'test'
+            )
+        )
+        const results = await engine.search('aligned', {
+            scope: languageScope('m68k'),
+            vector: null,
+            limit: 5
+        })
+        const ids = results.map((result) => (result.kind === 'entry' ? result.entry.id : ''))
+        expect(ids).toEqual(['m68k/instructions/lwa', 'm68k/instructions/lw'])
+    })
+
     it('puts the entry named exactly what was typed first', async () => {
         const engine = await engineWith()
         const results = await engine.search('MOVE', { scope: languageScope('m68k') })
