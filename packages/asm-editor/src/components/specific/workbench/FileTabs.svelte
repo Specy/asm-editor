@@ -240,6 +240,7 @@
         flex: none;
         padding: 0 0.3rem;
         color: color-mix(in srgb, var(--secondary-text) 70%, transparent);
+        background: color-mix(in srgb, var(--secondary-text) 6%, transparent);
         border: 1px solid color-mix(in srgb, var(--secondary-text) 30%, transparent);
         border-radius: 999px;
         font-size: 0.5rem;
@@ -247,9 +248,11 @@
         line-height: 0.8rem;
         letter-spacing: 0.04em;
 
+        /* solid, as in the Explorer */
         &.selected {
-            color: var(--accent);
-            border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+            color: var(--accent-text);
+            background: var(--accent);
+            border-color: var(--accent);
         }
     }
 

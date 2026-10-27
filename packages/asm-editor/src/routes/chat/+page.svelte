@@ -70,7 +70,7 @@
     <meta name="description" content="Chat with the AI assistant" />
 </svelte:head>
 
-<div class="chat-page" class:has-example={!!editorLanguage}>
+<div class="chat-page fills-screen" class:has-example={!!editorLanguage}>
     <DefaultNavbar exclude={['ai-chat']}>
         {#if editorLanguage && !isMobile}
             <button

@@ -20,6 +20,7 @@
     import Page from '#cmp/shared/layout/Page.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
 
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
@@ -77,7 +78,11 @@
 <Page>
     <div class="main">
         <div class="content row">
-            <img src="/images/ASM-editor.webp" alt="ASM editor" class="preview-image" />
+            <img
+                src="/images/ASM-Pacman.webp"
+                alt="Pac-Man written in C, running on RISC-V in ASM Editor"
+                class="preview-image"
+            />
             <div class="presentation">
                 <h1 class="welcome-title" class:textShadow={textShadowPrimary}>
                     The best web IDE for Assembly <br />
@@ -230,9 +235,9 @@
                 Documentation
             {/snippet}
             <div class="description" class:textShadow={textShadowPrimary}>
-                The editor comes with built-in documentation for the M68K, MIPS, RISC-V and Z80
-                instruction sets including the valid addressing modes, description and examples for
-                each instruction, directive and syscall.
+                The editor comes with built-in documentation for the M68K, MIPS, RISC-V, x86-64 and
+                Z80 instruction sets including the valid addressing modes, description and examples
+                for each instruction, directive and syscall.
                 <a
                     href={resolve('/documentation')}
                     title="View documentation"
@@ -272,9 +277,10 @@
                 Compile from C/C++
             {/snippet}
             <div class="description" class:textShadow={textShadowSecondary}>
-                Write C or C++ and compile it to MIPS or RISC-V assembly with Clang or GCC, at any
-                optimization level. C source lines are mapped to the assembly instructions so you
-                can see how loops, function calls and expressions become assembly.
+                Write C or C++ and compile it to MIPS, RISC-V or x86-64 assembly at any optimization
+                level, with GCC, or Clang on MIPS and RISC-V. C source lines are mapped to the
+                assembly instructions so you can see how loops, function calls and expressions
+                become assembly.
             </div>
         </MainPageSection>
         <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp">
@@ -341,14 +347,22 @@
                 </a>
             </div>
         </MainPageSection>
-        <MainPageSection id="citation">
-            {#snippet title()}
-                Published research
-            {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
-                ASM Editor is described in a peer-reviewed paper presented at the 2026 IEEE Global
-                Engineering Education Conference, together with the first-year course it was built
-                for.
+        <section id="citation" class="citation">
+            <Card
+                background="secondary"
+                border="tertiary"
+                padding="2rem"
+                gap="1rem"
+                radius="0.8rem"
+                align="start"
+                style="width: 100%; max-width: 44rem"
+            >
+                <h2 class="citation-title">Published research</h2>
+                <p>
+                    ASM Editor is described in a peer-reviewed paper presented at the 2026 IEEE
+                    Global Engineering Education Conference, together with the first-year course it
+                    was built for.
+                </p>
                 <p class="reference">
                     E. Menichelli and L. Forlizzi, &ldquo;ASM Editor: Understanding Language
                     Abstractions Through Assembly Programming&rdquo;, 2026 IEEE Global Engineering
@@ -364,15 +378,18 @@
                         <GoLinkExternal />
                     </div>
                 </a>
-            </div>
-        </MainPageSection>
+            </Card>
+        </section>
     </div>
 </Page>
 
-<div class="pre-footer"></div>
+<div class="pre-footer" class:fade={false}></div>
 
 <style lang="scss">
-    .pre-footer {
+    /* Fades a last section on the secondary colour (a `reverse` one) into the footer. The last
+       section is on the primary colour now, the footer's own, so `fade` is off in the markup: turn
+       it back on if adding or removing a section leaves a `reverse` one last. */
+    .pre-footer.fade {
         height: 5rem;
         min-height: 5rem;
         flex: 1;
@@ -393,10 +410,29 @@
         text-shadow: 2px 2px 12px rgb(36 36 36);
     }
 
+    /* fades in over the section above it the way a MainPageSection does (HeroSection.svelte) */
+    .citation {
+        display: flex;
+        justify-content: center;
+        position: relative;
+        z-index: 1;
+        margin-top: -3rem;
+        padding: 4.5rem 1rem 3rem;
+        background-color: var(--primary);
+        mask-image: linear-gradient(#0000, #000 3rem);
+        font-size: 1.1rem;
+        line-height: 1.6rem;
+    }
+
+    .citation-title {
+        font-size: 2.2rem;
+        font-weight: bold;
+        line-height: 1.2;
+    }
+
     .reference {
         font-size: 0.9rem;
         opacity: 0.8;
-        margin: 1rem 0;
     }
 
     .sections-wrapper {
@@ -415,7 +451,7 @@
         justify-content: center;
         align-items: center;
         background-color: rgba(var(--RGB-primary), 0.9);
-        backdrop-filter: blur(5px);
+        backdrop-filter: blur(2px);
         z-index: 2;
     }
 
@@ -485,7 +521,15 @@
     }
 
     @media screen and (max-width: 850px) {
-        .pre-footer {
+        .citation {
+            margin-top: 0;
+            padding: 0.5rem 1rem 1.5rem;
+            mask-image: none;
+        }
+        .citation-title {
+            font-size: 1.8rem;
+        }
+        .pre-footer.fade {
             background: transparent;
         }
     }

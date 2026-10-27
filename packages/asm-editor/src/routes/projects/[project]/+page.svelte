@@ -329,7 +329,7 @@
         {/if}
     </div>
 {/snippet}
-<Page>
+<Page fillsScreen>
     <div class="workbench-page">
         <ThemeScope theme={LANGUAGE_THEMES[project.language]}>
             {#if status === 'loaded'}

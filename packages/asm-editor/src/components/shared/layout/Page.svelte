@@ -7,14 +7,24 @@
         contentStyle?: string
         children?: import('svelte').Snippet
         hasNavbar?: boolean
+        //the page fills the screen and scrolls inside itself, so the document keeps no scrollbar
+        fillsScreen?: boolean
     }
 
-    let { cropped = false, style = '', contentStyle = '', children, hasNavbar }: Props = $props()
+    let {
+        cropped = false,
+        style = '',
+        contentStyle = '',
+        children,
+        hasNavbar,
+        fillsScreen = false
+    }: Props = $props()
 </script>
 
 <main
     class="content"
     class:has-nav={hasNavbar}
+    class:fills-screen={fillsScreen}
     {style}
     in:fly|global={{ x: $navigationStore.direction === 'back' ? 16 : -16, duration: 500 }}
 >

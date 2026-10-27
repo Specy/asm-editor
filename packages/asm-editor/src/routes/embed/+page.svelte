@@ -229,7 +229,7 @@
     {#if !inIframe}
         <DefaultNavbar />
     {/if}
-    <Page contentStyle={!inIframe ? 'padding-top: 3.5rem' : ''}>
+    <Page fillsScreen={inIframe} contentStyle={!inIframe ? 'padding-top: 3.5rem' : ''}>
         <div
             class="playground"
             class:embed-builder={!inIframe}

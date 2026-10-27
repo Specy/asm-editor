@@ -37,6 +37,15 @@ html {
     width: 100%;
     background-color: var(--background, #171a21);
     overflow-x: hidden;
+    /* always there, so going from a page that fits the screen to one that does not shifts nothing
+       sideways by the scrollbar's width */
+    overflow-y: scroll;
+}
+
+/* a page that fills the screen and scrolls inside itself (the Workbench, an exam, the chat) has
+   nothing for the document to scroll, and would only show an empty scrollbar */
+html:has(.fills-screen) {
+    overflow-y: auto;
 }
 
 @supports (height: 100dvh) {
@@ -64,7 +73,8 @@ body {
 
 @media print {
     body,
-    html {
+    html,
+    html:has(.fills-screen) {
         height: auto;
         overflow: visible;
     }

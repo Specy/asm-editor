@@ -84,7 +84,7 @@
 
 <DefaultNavbar />
 
-<Page hasNavbar>
+<Page hasNavbar fillsScreen>
     <h1 class="visually-hidden">RARS - RISC-V simulator</h1>
     <div bind:this={wrapper} class="wrapper"></div>
 </Page>

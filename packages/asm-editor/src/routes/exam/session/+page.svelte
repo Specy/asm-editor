@@ -711,7 +711,7 @@
     {/if}
 {/snippet}
 
-<Page>
+<Page fillsScreen>
     {#if status === 'loading'}
         <div class="overlay">
             <h1 class="loading">Loading exam...</h1>
