@@ -38,12 +38,13 @@
             }
         }
 
-        //a CheerpJ that fails to start would otherwise leave the page empty without a word
+        //a CheerpJ that fails to load or start would otherwise leave the page empty without a word
+        function fail(error: unknown) {
+            console.error(error)
+            toast.error('Could not start RARS')
+        }
         function start() {
-            onload().catch((error) => {
-                console.error(error)
-                toast.error('Could not start RARS')
-            })
+            onload().catch(fail)
         }
 
         if ('cheerpjInit' in window) {
@@ -54,6 +55,7 @@
             script.async = true
             document.head.appendChild(script)
             script.onload = start
+            script.onerror = () => fail(new Error(`Could not load ${script.src}`))
         }
     })
 
