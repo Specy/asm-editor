@@ -744,6 +744,14 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 )
                 return await this.handleInterrupt(interrupt, interpreter, execution)
             }
+            //nothing to answer: the caller hands the Synth a watched write, a run that pauses at a
+            //`simhalt` or stops at a breakpoint ends before asking, and one that raises an
+            //exception throws it
+            case CoreInterpreterStatus.WatchedWrite:
+            case CoreInterpreterStatus.Paused:
+            case CoreInterpreterStatus.Running:
+            case CoreInterpreterStatus.TerminatedWithException:
+                break
         }
         return undefined
     }
