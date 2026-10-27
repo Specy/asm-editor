@@ -3,6 +3,7 @@
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import { isClipboardReadSupported } from '../appsUtils'
+    import { toast } from '#stores/toastStore.ts'
 
     type CheerpJWindow = Window &
         typeof globalThis & {
@@ -37,14 +38,22 @@
             }
         }
 
+        //a CheerpJ that fails to start would otherwise leave the page empty without a word
+        function start() {
+            onload().catch((error) => {
+                console.error(error)
+                toast.error('Could not start RARS')
+            })
+        }
+
         if ('cheerpjInit' in window) {
-            onload()
+            start()
         } else {
             const script = document.createElement('script')
             script.src = 'https://cjrtnc.leaningtech.com/20250530_2444/loader.js'
             script.async = true
             document.head.appendChild(script)
-            script.onload = onload
+            script.onload = start
         }
     })
 

@@ -60,14 +60,18 @@
             peripherals: injectedPeripherals
         })
     )
-    emulatorPromise.then((emulatorInstance) => {
-        if (destroyed) {
-            emulatorInstance.dispose()
-            return
-        }
+    emulatorPromise.then(
+        (emulatorInstance) => {
+            if (destroyed) {
+                emulatorInstance.dispose()
+                return
+            }
 
-        emulator = emulatorInstance
-    })
+            emulator = emulatorInstance
+        },
+        //the {:catch} below shows a Core that failed to load; the reason goes to the console
+        (error) => console.error('Could not load the emulator', error)
+    )
 
     onDestroy(() => {
         destroyed = true

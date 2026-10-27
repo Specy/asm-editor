@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import { z } from 'zod'
-import type { RegisteredTool } from '@discerns/sdk'
+import { connectToDiscernsChatbot, type RegisteredTool } from '@discerns/sdk'
 import AiAgent from './AiAgent.svelte'
 
 const protocol = vi.hoisted(() => ({
@@ -62,5 +62,18 @@ describe('AiAgent', () => {
             'Could not register tool "view_file"',
             expect.objectContaining({ message: 'Ask "chatbot:register-tool" timed out' })
         )
+    })
+
+    //a connection that failed was an unhandled rejection too
+    it('reports a chatbot it could not connect to, and registers nothing', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        vi.mocked(connectToDiscernsChatbot).mockRejectedValueOnce(new Error('No content window'))
+        await mountAgent([namedTool('view_file')])
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(error).toHaveBeenCalledWith(
+            'Could not connect to the chatbot',
+            expect.objectContaining({ message: 'No content window' })
+        )
+        expect(protocol.registerTool).not.toHaveBeenCalled()
     })
 })
