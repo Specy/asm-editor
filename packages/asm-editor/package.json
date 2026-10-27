@@ -5,6 +5,7 @@
     "private": true,
     "scripts": {
         "preview": "vp preview",
+        "sync": "svelte-kit sync",
         "check": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json && tsc --project src/service-worker/tsconfig.json",
         "check:watch": "svelte-kit sync && svelte-check --threshold error --tsconfig ./tsconfig.json --watch",
         "lint:svelte": "eslint .",

@@ -37,7 +37,13 @@ export default ts.config(
         },
         rules: {
             'no-undef': 'off',
-            'no-import-assign': 'off'
+            'no-import-assign': 'off',
+            // The typed rules Oxlint runs on every other script (`lint` in vite.config.ts).
+            '@typescript-eslint/no-floating-promises': 'error',
+            '@typescript-eslint/switch-exhaustiveness-check': [
+                'error',
+                { considerDefaultExhaustiveForUnions: true }
+            ]
         }
     },
     {

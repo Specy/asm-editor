@@ -233,7 +233,7 @@ describe('notes in the Log', () => {
         const view = mount(LogView, { target, props: { entries } })
         flushSync()
         disposers.push(() => {
-            unmount(view)
+            void unmount(view)
             target.remove()
         })
         const text = target.querySelector('.note')!

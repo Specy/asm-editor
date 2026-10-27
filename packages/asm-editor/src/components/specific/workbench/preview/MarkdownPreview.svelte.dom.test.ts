@@ -42,7 +42,7 @@ describe('the Preview of a Markdown File', () => {
         const component = mount(MarkdownPreview, { target, props })
         flushSync()
         cleanup = () => {
-            unmount(component)
+            void unmount(component)
             target.remove()
         }
         return { target, props }
@@ -105,7 +105,7 @@ describe('the Preview of a Markdown File', () => {
             }
         })
         cleanup = () => {
-            unmount(component)
+            void unmount(component)
             target.remove()
         }
         flushSync()

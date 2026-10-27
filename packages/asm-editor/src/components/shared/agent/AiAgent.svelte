@@ -48,14 +48,16 @@
         registeredToolNames = new Set()
         protocol = undefined
 
-        connectToDiscernsChatbot(iframe).then((result) => {
-            if (disposed) {
-                result.dispose()
-                return
-            }
-            protocol = result
-            disposeProtocol = result.dispose
-        })
+        connectToDiscernsChatbot(iframe)
+            .then((result) => {
+                if (disposed) {
+                    result.dispose()
+                    return
+                }
+                protocol = result
+                disposeProtocol = result.dispose
+            })
+            .catch((error) => console.error('Could not connect to the chatbot', error))
 
         return () => {
             //an unmount before the chatbot first answers cannot stop the SDK's connection poll, a

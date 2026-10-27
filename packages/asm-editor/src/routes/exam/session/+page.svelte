@@ -658,8 +658,11 @@
     }
 
     onMount(() => {
-        loadExam()
-        preloadAllEmulators()
+        void loadExam()
+        //a warm-up: a Core that fails here loads again, and says why, when a section first needs it
+        preloadAllEmulators().catch((error) =>
+            console.warn('Could not preload the emulators', error)
+        )
 
         const intervalId = setInterval(() => {
             now = Date.now()

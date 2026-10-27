@@ -104,7 +104,7 @@ function sidePanel(panel: string, data: StoredProject = {}) {
     })
     flushSync()
     disposers.push(() => {
-        unmount(app)
+        void unmount(app)
         fixture.dispose()
     })
     const title = () =>

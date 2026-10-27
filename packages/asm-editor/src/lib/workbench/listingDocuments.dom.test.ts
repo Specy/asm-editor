@@ -399,7 +399,7 @@ describe('the Listing notice', () => {
         expect(tooltipText(host.querySelector('[role="status"] [aria-describedby]'))).toBe(
             'Generated Listing of crackme: read-only.'
         )
-        unmount(program)
+        void unmount(program)
         const library = mount(ListingNotice, {
             target: host,
             props: { document: listing, library: true }
@@ -409,6 +409,6 @@ describe('the Listing notice', () => {
         expect(tooltipText(host.querySelector('[role="status"] [aria-describedby]'))).toBe(
             'Generated Listing of crackme, a library the program loaded: read-only.'
         )
-        unmount(library)
+        void unmount(library)
     })
 })

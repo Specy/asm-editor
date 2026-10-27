@@ -40,7 +40,7 @@ async function languageOf(search: string) {
     const component = mount((await import('./+page.svelte')).default, { target })
     flushSync()
     const language = target.querySelector('.emulator-source')?.getAttribute('data-language')
-    unmount(component)
+    void unmount(component)
     return language
 }
 

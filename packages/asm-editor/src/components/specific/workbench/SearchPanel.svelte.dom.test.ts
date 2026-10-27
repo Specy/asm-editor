@@ -310,7 +310,7 @@ function searchPanel(
     })
     flushSync()
     disposers.push(() => {
-        unmount(app)
+        void unmount(app)
         fixture.dispose()
     })
     const query = () => target.querySelector<HTMLInputElement>('input[aria-label="Search"]')!

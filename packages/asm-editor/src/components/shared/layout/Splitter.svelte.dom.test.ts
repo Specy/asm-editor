@@ -68,7 +68,7 @@ function render(
         size: () => size,
         automatic: () => automatic,
         cleanup() {
-            unmount(component)
+            void unmount(component)
             target.remove()
         }
     }

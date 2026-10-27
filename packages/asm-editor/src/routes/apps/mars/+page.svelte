@@ -3,6 +3,7 @@
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import { isClipboardReadSupported } from '../appsUtils'
+    import { toast } from '#stores/toastStore.ts'
 
     type CheerpJWindow = Window &
         typeof globalThis & {
@@ -37,14 +38,24 @@
             }
         }
 
+        //a CheerpJ that fails to load or start would otherwise leave the page empty without a word
+        function fail(error: unknown) {
+            console.error(error)
+            toast.error('Could not start MARS')
+        }
+        function start() {
+            onload().catch(fail)
+        }
+
         if ('cheerpjInit' in window) {
-            onload()
+            start()
         } else {
             const script = document.createElement('script')
             script.src = 'https://cjrtnc.leaningtech.com/4.3/loader.js'
             script.async = true
             document.head.appendChild(script)
-            script.onload = onload
+            script.onload = start
+            script.onerror = () => fail(new Error(`Could not load ${script.src}`))
         }
     })
 

@@ -120,7 +120,7 @@ function setup(
     const editor = mount(PixelEditor, { target, props })
     let mountedNow = true
     const dispose = () => {
-        if (mountedNow) unmount(editor)
+        if (mountedNow) void unmount(editor)
         mountedNow = false
     }
     mounted.push(dispose)

@@ -113,7 +113,7 @@
         //textarea may still be inside that hidden ancestor when the first focus runs.
         //Retry once after the DOM settles, unless this read/view has already changed.
         let current = true
-        tick().then(() => {
+        void tick().then(() => {
             if (current && terminal.pendingRead === read && visible && interactive) takeFocus()
         })
         return () => {

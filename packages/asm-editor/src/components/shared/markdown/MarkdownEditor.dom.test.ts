@@ -17,7 +17,7 @@ function render(props: Record<string, unknown>) {
     const component = mount(MarkdownEditor, { target, props })
     flushSync()
     dispose = () => {
-        unmount(component)
+        void unmount(component)
         target.remove()
     }
     return target

@@ -91,7 +91,7 @@
         try {
             await ProjectStore.addProject(project)
             toast.logPill('Project created')
-            goto(resolve('/projects/[project]', { project: project.id }))
+            void goto(resolve('/projects/[project]', { project: project.id }))
         } catch (e) {
             console.error(e)
             toast.error('Error creating project')
@@ -101,8 +101,9 @@
     /** A program brought in instead of a template opens as Create would; several are listed. */
     async function importDropped(files: File[]) {
         const projects = await importFiles(files)
-        if (projects.length === 1) goto(resolve('/projects/[project]', { project: projects[0].id }))
-        else if (projects.length > 1) goto(resolve('/projects'))
+        if (projects.length === 1)
+            void goto(resolve('/projects/[project]', { project: projects[0].id }))
+        else if (projects.length > 1) void goto(resolve('/projects'))
     }
 </script>
 

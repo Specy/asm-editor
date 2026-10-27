@@ -53,7 +53,7 @@ function emptyEditor() {
     })
     flushSync()
     disposers.push(() => {
-        unmount(app)
+        void unmount(app)
         fixture.dispose()
     })
     return {

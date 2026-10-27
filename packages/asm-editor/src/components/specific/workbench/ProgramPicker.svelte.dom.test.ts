@@ -72,7 +72,7 @@ function picker(data: StoredProject = {}, deviceClass: DeviceClass = 'desktop') 
     })
     flushSync()
     disposers.push(() => {
-        unmount(app)
+        void unmount(app)
         fixture.dispose()
     })
     const button = () => target.querySelector<HTMLButtonElement>('[role="combobox"]')

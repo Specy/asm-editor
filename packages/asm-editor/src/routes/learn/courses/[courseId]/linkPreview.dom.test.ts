@@ -51,7 +51,7 @@ function socialImagesOf(Page: Component<{ data: never }>, data: object) {
     const app = mount(Page, { target: document.body, props: { data: data as never } })
     flushSync()
     const images = [...document.head.querySelectorAll('meta[property="og:image"]')]
-    unmount(app)
+    void unmount(app)
     return images.map((meta) => meta.getAttribute('content'))
 }
 

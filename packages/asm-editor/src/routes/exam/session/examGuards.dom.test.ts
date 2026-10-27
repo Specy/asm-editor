@@ -1,7 +1,8 @@
 /**
  * The guards an exam session runs under: leaving fullscreen or the tab pauses the exam, and the
  * browser's find and print shortcuts are held back. Unlocking a finished exam with the teacher's
- * password reopens it under the same guards it started with.
+ * password reopens it under the same guards it started with. The Cores it warms up as it opens
+ * are no reason to stop it when they fail to load.
  */
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
@@ -26,9 +27,10 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }))
 vi.mock('#lib/monaco/Monaco.ts', () => ({
     Monaco: { load: () => Promise.resolve(), dispose: () => {} }
 }))
+const preloadAllEmulators = vi.hoisted(() => vi.fn(() => Promise.resolve([])))
 vi.mock('#lib/languages/Emulator.ts', async (original) => ({
     ...(await original<typeof import('#lib/languages/Emulator.ts')>()),
-    preloadAllEmulators: () => {}
+    preloadAllEmulators
 }))
 
 // jsdom has no Web Animations API, which the page's transitions use.
@@ -122,5 +124,19 @@ it('puts the guards back on a finished exam the teacher unlocks', async () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     window.dispatchEvent(new Event('blur'))
     await vi.waitFor(() => expect(session.heading()).toBe('Exam disabled'))
-    session.dispose()
+    await session.dispose()
+})
+
+//the warm-up's failure was an unhandled rejection
+it('starts the exam when its Cores cannot be warmed up, and says why in the console', async () => {
+    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    preloadAllEmulators.mockRejectedValueOnce(
+        new Error('Failed to fetch dynamically imported module')
+    )
+    const session = await startExam('teacher')
+    expect(warned).toHaveBeenCalledWith(
+        'Could not preload the emulators',
+        expect.objectContaining({ message: 'Failed to fetch dynamically imported module' })
+    )
+    await session.dispose()
 })

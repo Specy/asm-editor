@@ -396,7 +396,7 @@ describe('the execution dock', () => {
             )
             buttons[1].click()
             expect(onChange).toHaveBeenLastCalledWith('listing')
-            unmount(app)
+            void unmount(app)
         }
     })
 })

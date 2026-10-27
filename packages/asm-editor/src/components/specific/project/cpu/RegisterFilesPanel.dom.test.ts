@@ -92,7 +92,7 @@ function render(options: { initialFileId?: string; initialFormat?: RegisterForma
             flushSync()
         },
         close: () => {
-            unmount(app)
+            void unmount(app)
             target.remove()
         }
     }
