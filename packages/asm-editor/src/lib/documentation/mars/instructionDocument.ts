@@ -6,6 +6,7 @@ import {
     documentPatterns,
     type FormPattern,
     type InstructionDocument,
+    type InstructionReference,
     type OperandSymbol
 } from '../instructions/document'
 import {
@@ -20,6 +21,7 @@ import { mipsInstructionCategories } from '../mips/categories'
 import { mipsInstructionNames } from '../mips/instructionNames'
 import { riscvInstructionCategories } from '../riscv/categories'
 import { riscvInstructionNames } from '../riscv/instructionNames'
+import { riscvManualReference } from '../riscv/manualReference'
 import { rewriteExpansion, type ExpansionOperand } from './expansion'
 import {
     immediateMeaning,
@@ -67,6 +69,8 @@ type Dialect = {
     tags: (form: MarsForm) => InstructionTag[]
     categories: CategoryTable
     names: InstructionNames
+    /** The architecture's own page for a mnemonic, where the language links one. */
+    reference?: (mnemonic: string) => InstructionReference | undefined
 }
 
 const MIPS_DIALECT: Dialect = {
@@ -96,6 +100,7 @@ const RISCV_DIALECT: Dialect = {
     meanings: RISCV_OPERAND_MEANINGS,
     tags: (form) => riscvFormTags({ isPseudo: form.isPseudo, isRv64Only: !!form.isRv64Only }),
     categories: riscvInstructionCategories,
+    reference: riscvManualReference,
     names: riscvInstructionNames
 }
 
@@ -372,7 +377,8 @@ function marsDocument(
         operands: legend(dialect, mnemonic, patterns, built),
         // MARS's first sentence is what the header's summary stands for, whether the table
         // rewrote it or not
-        description: authored ?? descriptionAfterSummary(mainSource, derived, plainText)
+        description: authored ?? descriptionAfterSummary(mainSource, derived, plainText),
+        reference: dialect.reference?.(mnemonic)
     }
 }
 
