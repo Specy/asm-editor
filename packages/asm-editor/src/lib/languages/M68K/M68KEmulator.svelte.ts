@@ -307,7 +307,16 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //the Build output: the S-record EASy68K's assembler writes, `main.S68`, which EASy68K's
         //simulator loads and runs ([ADR 0065](../../../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md))
         const program = new TextEncoder().encode(result.program.toSRecord())
-        return { ok: true, diagnostics, program, programFormat: 'srecord' }
+        //a program written for the 68010 or the 68020 says so beside the registers; one for the
+        //68000, which is every program without an `opt p=` line, says nothing
+        const processor = result.program.getProcessor()
+        return {
+            ok: true,
+            diagnostics,
+            program,
+            programFormat: 'srecord',
+            ...(processor === '68000' ? {} : { processor })
+        }
     }
 
     _initialize(undoSize: number): void {

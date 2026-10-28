@@ -1,8 +1,35 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
+import { languageDiagnosticToDiagnostic } from '../diagnosticBridge'
 import { analyzeM68kProject } from './m68kAdapter'
 
 describe('M68K Project analysis', () => {
+    it('keeps the fixes the Core suggests, so checking as you type offers them too', () => {
+        const sources = normalizeBuildInput({
+            entry: 'main.m68k',
+            files: {
+                'main.m68k': { encoding: 'plain', content: '    org $1000\n    extb.l d0\n' }
+            }
+        })
+        const [refused] = analyzeM68kProject(sources, 'test-session', 1).diagnostics
+        expect(refused.code).toBe('needs_a_later_processor')
+        //zero-based in the Worker's terms, one-based once in the editor's
+        expect(refused.fixes?.[0]).toEqual({
+            title: 'Add `opt p=68020` at the top of the program',
+            location: {
+                path: 'main.m68k',
+                range: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
+            },
+            text: '    opt p=68020\n'
+        })
+        //what the Worker posts is cloned, and the editor's diagnostic still carries the fixes
+        const [posted] = structuredClone([refused])
+        expect(languageDiagnosticToDiagnostic(posted).fixes?.map((fix) => fix.title)).toEqual([
+            'Add `opt p=68020` at the top of the program',
+            'Write `ext.w d0` and `ext.l d0`'
+        ])
+    })
+
     it('checks included Files and distinguishes an unreachable text File', () => {
         const sources = normalizeBuildInput({
             entry: 'a.m68k',

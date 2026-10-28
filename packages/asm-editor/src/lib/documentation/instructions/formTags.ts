@@ -49,7 +49,17 @@ export function z80FormTags(
     return tags
 }
 
-/** Privileged is the 68000's rule; s68k runs every program in supervisor mode all the same. */
-export function m68kFormTags(form: Pick<S68kInstructionForm, 'privileged'>): InstructionTag[] {
-    return form.privileged ? ['privileged'] : []
+/**
+ * Privileged is the 68000's rule; s68k runs every program in supervisor mode all the same. A form a
+ * later processor brought is tagged with that processor, the 68010 or the 68020, which a program
+ * chooses with `opt p=` ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+ * decision 3).
+ */
+export function m68kFormTags(
+    form: Pick<S68kInstructionForm, 'privileged' | 'processor'>
+): InstructionTag[] {
+    const tags: InstructionTag[] = []
+    if (form.privileged) tags.push('privileged')
+    if (form.processor !== '68000') tags.push(form.processor)
+    return tags
 }

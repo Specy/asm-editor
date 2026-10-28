@@ -355,6 +355,44 @@ describe('M68K v2 language tooling', () => {
         expect(org).not.toContain('*')
     })
 
+    it('says an instruction is the 68020’s alone, and a form the 68010’s, in its hover', async () => {
+        const provider = createM68kHoverProvider(monacoStub)
+        const value = async (line: string, column: number) => {
+            const hover = await provider.provideHover(
+                { getLineContent: () => line } as never,
+                { lineNumber: 1, column } as never,
+                {} as never
+            )
+            return hover?.contents.map((content) => content.value) ?? []
+        }
+        const [extb] = await value('    extb.l d0', 6)
+        //the fact says it once, without the tag beside it
+        expect(extb.split('\n\n')[1]).toBe(
+            '*Arithmetic · Size .l · 68020 only: write `opt p=68020` at the top of the program*'
+        )
+        const rows = (await value('    move.w d0,d1', 6)).find((block) =>
+            block.includes('`move ccr, <ea>`')
+        )
+        expect(rows?.split('  \n')).toContain('`move ccr, <ea>` · Size .w · 68010')
+    })
+
+    it('says in completion that an instruction is the 68020’s, and still offers it', async () => {
+        const provider = createM68KCompletion(monacoStub)
+        const [extb] = (await completions('    ext')).filter((item) => item.label === 'extb')
+        expect(extb.detail).toBe('M68K instruction, 68020 only')
+        expect(extb.documentation).toEqual({
+            value: 'Sign extends the low byte of a data register directly to a long.\n\n68020 only: write `opt p=68020` at the top of the program.'
+        })
+        const resolved = await provider.resolveCompletionItem!(
+            { label: 'extb', insertText: 'extb' } as never,
+            {} as never
+        )
+        expect(resolved?.detail).toBe('M68K instruction, 68020 only')
+        const [ext] = (await completions('    ext')).filter((item) => item.label === 'ext')
+        expect(ext.detail).toBe('M68K instruction')
+        expect(ext.documentation).toEqual(expect.any(String))
+    })
+
     it("links the instruction's Documentation by the page's address", async () => {
         //Monaco renders a link without a scheme as plain text, so a hover's are absolute
         vi.stubGlobal('location', { origin: 'https://asm.example' })
@@ -412,6 +450,14 @@ describe('M68K v2 language tooling', () => {
                 {} as never
             )
         ).toBeNull()
+    })
+
+    it('leaves the options of an opt line as they are, one word to s68k', () => {
+        //a space after a comma would end the options and make the rest a comment
+        expect(formatM68kSource('    opt mex,p=68020,bit ; options\nopt cre,bit')).toBe(
+            '    opt mex,p=68020,bit ; options\n\topt cre,bit'
+        )
+        expect(formatM68kSource('    move.w d0,d1')).toBe('    move.w d0, d1')
     })
 
     it('formats v2 operations without changing separators in strings or comments', () => {

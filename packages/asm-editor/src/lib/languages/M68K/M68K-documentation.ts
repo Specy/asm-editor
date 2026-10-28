@@ -431,7 +431,7 @@ const dirsDesc = {
     include:
         'Assembles another text File at this point. The path is relative to the including File, then the Project root.',
     incbin: 'Copies the exact bytes of another File into memory at this point.',
-    opt: 'Accepts an assembler option for compatibility and ignores it.',
+    opt: "Chooses the processor the program is written for. Write `opt p=68010` or `opt p=68020` at the top of the program to use an instruction a later processor added, such as the 68020's `extb`; a program without the line is written for the 68000. Only a few of the 68010's and 68020's instructions are available so far. `bit` asks for the 68020's bit-field instructions, which are not available yet. EASy68K's listing options, `cre`, `mex`, `sex`, `war` and `cex`, each also with `no` before it, are accepted and change nothing.",
     list: 'Accepted for compatibility and ignored.',
     nolist: 'Accepted for compatibility and ignored.',
     page: 'Accepted for compatibility and ignored.'
@@ -463,7 +463,7 @@ export const M68KDirectiveDocumentation = {
     offset: makeDirective('offset', NO_SIZE, dirsDesc.offset, 'offset 0'),
     include: makeDirective('include', NO_SIZE, dirsDesc.include, "include 'lib/io.x68'"),
     incbin: makeDirective('incbin', NO_SIZE, dirsDesc.incbin, "incbin 'images/sprite.bin'"),
-    opt: makeDirective('opt', NO_SIZE, dirsDesc.opt, 'opt xref'),
+    opt: makeDirective('opt', NO_SIZE, dirsDesc.opt, 'opt p=68020'),
     list: makeDirective('list', NO_SIZE, dirsDesc.list, 'list'),
     nolist: makeDirective('nolist', NO_SIZE, dirsDesc.nolist, 'nolist'),
     page: makeDirective('page', NO_SIZE, dirsDesc.page, 'page')
@@ -1657,7 +1657,16 @@ bset #2, d1 ; bit 2 was already 1 (Z clear), no change
         'nbcd.b d0',
         Size.Byte
     ),
-    extb: makeIns('extb', [ONLY_Da], ONLY_LONG, FLAGS_LOGIC, desc.extb, 'extb.l d0', Size.Long),
+    //a 68020 instruction, so its example writes the program for the 68020 first
+    extb: makeIns(
+        'extb',
+        [ONLY_Da],
+        ONLY_LONG,
+        FLAGS_LOGIC,
+        desc.extb,
+        '    opt p=68020\n    extb.l d0',
+        Size.Long
+    ),
     roxd: {
         ...makeIns(
             'roxd',
@@ -1884,6 +1893,27 @@ export const M68KRefusedDirectives = [
 
 /** Real 68000 mnemonics recognised by s68k but deliberately not implemented. */
 export const M68KRefusedInstructions = ['rte', 'stop', 'reset']
+
+/** The conditions of the 68020's `trap<cc>`: the 68000's, and `t` and `f`. */
+const TRAP_CONDITIONS = [
+    ...['t', 'f', 'hi', 'ls', 'cc', 'hs', 'cs', 'lo', 'ne', 'eq'],
+    ...['vc', 'vs', 'pl', 'mi', 'ge', 'lt', 'gt', 'le']
+]
+
+/**
+ * The 68010's and 68020's instructions s68k reads and refuses in every dialect for now: the ones its
+ * 68010 and 68020 dialects do not implement yet, which leave this list for a Documentation entry
+ * once its instruction table lists them (milestones E6b and E6c of the M68K machine plan), and the
+ * 68020's module call, `callm` and `rtm`, which s68k's 68020 leaves out for good. The editor
+ * colours them as words the assembler refuses.
+ */
+export const M68KUnimplementedDialectInstructions = [
+    ...['rtd', 'bkpt', 'movec', 'moves'],
+    ...['chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk', 'divsl', 'divul'],
+    ...TRAP_CONDITIONS.map((condition) => `trap${condition}`),
+    ...['bftst', 'bfextu', 'bfchg', 'bfexts', 'bfclr', 'bfffo', 'bfset', 'bfins'],
+    ...['callm', 'rtm']
+]
 
 const documentationFamilyNames = new Set(['asd', 'lsd', 'rod', 'roxd'])
 /** Every implemented mnemonic, with documentation-family placeholders removed. */

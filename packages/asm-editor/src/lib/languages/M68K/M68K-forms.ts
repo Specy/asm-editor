@@ -1,12 +1,12 @@
-import { S68k, type InstructionForm } from '@specy/s68k'
+import { S68k, type InstructionForm, type Processor } from '@specy/s68k'
 import type { InstructionDocumentation } from './M68K-documentation'
 
 /**
  * The **Instruction forms** of the M68K's documented instructions, from s68k's own instruction
  * table ([ADR 0051](../../../../../../docs/adr/0051-instruction-categories-in-the-editor-tags-from-the-core.md)):
- * per form, the addressing modes of each operand, the sizes, and whether the 68000 reserves it for
- * supervisor mode. The hand-written Documentation keeps one merged mode list per operand; this is
- * the list of forms beside it.
+ * per form, the addressing modes of each operand, the sizes, whether the 68000 reserves it for
+ * supervisor mode, and the first processor that has it. The hand-written Documentation keeps one
+ * merged mode list per operand; this is the list of forms beside it.
  *
  * Kept apart from `M68K-documentation.ts`, which the hovers, the grammar and the language detector
  * import, so that only what lists forms loads the Core. s68k instantiates its WebAssembly as its
@@ -34,4 +34,23 @@ export function m68kInstructionForms(
     const forms = formsByMnemonic()
     const member = (instruction.compundNames ?? [instruction.name]).find((name) => forms.has(name))
     return member ? forms.get(member)! : []
+}
+
+const PROCESSOR_ORDER: readonly Processor[] = ['68000', '68010', '68020']
+
+/**
+ * The first processor that has an instruction in any form: the 68000 for nearly all of them, the
+ * 68020 for `extb`, whose every form it brought. `move` is the 68000's, though its `ccr,<ea>` form
+ * came with the 68010. The 68000 too for a name s68k lists no forms of.
+ */
+export function m68kFirstProcessor(
+    instruction: Pick<InstructionDocumentation, 'name' | 'compundNames'>
+): Processor {
+    const forms = m68kInstructionForms(instruction)
+    if (forms.length === 0) return '68000'
+    return forms
+        .map((form) => form.processor)
+        .reduce((first, processor) =>
+            PROCESSOR_ORDER.indexOf(processor) < PROCESSOR_ORDER.indexOf(first) ? processor : first
+        )
 }

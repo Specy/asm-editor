@@ -50,7 +50,10 @@ export const INSTRUCTION_TAGS = [
     { id: 'pseudo', label: 'Pseudo-instruction' },
     { id: 'rv64-only', label: 'RV64 only' },
     { id: 'undocumented', label: 'Undocumented' },
-    { id: 'privileged', label: 'Privileged' }
+    { id: 'privileged', label: 'Privileged' },
+    //the first M68K processor that has a form, where it is a later one than the 68000
+    { id: '68010', label: '68010' },
+    { id: '68020', label: '68020' }
 ] as const
 
 export type InstructionTag = (typeof INSTRUCTION_TAGS)[number]['id']

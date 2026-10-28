@@ -1357,6 +1357,7 @@ export abstract class GenericEmulator<T, R extends string>
             terminated: false,
             termination: undefined,
             compiledCode: undefined,
+            processor: undefined,
             pc: 0n,
             sp: 0n,
             decorations: [],
@@ -1502,6 +1503,7 @@ export abstract class GenericEmulator<T, R extends string>
             this.state.compilerDiagnostics = result.diagnostics ?? []
             //only now, for the Build still current: a cancelled one says nothing of its program
             this._buildLibraryFiles = result.libraryFiles
+            this.state.processor = result.processor
             for (const note of result.notes ?? []) this.addNote(note)
             const output = await this.placeBuildOutput(
                 sources,
@@ -2931,5 +2933,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get compiledCode() {
         return this.state.compiledCode
+    }
+
+    /** The later processor the Build's program is written for, see `BaseEmulatorState.processor`. */
+    get processor() {
+        return this.state.processor
     }
 }

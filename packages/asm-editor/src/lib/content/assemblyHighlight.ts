@@ -97,6 +97,16 @@ type Syntax = {
      * an unindented `rts` is still the instruction.
      */
     columnLabels: boolean
+    /**
+     * Whether a directive's name in the first column is the directive all the same, as s68k reads
+     * `opt p=68020` there, rather than a label for the word after it.
+     */
+    columnDirectives?: boolean
+    /**
+     * The words a directive takes as options of its own rather than operands, coloured as the
+     * editor colours them: the M68K's `opt p=68020,bit`.
+     */
+    options?: { directive: string; words: RegExp }
     /** The instructions and directives the assembler knows but refuses, the M68K's `stop`. */
     refused?: ReadonlySet<string>
     /** The bracket pairs the editor colours by how deeply they nest, each opener before its closer. */
@@ -155,12 +165,24 @@ const RISCV_CSRS = new Set([
     ...['utval', 'uip', 'cycle', 'time', 'instret', 'cycleh', 'timeh', 'instreth']
 ])
 
-/** The 68000 instructions s68k refuses, and the directives of other assemblers it does. */
+/**
+ * The 68000 instructions s68k refuses, the 68010's and 68020's it does not implement yet, and the
+ * directives of other assemblers it refuses.
+ */
 const M68K_REFUSED = new Set([
     ...['rte', 'stop', 'reset', 'memory', 'macro', 'endm', 'mexit', 'ifeq', 'ifne', 'iflt'],
     ...['ifle', 'ifgt', 'ifge', 'ifc', 'ifnc', 'ifarg', 'endc', 'if', 'else', 'endi', 'while'],
-    ...['endw', 'for', 'endf', 'repeat', 'until', 'dbloop', 'unless']
+    ...['endw', 'for', 'endf', 'repeat', 'until', 'dbloop', 'unless'],
+    ...['rtd', 'bkpt', 'movec', 'moves', 'chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk'],
+    ...['divsl', 'divul', 'callm', 'rtm', 'bftst', 'bfextu', 'bfchg', 'bfexts', 'bfclr'],
+    ...['bfffo', 'bfset', 'bfins'],
+    //`trap<cc>`: the 68020's conditional trap, on each condition and `t` and `f`
+    ...['t', 'f', 'hi', 'ls', 'cc', 'hs', 'cs', 'lo', 'ne', 'eq'].map((c) => `trap${c}`),
+    ...['vc', 'vs', 'pl', 'mi', 'ge', 'lt', 'gt', 'le'].map((c) => `trap${c}`)
 ])
+
+/** What `opt` takes: `p=` and the processor, `bit`, and the listing options, `no` or not. */
+const M68K_OPT_OPTIONS = /^(?:p|bit|(?:no)?(?:cre|mex|sex|war|cex))$/i
 
 /** `jr c, loop` takes the carry condition, where `c` is otherwise a register. */
 const Z80_CONDITIONS = {
@@ -213,6 +235,8 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         sizeSuffixes: true,
         numericLabels: false,
         columnLabels: true,
+        columnDirectives: true,
+        options: { directive: 'opt', words: M68K_OPT_OPTIONS },
         refused: M68K_REFUSED,
         brackets: '()',
         quotes: `"'`,
@@ -315,6 +339,7 @@ function operandKind(
     }
     if (syntax.operandDirectives && isDirective(name, syntax)) return 'directive'
     if (syntax.sizes?.has(name)) return 'size'
+    if (mnemonic === syntax.options?.directive && syntax.options.words.test(name)) return 'size'
     if (syntax.csrs?.has(name) && mnemonic.startsWith('csr')) return 'register'
     return syntax.isRegister(name) ? 'register' : 'plain'
 }
@@ -433,7 +458,8 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
                     syntax.columnLabels &&
                     cursor === 0 &&
                     following !== undefined &&
-                    !syntax.isRegister(following.toLowerCase())
+                    !syntax.isRegister(following.toLowerCase()) &&
+                    !(syntax.columnDirectives && isDirective(lower, syntax))
                 if (named || columnLabel || ASSIGNMENT.test(line.slice(end))) push('label', name)
                 //a prefix leaves the instruction it stands before still to come: `rep movsb`, and
                 //so does x86's `times`, which repeats what follows its count: `times 4 db 0`

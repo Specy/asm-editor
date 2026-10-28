@@ -53,6 +53,26 @@ type DiagnosticBase = {
     /** Actionable help supplied by the Core, shown directly after the message when present. */
     hint?: string
     formatted: string
+    /** The changes the Core suggests, offered as quick fixes on it, the one to prefer first. */
+    fixes?: DiagnosticFix[]
+}
+
+/**
+ * A change a Core suggests for a diagnostic: `text` replaces the range, and an empty range inserts
+ * it. Lines are zero-based and columns one-based UTF-16, as a diagnostic's are; the range may be in
+ * another File than the diagnostic's.
+ */
+export type DiagnosticFix = {
+    /** What applying it does: "Add `opt p=68020` at the top of the program". */
+    title: string
+    file: string
+    lineIndex: number
+    column: number
+    endLineIndex: number
+    /** One-based, exclusive. */
+    endColumn: number
+    /** What replaces the range, with its own line breaks. */
+    text: string
 }
 
 /**
@@ -523,6 +543,12 @@ export type BaseEmulatorState = {
     code: string
     systemSize: RegisterSize
     compiledCode?: string
+    /**
+     * The processor the Build's program is written for, while it is one of the Target's later
+     * processors: an M68K program's `opt p=68020`. Undefined for the processor a Target starts on,
+     * and before a Build.
+     */
+    processor?: string
     registers: Register[]
     /**
      * Every Register file the Emulator exposes. The CPU file is always element 0 and its

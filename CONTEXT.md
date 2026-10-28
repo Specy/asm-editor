@@ -483,7 +483,7 @@ _Avoid_: template, shape, syntax line, variant
 
 ## Instruction tag
 
-A fact about an **Instruction form** as its assembler or its real processor defines it, from one shared list: Pseudo-instruction, RV64 only, Undocumented, Privileged. Privileged means the processor reserves the form for supervisor mode, even where the **Core** runs every program in that mode, as s68k does. A form can have several or none; a mnemonic shows a tag beside its name only when every one of its forms has it, and otherwise the tag sits on the forms that have it. Unlike an **Instruction category**, a tag says nothing about the kind of work done.
+A fact about an **Instruction form** as its assembler or its real processor defines it, from one shared list: Pseudo-instruction, RV64 only, Undocumented, Privileged, 68010 and 68020. Privileged means the processor reserves the form for supervisor mode, even where the **Core** runs every program in that mode, as s68k does. 68010 and 68020 name the first M68K processor that has the form, when it is a later one than the 68000, which a program chooses with `opt p=`. A form can have several or none; a mnemonic shows a tag beside its name only when every one of its forms has it, and otherwise the tag sits on the forms that have it. Unlike an **Instruction category**, a tag says nothing about the kind of work done.
 _Avoid_: category, flag (a **Status flag** is a CPU bit), badge, attribute
 
 ## Instruction example

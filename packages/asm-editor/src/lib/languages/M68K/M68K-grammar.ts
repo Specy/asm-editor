@@ -3,7 +3,8 @@ import {
     M68KDirectives,
     M68KRecognizedInstructions,
     M68KRefusedDirectives,
-    M68KRefusedInstructions
+    M68KRefusedInstructions,
+    M68KUnimplementedDialectInstructions
 } from './M68K-documentation'
 
 function alternatives(words: string[]): string {
@@ -15,6 +16,13 @@ const refusedDirectives = alternatives(M68KRefusedDirectives)
 /** `.b`, `.w`, `.l` and the short branch's `.s`, or nothing: not the start of a longer name. */
 const sizeSuffix = '(?:\\.[bwlsBWLS](?![\\w.]))?'
 
+/**
+ * The options `opt` takes, which s68k reads as one word each up to a comma: `p=` and the processor,
+ * `bit`, and EASy68K's listing options with or without `no` before them. They are coloured as the
+ * operand keywords they are; a word that is none of them stays plain, as s68k warns about it.
+ */
+export const M68K_OPT_OPTIONS = '(?:p|bit|(?:no)?(?:cre|mex|sex|war|cex))'
+
 /** Monaco's lexical view of the v2 grammar. Meaning and diagnostics remain the Core's job. */
 export const M68KLanguage: monaco.languages.IMonarchLanguage = {
     defaultToken: '',
@@ -22,7 +30,8 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
     tokenPostfix: '.m68k',
 
     keywords: M68KRecognizedInstructions,
-    refusedKeywords: M68KRefusedInstructions,
+    //the 68010's and 68020's instructions s68k does not implement yet are refused like `stop`
+    refusedKeywords: [...M68KRefusedInstructions, ...M68KUnimplementedDialectInstructions],
     symbols: /[(),.:]/,
     operators: ['+', '-', '*', '/', '\\', '&', '!', '|', '^', '<<', '>>', '~'],
 
@@ -45,6 +54,8 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
                 new RegExp(`(${refusedDirectives})(${sizeSuffix})\\b`),
                 ['invalid', { token: 'keyword.size', next: '@operands' }]
             ],
+            // `opt p=68020,bit`: its options are words of its own rather than operands
+            [/opt\b/, { token: 'directive', next: '@options' }],
             [
                 new RegExp(`(${directives})(${sizeSuffix})\\b`),
                 ['directive', { token: 'keyword.size', next: '@operands' }]
@@ -74,6 +85,16 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
                     },
                     { token: 'keyword.size', next: '@operands' }
                 ]
+            ],
+            { include: '@common' }
+        ],
+
+        // the options of an `opt` line, up to the end of the line or its comment
+        options: [
+            [/^/, { token: '', next: '@pop' }],
+            [
+                /[A-Za-z_]\w*/,
+                { cases: { [`$0~${M68K_OPT_OPTIONS}`]: 'keyword.size', '@default': 'identifier' } }
             ],
             { include: '@common' }
         ],

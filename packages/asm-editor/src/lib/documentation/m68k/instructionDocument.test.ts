@@ -18,22 +18,30 @@ function rows(name: string): string[] {
 const PAGE_NAMES = [...M68KUncompoundedInstructions.keys()]
 
 describe('M68K instruction documents', () => {
-    it('writes move as its five forms, the one into sr privileged', () => {
+    it('writes move as its five forms, the one into sr privileged, the one from ccr the 68010’s', () => {
         const move = document('move')
-        const [forms, privileged] = move.sections
+        const [forms, privileged, for68010] = move.sections
         expect(forms.tags).toEqual([])
         expect(forms.groups.flatMap((group) => group.patterns.map(patternText))).toEqual([
             'move <ea>, <ea>',
             'move <ea>, ccr',
-            'move sr, <ea>',
-            'move ccr, <ea>'
+            'move sr, <ea>'
         ])
         expect(privileged.tags).toEqual(['privileged'])
         expect(privileged.explanation).toContain('supervisor mode')
         expect(privileged.groups.flatMap((group) => group.patterns.map(patternText))).toEqual([
             'move <ea>, sr'
         ])
+        expect(for68010.tags).toEqual(['68010'])
+        expect(for68010.explanation).toBe(
+            'The 68010 and the 68020 have these, the 68000 does not: write `opt p=68010` at the top of the program to use them.'
+        )
+        expect(for68010.groups.flatMap((group) => group.patterns.map(patternText))).toEqual([
+            'move ccr, <ea>'
+        ])
+        expect(move.sections).toHaveLength(3)
         expect(move.tags).toEqual([])
+        expect(move.headerFacts).toEqual([])
 
         const [general] = documentPatterns(move)
         expect(general.details).toEqual([
@@ -84,6 +92,18 @@ describe('M68K instruction documents', () => {
                 values: ['(An)', 'd(An)', 'd(An,Xn)', 'abs', 'd(PC)', 'd(PC,Xn)']
             }
         ])
+    })
+
+    it('says extb is the 68020’s alone, and how to write a program for it', () => {
+        const extb = document('extb')
+        expect(extb.tags).toEqual(['68020'])
+        expect(extb.headerFacts).toEqual([
+            'Size .l',
+            '68020 only: write `opt p=68020` at the top of the program'
+        ])
+        //the tag is the mnemonic's, so its one form is in the untagged section
+        expect(extb.sections.map((section) => section.tags)).toEqual([[]])
+        expect(rows('extb')).toEqual(['extb Dn'])
     })
 
     it('puts andi into sr under Privileged, and each row its own size', () => {

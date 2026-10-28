@@ -19,6 +19,7 @@
     import { resolveEditorModel, type EditorModelStore, type EditorSource } from './editorSource'
     import { zeroBasedLineToMonaco } from '#lib/languages/service/monacoConversions.ts'
     import { setModelBuildArtifacts } from '#lib/monaco/assemblyInsights.ts'
+    import { quickFixRange, setModelQuickFixes } from '#lib/monaco/quickFixes.ts'
     import { CurrentLineReveal } from '#lib/monaco/currentLineReveal.ts'
     import { keepHoverReachable } from '#lib/monaco/hoverReachability.ts'
     import type { EditorLineColoring } from '#lib/monaco/lineColoring.ts'
@@ -1039,52 +1040,74 @@
                 warning: currentMonaco.MarkerSeverity.Warning,
                 suggestion: currentMonaco.MarkerSeverity.Info
             }
-            currentMonaco.editor.setModelMarkers(
+            //JSON, JavaScript, CSS and HTML report their own problems under their language's name,
+            //which the editor's would replace
+            const owner = isTextFileLanguage(language) ? `asm-editor-${language}` : language
+            //another File's text, whichever view this model is
+            const fileResource = (file: string) =>
+                modelIdentity
+                    ? projectSourceUri(currentMonaco, {
+                          ...modelIdentity,
+                          path: file,
+                          view: undefined
+                      })
+                    : undefined
+            const markers = diagnostics.map((e) => {
+                const lineNumber = Math.min(Math.max(e.lineIndex + 1, 1), model.getLineCount())
+                const maxColumn = model.getLineMaxColumn(lineNumber)
+                let startColumn = Math.min(Math.max(e.column, 1), maxColumn)
+                let endColumn = Math.min(
+                    Math.max(e.endColumn ?? startColumn + 1, startColumn),
+                    maxColumn
+                )
+                //An empty range draws nothing. A Core that reports a point, or one that points
+                //at the end of the line — "expected an operand" — clamps to exactly that, so
+                //widen it over the character beside it rather than leave an invisible marker.
+                if (startColumn === endColumn) {
+                    if (endColumn < maxColumn) endColumn += 1
+                    else if (startColumn > 1) startColumn -= 1
+                }
+                return {
+                    severity: markerSeverities[e.severity],
+                    message: e.formatted,
+                    source: e.source,
+                    code: e.code,
+                    startLineNumber: lineNumber,
+                    startColumn,
+                    endLineNumber: lineNumber,
+                    endColumn,
+                    relatedInformation: e.related?.map((related) => ({
+                        resource: fileResource(related.file) ?? model.uri,
+                        startLineNumber: related.lineIndex + 1,
+                        startColumn: related.column,
+                        endLineNumber: related.lineIndex + 1,
+                        endColumn: related.endColumn,
+                        message: related.message
+                    }))
+                }
+            })
+            currentMonaco.editor.setModelMarkers(model, owner, markers)
+            //the fixes the Core suggests, kept beside the markers for the quick fix provider; one
+            //into another File is offered where that File has a model to edit
+            setModelQuickFixes(
+                currentMonaco,
                 model,
-                //JSON, JavaScript, CSS and HTML report their own problems under their language's
-                //name, which the editor's would replace
-                isTextFileLanguage(language) ? `asm-editor-${language}` : language,
-                diagnostics.map((e) => {
-                    const lineNumber = Math.min(Math.max(e.lineIndex + 1, 1), model.getLineCount())
-                    const maxColumn = model.getLineMaxColumn(lineNumber)
-                    let startColumn = Math.min(Math.max(e.column, 1), maxColumn)
-                    let endColumn = Math.min(
-                        Math.max(e.endColumn ?? startColumn + 1, startColumn),
-                        maxColumn
-                    )
-                    //An empty range draws nothing. A Core that reports a point, or one that points
-                    //at the end of the line — "expected an operand" — clamps to exactly that, so
-                    //widen it over the character beside it rather than leave an invisible marker.
-                    if (startColumn === endColumn) {
-                        if (endColumn < maxColumn) endColumn += 1
-                        else if (startColumn > 1) startColumn -= 1
-                    }
-                    return {
-                        severity: markerSeverities[e.severity],
-                        message: e.formatted,
-                        source: e.source,
-                        code: e.code,
-                        startLineNumber: lineNumber,
-                        startColumn,
-                        endLineNumber: lineNumber,
-                        endColumn,
-                        relatedInformation: e.related?.map((related) => {
-                            //another File's text, whichever view this model is
-                            const relatedIdentity = modelIdentity
-                                ? { ...modelIdentity, path: related.file, view: undefined }
-                                : undefined
-                            return {
-                                resource: relatedIdentity
-                                    ? projectSourceUri(currentMonaco, relatedIdentity)
-                                    : model.uri,
-                                startLineNumber: related.lineIndex + 1,
-                                startColumn: related.column,
-                                endLineNumber: related.lineIndex + 1,
-                                endColumn: related.endColumn,
-                                message: related.message
-                            }
-                        })
-                    }
+                owner,
+                diagnostics.flatMap((e, index) => {
+                    const fixes = (e.fixes ?? []).flatMap((fix) => {
+                        const resource = fix.file === e.file ? model.uri : fileResource(fix.file)
+                        return resource
+                            ? [
+                                  {
+                                      title: fix.title,
+                                      resource,
+                                      range: quickFixRange(fix),
+                                      text: fix.text
+                                  }
+                              ]
+                            : []
+                    })
+                    return fixes.length > 0 ? [{ marker: markers[index], fixes }] : []
                 })
             )
         }

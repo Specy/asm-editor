@@ -6,7 +6,10 @@
         pseudo: "Not the processor's own syntax: the assembler translates it into real instructions",
         'rv64-only': 'Only on the RV64 target',
         undocumented: "Left out of the processor's manual",
-        privileged: 'The processor reserves it for supervisor or kernel mode'
+        privileged: 'The processor reserves it for supervisor or kernel mode',
+        '68010':
+            'The 68010 and 68020 have it, the 68000 does not: write opt p=68010 at the top of the program',
+        '68020': 'Only the 68020 has it: write opt p=68020 at the top of the program'
     }
 </script>
 

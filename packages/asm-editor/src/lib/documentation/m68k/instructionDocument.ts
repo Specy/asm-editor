@@ -87,6 +87,42 @@ const SIZE_SUFFIXES: Record<M68KInstructionForm['sizes'][number], string> = {
 const PRIVILEGED_EXPLANATION =
     'A 68000 runs these only in supervisor mode; s68k runs every program in supervisor mode, as EASy68K does, so they run here too.'
 
+/**
+ * What the forms a later processor brought need: the `opt p=` line that writes the program for it
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3).
+ */
+const PROCESSOR_EXPLANATIONS = {
+    '68010':
+        'The 68010 and the 68020 have these, the 68000 does not: write `opt p=68010` at the top of the program to use them.',
+    '68020': 'Only the 68020 has these: write `opt p=68020` at the top of the program to use them.'
+} as const
+
+/** The processors that have what a later one brought: s68k's family ends at the 68020. */
+const PROCESSOR_ONLY = {
+    '68010': '68010 and 68020 only',
+    '68020': '68020 only'
+} as const
+
+/** A processor after the 68000, which a program chooses with `opt p=`. */
+export type M68kLaterProcessor = keyof typeof PROCESSOR_ONLY
+
+export function isM68kLaterProcessor(name: string): name is M68kLaterProcessor {
+    return Object.hasOwn(PROCESSOR_ONLY, name)
+}
+
+/** Which processors have an instruction only a later one brought: "68020 only". */
+export function m68kProcessorOnly(processor: M68kLaterProcessor): string {
+    return PROCESSOR_ONLY[processor]
+}
+
+/**
+ * What the header, the hover and completion say of an instruction every form of which a later
+ * processor brought, `extb`: the program has to be written for that processor.
+ */
+export function m68kProcessorFact(processor: M68kLaterProcessor): string {
+    return `${PROCESSOR_ONLY[processor]}: write \`opt p=${processor}\` at the top of the program`
+}
+
 const MODE_RANK = new Map(M68K_MODE_ORDER.map((mode, index) => [mode, index]))
 
 /** A position's modes as the pages write them, in the manual's order. */
@@ -202,8 +238,10 @@ export function m68kInstructionDocument(name: string): InstructionDocument | und
 
     const result = buildFormPatterns(
         forms.map((form) => formInput(name, entry, form, instruction.defaultSize)),
-        { tagExplanations: { privileged: PRIVILEGED_EXPLANATION } }
+        { tagExplanations: { privileged: PRIVILEGED_EXPLANATION, ...PROCESSOR_EXPLANATIONS } }
     )
+    const laterProcessor = result.tags.find(isM68kLaterProcessor)
+    const processorFact = laterProcessor ? m68kProcessorFact(laterProcessor) : undefined
 
     // The rows' own symbols, and `#imm` where an opened row lists it, since its range is the
     // instruction's own (`1` to `8` for a shift). The other modes an opened row lists are the
@@ -232,7 +270,8 @@ export function m68kInstructionDocument(name: string): InstructionDocument | und
         summary,
         category: m68kInstructionCategory(name),
         tags: result.tags,
-        headerFacts: result.headerFacts,
+        //last, since it goes on to say what to do
+        headerFacts: processorFact ? [...result.headerFacts, processorFact] : result.headerFacts,
         flags: flagStrip(name, entry, instruction),
         sections: result.sections,
         omitted: [],

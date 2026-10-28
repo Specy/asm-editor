@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vite-plus/test'
 import { S68k } from '@specy/s68k'
 import {
     instructionsDocumentationList,
+    M68kDocumentation,
     M68kInstructions,
     M68KRefusedInstructions,
-    M68KUncompoundedInstructions
+    M68KUncompoundedInstructions,
+    M68KUnimplementedDialectInstructions
 } from './M68K-documentation'
-import { m68kInstructionForms } from './M68K-forms'
+import { m68kFirstProcessor, m68kInstructionForms } from './M68K-forms'
+import { m68kFormTags } from '#lib/documentation/instructions/formTags.ts'
 
 const table = new Map(S68k.instructionTable().map(({ mnemonic, forms }) => [mnemonic, forms]))
 
@@ -27,6 +30,21 @@ describe('M68K instruction forms', () => {
             expect(forms.length, instruction.name).toBeGreaterThan(0)
             if (!instruction.compundNames) expect(forms).toEqual(table.get(instruction.name))
         }
+    })
+
+    it('tags the forms a later processor brought with it: move from ccr, and extb', () => {
+        const later = [...table].flatMap(([mnemonic, forms]) =>
+            forms
+                .filter((form) => form.processor !== '68000')
+                .map((form) => `${mnemonic} ${form.operands.map((modes) => modes[0]).join(',')}`)
+        )
+        expect(later.sort()).toEqual(['extb Dn', 'move ccr,Dn'])
+        const moveFromCcr = table.get('move')!.find((form) => form.operands[0][0] === 'ccr')!
+        expect(m68kFormTags(moveFromCcr)).toEqual(['68010'])
+        expect(table.get('extb')!.map(m68kFormTags)).toEqual([['68020']])
+        expect(m68kFirstProcessor({ name: 'move' })).toBe('68000')
+        expect(m68kFirstProcessor({ name: 'extb' })).toBe('68020')
+        expect(m68kFirstProcessor({ name: 'dc' })).toBe('68000')
     })
 
     it('marks only move, andi, ori and eori to sr as privileged', () => {
@@ -53,5 +71,32 @@ describe('M68K documentation of the Core’s instructions', () => {
     it('refuses rte, stop and reset, which are not in the Core’s table yet', () => {
         expect(M68KRefusedInstructions).toEqual(['rte', 'stop', 'reset'])
         expect(M68KRefusedInstructions.filter((mnemonic) => table.has(mnemonic))).toEqual([])
+    })
+
+    //the 68010's and 68020's instructions the Core reads but refuses in every dialect: none may be
+    //in its table, where it would need a Documentation entry and to leave this list (milestones E6b
+    //and E6c), and each must still be one the Core reads as an instruction and refuses
+    it.each(M68KUnimplementedDialectInstructions)(
+        'colours %s as refused while the Core reads it and refuses it',
+        (mnemonic) => {
+            expect(table.has(mnemonic)).toBe(false)
+            const result = S68k.assemble(`    opt p=68020\n    ${mnemonic}\n`)
+            result.program?.dispose()
+            expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContainEqual(
+                expect.stringMatching(/^unimplemented_(?:in_dialect|operation)$/)
+            )
+        }
+    )
+
+    it('writes the program for the 68020 in extb’s example, which builds', () => {
+        const example = M68kDocumentation.extb.example!
+        expect(example).toMatch(/^\s*opt p=68020\n/)
+        const result = S68k.assemble(example)
+        try {
+            expect(result.diagnostics).toEqual([])
+            expect(result.program?.getProcessor()).toBe('68020')
+        } finally {
+            result.program?.dispose()
+        }
     })
 })

@@ -1,7 +1,8 @@
 <script lang="ts">
     /**
-     * The registers of a Debug session: the CPU's Status flags and the PC on top, then the Register
-     * files with their tabs, one register per row. A click on a register's name moves memory to its
+     * The registers of a Debug session: the CPU's Status flags and the PC on top, the processor the
+     * program is written for when it is a later one than the Target's first (`ProcessorLine`), then
+     * the Register files with their tabs, one register per row. A click on a register's name moves memory to its
      * value, and a right click on a value, the PC's too, opens its pointer menu (`pointerMenu.ts`).
      * A rule from edge to edge of the card separates the flags from the PC. The PC has no padding
      * of its own and lines up with the registers under it, and the Register files reach the card's
@@ -9,6 +10,7 @@
      */
     import RegistersRenderer from '#cmp/specific/project/cpu/RegistersRenderer.svelte'
     import RegisterFilesPanel from '#cmp/specific/project/cpu/RegisterFilesPanel.svelte'
+    import ProcessorLine from '#cmp/specific/project/cpu/ProcessorLine.svelte'
     import StatusCodesVisualiser from '#cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import { registerValueMenu, showInMemory } from './pointerMenu'
@@ -48,6 +50,9 @@
         position="bottom"
         {valueMenu}
     />
+    {#if emulator.processor}
+        <ProcessorLine processor={emulator.processor} style="padding: 0 0.45rem;" />
+    {/if}
     <div class="files">
         <RegisterFilesPanel
             systemSize={emulator.systemSize}

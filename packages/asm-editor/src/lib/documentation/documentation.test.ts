@@ -189,7 +189,7 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         expect((await instruction('z80', 'add')).tags).toBeUndefined()
     })
 
-    it('lists the M68K forms from s68k, with Privileged only where the 68000 says', async () => {
+    it('lists the M68K forms from s68k, with Privileged only where the 68000 says, and the later processors’ forms', async () => {
         const move = await instruction('m68k', 'move')
         expect(move.category).toBe('data-movement')
         expect(move.tags).toBeUndefined()
@@ -200,7 +200,10 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
                     section.groups.flatMap((group) => group.patterns.map(patternText))
                 ]
             )
-        expect((await sectionsOf('move')).at(-1)).toEqual([['privileged'], ['move <ea>, sr']])
+        expect((await sectionsOf('move')).slice(1)).toEqual([
+            [['privileged'], ['move <ea>, sr']],
+            [['68010'], ['move ccr, <ea>']]
+        ])
         expect(await sectionsOf('andi')).toEqual([
             [[], ['andi #imm, <ea>', 'andi #imm, ccr']],
             [['privileged'], ['andi #imm, sr']]
@@ -211,7 +214,9 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         for (const entry of entries.filter((entry) => entry.kind === 'instruction')) {
             const patterns = documentPatterns(viewOf(entry, 'instruction').document)
             expect(patterns.length, entry.id).toBeGreaterThan(0)
-            expect(entry.tags, entry.id).toBeUndefined()
+            //no M68K instruction is privileged in every form; `extb` is the 68020's in all of its
+            if (entry.title === 'extb') expect(entry.tags).toEqual(['68020'])
+            else expect(entry.tags, entry.id).toBeUndefined()
         }
     })
 

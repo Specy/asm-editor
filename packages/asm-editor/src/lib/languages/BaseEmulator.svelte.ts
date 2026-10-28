@@ -42,6 +42,11 @@ export type CompileResult =
           libraryFiles?: ProjectFiles
           /** What the Log should say about the program built, such as a library it lacks. */
           notes?: Omit<EmulatorNote, 'id'>[]
+          /**
+           * The processor the program is written for, when the Target has several and the program
+           * chose a later one than the one it starts on: M68K's `opt p=68010` or `opt p=68020`.
+           */
+          processor?: string
       }
     | { ok: false; diagnostics: Diagnostic[]; report: string }
 

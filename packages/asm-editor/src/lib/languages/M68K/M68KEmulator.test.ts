@@ -78,6 +78,41 @@ describe('M68K diagnostics', () => {
         expect(diagnostic.formatted).toBe(`${diagnostic.message}\n${diagnostic.hint}`)
         emulator.dispose()
     })
+
+    it('offers the Core’s fixes on a 68020 instruction in a 68000 program', async () => {
+        const emulator = M68KEmulator('    org $1000\n    extb.l d0\n')
+        try {
+            const [refused] = await emulator.check()
+            expect(refused.code).toBe('needs_a_later_processor')
+            expect(refused.fixes?.map((fix) => fix.title)).toEqual([
+                'Add `opt p=68020` at the top of the program',
+                'Write `ext.w d0` and `ext.l d0`'
+            ])
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
+describe('M68K processor dialects', () => {
+    it('names the processor of a Build written for a later one, and none for the 68000', async () => {
+        const emulator = M68KEmulator(
+            '    opt p=68020\n    org $1000\n    extb.l d0\n    simhalt\n'
+        )
+        try {
+            await emulator.compile(10, emulator.code)
+            expect(emulator.processor).toBe('68020')
+            //a Stop forgets the Build, and what it was written for
+            emulator.clear()
+            expect(emulator.processor).toBe(undefined)
+            await emulator.compile(10, '    opt p=68010\n    move.w ccr,d0\n')
+            expect(emulator.processor).toBe('68010')
+            await emulator.compile(10, '    move.w sr,d0\n')
+            expect(emulator.processor).toBe(undefined)
+        } finally {
+            emulator.dispose()
+        }
+    })
 })
 
 describe('M68K Project Files', () => {

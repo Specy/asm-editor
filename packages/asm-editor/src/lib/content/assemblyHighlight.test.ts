@@ -10,8 +10,10 @@ import { z80ConditionCodes, z80DirectiveNames } from '#lib/languages/Z80/Z80-doc
 import {
     M68KDirectives,
     M68KRefusedDirectives,
-    M68KRefusedInstructions
+    M68KRefusedInstructions,
+    M68KUnimplementedDialectInstructions
 } from '#lib/languages/M68K/M68K-documentation.ts'
+import { M68K_OPT_OPTIONS } from '#lib/languages/M68K/M68K-grammar.ts'
 import { X86Registers } from '#lib/languages/X86/X86-grammar.ts'
 
 /**
@@ -293,10 +295,50 @@ describe('tokenizeAssembly', () => {
         expect(kindOf('    stop #$2700', 'M68K', 'stop')).toBe('invalid')
         expect(kindOf('    bsr reset', 'M68K', 'reset')).toBe('plain')
         expect(
-            [...M68KRefusedInstructions, ...M68KRefusedDirectives].filter(
-                (name) => kindOf(`    ${name} 1`, 'M68K', name) !== 'invalid'
-            )
+            [
+                ...M68KRefusedInstructions,
+                ...M68KUnimplementedDialectInstructions,
+                ...M68KRefusedDirectives
+            ].filter((name) => kindOf(`    ${name} 1`, 'M68K', name) !== 'invalid')
         ).toEqual([])
+        //the 68020's still to come, sized or in the first column, which s68k reads as one there
+        expect(kindOf('    trapeq.w #1', 'M68K', 'trapeq')).toBe('invalid')
+        expect(kindOf('pack d0,d1,#0', 'M68K', 'pack')).toBe('invalid')
+    })
+
+    it('reads an opt line as the directive and its options, as the editor does', () => {
+        const kinds = (line: string) =>
+            tokenizeAssembly(line, 'M68K')[0]
+                .filter((token) => token.text.trim())
+                .map((token) => `${token.kind}:${token.text.trim()}`)
+        expect(kinds('    opt p=68020,bit ; the 68020')).toEqual([
+            'directive:opt',
+            'size:p',
+            'plain:=',
+            'number:68020',
+            'plain:,',
+            'size:bit',
+            'comment:; the 68020'
+        ])
+        //in the first column it is the directive still, not a label for its options
+        expect(kinds('OPT P=68010')).toEqual(['directive:OPT', 'size:P', 'plain:=', 'number:68010'])
+        expect(kinds('    opt nomex,cre,xref')).toEqual([
+            'directive:opt',
+            'size:nomex',
+            'plain:,',
+            'size:cre',
+            'plain:,xref'
+        ])
+        //the same options as the editor's grammar
+        const options = new RegExp(`^${M68K_OPT_OPTIONS}$`, 'i')
+        const option = (word: string) =>
+            tokenizeAssembly(`    opt ${word}`, 'M68K')[0].find((t) => t.text.trim() === word)?.kind
+        for (const word of ['p', 'bit', 'mex', 'nomex', 'cre', 'nocre', 'sex', 'war', 'cex'])
+            expect([options.test(word), option(word)], word).toEqual([true, 'size'])
+        for (const word of ['xref', 'nobit', 'pp'])
+            expect([options.test(word), option(word)], word).toEqual([false, 'plain'])
+        //elsewhere the words are names as ever
+        expect(kindOf('    move.w bit,d0', 'M68K', 'bit')).toBe('plain')
     })
 
     it('reads strings as NASM does: escapes only in a backquoted one', () => {

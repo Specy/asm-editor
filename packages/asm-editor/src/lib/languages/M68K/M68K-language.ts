@@ -15,9 +15,39 @@ import {
 import { s68kColumnToUtf16 } from './m68kDiagnostics'
 import { documentHover } from '#lib/documentation/instructions/hoverLine.ts'
 import type { InstructionDocument } from '#lib/documentation/instructions/document.ts'
-import { m68kInstructionDocument } from '#lib/documentation/m68k/instructionDocument.ts'
+import {
+    isM68kLaterProcessor,
+    m68kInstructionDocument,
+    m68kProcessorFact,
+    m68kProcessorOnly
+} from '#lib/documentation/m68k/instructionDocument.ts'
+import { m68kFirstProcessor } from './M68K-forms'
 
 const completionTokens = [...M68kInstructions, ...M68KDirectives]
+
+/**
+ * What completion says of an operation: an instruction only a later processor has, `extb`, says
+ * which and how to write the program for it. It is offered all the same in a 68000 program, where
+ * the quick fix on the diagnostic it gets adds the `opt p=` line.
+ */
+function operationCompletionText(name: string): {
+    detail: string | undefined
+    documentation: string | monaco.IMarkdownString | undefined
+} {
+    const documentation = getInstructionDocumentation(name)
+    if (!documentation) return { detail: undefined, documentation: undefined }
+    if (directiveSet.has(name))
+        return { detail: 'M68K directive', documentation: documentation.description }
+    const processor = m68kFirstProcessor({ name })
+    if (!isM68kLaterProcessor(processor))
+        return { detail: 'M68K instruction', documentation: documentation.description }
+    return {
+        detail: `M68K instruction, ${m68kProcessorOnly(processor)}`,
+        documentation: {
+            value: `${documentation.description}\n\n${m68kProcessorFact(processor)}.`
+        }
+    }
+}
 const recognizedTokens = [...M68KRecognizedInstructions, ...M68KRecognizedDirectives]
 const recognizedTokenSet = new Set(recognizedTokens)
 const directiveSet = new Set<string>(M68KDirectives)
@@ -87,19 +117,26 @@ function operationCompletionContext(linePrefix: string): OperationCompletionCont
     return undefined
 }
 
-/** Formats only structural separators; commas and colons inside strings/comments stay untouched. */
+/**
+ * Formats only structural separators; commas and colons inside strings/comments stay untouched, and
+ * so does the text s68k reads as one word, `opt`'s options (`opt p=68020,bit`): a space after one
+ * of its commas would end the options there and make the rest a comment.
+ */
 function formatSeparators(line: string): string {
     const parsed = S68k.parseLine(line)
     if (parsed.kind === 'comment') return line
     const commentStart = parsed.comment?.span.start ?? line.length
     const labelColon = parsed.label?.colon ? parsed.label.span.end : -1
+    const text = parsed.operation?.text?.span
+    const textStart = text ? s68kColumnToUtf16(line, text.start) : -1
+    const textEnd = text ? s68kColumnToUtf16(line, text.end) : -1
     let quote = ''
     let formatted = ''
 
     for (let index = 0; index < line.length; index++) {
         const character = line[index]
         formatted += character
-        if (index >= commentStart) continue
+        if (index >= commentStart || (index >= textStart && index < textEnd)) continue
 
         if (quote) {
             if (character === quote) quote = ''
@@ -228,7 +265,7 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
                     ...completionTokens
                         .filter((keyword) => keyword.startsWith(lowerPrefix))
                         .map((keyword) => {
-                            const documentation = getInstructionDocumentation(keyword)
+                            const { detail, documentation } = operationCompletionText(keyword)
                             return {
                                 kind: directiveSet.has(keyword)
                                     ? monaco.languages.CompletionItemKind.Keyword
@@ -238,10 +275,8 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
                                     keyword,
                                     operationContext.prefix
                                 ),
-                                detail: directiveSet.has(keyword)
-                                    ? 'M68K directive'
-                                    : 'M68K instruction',
-                                documentation: documentation?.description,
+                                detail,
+                                documentation,
                                 range: operationRange
                             }
                         })
@@ -299,14 +334,8 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
         resolveCompletionItem(item) {
             const label = typeof item.label === 'string' ? item.label : item.label.label
             const details = hasOwnKey(CompletionMap, label) ? CompletionMap[label] : undefined
-            const documentation = getInstructionDocumentation(label.toLowerCase())
             return {
-                detail: documentation
-                    ? directiveSet.has(label.toLowerCase())
-                        ? 'M68K directive'
-                        : 'M68K instruction'
-                    : undefined,
-                documentation: documentation?.description,
+                ...operationCompletionText(label.toLowerCase()),
                 ...details,
                 ...item
             }
@@ -347,8 +376,13 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                 const document = parsed.kind === 'instruction' ? m68kHoverDocument(name) : undefined
                 if (document) {
                     // The same header and first rows as the page and the panel row (the plan,
-                    // decision 22).
-                    const blocks = documentHover(document, {
+                    // decision 22). An instruction only a later processor has says so in a header
+                    // fact, "68020 only: write `opt p=68020` …", which its tag would only repeat.
+                    const shown = {
+                        ...document,
+                        tags: document.tags.filter((tag) => !isM68kLaterProcessor(tag))
+                    }
+                    const blocks = documentHover(shown, {
                         word: operation.name,
                         href: `/documentation/m68k/instruction/${document.name}`
                     })
