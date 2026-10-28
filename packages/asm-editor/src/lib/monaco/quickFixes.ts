@@ -90,6 +90,14 @@ function codeOf(marker: monaco.editor.IMarkerData): string | undefined {
     return typeof marker.code === 'object' ? marker.code.value : marker.code
 }
 
+/**
+ * A fix's title as Monaco's code action menu shows it, which is plain text: the Core writes code in
+ * its titles between backticks, as Markdown, "Add `opt p=68020` at the top of the program".
+ */
+export function quickFixTitle(title: string): string {
+    return title.replaceAll('`', '')
+}
+
 /** Whether a request for `only` actions takes quick fixes: `quickfix` and the kinds above it. */
 function wantsQuickFixes(only: string | undefined): boolean {
     return only === undefined || only === 'quickfix' || only === ''
@@ -127,7 +135,7 @@ export function quickFixActions(
                 if (target !== model && version !== undefined && version !== target.getVersionId())
                     return
                 actions.push({
-                    title: fix.title,
+                    title: quickFixTitle(fix.title),
                     kind: 'quickfix',
                     diagnostics: [marker],
                     //the Core lists the fix it prefers first

@@ -219,9 +219,10 @@ describe('the quick fix provider', () => {
         const current = fakeMonaco([model])
         setModelQuickFixes(current, model, 'M68K', fixesFor(model))
         const actions = quickFixActions(current, model, [{ ...marker(3), owner: 'M68K' } as never])
+        //Monaco's menu shows a title as plain text, so the Core's Markdown backticks are left out
         expect(actions.map((action) => [action.title, action.kind, action.isPreferred])).toEqual([
-            ['Add `opt p=68020` at the top of the program', 'quickfix', true],
-            ['Write `ext.w d0` and `ext.l d0`', 'quickfix', false]
+            ['Add opt p=68020 at the top of the program', 'quickfix', true],
+            ['Write ext.w d0 and ext.l d0', 'quickfix', false]
         ])
         expect(actions[0].edit?.edits).toEqual([
             {
@@ -259,7 +260,7 @@ describe('the quick fix provider', () => {
         const withoutEntry = fakeMonaco([model])
         setModelQuickFixes(withoutEntry, model, 'M68K', fixesFor(model, entry))
         expect(quickFixActions(withoutEntry, model, [marker(3)]).map((a) => a.title)).toEqual([
-            'Write `ext.w d0` and `ext.l d0`'
+            'Write ext.w d0 and ext.l d0'
         ])
 
         const both = fakeMonaco([model, entry])
@@ -267,7 +268,7 @@ describe('the quick fix provider', () => {
         expect(quickFixActions(both, model, [marker(3)])).toHaveLength(2)
         entry.edit()
         expect(quickFixActions(both, model, [marker(3)]).map((a) => a.title)).toEqual([
-            'Write `ext.w d0` and `ext.l d0`'
+            'Write ext.w d0 and ext.l d0'
         ])
     })
 

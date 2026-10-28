@@ -1514,6 +1514,9 @@ export abstract class GenericEmulator<T, R extends string>
                 execution
             )
             this.executionController.ensureCurrent(execution)
+            //said of the File the person now has, which a Testcase's Build never saves
+            if (stopInUserCode && output?.saved)
+                for (const note of result.outputNotes ?? []) this.addNote(note)
             this._initialize(undoSize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
@@ -1997,7 +2000,7 @@ export abstract class GenericEmulator<T, R extends string>
             console.error(lookupError)
         }
         const line = instruction?.lineNumber ?? -1
-        const message = this._stringifyError(error, line >= 0 ? line + 1 : undefined)
+        const message = this._stringifyRuntimeError(error, line >= 0 ? line + 1 : undefined)
         this.addError(message)
         this.endWithError(message)
         this._peripherals.terminal.flushOutput()

@@ -1822,6 +1822,23 @@ describe('M68K termination', () => {
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.termination?.kind).toBe('error')
         expect(emulator.errors).toEqual(['Error at $1002: Illegal instruction exception'])
+        expect(emulator.termination).toEqual({
+            kind: 'error',
+            message: 'Error at $1002: Illegal instruction exception'
+        })
+    })
+
+    it('says that address only of the error the program ended on', async () => {
+        const emulator = await build('    move.l #1,d1\n    dc.w $4AFC\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.termination?.kind).toBe('error')
+        //an error of something else after the end, such as a Poke's or an Undo's, has no line
+        //and did not happen at the address the program ended on
+        expect(emulator._stringifyError({ type: 'DivisionByZero' })).toBe('Division by zero')
+        expect(emulator._stringifyError(new Error('Screen Undo history exhausted'))).toBe(
+            'Screen Undo history exhausted'
+        )
+        emulator.dispose()
     })
 
     it('forgets how the program ended when Undo takes task 9 back', async () => {
@@ -1933,7 +1950,48 @@ describe('M68K Build output', () => {
         expect(entry).toEqual({ type: 'S8', body: '001000' })
         //the Debug session's Files are the Build's, its output included
         expect(Object.keys(emulator.buildSources!.files)).toEqual(['main.x68', 'main.S68'])
+        //a 68000 program's S-record runs in EASy68K, so the Log has nothing to say of it
+        expect(emulator.notes).toEqual([])
         emulator.dispose()
+    })
+
+    it('says in the Log that EASy68K cannot run the S-record of a program for a later processor', async () => {
+        /** The Log's notes after a Build, which saves its output when the Project has a host. */
+        const build = async (content: string, saves = true) => {
+            const sources = {
+                entry: 'main.x68',
+                files: { 'main.x68': { encoding: 'plain' as const, content } }
+            }
+            const emulator = M68KEmulator(sources)
+            if (saves) {
+                emulator.setBuildOutputHost({
+                    claim: async () => 'save' as const,
+                    save: (_sources, path, bytes) => {
+                        emulator.peripherals.fileSystem.writeBytes(path, bytes, true, 'plain')
+                    },
+                    isBuildOutput: () => false
+                })
+            }
+            await emulator.compile(100, sources)
+            expect(emulator.errors).toEqual([])
+            const notes = emulator.notes.map(({ tone, text }) => ({ tone, text }))
+            emulator.dispose()
+            return notes
+        }
+        expect(await build('    opt p=68020\n    org $1000\n    extb.l d0\n')).toEqual([
+            {
+                tone: 'info',
+                text: "`main.S68` is a program for the 68020 (`opt p=68020`), which EASy68K does not simulate: it runs the 68000's instructions and, of the 68020's, only the bit fields, so the program stops there at the first other instruction the 68000 lacks."
+            }
+        ])
+        expect(await build('    opt p=68010\n    org $1000\n    move.w ccr,d0\n')).toEqual([
+            {
+                tone: 'info',
+                text: "`main.S68` is a program for the 68010 (`opt p=68010`), which EASy68K does not simulate: it runs the 68000's instructions alone, so the program stops there at the first instruction the 68000 lacks."
+            }
+        ])
+        //without a host nothing is saved, as in a playground, and there is no File to speak of
+        expect(await build('    opt p=68020\n    org $1000\n    extb.l d0\n', false)).toEqual([])
     })
 })
 
@@ -1994,6 +2052,24 @@ describe('M68K writes into code', () => {
         }
     })
 
+    it('pauses after a store into code that is also in the Synth’s block', async () => {
+        //the Core reports such a store as a watched write, and its code write only on asking
+        const code = '    ORG $E00100\n' + PATCHES_ITSELF
+        const emulator = M68KEmulator(code)
+        await emulator.compile(100, code)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.line).toBe(3)
+        expect(emulator.notes.map((note) => note.text)).toContain(
+            'The program wrote into its own code at $E0010C, line 5: `add.l #5,d1`. Run again to go on with the new bytes.'
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.termination).toEqual({ kind: 'exit' })
+        expect(registerOf(emulator, 'D1')).toBe(1n)
+        emulator.dispose()
+    })
+
     it('pauses after a trap whose answer was read into code', async () => {
         //task 2 stores the line typed at (a1), here over the instruction after the trap
         const emulator = await build(
@@ -2025,6 +2101,19 @@ describe('M68K writes into code', () => {
         ])
         emulator.undo(1)
         expect(emulator.changedCode).toEqual([])
+        emulator.dispose()
+    })
+
+    it('marks the line whose code changed with the Undo history off too', async () => {
+        //without a history the Core's step id stays 0, so it cannot say on its own that memory moved
+        const code = ORG + PATCHES_ITSELF
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        expect(emulator.changedCode).toEqual([])
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.changedCode).toEqual([
+            { file: emulator.entry, line: 4, address: 0x100cn, runsNow: 'NOP' }
+        ])
         emulator.dispose()
     })
 

@@ -43,6 +43,11 @@ export type CompileResult =
           /** What the Log should say about the program built, such as a library it lacks. */
           notes?: Omit<EmulatorNote, 'id'>[]
           /**
+           * What the Log should say about `program` once a person's Build has saved it as the Build
+           * output, and only then: M68K's for an S-record EASy68K cannot run as written.
+           */
+          outputNotes?: Omit<EmulatorNote, 'id'>[]
+          /**
            * The processor the program is written for, when the Target has several and the program
            * chose a later one than the one it starts on: M68K's `opt p=68010` or `opt p=68020`.
            */
@@ -151,6 +156,15 @@ export abstract class BaseEmulator<R extends string> {
      */
     _stringifyError(error: unknown, _line?: number): string {
         return error instanceof Error ? error.message : String(error)
+    }
+
+    /**
+     * What the error a program failed on says, `_stringifyError`'s words unless the adapter can
+     * say more of where the program was. Only a program's end reads it: anything else that fails,
+     * a memory view's read, an Undo or a Poke, is not where the program stopped.
+     */
+    _stringifyRuntimeError(error: unknown, line?: number): string {
+        return this._stringifyError(error, line)
     }
 
     /**

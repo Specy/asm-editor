@@ -64,6 +64,7 @@ import type { TerminalReadOptions } from '#lib/languages/peripherals/Terminal.sv
 import { echoToScreen } from '#lib/languages/peripherals/screen/textEcho.ts'
 import { ScreenInstructionHistory } from '#lib/languages/peripherals/screen/ScreenInstructionHistory.ts'
 import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
+import { buildOutputPath } from '#lib/buildOutput.ts'
 import { m68kAssemblyFiles } from './m68kAssemblyFiles'
 import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
 
@@ -184,10 +185,16 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     private placed: PlacedRun[] | null = null
     /**
      * The addresses whose code changed since the Build, with what runs there now, as read at a
-     * step id: a step id names one state of memory, which Undo also comes back to, so the reading
-     * stands until another step, a direct write or an answered trap changes memory.
+     * step id and a count of instructions run: the step id names one state of memory, which Undo
+     * also comes back to, and the count moves with every instruction, as the step id does not
+     * without an Undo history, where it stays 0. The reading stands until another instruction, an
+     * Undo, a direct write or an answered trap changes memory.
      */
-    private changedReading: { step: number; changed: Map<number, string> } | null = null
+    private changedReading: {
+        step: number
+        executed: number
+        changed: Map<number, string>
+    } | null = null
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         super(
@@ -307,15 +314,21 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //the Build output: the S-record EASy68K's assembler writes, `main.S68`, which EASy68K's
         //simulator loads and runs ([ADR 0065](../../../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md))
         const program = new TextEncoder().encode(result.program.toSRecord())
-        //a program written for the 68010 or the 68020 says so beside the registers; one for the
-        //68000, which is every program without an `opt p=` line, says nothing
+        //a program written for the 68010 or the 68020 says so beside the registers, and of its
+        //S-record that EASy68K cannot run it; one for the 68000, which is every program without
+        //an `opt p=` line, says nothing
         const processor = result.program.getProcessor()
+        if (processor === '68000') {
+            return { ok: true, diagnostics, program, programFormat: 'srecord' }
+        }
+        const note = laterProcessorOutputNote(buildOutputPath(sources, 'srecord'), processor)
         return {
             ok: true,
             diagnostics,
             program,
             programFormat: 'srecord',
-            ...(processor === '68000' ? {} : { processor })
+            processor,
+            outputNotes: [{ tone: 'info', text: note }]
         }
     }
 
@@ -412,7 +425,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const interpreter = this.interpreter
         if (!interpreter) return new Map()
         const step = interpreter.getLastStepId()
-        if (this.changedReading?.step === step) return this.changedReading.changed
+        const executed = interpreter.getExecutedInstructions()
+        const reading = this.changedReading
+        if (reading?.step === step && reading.executed === executed) return reading.changed
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A reading copied into `changedCode`; nothing renders from it.
         const changed = new Map<number, string>()
         for (const run of this.placedCode()) {
             const now = interpreter.readMemoryBytes(run.start, run.length)
@@ -426,7 +442,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     )
             }
         }
-        this.changedReading = { step, changed }
+        this.changedReading = { step, executed, changed }
         return changed
     }
 
@@ -663,7 +679,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 const line = interpreter.getLastInstruction()?.location.line
                 return {
                     kind: 'error',
-                    message: this._stringifyError(
+                    message: this._stringifyRuntimeError(
                         termination.value,
                         line === undefined ? undefined : line + 1
                     )
@@ -715,6 +731,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _stringifyError(error: unknown, line?: number): string {
+        return getM68kErrorMessage(error, line)
+    }
+
+    /** The error the program ended on, at the address it ran when no line was laid out there. */
+    _stringifyRuntimeError(error: unknown, line?: number): string {
         return getM68kErrorMessage(
             error,
             line,
@@ -724,8 +745,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     /**
      * Where the instruction that ended the program ran, when no line was laid out there: in data
-     * the program ran into, or in bytes it changed. Undefined for any other error, and without a
-     * history, which is what remembers the address.
+     * the program ran into, or in bytes it changed. Undefined for any other end, and without a
+     * history, which is what remembers the address. Read only for the error the program ended on,
+     * since the end stays the Core's until an Undo takes it back, while other errors come and go.
      */
     private failedOutsideTheSource(): number | undefined {
         const interpreter = this.interpreter
@@ -832,16 +854,21 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             if (interpreter.getStatus() === CoreInterpreterStatus.Paused) {
                 return { reason: 'paused', instructions: ran() }
             }
-            const answered = interpreter.getStatus() === CoreInterpreterStatus.Interrupt
+            const stopped = interpreter.getStatus()
             const wait = await this.handleInterpreterInterruption(interpreter, execution)
             //a Delay is program time, not execution: the scheduler awaits it between slices, so the
             //GUI keeps repainting and Stop still answers while it runs (ADR 0007, ADR 0010)
             if (wait) return { reason: 'wait', instructions: ran(), wait }
-            //a trap's answer writes for the program, a line read into its own code included
-            const answerWrote = answered && stopOnCodeWrite ? interpreter.getCodeWrite() : null
-            if (answerWrote && !interpreter.hasTerminated()) {
-                return this.pauseForCodeWrite(answerWrote, ran())
-            }
+            //a trap's answer writes for the program, a line read into its own code included; and
+            //a store into the Synth's block stops the Core as a watched write before it says that
+            //the same instruction wrote into code, which the next call would forget
+            const wrote =
+                stopOnCodeWrite &&
+                (stopped === CoreInterpreterStatus.Interrupt ||
+                    stopped === CoreInterpreterStatus.WatchedWrite)
+                    ? interpreter.getCodeWrite()
+                    : null
+            if (wrote && !interpreter.hasTerminated()) return this.pauseForCodeWrite(wrote, ran())
         }
         return { reason: 'terminated', instructions: ran() }
     }
@@ -1618,6 +1645,19 @@ function isExecutionLimitError(error: unknown): boolean {
 function operationText(source: string): string {
     const span = S68k.parseLine(source).operation?.span
     return (span ? source.slice(span.start, span.end) : source).trim()
+}
+
+/**
+ * What the Log says of the S-record of a program for a later processor: EASy68K loads it, but its
+ * simulator is a 68000's, with the 68020's bit fields of `opt bit` and nothing else of the later
+ * processors ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 32).
+ */
+function laterProcessorOutputNote(path: string, processor: '68010' | '68020'): string {
+    const runs =
+        processor === '68020'
+            ? "the 68000's instructions and, of the 68020's, only the bit fields, so the program stops there at the first other instruction the 68000 lacks"
+            : "the 68000's instructions alone, so the program stops there at the first instruction the 68000 lacks"
+    return `\`${path}\` is a program for the ${processor} (\`opt p=${processor}\`), which EASy68K does not simulate: it runs ${runs}.`
 }
 
 /** An address as EASy68K writes one, `$1012`. */
