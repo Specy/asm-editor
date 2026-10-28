@@ -1,14 +1,21 @@
 import { readFileSync } from 'node:fs'
-import { beforeEach, describe, expect, it } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
 import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { makeMidi, makeWav } from '#lib/languages/peripherals/audio/soundFixtures.ts'
 import type { InputSettings } from '@specy/s68k'
-import { M68KEmulator } from '#lib/languages/M68K/M68KEmulator.svelte.ts'
+import { M68KEmulator, m68kSRecordOutput } from '#lib/languages/M68K/M68KEmulator.svelte.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import {
+    memoryHover,
+    memoryReasons,
+    regionLabels,
+    regionsAt
+} from '#lib/languages/memoryRegions.ts'
+import { statusFlagsFromBits } from '#lib/languages/statusFlagBits.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
 import { fileText, type BuildSources, type ProjectFiles } from '#lib/projectFiles.ts'
 import type { BuildOutputHost } from '#lib/buildOutput.ts'
@@ -1817,15 +1824,14 @@ describe('M68K termination', () => {
     })
 
     it('runs on into data that follows the code, as a 68000 does', async () => {
-        //`$4AFC` is the word of `illegal`, and no line was laid out where it is
+        //`$4AFC` is the word of `illegal`, and no line was laid out where it is; with no handler
+        //in its vector, the program ends there
         const emulator = await build('    move.l #1,d1\n    dc.w $4AFC\n')
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.termination?.kind).toBe('error')
-        expect(emulator.errors).toEqual(['Error at $1002: Illegal instruction exception'])
-        expect(emulator.termination).toEqual({
-            kind: 'error',
-            message: 'Error at $1002: Illegal instruction exception'
-        })
+        const message = 'Illegal instruction at $1002: vector 4 at $000010 holds no handler'
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
     })
 
     it('says that address only of the error the program ended on', async () => {
@@ -1873,6 +1879,596 @@ describe('M68K termination', () => {
     })
 })
 
+/**
+ * The 68000's exceptions in the Debug tools ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+ * decisions 9 to 12, 25, 28 and 31): a handler reached through its vector, the frame in the History
+ * and the Call stack, user mode with its own stack pointer, and the end of a program whose vector
+ * holds no handler or whose frame halts the CPU.
+ */
+describe('M68K exceptions', () => {
+    /** Built with a history, so every step can be undone. */
+    async function build(body: string) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        return emulator
+    }
+
+    function systemOf(emulator: Awaited<ReturnType<typeof build>>) {
+        const file = emulator.registerFiles.find((candidate) => candidate.id === 'system')
+        if (!file) throw new Error('No System file')
+        return {
+            values: Object.fromEntries(
+                file.registers.map((register) => [register.name, register.value])
+            ),
+            flags: Object.fromEntries(file.flags.map((flag) => [flag.name, flag.value]))
+        }
+    }
+
+    const TRAP_3 =
+        [
+            '    move.l #trap3_handler,$8C',
+            '    moveq #1,d0',
+            '    trap #3',
+            'after:',
+            '    moveq #2,d0',
+            '    simhalt',
+            'trap3_handler:',
+            '    moveq #9,d1',
+            '    rte'
+        ].join('\n') + '\n'
+
+    it('takes trap #3 through its vector, with the frame in the History, the Call stack and the SSP', async () => {
+        const emulator = await build(TRAP_3)
+        for (let i = 0; i < 3; i++) await emulator.step()
+        const handler = emulator.resolveMemoryLabel('trap3_handler')!
+        const after = emulator.resolveMemoryLabel('after')!
+        expect(emulator.pc).toBe(handler)
+
+        //the trap's row says what it raised first, then the frame the processor pushed
+        const [trap] = emulator.latestSteps
+        expect(trap.mutations[0]).toEqual({
+            type: 'TakeException',
+            value: {
+                vector: 35,
+                name: 'TRAP #3',
+                from: 0x100an,
+                handler,
+                label: 'trap3_handler'
+            }
+        })
+        expect(trap.mutations).toContainEqual({
+            type: 'WriteRegister',
+            value: { register: 'a7', old: 0x1000000n, new: 0xfffffan, size: RegisterSize.Long }
+        })
+
+        expect(emulator.callStack).toMatchObject([
+            { name: 'TRAP #3 → trap3_handler', address: handler, destination: after }
+        ])
+        expect(emulator.callStack[0].detail).toBe(
+            'An exception, taken through vector 35 at $00008C: `rte` returns to $100C'
+        )
+
+        //supervisor mode all along, the six bytes of the frame below the SSP
+        expect(systemOf(emulator).values).toEqual({ SR: 0x2000n, USP: 0xff0000n, SSP: 0xfffffan })
+        expect(systemOf(emulator).flags).toEqual({ T: 0, S: 1, I2: 0, I1: 0, I0: 0 })
+        expect(registerOf(emulator, 'A7')).toBe(0xfffffan)
+
+        //`rte` pops the frame and goes back past the trap
+        await emulator.step()
+        await emulator.step()
+        expect(emulator.pc).toBe(after)
+        expect(emulator.callStack).toEqual([])
+        expect(emulator.latestSteps[0].mutations).toContainEqual({
+            type: 'ReturnFromException',
+            value: { from: handler + 2n, to: after }
+        })
+        expect(systemOf(emulator).values.SSP).toBe(0x1000000n)
+
+        //Undo walks back through the `rte` and the exception, row by row
+        emulator.undo(1)
+        expect(emulator.pc).toBe(handler + 2n)
+        expect(emulator.callStack.map((frame) => frame.name)).toEqual(['TRAP #3 → trap3_handler'])
+        expect(emulator.latestSteps[0].mutations).toContainEqual(
+            expect.objectContaining({ type: 'WriteRegister' })
+        )
+        emulator.undo(2)
+        expect(emulator.pc).toBe(0x100an)
+        expect(emulator.callStack).toEqual([])
+        expect(systemOf(emulator).values.SSP).toBe(0x1000000n)
+        expect(emulator.latestSteps[0].mutations.map((mutation) => mutation.type)).toEqual([
+            'WriteRegister'
+        ])
+        emulator.dispose()
+    })
+
+    it('ends on a division by zero whose vector holds no handler, naming the vector', async () => {
+        const emulator = await build('    moveq #0,d1\n    divu d1,d0\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        const message = 'Division by zero at line 3: vector 5 at $000014 holds no handler'
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
+        //and Undo takes the end back
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        emulator.dispose()
+    })
+
+    it('goes through the handler a program installs for a division by zero, and back', async () => {
+        const emulator = await build(
+            [
+                '    move.l #div_handler,$14',
+                '    moveq #0,d1',
+                '    divu d1,d0',
+                '    simhalt',
+                'div_handler:',
+                '    moveq #7,d2',
+                '    rte'
+            ].join('\n') + '\n'
+        )
+        for (let i = 0; i < 3; i++) await emulator.step()
+        const [divu] = emulator.latestSteps
+        expect(divu.mutations[0]).toMatchObject({
+            type: 'TakeException',
+            value: { vector: 5, name: 'Divide by zero', label: 'div_handler' }
+        })
+        expect(emulator.callStack.map((frame) => frame.name)).toEqual([
+            'Divide by zero → div_handler'
+        ])
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D2')).toBe(7n)
+        expect(emulator.callStack).toEqual([])
+        emulator.dispose()
+    })
+
+    it('raises a privilege violation in user mode, where A7 is the USP', async () => {
+        const emulator = await build('    andi #$dfff,sr\n    move #0,sr\n')
+        await emulator.step()
+        //the `andi` wrote SR's system byte, and with S clear A7 is the other stack pointer
+        expect(emulator.latestSteps[0].mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: 'sr', old: 0x2000n, new: 0n, size: RegisterSize.Word }
+            },
+            { type: 'Other', value: 'Switched to user mode, so A7 is the USP' }
+        ])
+        expect(registerOf(emulator, 'A7')).toBe(0xff0000n)
+        expect(systemOf(emulator).flags.S).toBe(0)
+        await expect(emulator.step()).rejects.toBeDefined()
+        const message =
+            'Privilege violation at line 3: vector 8 at $000020 holds no handler (the instruction runs only in supervisor mode, and the program is in user mode)'
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
+        emulator.dispose()
+    })
+
+    const PRIVILEGE_HANDLER =
+        [
+            '    move.l #privileged,$20',
+            '    andi #$dfff,sr',
+            '    move #0,sr',
+            'back:',
+            '    simhalt',
+            //the 68000 stacks the privileged instruction's own address: skip its four bytes
+            'privileged:',
+            '    addq.l #4,2(a7)',
+            '    rte'
+        ].join('\n') + '\n'
+
+    it('returns to user mode with rte, and Undo walks back through all of it', async () => {
+        const emulator = await build(PRIVILEGE_HANDLER)
+        const privileged = emulator.resolveMemoryLabel('privileged')!
+        const back = emulator.resolveMemoryLabel('back')!
+        //the `move.l`, the `andi`, the violation, the handler's `addq` and its `rte`
+        for (let i = 0; i < 5; i++) await emulator.step()
+        expect(emulator.errors).toEqual([])
+        expect(emulator.pc).toBe(back)
+        //`rte` restored the user mode SR, so A7 is the USP again and the frame is gone
+        expect(systemOf(emulator).values).toEqual({ SR: 0n, USP: 0xff0000n, SSP: 0x1000000n })
+        expect(registerOf(emulator, 'A7')).toBe(0xff0000n)
+        expect(emulator.callStack).toEqual([])
+        const [rte, addq, violation, andi] = emulator.latestSteps
+        //in the order the processor did it, as an `rts` row is
+        expect(rte.mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: 'a7', old: 0xfffffan, new: 0x1000000n, size: RegisterSize.Long }
+            },
+            { type: 'Other', value: 'Switched to user mode, so A7 is the USP' },
+            { type: 'ReturnFromException', value: { from: privileged + 4n, to: back } }
+        ])
+        expect(addq.mutations.map((mutation) => mutation.type)).toEqual(['WriteMemory'])
+        expect(violation.mutations[0]).toEqual({
+            type: 'TakeException',
+            value: {
+                vector: 8,
+                name: 'Privilege violation',
+                from: back - 4n,
+                handler: privileged,
+                label: 'privileged'
+            }
+        })
+        expect(violation.mutations).toContainEqual({
+            type: 'Other',
+            value: 'Switched to supervisor mode, so A7 is the SSP'
+        })
+        expect(andi.mutations[0]).toMatchObject({
+            type: 'WriteRegister',
+            value: { register: 'sr' }
+        })
+
+        //back into the handler: supervisor mode, the frame on the SSP
+        emulator.undo(1)
+        expect(emulator.pc).toBe(privileged + 4n)
+        expect(systemOf(emulator).flags.S).toBe(1)
+        expect(registerOf(emulator, 'A7')).toBe(0xfffffan)
+        expect(emulator.callStack.map((frame) => frame.name)).toEqual([
+            'Privilege violation → privileged'
+        ])
+        //back before the violation: user mode, nothing on the Call stack
+        emulator.undo(2)
+        expect(emulator.pc).toBe(back - 4n)
+        expect(systemOf(emulator).values).toEqual({ SR: 0n, USP: 0xff0000n, SSP: 0x1000000n })
+        expect(registerOf(emulator, 'A7')).toBe(0xff0000n)
+        expect(emulator.callStack).toEqual([])
+        expect(emulator.latestSteps[0].mutations[1]).toEqual({
+            type: 'Other',
+            value: 'Switched to user mode, so A7 is the USP'
+        })
+        //and back to the start, where A7 is the SSP and the vector unset again
+        emulator.undo(2)
+        expect(emulator.pc).toBe(0x1000n)
+        expect(systemOf(emulator).values).toEqual({ SR: 0x2000n, USP: 0xff0000n, SSP: 0x1000000n })
+        expect(registerOf(emulator, 'A7')).toBe(0x1000000n)
+        expect(emulator.canUndo).toBe(false)
+        emulator.dispose()
+    })
+
+    it('halts the CPU on a frame pushed at an odd supervisor stack pointer, a double fault', async () => {
+        const emulator = await build('    move.l #$1000,$80\n    lea $5001,a7\n    trap #0\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        const message =
+            'The CPU halted at line 4: a double bus fault while taking TRAP #0 (vector 32), as pushing its frame raised an address error, writing a word at the odd address $4FFF'
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.terminated).toBe(false)
+        emulator.dispose()
+    })
+
+    it('names the access of an address error, all 32 bits of its address', async () => {
+        const emulator = await build('    move.l #$80000001,a0\n    move.w (a0),d0\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([
+            'Address error at line 3: vector 3 at $00000C holds no handler (reading a word at the odd address $80000001)'
+        ])
+        emulator.dispose()
+    })
+
+    it('reads the condition codes of a step in the CCR row, whatever SR’s system byte holds', async () => {
+        //SR starts at $2000, EASy68K's: the system byte must not reach the X N Z V C row
+        const emulator = await build('    moveq #0,d0\n    simhalt\n')
+        await emulator.step()
+        const [moveq] = emulator.latestSteps
+        expect(statusFlagsFromBits('M68K', moveq.new_ccr.bits)).toEqual([
+            false,
+            false,
+            true,
+            false,
+            false
+        ])
+        expect(emulator.statusRegisters.map((flag) => [flag.name, flag.value])).toEqual([
+            ['X', 0],
+            ['N', 0],
+            ['Z', 1],
+            ['V', 0],
+            ['C', 0]
+        ])
+        emulator.dispose()
+    })
+})
+
+describe('M68K System Register file', () => {
+    async function stepped(body: string, steps = 1) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        for (let i = 0; i < steps; i++) await emulator.step()
+        return emulator
+    }
+
+    function system(emulator: Awaited<ReturnType<typeof stepped>>) {
+        return emulator.registerFiles.find((candidate) => candidate.id === 'system')!
+    }
+
+    it('shows SR with its system byte as flags, then the two stack pointers', async () => {
+        const emulator = await stepped('    moveq #1,d0\n    simhalt\n')
+        expect(emulator.registerFiles.map((file) => file.label)).toEqual(['CPU', 'System'])
+        const file = system(emulator)
+        expect(file.layout).toEqual([
+            { name: 'SR', size: RegisterSize.Word, kind: 'integer' },
+            { name: 'USP', size: RegisterSize.Long, kind: 'integer' },
+            { name: 'SSP', size: RegisterSize.Long, kind: 'integer' }
+        ])
+        //EASy68K's reset state: supervisor mode, mask 0, A7 the SSP
+        expect(file.registers.map((register) => register.value)).toEqual([
+            0x2000n,
+            0xff0000n,
+            0x1000000n
+        ])
+        expect(file.flags.map((flag) => `${flag.name}=${flag.value}`)).toEqual([
+            'T=0',
+            'S=1',
+            'I2=0',
+            'I1=0',
+            'I0=0'
+        ])
+        //the CPU file keeps the condition codes
+        expect(emulator.statusRegisters.map((flag) => flag.name)).toEqual(['X', 'N', 'Z', 'V', 'C'])
+        emulator.dispose()
+    })
+
+    it('pokes SR into user mode, where A7 is the USP, and one Undo puts both back', async () => {
+        const emulator = await stepped('    moveq #1,d0\n    simhalt\n')
+        expect(emulator.pokeRegisters('system', [{ register: 'SR', value: 0x0700n }])).toBe(true)
+        expect(system(emulator).registers[0].value).toBe(0x0700n)
+        expect(system(emulator).flags.map((flag) => flag.value)).toEqual([0, 0, 1, 1, 1])
+        expect(registerOf(emulator, 'A7')).toBe(0xff0000n)
+        const [poke] = emulator.latestSteps
+        expect(poke.writes).toEqual([{ type: 'register', name: 'SR', old: 0x2000n, new: 0x0700n }])
+        emulator.undo(1)
+        expect(system(emulator).registers[0].value).toBe(0x2000n)
+        expect(registerOf(emulator, 'A7')).toBe(0x1000000n)
+        emulator.dispose()
+    })
+
+    it('pokes the stack pointer A7 is not, and the one it is', async () => {
+        const emulator = await stepped('    moveq #1,d0\n    simhalt\n')
+        expect(emulator.pokeRegisters('system', [{ register: 'USP', value: 0x8000n }])).toBe(true)
+        expect(registerOf(emulator, 'A7')).toBe(0x1000000n)
+        expect(emulator.pokeRegisters('system', [{ register: 'SSP', value: 0x9000n }])).toBe(true)
+        expect(registerOf(emulator, 'A7')).toBe(0x9000n)
+        expect(system(emulator).registers.map((register) => register.value)).toEqual([
+            0x2000n,
+            0x8000n,
+            0x9000n
+        ])
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 'SSP', old: 0x1000000n, new: 0x9000n }
+        ])
+        //a value wider than SR is refused, as the panel refuses it
+        expect(() =>
+            emulator.pokeRegisters('system', [{ register: 'SR', value: 0x10000n }])
+        ).toThrow()
+        emulator.dispose()
+    })
+
+    it('runs a Testcase against A7, the stack pointer of the mode the program is in', async () => {
+        const code = `${ORG}    move.l a7,d1
+    andi #$dfff,sr
+    move.l a7,d0
+    simhalt
+`
+        const testcase: Testcase = {
+            input: [],
+            expectedOutput: '',
+            //A7 at the start is the SSP, since the program starts in supervisor mode
+            startingRegisters: { A7: 0x8000n },
+            expectedRegisters: { D1: 0x8000n, D0: 0xff0000n, A7: 0xff0000n },
+            startingMemory: [],
+            expectedMemory: []
+        }
+        const emulator = M68KEmulator(code)
+        await emulator.check()
+        const [result] = await emulator.test(code, [testcase], INSTRUCTION_LIMIT, 100)
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
+        emulator.dispose()
+    })
+})
+
+describe('M68K memory regions', () => {
+    async function built(body: string) {
+        const code = body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        return emulator
+    }
+
+    it('names the exception vectors, one data label for each of the 68000’s own', async () => {
+        const emulator = await built(ORG + '    moveq #1,d0\n    simhalt\n')
+        const vectors = emulator.memoryRegions.find((region) => region.kind === 'vectors')
+        expect(vectors).toMatchObject({ name: 'Exception vectors', start: 0n, end: 0x400n })
+        const labels = regionLabels(vectors!, emulator.dataLabels)
+        expect(labels).toHaveLength(65)
+        expect(labels.slice(0, 12).map((label) => label.name)).toEqual([
+            'Reset SSP',
+            'Reset PC',
+            'Bus error',
+            'Address error',
+            'Illegal instruction',
+            'Divide by zero',
+            'CHK',
+            'TRAPV',
+            'Privilege violation',
+            'Trace',
+            'Line A',
+            'Line F'
+        ])
+        const at = (address: bigint) => labels.find((label) => label.address === address)?.name
+        expect(at(0x30n)).toBe('Reserved vector 12')
+        expect(at(0x3cn)).toBe('Uninitialized interrupt')
+        expect(at(0x60n)).toBe('Spurious interrupt')
+        expect(at(0x64n)).toBe('Level 1 autovector')
+        expect(at(0x7cn)).toBe('Level 7 autovector')
+        expect(at(0x80n)).toBe('TRAP #0')
+        expect(at(0xbcn)).toBe('TRAP #15')
+        expect(at(0x100n)).toBe('User vectors')
+        //the hover and the address input name them as they name a variable
+        expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, 0x16n)).toBe(
+            'Exception vectors · Divide by zero+2'
+        )
+        expect(memoryReasons(emulator.memoryRegions, 0x14n)[0]).toContain('handler')
+        expect(emulator.resolveMemoryLabel('Divide by zero')).toBe(0x14n)
+        emulator.dispose()
+    })
+
+    it('shows the memory map’s ranges as regions, and still takes Pokes into them', async () => {
+        const emulator = await built(
+            [
+                '    memory rom $8000,$8fff',
+                '    memory read $9000,$90ff',
+                '    memory protected $a000,$9fff',
+                '    memory invalid $f00000,$f0ffff',
+                '    ORG $1000',
+                '    moveq #1,d0',
+                '    simhalt'
+            ].join('\n') + '\n'
+        )
+        const map = emulator.memoryRegions
+            .filter((region) => ['rom', 'readOnly', 'protected', 'invalid'].includes(region.kind))
+            .map(({ kind, name, start, end }) => ({ kind, name, start, end }))
+        //`end` is in the range, and one below its start covers nothing
+        expect(map).toEqual([
+            { kind: 'rom', name: 'ROM', start: 0x8000n, end: 0x9000n },
+            { kind: 'readOnly', name: 'Read only', start: 0x9000n, end: 0x9100n },
+            { kind: 'invalid', name: 'Invalid', start: 0xf00000n, end: 0xf10000n }
+        ])
+        expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, 0x8004n)).toBe('ROM')
+        expect(memoryReasons(emulator.memoryRegions, 0x8004n)).toEqual([
+            'The program can read and run code here, and its writes are ignored, so the bytes stay as they are; a Poke still changes them.'
+        ])
+        expect(memoryReasons(emulator.memoryRegions, 0x9000n)[0]).toContain('bus error')
+        //the debugger is not the program: none of it is read only memory to the memory view
+        expect(emulator.readOnlyMemory).toEqual([])
+        await emulator.step()
+        expect(emulator.pokeMemory(0x8000n, new Uint8Array([1, 2]))).toBe(true)
+        expect([...emulator.readMemoryBytes(0x8000n, 2)]).toEqual([1, 2])
+        emulator.dispose()
+    })
+
+    it('outlines a range of the map over the program’s own code, and names both', async () => {
+        const emulator = await built(
+            '    memory rom $1000,$10ff\n' + ORG + '    moveq #1,d0\n    simhalt\n'
+        )
+        const [first] = regionsAt(emulator.memoryRegions, 0x1000n)
+        expect(first.kind).toBe('rom')
+        expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, 0x1000n)).toBe(
+            'ROM · Section 0'
+        )
+        emulator.dispose()
+    })
+})
+
+/**
+ * The memory map's ranges as the Core enforces them, which the regions' hovers describe
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 15): ROM ignores the
+ * program's writes, read only refuses them, protected refuses user mode, and invalid refuses every
+ * access, a fetch included, each refusal being the 68000's bus error, vector 2.
+ */
+describe('M68K memory map', () => {
+    async function ran(body: string) {
+        const code = body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        await emulator.run(INSTRUCTION_LIMIT)
+        return emulator
+    }
+
+    it('ignores a write into ROM, and ends on a write into a read only range', async () => {
+        const emulator = await ran(
+            [
+                '    memory rom $8000,$8fff',
+                '    memory read $9000,$9fff',
+                '    ORG $1000',
+                '    move.w #$1234,$8000',
+                '    move.w $8000,d0',
+                '    move.w $9000,d1',
+                '    move.w d0,$9000'
+            ].join('\n') + '\n'
+        )
+        const message =
+            "Bus error at line 7: vector 2 at $000008 holds no handler (writing a word at $9000, where the program's memory read line makes $9000-$9FFF read only)"
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
+        //the ROM kept what it held, and the read only range could be read
+        expect(registerOf(emulator, 'D0')).toBe(0xffffn)
+        expect(registerOf(emulator, 'D1')).toBe(0xffffn)
+        emulator.dispose()
+    })
+
+    it('lets supervisor mode use a protected range, and refuses user mode', async () => {
+        const emulator = await ran(
+            [
+                '    memory protected $a000,$afff',
+                '    ORG $1000',
+                '    move.w #5,$a000',
+                '    andi #$dfff,sr',
+                '    move.w $a000,d0'
+            ].join('\n') + '\n'
+        )
+        expect(emulator.errors).toEqual([
+            "Bus error at line 5: vector 2 at $000008 holds no handler (reading a word at $A000 in user mode, where the program's memory protected line keeps $A000-$AFFF for supervisor mode)"
+        ])
+        expect([...emulator.readMemoryBytes(0xa000n, 2)]).toEqual([0, 5])
+        emulator.dispose()
+    })
+
+    it('takes the bus error of a fetch from an invalid range through vector 2', async () => {
+        const emulator = await ran(
+            [
+                '    memory invalid $6000,$6fff',
+                '    ORG $1000',
+                '    move.l #bus_handler,$8',
+                '    jmp $6000',
+                'bus_handler:',
+                '    moveq #7,d2',
+                '    simhalt'
+            ].join('\n') + '\n'
+        )
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D2')).toBe(7n)
+        //the fetch ran nothing, so its row says nothing of what memory holds there
+        const [, , fetch] = emulator.latestSteps
+        expect(fetch).toMatchObject({ pc: 0x6000, line: -1 })
+        expect(fetch.disassembly).toBeUndefined()
+        expect(fetch.mutations[0]).toMatchObject({
+            type: 'TakeException',
+            value: { vector: 2, name: 'Bus error', label: 'bus_handler' }
+        })
+        emulator.dispose()
+    })
+
+    it('halts the CPU when the vector of an exception is in an invalid range', async () => {
+        const emulator = await ran(
+            ['    memory invalid $0,$3ff', '    ORG $1000', '    divu #0,d0'].join('\n') + '\n'
+        )
+        expect(emulator.errors).toEqual([
+            "The CPU halted at line 3: a double bus fault while taking Divide by zero (vector 5), as reading its vector at $000014 raised a bus error, where the program's memory invalid line makes $0-$3FF invalid"
+        ])
+        emulator.dispose()
+    })
+
+    it('halts the CPU when the frame of an exception would go into a read only range', async () => {
+        //the supervisor stack starts at $1000000, so the frame's first word goes to $FFFFFE
+        const emulator = await ran(
+            [
+                '    memory read $f00000,$ffffff',
+                '    ORG $1000',
+                '    move.l #div_handler,$14',
+                '    divu #0,d0',
+                'div_handler:',
+                '    rte'
+            ].join('\n') + '\n'
+        )
+        expect(emulator.errors).toEqual([
+            "The CPU halted at line 4: a double bus fault while taking Divide by zero (vector 5), as pushing its frame raised a bus error, writing a word at $FFFFFE, where the program's memory read line makes $F00000-$FFFFFF read only"
+        ])
+        emulator.dispose()
+    })
+})
+
 describe('M68K machine code', () => {
     it('gives each line its encoding, and what it assembled as where it differs', async () => {
         const code =
@@ -1906,6 +2502,48 @@ describe('M68K machine code', () => {
 })
 
 describe('M68K Build output', () => {
+    it('is no File: a Build saves nothing, presents nothing and says nothing of one', async () => {
+        const sources = {
+            entry: 'main.x68',
+            files: {
+                'main.x68': {
+                    encoding: 'plain' as const,
+                    content:
+                        '    opt p=68020\n' + ORG + 'start: extb.l d0\n    simhalt\n    end start\n'
+                }
+            }
+        }
+        const emulator = M68KEmulator(sources)
+        const asked: string[] = []
+        emulator.setBuildOutputHost({
+            claim: async (path) => {
+                asked.push(path)
+                return 'save'
+            },
+            save: (_sources, path) => asked.push(path),
+            isBuildOutput: () => false
+        })
+        await emulator.compile(100, sources)
+        expect(emulator.errors).toEqual([])
+        expect(asked).toEqual([])
+        expect(Object.keys(emulator.buildSources!.files)).toEqual(['main.x68'])
+        expect(Object.keys(emulator.peripherals.fileSystem.files)).not.toContain('main.S68')
+        expect(emulator.notes).toEqual([])
+        //the processor still shows beside the registers
+        expect(emulator.processor).toBe('68020')
+        emulator.dispose()
+    })
+})
+
+describe('M68K Build output with the S-record switch on', () => {
+    //the code kept for when the Build output format is chosen (m68k-machine.md, decision 32)
+    beforeEach(() => {
+        m68kSRecordOutput.enabled = true
+    })
+    afterEach(() => {
+        m68kSRecordOutput.enabled = false
+    })
+
     /** The records of an S-record file, each its type and its fields after the count. */
     function records(text: string) {
         return text
@@ -2138,6 +2776,60 @@ describe('M68K writes into code', () => {
         expect(patched.disassembly).toBe('NOP')
         expect(before.line).toBe(3)
         expect(before.disassembly).toBeUndefined()
+        emulator.dispose()
+    })
+
+    it('says in the History what a step ran after a later step overwrote it', async () => {
+        //the `addq` runs, then the store makes a `nop` of it: memory says NOP there now
+        const emulator = await build(
+            [
+                'target: add.l #5,d1',
+                '    lea target,a0',
+                '    move.w #$4E71,(a0)',
+                '    simhalt'
+            ].join('\n')
+        )
+        for (let i = 0; i < 3; i++) await emulator.step()
+        expect(emulator.changedCode).toEqual([
+            { file: emulator.entry, line: 1, address: 0x1000n, runsNow: 'NOP' }
+        ])
+        const [store, lea, addq] = emulator.latestSteps
+        expect(addq).toMatchObject({ pc: 0x1000, line: 1, disassembly: 'ADDQ.L #5,D1' })
+        expect(lea.disassembly).toBeUndefined()
+        expect(store.disassembly).toBeUndefined()
+        emulator.dispose()
+    })
+
+    it('says in the History what a line ran while it was changed, once it is changed back', async () => {
+        //`add.l #5,d1` runs as a `nop`, and then the program writes its `addq` back
+        const emulator = await build(
+            [
+                '    lea target,a0',
+                '    move.w #$4E71,(a0)',
+                'target: add.l #5,d1',
+                '    move.w #$5A81,(a0)',
+                '    simhalt'
+            ].join('\n')
+        )
+        for (let i = 0; i < 4; i++) await emulator.step()
+        expect(emulator.changedCode).toEqual([])
+        const [, patched] = emulator.latestSteps
+        expect(patched).toMatchObject({ line: 3, disassembly: 'NOP' })
+        expect(registerOf(emulator, 'D1')).toBe(0n)
+        emulator.dispose()
+    })
+
+    it('says nothing of what ran on a step that fetched from an odd address', async () => {
+        //an Entry point at an odd address: the first fetch is an address error, and runs nothing,
+        //where memory there would decode as `DC.W $71FF`
+        const emulator = await build('    nop\n    end $1001\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        const message =
+            'Address error at $1001: vector 3 at $00000C holds no handler (fetching code at the odd address $1001)'
+        expect(emulator.errors).toEqual([message])
+        const [fetched] = emulator.latestSteps
+        expect(fetched).toMatchObject({ kind: 'instruction', pc: 0x1001, line: -1 })
+        expect(fetched.disassembly).toBeUndefined()
         emulator.dispose()
     })
 

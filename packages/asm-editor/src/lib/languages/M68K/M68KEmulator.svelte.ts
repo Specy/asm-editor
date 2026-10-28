@@ -7,6 +7,7 @@ import {
     type InputSettings,
     type InstructionLine,
     Interpreter,
+    type MemoryRange,
     InterpreterStatus as CoreInterpreterStatus,
     type Interrupt,
     type OpenedFile,
@@ -26,14 +27,19 @@ import {
 import {
     type BuildArtifact,
     type ChangedCode,
+    type DataLabel,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
     type ExecutionStep,
     isLineBreakpoint,
+    type MachineRegion,
     makeLabelColor,
+    type MemoryLayout,
+    type MemoryLayoutItem,
     type MutationOperation,
     type PokeWrite,
+    type RegisterFileDescriptor,
     RegisterSize,
     type StackFrame
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
@@ -44,7 +50,13 @@ import { SYNTH_BASES, SYNTH_BLOCK_SIZE } from '#lib/languages/synthRegisters.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
-import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
+import { getM68kErrorMessage, getM68kTerminationMessage } from '#lib/languages/M68K/M68kUtils.ts'
+import {
+    M68K_FIRST_USER_VECTOR,
+    M68K_VECTOR_TABLE_END,
+    m68kVectorAddress,
+    m68kVectorName
+} from '#lib/languages/M68K/M68K-vectors.ts'
 import {
     easy68kColorOf,
     M68K_DRAWING_MODES,
@@ -103,6 +115,81 @@ type PlacedRun = { start: number; length: number; instructions: PlacedInstructio
 
 const M68K_FLAG_NAMES = ['X', 'N', 'Z', 'V', 'C']
 
+/** The Register file of the 68000's system registers, beside the CPU file. */
+const SYSTEM_FILE_ID = 'system'
+
+/** SR's supervisor bit: set, A7 is the SSP; clear, the program is in user mode and A7 is the USP. */
+const SR_SUPERVISOR = 0x2000
+/** The bits of SR's system byte a 68000 has: trace, supervisor and the interrupt mask. */
+const SR_SYSTEM_BITS = 0xa700
+
+/** SR's system byte as the System file's Status flags show it, from its high bit down. */
+const M68K_SYSTEM_FLAGS = [
+    { name: 'T', bit: 15 },
+    { name: 'S', bit: 13 },
+    { name: 'I2', bit: 10 },
+    { name: 'I1', bit: 9 },
+    { name: 'I0', bit: 8 }
+] as const
+
+/**
+ * The 68000's system registers as a Register file of their own, "System"
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 25): the whole
+ * status register, with its system byte as Status flags (trace, supervisor, the interrupt mask),
+ * then both stack pointers. A7 in the CPU file is whichever of the two S makes active, and the CPU
+ * file's Status flags stay the condition codes. Every register takes Pokes through the Core's own
+ * setters, which journal them.
+ */
+const M68K_REGISTER_FILES: RegisterFileDescriptor[] = [
+    {
+        id: SYSTEM_FILE_ID,
+        label: 'System',
+        size: RegisterSize.Long,
+        formats: ['hex'],
+        flagNames: M68K_SYSTEM_FLAGS.map((flag) => flag.name),
+        registers: [{ name: 'SR', size: RegisterSize.Word }, { name: 'USP' }, { name: 'SSP' }]
+    }
+]
+
+/**
+ * The ranges of EASy68K's memory map as the memory view names them, with what each does to the
+ * program's accesses as the Core enforces them
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 15): reads against
+ * invalid and protected, writes against all four, and an instruction's fetch as a read. The
+ * debugger is not the program: a Poke still writes into every one of them.
+ */
+const MEMORY_MAP_REGIONS: Record<MemoryRange['kind'], Omit<MachineRegion, 'start' | 'end'>> = {
+    rom: {
+        kind: 'rom',
+        name: 'ROM',
+        reason: 'The program can read and run code here, and its writes are ignored, so the bytes stay as they are; a Poke still changes them.'
+    },
+    read: {
+        kind: 'readOnly',
+        name: 'Read only',
+        reason: 'The program can read and run code here, and a write by it raises a bus error; a Poke still changes it.'
+    },
+    protected: {
+        kind: 'protected',
+        name: 'Protected',
+        reason: 'Only supervisor mode can use it: in user mode, any access by the program here, a read, a write or running code, raises a bus error. A Poke still changes it.'
+    },
+    invalid: {
+        kind: 'invalid',
+        name: 'Invalid',
+        reason: 'Any access by the program here, a read, a write or running code, raises a bus error; a Poke still changes it.'
+    }
+}
+
+/** The vector table's region, whose data labels are the vectors' names. */
+const VECTORS_REGION: MachineRegion = {
+    kind: 'vectors',
+    name: 'Exception vectors',
+    start: 0n,
+    end: BigInt(M68K_VECTOR_TABLE_END),
+    reason: 'Each long word is the address of an exception’s handler. An odd one, as every vector holds until the program writes it, means there is no handler.'
+}
+
 /**
  * How many instructions the s68k interpreter runs in a millisecond, used to turn a slice's time
  * budget into a halt limit. Measured again on 2026-10-28 with the measurement harness, once the
@@ -138,6 +225,18 @@ const INTERRUPT_INPUT_QUESTIONS: Partial<Record<Interrupt['type'], string>> = {
  * at most eight open at once (`MAXFILES`, `SIMOPS2.CPP`), so a ninth open is answered with null.
  */
 const EASY68K_FILE_DESCRIPTORS: FileDescriptorOptions = { firstDescriptor: 0, maxOpen: 8 }
+
+/**
+ * The switch for the M68K Build output: whether a Build saves its program as the S-record
+ * EASy68K's assembler writes, `main.S68`, through the Build output host of
+ * [ADR 0056](../../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md),
+ * and says in the Log when EASy68K cannot run it. Off until the owner picks the Build output
+ * format, an ELF or a Build output option
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 32): while it is
+ * off a Build saves no File, presents none to the program and says nothing of one. The code it
+ * guards is kept so that choice need not rebuild it, and its tests turn the switch on.
+ */
+export const m68kSRecordOutput = { enabled: false }
 
 /**
  * How the program ended when the editor answered a task with `Terminate`, which it no longer does for
@@ -183,6 +282,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     private graphical = false
     /** What the Build laid out as code, read from the Core once per Build (`placedCode`). */
     private placed: PlacedRun[] | null = null
+    /** The bytes of each instruction in `placed`, by its address (`ranAsBuilt`). */
+    private placedBytes: Map<number, readonly number[]> | null = null
     /**
      * The addresses whose code changed since the Build, with what runs there now, as read at a
      * step id and a count of instructions run: the step id names one state of memory, which Undo
@@ -195,6 +296,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         executed: number
         changed: Map<number, string>
     } | null = null
+    /** The program's labels by address, for the handler an exception went to (`labelAt`). */
+    private labels: Map<number, string> | null = null
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         super(
@@ -202,7 +305,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             {
                 systemSize: RegisterSize.Long,
                 registerNames: [...registerName],
-                endianness: 'big'
+                endianness: 'big',
+                registerFiles: M68K_REGISTER_FILES
             },
             {
                 ...options,
@@ -311,13 +415,16 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
         }
         this.program = result.program
-        //the Build output: the S-record EASy68K's assembler writes, `main.S68`, which EASy68K's
-        //simulator loads and runs ([ADR 0065](../../../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md))
-        const program = new TextEncoder().encode(result.program.toSRecord())
         //a program written for the 68010 or the 68020 says so beside the registers, and of its
         //S-record that EASy68K cannot run it; one for the 68000, which is every program without
         //an `opt p=` line, says nothing
         const processor = result.program.getProcessor()
+        if (!m68kSRecordOutput.enabled) {
+            return { ok: true, diagnostics, ...(processor === '68000' ? {} : { processor }) }
+        }
+        //the Build output, while its switch is on: the S-record EASy68K's assembler writes,
+        //`main.S68`, which EASy68K's simulator loads and runs
+        const program = new TextEncoder().encode(result.program.toSRecord())
         if (processor === '68000') {
             return { ok: true, diagnostics, program, programFormat: 'srecord' }
         }
@@ -382,7 +489,23 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     private forgetPlacedCode(): void {
         this.placed = null
+        this.placedBytes = null
         this.changedReading = null
+        this.labels = null
+    }
+
+    /** The label the program put at `address`, the first it defined there, or undefined. */
+    private labelAt(address: number): string | undefined {
+        if (!this.labels) {
+            // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A lookup table rebuilt per Build; nothing renders from it.
+            const labels = new Map<number, string>()
+            for (const symbol of Object.values(this.program?.getSymbols() ?? {})) {
+                if (symbol.kind === 'label' && !labels.has(symbol.value))
+                    labels.set(symbol.value, symbol.name)
+            }
+            this.labels = labels
+        }
+        return this.labels.get(address)
     }
 
     /**
@@ -446,6 +569,27 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         return changed
     }
 
+    /**
+     * Whether `bytes`, what a step ran at `address`, are what the Build placed there: a line that
+     * the program changed and changed back ran other words in between, which its text does not say.
+     */
+    private ranAsBuilt(address: number, bytes: readonly number[]): boolean {
+        if (!this.placedBytes) {
+            // eslint-disable-next-line svelte/prefer-svelte-reactivity -- A lookup table rebuilt per Build; nothing renders from it.
+            const placed = new Map<number, readonly number[]>()
+            for (const run of this.placedCode())
+                for (const instruction of run.instructions)
+                    placed.set(instruction.address, instruction.bytes)
+            this.placedBytes = placed
+        }
+        const built = this.placedBytes.get(address)
+        return (
+            built !== undefined &&
+            built.length === bytes.length &&
+            built.every((byte, i) => byte === bytes[i])
+        )
+    }
+
     /** Memory changed without a step of its own: a direct write, or the answer to a trap. */
     private forgetChangedCode(): void {
         this.changedReading = null
@@ -471,18 +615,75 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         )
     }
 
+    /**
+     * The frames entered and not returned from: each `bsr` and `jsr` by the label it called, and
+     * each exception taken by its vector and handler, `TRAP #3 → trap3_handler`, which `rte` pops
+     * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28).
+     */
     _getCallStack(): StackFrame[] {
         return (
-            this.interpreter?.getCallStack().map((frame, i) => ({
-                address: BigInt(frame.address),
-                name: frame.label_name,
-                line: frame.label_location?.line ?? -1,
-                file: frame.label_location?.file,
-                sp: BigInt(frame.registers[15]),
-                destination: BigInt(frame.source_address),
-                color: makeLabelColor(i, frame.address)
-            })) ?? []
+            this.interpreter?.getCallStack().map((frame, i) => {
+                const vector = frame.kind === 'exception' ? frame.vector : undefined
+                const handler =
+                    frame.label_location === undefined
+                        ? m68kAddress(frame.address)
+                        : frame.label_name
+                return {
+                    address: BigInt(frame.address),
+                    name:
+                        vector === undefined
+                            ? frame.label_name
+                            : `${m68kVectorName(vector)} → ${handler}`,
+                    ...(vector === undefined
+                        ? {}
+                        : {
+                              detail: `An exception, taken through vector ${vector} at ${m68kVectorAddress(vector)}: \`rte\` returns to ${m68kAddress(frame.source_address)}`
+                          }),
+                    line: frame.label_location?.line ?? -1,
+                    file: frame.label_location?.file,
+                    sp: BigInt(frame.registers[15]),
+                    destination: BigInt(frame.source_address),
+                    color: makeLabelColor(i, frame.address)
+                }
+            }) ?? []
         )
+    }
+
+    _getRegisterFileValues(id: string): bigint[] {
+        if (id !== SYSTEM_FILE_ID) throw new Error(`Unknown register file: ${id}`)
+        const system = this.interpreter?.getSystem()
+        if (!system) return [0n, 0n, 0n]
+        return [system.sr, system.usp, system.ssp].map((value) => BigInt(value >>> 0))
+    }
+
+    /**
+     * SR's system byte, T S I2 I1 I0, with the SR the newest step found as the previous value, as
+     * the CPU file's condition codes take theirs (`_getFlags`).
+     */
+    _getRegisterFileFlags(id: string): { name: string; value: number; prev?: number }[] {
+        if (id !== SYSTEM_FILE_ID) throw new Error(`Unknown register file: ${id}`)
+        const interpreter = this.interpreter
+        const sr = interpreter?.getSr() ?? 0
+        const prev = interpreter?.getUndoHistory(1)[0]?.old_sr ?? sr
+        return M68K_SYSTEM_FLAGS.map(({ name, bit }) => ({
+            name,
+            value: (sr >>> bit) & 1,
+            prev: (prev >>> bit) & 1
+        }))
+    }
+
+    /**
+     * A Poke of SR, the USP or the SSP, through the Core's setters, which journal it inside a Poke:
+     * SR is cut to the bits a 68000 has, and a change of S makes A7 the other stack pointer.
+     */
+    _setRegisterFileValue(id: string, register: string, value: bigint): void {
+        if (id !== SYSTEM_FILE_ID) throw new Error(`Unknown register file: ${id}`)
+        const interpreter = this.requireInterpreter()
+        const word = Number(BigInt.asUintN(32, value))
+        if (register === 'SR') interpreter.setSr(word)
+        else if (register === 'USP') interpreter.setUsp(word)
+        else if (register === 'SSP') interpreter.setSsp(word)
+        else throw new Error(`No System register named ${register}`)
     }
 
     _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
@@ -544,7 +745,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     _getMemoryLayout() {
         const values = this.program!.getLayoutItems()
-        const items: import('../commonLanguageFeatures.svelte').MemoryLayoutItem[] = []
+        const items: MemoryLayoutItem[] = []
         for (let i = 0; i < values.length; i += 5)
             items.push({
                 start: BigInt(values[i]),
@@ -560,7 +761,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 address: BigInt(symbol.value),
                 fromLibrary: false
             }))
-        return memoryLayoutFromItems(items, labels)
+        return withMachineRegions(
+            memoryLayoutFromItems(items, labels),
+            this.program!.getMemoryMap()
+        )
     }
     _getStackTop() {
         return BigInt(this.interpreter?.getStackTop() ?? 0)
@@ -624,7 +828,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     mutations: writes.map(pokeWriteToMutation)
                 }
             }
-            const mutations = step.mutations.map(convertMutation)
+            const mutations = this.stepMutations(step)
             //the row of an instruction that wrote into code says so, as the Run's pause did
             if (step.wroteCode) {
                 mutations.push({
@@ -632,11 +836,16 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     value: `Wrote into its code at ${this.describeCodeWrite(step.wroteCode).replaceAll('`', '')}`
                 })
             }
-            //what ran where the source does not say: on no line, as in data, or on a line
-            //whose bytes have changed since the Build
-            const disassembly = step.location
-                ? changed.get(step.pc)
-                : interpreter.disassembleAt(step.pc).text
+            //what ran where the source does not say: on no line, as in data, or on a line whose
+            //bytes have changed since the Build, now or by the time it ran. The text is the step's
+            //own, from the words it ran, so a later write into its code leaves it right; a step
+            //that ran nothing, an instruction fetched from an odd address, has none
+            const ran = step.ran
+            const disassembly =
+                ran &&
+                (!step.location || changed.has(step.pc) || !this.ranAsBuilt(ran.address, ran.bytes))
+                    ? ran.text
+                    : undefined
             return {
                 kind: 'instruction',
                 pc: step.pc,
@@ -648,6 +857,82 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 ...(disassembly === undefined ? {} : { disassembly })
             }
         })
+    }
+
+    /**
+     * What an instruction did, as its History row lists it
+     * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28). An exception
+     * it raised comes first, since that is what the row is about, with the handler's label, and the
+     * frame the processor pushed follows it. A swap of the stack pointers says which mode the
+     * processor went into, a write of SR's system byte by the instruction itself is a write of SR,
+     * and `move An,usp` is a write of the USP.
+     */
+    private stepMutations(step: CoreExecutionStep): MutationOperation[] {
+        const exceptions: MutationOperation[] = []
+        const rest: MutationOperation[] = []
+        let supervisor = (step.old_sr & SR_SUPERVISOR) !== 0
+        for (const mutation of step.mutations) {
+            switch (mutation.type) {
+                case 'PushException': {
+                    const { vector, from, handler } = mutation.value
+                    const label = this.labelAt(handler)
+                    exceptions.push({
+                        type: 'TakeException',
+                        value: {
+                            vector,
+                            name: m68kVectorName(vector),
+                            from: BigInt(from),
+                            handler: BigInt(handler),
+                            ...(label === undefined ? {} : { label })
+                        }
+                    })
+                    break
+                }
+                case 'PopException':
+                    rest.push({
+                        type: 'ReturnFromException',
+                        value: { from: BigInt(mutation.value.from), to: BigInt(mutation.value.to) }
+                    })
+                    break
+                case 'WriteStackPointers': {
+                    const { old, new: next } = mutation.value
+                    const writes = (['usp', 'ssp'] as const).flatMap((register) =>
+                        old[register] === next[register]
+                            ? []
+                            : [stackPointerWrite(register, old[register], next[register])]
+                    )
+                    if (writes.length > 0) {
+                        rest.push(...writes)
+                        break
+                    }
+                    //a change of S moves no value: A7 becomes the other stack pointer
+                    supervisor = !supervisor
+                    rest.push({
+                        type: 'Other',
+                        value: supervisor
+                            ? 'Switched to supervisor mode, so A7 is the SSP'
+                            : 'Switched to user mode, so A7 is the USP'
+                    })
+                    break
+                }
+                default:
+                    rest.push(convertMutation(mutation))
+            }
+        }
+        //`move #n,sr` and the like; an exception taken or returned from says what it did to SR
+        const tookOrReturned = exceptions.length > 0 || rest.some(isReturnFromException)
+        if (((step.old_sr ^ step.new_sr) & SR_SYSTEM_BITS) !== 0 && !tookOrReturned) {
+            rest.unshift({
+                type: 'WriteRegister',
+                value: {
+                    register: 'sr',
+                    old: BigInt(step.old_sr),
+                    new: BigInt(step.new_sr),
+                    size: RegisterSize.Word
+                }
+            })
+        }
+        return [...exceptions, ...rest]
     }
 
     _hasTerminated(): boolean {
@@ -675,12 +960,14 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 return { kind: 'end', unwrittenMemory: m68kAddress(termination.value.address) }
             case 'TerminatedByHost':
                 return { kind: 'error', message: ENDED_BY_THE_EDITOR }
-            case 'Exception': {
+            //an exception whose vector held no handler, or a double fault, which halts the CPU
+            case 'Exception':
+            case 'Halted': {
                 const line = interpreter.getLastInstruction()?.location.line
                 return {
                     kind: 'error',
                     message: this._stringifyRuntimeError(
-                        termination.value,
+                        termination.value.cause,
                         line === undefined ? undefined : line + 1
                     )
                 }
@@ -731,16 +1018,28 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _stringifyError(error: unknown, line?: number): string {
-        return getM68kErrorMessage(error, line)
+        return getM68kErrorMessage(error, line, undefined, this.program?.getMemoryMap())
     }
 
-    /** The error the program ended on, at the address it ran when no line was laid out there. */
+    /**
+     * The error the program ended on, at the address it ran when no line was laid out there. The
+     * Core throws only the cause; its termination adds the vector that held no handler, "Division
+     * by zero at line 12: vector 5 at $000014 holds no handler", or the exception whose frame
+     * halted the CPU. A bus error names the range of the memory map that refused it.
+     */
     _stringifyRuntimeError(error: unknown, line?: number): string {
-        return getM68kErrorMessage(
-            error,
-            line,
-            line === undefined ? this.failedOutsideTheSource() : undefined
-        )
+        const address = line === undefined ? this.failedOutsideTheSource() : undefined
+        const memoryMap = this.program?.getMemoryMap()
+        const termination = this.interpreter?.getTermination()
+        if (
+            (termination?.type === 'Exception' || termination?.type === 'Halted') &&
+            typeof error === 'object' &&
+            error !== null &&
+            (error as { type?: unknown }).type === termination.value.cause.type
+        ) {
+            return getM68kTerminationMessage(termination, line, address, memoryMap)
+        }
+        return getM68kErrorMessage(error, line, address, memoryMap)
     }
 
     /**
@@ -751,7 +1050,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      */
     private failedOutsideTheSource(): number | undefined {
         const interpreter = this.interpreter
-        if (interpreter?.getTermination()?.type !== 'Exception') return undefined
+        if (!interpreter) return undefined
+        const ended = interpreter.getTermination()?.type
+        if (ended !== 'Exception' && ended !== 'Halted') return undefined
         const [step] = interpreter.getUndoHistory(1)
         return step?.kind === 'instruction' && !step.location ? step.pc : undefined
     }
@@ -1660,6 +1961,41 @@ function laterProcessorOutputNote(path: string, processor: '68010' | '68020'): s
     return `\`${path}\` is a program for the ${processor} (\`opt p=${processor}\`), which EASy68K does not simulate: it runs ${runs}.`
 }
 
+/**
+ * The layout with what the 68000 and the program's memory map give a meaning
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 31): the vector
+ * table, a data label for each of the 68000's own vectors (0 to 63) and one for the user vectors,
+ * which only vectored interrupts use and EASy68K has none of; and each range the program's
+ * `memory` lines declare, `end` included. A Poke still writes into all of them (decision 15), so
+ * none is read only memory.
+ */
+function withMachineRegions(layout: MemoryLayout, map: readonly MemoryRange[]): MemoryLayout {
+    const vector = (name: string, number: number): DataLabel => ({
+        name,
+        address: BigInt(number * 4),
+        section: VECTORS_REGION.name,
+        fromLibrary: false
+    })
+    const vectors = Array.from({ length: M68K_FIRST_USER_VECTOR }, (_, number) =>
+        vector(m68kVectorName(number), number)
+    )
+    vectors.push(vector('User vectors', M68K_FIRST_USER_VECTOR))
+    const ranges = map
+        .filter((range) => range.end >= range.start)
+        .map((range) => ({
+            ...MEMORY_MAP_REGIONS[range.kind],
+            start: BigInt(range.start),
+            end: BigInt(range.end) + 1n
+        }))
+    return {
+        ...layout,
+        dataLabels: [...layout.dataLabels, ...vectors].sort((a, b) =>
+            a.address < b.address ? -1 : a.address > b.address ? 1 : a.name.localeCompare(b.name)
+        ),
+        machineRegions: [VECTORS_REGION, ...ranges]
+    }
+}
+
 /** An address as EASy68K writes one, `$1012`. */
 function m68kAddress(address: number): string {
     return `$${address.toString(16).toUpperCase()}`
@@ -1692,7 +2028,15 @@ function toInstruction(instruction: InstructionLine | null | undefined): Instruc
     }
 }
 
-function convertMutation(mutation: CoreExecutionStep['mutations'][number]): MutationOperation {
+type CoreMutation = CoreExecutionStep['mutations'][number]
+
+/** The mutations that convert one for one; the stack pointers' and the exceptions' read the step. */
+function convertMutation(
+    mutation: Exclude<
+        CoreMutation,
+        { type: 'WriteStackPointers' | 'PushException' | 'PopException' }
+    >
+): MutationOperation {
     switch (mutation.type) {
         case 'WriteRegister':
             return {
@@ -1749,6 +2093,23 @@ function convertMutation(mutation: CoreExecutionStep['mutations'][number]): Muta
     }
 }
 
+/** `move An,usp`, or a poke of either stack pointer, as a write of that register. */
+function stackPointerWrite(register: 'usp' | 'ssp', old: number, next: number): MutationOperation {
+    return {
+        type: 'WriteRegister',
+        value: {
+            register,
+            old: BigInt(old >>> 0),
+            new: BigInt(next >>> 0),
+            size: RegisterSize.Long
+        }
+    }
+}
+
+function isReturnFromException(mutation: MutationOperation): boolean {
+    return mutation.type === 'ReturnFromException'
+}
+
 /**
  * What task 12 or 16 changed, as the History names it: "Turned the echo off". The Core journals a
  * change only, so at least one of the three differs.
@@ -1800,10 +2161,18 @@ function pokeWriteToMutation(write: PokeWrite): MutationOperation {
     }
 }
 
-/** The Core names a register the way the assembler does; the Register file draws it `D0`, `A7`. */
+/**
+ * The Core names a register the way the assembler does; the Register files draw it `D0`, `A7`, and
+ * the System file's `SR`, `USP` and `SSP`.
+ */
 function pokeRegisterName(name: string): string {
     const upper = name.toUpperCase()
-    return (registerName as readonly string[]).includes(upper) ? upper : name
+    return (registerName as readonly string[]).includes(upper) ||
+        upper === 'SR' ||
+        upper === 'USP' ||
+        upper === 'SSP'
+        ? upper
+        : name
 }
 
 function unsupportedMutation(mutation: never): never {

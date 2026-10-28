@@ -1,6 +1,6 @@
 {
     "name": "Exceptions and the vector table",
-    "description": "How the 68000 uses exception vectors, why this editor reports faults instead of running handlers, and how to guard a division before it fails.",
+    "description": "How the 68000 runs a handler through its vector table: filling a vector, a trap service of your own, rte and the exception frame, and user mode with a stack of its own.",
     "order": 2,
     "topic": "interrupts"
 }

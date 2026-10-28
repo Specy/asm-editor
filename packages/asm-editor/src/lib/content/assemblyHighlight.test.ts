@@ -294,6 +294,8 @@ describe('tokenizeAssembly', () => {
     it('reads the words s68k refuses as invalid, and every one of them', () => {
         expect(kindOf('    stop #$2700', 'M68K', 'stop')).toBe('invalid')
         expect(kindOf('    bsr reset', 'M68K', 'reset')).toBe('plain')
+        //what the Core has come to assemble is an instruction again
+        expect(kindOf('    rte', 'M68K', 'rte')).toBe('mnemonic')
         expect(
             [
                 ...M68KRefusedInstructions,

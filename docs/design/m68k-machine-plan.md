@@ -6,7 +6,7 @@ Written on 2026-10-21, beside the [design](./m68k-machine.md), and revised the s
 - the Hardware panel and the S-record Executables deferred;
 - the 68010 and 68020 added as dialects.
 
-On 2026-10-28 the owner confirmed design decision 3's `opt p=` and planning decisions 11 and 12, and batch 1 began. The editor ADRs are numbered 0065 (the S-record Build output) and 0066 (IRQs), since 0055 and 0056 were taken meanwhile.
+On 2026-10-28 the owner confirmed design decision 3's `opt p=` and planning decisions 11 and 12, and batch 1 began. The editor's IRQ ADR is numbered 0065, since 0055 was taken meanwhile. The same day the owner deferred the Build output's format (design decision 32), so E5 is deferred and has no ADR.
 
 The plan covers both halves:
 
@@ -110,13 +110,13 @@ What the editor will call, beside today's methods. TypeScript names are as `ts-l
 
 ## Batches and milestones
 
-| Batch                    | Core            | Editor                    | Ships                                                                                                                                                                                                     |
-| ------------------------ | --------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Real code             | C0–C5, C10, C11 | E0, E1, E5, E6a, E7a, E8a | Encodings, disassembler, code in memory with the cache and the code-write pause, conformance on plain instructions, `.S68` Build output, `opt p=` with its first two instructions. Core 4.0.0 (breaking). |
-| 2. Exceptions            | C6, C7          | E2, E7b, E8b              | Vectors, frames, `rte`, privilege, trace, bus errors, memory map. Core 4.1.0.                                                                                                                             |
-| 3. Interrupts and cycles | C8, C9          | E3, E4, E7c, E8c          | IRQs, `stop`, `reset`, timers, keyboard and mouse IRQs, cycles. Core 4.2.0.                                                                                                                               |
-| 4. The 68010             | C12             | E6b                       | The complete 68010 dialect. Core 4.3.0.                                                                                                                                                                   |
-| 5. The 68020             | C13             | E6c                       | The 68020 as a 68EC020, user-mode integer set; its cache-case cycle estimate can follow. Core 4.4.0.                                                                                                      |
+| Batch                    | Core            | Editor                | Ships                                                                                                                                                                                                     |
+| ------------------------ | --------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Real code             | C0–C5, C10, C11 | E0, E1, E6a, E7a, E8a | Encodings, disassembler, code in memory with the cache and the code-write pause, conformance on plain instructions, the S-record writer, `opt p=` with its first two instructions. Core 4.0.0 (breaking). |
+| 2. Exceptions            | C6, C7          | E2, E7b, E8b          | Vectors, frames, `rte`, privilege, trace, bus errors, memory map. Core 4.1.0.                                                                                                                             |
+| 3. Interrupts and cycles | C8, C9          | E3, E4, E7c, E8c      | IRQs, `stop`, `reset`, timers, keyboard and mouse IRQs, cycles. Core 4.2.0.                                                                                                                               |
+| 4. The 68010             | C12             | E6b                   | The complete 68010 dialect. Core 4.3.0.                                                                                                                                                                   |
+| 5. The 68020             | C13             | E6c                   | The 68020 as a 68EC020, user-mode integer set; its cache-case cycle estimate can follow. Core 4.4.0.                                                                                                      |
 
 Within a batch the Core leads and the editor follows each milestone. Batches run in order: batches 4 and 5 build on batch 2's frames and batch 3's timing tables.
 
@@ -303,6 +303,7 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
 - **History rows** for steps with no source line show `disassembleAt(pc)`, and so does the agent's step formatting ([formatting.ts](../../packages/asm-editor/src/components/shared/agent/defaultCodingAgent/formatting.ts)).
 - **Estimate:** 1–2 days.
 - **As built (2026-10-28):** the adapter compares every laid-out line, not only those on screen: it reads each run of code in one call at a refresh and disassembles only what changed, and keeps the reading while the Core's step id stands. A changed line is marked as a Listing's patched line is, and a History row on a changed line shows its disassembly too.
+- **Since Core 6e9d8a3:** a History row's disassembly is the step's own `ran`, decoded from the words it ran, so a later write into its code leaves the row right; `disassembleAt(pc)` read memory as it is now. A row also shows it when its line ran other bytes than the Build placed, as a line changed and then changed back does. A step that ran nothing, an instruction fetched from an odd address or refused by the memory map, shows none.
 
 ### E2: Exceptions and privilege in the editor (after C6, C7)
 
@@ -315,6 +316,15 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
     - ROM does not join `readOnly` for Pokes (design decision 15).
 - **Tests:** the adapter (a trap #3 handler, an unhandled divide, a privilege violation in user mode, undo through `rte`), register files, regions, and History rendering.
 - **Estimate:** 3–4 days.
+- **As built (2026-10-28), against C6 alone:**
+    - **Terminations.** An exception whose vector held no handler reads "Division by zero at line 12: vector 5 at $000014 holds no handler", what it was about following in parentheses ("Address error … (reading a word at the odd address $1)"). A double fault reads "The CPU halted at line 4: a double bus fault while taking TRAP #0 (vector 32), as pushing its frame raised an address error, writing a word at the odd address $4FFF". Both are `error` terminations.
+    - **History.** `PushException` becomes the shared mutation `TakeException` (vector, name, handler, label), listed first in its row and drawn apart from the frame it pushed; `PopException` becomes `ReturnFromException`. A swap of the stacks reads "Switched to user mode, so A7 is the USP", `move An,usp` is a write of the USP, and an instruction that writes SR's system byte gets a write of SR. `SetMachineState` is C8's and not handled yet.
+    - **Regions.** The memory layout gains `machineRegions`. The Exception vectors region has a data label for each vector 0 to 63 and one "User vectors" for 64 to 255, which only vectored interrupts use, so the picker lists 65 rows rather than 256. Overlaps outline the vectors first, then a range of the map, then the program's own runs, and the hover names them all with a line saying what the region means.
+- **As built against C7 (Core 6e9d8a3):**
+    - **Bus errors.** A bus error says what was accessed and which `memory` line refused it, with the range's bounds from `getMemoryMap()`: "Bus error at line 7: vector 2 at $000008 holds no handler (writing a word at $9000, where the program's memory read line makes $9000-$9FFF read only)". A protected range adds "in user mode". A double fault on a vector read from an invalid range reads "…, as reading its vector at $000014 raised a bus error, where …", and one on a refused frame "as pushing its frame raised a bus error, …".
+    - **Regions.** Each range's hover says what the Core enforces: ROM can be read and run and ignores writes, read only refuses writes, protected refuses every access from user mode, invalid every access, a fetch included.
+    - **The `memory` directive** leaves the refused lists, so it is highlighted, completed and documented as a directive.
+    - **Quick fix.** `processor_chosen_after_code`'s deletion of the late `opt` line comes through the existing provider unchanged.
 
 ### E3: IRQs and stop in the editor (after C8)
 
@@ -325,7 +335,7 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
 - **Timers.** An IRQ timer scheduler in the adapter reads `getMachineState().autoIrqs` after every Core call and schedules firings on [ProgramClock.ts](../../packages/asm-editor/src/lib/languages/peripherals/ProgramClock.ts). Firings run only during a Run; virtual time applies in Testcases, where `Stopped` advances the clock to the next firing.
 - **Keyboard and mouse events.** Press-time hooks on [Keyboard.ts](../../packages/asm-editor/src/lib/languages/peripherals/Keyboard.ts) and [Mouse.ts](../../packages/asm-editor/src/lib/languages/peripherals/Mouse.ts) call `deviceEvent`. Key state still applies at read time, as ADR 0008 requires.
 - **IRQ steps** render as History rows of their own.
-- **Records.** Editor ADR 0066 is written, amending 0008, and ADR 0010 gets a note on timers. (The design first numbered it 0055, which was taken in the meantime.)
+- **Records.** Editor ADR 0065 is written, amending 0008, and ADR 0010 gets a note on timers. (The design first numbered it 0055, which was taken in the meantime.)
 - **Tests:**
     - a fake-clock scheduler;
     - `stop` with Pause and Stop;
@@ -340,12 +350,11 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
 - **Trap tasks.** Tasks 30 and 31 move from the refused list in [M68K-traps.ts](../../packages/asm-editor/src/lib/languages/M68K/M68K-traps.ts) to the documented tasks, and task 32's #4, #5 and #6 are documented beside its refused parts.
 - **Estimate:** 1 day.
 
-### E5: The S-record Build output (after C10)
+### E5: The S-record Build output (deferred)
 
-- **Output.** `_compile` returns the S-record as the Build output `<entry>.S68`, stored as text bytes ([buildOutput.ts](../../packages/asm-editor/src/lib/buildOutput.ts)).
-- **Dialects.** For a non-68000 Program the Log says the file will not run in EASy68K.
-- **Records.** Editor [ADR 0065](../adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md) is written, amending 0056, which superseded 0050. (The design first numbered it 0056, which was taken in the meantime.)
-- **Estimate:** 0.5–1 day.
+- **Deferred** on 2026-10-28: the owner wants the Build output's format chosen first, an ELF or a Build output option (design decision 32). Until then an M68K Build saves no File.
+- **The code is kept, switched off.** `_compile` makes the S-record `<entry>.S68`, saved as text through the Build output host ([buildOutput.ts](../../packages/asm-editor/src/lib/buildOutput.ts)), and for a non-68000 Program the Log says the file will not run in EASy68K, but only while [`m68kSRecordOutput`](../../packages/asm-editor/src/lib/languages/M68K/M68KEmulator.svelte.ts) is on. Its tests turn it on.
+- **Records.** None while it is deferred. The ADR first written for it was deleted before it was merged, and its number, 0065, goes to the IRQs (E3).
 
 ### E6: Dialects in the editor
 
@@ -396,16 +405,16 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
 
 Person-days for someone who knows both codebases. The fixes found by the conformance suite are the least certain part of the 68000; the differential harness is the least certain part of the dialects.
 
-|                                | Core                                  | Editor and content               | Total                                                          |
-| ------------------------------ | ------------------------------------- | -------------------------------- | -------------------------------------------------------------- |
-| Batch 1: Real code             | 15–25 (C0–C5, C10, C11, C14)          | 6–10 (E0, E1, E5, E6a, E7a, E8a) | 21–35                                                          |
-| Batch 2: Exceptions            | 6–9 (C6, C7, C14)                     | 5–7 (E2, E7b, E8b)               | 11–16                                                          |
-| Batch 3: Interrupts and cycles | 5–8 (C8, C9, C14)                     | 6–7 (E3, E4, E7c, E8c)           | 11–15                                                          |
-| Conformance fixes              | 3–5                                   |                                  | 3–5                                                            |
-| **The 68000 machine**          | **29–47**                             | **17–24**                        | **46–71, about 9–14 weeks**                                    |
-| Batch 4: The 68010             | 9–13 (C12, C14)                       | 1–2 (E6b)                        | 10–15                                                          |
-| Batch 5: The 68020             | 20–31, plus 3–5 for cycles (C13, C14) | 3–4 (E6c)                        | 23–35, plus 3–5                                                |
-| **With both dialects**         |                                       |                                  | **79–121, plus 3–5 for the 68020's cycles; about 16–25 weeks** |
+|                                | Core                                  | Editor and content           | Total                                                          |
+| ------------------------------ | ------------------------------------- | ---------------------------- | -------------------------------------------------------------- |
+| Batch 1: Real code             | 15–25 (C0–C5, C10, C11, C14)          | 6–10 (E0, E1, E6a, E7a, E8a) | 21–35                                                          |
+| Batch 2: Exceptions            | 6–9 (C6, C7, C14)                     | 5–7 (E2, E7b, E8b)           | 11–16                                                          |
+| Batch 3: Interrupts and cycles | 5–8 (C8, C9, C14)                     | 6–7 (E3, E4, E7c, E8c)       | 11–15                                                          |
+| Conformance fixes              | 3–5                                   |                              | 3–5                                                            |
+| **The 68000 machine**          | **29–47**                             | **17–24**                    | **46–71, about 9–14 weeks**                                    |
+| Batch 4: The 68010             | 9–13 (C12, C14)                       | 1–2 (E6b)                    | 10–15                                                          |
+| Batch 5: The 68020             | 20–31, plus 3–5 for cycles (C13, C14) | 3–4 (E6c)                    | 23–35, plus 3–5                                                |
+| **With both dialects**         |                                       |                              | **79–121, plus 3–5 for the 68020's cycles; about 16–25 weeks** |
 
 ## Risks
 

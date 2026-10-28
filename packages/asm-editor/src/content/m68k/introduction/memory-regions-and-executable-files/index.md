@@ -143,8 +143,8 @@ A **raw binary** contains a sequence of bytes without ELF's loading records. Its
 and entry point must be supplied separately.
 
 An **S-record** file, the format EASy68K uses, writes those bytes as lines of text, each with the
-address its bytes go to, and ends with the entry point. In the full editor, a Build saves one beside
-the source, named after it with `.S68`, and EASy68K's simulator can load and run it.
+address its bytes go to, and ends with the entry point. EASy68K's assembler writes one named after
+the source with `.S68`, and its simulator loads and runs it.
 
 ## Check your understanding
 

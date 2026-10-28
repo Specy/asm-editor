@@ -7,6 +7,18 @@
         { "query": "dbra", "first": "m68k/instructions/dbra" },
         { "query": "movea", "first": "m68k/instructions/movea" },
         { "query": "dc", "first": "m68k/directives/dc" },
+        { "query": "rte", "first": "m68k/instructions/rte" },
+        {
+            "query": "return from exception",
+            "top": 3,
+            "expect": ["m68k/instructions/rte", "m68k/exceptions/frames"]
+        },
+        {
+            "query": "exception vector table",
+            "top": 3,
+            "expect": "m68k/exceptions/the-vector-table"
+        },
+        { "query": "user mode stack pointer", "top": 3, "expect": "m68k/exceptions/modes" },
         { "query": "print a number", "top": 1, "expect": "m68k/trap-tasks/task-3" },
         { "query": "how do I print a number", "top": 3, "expect": "m68k/trap-tasks/task-3" },
         { "query": "set the pen color", "top": 1, "expect": "m68k/trap-tasks/task-80" },

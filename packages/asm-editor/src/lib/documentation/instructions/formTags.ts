@@ -50,8 +50,8 @@ export function z80FormTags(
 }
 
 /**
- * Privileged is the 68000's rule; s68k runs every program in supervisor mode all the same. A form a
- * later processor brought is tagged with that processor, the 68010 or the 68020, which a program
+ * Privileged is the 68000's rule, which s68k enforces: in user mode the form raises a privilege
+ * violation. A form a later processor brought is tagged with that processor, the 68010 or the 68020, which a program
  * chooses with `opt p=` ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
  * decision 3).
  */

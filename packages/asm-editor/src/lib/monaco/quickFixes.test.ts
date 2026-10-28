@@ -179,6 +179,34 @@ describe('quick fixes from the Core', () => {
         expect(refused.file).toBe('lib.x68')
         expect(refused.fixes!.map((fix) => fix.file)).toEqual(['main.x68', 'lib.x68'])
     })
+
+    it('delete an `opt` line that comes after the first instruction, which chooses nothing', () => {
+        const late = '    org $1000\n    nop\n    opt p=68020\n    extb.l d0\n'
+        const [after, refused] = diagnosticsOf(sourcesOf({ 'main.m68k': late }))
+        expect(after.code).toBe('processor_chosen_after_code')
+        const [remove] = after.fixes!
+        expect(remove).toMatchObject({ title: 'Delete `opt p=68020`', text: '' })
+        expect(quickFixRange(remove)).toEqual({
+            startLineNumber: 3,
+            startColumn: 1,
+            endLineNumber: 3,
+            endColumn: 16
+        })
+        //with the `extb.l`'s own fix, in either order, the program assembles for the 68020
+        const [opt] = refused.fixes!
+        const deleted = applyEdit(late, quickFixRange(remove), remove.text)
+        expect(deleted).toBe('    org $1000\n    nop\n\n    extb.l d0\n')
+        const both = applyEdit(deleted, quickFixRange(opt), opt.text)
+        expect(assembles(both)).toEqual({ processor: '68020', errors: [] })
+        const other = applyEdit(late, quickFixRange(opt), opt.text)
+        const [again] = diagnosticsOf(sourcesOf({ 'main.m68k': other }))
+        expect(again.code).toBe('processor_chosen_after_code')
+        const [removeAgain] = again.fixes!
+        expect(assembles(applyEdit(other, quickFixRange(removeAgain), removeAgain.text))).toEqual({
+            processor: '68020',
+            errors: []
+        })
+    })
 })
 
 describe('the quick fix provider', () => {

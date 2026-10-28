@@ -65,8 +65,8 @@ describe('the M68K Documentation', () => {
             chapters().map((chapter) => [chapter.id, chapter.entries.length])
         )
         expect(counts).toEqual({
-            instructions: 69,
-            'addressing-modes': 10,
+            instructions: 70,
+            'addressing-modes': 11,
             //the explanation's two sections, then the 16 codes
             'condition-codes': 18,
             'shift-directions': 1,
@@ -75,8 +75,9 @@ describe('the M68K Documentation', () => {
             'trap-tasks': 72,
             //the introduction and the seven sections after it
             synth: 8,
-            exceptions: 4,
-            directives: 18,
+            //the introduction and the nine sections after it
+            exceptions: 10,
+            directives: 19,
             'assembler-features': 1
         })
     })
@@ -229,7 +230,7 @@ describe('the M68K Documentation', () => {
 
     it('leaves an instruction without an example without one, so its page says so', () => {
         expect(M68KUncompoundedInstructions.get('roxl')?.interactiveExample).toBeUndefined()
-        expect(M68KUncompoundedInstructions.get('chk')?.interactiveExample).toBeUndefined()
+        expect(M68KUncompoundedInstructions.get('rtr')?.interactiveExample).toBeUndefined()
         expect(M68KUncompoundedInstructions.get('move')?.interactiveExample?.code).toContain(
             'move.b #$FF, d0'
         )

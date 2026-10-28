@@ -317,6 +317,20 @@
                     <div class="mutation-plain">
                         Pushed call from {hex(mutation.value.from)} to {hex(mutation.value.to)}
                     </div>
+                {:else if mutation.type === 'TakeException'}
+                    <!--
+                        what the instruction raised, the vector the processor went through and the
+                        handler it jumped to: "Divide by zero → vector 5, div_handler at $1040"
+                    -->
+                    <div class="mutation-plain exception">
+                        {mutation.value.name} → vector {mutation.value.vector},
+                        {#if mutation.value.label}<code class="handler">{mutation.value.label}</code
+                            >{:else}the handler{/if} at ${hex(mutation.value.handler)}
+                    </div>
+                {:else if mutation.type === 'ReturnFromException'}
+                    <div class="mutation-plain">
+                        Returned from the exception to ${hex(mutation.value.to)}
+                    </div>
                 {:else if mutation.type === 'Other'}
                     <div class="mutation-plain">{mutation.value}</div>
                 {/if}
@@ -467,6 +481,19 @@
 
     .mutation-plain {
         padding: 0.15rem 0.3rem;
+    }
+
+    //an exception taken is what the row is about, so it stands out from the frame it pushed
+    .exception {
+        overflow-wrap: anywhere;
+        border-left: 2px solid var(--accent);
+        border-radius: 0.2rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+
+    .handler {
+        font-family: 'Fira Code', monospace;
+        font-size: 0.85em;
     }
 
     //a write the person can open: tinted with the accent on hover, and more while it stands open

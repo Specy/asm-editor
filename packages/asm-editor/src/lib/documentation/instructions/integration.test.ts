@@ -223,12 +223,12 @@ describe('instruction content integration', () => {
         expect(body.textContent).not.toContain('(64bit)')
     })
 
-    it('lists M68K move’s forms with <ea>,sr alone Privileged and ccr,<ea> the 68010’s', () => {
+    it('lists M68K move’s forms with <ea>,sr and usp Privileged and ccr,<ea> the 68010’s', () => {
         const body = renderBody(instructionEntry(m68kChapters(), 'move'))
         const sections = sectionsIn(body)
-        expect(sections.flatMap(([, rows]) => rows)).toHaveLength(5)
+        expect(sections.flatMap(([, rows]) => rows)).toHaveLength(7)
         expect(sections.slice(1)).toEqual([
-            ['Privileged', ['move <ea>, sr']],
+            ['Privileged', ['move <ea>, sr', 'move usp, An', 'move An, usp']],
             ['68010 and later', ['move ccr, <ea>']]
         ])
         expect(sections[0][1]).toContain('move sr, <ea>')

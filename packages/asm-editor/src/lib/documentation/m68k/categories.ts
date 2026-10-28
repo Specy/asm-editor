@@ -64,6 +64,7 @@ export const m68kInstructionCategories: CategoryTable = {
     rod: 'shifts-and-rotates',
     roxd: 'shifts-and-rotates',
     rtr: 'control-flow',
+    rte: 'system',
     rts: 'control-flow',
     sbcd: 'arithmetic',
     scc: 'comparison',

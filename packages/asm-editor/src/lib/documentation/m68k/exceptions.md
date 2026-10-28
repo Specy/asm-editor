@@ -1,59 +1,123 @@
-## Exceptions on a real 68000
+## Exceptions
 
-> **This editor does not dispatch exceptions to program handlers.** The 68000's exception machinery is described here because it is part of the processor and you will meet it in real code, but the emulator has no vector table or exception handlers. Every program runs with supervisor access; there is no user-mode privilege checking or separate user stack. The bottom of memory is ordinary memory: writing to it changes nothing about how a program runs. Each section below ends with what the editor does instead.
+An **exception** is the processor setting aside the program it is running to run a **handler**, a piece of code written for one cause. Some causes are mistakes, such as a division by zero or a word read at an odd address; some are requests, such as `trap #3`. The handler deals with the cause and ends with [rte](/documentation/m68k/instruction/rte), and the program carries on.
 
-On a real 68000, `trap #15` is one of sixteen trap instructions, and the traps are a few of 256 causes that can take the program counter away from your program. All of them work the same way, through a table at the bottom of memory.
+The processor finds each handler through the vector table at the bottom of memory. A program installs a handler by writing its address there. A cause whose vector holds no handler ends the program, with a message naming the vector.
 
 ## The vector table
 
-The first 1024 bytes of memory, `$000000` to `$0003FF`, are **256 vectors** of four bytes each. A vector is the address of the code that deals with one cause, and the CPU finds it by multiplying the cause's **vector number** by 4 and reading the long there.
+The first 1024 bytes of memory, `$000000` to `$0003FF`, are **256 vectors** of four bytes each. A vector holds the address of one handler. The processor finds it by multiplying the cause's **vector number** by 4 and reading the long there, so division by zero, vector 5, reads its handler's address at `$14`.
 
-| vector | address | cause                                            |
-| -----: | ------- | ------------------------------------------------ |
-|      0 | `$0000` | the supervisor stack pointer the CPU starts with |
-|      1 | `$0004` | the program counter the CPU starts with          |
-|      2 | `$0008` | bus error                                        |
-|      3 | `$000C` | address error, a word or long at an odd address  |
-|      4 | `$0010` | illegal instruction                              |
-|      5 | `$0014` | division by zero                                 |
-|      6 | `$0018` | the `chk` instruction, an index out of range     |
-|      7 | `$001C` | the `trapv` instruction, on overflow             |
-|      8 | `$0020` | privilege violation                              |
-|      9 | `$0024` | trace, one vector per instruction for a debugger |
-| 10, 11 | `$0028` | an instruction beginning `1010` or `1111`        |
-|     24 | `$0060` | spurious interrupt                               |
-|  25-31 | `$0064` | the seven interrupt levels, one vector each      |
-|  32-47 | `$0080` | `trap #0` to `trap #15`                          |
-| 64-255 | `$0100` | interrupt vectors devices supply themselves      |
+| vector | address         | cause                                                                                                                      |
+| -----: | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+|   0, 1 | `$000`, `$004`  | the stack pointer and the program counter a 68000 starts with                                                              |
+|      2 | `$008`          | bus error, an access a [`memory`](/documentation/m68k/directive#memory) range refuses, such as a write to read-only memory |
+|      3 | `$00C`          | address error, a word or long at an odd address                                                                            |
+|      4 | `$010`          | illegal instruction, such as [illegal](/documentation/m68k/instruction/illegal)                                            |
+|      5 | `$014`          | division by zero, in [divu](/documentation/m68k/instruction/divu) or [divs](/documentation/m68k/instruction/divs)          |
+|      6 | `$018`          | [chk](/documentation/m68k/instruction/chk) with a value out of range                                                       |
+|      7 | `$01C`          | [trapv](/documentation/m68k/instruction/trapv) with V set                                                                  |
+|      8 | `$020`          | privilege violation, a supervisor-only instruction in user mode                                                            |
+|      9 | `$024`          | trace, after every instruction while the T bit is set                                                                      |
+|     10 | `$028`          | an instruction word that starts with `$A`, "line A"                                                                        |
+|     11 | `$02C`          | an instruction word that starts with `$F`, "line F"                                                                        |
+|  25-31 | `$064` - `$07C` | interrupts at levels 1 to 7                                                                                                |
+|  32-46 | `$080` - `$0B8` | `trap #0` to `trap #14`                                                                                                    |
+|     47 | `$0BC`          | `trap #15`, when its task number is not one of the simulator's                                                             |
 
-So `trap #15` is vector 47, at `$0000BC`, and a division by zero is vector 5, at `$000014`. The first two entries are why a 68000 needs no boot code of its own: on reset it loads `a7` from `$0000` and the program counter from `$0004`, and starts running. Filling that table in is the first thing an operating system does, and on a machine without one it is the first thing the program does.
+The others are reserved, or used by interrupts that devices number themselves. Nothing in this editor reads vectors 0 and 1: a program starts at its entry point, in supervisor mode.
 
-> **In this editor:** there is no vector table. The bottom of memory holds whatever you put there and nothing reads it. A program can write to `$0000` and `$0004` and see the bytes in the memory panel, but the emulator never consults them.
+Memory starts filled with `$FF` bytes, so every vector a program has not written reads `$FFFFFFFF`. Instructions are always at even addresses, so an odd address in a vector means there is no handler there. The memory view shows the table as its Exception vectors region, each vector named.
 
-## What the CPU does when an exception happens
+## Writing a handler {#handlers}
 
-The steps are the same for every cause, and this is what handling an exception means in hardware.
+Install a handler by writing its address into its vector, once, before the cause can happen. End it with `rte`, which returns to the program. This one gives a division by zero an answer the program can test:
 
-1. It finishes, or abandons, the instruction it is on.
-2. It makes an internal copy of the status register, then sets the **S** bit to switch into **supervisor mode**, and clears the **T** bit so the handler is not traced.
-3. It pushes an **exception frame** onto the supervisor stack: the program counter and that copy of the status register, six bytes for most causes. A bus or address error pushes eight more bytes describing what went wrong, since the instruction has to be abandoned halfway.
-4. It reads the vector and loads it into the program counter, and the handler starts.
-5. The handler ends with `rte`, return from exception, which pops the status register and the program counter back, and the program carries on where it left off.
+```m68k
+    move.l #div_zero, $14    ; vector 5: division by zero
+    moveq #0, d1
+    divu d1, d0              ; d1 is 0, so div_zero runs
+    tst.l d0                 ; rte comes back here, with -1 in d0
+    bra done
 
-> **In this editor:** the three instructions that exist only to serve this machinery are recognised by the assembler but refuse to build, each with its own reason.
->
-> - `rte` is not implemented: no exception frames are kept to return from.
-> - `stop` is not implemented: there are no interrupts to wake a stopped processor.
-> - `reset` is not implemented: there is no external hardware to reset.
->
-> `chk`, `trapv` and `illegal` do assemble and run. `rtr` works too, because it only restores the condition codes and a return address from the ordinary stack rather than from an exception frame.
+div_zero:
+    moveq #-1, d0
+    rte
 
-## Three words for three causes
+done:
+```
 
-All three go through the machinery above, and the difference is where they come from.
+A handler runs between two instructions of a program that does not expect it. It saves every register it changes, with [movem](/documentation/m68k/instruction/movem), and puts them back before its `rte`, unless changing one is its purpose, as when a `trap` service returns an answer in `d0`.
 
-- An **exception** is the CPU refusing to carry out the instruction it is on: an address error, a division by zero, an illegal instruction. Your program caused it, at an instruction you can point at.
-- An **interrupt** comes from a device, between two instructions. The 68000 has seven levels, and three bits in the status register hold the **interrupt mask**, which says the levels it will listen to right now. A program can raise the mask to keep a piece of code from being stopped halfway. Level 7 is non-maskable and gets through regardless.
-- A **trap** is an instruction you ran on purpose to hand control over, which is what [trap #15](/documentation/m68k/traps) does here.
+The History shows the exception in the row of the instruction that raised it, with the vector and the handler. The Call stack lists it, as `Divide by zero → div_zero`, until the handler's `rte`.
 
-> **In this editor:** only `trap #15` exists. Writing `trap #0` through `trap #14` does not assemble at all, and the build error says so: "simulates one trap, `#15`, which is its input and output". There are no trap vectors for the other fifteen to point at. No device raises an interrupt either, so the interrupt mask never matters.
+## What the processor does
+
+The steps are the same for every cause.
+
+1. It keeps a copy of the status register, then sets the S bit, which puts it in supervisor mode, and clears the T bit, so the handler is not traced.
+2. It pushes an **exception frame** on the supervisor stack: the program counter, then that copy of the status register.
+3. It reads the vector and jumps to the address there.
+
+`rte` undoes it: it pops the status register and then the program counter. Restoring the status register restores the mode the program was in, and its flags.
+
+## Exception frames {#frames}
+
+Most exceptions push six bytes. After the push, the supervisor stack pointer points at the frame:
+
+| where   | size | what                                               |
+| ------- | ---- | -------------------------------------------------- |
+| `(sp)`  | word | the status register as it was before the exception |
+| `2(sp)` | long | the address `rte` returns to                       |
+
+That address depends on the cause:
+
+- After a `trap`, `trapv`, `chk` or a division by zero, it is the next instruction's, so the program carries on after the one that raised it.
+- After an illegal instruction, a line A or line F word or a privilege violation, it is the instruction's own. Returning to it runs it again, and raises the same exception again. A handler that wants to carry on steps past it first, adding the instruction's size to the saved address: `addq.l #2, 2(sp)` for `illegal`.
+
+An address error or a bus error stops an instruction halfway, so it pushes 14 bytes: eight that describe the access, on top of the usual six, which move down to `8(sp)` and `10(sp)`:
+
+| where    | size | what                                                                   |
+| -------- | ---- | ---------------------------------------------------------------------- |
+| `(sp)`   | word | how the access was made: bit 4 is set for a read and clear for a write |
+| `2(sp)`  | long | the address it tried to read or write                                  |
+| `6(sp)`  | word | the first word of the instruction                                      |
+| `8(sp)`  | word | the status register                                                    |
+| `10(sp)` | long | an address near the instruction, which `rte` would return to           |
+
+Such an instruction cannot simply be resumed, so a handler for one usually reports what went wrong and ends the program.
+
+## User and supervisor mode {#modes}
+
+The S bit of the status register, bit 13, says which mode the processor is in.
+
+- **Supervisor mode** is where a program starts: the status register is `$2000`, as in EASy68K. Every instruction runs.
+- **User mode** is where an operating system would run the programs it loads. A program enters it by clearing S, with `andi #$dfff, sr`. The privileged instructions then raise a privilege violation: [move](/documentation/m68k/instruction/move) to `sr`, [andi](/documentation/m68k/instruction/andi), [ori](/documentation/m68k/instruction/ori) and [eori](/documentation/m68k/instruction/eori) to `sr`, `move` to or from `usp`, and [rte](/documentation/m68k/instruction/rte). Everything else runs as before, the flags included, and so does writing `ccr` alone.
+
+Each mode has its own stack pointer, and `a7` is the one of the current mode. The supervisor stack pointer, SSP, starts at `$1000000`, and the user stack pointer, USP, at `$FF0000`. Supervisor code sets the USP before it enters user mode, with `move.l a0, usp`; `usp` is read and written only through an address register. The System register file shows the status register's system bits and both stack pointers.
+
+The only way back from user mode is an exception, which always switches to supervisor mode and pushes its frame on the supervisor stack. A `trap` is the one a program raises on purpose, so it is how user code asks supervisor code to do something for it. The handler's `rte` returns to user mode, since the status register it restores has S clear. `trap #15` works in either mode.
+
+## Traps {#traps}
+
+`trap #0` to `trap #14` take vectors 32 to 46, at `$80` to `$B8`, and run handlers the program installs. `trap #15` is EASy68K's: the simulator carries out the [trap task](/documentation/m68k/traps) whose number is in `d0.b`, and no vector is read. A task number the simulator does not know goes through vector 47, at `$BC`, as in EASy68K, so a program can add tasks of its own there.
+
+## Trace
+
+When the T bit of the status register, bit 15, is set, the processor takes a trace exception, vector 9, after every instruction. A debugger uses it to stop after each step. `ori #$8000, sr` sets T; the trace handler runs with T clear, and its `rte` restores it, so the next instruction is traced too.
+
+## When there is no handler {#no-handler}
+
+An exception whose vector holds an odd address ends the program, and the message names the exception, the line and the vector:
+
+```text
+Division by zero at line 3: vector 5 at $000014 holds no handler
+```
+
+A real 68000 would try to run the odd address, raise an address error, find no handler for that either, and halt. The editor ends the program at the first exception instead, so the message points at the instruction that caused it.
+
+If taking an exception itself fails, the processor halts, and the program ends with a message saying so. That happens when the supervisor stack pointer is odd, when the frame would be pushed where a [`memory`](/documentation/m68k/directive#memory) range refuses writes, or when the vector itself is in an `invalid` range.
+
+## Interrupts
+
+An **interrupt** is an exception a device raises between two instructions, such as a key press or a timer. The 68000 has seven levels, taken through vectors 25 to 31, and the three bits I2 to I0 of the status register are the interrupt mask: a request at or below its level waits, and level 7 is always taken. No device in this editor raises one for now, and `stop`, which waits for an interrupt, and `reset` are refused by the assembler. A program polls its devices instead, as the [trap tasks](/documentation/m68k/traps#input) for the keyboard and the mouse do.

@@ -5,10 +5,10 @@ it needs help from the environment running it. On the 68000, `trap #n` is a real
 enters an **exception handler**: code that takes over when the instruction runs.
 The processor provides `trap #0` through `trap #15`. It does not define printing tasks.
 
-This editor supplies its own service agreement for `trap #15`. A number in `d0.b` selects a
-**task**, and each task specifies which registers carry its arguments and answer. The editor
-implements only `trap #15`, so its assembler rejects the other trap numbers as unsupported here.
-They are still valid 68000 instructions elsewhere.
+This editor, like EASy68K, supplies its own service agreement for `trap #15`. A number in `d0.b`
+selects a **task**, and each task specifies which registers carry its arguments and answer. The
+simulator answers `trap #15` itself. `trap #0` to `trap #14` run handlers that the program
+installs, which the last lecture of this module writes.
 
 For each request:
 

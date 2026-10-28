@@ -201,7 +201,7 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
                 ]
             )
         expect((await sectionsOf('move')).slice(1)).toEqual([
-            [['privileged'], ['move <ea>, sr']],
+            [['privileged'], ['move <ea>, sr', 'move usp, An', 'move An, usp']],
             [['68010'], ['move ccr, <ea>']]
         ])
         expect(await sectionsOf('andi')).toEqual([
@@ -214,8 +214,10 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         for (const entry of entries.filter((entry) => entry.kind === 'instruction')) {
             const patterns = documentPatterns(viewOf(entry, 'instruction').document)
             expect(patterns.length, entry.id).toBeGreaterThan(0)
-            //no M68K instruction is privileged in every form; `extb` is the 68020's in all of its
+            //`rte` is the one M68K instruction privileged in every form; `extb` is the 68020's in all
+            //of its
             if (entry.title === 'extb') expect(entry.tags).toEqual(['68020'])
+            else if (entry.title === 'rte') expect(entry.tags).toEqual(['privileged'])
             else expect(entry.tags, entry.id).toBeUndefined()
         }
     })

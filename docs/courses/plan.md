@@ -211,9 +211,11 @@ Going 64-bit (RISC-V, after Numbers): registers become 64 bits, `ld` and `sd` jo
 the `w`-suffixed instructions exist because 32-bit results are sign-extended, `li` holds a 64-bit
 constant, one `riscv64` Playground, and how to pick RISC-V-64 when creating a project.
 
-Interrupts lectures explain the machine's real mechanism and state plainly what the editor runs. None
-of the Cores runs a user interrupt handler today; verify in each Core what exceptions it raises
-(division by zero, illegal instruction, address errors) before claiming it on a page.
+Interrupts lectures explain the machine's real mechanism and state plainly what the editor runs. No
+Core delivers a device interrupt today, while MIPS, RISC-V and, since s68k's exceptions batch, the
+M68K run handlers a program installs for the exceptions it causes; verify in each Core what
+exceptions it raises (division by zero, illegal instruction, address errors) before claiming it on a
+page.
 
 ### Module `examples`, "Examples": the ladder, 24 programs
 
@@ -383,9 +385,19 @@ Each one cost time to rediscover, which is why it is written down.
 - The top byte of a 24-bit address is ignored. `org` only moves forwards. An `equ` takes `+` and `-`
   on another `equ` but not `*`.
 - A byte push moves `sp` by 2, as a real 68000 does (by 1 before s68k 4.0.0).
-- `addx`, `subx`, `negx`, `roxl`, `roxr`, `rte`, `stop`, `chk` and `trapv` are unknown to this
-  assembler, so the `X` flag is written and never read. `divu` overflow sets `V` and leaves the
-  register alone. `trap #14` fails at build time.
+- Since s68k's second batch (4.1.0, exceptions), every exception goes through the vector table at
+  `$000`-`$3FF`. Memory reads `$FF`, so an unfilled vector reads `$FFFFFFFF`, which ends the run
+  with `Division by zero at line 3: vector 5 at $000014 holds no handler`. The content test fails a
+  playground that ends on an error, so a playground that faults installs its handler. `trap #0` to
+  `#14` take vectors 32 to 46; `trap #15` is the simulator's in either mode, and an unknown task goes
+  through vector 47. `rte`, `move usp`, `chk`, `trapv` and `illegal` assemble and run; `stop` and
+  `reset` are refused until the interrupts batch.
+- A program starts in supervisor mode: SR `$2000`, `a7` the SSP at `$1000000`, the USP at
+  `$FF0000`. `andi #$dfff, sr` enters user mode, where `a7` is the USP and the privileged
+  instructions raise a privilege violation, vector 8, which stacks the instruction's own address, as
+  `illegal` and line A/F do. Testcases read and set only the CPU file, `a7` being the active stack
+  pointer; the fence flag `system` opens a playground on the System file.
+- `divu` overflow sets `V` and leaves the register alone.
 - Expected register values are written as unsigned hex.
 - The Core charges its instruction budget per run segment between traps, so a trap-heavy program's
   `runFor` is a budget rather than a count.
@@ -500,10 +512,12 @@ RARS is a port of MARS, so the RISC-V course re-checked these rather than assumi
 - Testcases cannot script input into the MARS and RARS keyboard receiver, so keyboard MMIO Exercises on
   MIPS and RISC-V are prompts, not checked.
 - RV64 registers are untested in the editor; every claim in Going 64-bit is run before it is written.
-- No Core delivers a device interrupt (the MARS keyboard's interrupt-enable bit stops the program, EASy68K's
-  tasks 60 and 62 are refused), but MIPS runs a user exception handler at `.ktext 0x80000180` and RISC-V
-  runs one once `ustatus` bit 0 is set; the M68K rejects every trap but 15 and ends the run on a fault;
-  the Z80 assembles `di`, `ei` and `im` as no-ops. Verified in batch 1; the interrupt lectures say so.
+- No Core delivers a device interrupt yet (the MARS keyboard's interrupt-enable bit stops the program,
+  EASy68K's tasks 60 and 62 are refused until s68k's interrupts batch), but MIPS runs a user exception
+  handler at `.ktext 0x80000180` and RISC-V runs one once `ustatus` bit 0 is set; the M68K runs the
+  handlers a program writes into its vector table, and ends the run on a fault whose vector is empty;
+  the Z80 assembles `di`, `ei` and `im` as no-ops. Verified in batch 1, and for the M68K again with
+  s68k's exceptions batch; the interrupt lectures say so.
 - x86 had no course until 2026-09-15; the embed always listed it. What it still has no answer for is
   console input and a Screen, which is why its ladder is 19 rungs and not 25.
 - The playground embed boots a full editor per iframe; change B is required before lectures with five

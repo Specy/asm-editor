@@ -28,8 +28,8 @@ export type CompileResult =
            * The program the Build made, for a Target whose Builds make a file of it: the Build
            * output ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
            * x86 links an executable, at the path the Command line names; M68K writes EASy68K's
-           * S-record of the program, `programFormat` `srecord`
-           * ([ADR 0065](../../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md)).
+           * S-record of the program, `programFormat` `srecord`, only while `m68kSRecordOutput` is
+           * on ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 32).
            * None for a Build that loaded an Executable, which is a File already.
            */
           program?: Uint8Array

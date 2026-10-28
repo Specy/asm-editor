@@ -224,6 +224,54 @@ describe('an instruction in the History panel', () => {
     })
 })
 
+/**
+ * An exception in its row ([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md),
+ * decision 28): what the instruction raised, the vector and the handler it went to, ahead of the
+ * frame the processor pushed, and the return from it as an `rte` row says it.
+ */
+describe('an exception in the History panel', () => {
+    it('names the exception, its vector and the handler, by label and address', () => {
+        const row = renderInstruction([
+            {
+                type: 'TakeException',
+                value: {
+                    vector: 5,
+                    name: 'Divide by zero',
+                    from: 0x1008n,
+                    handler: 0x1040n,
+                    label: 'div_handler'
+                }
+            },
+            {
+                type: 'WriteMemory',
+                value: { address: 0xfffffan, old: 0xffffn, new: 0x2000n, size: RegisterSize.Word }
+            }
+        ])
+        expect(row.rows()).toEqual([
+            'Divide by zero → vector 5, div_handler at $1040',
+            'Wrote Word to $FFFFFA'
+        ])
+        //the exception stands out from the frame, and is no write to open
+        expect(row.expandable()).toEqual([false, true])
+        row.close()
+    })
+
+    it('names the handler by its address alone where no label is, and the return from it', () => {
+        const row = renderInstruction([
+            {
+                type: 'TakeException',
+                value: { vector: 35, name: 'TRAP #3', from: 0x100an, handler: 0x2000n }
+            },
+            { type: 'ReturnFromException', value: { from: 0x2002n, to: 0x100cn } }
+        ])
+        expect(row.rows()).toEqual([
+            'TRAP #3 → vector 35, the handler at $2000',
+            'Returned from the exception to $100C'
+        ])
+        row.close()
+    })
+})
+
 describe('what an instruction ran where the source does not say', () => {
     it('shows the disassembly of a step on no line, and nothing of the kind on a source line', () => {
         const row = renderInstruction([])

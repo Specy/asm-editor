@@ -148,8 +148,8 @@ const Z80_REGISTERS = new Set([
 
 /** s68k's directives; `dc.w` is `dc` sized. */
 const M68K_DIRECTIVES = new Set([
-    ...['dc', 'dcb', 'ds', 'end', 'equ', 'fail', 'incbin', 'include', 'list', 'nolist'],
-    ...['offset', 'opt', 'org', 'page', 'reg', 'section', 'set', 'simhalt']
+    ...['dc', 'dcb', 'ds', 'end', 'equ', 'fail', 'incbin', 'include', 'list', 'memory'],
+    ...['nolist', 'offset', 'opt', 'org', 'page', 'reg', 'section', 'set', 'simhalt']
 ])
 
 /** The Z80's directives without a dot (those with one read by it), and those spelled with `#`. */
@@ -166,11 +166,11 @@ const RISCV_CSRS = new Set([
 ])
 
 /**
- * The 68000 instructions s68k refuses, the 68010's and 68020's it does not implement yet, and the
- * directives of other assemblers it refuses.
+ * The 68000 instructions s68k refuses (`stop` and `reset`, until its interrupts), the 68010's and
+ * 68020's it does not implement yet, and the directives of other assemblers it refuses.
  */
 const M68K_REFUSED = new Set([
-    ...['rte', 'stop', 'reset', 'memory', 'macro', 'endm', 'mexit', 'ifeq', 'ifne', 'iflt'],
+    ...['stop', 'reset', 'macro', 'endm', 'mexit', 'ifeq', 'ifne', 'iflt'],
     ...['ifle', 'ifgt', 'ifge', 'ifc', 'ifnc', 'ifarg', 'endc', 'if', 'else', 'endi', 'while'],
     ...['endw', 'for', 'endf', 'repeat', 'until', 'dbloop', 'unless'],
     ...['rtd', 'bkpt', 'movec', 'moves', 'chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk'],

@@ -43,7 +43,8 @@ export function s68kDiagnosticToLanguageDiagnostic(
             message: related.message
         })),
         //`needs_a_later_processor` carries the `opt p=` line to add and the 68000's own way of
-        //writing the same, which the editor offers as quick fixes
+        //writing the same, and `processor_chosen_after_code` the deletion of its late line, which
+        //the editor offers as quick fixes
         ...(error.fixes
             ? {
                   fixes: error.fixes.map((fix) => ({

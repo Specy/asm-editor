@@ -18,7 +18,7 @@ function rows(name: string): string[] {
 const PAGE_NAMES = [...M68KUncompoundedInstructions.keys()]
 
 describe('M68K instruction documents', () => {
-    it('writes move as its five forms, the one into sr privileged, the one from ccr the 68010’s', () => {
+    it('writes move as its seven forms, those into sr and with usp privileged, the one from ccr the 68010’s', () => {
         const move = document('move')
         const [forms, privileged, for68010] = move.sections
         expect(forms.tags).toEqual([])
@@ -28,9 +28,11 @@ describe('M68K instruction documents', () => {
             'move sr, <ea>'
         ])
         expect(privileged.tags).toEqual(['privileged'])
-        expect(privileged.explanation).toContain('supervisor mode')
+        expect(privileged.explanation).toContain('privilege violation')
         expect(privileged.groups.flatMap((group) => group.patterns.map(patternText))).toEqual([
-            'move <ea>, sr'
+            'move <ea>, sr',
+            'move usp, An',
+            'move An, usp'
         ])
         expect(for68010.tags).toEqual(['68010'])
         expect(for68010.explanation).toBe(
@@ -119,6 +121,32 @@ describe('M68K instruction documents', () => {
         expect(documentPatterns(andi)[0].details[0]).toMatchObject({
             label: 'Destination',
             name: 'data alterable'
+        })
+    })
+
+    it('says rte is privileged in its one form, a system instruction that restores every flag', () => {
+        const rte = document('rte')
+        expect(rte.longName).toBe('Return from exception')
+        expect(rte.category).toBe('system')
+        //every form is privileged, so the tag is the mnemonic's, and its row is in the untagged section
+        expect(rte.tags).toEqual(['privileged'])
+        expect(rte.sections.map((section) => section.tags)).toEqual([[]])
+        expect(rows('rte')).toEqual(['rte'])
+        expect(Object.values(rte.flags?.marks ?? {}).map((mark) => mark.kind)).toEqual([
+            'changed',
+            'changed',
+            'changed',
+            'changed',
+            'changed'
+        ])
+    })
+
+    it('explains usp in move’s legend, linked to its addressing mode', () => {
+        expect(document('move').operands.find((operand) => operand.symbol === 'usp')).toEqual({
+            symbol: 'usp',
+            meaning:
+                'The user stack pointer: the `a7` a program has in user mode. Supervisor code reads and sets it through an address register, as in `move.l usp, a0`.',
+            href: '/documentation/m68k/addressing-mode#user-stack-pointer'
         })
     })
 
@@ -229,7 +257,7 @@ describe('M68K instruction documents', () => {
     })
 
     it('is undefined for a name with no page', () => {
-        expect(m68kInstructionDocument('rte')).toBeUndefined()
+        expect(m68kInstructionDocument('stop')).toBeUndefined()
         expect(m68kInstructionDocument('dc')).toBeUndefined()
     })
 
@@ -239,7 +267,7 @@ describe('M68K instruction documents', () => {
             modesChapter.href,
             ...modesChapter.entries.map((entry) => entry.href)
         ])
-        expect(PAGE_NAMES.length).toBe(126)
+        expect(PAGE_NAMES.length).toBe(127)
         for (const name of PAGE_NAMES) {
             const built = document(name)
             const explained = new Set(built.operands.map((operand) => operand.symbol))

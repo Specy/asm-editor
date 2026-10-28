@@ -47,11 +47,21 @@ describe('M68K instruction forms', () => {
         expect(m68kFirstProcessor({ name: 'dc' })).toBe('68000')
     })
 
-    it('marks only move, andi, ori and eori to sr as privileged', () => {
+    it('marks as privileged what the 68000 runs only in supervisor mode', () => {
         const privileged = [...table].flatMap(([mnemonic, forms]) =>
-            forms.filter((form) => form.privileged).map((form) => `${mnemonic} ${form.operands[1]}`)
+            forms
+                .filter((form) => form.privileged)
+                .map((form) => [mnemonic, ...form.operands.map((modes) => modes[0])].join(' '))
         )
-        expect(privileged.sort()).toEqual(['andi sr', 'eori sr', 'move sr', 'ori sr'])
+        expect(privileged.sort()).toEqual([
+            'andi Im sr',
+            'eori Im sr',
+            'move An usp',
+            'move Dn sr',
+            'move usp An',
+            'ori Im sr',
+            'rte'
+        ])
     })
 })
 
@@ -65,11 +75,11 @@ describe('M68K documentation of the Core’s instructions', () => {
         expect(M68kInstructions.filter((mnemonic) => !table.has(mnemonic))).toEqual([])
     })
 
-    //`rte`, `stop` and `reset` are 68000 instructions the Core does not run yet, so they are not in
-    //its table and the editor refuses them; once the Core lists one, it needs its documentation
-    //entry and its place among the instructions instead (the plan's milestone E7b)
-    it('refuses rte, stop and reset, which are not in the Core’s table yet', () => {
-        expect(M68KRefusedInstructions).toEqual(['rte', 'stop', 'reset'])
+    //`stop` and `reset` are 68000 instructions the Core does not run until its interrupts, so they
+    //are not in its table and the editor refuses them; once the Core lists one, it needs its
+    //documentation entry and its place among the instructions instead, as `rte` had
+    it('refuses stop and reset, which are not in the Core’s table yet', () => {
+        expect(M68KRefusedInstructions).toEqual(['stop', 'reset'])
         expect(M68KRefusedInstructions.filter((mnemonic) => table.has(mnemonic))).toEqual([])
     })
 

@@ -14,7 +14,8 @@ export enum AddressingMode {
     PcDisplacement = 1024,
     PcIndex = 2048,
     StatusRegister = 4096,
-    ConditionCodeRegister = 8192
+    ConditionCodeRegister = 8192,
+    UserStackPointer = 16384
 }
 
 export function addressingModeToString(addressingMode: AddressingMode): string {
@@ -48,6 +49,8 @@ export function addressingModeToString(addressingMode: AddressingMode): string {
             return 'sr'
         case AddressingMode.ConditionCodeRegister:
             return 'ccr'
+        case AddressingMode.UserStackPointer:
+            return 'usp'
         default:
             return '_'
     }
@@ -107,6 +110,7 @@ const Pd = AddressingMode.PcDisplacement
 const Pi = AddressingMode.PcIndex
 const Sr = AddressingMode.StatusRegister
 const Ccr = AddressingMode.ConditionCodeRegister
+const Usp = AddressingMode.UserStackPointer
 
 /** The same mode groups as s68k's v2 instruction table, aggregated for documentation/completion. */
 const MEMORY = [In, Ipi, Ipd, Id, Ix, Ea, Pd, Pi]
@@ -127,6 +131,8 @@ const COUNT = [Da, Im]
 const EXTENDED_PAIR = [Da, Ipd]
 const REGISTER_LIST_OR_REGISTER = [Da, Ad, Rl]
 const STATUS_DESTINATION = [...NO_IM_OR_Ad, Sr, Ccr]
+/** `move`'s destinations: an address register too, which it writes as `movea`, and the USP. */
+const MOVE_DESTINATION = [Da, Ad, In, Ipi, Ipd, Id, Ea, Ix, Sr, Ccr, Usp]
 
 const NO_SIZE: Size[] = []
 const ANY_SIZE = [Size.Byte, Size.Word, Size.Long]
@@ -311,7 +317,7 @@ export const directionsDescriptions = new Map<string, string>([
     ['r', 'Right']
 ])
 const desc = {
-    move: 'Moves the value from the first operand to second operand. If the second operand is an address register, the [MOVEA](/documentation/m68k/instruction/movea) instruction is used instead.',
+    move: 'Moves the value from the first operand to second operand. If the second operand is an address register, the [MOVEA](/documentation/m68k/instruction/movea) instruction is used instead. `move.l a0, usp` sets the user stack pointer, the `a7` a program has in user mode, and `move.l usp, a0` reads it; only supervisor code may use either. See [user and supervisor mode](/documentation/m68k/exceptions#modes).',
     moveq: 'Moves an 8-bit encoded value from -128 through 255 into a data register and sign extends it to 32 bits. Values 128 through 255 are the unsigned spellings of -128 through -1.',
     movea: 'Moves the value from the first operand to second operand. If the size is word, it is sign extended to long. It does not change the SR. When using word size, the first operand is sign extended to long and the second is written as a long.',
     movem:
@@ -326,8 +332,8 @@ const desc = {
     suba: 'Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR. When using word size, the first operand is sign extended to long and the second is read and written as a long.',
     subq: 'Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is an address register, it is always treated as a long, and the condition codes are not affected.',
     subi: 'Subtracts the immediate value to the second operand',
-    divs: 'Divides (signed) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long',
-    divu: 'Divides (unsigned) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long',
+    divs: 'Divides (signed) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long.\n\nDividing by zero raises a division-by-zero exception: the processor runs the handler whose address is in vector 5, at `$14`, and leaves the destination unchanged. A program that has not installed one ends there, at the `divs`. See [writing a handler](/documentation/m68k/exceptions#handlers). A quotient too large for 16 bits is no exception: V is set and the destination is left unchanged, so test it with `bvs` after the division.',
+    divu: 'Divides (unsigned) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long.\n\nDividing by zero raises a division-by-zero exception: the processor runs the handler whose address is in vector 5, at `$14`, and leaves the destination unchanged. A program that has not installed one ends there, at the `divu`. See [writing a handler](/documentation/m68k/exceptions#handlers). A quotient too large for 16 bits is no exception: V is set and the destination is left unchanged, so test it with `bvs` after the division.',
     muls: 'Multiplies the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long',
     mulu: 'Multiplies (unsigned) the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long',
     swap: 'Swaps the two words of the register, you can see the register as [a,b] after the swap it will be [b,a]',
@@ -369,35 +375,11 @@ const desc = {
     rts: 'Returns from a subroutine, pops the return address from the stack and jumps to it',
     jsr: 'Jumps to the specified address, like the "lea" instruction, when resolving the address, it does not read the memory, so "jsr 4(a0)" will jump to the value of "a0 + 4", the address is loaded and stores the return address in the stack',
     trap: `
-Raises the trap exception selected by the operand. In this editor, \`trap #15\` enters the simulator’s service handler; put its decimal task number in \`D0.B\` (for example, task 13 prints a NUL-terminated string). These tasks are separate from CPU exception handling. See the [trap tasks reference](/documentation/m68k/traps) for each task’s register inputs and results.
-| Task | Description   |
-|:------:|-------------------------------------------------------------------------------------------------------|
-| 0      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255, then prints a new line.      |
-| 1      | Print string pointed by a1 with length read in d1.w, null terminated with max of 255.      |
-| 2      | Read a line, writes its first 79 characters at the address of a1 with a null and their count to d1.l.       |
-| 3      | Print signed number at d1.  |
-| 4      | Read a line and convert it to a number in d1.l, as C's atoi does: \`12abc\` is 12, a line with no number is 0.   |
-| 5      | Read one key into d1.b, without waiting for Enter; Enter is $0D.|
-| 6      | Print character at d1.       |
-| 7      | Check for keyboard input, writes 1 or 0 to d1.b.  |
-| 8      | Get the time in hundredths of a second since the run started, writes to d1.      |
-| 9      | Terminate.     |
-| 11     | Set or get the text cursor, or clear the screen with d1.w = $FF00.  |
-| 12     | Turn the echo of what is typed off with d1.b = 0, on with anything else.  |
-| 13     | Prints null terminated string pointed by a1 then prints new line, errors if string is longer than 16kb, to prevent infinite loops.   |
-| 14     | Prints null terminated string pointed by a1, errors if string is longer than 16kb, to prevent infinite loops.       |
-| 15     | Prints unsigned number at d1 in base (from 2 to 36) specified in d2.b, in upper case  |
-| 16     | Hide (d1.b = 0) or show (1) the input prompt, turn the line feed after Enter off (2) or on (3).  |
-| 17     | Prints the null terminated string at a1, then the signed number in d1.  |
-| 18     | Prints the null terminated string at a1, then reads a number into d1.  |
-| 19     | Reads the state of up to four keys given in d1.l, or the last keys pressed and released with d1.l = 0.  |
-| 20     | Print the signed number in d1 right justified in a field d2.b columns wide; a negative d2.b left justifies it.  |
-| 23     | Delay for the number of hundredths of a second in d1.  |
-| 24     | Enable or disable the simulator shortcut keys; accepted and ignored.  |
-| 33     | Set or get the screen size, or set the window mode.  |
-| 50-59  | Files: close all, open, create, read, write, position, close, delete, the file dialog and whether a file exists.  |
-| 61     | Read the mouse: flags in d0, y:x in d1.  |
-| 80-96  | Graphics: colors, pixels, lines, rectangles, ellipses, flood fill, drawing modes, double buffering, text and the pen position.  |
+Asks for a service: \`trap #0\` to \`trap #14\` run a handler your program installed, and \`trap #15\` one of the simulator's tasks.
+
+For \`trap #0\` to \`trap #14\`, the processor pushes the address of the next instruction and the status register on the supervisor stack, switches to supervisor mode, and jumps to the address held in the trap's vector: \`trap #n\` uses vector 32 + n, at \`$80\` + 4 × n. The handler ends with [rte](/documentation/m68k/instruction/rte), which returns to the instruction after the \`trap\`. Write the handler's address into the vector before the first \`trap\`, as \`move.l #service, $8C\` does for \`trap #3\`. A vector nobody filled reads \`$FFFFFFFF\`, and the program ends at the \`trap\` with a message naming the vector. See [writing a handler](/documentation/m68k/exceptions#handlers).
+
+\`trap #15\` is EASy68K's: the simulator carries out the task whose number is in \`d0.b\`, such as task 13, which prints the string at \`a1\`, and the program carries on after the \`trap\`. It works in user mode as well. The [trap tasks](/documentation/m68k/traps) list every task with its registers.
 `.trim(),
     nop: 'This instruction is a no-operation, it does not do anything.',
     movep: 'Moves a word or long between a data register and every other byte beginning at a displacement from an address register.',
@@ -410,9 +392,11 @@ Raises the trap exception selected by the operand. In this editor, \`trap #15\` 
     extb: 'Sign extends the low byte of a data register directly to a long.',
     tas: 'Tests the original byte into the condition codes, then sets its top bit.',
     rtr: 'Returns by popping the condition-code byte and then the program counter from the stack.',
-    chk: 'Checks a signed data-register word against zero and a signed upper bound, ending the run with a CHK exception when it is outside that range.',
-    trapv: 'Ends the run with an overflow exception when V is set; otherwise it continues.',
-    illegal: 'Always ends the run with an illegal-instruction exception.'
+    chk: 'Checks that the low word of a data register is between 0 and an upper bound, as a program checks an index before it uses it. Both are read as signed words. If the value is in range, nothing happens. If it is below 0 or above the bound, the processor raises a CHK exception: it runs the handler whose address is in vector 6, at `$18`, and that handler’s `rte` returns to the instruction after the `chk`. N tells the handler which end was crossed: set below 0, clear above the bound. A program that has not installed a handler ends at the `chk`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
+    trapv: 'Raises an overflow exception if the overflow flag V is set, and does nothing otherwise. Put it after arithmetic whose result must fit, to send every overflow to one handler instead of testing V with `bvs` each time. The processor runs the handler whose address is in vector 7, at `$1C`, and that handler’s `rte` returns to the instruction after the `trapv`. A program that has not installed a handler ends at the `trapv`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
+    illegal:
+        'Raises an illegal-instruction exception, always. It is the one instruction made to be nothing else, so programs use it to mark code that must never run. The processor runs the handler whose address is in vector 4, at `$10`. The exception saves the address of the `illegal` itself, not of the instruction after it, so a handler that wants the program to carry on adds 2 to the saved address before its `rte`; otherwise the `illegal` runs again. A program that has not installed a handler ends at the `illegal`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
+    rte: 'Returns from an exception handler: it pops the status register and then the program counter that the exception pushed, and the interrupted program carries on. Every handler ends with `rte`, as a subroutine ends with [rts](/documentation/m68k/instruction/rts). `rte` restores the whole status register, the S bit included, so a handler entered from user mode returns to user mode, and A7 becomes the user stack pointer again. It is privileged: in user mode it raises a privilege violation. See [writing a handler](/documentation/m68k/exceptions#handlers).'
 }
 const dirsDesc = {
     dc: 'Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words',
@@ -431,6 +415,16 @@ const dirsDesc = {
     include:
         'Assembles another text File at this point. The path is relative to the including File, then the Project root.',
     incbin: 'Copies the exact bytes of another File into memory at this point.',
+    memory: [
+        'Marks a range of memory with a rule the program has to follow there, as a real computer has memory that can only be read, or addresses where nothing is connected. `memory rom $8000,$8FFF` covers `$8000` to `$8FFF`, both included. There are four kinds:',
+        '',
+        '- `rom`: the program can read and run code here, but its writes are ignored, so the bytes stay as they are.',
+        '- `read`: read only. The program can read and run code here, and a write is a bus error.',
+        '- `protected`: only [supervisor mode](/documentation/m68k/exceptions#modes) can use it. Any access from user mode, a read, a write or running code, is a bus error.',
+        '- `invalid`: nothing is there. Any access, a read, a write or running code, is a bus error.',
+        '',
+        'A **bus error** is the exception the processor takes when memory refuses an access, vector 2. It runs the handler whose address is at `$8`, as for any [exception](/documentation/m68k/exceptions#handlers); a program that installed none ends, and the Log says what it tried to access and which range refused it. A program has at most one range of each kind: a second `memory` line of the same kind replaces the first. The rules are for the program alone: the debugger still reads and changes these bytes, and the memory view shows each range as a region.'
+    ].join('\n'),
     opt: "Chooses the processor the program is written for. Write `opt p=68010` or `opt p=68020` at the top of the program to use an instruction a later processor added, such as the 68020's `extb`; a program without the line is written for the 68000. Only a few of the 68010's and 68020's instructions are available so far. `bit` asks for the 68020's bit-field instructions, which are not available yet. EASy68K's listing options, `cre`, `mex`, `sex`, `war` and `cex`, each also with `no` before it, are accepted and change nothing.",
     list: 'Accepted for compatibility and ignored.',
     nolist: 'Accepted for compatibility and ignored.',
@@ -463,6 +457,7 @@ export const M68KDirectiveDocumentation = {
     offset: makeDirective('offset', NO_SIZE, dirsDesc.offset, 'offset 0'),
     include: makeDirective('include', NO_SIZE, dirsDesc.include, "include 'lib/io.x68'"),
     incbin: makeDirective('incbin', NO_SIZE, dirsDesc.incbin, "incbin 'images/sprite.bin'"),
+    memory: makeDirective('memory', NO_SIZE, dirsDesc.memory, 'memory rom $8000,$8FFF'),
     opt: makeDirective('opt', NO_SIZE, dirsDesc.opt, 'opt p=68020'),
     list: makeDirective('list', NO_SIZE, dirsDesc.list, 'list'),
     nolist: makeDirective('nolist', NO_SIZE, dirsDesc.nolist, 'nolist'),
@@ -473,7 +468,7 @@ export const M68KDirectiveDocumentationList = Object.values(M68KDirectiveDocumen
 export const M68kDocumentation = {
     move: makeIns(
         'move',
-        [[...ANY, Sr, Ccr], STATUS_DESTINATION],
+        [[...ANY, Sr, Ccr, Usp], MOVE_DESTINATION],
         ANY_SIZE,
         FLAGS_LOGIC,
         desc.move,
@@ -501,6 +496,11 @@ move.w 4(a0), d5
 lea $2000, a1
 move.l (a1)+, d6
 move.l #$11223344, -(a1)
+
+* --- The user stack pointer, for supervisor code only ---
+lea $8000, a2
+move.l a2, usp ; the a7 of user mode will start at $8000
+move.l usp, a3
     `
     ),
     moveq: makeIns(
@@ -750,7 +750,7 @@ swap d3
 move.w d3, d5 ; d5 = remainder (-1)
 
 ; move.l #10, d6
-; divs #0, d6 ; division by zero exception!
+; divs #0, d6 ; division by zero: with nothing at $14, the program ends here
     `
     ),
     divu: makeIns(
@@ -1420,17 +1420,24 @@ END:
         'trap #15',
         undefined,
         `
-* --- Trap #15 invokes I/O based on d0 ---
-move #4, d0
-trap #15 ; read input
+* --- trap #15: one of the simulator's tasks ---
+move.b #4, d0
+trap #15 ; task 4: read a number into d1
 
-move #3, d0
-trap #15 ; print input
+* --- trap #0 to #14: a handler of your own ---
+move.l #double, $80 ; trap #0's vector, number 32, is at $80
+trap #0 ; runs double, then carries on below
 
-move #6, d0
-move #32, d1
-trap #15 ; print character (space)
-       `
+move.b #3, d0
+trap #15 ; task 3: print d1, twice the number read
+bra END
+
+double:
+    add.l d1, d1
+    rte ; back to the instruction after the trap
+
+END:
+    `
     ),
     asd: {
         ...makeIns(
@@ -1681,6 +1688,30 @@ bset #2, d1 ; bit 2 was already 1 (Z clear), no change
     },
     tas: makeIns('tas', [NO_IM_OR_Ad], ONLY_BYTE, FLAGS_LOGIC, desc.tas, 'tas.b d0', Size.Byte),
     rtr: makeIns('rtr', [], NO_SIZE, FLAGS_MATH, desc.rtr, 'rtr'),
+    rte: makeIns(
+        'rte',
+        [],
+        NO_SIZE,
+        FLAGS_MATH,
+        desc.rte,
+        'rte',
+        undefined,
+        `
+* --- A handler for a division by zero ---
+move.l #div_zero, $14 ; vector 5 is at $14
+move.l #100, d0
+moveq #0, d1
+divu d1, d0 ; d1 is 0, so div_zero runs
+move.l d0, d2 ; rte comes back here: d2 = -1
+bra END
+
+div_zero:
+    moveq #-1, d0 ; an answer the program can test
+    rte ; pops the status register and the return address
+
+END:
+    `
+    ),
     chk: makeIns(
         'chk',
         [NO_Ad, ONLY_Da],
@@ -1688,10 +1719,71 @@ bset #2, d1 ; bit 2 was already 1 (Z clear), no change
         FLAGS_CHK,
         desc.chk,
         'chk.w #10,d0',
-        Size.Word
+        Size.Word,
+        `
+* --- Keep an index between 0 and 9 ---
+move.l #out_of_range, $18 ; vector 6 is at $18
+moveq #4, d0
+chk #9, d0 ; 4 is in range: nothing happens
+moveq #12, d0
+chk #9, d0 ; 12 is above 9: out_of_range runs
+move.w d0, d1 ; rte comes back here: d1 = 9
+bra END
+
+out_of_range:
+    moveq #9, d0 ; use the last index instead
+    rte
+
+END:
+    `
     ),
-    trapv: makeIns('trapv', [], NO_SIZE, UNAFFECTED, desc.trapv, 'trapv'),
-    illegal: makeIns('illegal', [], NO_SIZE, UNAFFECTED, desc.illegal, 'illegal'),
+    trapv: makeIns(
+        'trapv',
+        [],
+        NO_SIZE,
+        UNAFFECTED,
+        desc.trapv,
+        'trapv',
+        undefined,
+        `
+* --- Send an overflow to a handler ---
+move.l #overflow, $1C ; vector 7 is at $1C
+move.b #100, d0
+add.b #100, d0 ; 200 does not fit a signed byte: V is set
+trapv ; V is set, so overflow runs
+move.b d0, d1 ; rte comes back here: d1 = 127
+bra END
+
+overflow:
+    move.b #127, d0 ; the largest signed byte instead
+    rte
+
+END:
+    `
+    ),
+    illegal: makeIns(
+        'illegal',
+        [],
+        NO_SIZE,
+        UNAFFECTED,
+        desc.illegal,
+        'illegal',
+        undefined,
+        `
+* --- Step past an illegal instruction ---
+move.l #skip, $10 ; vector 4 is at $10
+moveq #1, d0
+illegal ; skip runs
+moveq #2, d0 ; and the program carries on here
+bra END
+
+skip:
+    addq.l #2, 2(sp) ; the saved address is the illegal's own: step past it
+    rte
+
+END:
+    `
+    ),
     nop: makeIns(
         'nop',
         [],
@@ -1851,6 +1943,7 @@ export const M68KDirectives = [
     'incbin',
     'include',
     'list',
+    'memory',
     'nolist',
     'offset',
     'opt',
@@ -1864,7 +1957,6 @@ export const M68KDirectives = [
 
 /** Directive names the parser reserves so they receive a useful not-implemented diagnostic. */
 export const M68KRefusedDirectives = [
-    'memory',
     'macro',
     'endm',
     'mexit',
@@ -1891,8 +1983,12 @@ export const M68KRefusedDirectives = [
     'unless'
 ]
 
-/** Real 68000 mnemonics recognised by s68k but deliberately not implemented. */
-export const M68KRefusedInstructions = ['rte', 'stop', 'reset']
+/**
+ * The 68000 instructions s68k reads and refuses for now: `stop` and `reset`, which wait for an
+ * interrupt and reset the devices, come with its interrupts (milestone C8 of the M68K machine
+ * plan), and then need a Documentation entry here instead.
+ */
+export const M68KRefusedInstructions = ['stop', 'reset']
 
 /** The conditions of the 68020's `trap<cc>`: the 68000's, and `t` and `f`. */
 const TRAP_CONDITIONS = [

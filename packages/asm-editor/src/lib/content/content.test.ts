@@ -320,6 +320,7 @@ describe('the register file fence flag', () => {
         expect(parsePlaygroundFence('mips|playground|fpu')?.settings.registerFile).toBe('fpu')
         expect(parsePlaygroundFence('riscv|playground|csr')?.settings.registerFile).toBe('csr')
         expect(parsePlaygroundFence('x86|playground|x87')?.settings.registerFile).toBe('x87')
+        expect(parsePlaygroundFence('m68k|playground|system')?.settings.registerFile).toBe('system')
     })
 
     it('leaves a fence without one on the CPU file', () => {

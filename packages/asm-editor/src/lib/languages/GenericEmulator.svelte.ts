@@ -1607,8 +1607,7 @@ export abstract class GenericEmulator<T, R extends string>
     /**
      * Where the program a Build linked goes ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)):
      * at the path the Command line names, or for an M68K S-record that name with `.S68`
-     * ([ADR 0065](../../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md)),
-     * where the run's FileSystem has it for the program. A
+     * (`BuildOutputFormat`), where the run's FileSystem has it for the program. A
      * person's Build (`build`) has its host save it there as the Build output, `saved`, before the
      * Debug session takes the Files, asking first when that replaces something; else, or without
      * a host, it is only presented to the program. A Testcase's program takes the place of a Build

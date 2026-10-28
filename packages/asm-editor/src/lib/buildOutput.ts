@@ -39,7 +39,7 @@ export type BuildRecord = {
     entry: string
     /**
      * Where it saved the program: the Entry path without its extension, and with `.S68` for an
-     * M68K S-record.
+     * M68K S-record (`BuildOutputFormat`).
      */
     outputPath: string
     /** Each File the Build read, but the Build outputs, by its content's fingerprint. */
@@ -52,9 +52,10 @@ export type BuildRecord = {
 
 /**
  * What a Build's output is: the `executable` an x86 Build links, saved as bytes at the Entry path
- * without its extension, as `ld -o main` names it; or the `srecord` an M68K Build writes, EASy68K's
- * S-record of the program, saved as text beside it as `main.S68`, the name EASy68K's assembler
- * gives it ([ADR 0065](../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md)).
+ * without its extension, as `ld -o main` names it; or the `srecord` an M68K Build writes while
+ * `m68kSRecordOutput` is on, EASy68K's S-record of the program, saved as text beside it as
+ * `main.S68`, the name EASy68K's assembler gives it. That switch is off until the Build output
+ * format is chosen ([m68k-machine.md](../../../../docs/design/m68k-machine.md), decision 32).
  */
 export type BuildOutputFormat = 'executable' | 'srecord'
 

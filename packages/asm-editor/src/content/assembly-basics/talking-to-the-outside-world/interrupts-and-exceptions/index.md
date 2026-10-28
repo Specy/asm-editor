@@ -63,20 +63,22 @@ to ignore.
 A simulator is not a machine with an operating system on it, and the ones here answer a fault
 differently from each other.
 
-MIPS and RISC-V go furthest: both can run a handler you wrote, for exceptions the program causes
-itself. MIPS looks for it at one fixed address and keeps the address of the faulting instruction in
-a register called **EPC**, the exception program counter, which the handler has to step past before
+MIPS, RISC-V and the M68K all run a handler you wrote, for exceptions the program causes itself.
+MIPS looks for it at one fixed address and keeps the address of the faulting instruction in a
+register called **EPC**, the exception program counter, which the handler has to step past before
 returning, or the same instruction faults again forever.
 
-The M68K here has no vector table you can fill in: the only trap the assembler accepts is the one the
-console uses, and a fault ends the run and puts its message in the console panel instead of jumping
-anywhere.
+The M68K has a whole vector table. A program writes a handler's address into the vector for a
+division by zero, an illegal instruction or one of its traps, and the handler returns with the
+instruction made for the job. A vector the program left empty ends the run with a message naming
+it. The M68K also has both modes: a program can drop itself into user mode, with a stack of its own,
+and watch a privileged instruction raise an exception.
 
 The Z80 assembles its interrupt instructions and they change nothing you can observe, because nothing
 in this editor will ever interrupt it.
 
-No device here raises an interrupt at all. The MIPS and RISC-V keyboard has an interrupt-enable bit,
-and a program that sets it is stopped with a message saying that interrupt-driven input is not
+For now no device here raises an interrupt. The MIPS and RISC-V keyboard has an interrupt-enable
+bit, and a program that sets it is stopped with a message saying that interrupt-driven input is not
 supported and that it should poll the ready bit instead. The M68K's two trap tasks for turning on
 keyboard and mouse interrupts are refused for the same reason. Input in this editor is polled, the
 way the previous lecture polled it, and a program that wants to know whether a key is waiting has to

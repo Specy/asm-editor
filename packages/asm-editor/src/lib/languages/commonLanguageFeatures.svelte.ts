@@ -251,10 +251,11 @@ export type ExecutionStep = {
     /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
     writes?: PokeWrite[]
     /**
-     * What ran, as the Core decodes the bytes at `pc` now, where the source does not say: an
-     * instruction on no line, as in data the program ran into, or on a line whose bytes the program
-     * or a Poke changed since the Build (M68K, [m68k-machine.md](../../../../../docs/design/m68k-machine.md),
-     * decision 28).
+     * What ran, decoded from the words the step ran, which a later write into code leaves alone,
+     * where the source does not say: an instruction on no line, as in data the program ran into, or
+     * on a line whose bytes the program or a Poke changed since the Build (M68K,
+     * [m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 28). Absent on a step
+     * that ran nothing, an instruction fetched from an odd address.
      */
     disassembly?: string
     /**
@@ -338,6 +339,30 @@ export type MutationOperation =
       }
     | {
           type: 'PushCallStack'
+          value: {
+              to: bigint
+              from: bigint
+          }
+      }
+    /**
+     * The processor took an exception: it pushed a frame and jumped through `vector` to the
+     * handler at `handler`, named `label` when a label is there (M68K,
+     * [m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 28).
+     */
+    | {
+          type: 'TakeException'
+          value: {
+              vector: number
+              /** What the vector is for, as a learner reads it: `Divide by zero`, `TRAP #3`. */
+              name: string
+              from: bigint
+              handler: bigint
+              label?: string
+          }
+      }
+    /** A return from an exception, `rte` on M68K, from the instruction at `from` to `to`. */
+    | {
+          type: 'ReturnFromException'
           value: {
               to: bigint
               from: bigint
@@ -460,6 +485,12 @@ export type MemoryLayout = {
     dataLabels: DataLabel[]
     /** Memory the Core reads but takes no Pokes into, such as a text segment of statements. */
     readOnly?: ReadOnlyMemory[]
+    /**
+     * Memory the machine itself gives a meaning, whatever the program placed there: the 68000's
+     * exception vectors, and the ranges of an M68K program's memory map. The vectors' names are
+     * data labels of their region, in its section.
+     */
+    machineRegions?: MachineRegion[]
     /** Where the program's Arguments are, once the Core has stored them (`withArgumentsArea`). */
     arguments?: { name: string; start: bigint; end: bigint }
 }
@@ -480,12 +511,28 @@ export type ArgumentsArea = {
 export type ReadOnlyMemory = { start: bigint; end: bigint; reason: string }
 export type HeapBounds = { start: bigint; end: bigint }
 export type DeviceRegion = { name: string; start: bigint; end: bigint }
+/**
+ * The kinds of memory the machine defines: an exception vector table, and the four ranges of
+ * EASy68K's memory map, ROM (the program's writes are ignored), read only (a write raises a bus
+ * error), protected (any access from user mode does) and invalid (any access does).
+ */
+export type MachineRegionKind = 'vectors' | 'rom' | 'readOnly' | 'protected' | 'invalid'
+/** A half-open range the machine defines, with what it means, which the memory view's hover says. */
+export type MachineRegion = {
+    name: string
+    start: bigint
+    end: bigint
+    kind: MachineRegionKind
+    reason: string
+}
 export type MemoryRegion = DeviceRegion & {
     id: string
-    kind: MemoryRunKind | 'heap' | 'stack' | 'arguments' | 'device'
+    kind: MemoryRunKind | 'heap' | 'stack' | 'arguments' | 'device' | MachineRegionKind
     section?: string
     /** The live stack jumps to SP, including when its extent is empty. */
     destination?: bigint
+    /** What the memory means to the program, for a region the machine defines. */
+    reason?: string
 }
 
 export type EmulatorDecoration = {

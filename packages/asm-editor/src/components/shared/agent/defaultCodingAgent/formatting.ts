@@ -223,10 +223,21 @@ export function formatLatestSteps(
                         }
                     case 'PushCallStack':
                     case 'PopCallStack':
+                    case 'ReturnFromException':
                         return {
                             type: mutation.type,
                             from: formatNumber(mutation.value.from),
                             to: formatNumber(mutation.value.to)
+                        }
+                    //the exception the instruction raised and the handler it went to
+                    case 'TakeException':
+                        return {
+                            type: mutation.type,
+                            exception: mutation.value.name,
+                            vector: mutation.value.vector,
+                            from: formatNumber(mutation.value.from),
+                            handler: formatNumber(mutation.value.handler),
+                            label: mutation.value.label ?? null
                         }
                     case 'Other':
                         return { type: mutation.type, value: mutation.value }

@@ -280,6 +280,7 @@ export const m68kInstructionNames: Readonly<
         longName: 'Return and restore condition codes',
         summary: 'Returns by popping ccr and then the program counter from the stack.'
     },
+    rte: { longName: 'Return from exception' },
     rts: {
         longName: 'Return from subroutine',
         summary:

@@ -89,7 +89,7 @@ Accesses memory at the sum of an address register, an index register and an opti
 
 Write the target label or address before `(pc)`, as in `table(pc)`. The assembler calculates the displacement from two bytes after the instruction’s start to that target. For `d(PC)`, this displacement must fit a signed 16-bit value (`-32768` to `32767`).
 
-An indexed operand such as `table(pc,d0.w)` accesses the target address plus the index register. Its calculated displacement must fit a signed 8-bit value (`-128` to `127`). The index uses the same `.w`/`.l` rules as [address-register indexed operands](#address-register-indexed). If the target is omitted, as in `(pc,d0.w)`, the displacement is zero: the address is two bytes after the instruction’s start plus the index.
+An indexed operand such as `table(pc,d0.w)` accesses the target address plus the index register. Its calculated displacement must fit a signed 8-bit value (`-128` to `127`). The index uses the same `.w`/`.l` rules as [address-register indexed operands](#address-register-indexed). If the target is omitted, as in `(pc,d0.w)`, the target is the instruction itself, as in EASy68K: the address is the instruction’s start plus the index.
 
 These modes can read memory but cannot write it.
 
@@ -110,3 +110,13 @@ move.w sr,d0
 
 - `sr`: Status register
 - `ccr`: Condition-code register
+
+## User stack pointer
+
+`usp` is the user stack pointer: the `a7` a program has in user mode. In supervisor mode `a7` is the supervisor stack pointer, so supervisor code reaches the other one through `usp`, and only with [move](/documentation/m68k/instruction/move) to or from an address register. Both forms are long and privileged. See [user and supervisor mode](/documentation/m68k/exceptions#modes).
+
+```m68k
+move.l a0, usp
+```
+
+- `usp`: User stack pointer

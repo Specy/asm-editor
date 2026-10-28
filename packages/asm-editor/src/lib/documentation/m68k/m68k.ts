@@ -138,7 +138,8 @@ const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
     'effective-address': ['abs', 'Ea/<label>'],
     'address-register-indexed': ['d(An,Xn)'],
     'program-counter-relative': ['d(PC)', 'd(PC,Xn)'],
-    'status-registers': ['sr', 'ccr']
+    'status-registers': ['sr', 'ccr'],
+    'user-stack-pointer': ['usp']
 }
 
 function addressingModes(): Chapter {
@@ -364,7 +365,7 @@ function trapTasks(): Chapter {
         title: 'Trap tasks',
         href,
         description:
-            'The editor’s services use the 68000 `trap` instruction with vector 15. Put the task number in D0.B (the values below are decimal); the task’s other inputs and results use the listed registers. These simulator tasks are distinct from the CPU’s exception and interrupt handling.',
+            'The editor’s services, which `trap #15` asks for. Put the task number in D0.B (the values below are decimal); the task’s other inputs and results use the listed registers. `trap #0` to `trap #14` run handlers the program installs instead.',
         entries
     }
 }
@@ -377,7 +378,7 @@ function exceptions(): Chapter {
         title: 'Exceptions',
         href,
         description:
-            'How a real 68000 handles exceptions, interrupts and traps, and what this editor does instead.',
+            'How the 68000 handles exceptions through its vector table: handlers, frames, `rte`, and user and supervisor mode.',
         entries: prose('exceptions', href, exceptionsMarkdown)
     }
 }

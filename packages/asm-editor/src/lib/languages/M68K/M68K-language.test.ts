@@ -13,7 +13,10 @@ import {
     createM68kSignatureHelpProvider,
     formatM68kSource
 } from './M68K-language'
-import { getM68kErrorMessage } from './M68kUtils'
+import { getM68kErrorMessage, getM68kTerminationMessage } from './M68kUtils'
+import { M68KLanguage } from './M68K-grammar'
+import type { MemoryRange } from '@specy/s68k'
+import { tokenizeAssembly } from '#lib/content/assemblyHighlight.ts'
 
 const ADDED_V2_INSTRUCTIONS = [
     'movep',
@@ -30,7 +33,8 @@ const ADDED_V2_INSTRUCTIONS = [
     'abcd',
     'sbcd',
     'nbcd',
-    'extb'
+    'extb',
+    'rte'
 ]
 
 const CONDITION_CODES = [
@@ -119,6 +123,7 @@ const V2_INSTRUCTIONS = [
     'nop',
     'trap',
     'rtr',
+    'rte',
     'tas',
     'trapv',
     'chk',
@@ -139,6 +144,7 @@ const V2_DIRECTIVES = [
     'incbin',
     'include',
     'list',
+    'memory',
     'nolist',
     'offset',
     'opt',
@@ -203,10 +209,34 @@ describe('M68K v2 language tooling', () => {
         for (const name of [...ADDED_V2_INSTRUCTIONS, ...V2_DIRECTIVES]) {
             expect(getInstructionDocumentation(name), `${name} has documentation`).toBeDefined()
         }
-        expect(M68KRefusedInstructions).toEqual(['rte', 'stop', 'reset'])
+        expect(M68KRefusedInstructions).toEqual(['stop', 'reset'])
         expect(M68KRefusedDirectives).toEqual(
             expect.arrayContaining(['macro', 'endm', 'ifeq', 'endc', 'while', 'endw'])
         )
+    })
+
+    //the Core reads and enforces EASy68K's memory map, so the line is a directive like any other
+    //([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 15)
+    it('highlights, completes and documents the memory directive', async () => {
+        expect(M68KDirectives).toContain('memory')
+        expect(M68KRefusedDirectives).not.toContain('memory')
+        //the first rule of the editor's grammar to read the word, as Monaco reads it from there
+        const line = 'memory rom $8000,$8fff'
+        const rules = M68KLanguage.tokenizer.root as unknown[]
+        const rule = rules.find(
+            (candidate): candidate is [RegExp, unknown] =>
+                Array.isArray(candidate) &&
+                candidate[0] instanceof RegExp &&
+                new RegExp(`^(?:${candidate[0].source})`, 'i').test(line)
+        )
+        expect(rule?.[1]).toEqual(['directive', expect.objectContaining({ next: '@operands' })])
+        //and the code blocks of the Documentation and the courses
+        const [memory] = tokenizeAssembly(`    ${line}`, 'M68K')[0].filter((t) => t.text.trim())
+        expect(memory).toMatchObject({ kind: 'directive', text: 'memory' })
+        expect(await completions('    mem')).toEqual(
+            expect.arrayContaining([expect.objectContaining({ label: 'memory' })])
+        )
+        expect(getInstructionDocumentation('memory')?.description).toContain('bus error')
     })
 
     it('completes SIMHALT, uppercase directives, and operations after labels', async () => {
@@ -263,7 +293,8 @@ describe('M68K v2 language tooling', () => {
             'd(PC) | 0(pc) | 6 | Program-counter displacement | ',
             'd(PC,Xn) | 0(pc,d0) | 6 | Program-counter displacement with an index | ',
             'sr | sr | 5 | Status register | ',
-            'ccr | ccr | 5 | Condition-code register | '
+            'ccr | ccr | 5 | Condition-code register | ',
+            'usp | usp | 5 | User stack pointer | '
         ])
         expect(await resolved('movem.w ')).toContain(
             '<register list> | d0-d1/a0-a1 | 5 | Register list for MOVEM | '
@@ -355,7 +386,7 @@ describe('M68K v2 language tooling', () => {
         expect(org).not.toContain('*')
     })
 
-    it('says an instruction is the 68020’s alone, and a form the 68010’s, in its hover', async () => {
+    it('says an instruction is the 68020’s alone, and a form privileged, in its hover', async () => {
         const provider = createM68kHoverProvider(monacoStub)
         const value = async (line: string, column: number) => {
             const hover = await provider.provideHover(
@@ -370,10 +401,19 @@ describe('M68K v2 language tooling', () => {
         expect(extb.split('\n\n')[1]).toBe(
             '*Arithmetic · Size .l · 68020 only: write `opt p=68020` at the top of the program*'
         )
+        //the first six of move's seven rows, the 68010's last, which its page lists
         const rows = (await value('    move.w d0,d1', 6)).find((block) =>
-            block.includes('`move ccr, <ea>`')
+            block.includes('`move usp, An`')
         )
-        expect(rows?.split('  \n')).toContain('`move ccr, <ea>` · Size .w · 68010')
+        expect(rows?.split('  \n').slice(3)).toEqual([
+            '`move <ea>, sr` · Size .w · Privileged',
+            '`move usp, An` · Size .l · Privileged',
+            '`move An, usp` · Size .l · Privileged',
+            '… 1 more on its page'
+        ])
+        //rte is privileged in its one form, so the tag is the instruction's
+        const [rte] = await value('    rte', 6)
+        expect(rte.split('\n\n')[1]).toBe('*System · Privileged*')
     })
 
     it('says in completion that an instruction is the 68020’s, and still offers it', async () => {
@@ -477,8 +517,208 @@ describe('M68K v2 language tooling', () => {
         expect(getM68kErrorMessage({ type: 'IllegalInstruction' })).toContain('Illegal instruction')
         //what the Core does not run yet, which a program can only reach in bytes it never
         //assembled as code
-        expect(getM68kErrorMessage({ type: 'Unimplemented', value: '`rte`' }, 4)).toBe(
-            'Error at line 4: `rte` is not implemented yet'
+        expect(getM68kErrorMessage({ type: 'Unimplemented', value: '`stop`' }, 4)).toBe(
+            'Error at line 4: `stop` is not implemented yet'
+        )
+    })
+
+    //an exception whose vector holds no handler ends the program, the vector named after where
+    //it happened ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 9)
+    it('names the vector that held no handler, and what the exception was about', () => {
+        const ended = (cause: object, vector?: number) =>
+            ({ type: 'Exception', value: { cause, vector } }) as Parameters<
+                typeof getM68kTerminationMessage
+            >[0]
+        expect(getM68kTerminationMessage(ended({ type: 'DivisionByZero' }, 5), 12)).toBe(
+            'Division by zero at line 12: vector 5 at $000014 holds no handler'
+        )
+        expect(
+            getM68kTerminationMessage(
+                ended({ type: 'UnhandledTrap', value: { vector: 35 } }, 35),
+                4
+            )
+        ).toBe('TRAP #3 at line 4: vector 35 at $00008C holds no handler')
+        expect(
+            getM68kTerminationMessage(
+                ended({ type: 'LineA', value: 0xa123 }, 10),
+                undefined,
+                0x1000
+            )
+        ).toBe(
+            'Line A instruction at $1000: vector 10 at $000028 holds no handler ($A123: the processor has no instruction starting with $A)'
+        )
+        expect(getM68kTerminationMessage(ended({ type: 'Trace' }, 9))).toBe(
+            'Trace exception: vector 9 at $000024 holds no handler (the T bit of SR is set, so the processor stops after every instruction)'
+        )
+        expect(
+            getM68kTerminationMessage(
+                ended(
+                    {
+                        type: 'AddressError',
+                        value: { address: 0x1001, size: 'Word', access: 'Program' }
+                    },
+                    3
+                ),
+                2
+            )
+        ).toBe(
+            'Address error at line 2: vector 3 at $00000C holds no handler (fetching code at the odd address $1001)'
+        )
+        //a task EASy68K does not know goes through TRAP #15's own vector
+        expect(
+            getM68kTerminationMessage(
+                ended({ type: 'UnsupportedTrapTask', value: { task: 200 } }, 47),
+                3
+            )
+        ).toBe(
+            'Trap task 200 is not a supported trap #15 task at line 3: vector 47 at $0000BC holds no handler'
+        )
+        //one no handler could take reads as any other error
+        expect(
+            getM68kTerminationMessage(
+                ended({ type: 'UnsupportedTrapTask', value: { task: 30 } }),
+                3
+            )
+        ).toBe(getM68kErrorMessage({ type: 'UnsupportedTrapTask', value: { task: 30 } }, 3))
+    })
+
+    it('says the CPU halted on a double fault, and what pushing the frame raised', () => {
+        expect(
+            getM68kTerminationMessage(
+                {
+                    type: 'Halted',
+                    value: {
+                        cause: {
+                            type: 'AddressError',
+                            value: { address: 0x4fff, size: 'Word' as never, access: 'Write' }
+                        },
+                        vector: 32
+                    }
+                },
+                4
+            )
+        ).toBe(
+            'The CPU halted at line 4: a double bus fault while taking TRAP #0 (vector 32), as pushing its frame raised an address error, writing a word at the odd address $4FFF'
+        )
+    })
+
+    it('reads every new cause of an error on its own, as the toasts show it', () => {
+        expect(getM68kErrorMessage({ type: 'PrivilegeViolation' }, 3)).toBe(
+            'Error at line 3: Privilege violation: the instruction runs only in supervisor mode, and the program is in user mode'
+        )
+        expect(getM68kErrorMessage({ type: 'LineF', value: 0xf000 })).toBe(
+            'Line F instruction: $F000: the processor has no instruction starting with $F'
+        )
+        expect(
+            getM68kErrorMessage({
+                type: 'AddressError',
+                value: { address: 0x2001, size: 'Long', access: 'Write' }
+            })
+        ).toBe('Address error: writing a long word at the odd address $2001')
+    })
+
+    //the memory map's bus error, vector 2, names the access and the `memory` line that refused it
+    //([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 15)
+    it('says what a bus error tried, and which range of the memory map refused it', () => {
+        const range = (kind: MemoryRange['kind'], start: number, end: number): MemoryRange => ({
+            kind,
+            start,
+            end,
+            location: { file: 'main.x68', line: 0, column: 0, endColumn: 0 }
+        })
+        const map = [
+            range('rom', 0x8000, 0x8fff),
+            range('read', 0x9000, 0x9fff),
+            range('protected', 0xa000, 0xafff),
+            range('invalid', 0x0, 0x3ff)
+        ]
+        const busError = (address: number, size: string, access: string, kind: string) => ({
+            type: 'BusError',
+            value: { address, size, access, range: kind }
+        })
+        expect(
+            getM68kErrorMessage(busError(0x9000, 'Word', 'Write', 'read'), 4, undefined, map)
+        ).toBe(
+            "Error at line 4: Bus error: writing a word at $9000, where the program's memory read line makes $9000-$9FFF read only"
+        )
+        expect(
+            getM68kErrorMessage(busError(0xa002, 'Byte', 'Read', 'protected'), 5, undefined, map)
+        ).toBe(
+            "Error at line 5: Bus error: reading a byte at $A002 in user mode, where the program's memory protected line keeps $A000-$AFFF for supervisor mode"
+        )
+        expect(
+            getM68kErrorMessage(
+                busError(0x200, 'Word', 'Program', 'invalid'),
+                undefined,
+                0x200,
+                map
+            )
+        ).toBe(
+            "Error at $200: Bus error: fetching code at $200, where the program's memory invalid line makes $0-$3FF invalid"
+        )
+        //without the Program's map, as a toast has it, the line is named alone
+        expect(getM68kErrorMessage(busError(0x9000, 'Long', 'Write', 'read'))).toBe(
+            "Bus error: writing a long word at $9000, which the program's memory read line makes read only"
+        )
+        const ended = {
+            type: 'Exception',
+            value: { cause: busError(0x9000, 'Word', 'Write', 'read'), vector: 2 }
+        } as Parameters<typeof getM68kTerminationMessage>[0]
+        expect(getM68kTerminationMessage(ended, 4, undefined, map)).toBe(
+            "Bus error at line 4: vector 2 at $000008 holds no handler (writing a word at $9000, where the program's memory read line makes $9000-$9FFF read only)"
+        )
+    })
+
+    it('says the CPU halted on a bus error while it took an exception, reading its vector or pushing its frame', () => {
+        const map: MemoryRange[] = [
+            {
+                kind: 'invalid',
+                start: 0,
+                end: 0x3ff,
+                location: { file: 'main.x68', line: 0, column: 0, endColumn: 0 }
+            },
+            {
+                kind: 'read',
+                start: 0xf00000,
+                end: 0xffffff,
+                location: { file: 'main.x68', line: 1, column: 0, endColumn: 0 }
+            }
+        ]
+        const halted = (cause: object, vector: number) =>
+            ({ type: 'Halted', value: { cause, vector } }) as Parameters<
+                typeof getM68kTerminationMessage
+            >[0]
+        expect(
+            getM68kTerminationMessage(
+                halted(
+                    {
+                        type: 'BusError',
+                        value: { address: 0x14, size: 'Long', access: 'Read', range: 'invalid' }
+                    },
+                    5
+                ),
+                3,
+                undefined,
+                map
+            )
+        ).toBe(
+            "The CPU halted at line 3: a double bus fault while taking Divide by zero (vector 5), as reading its vector at $000014 raised a bus error, where the program's memory invalid line makes $0-$3FF invalid"
+        )
+        expect(
+            getM68kTerminationMessage(
+                halted(
+                    {
+                        type: 'BusError',
+                        value: { address: 0xfffffe, size: 'Word', access: 'Write', range: 'read' }
+                    },
+                    2
+                ),
+                3,
+                undefined,
+                map
+            )
+        ).toBe(
+            "The CPU halted at line 3: a double bus fault while taking Bus error (vector 2), as pushing its frame raised a bus error, writing a word at $FFFFFE, where the program's memory read line makes $F00000-$FFFFFF read only"
         )
     })
 

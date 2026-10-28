@@ -26,7 +26,8 @@ export const M68K_MODE_SYMBOLS: Readonly<Record<string, string>> = {
     Im: '#imm',
     '<register list>': '<register list>',
     sr: 'sr',
-    ccr: 'ccr'
+    ccr: 'ccr',
+    usp: 'usp'
 }
 
 /** The modes in the manual's order, as the pages write them. */
@@ -129,7 +130,7 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
     },
     'd(PC,Xn)': {
         meaning:
-            'Memory at a target address plus an index register, for example `4(pc,d0.w)`. The assembler computes a signed 8-bit displacement from two bytes after the instruction’s start to the target. `Xn` is a data or address register; `.w` uses its signed low word, and `.l` its full long value. This addressing mode cannot write memory.',
+            'Memory at a target address plus an index register, for example `4(pc,d0.w)`. The assembler computes a signed 8-bit displacement from two bytes after the instruction’s start to the target; without one, as in `(pc,d0.w)`, the target is the instruction itself. `Xn` is a data or address register; `.w` uses its signed low word, and `.l` its full long value. This addressing mode cannot write memory.',
         href: `${MODES}#program-counter-relative`
     },
     '#imm': {
@@ -146,6 +147,11 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
         meaning:
             'The condition-code register: the low byte of `sr`, containing the `X`, `N`, `Z`, `V` and `C` flags.',
         href: `${MODES}#status-registers`
+    },
+    usp: {
+        meaning:
+            'The user stack pointer: the `a7` a program has in user mode. Supervisor code reads and sets it through an address register, as in `move.l usp, a0`.',
+        href: `${MODES}#user-stack-pointer`
     },
     '<register list>': {
         meaning:
@@ -169,7 +175,7 @@ const IMMEDIATE_MEANINGS: Readonly<Record<string, string>> = {
     bset: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
     bclr: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
     bchg: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
-    trap: 'A trap vector from `0` to `15`. Use `#15` to call the simulator’s service handler.',
+    trap: 'A trap number from `0` to `15`. `#0` to `#14` run the handler in vectors 32 to 46; `#15` runs the simulator’s task numbered in `d0.b`.',
     link: 'A signed 16-bit displacement added to the stack pointer. Use a negative value to reserve stack space, for example `#-16`.'
 }
 

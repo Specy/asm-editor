@@ -60,9 +60,10 @@ loop.
 The loop still adds the six words, so `d0` is `0000006C`, but then the processor carries on into
 `numbers` and runs its words as instructions. The first two, 4 and 8, read as `ORI.B #$8,D4`,
 which puts 8 in `d4`. The third word, 15, is no instruction at all, so the run ends with
-`Error at $1016: Illegal instruction exception`. Opened in the editor, the History lists those two
-steps with no source line, each with what ran: `ORI.B #$8,D4`, then `DC.W $000F`, a word that
-decodes to no instruction. A real 68000 does the same.
+`Illegal instruction at $1016: vector 4 at $000010 holds no handler`: the program installed no
+handler for an illegal instruction, as the exceptions lecture explains. Opened in the editor, the
+History lists those two steps with no source line, each with what ran: `ORI.B #$8,D4`, then
+`DC.W $000F`, a word that decodes to no instruction. A real 68000 does the same.
 
 </details>
 

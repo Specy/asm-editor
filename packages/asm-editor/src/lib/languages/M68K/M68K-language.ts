@@ -577,7 +577,8 @@ const OPERAND_COMPLETIONS: [
         'Register list for MOVEM'
     ],
     [AddressingMode.StatusRegister, 'Variable', 'sr', 'sr', 'Status register'],
-    [AddressingMode.ConditionCodeRegister, 'Variable', 'ccr', 'ccr', 'Condition-code register']
+    [AddressingMode.ConditionCodeRegister, 'Variable', 'ccr', 'ccr', 'Condition-code register'],
+    [AddressingMode.UserStackPointer, 'Variable', 'usp', 'usp', 'User stack pointer']
 ]
 
 function getAddressingModes(

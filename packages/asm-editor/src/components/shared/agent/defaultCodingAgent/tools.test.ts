@@ -1633,6 +1633,29 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
             expect(formatted.disassembly).toBe('NOP')
         })
 
+        it('says what a step ran on the real Core after a later step overwrote its code', async () => {
+            //the `addq` runs, then the store makes a `nop` of it, which memory holds now
+            const code = [
+                '    ORG $1000',
+                'target: add.l #5,d1',
+                '    lea target,a0',
+                '    move.w #$4E71,(a0)',
+                '    simhalt'
+            ].join('\n')
+            const emulator = M68KEmulator(code)
+            try {
+                await emulator.compile(200, code)
+                for (let i = 0; i < 3; i++) await emulator.step()
+                const steps = formatLatestSteps(code, emulator.latestSteps) as FormattedStep[]
+                expect(steps[2]).toMatchObject({
+                    line: 'main:2 | target: add.l #5,d1',
+                    disassembly: 'ADDQ.L #5,D1'
+                })
+            } finally {
+                emulator.dispose()
+            }
+        })
+
         //a Poke made through the tool reaches the prompt as well, so the model knows what it is for
         it('tells the prompt what a Poke is and what is never pokeable', () => {
             const prompt = buildDefaultCodingAgentPrompt({

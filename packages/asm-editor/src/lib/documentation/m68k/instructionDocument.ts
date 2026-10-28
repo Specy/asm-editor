@@ -83,9 +83,9 @@ const SIZE_SUFFIXES: Record<M68KInstructionForm['sizes'][number], string> = {
     short: '.s'
 }
 
-/** The 68000 reserves these for supervisor mode, which s68k does not enforce. */
+/** The 68000 reserves these for supervisor mode, and s68k enforces it. */
 const PRIVILEGED_EXPLANATION =
-    'A 68000 runs these only in supervisor mode; s68k runs every program in supervisor mode, as EASy68K does, so they run here too.'
+    'These run only in supervisor mode, where a program starts. In user mode they raise a privilege violation instead; see [user and supervisor mode](/documentation/m68k/exceptions#modes).'
 
 /**
  * What the forms a later processor brought need: the `opt p=` line that writes the program for it
