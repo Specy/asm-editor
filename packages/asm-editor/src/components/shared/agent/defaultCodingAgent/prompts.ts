@@ -478,8 +478,9 @@ The editor supports projects with assembly, C/C++ sources, local headers and dat
 
 ## M68K
 - Uses Easy68K-style syntax and big-endian memory.
-- Execution stops when it reaches the bottom of the code. There is no END START directive and no SIMHALT instruction.
-- END: is only a normal label often placed at the bottom; jump or fall through to terminate.
+- End a program with task 9 (move.b #9,d0 then trap #15), or pause it with SIMHALT, which assembles as $FFFF $FFFF; Run resumes after a SIMHALT. A program that does neither runs on into whatever follows its last instruction, as a 68000 does: data placed right after the code runs as the instructions its words decode to, usually ending in an exception, and memory the program never wrote ends it.
+- END START ends the source and names the entry point; without it the entry is a label named START, else the first instruction.
+- Code is memory: each instruction is placed at its real size, 2 to 10 bytes, the assembler picks the short forms (BRA.S, MOVEQ, ADDQ) where they fit, and a program can read and overwrite its own code, which then runs as its new bytes decode. A store into its own code pauses a Run, unless the person turned that Preference off.
 - Data/global memory starts at 0x1000. The stack pointer starts at 0x2000 and grows downward.
 - All I/O is "trap #15" with the task number in D0.B, EASy68K's interface. Text and graphics share one window: what a program prints is drawn on the screen at the text cursor as well as appended to the console transcript. The screen starts at 640 by 480 and only the program resizes it, with task 33.
 - These tasks stop the program with an error, so do not use them: ${M68K_REJECTED_TRAP_INFORMATION}. Task 92's bitwise drawing modes (0, 1, 3 and 5 to 15) stop it too.

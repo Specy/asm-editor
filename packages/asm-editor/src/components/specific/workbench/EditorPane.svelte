@@ -35,6 +35,7 @@
     import PixelEditor from './pixels/PixelEditor.svelte'
     import MarkdownPreview from './preview/MarkdownPreview.svelte'
     import { isPreviewKind } from '#lib/fileKinds.ts'
+    import { changedLinesOf, withChangedCode } from '#lib/languages/changedCode.ts'
     import { useWorkbench } from './workbenchContext'
     import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
     import FaUpload from '~icons/fa-solid/upload'
@@ -118,6 +119,13 @@
     const pendingListing = $derived(group.displayedListing ?? group.pseudocodeListing)
     /** A Pseudocode has no Build artifacts or pseudo-instructions of its own. */
     const showsFileLines = $derived(group.displayedView !== 'pseudocode')
+    /**
+     * The program's own code it or a Poke changed at run time, on the File the Build read: what
+     * runs there now goes in the Build hover and on the line's mark (m68k-machine.md, decision 27).
+     */
+    const changedCode = $derived(
+        group.sourceView === 'snapshot' && showsFileLines ? emulator.changedCode : []
+    )
     /**
      * "Patch instruction…" on an instruction of the running Executable's Listing
      * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): in the context
@@ -423,8 +431,11 @@
                 sharedModels={session.models}
                 retainedModelKeys={session.retainedModelKeys}
                 buildArtifacts={group.sourceView === 'snapshot' && showsFileLines
-                    ? emulator.buildArtifacts.filter(
-                          (artifact) => artifact.file === group.displayedPath
+                    ? withChangedCode(
+                          emulator.buildArtifacts.filter(
+                              (artifact) => artifact.file === group.displayedPath
+                          ),
+                          changedCode
                       )
                     : []}
                 viewZones={group.sourceView === 'snapshot' &&
@@ -461,6 +472,7 @@
                 navigation={navigable ? navigation : undefined}
                 canBreakAt={breakable}
                 {patchedLines}
+                changedLines={changedLinesOf(changedCode, group.displayedPath)}
                 lineNote={group.runningWithin}
                 lineActions={listingModel
                     ? listingModel.library

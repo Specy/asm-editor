@@ -9,7 +9,10 @@ import { formatTime } from '#lib/utils.ts'
  *   `ret`. `code` is its status when the environment has one and the Core reports it: x86 does,
  *   MARS and RARS do from their 4.0.0 Cores.
  * - `end`: it ran past its last instruction (MARS's and RARS's "dropped off bottom", the Z80's
- *   cliff), or the Core says only that it is over.
+ *   cliff), or the Core says only that it is over. An M68K program ends where it runs into memory
+ *   it never wrote, EASy68K's SIMHALT (`$FFFF $FFFF`) outside the bytes it placed, and
+ *   `unwrittenMemory` says where, as the Target writes an address: one past its last instruction
+ *   when nothing follows it, further on when it ran on through data first.
  * - `signal`: a Linux signal ended it, named as a shell names it: `Segmentation fault`. When the
  *   signal says only that the emulator cannot run what a real processor would, `unsupported` says
  *   that in its place: "stopped: AVX-512 isn't supported yet" for SIGILL on an AVX-512 (EVEX)
@@ -21,7 +24,7 @@ import { formatTime } from '#lib/utils.ts'
  */
 export type Termination =
     | { kind: 'exit'; code?: number }
-    | { kind: 'end' }
+    | { kind: 'end'; unwrittenMemory?: string }
     | {
           kind: 'signal'
           number: number
@@ -41,8 +44,9 @@ export type TerminationWordingOptions = {
 
 /**
  * How the program ended, as one clause the Log, the info lines and the coding agent share:
- * "exited with code 3", "exited", "ran past its last instruction", "Segmentation fault (signal
- * 11)", "stopped: AVX-512 isn't supported yet", "stopped by an error: …".
+ * "exited with code 3", "exited", "ran past its last instruction", "ran into memory the program
+ * never wrote, at $1012", "Segmentation fault (signal 11)", "stopped: AVX-512 isn't supported
+ * yet", "stopped by an error: …".
  */
 export function describeTermination(
     termination: Termination,
@@ -54,7 +58,9 @@ export function describeTermination(
                 ? 'exited'
                 : `exited with code ${termination.code}`
         case 'end':
-            return 'ran past its last instruction'
+            return termination.unwrittenMemory === undefined
+                ? 'ran past its last instruction'
+                : `ran into memory the program never wrote, at ${termination.unwrittenMemory}`
         case 'signal':
             return (
                 termination.unsupported ??
@@ -68,14 +74,16 @@ export function describeTermination(
 }
 
 /**
- * Whether the way the program ended says more than that it ended: a status, a signal or an error.
+ * Whether the way the program ended says more than that it ended: a status, a signal, an error,
+ * or the memory an M68K program ran into, which says where it got to when it did not end itself.
  * A plain end, or an exit with no status, is what every program that finishes does, and the
  * summary leaves it unsaid.
  */
 function isNoteworthy(termination: Termination | undefined): termination is Termination {
     if (!termination) return false
     if (termination.kind === 'exit') return termination.code !== undefined
-    return termination.kind !== 'end'
+    if (termination.kind === 'end') return termination.unwrittenMemory !== undefined
+    return true
 }
 
 /**

@@ -26,13 +26,15 @@ end:
 ```
 
 The playground begins with `sp` (also called `a7`) at `$1000000`. Here `bsr triple` is at
-`$1004`, and the instruction after it, `move.l d0,d1`, is at `$1008`:
+`$1002`, after the two bytes of `move.l #10, d0`. It takes four bytes itself, two for the
+instruction and two for the distance to `triple`, so the instruction after it, `move.l d0,d1`, is
+at `$1006`:
 
 | moment       | next instruction              | `sp`       | top of stack            |
 | ------------ | ----------------------------- | ---------- | ----------------------- |
-| before `bsr` | `bsr triple` at `$1004`       | `$1000000` | no value from this call |
-| after `bsr`  | first instruction of `triple` | `$FFFFFC`  | return address `$1008`  |
-| after `rts`  | `move.l d0,d1` at `$1008`     | `$1000000` | return address popped   |
+| before `bsr` | `bsr triple` at `$1002`       | `$1000000` | no value from this call |
+| after `bsr`  | first instruction of `triple` | `$FFFFFC`  | return address `$1006`  |
+| after `rts`  | `move.l d0,d1` at `$1006`     | `$1000000` | return address popped   |
 
 `bsr` pushed a long address, moving `sp` down by four bytes. `rts` used that address and moved `sp`
 back up by four. The caller then copies 30 into `d1`. The `bra end` skips the subroutine's code:

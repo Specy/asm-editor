@@ -10,13 +10,15 @@ import { M68KEmulator } from '#lib/languages/M68K/M68KEmulator.svelte.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
-import { fileText, type ProjectFiles } from '#lib/projectFiles.ts'
+import { fileText, type BuildSources, type ProjectFiles } from '#lib/projectFiles.ts'
+import type { BuildOutputHost } from '#lib/buildOutput.ts'
 import { M68K_TRAP_DOCS, screenColorOf } from '#lib/languages/M68K/M68K-traps.ts'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import { KEY_CODES, letterKeyCode } from '#lib/languages/peripherals/keyCodes.ts'
 import { BLACK } from '#lib/languages/peripherals/screen/color.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 
 /**
  * The `trap #15` interface against the real Core under node: every task the editor supports, routed
@@ -100,7 +102,8 @@ describe('M68K Project Files', () => {
             {
                 file: 'src/lib/helper.m68k',
                 line: 0,
-                address: 0x1000n
+                address: 0x1000n,
+                opcode: '70 07'
             }
         ])
         await emulator.step()
@@ -1749,20 +1752,41 @@ describe('M68K termination', () => {
         expect(emulator.executionTime).toBeGreaterThanOrEqual(0)
     })
 
-    it('says a program that runs past its last instruction ended there', async () => {
+    it('says where a program that does not end itself ran into memory it never wrote', async () => {
+        //two `moveq`s, two bytes each, so the first word nobody wrote is at $1004
         const emulator = await build('    move.l #1,d1\n    move.l #2,d2\n')
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.terminated).toBe(true)
-        expect(emulator.termination).toEqual({ kind: 'end' })
+        expect(emulator.termination).toEqual({ kind: 'end', unwrittenMemory: '$1004' })
     })
 
     it('leaves a program simhalt paused unended, and ends it past the last instruction', async () => {
+        //`simhalt` is four bytes, $FFFF $FFFF, which the program placed itself
         const emulator = await build('    move.l #1,d1\n    simhalt\n')
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.terminated).toBe(false)
         expect(emulator.termination).toBeUndefined()
         await emulator.run(INSTRUCTION_LIMIT)
-        expect(emulator.termination).toEqual({ kind: 'end' })
+        expect(emulator.termination).toEqual({ kind: 'end', unwrittenMemory: '$1006' })
+    })
+
+    it('shows in the History what ran on no line, decoded from memory', async () => {
+        //`$4E71` is the word of `nop`, which the program runs into from its last instruction
+        const emulator = await build('    move.l #1,d1\n    dc.w $4E71\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.termination).toEqual({ kind: 'end', unwrittenMemory: '$1004' })
+        const [data, code] = emulator.latestSteps
+        expect(data).toMatchObject({ pc: 0x1002, line: -1, disassembly: 'NOP' })
+        expect(code.line).toBe(1)
+        expect(code.disassembly).toBeUndefined()
+    })
+
+    it('runs on into data that follows the code, as a 68000 does', async () => {
+        //`$4AFC` is the word of `illegal`, and no line was laid out where it is
+        const emulator = await build('    move.l #1,d1\n    dc.w $4AFC\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.termination?.kind).toBe('error')
+        expect(emulator.errors).toEqual(['Error at $1002: Illegal instruction exception'])
     })
 
     it('forgets how the program ended when Undo takes task 9 back', async () => {
@@ -1794,6 +1818,221 @@ describe('M68K termination', () => {
         expect(emulator.errors[0]).toContain('Address error')
         //the `move.w`, below ORG and the `move.l`
         expect(emulator.line).toBe(2)
+    })
+})
+
+describe('M68K machine code', () => {
+    it('gives each line its encoding, and what it assembled as where it differs', async () => {
+        const code =
+            ORG + ['loop:', '    move.l #5,d0', '    add.l #1,d0', '    bra loop'].join('\n')
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        expect(
+            emulator.buildArtifacts.map(({ line, address, opcode, assembledAs }) => ({
+                line,
+                address,
+                opcode,
+                assembledAs
+            }))
+        ).toEqual([
+            { line: 2, address: 0x1000n, opcode: '70 05', assembledAs: 'MOVEQ #5,D0' },
+            { line: 3, address: 0x1002n, opcode: '52 80', assembledAs: 'ADDQ.L #1,D0' },
+            { line: 4, address: 0x1004n, opcode: '60 fa', assembledAs: 'BRA.S loop' }
+        ])
+        emulator.dispose()
+    })
+
+    it('leaves out what a line assembled as when it is what the line wrote', async () => {
+        const code = ORG + '    move.w d1,d2\n'
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        expect(emulator.buildArtifacts).toEqual([
+            { file: emulator.entry, line: 1, address: 0x1000n, opcode: '34 01' }
+        ])
+        emulator.dispose()
+    })
+})
+
+describe('M68K Build output', () => {
+    /** The records of an S-record file, each its type and its fields after the count. */
+    function records(text: string) {
+        return text
+            .split('\r\n')
+            .filter(Boolean)
+            .map((record) => ({ type: record.slice(0, 2), body: record.slice(4, -2) }))
+    }
+
+    it('saves the program as the S-record EASy68K writes, beside the Entry as main.S68', async () => {
+        const sources = {
+            entry: 'main.x68',
+            files: {
+                'main.x68': {
+                    encoding: 'plain' as const,
+                    content: ORG + 'start: move.l #5,d0\n    simhalt\n    end start\n'
+                }
+            }
+        }
+        const emulator = M68KEmulator(sources)
+        const saved: { path: string; text: string; format: string }[] = []
+        const host = {
+            claim: async () => 'save' as const,
+            save: (_sources: BuildSources, path: string, bytes: Uint8Array, format) => {
+                saved.push({ path, text: new TextDecoder().decode(bytes), format })
+                emulator.peripherals.fileSystem.writeBytes(path, bytes, true, 'plain')
+            },
+            isBuildOutput: () => false
+        } satisfies BuildOutputHost
+        emulator.setBuildOutputHost(host)
+        await emulator.compile(100, sources)
+        expect(emulator.errors).toEqual([])
+        expect(saved.map(({ path, format }) => ({ path, format }))).toEqual([
+            { path: 'main.S68', format: 'srecord' }
+        ])
+        const [header, data, entry] = records(saved[0].text)
+        //EASy68K's header, then `moveq #5,d0` and `simhalt` at $1000, then the entry point
+        expect(header.type).toBe('S0')
+        expect(Buffer.from(header.body.slice(4), 'hex').toString('latin1')).toBe(
+            '68KPROG   20CREATED BY EASY68K'
+        )
+        expect(data).toEqual({ type: 'S1', body: '10007005FFFFFFFF' })
+        expect(entry).toEqual({ type: 'S8', body: '001000' })
+        //the Debug session's Files are the Build's, its output included
+        expect(Object.keys(emulator.buildSources!.files)).toEqual(['main.x68', 'main.S68'])
+        emulator.dispose()
+    })
+})
+
+describe('M68K writes into code', () => {
+    /** Turns the second instruction after the store into a `nop` before it runs. */
+    const PATCHES_ITSELF = [
+        '    lea target,a0',
+        '    move.w #$4E71,(a0)',
+        '    move.l #1,d1',
+        'target: add.l #5,d1',
+        '    move.b #9,d0',
+        '    trap #15'
+    ].join('\n')
+
+    async function build(body: string) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(100, code)
+        return emulator
+    }
+
+    it('pauses a Run after the store, names what it overwrote, and goes on with the new bytes', async () => {
+        const emulator = await build(PATCHES_ITSELF)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(false)
+        //paused after the `move.w`, on the `move.l` after it
+        expect(emulator.line).toBe(3)
+        expect(emulator.notes.map((note) => note.text)).toEqual([
+            'The program wrote into its own code at $100C, line 5: `add.l #5,d1`. Run again to go on with the new bytes.'
+        ])
+        const [step] = emulator.latestSteps
+        expect(step.mutations).toContainEqual({
+            type: 'Other',
+            value: 'Wrote into its code at $100C, line 5: add.l #5,d1'
+        })
+
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.termination).toEqual({ kind: 'exit' })
+        //the `add.l` was a `nop` by the time it ran
+        expect(registerOf(emulator, 'D1')).toBe(1n)
+        emulator.dispose()
+    })
+
+    it('runs straight through when the Preference is off', async () => {
+        const preference = preferencesStore.values.pauseOnCodeWrite
+        preference.value = false
+        try {
+            const emulator = await build(PATCHES_ITSELF)
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.termination).toEqual({ kind: 'exit' })
+            expect(registerOf(emulator, 'D1')).toBe(1n)
+            expect(emulator.notes).toEqual([])
+            emulator.dispose()
+        } finally {
+            preference.value = true
+        }
+    })
+
+    it('pauses after a trap whose answer was read into code', async () => {
+        //task 2 stores the line typed at (a1), here over the instruction after the trap
+        const emulator = await build(
+            [
+                '    lea after,a1',
+                '    move.b #2,d0',
+                '    trap #15',
+                'after: move.l #7,d1',
+                '    move.b #9,d0',
+                '    trap #15'
+            ].join('\n')
+        )
+        emulator.peripherals.terminal.useScriptedInput(['NN'])
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.notes.map((note) => note.text)).toEqual([
+            'The program wrote into its own code at $100C, line 5: `move.l #7,d1`. Run again to go on with the new bytes.'
+        ])
+        emulator.dispose()
+    })
+
+    it('marks the line whose code changed, with what runs there now, until Undo puts it back', async () => {
+        const emulator = await build(PATCHES_ITSELF)
+        expect(emulator.changedCode).toEqual([])
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.changedCode).toEqual([
+            { file: emulator.entry, line: 4, address: 0x100cn, runsNow: 'NOP' }
+        ])
+        emulator.undo(1)
+        expect(emulator.changedCode).toEqual([])
+        emulator.dispose()
+    })
+
+    it('marks a line a Poke changed', async () => {
+        const emulator = await build(PATCHES_ITSELF)
+        //`moveq #1,d1` at $100A becomes `moveq #3,d1`
+        expect(emulator.pokeMemory(0x100an, new Uint8Array([0x72, 0x03]))).toBe(true)
+        expect(emulator.changedCode).toEqual([
+            { file: emulator.entry, line: 3, address: 0x100an, runsNow: 'MOVEQ #3,D1' }
+        ])
+        emulator.dispose()
+    })
+
+    it('says in the History what a changed line ran', async () => {
+        const emulator = await build(PATCHES_ITSELF)
+        await emulator.run(INSTRUCTION_LIMIT)
+        await emulator.step()
+        await emulator.step()
+        //newest first: the `nop` the program made of `add.l #5,d1`, then the `moveq` before it
+        const [patched, before] = emulator.latestSteps
+        expect(patched.line).toBe(4)
+        expect(patched.disassembly).toBe('NOP')
+        expect(before.line).toBe(3)
+        expect(before.disassembly).toBeUndefined()
+        emulator.dispose()
+    })
+
+    it('records the write in the History of a Step, which never pauses for it', async () => {
+        const emulator = await build(PATCHES_ITSELF)
+        await emulator.step()
+        await emulator.step()
+        expect(emulator.notes).toEqual([])
+        expect(emulator.latestSteps[0].mutations).toContainEqual({
+            type: 'Other',
+            value: 'Wrote into its code at $100C, line 5: add.l #5,d1'
+        })
+        //and Undo puts the instruction back
+        emulator.undo(1)
+        await emulator.step()
+        await emulator.run(INSTRUCTION_LIMIT)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(registerOf(emulator, 'D1')).toBe(1n)
+        emulator.dispose()
     })
 })
 
@@ -1849,7 +2088,7 @@ describe('M68K slices', () => {
         const code = ORG + DRAWING_LOOP
         const emulator = M68KEmulator(code)
         await emulator.compile(0, code)
-        //the adapter's estimate would let fifteen thousand instructions into a 1 ms slice, and this
+        //the adapter’s estimate would let twelve thousand instructions into a 1 ms slice, and this
         //program charges five of them per whole-image clear and repaint
         const slice = await (
             emulator as unknown as {
@@ -2078,7 +2317,7 @@ describe('M68K Synth', () => {
             timeBudgetMs: 1000,
             breakpoints: [],
             skipBreakpointAtPc: true,
-            speedCorrection: 30 / 15_000_000,
+            speedCorrection: 30 / 12_000_000,
             instructionBudget: 1000,
             runInstructionLimit: 1000
         }

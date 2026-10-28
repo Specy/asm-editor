@@ -192,6 +192,8 @@ export function formatLatestSteps(
             file: step.file ?? null,
             line: formatSourceLine(code, step.line, step.file).line,
             pc: formatNumber(step.pc),
+            //what ran where the source line does not say: no line, or one whose bytes changed
+            ...(step.disassembly === undefined ? {} : { disassembly: step.disassembly }),
             mutations: step.mutations.map((mutation) => {
                 switch (mutation.type) {
                     //`old` and `new` are what the Core reports of a write and nothing is

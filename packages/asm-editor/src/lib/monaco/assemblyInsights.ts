@@ -260,13 +260,26 @@ function inlineCode(text: string): string {
     return `${fence}${pad}${text}${pad}${fence}`
 }
 
+/**
+ * The Build hover's rows, one per address the line was placed at: the address and machine code,
+ * what the line assembled as where that is not what it says, and what runs there now where the
+ * program or a Poke changed those bytes since
+ * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decisions 26 and 27).
+ */
 function buildArtifactMarkdown(artifacts: readonly BuildArtifact[]): string {
     const visible = artifacts.slice(0, 32)
     const rows = visible.map((artifact) => {
         const address = formattedAddress(artifact.address)
-        return artifact.opcode
+        const placed = artifact.opcode
             ? `- Address \`${address}\` Machine code \`${artifact.opcode}\``
             : `- Address \`${address}\``
+        const assembledAs = artifact.assembledAs
+            ? `, assembled as ${inlineCode(artifact.assembledAs)}`
+            : ''
+        const runsNow = artifact.runsNow
+            ? `\n- Changed at run time: runs ${inlineCode(artifact.runsNow)} now`
+            : ''
+        return `${placed}${assembledAs}${runsNow}`
     })
     if (visible.length < artifacts.length) {
         rows.push(`- …and ${artifacts.length - visible.length} more`)

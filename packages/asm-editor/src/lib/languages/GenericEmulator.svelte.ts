@@ -1,11 +1,14 @@
 import { buildSourcesEqual } from '#lib/projectFiles.ts'
 import {
     buildOutputCollision,
+    buildOutputEncoding,
     buildOutputNote,
     buildOutputPath,
+    type BuildOutputFormat,
     type BuildOutputHost
 } from '#lib/buildOutput.ts'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
+import { sameChangedCode } from './changedCode'
 import { mergeMemoryRegions, readOnlyMemoryAt, withArgumentsArea } from './memoryRegions'
 import {
     BaseEmulator,
@@ -400,6 +403,7 @@ export abstract class GenericEmulator<T, R extends string>
             currentFile: this._sources.entry,
             decorations: [],
             buildArtifacts: [],
+            changedCode: [],
             statusRegisters: [],
             compilerDiagnostics: [],
             callStack: [],
@@ -936,6 +940,9 @@ export abstract class GenericEmulator<T, R extends string>
         this.captureArguments()
         this.deviceRegions = this._getDeviceRegions?.() ?? []
         this.state.latestSteps = this.visibleHistory(VISIBLE_HISTORY_STEPS)
+        //kept as it was while nothing changed, so the editor's line marks and hovers stay put
+        const changed = this._getChangedCode?.() ?? []
+        if (!sameChangedCode(changed, this.state.changedCode)) this.state.changedCode = changed
     }
 
     /**
@@ -1354,6 +1361,7 @@ export abstract class GenericEmulator<T, R extends string>
             sp: 0n,
             decorations: [],
             buildArtifacts: [],
+            changedCode: [],
             line: -1,
             currentFile: this._sources.entry,
             interrupt: undefined,
@@ -1498,6 +1506,7 @@ export abstract class GenericEmulator<T, R extends string>
             const output = await this.placeBuildOutput(
                 sources,
                 result.program,
+                result.programFormat ?? 'executable',
                 stopInUserCode,
                 fileSystem,
                 execution
@@ -1592,7 +1601,9 @@ export abstract class GenericEmulator<T, R extends string>
 
     /**
      * Where the program a Build linked goes ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)):
-     * at the path the Command line names, where the run's FileSystem has it for the program. A
+     * at the path the Command line names, or for an M68K S-record that name with `.S68`
+     * ([ADR 0065](../../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md)),
+     * where the run's FileSystem has it for the program. A
      * person's Build (`build`) has its host save it there as the Build output, `saved`, before the
      * Debug session takes the Files, asking first when that replaces something; else, or without
      * a host, it is only presented to the program. A Testcase's program takes the place of a Build
@@ -1602,12 +1613,13 @@ export abstract class GenericEmulator<T, R extends string>
     private async placeBuildOutput(
         sources: BuildSources,
         program: Uint8Array | undefined,
+        format: BuildOutputFormat,
         build: boolean,
         fileSystem: FileSystem,
         execution: ExecutionGeneration
     ): Promise<{ path: string; bytes: Uint8Array; saved: boolean } | undefined> {
         if (!program) return undefined
-        const path = buildOutputPath(sources)
+        const path = buildOutputPath(sources, format)
         const note = (text: string) => {
             if (build) this.addNote({ tone: 'warning', text })
             return undefined
@@ -1628,7 +1640,7 @@ export abstract class GenericEmulator<T, R extends string>
             this.executionController.ensureCurrent(execution)
             if (claim === 'save') {
                 try {
-                    host.save(sources, path, program)
+                    host.save(sources, path, program, format)
                     return { path, bytes: program, saved: true }
                 } catch (error) {
                     //a Project at its limits still runs the program it cannot keep
@@ -1643,7 +1655,7 @@ export abstract class GenericEmulator<T, R extends string>
         const collision = buildOutputCollision(fileSystem.files, path)
         if (!build && collision === 'file' && host?.isBuildOutput(path)) {
             //the Testcase's own FileSystem, which nothing saves
-            fileSystem.writeBytes(path, program, true, 'base64')
+            fileSystem.writeBytes(path, program, true, buildOutputEncoding(format))
             return { path, bytes: program, saved: true }
         }
         if (collision)
@@ -2822,6 +2834,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get buildArtifacts() {
         return this.state.buildArtifacts
+    }
+
+    get changedCode() {
+        return this.state.changedCode
     }
 
     get errors() {

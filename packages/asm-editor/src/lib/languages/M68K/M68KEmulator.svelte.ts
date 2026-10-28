@@ -1,6 +1,7 @@
 import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     ccrToFlagsArray,
+    type CodeWrite,
     type ExecutionStep as CoreExecutionStep,
     type FileDialogMode,
     type InputSettings,
@@ -24,6 +25,7 @@ import {
 } from '#lib/languages/ExecutionSlice.ts'
 import {
     type BuildArtifact,
+    type ChangedCode,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorSettings,
@@ -39,6 +41,7 @@ import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
 import type { OpenedSound } from '#lib/languages/peripherals/audio/Audio.ts'
 import type { SynthBus } from '#lib/languages/peripherals/audio/Synth.ts'
 import { SYNTH_BASES, SYNTH_BLOCK_SIZE } from '#lib/languages/synthRegisters.ts'
+import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
 import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
@@ -85,15 +88,31 @@ const registerName = [
 
 type M68KRegisterName = (typeof registerName)[number]
 
+/** One instruction the Build laid out: where, the bytes it placed, and the line it came from. */
+type PlacedInstruction = {
+    address: number
+    bytes: readonly number[]
+    file: string
+    line: number
+    assembledAs?: string
+}
+
+/** Instructions laid out back to back, which one read of memory covers. */
+type PlacedRun = { start: number; length: number; instructions: PlacedInstruction[] }
+
 const M68K_FLAG_NAMES = ['X', 'N', 'Z', 'V', 'C']
 
 /**
  * How many instructions the s68k interpreter runs in a millisecond, used to turn a slice's time
- * budget into a halt limit. Measured in phase 8 on a compute-only loop under node, which came to
- * about eighteen thousand; the estimate is rounded down because every other program is slower, and
- * a trap-heavy one is bounded by the slice's deadline instead (see `_runSlice`).
+ * budget into a halt limit. Measured again on 2026-10-28 with the measurement harness, once the
+ * Core ran from its decode cache: 13,000 to 14,000 on the compute-only loop under node (phase 8's
+ * Core did about eighteen thousand there), and a program of 10,000 instructions now runs at 11,000
+ * to 13,000 where it ran at about 6,000, since a step no longer searches the program for its
+ * instruction. Rounded down, as a program that does more per instruction is slower, and a
+ * trap-heavy one is bounded by the slice's deadline instead (see `_runSlice`); the scheduler's
+ * speed correction takes up the rest.
  */
-const M68K_INSTRUCTIONS_PER_MS = 15_000
+const M68K_INSTRUCTIONS_PER_MS = 12_000
 
 /** The Synth's block, beside EASy68K's hardware devices at $E00000. */
 const SYNTH_BASE = SYNTH_BASES.m68k
@@ -161,6 +180,14 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * ([ADR 0009](../../../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)).
      */
     private graphical = false
+    /** What the Build laid out as code, read from the Core once per Build (`placedCode`). */
+    private placed: PlacedRun[] | null = null
+    /**
+     * The addresses whose code changed since the Build, with what runs there now, as read at a
+     * step id: a step id names one state of memory, which Undo also comes back to, so the reading
+     * stands until another step, a direct write or an answered trap changes memory.
+     */
+    private changedReading: { step: number; changed: Map<number, string> } | null = null
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         super(
@@ -264,6 +291,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this.program?.dispose()
         this.program = null
         this.interpreter = null
+        this.forgetPlacedCode()
         const result = S68k.assemble({ files: m68kAssemblyFiles(sources), entry: sources.entry })
         const diagnostics = result.diagnostics.map((diagnostic) =>
             s68kDiagnosticToDiagnostic(diagnostic, sources)
@@ -276,7 +304,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
         }
         this.program = result.program
-        return { ok: true, diagnostics }
+        //the Build output: the S-record EASy68K's assembler writes, `main.S68`, which EASy68K's
+        //simulator loads and runs ([ADR 0065](../../../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md))
+        const program = new TextEncoder().encode(result.program.toSRecord())
+        return { ok: true, diagnostics, program, programFormat: 'srecord' }
     }
 
     _initialize(undoSize: number): void {
@@ -292,6 +323,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             keep_history: undoSize > 0
         })
         this.interpreter = interpreter
+        this.forgetPlacedCode()
         //the Synth's registers start at 0, as a chip's do at power-on, where the Core's memory
         //starts at $FF, except where the program put code or data of its own, which is left alone;
         //then every store into them stops the Core, which hands it over as it happens
@@ -323,6 +355,95 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this.program?.dispose()
         this.interpreter = null
         this.program = null
+        this.forgetPlacedCode()
+    }
+
+    private forgetPlacedCode(): void {
+        this.placed = null
+        this.changedReading = null
+    }
+
+    /**
+     * The code the Build laid out, in runs of instructions back to back: what `getInstructionAt`
+     * answers of each address, which is what the Build placed and never what memory holds now.
+     */
+    private placedCode(): PlacedRun[] {
+        if (this.placed) return this.placed
+        const interpreter = this.interpreter
+        const program = this.program
+        if (!interpreter || !program) return []
+        const runs: PlacedRun[] = []
+        let run: PlacedRun | undefined
+        for (const address of program.getInstructionAddresses()) {
+            const instruction = interpreter.getInstructionAt(address)
+            if (!instruction || instruction.size <= 0) continue
+            if (!run || run.start + run.length !== address) {
+                run = { start: address, length: 0, instructions: [] }
+                runs.push(run)
+            }
+            run.instructions.push({
+                address,
+                bytes: instruction.bytes,
+                file: instruction.location.file,
+                line: instruction.location.line,
+                ...(instruction.assembledAs ? { assembledAs: instruction.assembledAs } : {})
+            })
+            run.length += instruction.bytes.length
+        }
+        this.placed = runs
+        return runs
+    }
+
+    /**
+     * Each laid-out address whose bytes differ from what the Build placed, with the instruction
+     * memory holds there now: one read of memory per run of code, and a disassembly only of what
+     * changed, so a refresh costs a copy of the program's code.
+     */
+    private changedCodeAt(): Map<number, string> {
+        const interpreter = this.interpreter
+        if (!interpreter) return new Map()
+        const step = interpreter.getLastStepId()
+        if (this.changedReading?.step === step) return this.changedReading.changed
+        const changed = new Map<number, string>()
+        for (const run of this.placedCode()) {
+            const now = interpreter.readMemoryBytes(run.start, run.length)
+            for (const instruction of run.instructions) {
+                const offset = instruction.address - run.start
+                const same = instruction.bytes.every((byte, i) => now[offset + i] === byte)
+                if (!same)
+                    changed.set(
+                        instruction.address,
+                        interpreter.disassembleAt(instruction.address).text
+                    )
+            }
+        }
+        this.changedReading = { step, changed }
+        return changed
+    }
+
+    /** Memory changed without a step of its own: a direct write, or the answer to a trap. */
+    private forgetChangedCode(): void {
+        this.changedReading = null
+    }
+
+    _getChangedCode(): ChangedCode[] {
+        const changed = this.changedCodeAt()
+        if (changed.size === 0) return []
+        return this.placedCode().flatMap((run) =>
+            run.instructions.flatMap((instruction) => {
+                const runsNow = changed.get(instruction.address)
+                return runsNow === undefined
+                    ? []
+                    : [
+                          {
+                              file: instruction.file,
+                              line: instruction.line,
+                              address: BigInt(instruction.address),
+                              runsNow
+                          }
+                      ]
+            })
+        )
     }
 
     _getCallStack(): StackFrame[] {
@@ -340,25 +461,23 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
-        //M68K has no pseudo instructions, so there is nothing to decorate nor any generated code to show
+        //M68K has no pseudo instructions, so there is nothing to expand below a line. What a line
+        //assembled as, where the assembler chose another form (`bra loop` is `BRA.S loop`), is
+        //one instruction and the Build hover says it (`_getBuildArtifacts`)
         return { decorations: [], code: '' }
     }
 
     protected _getBuildArtifacts(): BuildArtifact[] {
-        const interpreter = this.interpreter
-        const program = this.program
-        if (!interpreter || !program) return []
-        const result: BuildArtifact[] = []
-        for (const address of program.getInstructionAddresses()) {
-            const instruction = interpreter.getInstructionAt(address)
-            if (!instruction || instruction.size <= 0) continue
-            result.push({
-                file: instruction.location.file,
-                line: instruction.location.line,
-                address: BigInt(address)
-            })
-        }
-        return result
+        return this.placedCode().flatMap((run) =>
+            run.instructions.map((instruction) => ({
+                file: instruction.file,
+                line: instruction.line,
+                address: BigInt(instruction.address),
+                opcode: hexBytes(instruction.bytes),
+                //what the assembler chose where the line did not say: `bra loop` is `BRA.S loop`
+                ...(instruction.assembledAs ? { assembledAs: instruction.assembledAs } : {})
+            }))
+        )
     }
 
     _getFlags(): { name: string; value: number; prev?: number }[] {
@@ -458,33 +577,52 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {
-        return (
-            this.interpreter?.getUndoHistory(max).map((step): ExecutionStep => {
-                if (step.kind === 'poke') {
-                    //a Poke ran no instruction, so it has no line to go to and no mutations of its
-                    //own: its row is what it wrote
-                    const writes = step.writes.map(convertPokeWrite)
-                    return {
-                        kind: 'poke',
-                        pc: step.pc,
-                        old_ccr: step.old_ccr,
-                        new_ccr: step.new_ccr,
-                        line: -1,
-                        writes,
-                        mutations: writes.map(pokeWriteToMutation)
-                    }
-                }
+        const interpreter = this.interpreter
+        if (!interpreter) return []
+        const steps = interpreter.getUndoHistory(max)
+        //read only when a step ran on a line, which is when the line's own text could mislead
+        const changed = steps.some((step) => step.kind === 'instruction' && step.location)
+            ? this.changedCodeAt()
+            : new Map<number, string>()
+        return steps.map((step): ExecutionStep => {
+            if (step.kind === 'poke') {
+                //a Poke ran no instruction, so it has no line to go to and no mutations of its
+                //own: its row is what it wrote
+                const writes = step.writes.map(convertPokeWrite)
                 return {
-                    kind: 'instruction',
+                    kind: 'poke',
                     pc: step.pc,
                     old_ccr: step.old_ccr,
                     new_ccr: step.new_ccr,
-                    line: step.location?.line ?? -1,
-                    file: step.location?.file,
-                    mutations: step.mutations.map(convertMutation)
+                    line: -1,
+                    writes,
+                    mutations: writes.map(pokeWriteToMutation)
                 }
-            }) ?? []
-        )
+            }
+            const mutations = step.mutations.map(convertMutation)
+            //the row of an instruction that wrote into code says so, as the Run's pause did
+            if (step.wroteCode) {
+                mutations.push({
+                    type: 'Other',
+                    value: `Wrote into its code at ${this.describeCodeWrite(step.wroteCode).replaceAll('`', '')}`
+                })
+            }
+            //what ran where the source does not say: on no line, as in data, or on a line
+            //whose bytes have changed since the Build
+            const disassembly = step.location
+                ? changed.get(step.pc)
+                : interpreter.disassembleAt(step.pc).text
+            return {
+                kind: 'instruction',
+                pc: step.pc,
+                old_ccr: step.old_ccr,
+                new_ccr: step.new_ccr,
+                line: step.location?.line ?? -1,
+                file: step.location?.file,
+                mutations,
+                ...(disassembly === undefined ? {} : { disassembly })
+            }
+        })
     }
 
     _hasTerminated(): boolean {
@@ -506,8 +644,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         switch (termination.type) {
             case 'TerminateTask':
                 return { kind: 'exit' }
+            //EASy68K's SIMHALT outside the bytes the program placed: where a program that does
+            //not end itself runs to, one past its last instruction or on through its data
             case 'EndOfProgram':
-                return { kind: 'end' }
+                return { kind: 'end', unwrittenMemory: m68kAddress(termination.value.address) }
             case 'TerminatedByHost':
                 return { kind: 'error', message: ENDED_BY_THE_EDITOR }
             case 'Exception': {
@@ -529,6 +669,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
         this.requireInterpreter().writeMemoryBytes(Number(address), data)
+        //outside a Poke this records no step, so the step id alone would not tell
+        this.forgetChangedCode()
     }
 
     _setRegisterValue(
@@ -556,6 +698,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             //a step has no scheduler to hand the wait to, so it is awaited here; a testcase's
             //virtual clock makes that immediate (ADR 0010)
             if (wait) await this.executionController.waitFor(execution, () => wait)
+            this.forgetChangedCode()
         }
         this.takeSynthWrites(interpreter)
         this.executionController.ensureCurrent(execution)
@@ -563,7 +706,23 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _stringifyError(error: unknown, line?: number): string {
-        return getM68kErrorMessage(error, line)
+        return getM68kErrorMessage(
+            error,
+            line,
+            line === undefined ? this.failedOutsideTheSource() : undefined
+        )
+    }
+
+    /**
+     * Where the instruction that ended the program ran, when no line was laid out there: in data
+     * the program ran into, or in bytes it changed. Undefined for any other error, and without a
+     * history, which is what remembers the address.
+     */
+    private failedOutsideTheSource(): number | undefined {
+        const interpreter = this.interpreter
+        if (interpreter?.getTermination()?.type !== 'Exception') return undefined
+        const [step] = interpreter.getUndoHistory(1)
+        return step?.kind === 'instruction' && !step.location ? step.pc : undefined
     }
 
     _undo(): void {
@@ -618,6 +777,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //`runWithBreakpoints` skips the instruction it starts on, and re-entering after a trap with
         //that skip on is what made the instruction after every trap unbreakable
         let startsTheRun = request.skipBreakpointAtPc
+        //a store into the program's own code pauses the Run after it, unless the person turned
+        //that off; a Testcase and a Step never pause for it
+        const stopOnCodeWrite = this.pausesOnCodeWrite
         while (!interpreter.hasTerminated()) {
             const remaining = budget - ran()
             if (remaining <= 0) {
@@ -632,13 +794,18 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 return { reason: 'budget', instructions: ran() }
             }
             try {
-                if (hasBreakpoints) {
-                    interpreter.runWithBreakpoints(parsedBreakpoints, remaining, {
-                        skipBreakpointAtPc: startsTheRun
+                if (hasBreakpoints || stopOnCodeWrite) {
+                    const status = interpreter.runWithBreakpoints(parsedBreakpoints, remaining, {
+                        skipBreakpointAtPc: startsTheRun,
+                        stopOnCodeWrite
                     })
                     startsTheRun = false
+                    //the instruction that wrote into code has run, and the next one has not
+                    if (status === CoreInterpreterStatus.CodeWrite) {
+                        return this.pauseForCodeWrite(interpreter.getCodeWrite(), ran())
+                    }
                     //here we might have reached a breakpoint. It is paused if the status is running
-                    if (interpreter.getStatus() === CoreInterpreterStatus.Running) {
+                    if (status === CoreInterpreterStatus.Running) {
                         return { reason: 'breakpoint', instructions: ran() }
                     }
                 } else {
@@ -656,12 +823,56 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             if (interpreter.getStatus() === CoreInterpreterStatus.Paused) {
                 return { reason: 'paused', instructions: ran() }
             }
+            const answered = interpreter.getStatus() === CoreInterpreterStatus.Interrupt
             const wait = await this.handleInterpreterInterruption(interpreter, execution)
             //a Delay is program time, not execution: the scheduler awaits it between slices, so the
             //GUI keeps repainting and Stop still answers while it runs (ADR 0007, ADR 0010)
             if (wait) return { reason: 'wait', instructions: ran(), wait }
+            //a trap's answer writes for the program, a line read into its own code included
+            const answerWrote = answered && stopOnCodeWrite ? interpreter.getCodeWrite() : null
+            if (answerWrote && !interpreter.hasTerminated()) {
+                return this.pauseForCodeWrite(answerWrote, ran())
+            }
         }
         return { reason: 'terminated', instructions: ran() }
+    }
+
+    /** The Preference that pauses a Run after the program writes into its code, on by default. */
+    private get pausesOnCodeWrite(): boolean {
+        return preferencesStore.values.pauseOnCodeWrite?.value !== false
+    }
+
+    /**
+     * Ends a slice after an instruction that wrote into the program's code, with a note naming what
+     * it overwrote ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 4):
+     * the Run pauses as at a Breakpoint, and the next Run goes on, the overwritten instruction
+     * running as its new bytes decode.
+     */
+    private pauseForCodeWrite(write: CodeWrite | null, instructions: number): ExecutionSlice {
+        if (write) {
+            this.addNote({
+                tone: 'warning',
+                text: `The program wrote into its own code at ${this.describeCodeWrite(write)}. Run again to go on with the new bytes.`
+            })
+        }
+        return { reason: 'codeWrite', instructions }
+    }
+
+    /**
+     * Where a code write landed, as the History and the Log say it: the address, and the line laid
+     * out there with its source, `$1008, line 4: \`add.w d1,d2\``, the File named when it is not the
+     * Entry. An address alone for code no line was laid out at, as in data the program ran.
+     */
+    private describeCodeWrite(write: CodeWrite): string {
+        const address = m68kAddress(write.address)
+        const instruction =
+            write.instructionIndex === undefined
+                ? null
+                : this.interpreter?.getInstructionAt(write.address)
+        if (!instruction) return address
+        const { file, line } = instruction.location
+        const where = file === this.buildSources?.entry ? '' : ` of \`${file}\``
+        return `${address}, line ${line + 1}${where}: \`${operationText(instruction.source)}\``
     }
 
     async _runTestcase(limit: number): Promise<void> {
@@ -703,6 +914,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         execution: ExecutionGeneration
     ): Promise<Promise<void> | undefined> {
         const wait = await this.answerInterruption(interpreter, execution)
+        //an answer writes for the instruction that asked, under that instruction's step id
+        this.forgetChangedCode()
         this.takeSynthWrites(interpreter)
         return wait
     }
@@ -748,6 +961,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             //`simhalt` or stops at a breakpoint ends before asking, and one that raises an
             //exception throws it
             case CoreInterpreterStatus.WatchedWrite:
+            case CoreInterpreterStatus.CodeWrite:
             case CoreInterpreterStatus.Paused:
             case CoreInterpreterStatus.Running:
             case CoreInterpreterStatus.TerminatedWithException:
@@ -1389,6 +1603,22 @@ function isExecutionLimitError(error: unknown): boolean {
         error !== null &&
         (error as { type?: unknown }).type === 'ExecutionLimit'
     )
+}
+
+/** A line's instruction as it was written, without its label and comment: `add.w d1,d2`. */
+function operationText(source: string): string {
+    const span = S68k.parseLine(source).operation?.span
+    return (span ? source.slice(span.start, span.end) : source).trim()
+}
+
+/** An address as EASy68K writes one, `$1012`. */
+function m68kAddress(address: number): string {
+    return `$${address.toString(16).toUpperCase()}`
+}
+
+/** An instruction's encoding as the Build hover shows machine code: `60 f6`. */
+function hexBytes(bytes: readonly number[]): string {
+    return bytes.map((byte) => byte.toString(16).padStart(2, '0')).join(' ')
 }
 
 function toCoreSize(size: RegisterSize | undefined): Size {

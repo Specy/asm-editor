@@ -67,6 +67,10 @@ export type ExecutionSliceRequest = {
  *
  * - `budget`: the slice ran out of instructions or time. Nothing is wrong, run the next slice.
  * - `breakpoint`: the Core stopped on one of the requested breakpoints.
+ * - `codeWrite`: the program wrote into its own code, and the person asked a Run to pause after
+ *   that instruction (the M68K Preference "Pause when a program writes to its code"). It ends the
+ *   run as a breakpoint does, after the instruction rather than before one; the adapter has
+ *   already said what was overwritten.
  * - `paused`: the program itself asked the Core to pause, as M68K's `simhalt` does.
  * - `terminated`: the program ended, normally or with an exception the adapter already reported.
  * - `limit`: the Core refused to continue because of a limit of its own.
@@ -79,6 +83,7 @@ export type ExecutionSliceRequest = {
 export type ExecutionSliceReason =
     | 'budget'
     | 'breakpoint'
+    | 'codeWrite'
     | 'paused'
     | 'terminated'
     | 'limit'

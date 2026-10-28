@@ -22,7 +22,7 @@ ADR 0050's reasons, measured on 2026-10-23: a share link compresses its payload,
 
 ## Consequences
 
-- Only x86 links a program, as before: MIPS and RISC-V assemble into memory, s68k writes no S-records, and the Z80 output formats are a separate feature.
+- Only x86 links a program, as before: MIPS and RISC-V assemble into memory, s68k writes no S-records, and the Z80 output formats are a separate feature. Amended by [ADR 0065](./0065-the-m68k-build-output-is-an-easy68k-s-record.md): an M68K Build now saves its program as EASy68K's S-record, `main.S68`, a Build output like this one.
 - The Emulator hands the program to its host, the Workbench, after linking and before the Debug session takes the Files, through `setBuildOutputHost` (`claim`, `save`, `isBuildOutput`); a question still open when the Build is cancelled is taken back. Without a host, and in a Project that cannot change, the program is only presented to the running program, outside the Files, as ADR 0050 had it.
 - During the Debug session the running program reads its own File but cannot write, truncate, rename or remove it (ETXTBSY, EBUSY), as Linux keeps a running executable; it is now a File of the Project, published with the others and counted toward the 16 MiB limit. The Debug session's **Build sources** include it.
 - Its Listing and Pseudocode are an Executable's: Breakpoints set in them are for running it as its own Program, and while its source runs they show no program counter, since the debugger follows the source.

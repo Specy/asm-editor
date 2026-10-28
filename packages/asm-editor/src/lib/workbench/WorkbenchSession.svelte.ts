@@ -46,8 +46,10 @@ import {
     buildOutputStale,
     buildRecordAt,
     isUntouchedBuildOutput,
+    buildOutputEncoding,
     makeBuildRecord,
     type BuildOutputClaim,
+    type BuildOutputFormat,
     type BuildOutputState
 } from '#lib/buildOutput.ts'
 import {
@@ -905,7 +907,8 @@ export class WorkbenchSession {
         )
         emulator.setBuildOutputHost({
             claim: (path, signal) => this.claimBuildOutput(path, signal),
-            save: (sources, path, bytes) => this.saveBuildOutput(sources, path, bytes),
+            save: (sources, path, bytes, format) =>
+                this.saveBuildOutput(sources, path, bytes, format),
             isBuildOutput: (path) => this.buildOutputs.has(path)
         })
         this.executionSourceLocation = $derived.by(() => {
@@ -3986,13 +3989,19 @@ export class WorkbenchSession {
     }
 
     /**
-     * Saves the program a Build of `sources` linked as the Build output at `path`, stored as bytes
-     * as an uploaded Executable is, with the record of what it was built from.
+     * Saves the program a Build of `sources` linked as the Build output at `path`, with the record
+     * of what it was built from: an executable stored as bytes, as an uploaded Executable is, and
+     * an M68K S-record as text, which opens to be read.
      */
-    private saveBuildOutput(sources: BuildSources, path: string, bytes: Uint8Array) {
+    private saveBuildOutput(
+        sources: BuildSources,
+        path: string,
+        bytes: Uint8Array,
+        format: BuildOutputFormat
+    ) {
         const fileSystem = this.project.fileSystem
         const outputs = this.project.builds.map((record) => record.outputPath)
-        fileSystem.writeBytes(path, bytes, true, 'base64')
+        fileSystem.writeBytes(path, bytes, true, buildOutputEncoding(format))
         this.project.recordBuild(makeBuildRecord(sources, path, fileSystem.files[path], outputs))
     }
 

@@ -37,7 +37,10 @@ function fingerprintOf(file: ProjectFile | undefined): string | undefined {
 export type BuildRecord = {
     /** The Entry the Build built, its Program's. */
     entry: string
-    /** Where it saved the program: the Entry path without its extension. */
+    /**
+     * Where it saved the program: the Entry path without its extension, and with `.S68` for an
+     * M68K S-record.
+     */
     outputPath: string
     /** Each File the Build read, but the Build outputs, by its content's fingerprint. */
     inputs: Readonly<Record<string, string>>
@@ -45,6 +48,19 @@ export type BuildRecord = {
     configuration: string
     /** The fingerprint of the File it saved. */
     outputFingerprint: string
+}
+
+/**
+ * What a Build's output is: the `executable` an x86 Build links, saved as bytes at the Entry path
+ * without its extension, as `ld -o main` names it; or the `srecord` an M68K Build writes, EASy68K's
+ * S-record of the program, saved as text beside it as `main.S68`, the name EASy68K's assembler
+ * gives it ([ADR 0065](../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md)).
+ */
+export type BuildOutputFormat = 'executable' | 'srecord'
+
+/** How a Build output of `format` is stored as a File: an executable's bytes, an S-record's text. */
+export function buildOutputEncoding(format: BuildOutputFormat): 'base64' | 'plain' {
+    return format === 'srecord' ? 'plain' : 'base64'
 }
 
 /** What a Workbench does with the program a Build linked, see `GenericEmulator.setBuildOutputHost`. */
@@ -57,8 +73,11 @@ export type BuildOutputHost = {
      * `signal` takes the question back.
      */
     claim(path: string, signal: AbortSignal): Promise<BuildOutputClaim>
-    /** Saves the program at `path`, with the record of what `sources` built it from. */
-    save(sources: BuildSources, path: string, bytes: Uint8Array): void
+    /**
+     * Saves the program at `path`, stored as `format` is (`buildOutputEncoding`), with the record
+     * of what `sources` built it from.
+     */
+    save(sources: BuildSources, path: string, bytes: Uint8Array, format: BuildOutputFormat): void
     /**
      * Whether the File at `path` is a Build output nobody changed since, whose place a Testcase's
      * program takes in that Testcase's own FileSystem.
@@ -74,9 +93,17 @@ export type BuildOutputClaim = 'save' | 'present' | { note: string }
  */
 export type BuildOutputState = { readonly entry: string; readonly stale: boolean }
 
-/** Where a Build of these sources saves the program it links ([file-views.md](../../../../docs/design/file-views.md), decision 18). */
-export function buildOutputPath(sources: BuildSources): string {
-    return commandLineProgram(sources.entry, false, sources.entrySource)
+/**
+ * Where a Build of these sources saves the program it links ([file-views.md](../../../../docs/design/file-views.md),
+ * decision 18): the name the Command line runs it as, `main` for `main.asm`, and for an M68K
+ * S-record that name with EASy68K's extension, `main.S68` for `main.x68`.
+ */
+export function buildOutputPath(
+    sources: BuildSources,
+    format: BuildOutputFormat = 'executable'
+): string {
+    const program = commandLineProgram(sources.entry, false, sources.entrySource)
+    return format === 'srecord' ? `${program}.S68` : program
 }
 
 /** What of the Project's already has the Build output's path: a File, or a folder. */

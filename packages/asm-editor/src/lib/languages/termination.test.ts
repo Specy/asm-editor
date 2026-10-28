@@ -22,6 +22,10 @@ describe('describeTermination', () => {
         expect(describeTermination({ kind: 'exit', code: 0 })).toBe('exited with code 0')
         expect(describeTermination({ kind: 'exit' })).toBe('exited')
         expect(describeTermination({ kind: 'end' })).toBe('ran past its last instruction')
+        //an M68K program, at EASy68K's SIMHALT outside the bytes it placed
+        expect(describeTermination({ kind: 'end', unwrittenMemory: '$1012' })).toBe(
+            'ran into memory the program never wrote, at $1012'
+        )
         expect(describeTermination(SEGFAULT)).toBe('Segmentation fault (signal 11)')
         //what the emulator cannot run, in place of the signal it raised
         expect(describeTermination(AVX)).toBe("stopped: AVX-512 isn't supported yet")
@@ -51,6 +55,13 @@ describe('terminationSummary', () => {
         expect(
             terminationSummary({ kind: 'error', message: 'Bad load' }, 3, { errorMessage: false })
         ).toBe('Ran in 3ms, stopped by an error')
+        //where an M68K program that did not end itself got to
+        expect(terminationSummary({ kind: 'end', unwrittenMemory: '$1012' }, 12)).toBe(
+            'Ran in 12ms, ran into memory the program never wrote, at $1012'
+        )
+        expect(terminationSummary({ kind: 'end', unwrittenMemory: '$1012' }, -1)).toBe(
+            'Ran into memory the program never wrote, at $1012'
+        )
     })
 
     it('says nothing more of an end that every finished program has', () => {

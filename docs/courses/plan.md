@@ -374,11 +374,15 @@ Each one cost time to rediscover, which is why it is written down.
 
 ### M68K
 
-- This simulator does not place assembled instructions in memory: four bytes are reserved per
-  instruction and those addresses still read `$FF`.
+- Since s68k 4.0.0 (2026-10-28), the first batch of the real 68000, assembled instructions are in
+  memory at their real sizes, two to ten bytes, with the short forms EASy68K picks (`moveq`,
+  `addq`, `bra.s`, `.w` addresses); read every address of a lecture off a Build. A program that
+  does not end itself runs on into whatever follows its last instruction: data placed right after
+  the code runs as instructions, and memory nobody wrote ends the program. `simhalt` keeps the
+  registers as they are, where task 9 changes `d0.b`.
 - The top byte of a 24-bit address is ignored. `org` only moves forwards. An `equ` takes `+` and `-`
   on another `equ` but not `*`.
-- A byte push moves `sp` by 1, where a real 68000 moves it by 2.
+- A byte push moves `sp` by 2, as a real 68000 does (by 1 before s68k 4.0.0).
 - `addx`, `subx`, `negx`, `roxl`, `roxr`, `rte`, `stop`, `chk` and `trapv` are unknown to this
   assembler, so the `X` flag is written and never read. `divu` overflow sets `V` and leaves the
   register alone. `trap #14` fails at build time.

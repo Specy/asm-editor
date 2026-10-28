@@ -239,6 +239,20 @@
                     </button>
                 </span>
             </div>
+            {#if step.disassembly}
+                <!-- what ran where no source line says: in data, or in code the program changed -->
+                <div class="row space-between">
+                    <span> Ran </span>
+                    <code
+                        class="disassembly"
+                        {@attach tooltip(
+                            step.line < 0
+                                ? 'Decoded from memory: no line of the source is here'
+                                : 'Decoded from memory: this line’s bytes changed since the Build'
+                        )}>{step.disassembly}</code
+                    >
+                </div>
+            {/if}
             {#if step.undoable === false}
                 <div class="stretch">Undo stops here: effects are not recorded.</div>
             {/if}
@@ -312,6 +326,12 @@
 </div>
 
 <style lang="scss">
+    .disassembly {
+        font-family: 'Fira Code', monospace;
+        font-size: 0.8rem;
+        overflow-wrap: anywhere;
+        text-align: right;
+    }
     .stretch {
         font-size: 0.8rem;
         opacity: 0.85;

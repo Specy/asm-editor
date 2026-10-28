@@ -224,6 +224,24 @@ describe('an instruction in the History panel', () => {
     })
 })
 
+describe('what an instruction ran where the source does not say', () => {
+    it('shows the disassembly of a step on no line, and nothing of the kind on a source line', () => {
+        const row = renderInstruction([])
+        expect(row.text()).not.toContain('Ran')
+        row.show({
+            kind: 'instruction',
+            mutations: [],
+            pc: 0x1002,
+            line: -1,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            disassembly: 'ILLEGAL'
+        })
+        expect(row.text().replace(/\s+/g, ' ')).toContain('Ran ILLEGAL')
+        row.close()
+    })
+})
+
 describe('the flags of an instruction row', () => {
     it("light the Target's own flags, reading x86's EFLAGS rather than a 68000 CCR", () => {
         const step: ExecutionStep = {

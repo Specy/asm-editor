@@ -12,6 +12,7 @@ import {
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
+import type { BuildOutputFormat } from '#lib/buildOutput.ts'
 
 type MaybePromise<T> = T | PromiseLike<T>
 
@@ -24,11 +25,16 @@ export type CompileResult =
           ok: true
           diagnostics?: Diagnostic[]
           /**
-           * The executable the Build linked, for a Target whose Builds link one (x86): the Build
-           * output, at the path the Command line names ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+           * The program the Build made, for a Target whose Builds make a file of it: the Build
+           * output ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+           * x86 links an executable, at the path the Command line names; M68K writes EASy68K's
+           * S-record of the program, `programFormat` `srecord`
+           * ([ADR 0065](../../../../../docs/adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md)).
            * None for a Build that loaded an Executable, which is a File already.
            */
           program?: Uint8Array
+          /** What `program` is, an `executable` unless the Target says otherwise. */
+          programFormat?: BuildOutputFormat
           /**
            * The Runtime library members or the start code the program was linked with, which the
            * debugger opens as `buildLibraryFiles`.
@@ -280,6 +286,11 @@ export abstract class BaseEmulator<R extends string> {
     abstract _getPc(): bigint
 
     /** Static layout is read once after Build; moving bounds are read at panel refresh. */
+    /**
+     * The lines whose bytes in memory differ from what the Build placed, for a Core whose code is
+     * memory the program can write (M68K): read again at every refresh, as the History is.
+     */
+    _getChangedCode?(): import('./commonLanguageFeatures.svelte').ChangedCode[]
     _getMemoryLayout?(): import('./commonLanguageFeatures.svelte').MemoryLayout
     _getHeapBounds?(): import('./commonLanguageFeatures.svelte').HeapBounds | undefined
     _getStackTop?(): bigint

@@ -257,6 +257,7 @@ type FormattedStep = {
     line?: string
     pc?: { hex: string }
     writes?: unknown[]
+    disassembly?: string
 }
 
 /**
@@ -1613,6 +1614,23 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
             expect(formatted.kind).toBe('instruction')
             expect(formatted.line).toBe('1 | move.l #1,d0')
             expect(formatted.writes).toBeUndefined()
+        })
+
+        it('says what an instruction on no source line ran, as the Core decodes it', () => {
+            //an M68K program that ran on into its data
+            const inData: ExecutionStep = {
+                kind: 'instruction',
+                mutations: [],
+                pc: 0x1002,
+                line: -1,
+                old_ccr: { bits: 0 },
+                new_ccr: { bits: 0 },
+                disassembly: 'NOP'
+            }
+
+            const [formatted] = formatLatestSteps('move.l #1,d0', [inData]) as FormattedStep[]
+            expect(formatted.line).toBe('No current source line')
+            expect(formatted.disassembly).toBe('NOP')
         })
 
         //a Poke made through the tool reaches the prompt as well, so the model knows what it is for

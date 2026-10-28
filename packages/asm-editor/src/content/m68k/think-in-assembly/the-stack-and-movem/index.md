@@ -46,9 +46,10 @@ back at its starting address. A word push, `move.w d0, -(sp)`, moves it down by 
 `move.w (sp)+, d0` moves it back up by 2. Use the same access size when retrieving a value so the
 pointer advances past exactly what was stored.
 
-For a byte-sized access through `sp`, real 68000 hardware makes a special exception: `-(sp)` and
-`(sp)+` change `sp` by **2**, keeping it even. This playground currently changes it by **1**.
-Word and long accesses change `sp` by 2 and 4 respectively in both the 68000 and this playground.
+A byte-sized access through `sp` is the one exception: `-(sp)` and `(sp)+` change `sp` by **2**,
+not 1, so that it stays even. `move.b d0, -(sp)` with `sp` at `$1000000` moves it to `$FFFFFE` and
+stores the byte there, leaving the byte at `$FFFFFF` unused, and `move.b (sp)+, d0` moves it back
+up by 2. This holds only for `sp`: `move.b d0, -(a0)` moves `a0` down by 1.
 
 ## Save several registers with `movem`
 

@@ -6,6 +6,8 @@ Status: proposed on 2026-10-21. The owner reviewed it the same day:
 - **Deferred:** the Hardware panel (20–22) and the S-record Executables (33).
 - **Changed:** decision 3 now offers the 68010 and the 68020 as dialects.
 
+On 2026-10-28 the owner confirmed ("ok go") design decision 3's choice of `opt p=` in the source over a per-Program Setting, and the plan's planning decisions 11 (the dialect plumbing ships in batch 1) and 12 (the pause on a write into code is a Preference). Batch 1 is being implemented. The editor ADR numbers moved, since 0055–0064 were taken in the meantime: the S-record Build output is [ADR 0065](../adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md) and the IRQs will be ADR 0066.
+
 The remaining decisions are recommendations drawn from three fact bases and from a read of the s68k Core and the editor summarised in the [plan](./m68k-machine-plan.md)'s Starting point. The fact bases are:
 
 - [EASy68K's machine behaviour](../research/easy68k-machine-behaviour.md), read from its 5.16.1 source;
@@ -82,7 +84,7 @@ Four things a person can do once this is in, to show where each decision lands.
         - A Program picks the 68010 or the 68020 with `opt p=68010` or `opt p=68020`, once, before its first instruction. That is the Devpac spelling vasm also reads, and it extends the `opt` EASy68K users already write.
         - `opt bit` keeps its EASy68K meaning, the 68020's bit-field instructions on a 68000 with 68000 addressing modes, and `p=68020` implies it.
         - The Program carries its processor, as it carries the memory map (15): it travels with the source, a Playground and an exam, and the Build and the language service read it from the assembly.
-        - **(owner)** The alternative is a per-Program Setting, as the RISC-V assembly profile is. The processor decides whether the source assembles at all, so it belongs in the source.
+        - Confirmed by the owner on 2026-10-28. The alternative was a per-Program Setting, as the RISC-V assembly profile is; the processor decides whether the source assembles at all, so it belongs in the source.
     - **One machine with gates.** There is one decoder, encoder, executor and disassembler. Each form and each decoder entry names the first processor that has it. A word outside the dialect is an illegal instruction, or a privilege violation where the manuals say so.
         - These differ per dialect:
             - the reading of an index extension word;
@@ -332,7 +334,7 @@ Four things a person can do once this is in, to show where each decision lands.
     - The memory map's ranges are regions of their own: ROM, Read only, Protected and Invalid.
     - One Stack region follows A7. The other stack is not drawn (Deferred).
 
-32. **The Build output is an EASy68K S-record**, `<entry>.S68`, with the memory map's S0 records and the S8 entry address. A 68000 program built here downloads and runs in EASy68K. ADR 0050 says s68k writes no S-records, so it is amended.
+32. **The Build output is an EASy68K S-record**, `<entry>.S68`, with the memory map's S0 records and the S8 entry address. A 68000 program built here downloads and runs in EASy68K. ADR 0050 and ADR 0056, which superseded it, say s68k writes no S-records, so [ADR 0065](../adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md) amends 0056: the S-record is a Build output saved as text beside the Entry, `main.S68` for `main.x68`.
 
 33. **No S-record Executables for now.** The owner deferred loading an S-record as an Executable with a Listing (the plan's former batch 4). The Build output (32) is written, not read back.
 
@@ -375,8 +377,8 @@ Four things a person can do once this is in, to show where each decision lands.
 - **Core 0009:** SIMHALT, and running into memory the program never placed ends it (7).
 - **Core 0010:** the MAME-derived single-step suite is the conformance oracle (34).
 - **Core 0011:** the processor is a dialect the source chooses with `opt p=` (3).
-- **Editor 0055:** M68K devices deliver IRQs (18, 19). Amends 0008.
-- **Editor 0056:** the M68K Build output is an EASy68K S-record (32). Amends 0050.
+- **Editor 0066:** M68K devices deliver IRQs (18, 19). Amends 0008.
+- **Editor 0065:** the M68K Build output is an EASy68K S-record (32). Amends 0056, which superseded 0050. Written on 2026-10-28.
 
 ## Deferred
 

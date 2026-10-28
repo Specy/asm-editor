@@ -11,6 +11,7 @@ count equ 6
 loop:
     add.w (a0)+, d0     ; add this word, then advance a0 by two bytes
     dbra d1, loop       ; repeat until all six words have been read
+    simhalt             ; stop here: the sum is done
 
     org $2000
 numbers: dc.w 4, 8, 15, 16, 23, 42
@@ -29,8 +30,12 @@ leaves 4 in `d0`, and moves `a0` to `$2002`, where the 8 is stored.
 `dbra` runs the body once more than the starting value in its low word. Starting `d1` at
 `count-1`, or 5, gives six reads. After the sixth read, `a0` is `$200C`, just past the array; the
 loop does not read from that address. The final `dbra` makes the low word of `d1` `$FFFF` and
-falls through. In this playground, execution ends after that last assembled instruction. The
-`dc.w` values are data, so Run does not execute them as instructions.
+falls through to `simhalt`, which stops the program.
+
+The stop matters. The processor runs whatever bytes come after the last instruction, and nothing in
+memory marks the six words as data rather than code: only where the program stops keeps them from
+running. Here `org $2000` also leaves memory nobody wrote between the code and the numbers, which
+the simulator would end the program on, but a program should not count on that.
 
 ## Run it and follow the pointer
 
@@ -42,6 +47,24 @@ Select **Build** again to reset the program, then select **Step** once per instr
 `lea`, `a0` is `00002000`. After the first `add.w`, `d0` is `00000004` and `a0` is `00002002`.
 The following `dbra` changes `d1` from `00000005` to `00000004` and returns to `loop`. Keep
 stepping to watch `a0` advance by two at each read and `d0` grow to `0000006C`.
+
+## Run into the data
+
+Delete the `simhalt` line and the `org $2000` line, so the six words come straight after `dbra`.
+Select **Build** and **Run**, and predict what happens to `d0` and what the program does after the
+loop.
+
+<details>
+<summary>Show answer</summary>
+
+The loop still adds the six words, so `d0` is `0000006C`, but then the processor carries on into
+`numbers` and runs its words as instructions. The first two, 4 and 8, read as `ORI.B #$8,D4`,
+which puts 8 in `d4`. The third word, 15, is no instruction at all, so the run ends with
+`Error at $1016: Illegal instruction exception`. Opened in the editor, the History lists those two
+steps with no source line, each with what ran: `ORI.B #$8,D4`, then `DC.W $000F`, a word that
+decodes to no instruction. A real 68000 does the same.
+
+</details>
 
 ## Try a seventh number
 

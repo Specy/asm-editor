@@ -65,7 +65,7 @@ Quoted text is packed into one number, with the first character’s byte highest
 
 ## Absolute memory address {#effective-address}
 
-Accesses memory at an address written as a number, label or expression. A `.w` or `.l` suffix selects the address width, independently of the size of the data accessed. Both name the same address in the simulator; `.w` requires the address expression to be between `-32768` and `32767`. Use `.l` or omit the suffix for addresses outside that range.
+Accesses memory at an address written as a number, label or expression. A `.w` or `.l` suffix selects how many bytes of the instruction hold the address, independently of the size of the data accessed: `.w` stores it in one word, two bytes, and needs the address expression to be between `-32768` and `32767`; `.l` stores all of it in four. Without a suffix the assembler picks `.w` when it already knows the address, a number or a label defined above the line, and the address fits, and `.l` otherwise, so a label defined further down always takes `.l`. Hover over the instruction after a Build to see its machine code and what it assembled as.
 
 ```m68k
 $1000, some_label, some_label.w, some_label.l

@@ -102,6 +102,11 @@
         canBreakAt?: (line: number) => boolean
         /** 0-based lines a Debug session patched, marked beside their line numbers. */
         patchedLines?: readonly number[]
+        /**
+         * 0-based lines whose code the program or a Poke changed at run time, marked as patched
+         * lines are, with what runs there now in the mark's tooltip.
+         */
+        changedLines?: readonly { line: number; runsNow: string }[]
         /** A note written after a line's text, such as running from inside its instruction. */
         lineNote?: { line: number; text: string }
         /**
@@ -163,6 +168,7 @@
         pseudocode,
         canBreakAt,
         patchedLines = [],
+        changedLines = [],
         lineNote,
         lineActions,
         navigation,
@@ -962,6 +968,16 @@
                         zIndex: 1
                     }
                 })),
+                ...changedLines.map(({ line, runsNow }) => ({
+                    range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
+                    options: {
+                        isWholeLine: true,
+                        className: 'patched-line',
+                        linesDecorationsClassName: 'patched-line-marker',
+                        linesDecorationsTooltip: `Changed at run time: runs ${runsNow} now`,
+                        zIndex: 1
+                    }
+                })),
                 ...breakpoints.map((e) => ({
                     range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
                     options: {
@@ -1321,7 +1337,8 @@
         font-style: italic;
     }
 
-    //a line whose instruction a Debug session patched: a bar beside its address, and a tint
+    //a line whose instruction a Debug session patched, or whose code the program changed: a bar
+    //beside its address, and a tint
     :global(.patched-line-marker) {
         width: 3px !important;
         margin-left: 3px;

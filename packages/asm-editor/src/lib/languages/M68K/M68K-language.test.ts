@@ -429,20 +429,11 @@ describe('M68K v2 language tooling', () => {
         ).toBe('CHK exception: -1 is outside 0..9')
         expect(getM68kErrorMessage({ type: 'OverflowException' })).toContain('TRAPV')
         expect(getM68kErrorMessage({ type: 'IllegalInstruction' })).toContain('Illegal instruction')
-        expect(
-            getM68kErrorMessage({
-                type: 'InstructionAccess',
-                value: { address: 4096, write: true }
-            })
-        ).toBe(
-            'Cannot write to an instruction: address $1000 is not available as it holds assembled instructions'
+        //what the Core does not run yet, which a program can only reach in bytes it never
+        //assembled as code
+        expect(getM68kErrorMessage({ type: 'Unimplemented', value: '`rte`' }, 4)).toBe(
+            'Error at line 4: `rte` is not implemented yet'
         )
-        expect(
-            getM68kErrorMessage({
-                type: 'InstructionAccess',
-                value: { address: 4098, write: false }
-            })
-        ).toContain('Cannot read from an instruction: address $1002')
     })
 
     //a caller follows its own sentence with a space ("Error compiling code. Entry file not found")

@@ -43,6 +43,7 @@ export type PreferenceValues = {
     showPseudoInstructions: PreferenceValue<boolean>
     sourceAnnotations: PreferenceValue<boolean>
     stepIntoRuntimeLibrary: PreferenceValue<boolean>
+    pauseOnCodeWrite: PreferenceValue<boolean>
     panelStyle: PreferenceValue<PanelStyle>
     debugTools: PreferenceValue<DebugToolsPlacement>
     memoryPanelSize: PreferenceValue<MemoryPanelSize>
@@ -94,6 +95,11 @@ export function defaultPreferences(): PreferenceValues {
         //Runtime library and the libraries an Executable loads. The key predates the libraries and
         //stays, so saved Preferences keep it
         stepIntoRuntimeLibrary: createValue('Step into library code', false),
+        //an M68K program's code is memory it can overwrite, and a stray store into it is almost
+        //always a bug, so a Run pauses after one; it changes what Run does for the person, never
+        //what the program does ([m68k-machine.md](../../../../docs/design/m68k-machine.md),
+        //decision 4, and its plan's decision 12)
+        pauseOnCodeWrite: createValue('Pause when a program writes to its code', true, 'M68K'),
         showDrawingBuffer: createValue(
             'Show the drawing buffer of a double buffered screen',
             false

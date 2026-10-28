@@ -424,7 +424,8 @@ const dirsDesc = {
     end: 'Stops assembly and optionally selects the program entry point. Code after it is ignored.',
     reg: 'Names a register list for use by `movem`.',
     fail: 'Raises an assembly error with the rest of the line as its message.',
-    simhalt: 'Emits a four-byte simulator pause. Run resumes at the following instruction.',
+    simhalt:
+        'Pauses the program: it assembles as `$FFFF $FFFF`, the two words EASy68K stops at, and Run resumes at the following instruction. A program that neither pauses nor ends itself with task 9 runs on into whatever follows its last instruction, its data included.',
     section: 'Selects one of sixteen independent location counters, numbered 0 through 15.',
     offset: 'Enters an offset-only region at the given value. Labels receive offsets and no bytes are emitted until `org`.',
     include:
@@ -1035,8 +1036,8 @@ sgt d1 ; d1 = $FF ($2000 > $1000)
         Size.Word,
         `
 * --- Compare two memory blocks byte by byte ---
-lea $1000, a0
-lea $2000, a1
+lea $2000, a0 ; free memory: the program itself is at $1000
+lea $2100, a1
 move.l #$AABB, (a0)
 move.l #$AABB, (a1)
 
@@ -1457,7 +1458,7 @@ move.w #$7000, d3
 asl.w #1, d3 ; V flag set! MSB changed from 0 to 1
 
 * --- Memory form: shifts word at (a0) left by 1 ---
-lea $1000, a0
+lea $2000, a0 ; free memory: the program itself is at $1000
 move.w #$0001, (a0)
 asl (a0) ; (a0) = $0002
     `
@@ -1489,7 +1490,7 @@ move.w #$FF00, d3
 lsr.w #4, d3 ; d3 = $0FF0 (zero filled)
 
 * --- Memory form: shifts word at (a0) right by 1 ---
-lea $1000, a0
+lea $2000, a0 ; free memory: the program itself is at $1000
 move.w #$0010, (a0)
 lsr (a0) ; (a0) = $0008
     `
@@ -1515,13 +1516,13 @@ move.w #$1234, d1
 ror.w #8, d1 ; d1 = $3412
 
 * --- Single bit rotate ---
-move.w #%10000000_00000001, d2
-rol.w #1, d2 ; d2 = %00000000_00000011
+move.w #%1000000000000001, d2
+rol.w #1, d2 ; d2 = %0000000000000011
 
 * --- Memory form: rotates word at (a0) left by 1 ---
-lea $1000, a0
-move.w #%10000000_00000001, (a0)
-rol (a0) ; (a0) = %00000000_00000011
+lea $2000, a0 ; free memory: the program itself is at $1000
+move.w #%1000000000000001, (a0)
+rol (a0) ; (a0) = %0000000000000011
 `
         ),
         compundNames: ['rol', 'ror']

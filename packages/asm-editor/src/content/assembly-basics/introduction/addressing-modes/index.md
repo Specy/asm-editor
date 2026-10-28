@@ -33,8 +33,8 @@ In M68K syntax that is `#7`, `d0`, `numbers`, `(a0)` and `(a0, d4)`, in that ord
 ## One program, five modes
 
 Build this one, open the memory panel next to it and press **Step** eight times. The five modes are
-in the five `move` instructions that read something, and the ninth line writes back through the
-indexed mode, which is the change you can watch in memory.
+in the five `move` instructions that read something, and the last of the eight writes back through
+the indexed mode, which is the change you can watch in memory.
 
 ```m68k|playground|memory|no-flags
     move.l #7, d0           ; x = 7
@@ -45,6 +45,7 @@ indexed mode, which is the change you can watch in memory.
     move.l #8, d4           ; i = the byte offset of numbers[2], two longs of 4 bytes
     move.l (a0, d4), d5     ; v = numbers[2]
     move.l d0, (a0, d4)     ; numbers[2] = x
+    simhalt                 ; stop here, before the data
 
 numbers: dc.l 10, 20, 30, 40
 ```
@@ -57,8 +58,11 @@ numbers: dc.l 10, 20, 30, 40
 | `move.l (a0), d3`     | indirect  | the address is whatever is in `a0` when the line runs             |
 | `move.l (a0, d4), d5` | indexed   | the address is `a0` plus `d4`, added while the line runs          |
 
-The four longs are written by the assembler right after the code. The eight instructions start at
-`0x1000` and take four bytes each, so `numbers` begins at `0x1020`, which is also where `a0` ends up.
+The four longs are written by the assembler right after the code, and `simhalt` stops the program
+before it gets to them, since the CPU would otherwise run their bytes as instructions. The eight
+instructions start at `0x1000` and take two to six bytes each, 28 in all: the ones that name
+`numbers` hold its address, and the ones that only name registers are two bytes. With the four
+bytes of `simhalt`, `numbers` begins at `0x1020`, which is also where `a0` ends up.
 Click `a0` in the registers panel and the memory panel jumps to that address, where the four longs
 are:
 

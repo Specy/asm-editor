@@ -231,6 +231,13 @@ export type ExecutionStep = {
     /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
     writes?: PokeWrite[]
     /**
+     * What ran, as the Core decodes the bytes at `pc` now, where the source does not say: an
+     * instruction on no line, as in data the program ran into, or on a line whose bytes the program
+     * or a Poke changed since the Build (M68K, [m68k-machine.md](../../../../../docs/design/m68k-machine.md),
+     * decision 28).
+     */
+    disassembly?: string
+    /**
      * What a Poke did, in words, when it is more than the values it wrote: a patch of an
      * Executable's instruction from its Listing reads `Patched jne → je at 0x5555555551f8`.
      */
@@ -471,6 +478,20 @@ export type EmulatorDecoration = {
     instructions?: { address: bigint; code: string }[]
 }
 
+/**
+ * A line whose bytes in memory are no longer what its Build placed, because the program or a Poke
+ * wrote over them: where it is, and what runs there now, as the Core disassembles memory. The line
+ * keeps its place in the source; only what it runs has changed
+ * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 27).
+ */
+export type ChangedCode = {
+    file: string
+    /** Zero-based source line. */
+    line: number
+    address: bigint
+    runsNow: string
+}
+
 export type BuildArtifact = {
     file: string
     /** Zero-based source line. */
@@ -478,6 +499,19 @@ export type BuildArtifact = {
     address: bigint
     /** Emitted instruction bytes or machine word, written in hexadecimal, when the Core exposes it. */
     opcode?: string
+    /**
+     * What the line assembled as, in the Core's own syntax, where the assembler chose something
+     * the line did not write: another mnemonic (`add.l #1,d0` is `ADDQ.L #1,D0`), a branch size
+     * (`bra loop` is `BRA.S loop`) or an address in a word. The M68K Core says so; the others
+     * show what they expand a line into as Assembled instructions below it instead.
+     */
+    assembledAs?: string
+    /**
+     * What runs at `address` now, as the Core disassembles memory, when the program or a Poke has
+     * changed the bytes the Build placed there: the Workbench adds it from `changedCode` for the
+     * hover, and a Build never sets it.
+     */
+    runsNow?: string
 }
 
 export type EmulatorInterrupt = {
@@ -500,6 +534,8 @@ export type BaseEmulatorState = {
     hiddenRegisters: string[]
     decorations: EmulatorDecoration[]
     buildArtifacts: BuildArtifact[]
+    /** The lines whose code the program or a Poke changed since the Build, see `ChangedCode`. */
+    changedCode: ChangedCode[]
     statusRegisters: StatusRegister[]
     errors: string[]
     compilerDiagnostics: Diagnostic[]

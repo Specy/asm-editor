@@ -76,6 +76,7 @@
     import FaListOl from '~icons/fa-solid/list-ol'
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { watchViewport } from '#lib/workbench/viewport.svelte.ts'
+    import { changedLinesOf, withChangedCode } from '#lib/languages/changedCode.ts'
 
     let running = $state(false)
     let building = $state(false)
@@ -196,9 +197,15 @@
     const displayedAssemblyFile = $derived(
         selectedFile ?? emulator.buildSources?.entry ?? emulator.entry
     )
+    //what runs now where the program or a Poke changed its code goes in the hover beside the
+    //machine code the Build placed, and on the line's mark
     const buildArtifacts = $derived(
-        emulator.buildArtifacts.filter((artifact) => artifact.file === displayedAssemblyFile)
+        withChangedCode(
+            emulator.buildArtifacts.filter((artifact) => artifact.file === displayedAssemblyFile),
+            emulator.changedCode
+        )
     )
+    const changedLines = $derived(changedLinesOf(emulator.changedCode, displayedAssemblyFile))
     const viewZones = $derived(
         preferencesStore.values.showPseudoInstructions.value
             ? emulator.decorations
@@ -600,6 +607,7 @@
                 retainedModelKeys={session ? Object.keys(session.project.files) : undefined}
                 codeOverride={session ? undefined : emulator.compiledCode}
                 {buildArtifacts}
+                {changedLines}
                 {viewZones}
                 breakpointsEditable={!selectedIsSource}
                 breakpoints={emulator.breakpoints

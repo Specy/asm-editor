@@ -6,6 +6,8 @@ Written on 2026-10-21, beside the [design](./m68k-machine.md), and revised the s
 - the Hardware panel and the S-record Executables deferred;
 - the 68010 and 68020 added as dialects.
 
+On 2026-10-28 the owner confirmed design decision 3's `opt p=` and planning decisions 11 and 12, and batch 1 began. The editor ADRs are numbered 0065 (the S-record Build output) and 0066 (IRQs), since 0055 and 0056 were taken meanwhile.
+
 The plan covers both halves:
 
 - **the s68k Core** (`packages/m68k`, crate `s68k`, npm `@specy/s68k`);
@@ -74,12 +76,12 @@ These are taken by default, for the owner to overturn.
 8. **The bug fixes ship first and alone (C0),** as a patch release, because none of them waits on the rest.
 9. **Branches.** Core work goes on `feat/machine` in `packages/m68k`, merged into `main` per batch. Editor work goes on `feat/m68k-machine`, with the submodule pointer bumped per batch. No Co-Authored-By trailers.
 10. **The Core's TypeScript surface grows as listed under [API](#api)** and stays one `Interpreter` class. Enums are only appended to.
-11. **The dialect plumbing ships in batch 1**, so `extb.l` and `move ccr,<ea>` have a home from the day the 68000 refuses them.
+11. **The dialect plumbing ships in batch 1**, so `extb.l` and `move ccr,<ea>` have a home from the day the 68000 refuses them. Confirmed by the owner on 2026-10-28.
     - `opt p=68010`, `opt p=68020` and `opt bit` are parsed, and `Program.processor` is set.
     - The gates exist in the assembler and the decoder.
     - The two instructions are the dialects' first members.
     - Every other 68010/68020 instruction stays refused with "not implemented yet in the 68010 dialect" until batch 4 or 5. The Documentation calls the dialects partial until then.
-12. **The pause on a write into code is a Preference,** "Pause when a program writes to its code", on by default. It changes what Run does for the person, not what the program does, as ADR 0014 draws the line. The Core reports the flag on every step; the editor decides whether to pause.
+12. **The pause on a write into code is a Preference,** "Pause when a program writes to its code", on by default. It changes what Run does for the person, not what the program does, as ADR 0014 draws the line. The Core reports the flag on every step; the editor decides whether to pause. Confirmed by the owner on 2026-10-28.
 
 ## API
 
@@ -293,12 +295,14 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
     - `M68KEmulator.test.ts`: the build artifacts now carry an opcode, the termination text changes, the slices change, and the code-write pause and continue.
     - `memoryRegions.integration.test.ts`: a case "M68K code reads as its encoding and takes Pokes".
 - **Estimate:** 1.5–2.5 days.
+- **As built (2026-10-28):** "assembled as" is a field of the Build artifact, `assembledAs`, which the Build hover shows beside the machine code; `_getCompiledCode` still adds nothing, since a below-line zone on every `bra` and `moveq` would bury the source. M68K_INSTRUCTIONS_PER_MS is 12,000.
 
 ### E1: Changed code and disassembly (after C4)
 
 - **Changed lines.** A line whose bytes differ from what its Build placed is marked with a gutter decoration "changed at run time", and its hover disassembles what runs there now. The adapter compares `getInstructionAt(addr).bytes` with memory at each refresh, only for lines on screen.
 - **History rows** for steps with no source line show `disassembleAt(pc)`, and so does the agent's step formatting ([formatting.ts](../../packages/asm-editor/src/components/shared/agent/defaultCodingAgent/formatting.ts)).
 - **Estimate:** 1–2 days.
+- **As built (2026-10-28):** the adapter compares every laid-out line, not only those on screen: it reads each run of code in one call at a refresh and disassembles only what changed, and keeps the reading while the Core's step id stands. A changed line is marked as a Listing's patched line is, and a History row on a changed line shows its disassembly too.
 
 ### E2: Exceptions and privilege in the editor (after C6, C7)
 
@@ -321,7 +325,7 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
 - **Timers.** An IRQ timer scheduler in the adapter reads `getMachineState().autoIrqs` after every Core call and schedules firings on [ProgramClock.ts](../../packages/asm-editor/src/lib/languages/peripherals/ProgramClock.ts). Firings run only during a Run; virtual time applies in Testcases, where `Stopped` advances the clock to the next firing.
 - **Keyboard and mouse events.** Press-time hooks on [Keyboard.ts](../../packages/asm-editor/src/lib/languages/peripherals/Keyboard.ts) and [Mouse.ts](../../packages/asm-editor/src/lib/languages/peripherals/Mouse.ts) call `deviceEvent`. Key state still applies at read time, as ADR 0008 requires.
 - **IRQ steps** render as History rows of their own.
-- **Records.** Editor ADR 0055 is written, amending 0008, and ADR 0010 gets a note on timers.
+- **Records.** Editor ADR 0066 is written, amending 0008, and ADR 0010 gets a note on timers. (The design first numbered it 0055, which was taken in the meantime.)
 - **Tests:**
     - a fake-clock scheduler;
     - `stop` with Pause and Stop;
@@ -340,7 +344,7 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
 
 - **Output.** `_compile` returns the S-record as the Build output `<entry>.S68`, stored as text bytes ([buildOutput.ts](../../packages/asm-editor/src/lib/buildOutput.ts)).
 - **Dialects.** For a non-68000 Program the Log says the file will not run in EASy68K.
-- **Records.** Editor ADR 0056 is written, amending 0050.
+- **Records.** Editor [ADR 0065](../adr/0065-the-m68k-build-output-is-an-easy68k-s-record.md) is written, amending 0056, which superseded 0050. (The design first numbered it 0056, which was taken in the meantime.)
 - **Estimate:** 0.5–1 day.
 
 ### E6: Dialects in the editor
@@ -415,7 +419,7 @@ Person-days for someone who knows both codebases. The fixes found by the conform
 
 ## Order of the first week
 
-1. **The owner's last calls.** Design decision 3's choice between `opt p=` in the source and a Setting, and planning decisions 11 and 12. Everything else can start without them.
+1. **The owner's last calls.** Design decision 3's choice between `opt p=` in the source and a Setting, and planning decisions 11 and 12. Everything else can start without them. All three were confirmed on 2026-10-28: `opt p=`, the plumbing in batch 1, and the Preference.
 2. **C0,** released as a patch.
 3. **C1 and C2 in parallel.** They meet at the round-trip test.
 4. **C3,** then **C4** with the benchmark, then **C5**. C10 and C11 fit beside C3.

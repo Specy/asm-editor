@@ -1,10 +1,19 @@
 import { describeInvalidTrapArgument, describeUnsupportedTrapTask } from './M68K-traps'
 
-export function getM68kErrorMessage(error: unknown, lineNumber?: number): string {
+/**
+ * A Core error as the Log says it. `lineNumber` (1-based) is the line of the instruction that
+ * raised it; `address` stands in for it where no line was laid out, as when the program ran into
+ * its data, whose words decode as instructions too.
+ */
+export function getM68kErrorMessage(error: unknown, lineNumber?: number, address?: number): string {
     //"Error at line 3: Division by zero", or the message alone, which a caller's own sentence
     //follows with a space of its own ("Error executing code. Division by zero")
     const at = (message: string) =>
-        lineNumber ? `Error at line ${lineNumber}: ${message}` : message
+        lineNumber
+            ? `Error at line ${lineNumber}: ${message}`
+            : address !== undefined
+              ? `Error at $${address.toString(16).toUpperCase()}: ${message}`
+              : message
     if (!isRecord(error)) {
         return at(`${error}`)
     }
@@ -12,8 +21,14 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
         case 'Raw':
             if (typeof error.value === 'string') return error.value
             break
+        //a 68000 instruction the Core does not run yet, named: `rte`, or the line A word $A000,
+        //which only a program running bytes it never assembled as code can reach
         case 'Unimplemented':
-            return at('Unimplemented')
+            return at(
+                typeof error.value === 'string'
+                    ? `${error.value} is not implemented yet`
+                    : 'Unimplemented'
+            )
         case 'DivisionByZero':
             return at('Division by zero')
         case 'ExecutionLimit':
@@ -38,18 +53,6 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
                 return at(
                     `Address error: Tried to read/write to an odd memory address "${error.value.address}" using non-byte operation with size "${error.value.size}" `
                 )
-            }
-            break
-        case 'InstructionAccess':
-            if (isRecord(error.value) && typeof error.value.address === 'number') {
-                const address = `$${error.value.address.toString(16).toUpperCase()}`
-                return error.value.write
-                    ? at(
-                          `Cannot write to an instruction: address ${address} is not available as it holds assembled instructions`
-                      )
-                    : at(
-                          `Cannot read from an instruction: address ${address} is not available as it holds assembled instructions`
-                      )
             }
             break
         case 'ChkOutOfBounds':

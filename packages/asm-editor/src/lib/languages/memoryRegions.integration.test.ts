@@ -122,13 +122,29 @@ for (const [name, factory, source, encoding] of textCases)
         }
     }, 20000)
 
-it('M68K: code in flat memory stays pokeable', async () => {
-    const emulator: Emulator = await M68KEmulator(' org $1000\nstart: simhalt\n end start', {
-        automaticChecking: false
-    })
+it('M68K code reads as its encoding and takes Pokes', async () => {
+    const emulator: Emulator = await M68KEmulator(
+        ' org $1000\nstart: move.l #1,d1\n move.l #2,d2\n simhalt\n end start',
+        { automaticChecking: false }
+    )
     try {
         await emulator.compile(100, undefined)
+        //the program's code is memory like its data, so nothing of it is held back from a Poke
         expect(emulator.readOnlyMemory).toEqual([])
+        const code = emulator.memoryRegions.find((region) => region.kind === 'code')!
+        expect(code.start).toBe(0x1000n)
+        //`moveq #1,d1` and `moveq #2,d2`, as the assembler chose for them, then `simhalt`
+        expect(Array.from(emulator.readMemoryBytes(code.start, 8))).toEqual([
+            0x72, 0x01, 0x74, 0x02, 0xff, 0xff, 0xff, 0xff
+        ])
+        //a Poke makes the second `moveq #9,d2`, and that is what runs
+        expect(emulator.pokeMemory(0x1002n, new Uint8Array([0x74, 0x09]))).toBe(true)
+        expect(Array.from(emulator.readMemoryBytes(0x1002n, 2))).toEqual([0x74, 0x09])
+        await emulator.step()
+        await emulator.step()
+        const d2 = emulator.registers.find((register) => register.name === 'D2')!
+        expect(d2.value).toBe(9n)
+        expect(emulator.errors).toEqual([])
     } finally {
         emulator.dispose()
     }
