@@ -16,7 +16,10 @@
 
     interface Props {
         cycles: CycleCount
-        /** The processor the program is written for, when it is a later one than the 68000. */
+        /**
+         * The processor the program is written for, when it is a later one than the 68000 or one
+         * `opt bit` gave the bit fields.
+         */
         processor?: string
         style?: string
     }

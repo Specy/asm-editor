@@ -295,6 +295,80 @@ describe('quick fixes from the Core', () => {
         ])
     })
 
+    //a 68010 instruction with a 68020 operand names the operand's processor, so one fix builds it
+    it('add `opt p=68020` at once for movec of a 68020 control register', () => {
+        const program = '    org $1000\n    movec d0,msp\n'
+        const [refused] = diagnosticsOf(sourcesOf({ 'main.m68k': program }))
+        expect(refused).toMatchObject({
+            code: 'needs_a_later_processor',
+            message: '`msp` is a 68020 control register, and this program is written for the 68000.'
+        })
+        expect(refused.fixes!.map((fix) => fix.title)).toEqual([
+            'Add `opt p=68020` at the top of the program'
+        ])
+        const [opt] = refused.fixes!
+        expect(assembles(applyEdit(program, quickFixRange(opt), opt.text))).toEqual({
+            processor: '68020',
+            errors: []
+        })
+        //a 68010 program, which has `movec`, changes its own line to the 68020
+        const for68010 = '    opt p=68010\n    org $1000\n    movec d0,msp\n'
+        const [later] = diagnosticsOf(sourcesOf({ 'main.m68k': for68010 }))
+        const [change] = later.fixes!
+        expect(change.title).toBe('Change `opt p=68010` to `opt p=68020`')
+        expect(assembles(applyEdit(for68010, quickFixRange(change), change.text))).toEqual({
+            processor: '68020',
+            errors: []
+        })
+    })
+
+    //`link.w` is the 68020's, which EASy68K refuses: the second fix writes the 68000's `link`
+    it('offer `link` without its size for link.w in a 68000 program, beside `opt p=68020`', () => {
+        const program = '    org $1000\n    link.w a6,#-8\n    unlk a6\n'
+        const [refused] = diagnosticsOf(sourcesOf({ 'main.m68k': program }))
+        expect(refused).toMatchObject({
+            code: 'needs_a_later_processor',
+            message:
+                '`link.w a6,#-8` is a 68020 instruction, and this program is written for the 68000.'
+        })
+        expect(refused.fixes!.map((fix) => fix.title)).toEqual([
+            'Add `opt p=68020` at the top of the program',
+            'Write `link a6,#-8`'
+        ])
+        const [opt, unsized] = refused.fixes!
+        expect(assembles(applyEdit(program, quickFixRange(opt), opt.text))).toEqual({
+            processor: '68020',
+            errors: []
+        })
+        const written = applyEdit(program, quickFixRange(unsized), unsized.text)
+        expect(written).toBe('    org $1000\n    link a6,#-8\n    unlk a6\n')
+        expect(assembles(written)).toEqual({ processor: '68000', errors: [] })
+
+        //through the provider, as Monaco asks for the marker's actions
+        const model = fakeModel('file:///main')
+        const current = fakeMonaco([model])
+        const marked = { ...marker(2, refused.formatted), owner: 'M68K' } as never
+        setModelQuickFixes(current, model, 'M68K', [
+            {
+                marker: marked,
+                fixes: refused.fixes!.map((fix) => ({
+                    title: fix.title,
+                    resource: model.uri,
+                    range: quickFixRange(fix),
+                    text: fix.text
+                }))
+            }
+        ])
+        const actions = quickFixActions(current, model, [marked])
+        expect(actions.map((action) => action.title)).toEqual([
+            'Add opt p=68020 at the top of the program',
+            'Write link a6,#-8'
+        ])
+        expect(actions[1].edit?.edits[0]).toMatchObject({
+            textEdit: { range: quickFixRange(unsized), text: '' }
+        })
+    })
+
     it('point a fix into the entry File when the instruction is in an included one', () => {
         const sources = sourcesOf(
             {

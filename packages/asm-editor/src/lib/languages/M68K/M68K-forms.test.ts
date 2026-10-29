@@ -61,6 +61,8 @@ describe('M68K instruction forms', () => {
             'divs Dn,Dn',
             'divu Dn,Dn',
             'extb Dn',
+            //`link.w`, the 68000's `link` with its size written, and `link.l`
+            'link An,Im',
             'link An,Im',
             'muls Dn,Dn',
             'mulu Dn,Dn',
@@ -85,6 +87,11 @@ describe('M68K instruction forms', () => {
         expect(table.get('bfextu')!.map(m68kFormTags)).toEqual([['68020', 'opt-bit']])
         expect(table.get('cas2')!.map(m68kFormTags)).toEqual([['68020']])
         expect(table.get('muls')!.map(m68kFormTags)).toEqual([[], ['68020']])
+        expect(table.get('link')!.map((form) => [form.sizes, m68kFormTags(form)])).toEqual([
+            [[], []],
+            [['word'], ['68020']],
+            [['long'], ['68020']]
+        ])
         expect(m68kFirstProcessor({ name: 'move' })).toBe('68000')
         expect(m68kFirstProcessor({ name: 'extb' })).toBe('68020')
         expect(m68kFirstProcessor(M68kDocumentation.trapcc)).toBe('68020')

@@ -632,8 +632,9 @@ export type BaseEmulatorState = {
     compiledCode?: string
     /**
      * The processor the Build's program is written for, while it is one of the Target's later
-     * processors: an M68K program's `opt p=68020`. Undefined for the processor a Target starts on,
-     * and before a Build.
+     * processors: an M68K program's `opt p=68020`; or the one a Target starts on with what an
+     * option added to it, `68000 with bit fields` for `opt bit`. Undefined for the processor a
+     * Target starts on as it is, and before a Build.
      */
     processor?: string
     registers: Register[]

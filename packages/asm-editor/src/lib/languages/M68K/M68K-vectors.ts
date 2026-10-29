@@ -1,4 +1,4 @@
-import type { Processor } from '@specy/s68k'
+import type { Processor, RuntimeError } from '@specy/s68k'
 
 /**
  * The 68000's exception vectors, `$000` to `$3FF`: 256 long words, each the address of the handler
@@ -84,16 +84,24 @@ const CONDITIONAL_TRAP = /^TRAP(?:T|F|HI|LS|CC|HS|CS|LO|NE|EQ|VC|VS|PL|MI|GE|LT|
  * What an exception taken through `vector` is called in the History and the Call stack: an
  * autovector's is the IRQ it takes, `IRQ 2`, and every other one is its vector's name, `TRAP #3`
  * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28). The 68020's
- * `chk2` raises vector 6 as `chk` does, and its `trap<cc>` vector 7 as `trapv` does, so where the
- * instruction that raised it is known, `ran` as the disassembler prints it (`TRAPEQ.W #$3`), the
- * exception is named after that instruction: `CHK2`, `TRAPEQ`.
+ * `chk2` raises vector 6 as `chk` does, and its `trap<cc>` vector 7 as `trapv` does, which the
+ * Core's `cause`, the type of the error that raised it, tells apart: the exception is named after
+ * the instruction, `CHK2`, and a `trap<cc>` after the condition it ran with where `ran`, the
+ * instruction as the disassembler prints it (`TRAPEQ.W #$3`), says it, `TRAPEQ`, and `TRAPcc`
+ * where nothing does.
  */
-export function m68kExceptionName(vector: number, ran?: string): string {
+export function m68kExceptionName(
+    vector: number,
+    cause?: RuntimeError['type'],
+    ran?: string
+): string {
     const level = m68kAutovectorLevel(vector)
     if (level !== undefined) return `IRQ ${level}`
-    const mnemonic = ran?.trim().split(/[\s.]/, 1)[0].toUpperCase() ?? ''
-    if (vector === 6 && mnemonic === 'CHK2') return 'CHK2'
-    if (vector === 7 && CONDITIONAL_TRAP.test(mnemonic)) return mnemonic
+    if (cause === 'Chk2OutOfBounds') return 'CHK2'
+    if (cause === 'ConditionalTrap') {
+        const mnemonic = ran?.trim().split(/[\s.]/, 1)[0].toUpperCase() ?? ''
+        return CONDITIONAL_TRAP.test(mnemonic) ? mnemonic : 'TRAPcc'
+    }
     return m68kVectorName(vector)
 }
 

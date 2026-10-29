@@ -55,4 +55,13 @@ describe('the cycle counter', () => {
             'An estimate of the clock cycles a 68020 takes to run this program: 12,345 since it started or trap #15 task 30 last cleared the counter. A 68020 overlaps each instruction with the next and keeps recent code in a cache, so the time of one depends on its neighbours. Its manual gives each instruction’s time for the case where the instruction is in the cache already, which is what is counted here. The newest step took 8.'
         )
     })
+
+    //a 68000's bit field under `opt bit` takes the 68020's time, as EASy68K counts it
+    it('says why a 68000 program with a bit field counts an estimate', () => {
+        const shown = render({ total: 40n, last: 8, estimate: true }, '68000 with bit fields')
+        expect(shown.text).toBe('Cycles ≈ 40 (+8)')
+        expect(shown.tooltip).toBe(
+            'An estimate of the clock cycles a 68000 with bit fields takes to run this program: 40 since it started or trap #15 task 30 last cleared the counter. A 68000 or a 68010 has no bit-field instructions, so those `opt bit` adds take the time the 68020’s manual gives them, with the instruction in its cache already, as EASy68K counts them. Every other instruction takes its exact time. The newest step took 8.'
+        )
+    })
 })

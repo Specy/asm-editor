@@ -77,9 +77,9 @@ describe('the M68K Documentation', () => {
             'trap-tasks': 79,
             //the introduction and the seven sections after it
             synth: 8,
-            //the introduction and the eighteen sections after it, the 68010's and then the
-            //68020's seven last
-            exceptions: 19,
+            //the introduction and the nineteen sections after it, the 68010's, its format errors and
+            //then the 68020's seven last
+            exceptions: 20,
             directives: 19,
             'assembler-features': 1
         })

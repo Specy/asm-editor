@@ -3,8 +3,9 @@
      * The processor a Build's program is written for, beside the registers, while it is one of the
      * Target's later processors: an M68K program's `opt p=68020` line makes the registers and the
      * instructions the 68020's ([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md),
-     * decision 3). The host draws nothing for the processor a Target starts on. The badge is the
-     * one a later processor's instructions carry in the Documentation.
+     * decision 3), and `opt bit` gives a 68000 program the bit fields, `68000 with bit fields`.
+     * The host draws nothing for the processor a Target starts on as it is. The badge is the one a
+     * later processor's instructions carry in the Documentation.
      */
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 

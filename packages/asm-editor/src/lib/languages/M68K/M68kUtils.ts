@@ -157,7 +157,7 @@ function errorParts(
                 headline: 'Trace exception',
                 detail:
                     processor === '68020'
-                        ? 'a trace bit of SR is set: T1 stops the processor after every instruction, and T0 after each branch, jump or return'
+                        ? 'a trace bit of SR is set: T1 stops the processor after every instruction, and T0 after each branch taken, jump, return and write of SR, and each ANDI, ORI or EORI to CCR'
                         : 'the T bit of SR is set, so the processor stops after every instruction'
             }
         //a word no instruction of the processor starts with, kept by the Core

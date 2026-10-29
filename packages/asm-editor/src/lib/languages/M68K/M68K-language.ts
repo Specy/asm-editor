@@ -3,6 +3,7 @@ import { S68k } from '@specy/s68k'
 import type monaco from 'monaco-editor'
 import {
     AddressingMode,
+    addressingModeToString,
     fromSizesToString,
     fromSizeToString,
     getAddressingModeNames,
@@ -10,7 +11,8 @@ import {
     M68KDirectives,
     M68kInstructions,
     M68KRecognizedDirectives,
-    M68KRecognizedInstructions
+    M68KRecognizedInstructions,
+    type InstructionDocumentation
 } from './M68K-documentation'
 import { s68kColumnToUtf16 } from './m68kDiagnostics'
 import { documentHover } from '#lib/documentation/instructions/hoverLine.ts'
@@ -23,7 +25,7 @@ import {
     m68kProcessorOnly,
     type M68kLaterProcessor
 } from '#lib/documentation/m68k/instructionDocument.ts'
-import { m68kFirstProcessor, m68kIsBitField } from './M68K-forms'
+import { m68kFirstProcessor, m68kInstructionForms, m68kIsBitField } from './M68K-forms'
 
 const completionTokens = [...M68kInstructions, ...M68KDirectives]
 
@@ -334,7 +336,12 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
             ) {
                 const operandPosition = operation?.operands.length ?? 0
                 suggestions.push(
-                    ...getAddressingModes(firstArgDoc.args[operandPosition], monaco, range)
+                    ...getAddressingModes(
+                        firstArgDoc.args[operandPosition],
+                        monaco,
+                        range,
+                        laterFormModes(firstArgDoc, operandPosition)
+                    )
                 )
             }
             return {
@@ -749,23 +756,72 @@ function operandCompletionText(completion: OperandCompletion): {
     }
 }
 
+/** The modes of the Core's forms, by the names it gives them, as the Documentation's lists hold them. */
+const MODE_BY_NAME = new Map(
+    Object.values(AddressingMode)
+        .filter((mode): mode is AddressingMode => typeof mode === 'number')
+        .map((mode) => [addressingModeToString(mode), mode])
+)
+
+/**
+ * The modes a later processor's forms of an instruction add at an operand position, with the
+ * processor that brought each, from the Core's forms: the 68020's `tst` of An, an immediate and
+ * the PC-relative modes, and its `cmpi` to a PC-relative destination. Only where the
+ * Documentation's list there is the first processor's forms whole: `cmp`'s leaves out the forms it
+ * assembles as `cmpi` and `cmpm`, and with them the 68020's.
+ */
+function laterFormModes(
+    documentation: InstructionDocumentation,
+    position: number
+): Map<AddressingMode, M68kLaterProcessor> {
+    const later = new Map<AddressingMode, M68kLaterProcessor>()
+    const listed = documentation.args[position]
+    if (!listed) return later
+    const forms = m68kInstructionForms(documentation).filter(
+        (form) => form.operands.length === documentation.args.length
+    )
+    const first = m68kFirstProcessor(documentation)
+    const own = new Set(listed.map(addressingModeToString))
+    const firstModes = forms
+        .filter((form) => form.processor === first)
+        .flatMap((form) => form.operands[position])
+    if (!firstModes.every((mode) => own.has(mode))) return later
+    for (const form of forms) {
+        const processor = form.processor
+        if (processor === first || !isM68kLaterProcessor(processor)) continue
+        for (const name of form.operands[position]) {
+            const mode = MODE_BY_NAME.get(name)
+            if (mode === undefined || own.has(name)) continue
+            //the earliest processor that has it, should two later ones both
+            if (later.get(mode) !== '68010') later.set(mode, processor)
+        }
+    }
+    return later
+}
+
 function getAddressingModes(
     am: AddressingMode[] | undefined,
     monaco: MonacoType,
-    range: monaco.IRange
+    range: monaco.IRange,
+    later: ReadonlyMap<AddressingMode, M68kLaterProcessor> = new Map()
 ): monaco.languages.CompletionItem[] {
     if (!am) return []
-    const allowed = new Set(am)
-    const items = OPERAND_COMPLETIONS.filter(({ mode }) => allowed.has(mode)).map((completion) => ({
-        kind: monaco.languages.CompletionItemKind[completion.kind],
-        label: completion.label,
-        insertText: completion.insertText,
-        range,
-        //a later processor's mode says so in the list, and comes after the 68000's own
-        ...(completion.processor
-            ? { ...operandCompletionText(completion), sortText: `~${completion.label}` }
-            : {})
-    }))
+    const allowed = new Set([...am, ...later.keys()])
+    const items = OPERAND_COMPLETIONS.filter(({ mode }) => allowed.has(mode)).map((offered) => {
+        //a mode a later processor's form of the instruction brought is tagged with it here
+        const processor = offered.processor ?? later.get(offered.mode)
+        const completion = processor ? { ...offered, processor } : offered
+        return {
+            kind: monaco.languages.CompletionItemKind[completion.kind],
+            label: completion.label,
+            insertText: completion.insertText,
+            range,
+            //a later processor's mode says so in the list, and comes after the 68000's own
+            ...(completion.processor
+                ? { ...operandCompletionText(completion), sortText: `~${completion.label}` }
+                : {})
+        }
+    })
     if (!allowed.has(AddressingMode.BitField)) return items
     //a bit field's operand is what the field is in with the field after it, `d0{0:8}`: offered
     //whole, it says so, and keeps a later processor's mode's tag

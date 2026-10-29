@@ -50,7 +50,8 @@ export type CompileResult =
           outputNotes?: Omit<EmulatorNote, 'id'>[]
           /**
            * The processor the program is written for, when the Target has several and the program
-           * chose a later one than the one it starts on: M68K's `opt p=68010` or `opt p=68020`.
+           * chose a later one than the one it starts on: M68K's `opt p=68010` or `opt p=68020`; or
+           * what an option added to the one it starts on, `68000 with bit fields` for `opt bit`.
            */
           processor?: string
       }

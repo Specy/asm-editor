@@ -1149,6 +1149,47 @@ describe('the 68020’s instructions in the editor', () => {
         expect(M68KLanguageConfiguration.brackets).toContainEqual(['{', '}'])
     })
 
+    it('offers the modes the 68020’s tst and cmpi add, tagged 68020 only', async () => {
+        const tagged = async (line: string) =>
+            (await completions(line))
+                .filter((item) => item.sortText)
+                .map((item) => [item.label, item.detail])
+        const indexed = [
+            ['(bd,An,Xn*k)', 'Scaled index with a base displacement, 68020 only'],
+            ['([bd,An],Xn,od)', 'Memory indirect, postindexed, 68020 only'],
+            ['([bd,An,Xn],od)', 'Memory indirect, preindexed, 68020 only']
+        ]
+        const pcIndexed = [
+            ['(bd,PC,Xn*k)', 'Scaled index with a base displacement, 68020 only'],
+            ['([bd,PC],Xn,od)', 'Memory indirect, postindexed, 68020 only'],
+            ['([bd,PC,Xn],od)', 'Memory indirect, preindexed, 68020 only']
+        ]
+        //tst takes An, an immediate and the PC-relative modes on the 68020, after the 68000's own
+        expect(await tagged('    tst.w ')).toEqual([
+            ['An', 'Address register, 68020 only'],
+            ['#', '#<num/label> | decimal number or label, 68020 only'],
+            ['d(PC)', 'Program-counter displacement, 68020 only'],
+            ['d(PC,Xn)', 'Program-counter displacement with an index, 68020 only'],
+            ...indexed,
+            ...pcIndexed
+        ])
+        const tst = await completions('    tst.w ')
+        expect(tst.find((item) => item.label === 'Dn')?.sortText).toBeUndefined()
+        expect(tst.find((item) => item.label === 'An')?.documentation).toEqual({
+            value: '68020 only: write `opt p=68020` at the top of the program.'
+        })
+        //cmpi compares with a PC-relative destination on the 68020, and its immediate is the 68000's
+        expect(await tagged('    cmpi.w #1,')).toEqual([
+            ['d(PC)', 'Program-counter displacement, 68020 only'],
+            ['d(PC,Xn)', 'Program-counter displacement with an index, 68020 only'],
+            ...indexed,
+            ...pcIndexed
+        ])
+        expect(await tagged('    cmpi.w ')).toEqual([])
+        //cmp's page lists its own forms only, not those it assembles as cmpi, the 68020's among them
+        expect(await tagged('    cmp.w d0,')).toEqual([])
+    })
+
     it('says in completion that a bit field is the 68020’s or 68000 with opt bit', async () => {
         const [bfextu] = (await completions('    bfext')).filter((item) => item.label === 'bfextu')
         expect(bfextu.detail).toBe('M68K instruction, 68020, or 68000 with opt bit')

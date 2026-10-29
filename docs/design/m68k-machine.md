@@ -318,7 +318,7 @@ Four things a person can do once this is in, to show where each decision lands.
 
 28. **Exceptions in the Debug tools.**
     - **History.** An instruction that raised an exception shows it in its row: the vector, and the handler's address and label. An IRQ has a row of its own.
-    - **Call stack.** It shows each exception frame, pushed at entry and popped by `rte`, named for its vector: `TRAP #3 → trap3_handler`, `IRQ 2 → timer`.
+    - **Call stack.** It shows each exception frame, pushed at entry and popped by `rte`, named for its vector: `TRAP #3 → trap3_handler`, `IRQ 2 → timer`. Where two causes share a vector the frame is named after the instruction, `CHK2 → handler`, `TRAPEQ → handler`, and its vector is given at the address it was read from as the exception was taken.
     - **Steps with no source line**, such as a handler reached in data or a changed line, show their disassembly.
 
 29. **Stopped.**

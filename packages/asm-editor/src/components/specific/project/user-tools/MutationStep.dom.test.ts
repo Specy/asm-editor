@@ -574,4 +574,36 @@ describe('the cycles of a step in the History panel', () => {
         )
         row.close()
     })
+
+    //a 68000 program's whose `opt bit` gave it a bit field, which takes the 68020's time
+    it('says a bit field under opt bit is why a 68000 program’s count is an estimate', () => {
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const app = mount(MutationsRenderer, {
+            target,
+            props: {
+                language: 'M68K',
+                processor: '68000 with bit fields',
+                statusRegisterNames: [],
+                steps: [
+                    {
+                        kind: 'instruction',
+                        mutations: [],
+                        pc: 0x1000,
+                        line: 3,
+                        old_ccr: { bits: 0 },
+                        new_ccr: { bits: 0 },
+                        cycles: 8,
+                        cyclesEstimate: true
+                    }
+                ]
+            }
+        })
+        flushSync()
+        expect(tooltipText(target.querySelector('.cycles'))).toMatch(
+            /^An estimate\. A 68000 or a 68010 has no bit-field instructions/
+        )
+        void unmount(app)
+        target.remove()
+    })
 })

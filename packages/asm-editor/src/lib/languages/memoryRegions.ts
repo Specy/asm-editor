@@ -156,9 +156,16 @@ export function mergeMemoryRegions(
             kind: run.kind
         }))
     )
-    //what the machine gives a meaning, named by itself: the vectors' names are labels of its section
-    for (const region of layout.machineRegions ?? [])
-        regions.push({ ...region, id: `machine:${region.kind}`, section: region.name })
+    //what the machine gives a meaning, named by itself: the vectors' names are labels of its section.
+    //A kind can have several, two `memory rom` lines or a vector table that wraps round the top of
+    //memory, and each after the first of its kind is numbered, so that every id stays unique
+    const machineKinds = new Map<string, number>()
+    for (const region of layout.machineRegions ?? []) {
+        const count = (machineKinds.get(region.kind) ?? 0) + 1
+        machineKinds.set(region.kind, count)
+        const id = count === 1 ? `machine:${region.kind}` : `machine:${region.kind}:${count}`
+        regions.push({ ...region, id, section: region.name })
+    }
     if (heap) regions.push({ ...heap, id: 'heap', name: 'Heap', kind: 'heap' })
     if (stack)
         regions.push({

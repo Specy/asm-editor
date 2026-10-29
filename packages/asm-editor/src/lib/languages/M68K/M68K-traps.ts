@@ -293,7 +293,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Read the cycle counter',
         output: 'D1.L = the cycles since the program started or task 30 last cleared the counter, or 0 once they no longer fit in 32 bits',
         description:
-            'Reads the counter without changing it. The instruction that puts 31 in D0 runs before the read and counts too: `moveq #31, d0` takes 4 cycles, and `move.b #31, d0` takes 8.',
+            'Reads the counter without changing it. The instruction that puts 31 in D0 runs before the read and counts too: `moveq #31, d0` takes 4 cycles, and `move.b #31, d0` takes 8, on the 68000 and the 68010; on the 68020 they take 2 and 4.',
         deviation:
             'The counts are a real 68000’s, so a few differ from EASy68K’s own: `trap #0` to `#14` takes 34 cycles here and 38 in EASy68K.'
     },

@@ -18,10 +18,10 @@ The first 1024 bytes of memory, `$000000` to `$0003FF`, are **256 vectors** of f
 |      6 | `$018`          | [chk](/documentation/m68k/instruction/chk), or on the 68020 [chk2](/documentation/m68k/instruction/chk2), with a value out of range                                                                                                 |
 |      7 | `$01C`          | [trapv](/documentation/m68k/instruction/trapv) with V set, or on the 68020 [trapcc](/documentation/m68k/instruction/trapcc) with its condition true                                                                                 |
 |      8 | `$020`          | privilege violation, a supervisor-only instruction in user mode                                                                                                                                                                     |
-|      9 | `$024`          | trace, after every instruction while the T bit is set, or on the 68020 after each branch, jump or return while T0 is set                                                                                                            |
+|      9 | `$024`          | trace, after every instruction while the T bit is set, or on the 68020, while T0 is set, after each branch taken, jump, return and write of `sr`, and each `andi`, `ori` or `eori` to `ccr`                                         |
 |     10 | `$028`          | an instruction word that starts with `$A`, "line A"                                                                                                                                                                                 |
 |     11 | `$02C`          | an instruction word that starts with `$F`, "line F"                                                                                                                                                                                 |
-|     14 | `$038`          | format error, on the 68010 and the 68020: a frame `rte` cannot read ([below](#68010))                                                                                                                                               |
+|     14 | `$038`          | format error, on the 68010 and the 68020: a frame `rte` cannot read ([below](#format-error))                                                                                                                                        |
 |  25-31 | `$064` - `$07C` | interrupts at levels 1 to 7                                                                                                                                                                                                         |
 |  32-46 | `$080` - `$0B8` | `trap #0` to `trap #14`                                                                                                                                                                                                             |
 |     47 | `$0BC`          | `trap #15`, when its task number is not one of the simulator's                                                                                                                                                                      |
@@ -151,7 +151,7 @@ tick:
 
 A 68000 works to the beat of a clock, and each beat is a **clock cycle**. Every instruction takes a whole number of them, more when it reaches memory and more when its numbers make more work: `moveq` takes 4 cycles, `add.l d0, d1` 8, a `dbra` that loops back 10, and a division over 100. At 8 MHz, the clock of an Atari ST, a 68000 has eight million cycles a second, so 8,000 cycles take a millisecond.
 
-The editor counts the cycles a 68000 takes, instruction by instruction. The line under the registers shows the count with what the last step took, `Cycles 1,234 (+8)`, each History row shows its own, and the Log gives the count when the program ends. Undo takes a step's cycles back. Exceptions take cycles too: 34 for `trap #0` to `#14`, 38 or more for a division by zero, and 44 for an interrupt request. A `trap #15` task takes none, so printing, drawing or a delay adds nothing, and `stop` takes 4, however long it waits. A program written for the 68010 counts a 68010's cycles, which are a little different (see [on the 68010](#68010)), and one for the 68020 counts an estimate (see [cycles on the 68020](#68020-cycles)).
+The editor counts the cycles a 68000 takes, instruction by instruction. The line under the registers shows the count with what the last step took, `Cycles 1,234 (+8)`, each History row shows its own, and the Log gives the count when the program ends. Undo takes a step's cycles back. Exceptions take cycles too: 34 for `trap #0` to `#14`, 38 or more for a division by zero, and 44 for an interrupt request. A `trap #15` task takes none, so printing, drawing or a delay adds nothing, and `stop` takes 4, however long it waits. A program written for the 68010 counts a 68010's cycles, which are a little different (see [on the 68010](#68010)), and one for the 68020 counts an estimate (see [cycles on the 68020](#68020-cycles)), as does a program that uses a [bit field](/documentation/m68k/addressing-mode#bit-fields) through `opt bit`.
 
 To time a piece of code, clear the counter with [trap #15 task 30](/documentation/m68k/traps#task-30) just before it, and read it into `d1` with [task 31](/documentation/m68k/traps#task-31) just after it:
 
@@ -187,7 +187,7 @@ div_zero:
     rte
 ```
 
-The System register file shows VBR, and the memory view's Exception vectors region moves with it.
+The System register file shows VBR, and the memory view's Exception vectors region moves with it. Vectors 0 and 1, the reset stack pointer and program counter, are read only from address 0, at reset, so in a moved table the region names them Vector 0 and Vector 1, which nothing reads.
 
 **Every frame has a format word.** The frame is 8 bytes: the 6 a 68000 pushes, then one more word. Its top four bits are the frame's **format**, `$0` here, and the rest is 4 × the vector number, so one handler installed in several vectors can tell which one it was called for.
 
@@ -201,13 +201,19 @@ A handler that takes the frame off the stack by hand takes 8 bytes, not 6.
 
 **Bus and address errors push a 58-byte frame,** format `$8`. It starts as the short one does, with the format word `$8` and the vector's offset at `6(sp)`, then says how the access was made at `8(sp)` (bit 8 is set for a read) and the address it tried at `10(sp)`. The rest is the processor's internal state. The address at `2(sp)` is the instruction that faulted, and `rte` runs it again, so a handler either removes the cause first or does not return.
 
-**`rte` checks the format.** It reads the format word first and pops the whole frame: 8 bytes for format `$0`, 58 for format `$8`. Any other format means the stack does not hold a frame the processor pushed, usually because the handler left something on the stack or took too much off. Rather than return to a wrong address, `rte` then raises a **format error**, vector 14, at `$38`, and with no handler there the program ends:
+**`rte` checks the format,** and pops 8 bytes for format `$0` and 58 for format `$8`. Any other format is a [format error](#format-error).
+
+The 68010 also has [bkpt](/documentation/m68k/instruction/bkpt), which takes vector 4 here, as `illegal` does, and makes `move` from `sr` privileged, so user code reads the flags with `move ccr, <ea>`. Its cycles differ a little: an exception takes 38 and an interrupt 46, and `rte` 24. A `dbra` that loops back over one short instruction, such as `move.w (a0)+, (a1)+`, enters **loop mode** after its first turn: the processor stops fetching the two instructions again, so each further turn takes fewer cycles. The History says when a loop enters and leaves it.
+
+## Format errors {#format-error}
+
+On the 68010 and the 68020, `rte` reads the format word first and pops the whole frame the format says. If the format is not one the processor pushes, the stack does not hold a frame it pushed, usually because the handler left something on the stack or took too much off. Rather than return to a wrong address, `rte` then raises a **format error**, vector 14, at `$38`, and with no handler there the program ends:
 
 ```text
 Format error at line 9: vector 14 at $000038 holds no handler (rte found a frame of format $3, which a 68010 does not make)
 ```
 
-The 68010 also has [bkpt](/documentation/m68k/instruction/bkpt), which takes vector 4 here, as `illegal` does, and makes `move` from `sr` privileged, so user code reads the flags with `move ccr, <ea>`. Its cycles differ a little: an exception takes 38 and an interrupt 46, and `rte` 24. A `dbra` that loops back over one short instruction, such as `move.w (a0)+, (a1)+`, enters **loop mode** after its first turn: the processor stops fetching the two instructions again, so each further turn takes fewer cycles. The History says when a loop enters and leaves it.
+The 68010 pushes formats `$0` and `$8`, [above](#68010), and the 68020 its own, [below](#68020-frames). A 68000's frames have no format word, so a 68000 has no format error.
 
 ## On the 68020 {#68020}
 
@@ -302,11 +308,11 @@ out_of_range:
 
 A bus or address error pushes a larger frame: format `$B`, 92 bytes, or for a bus error while fetching an instruction, format `$A`, 32 bytes. Like the 68010's format `$8`, it says how the access was made at `$A(sp)` and the address it tried at `$10(sp)`, and `rte` runs the instruction that faulted again.
 
-`rte` pops each frame whole, and the [throwaway frame](#throwaway-frame) and the one under it. Any other format, the 68010's `$8` among them, is a [format error](#68010), which with no handler ends the program: "…rte found a frame of format $8, which a 68020 does not make".
+`rte` pops each frame whole, and the [throwaway frame](#throwaway-frame) and the one under it. Any other format, the 68010's `$8` among them, is a [format error](#format-error), which with no handler ends the program: "…rte found a frame of format $8, which a 68020 does not make".
 
 ## Tracing on the 68020 {#68020-trace}
 
-The 68000's T is called T1 on the 68020, and still traces every instruction. A second bit, **T0**, bit 14, traces only an instruction that changes the flow of the program: a branch taken, `bra` and `bsr`, a jump, a return, and a write of `sr`. With T0 set, a debugger stops at each jump and skips the straight runs of code between them. The trace frame is format `$2`, with the address of the instruction traced at `8(sp)`.
+The 68000's T is called T1 on the 68020, and still traces every instruction. A second bit, **T0**, bit 14, traces only an instruction that changes the flow of the program: a branch taken, `bra` and `bsr`, a jump, a return, a write of `sr`, and `andi`, `ori` or `eori` to `ccr`, though not `move` to `ccr`. With T0 set, a debugger stops at each jump and skips the straight runs of code between them. The trace frame is format `$2`, with the address of the instruction traced at `8(sp)`.
 
 ## Data at odd addresses {#odd-addresses}
 

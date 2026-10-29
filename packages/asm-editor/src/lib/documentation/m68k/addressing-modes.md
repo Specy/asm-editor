@@ -240,7 +240,7 @@ Changing the long at `current` to `scores_a` makes the same instruction read the
 
 ## Suppressed registers {#suppressed-registers}
 
-On the 68020, a `z` before a register's name, `za0` to `za7`, `zd0` to `zd7` and `zpc`, keeps the register's place in the operand but adds nothing for it: `([current,za0],d1.w*2)` reads the same word as `([current],d1.w*2)`. Leaving the register out does the same, so you rarely need to write one, but other assemblers' code and the disassembly of a 68020 instruction can use them. They are registers only inside an operand's parentheses; elsewhere `za0` is an ordinary name, which a label can have.
+On the 68020, a `z` before a register's name, `za0` to `za7`, `zd0` to `zd7` and `zpc`, keeps the register's place in the operand but adds nothing for it: `([current,za0],d1.w*2)` reads the same word as `([current],d1.w*2)`. Leaving the register out does the same, so you rarely need to write one, but other assemblers' code and the disassembly of a 68020 instruction can use them. They are registers only inside an operand's parentheses; elsewhere `za0` is an ordinary name, which a label can have. A label named `za0` keeps its meaning inside the parentheses too, wherever the operand still reads with it: `lea (za0),a1` loads the label's address, as on the 68000. In a program for the 68020, where the register could have stood there as well, the editor warns that the name is read as the label, so rename the label to write the register.
 
 ## Long branches {#long-branches}
 
@@ -297,7 +297,7 @@ So `d0{24:8}` is the low byte of `d0`, and `(a0){0:5}` the five highest bits of 
 
 Each sets N to the field's highest bit and Z when the field is 0, and clears V and C.
 
-A program for the 68020 has them. A program for the 68000 or the 68010 has them too when it starts with `opt bit`, EASy68K's option for them, and keeps its own addressing modes. This program splits a 16-bit colour into its red, green and blue:
+A program for the 68020 has them. A program for the 68000 or the 68010 has them too when it starts with `opt bit`, EASy68K's option for them, and keeps its own addressing modes. Neither processor has bit fields of its own, so they take the time the 68020's manual gives them, as EASy68K counts them, and once the program has one its [cycle count](/documentation/m68k/exceptions#cycles) is marked as an estimate. This program splits a 16-bit colour into its red, green and blue:
 
 ```m68k
     opt bit

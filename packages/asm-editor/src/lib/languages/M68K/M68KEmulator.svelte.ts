@@ -17,6 +17,7 @@ import {
     type Processor,
     type RegisterOperand,
     type Program,
+    type StackFrame as CoreStackFrame,
     type SystemRegisters,
     S68k,
     Size
@@ -57,6 +58,7 @@ import type { SynthBus } from '#lib/languages/peripherals/audio/Synth.ts'
 import { SYNTH_BASES, SYNTH_BLOCK_SIZE } from '#lib/languages/synthRegisters.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import type { Termination } from '#lib/languages/termination.ts'
+import { WITH_BIT_FIELDS } from '#lib/languages/cycles.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
 import { getM68kErrorMessage, getM68kTerminationMessage } from '#lib/languages/M68K/M68kUtils.ts'
 import {
@@ -68,6 +70,7 @@ import {
     m68kInterruptMask,
     m68kIrqGetsThrough,
     m68kVectorAddress,
+    m68kVectorLocation,
     m68kVectorName,
     m68kVectorTableStart
 } from '#lib/languages/M68K/M68K-vectors.ts'
@@ -422,6 +425,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * the Program's information copies its symbols out of the Core.
      */
     private programProcessor: Processor = '68000'
+    /**
+     * Whether the Build's program counts its processor's exact cycles, the 68000's and the
+     * 68010's, rather than an estimate, the 68020's or a bit field's under `opt bit`: the Core's
+     * `cyclesExact`, read with `programProcessor`.
+     */
+    private programCyclesExact = true
     private interpreter: Interpreter | null = null
     private screenInstructions: ScreenInstructionHistory | null = null
     /**
@@ -590,22 +599,21 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this.program = result.program
         //a program written for the 68010 or the 68020 says so beside the registers, and of its
         //S-record that EASy68K cannot run it; one for the 68000, which is every program without
-        //an `opt p=` line, says nothing
-        const processor = result.program.getProcessor()
+        //an `opt p=` line, says nothing, unless `opt bit` gave it the bit fields. Read in one copy
+        //of the Program's information, which carries its symbols too
+        const { processor, bitFields, cyclesExact } = result.program.getInfo()
         this.programProcessor = processor
-        //and its System file has the 68010's control registers, which the 68000 has not, and the
-        //68020's stack pointers and cache registers. The files stay as this Build made them until
-        //the next one, a Stop included, so that they do not shrink and grow back while a Build
-        //clears them
-        this.redeclareRegisterFiles(registerFilesOf(processor))
-        if (!m68kSRecordOutput.enabled) {
-            return { ok: true, diagnostics, ...(processor === '68000' ? {} : { processor }) }
-        }
+        this.programCyclesExact = cyclesExact
+        const shown = processorShown(processor, bitFields)
+        const line = shown === undefined ? {} : { processor: shown }
+        //its System file follows the processor too, but only once the Build is the current one,
+        //in `_initialize`
+        if (!m68kSRecordOutput.enabled) return { ok: true, diagnostics, ...line }
         //the Build output, while its switch is on: the S-record EASy68K's assembler writes,
         //`main.S68`, which EASy68K's simulator loads and runs
         const program = new TextEncoder().encode(result.program.toSRecord())
         if (processor === '68000') {
-            return { ok: true, diagnostics, program, programFormat: 'srecord' }
+            return { ok: true, diagnostics, program, programFormat: 'srecord', ...line }
         }
         const note = laterProcessorOutputNote(buildOutputPath(sources, 'srecord'), processor)
         return {
@@ -613,7 +621,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             diagnostics,
             program,
             programFormat: 'srecord',
-            processor,
+            ...line,
             outputNotes: [{ tone: 'info', text: note }]
         }
     }
@@ -621,6 +629,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     _initialize(undoSize: number): void {
         const program = this.program
         if (!program) throw new Error('Interpreter not initialized')
+        //the System file has the 68010's control registers, which the 68000 has not, and the
+        //68020's stack pointers and cache registers. Declared here, which only the current Build
+        //reaches, so that one a Stop or a newer Build cancelled leaves them as they were; they
+        //stay as this Build made them until the next one, a Stop included, so that they do not
+        //shrink and grow back while a Build clears them
+        this.redeclareRegisterFiles(registerFilesOf(this.programProcessor))
         //a run starts reading what is typed in the Terminal; the first graphics, keyboard or mouse
         //task moves input to the focused Screen instead (see `useScreenInput`)
         this._peripherals.terminal.useTerminalInput((text) =>
@@ -800,13 +814,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
 
     /**
      * The frames entered and not returned from: each `bsr` and `jsr` by the label it called, and
-     * each exception taken by its vector and handler, `TRAP #3 → trap3_handler`, which `rte` pops
-     * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28).
+     * each exception taken by what raised it and its handler, `TRAP #3 → trap3_handler`, which
+     * `rte` pops ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28).
+     * Its vector is where the table was when it was taken, the frame's own VBR, which a handler
+     * that moves the table leaves as it was.
      */
     _getCallStack(): StackFrame[] {
-        //where the table is now, which is where the frames' vectors were read unless the program
-        //moved VBR since
-        const vbr = this.vectorBase()
         return (
             this.interpreter?.getCallStack().map((frame, i) => {
                 const vector = frame.kind === 'exception' ? frame.vector : undefined
@@ -822,11 +835,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     name:
                         vector === undefined
                             ? frame.label_name
-                            : `${m68kExceptionName(vector)} → ${handler}`,
+                            : `${m68kExceptionName(vector, frame.cause, this.conditionalTrapOf(frame))} → ${handler}`,
                     ...(vector === undefined
                         ? {}
                         : {
-                              detail: `${what}, taken through vector ${vector} at ${m68kVectorAddress(vector, vbr)}: \`rte\` returns to ${m68kAddress(frame.source_address)}`
+                              detail: `${what}, taken through vector ${vector} at ${m68kVectorAddress(vector, frame.vbr ?? 0)}: \`rte\` returns to ${m68kAddress(frame.source_address)}`
                           }),
                     line: frame.label_location?.line ?? -1,
                     file: frame.label_location?.file,
@@ -836,6 +849,21 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 }
             }) ?? []
         )
+    }
+
+    /**
+     * The `trap<cc>` that raised an exception frame, as the disassembler prints it, `TRAPEQ.W #$3`,
+     * which names the frame after its condition: the 68020 stacks the instruction's own address
+     * at +8 of its format $2 frame, where A7 pointed as the handler was entered. Undefined for a
+     * frame that something else raised, and where memory no longer holds a whole address there.
+     */
+    private conditionalTrapOf(frame: CoreStackFrame): string | undefined {
+        const interpreter = this.interpreter
+        if (!interpreter || frame.cause !== 'ConditionalTrap') return undefined
+        const stacked = interpreter.readMemoryBytes((frame.registers[15] + 8) >>> 0, 4)
+        if (stacked.length < 4) return undefined
+        const address = new DataView(stacked.buffer, stacked.byteOffset).getUint32(0)
+        return interpreter.disassembleAt(address).text
     }
 
     /**
@@ -1123,14 +1151,14 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         for (const mutation of step.mutations) {
             switch (mutation.type) {
                 case 'PushException': {
-                    const { vector, from, handler } = mutation.value
+                    const { vector, from, handler, cause } = mutation.value
                     const label = this.labelAt(handler)
                     exceptions.push({
                         type: 'TakeException',
                         value: {
                             vector,
                             //named after the instruction where two share a vector: `TRAPEQ`
-                            name: m68kExceptionName(vector, step.ran?.text),
+                            name: m68kExceptionName(vector, cause, step.ran?.text),
                             from: BigInt(from),
                             handler: BigInt(handler),
                             ...(label === undefined ? {} : { label })
@@ -1648,12 +1676,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * Whether the counts are an estimate rather than the processor's own time
      * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 3 and 30): a
      * 68020 program's, which the Core counts from the manual's cache case, the 68020 overlapping
-     * instructions in ways no table can follow (Core milestone C13d). Read from the processor for
-     * now; should the Core's `ProgramInfo` come to say it, as a `cyclesExact` flag, read that here
-     * instead, kept at the Build as `programProcessor` is.
+     * instructions in ways no table can follow (Core milestone C13d), and a 68000 or 68010
+     * program's whose `opt bit` gave it a bit field, which takes that same time. The Core says
+     * which, as `Program.hasExactCycles()`, read at the Build.
      */
     private cyclesAreAnEstimate(): boolean {
-        return this.program !== null && this.programProcessor === '68020'
+        return this.program !== null && !this.programCyclesExact
     }
 
     /** The Preference that pauses a Run after the program writes into its code, on by default. */
@@ -2506,6 +2534,17 @@ function operationText(source: string): string {
 }
 
 /**
+ * What the line beside the registers says the program is written for
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3): a later processor,
+ * `68020`, or one before the 68020 that `opt bit` gave the 68020's bit fields, `68000 with bit
+ * fields`; nothing for a plain 68000 program, which is every program without an `opt` line.
+ */
+function processorShown(processor: Processor, bitFields: boolean): string | undefined {
+    if (bitFields && processor !== '68020') return `${processor} ${WITH_BIT_FIELDS}`
+    return processor === '68000' ? undefined : processor
+}
+
+/**
  * What the Log says of the S-record of a program for a later processor: EASy68K loads it, but its
  * simulator is a 68000's, with the 68020's bit fields of `opt bit` and nothing else of the later
  * processors ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 32).
@@ -2524,8 +2563,12 @@ function laterProcessorOutputNote(path: string, processor: '68010' | '68020'): s
  * vector table where VBR puts it, at 0 unless a program for the 68010 moved it, with a data label
  * for each of the processor's own vectors (0 to 63) and one for the user vectors, which only
  * vectored interrupts use and EASy68K has none of; and each range the program's `memory` lines
- * declare, `end` included. A table that VBR puts against the top of the 16 MB stops there. A Poke
- * still writes into all of them (decision 15), so none is read only memory.
+ * declare, `end` included. A table that VBR puts against the top of the 16 MB wraps round to
+ * address 0, as the 24-bit bus does, so it is two regions of one name, the vectors past `$FFFFFF`
+ * in the second. Vectors 0 and 1 are the reset stack pointer and program counter, which a
+ * processor reads only from address 0, so where VBR moved the table they are named by their
+ * numbers, and the region's hover says why. A Poke still writes into all of them (decision 15), so
+ * none is read only memory.
  */
 function withMachineRegions(
     layout: MemoryLayout,
@@ -2534,25 +2577,49 @@ function withMachineRegions(
     vbr: number
 ): MemoryLayout {
     const start = m68kVectorTableStart(vbr)
-    const end = Math.min(start + M68K_VECTOR_TABLE_SIZE, M68K_MEMORY_SIZE)
-    const table: MachineRegion = {
+    const end = start + M68K_VECTOR_TABLE_SIZE
+    const moved = (where: string): string =>
+        `${VECTORS_REASON} The vector base register, VBR, ${where}. Vectors 0 and 1, the reset stack pointer and program counter, are read only from address 0, at reset, so VBR + 0 and VBR + 4 are not used.`
+    const region = (from: number, to: number, reason: string): MachineRegion => ({
         kind: 'vectors',
         name: VECTORS_REGION_NAME,
-        start: BigInt(start),
-        end: BigInt(end),
-        reason:
-            vbr === 0
-                ? VECTORS_REASON
-                : `${VECTORS_REASON} The vector base register, VBR, puts the table here, at ${m68kAddress(start)}.`
-    }
+        start: BigInt(from),
+        end: BigInt(to),
+        reason
+    })
+    //a VBR of a multiple of 16 MB puts the table at 0 too, the reset vectors where reset reads them
+    const atZero = start === 0
+    const tables = atZero
+        ? [region(start, end, VECTORS_REASON)]
+        : end <= M68K_MEMORY_SIZE
+          ? [region(start, end, moved(`puts the table here, at ${m68kAddress(start)}`))]
+          : [
+                region(
+                    start,
+                    M68K_MEMORY_SIZE,
+                    moved(
+                        `puts the table here, at ${m68kAddress(start)}, and its last vectors past $FFFFFF, the top of the 24-bit bus, wrap round to $0`
+                    )
+                ),
+                region(
+                    0,
+                    end - M68K_MEMORY_SIZE,
+                    moved(
+                        `puts the table at ${m68kAddress(start)}, and these are its last vectors, which run past $FFFFFF, the top of the 24-bit bus, and wrap round to $0`
+                    )
+                )
+            ]
     const vector = (name: string, number: number): DataLabel => ({
         name,
-        address: BigInt(start + number * 4),
+        address: BigInt(m68kVectorLocation(number, vbr)),
         section: VECTORS_REGION_NAME,
         fromLibrary: false
     })
     const vectors = Array.from({ length: M68K_FIRST_USER_VECTOR }, (_, number) =>
-        vector(m68kVectorName(number, processor), number)
+        vector(
+            !atZero && number < 2 ? `Vector ${number}` : m68kVectorName(number, processor),
+            number
+        )
     )
     vectors.push(vector('User vectors', M68K_FIRST_USER_VECTOR))
     const ranges = map
@@ -2564,13 +2631,10 @@ function withMachineRegions(
         }))
     return {
         ...layout,
-        dataLabels: [
-            ...layout.dataLabels,
-            ...vectors.filter((label) => label.address < table.end)
-        ].sort((a, b) =>
+        dataLabels: [...layout.dataLabels, ...vectors].sort((a, b) =>
             a.address < b.address ? -1 : a.address > b.address ? 1 : a.name.localeCompare(b.name)
         ),
-        machineRegions: [table, ...ranges]
+        machineRegions: [...tables, ...ranges]
     }
 }
 
@@ -2728,12 +2792,12 @@ function activeStack(sr: number): Stack {
 }
 
 /**
- * What made a swap of the stack pointers: an exception's entry from user mode, which sets S; the
- * throwaway frame of a 68020's interrupt in the master state, which clears M after its frame; the
- * throwaway frame `rte` pops, whose status register it writes before the frame under it; or any
- * other write of SR, an instruction's, or `rte`'s of the frame it returns from.
+ * What made a swap of the stack pointers, which says how the History tells it: the throwaway frame
+ * of a 68020's interrupt in the master state, which clears M after its frame; the throwaway frame
+ * `rte` pops, whose status register it writes before the frame under it; or any other write of
+ * SR, an exception's entry, an instruction's, or `rte`'s of the frame it returns from.
  */
-type SwapCause = 'entry' | 'throwaway' | 'unwind' | 'write'
+type SwapCause = 'throwaway' | 'unwind' | 'write'
 
 /**
  * What each swap of the stack pointers in a step did, in the step's order, as the History says it
@@ -2741,13 +2805,10 @@ type SwapCause = 'entry' | 'throwaway' | 'unwind' | 'write'
  * to user mode, so A7 is the USP", and on a 68020, whose M chooses between two supervisor stacks,
  * "Switched to the master stack, so A7 is the MSP".
  *
- * A swap moves no value, and the Core journals it without saying which pointer A7 became, so the
- * step as a whole says: the last swap leaves A7 where the step's new SR has it; an interrupt's
- * throwaway frame goes on the interrupt stack, after an entry from user mode onto the master stack,
- * as only M set makes one; a write of SR before an exception's entry left user mode's A7, as only
- * an entry from user mode swaps; and the throwaway frame `rte` pops names the master stack. Any
- * other swap, of an `rte` that pops a frame a program made by hand, goes to a stack that is neither
- * the one before nor the one after it. A 68000 and a 68010 have two stacks, which alternate.
+ * A swap moves no value, and the Core says which pointer each made A7, `a7`, the 68020's ISP
+ * named `ssp` as on every processor; the first leaves the one the step's old SR has. What made
+ * it is read from where it falls in the step: after the frame of an IRQ, the throwaway frame of
+ * the master state, and before the frame `rte` pops, the throwaway frame `rte` popped first.
  */
 function stackSwaps(step: CoreExecutionStep, m68020: boolean): string[] {
     const mutations = step.mutations
@@ -2756,61 +2817,49 @@ function stackSwaps(step: CoreExecutionStep, m68020: boolean): string[] {
         (['usp', 'ssp', 'msp'] as const).every(
             (register) => mutation.value.old[register] === mutation.value.new[register]
         )
-    const causes: SwapCause[] = []
-    mutations.forEach((mutation, at) => {
-        if (!isSwap(mutation)) return
-        //what the swap comes before: the frame of the exception it entered, or the one `rte` pops
+    let from = activeStack(step.old_sr)
+    return mutations.flatMap((mutation, at) => {
+        if (mutation.type !== 'WriteStackPointers' || !isSwap(mutation)) return []
+        const to: Stack = mutation.value.a7 === 'ssp' ? 'isp' : mutation.value.a7
+        //what the swap comes before: the frame `rte` pops, or nothing more of the step
         const next = mutations
             .slice(at + 1)
-            .find(
-                (later) =>
-                    later.type === 'PushException' || later.type === 'PopException' || isSwap(later)
-            )
+            .find((later) => later.type === 'PopException' || isSwap(later))
         const afterFrame = mutations
             .slice(0, at)
             .some((earlier) => earlier.type === 'PushException')
-        causes.push(
+        const cause: SwapCause =
             step.kind === 'irq' && afterFrame
                 ? 'throwaway'
-                : next?.type === 'PushException'
-                  ? 'entry'
-                  : next?.type === 'PopException'
-                    ? 'unwind'
-                    : 'write'
-        )
-    })
-    const stacks: Stack[] = m68020 ? ['msp', 'isp', 'usp'] : ['isp', 'usp']
-    //where each swap left A7, from the last back to the first where its cause says
-    const to: (Stack | undefined)[] = causes.map((cause, i) => {
-        if (i === causes.length - 1) return activeStack(step.new_sr)
-        if (cause === 'throwaway') return 'isp'
-        if (cause === 'entry' && causes[i + 1] === 'throwaway') return 'msp'
-        if (cause === 'write' && causes[i + 1] === 'entry') return 'usp'
-        if (cause === 'unwind' && m68020) return 'msp'
-        return undefined
-    })
-    let from = activeStack(step.old_sr)
-    return causes.map((cause, i) => {
-        const stack =
-            to[i] ?? stacks.find((candidate) => candidate !== from && candidate !== to[i + 1])!
-        const text = stackSwapText(from, stack, cause, m68020)
-        from = stack
-        return text
+                : next?.type === 'PopException'
+                  ? 'unwind'
+                  : 'write'
+        const text = stackSwapText(from, to, cause, m68020)
+        from = to
+        return [text]
     })
 }
 
 /** One swap of the stack pointers as the History says it, from `from` to `to`. */
 function stackSwapText(from: Stack, to: Stack, cause: SwapCause, m68020: boolean): string {
-    if (to === 'usp') return 'Switched to user mode, so A7 is the USP'
+    const user = 'user mode, so A7 is the USP'
+    //a throwaway frame `rte` popped names a stack, the user stack too in one a program made
+    if (cause === 'unwind') {
+        const where =
+            to === 'usp'
+                ? user
+                : to === 'msp'
+                  ? 'the master stack, so A7 is the MSP'
+                  : 'the interrupt stack, so A7 is the ISP'
+        return `Popped the throwaway frame and switched to ${where}`
+    }
+    if (to === 'usp') return `Switched to ${user}`
     if (!m68020) return 'Switched to supervisor mode, so A7 is the SSP'
     const name = to === 'msp' ? 'MSP' : 'ISP'
     const stack = to === 'msp' ? 'the master stack' : 'the interrupt stack'
     if (from === 'usp') return `Switched to supervisor mode on ${stack}, so A7 is the ${name}`
     if (cause === 'throwaway') {
         return `Switched to ${stack} for the handler, so A7 is the ${name}, and pushed the throwaway frame there`
-    }
-    if (cause === 'unwind') {
-        return `Popped the throwaway frame and switched to ${stack}, so A7 is the ${name}`
     }
     return `Switched to ${stack}, so A7 is the ${name}`
 }

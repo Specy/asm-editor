@@ -13,7 +13,7 @@
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import {
         CYCLE_ESTIMATE_MARK,
-        CYCLE_ESTIMATE_REASON,
+        cycleEstimateReason,
         formatCycles
     } from '#lib/languages/cycles.ts'
 
@@ -24,6 +24,11 @@
         flags: string[]
         /** The Target, which names the width a written mutation reports (`sizeNames.ts`). */
         language: AvailableLanguages
+        /**
+         * The processor the program is written for, as the panels name it, which says why its
+         * cycles are an estimate: `68020`, or `68000 with bit fields`.
+         */
+        processor?: string
         /** Contrast with the section surface when shown in a docked History panel. */
         docked?: boolean
         /** "Undo to here" was pressed. */
@@ -36,6 +41,7 @@
         step,
         flags,
         language,
+        processor,
         undoBlocked,
         docked = false,
         onUndo,
@@ -215,13 +221,14 @@
 
 <!--
     what the step took on a Target that counts cycles, an M68K's with its processor's timing, marked
-    "≈ 8" where that is an estimate, the 68020's cache case, which the hover explains
+    "≈ 8" where that is an estimate, the 68020's cache case or a bit field's under `opt bit`, which
+    the hover explains
 -->
 {#snippet cyclesRow(cycles: number)}
     <div class="row space-between">
         <span> Cycles </span>
         {#if step.cyclesEstimate}
-            <span class="cycles" {@attach tooltip(`An estimate. ${CYCLE_ESTIMATE_REASON}`)}
+            <span class="cycles" {@attach tooltip(`An estimate. ${cycleEstimateReason(processor)}`)}
                 >{CYCLE_ESTIMATE_MARK} {formatCycles(cycles)}</span
             >
         {:else}

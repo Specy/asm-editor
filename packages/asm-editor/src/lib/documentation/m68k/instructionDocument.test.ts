@@ -342,6 +342,20 @@ describe('M68K instruction documents', () => {
         expect(meaning('cas2', '(Rn1):(Rn2)')?.meaning).toContain('`(a0):(a1)`')
     })
 
+    //the 68000's `link` takes no size, and the 68020 writes it `link.w`, the same words, or
+    //`link.l`, with a long displacement
+    it('writes link without a size, and link.w and link.l as the 68020’s', () => {
+        const link = document('link')
+        expect(link.sections.map((section) => section.tags)).toEqual([[], ['68020']])
+        expect(rows('link')).toEqual(['link An, #imm', 'link An, #imm', 'link An, #imm'])
+        expect(documentPatterns(link).map((pattern) => pattern.facts)).toEqual([
+            [],
+            ['Size .w'],
+            ['Size .l']
+        ])
+        expect(link.description).toContain('`link.w` is the same instruction')
+    })
+
     it('writes a bit field after its operand, the 68020’s or the 68000’s with opt bit', () => {
         const bfextu = document('bfextu')
         expect(bfextu.tags).toEqual(['68020', 'opt-bit'])
