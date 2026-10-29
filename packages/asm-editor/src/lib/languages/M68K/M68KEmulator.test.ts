@@ -24,7 +24,6 @@ import { fileText, type BuildSources, type ProjectFiles } from '#lib/projectFile
 import type { BuildOutputHost } from '#lib/buildOutput.ts'
 import { M68K_TRAP_DOCS, screenColorOf } from '#lib/languages/M68K/M68K-traps.ts'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
-import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import { KEY_CODES, letterKeyCode } from '#lib/languages/peripherals/keyCodes.ts'
 import { BLACK } from '#lib/languages/peripherals/screen/color.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
@@ -49,16 +48,6 @@ async function run(body: string, options: { limit?: number } = {}) {
     await emulator.compile(0, code)
     await emulator.run(options.limit ?? INSTRUCTION_LIMIT)
     return emulator
-}
-
-/**
- * The default Keyboard applies at most one queued transition per read and never faster than its
- * hold interval, so a test that presses two keys and reads once would see one of them. Zero here
- * keeps the "one per read" half, which is what the register packing is being checked against; the
- * interval itself has its own tests in `Keyboard.test.ts`.
- */
-function instantKeyboard() {
-    return { peripherals: { keyboard: new Keyboard({ holdIntervalMs: 0 }) } }
 }
 
 function registerOf(emulator: Awaited<ReturnType<typeof run>>, name: string): bigint {
@@ -560,21 +549,16 @@ describe('M68K graphics tasks', () => {
 })
 
 describe('M68K keyboard and mouse tasks', () => {
-    /** Task 19 reads one queued transition at a time, so a poll loop is what a program writes. */
-    const POLL_KEYS = (request: string) =>
-        [
-            '    move.w #6,d7',
-            'poll:',
-            `    move.l #${request},d1`,
-            '    move.b #19,d0',
-            '    trap #15',
-            '    move.l d1,d6',
-            '    dbra d7,poll'
-        ].join('\n') + '\n'
+    /**
+     * One task 19 read into D6. The key state changes at the event, as EASy68K's does, so a single
+     * read sees every press and release made before it (ADR 0066).
+     */
+    const READ_KEYS = (request: string) =>
+        trap(19, [`    move.l #${request},d1`]) + '    move.l d1,d6\n'
 
     it('answers with one $FF byte per held key, in the order asked', async () => {
-        const code = ORG + POLL_KEYS('$41535746') + trap(9)
-        const emulator = M68KEmulator(code, instantKeyboard())
+        const code = ORG + READ_KEYS('$41535746') + trap(9)
+        const emulator = M68KEmulator(code)
         await emulator.compile(0, code)
         //'A' and 'W' held, 'S' and 'F' not; the codes are ASCII capitals, EASy68K's table
         emulator.peripherals.keyboard.pressKey(letterKeyCode('a'))
@@ -586,8 +570,8 @@ describe('M68K keyboard and mouse tasks', () => {
     })
 
     it('answers the last key up and the last key down with task 19 and D1.L = 0', async () => {
-        const code = ORG + POLL_KEYS('0') + trap(9)
-        const emulator = M68KEmulator(code, instantKeyboard())
+        const code = ORG + READ_KEYS('0') + trap(9)
+        const emulator = M68KEmulator(code)
         await emulator.compile(0, code)
         emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
         emulator.peripherals.keyboard.releaseKey(KEY_CODES.SPACE)
@@ -3115,7 +3099,7 @@ describe('examples/m68k', () => {
     it('moves the square while an arrow key is held', async () => {
         async function runHoldingRight(limit: number) {
             const code = load('keyboard-move.x68')
-            const emulator = M68KEmulator(code, instantKeyboard())
+            const emulator = M68KEmulator(code)
             await emulator.compile(0, code)
             emulator.peripherals.keyboard.pressKey(KEY_CODES.RIGHT_ARROW)
             await emulator.run(limit)
@@ -3469,9 +3453,9 @@ describe('M68K IRQs and stop', () => {
     /** `stop` with nothing set up to wake it. */
     const STOPS_FOR_GOOD = ['    moveq #1,d0', '    stop #$2300', '    moveq #2,d0'].join('\n')
 
-    async function build(body: string, options = {}) {
+    async function build(body: string) {
         const code = ORG + body
-        const emulator = M68KEmulator(code, options)
+        const emulator = M68KEmulator(code)
         await emulator.compile(200, code)
         return emulator
     }
@@ -3666,10 +3650,7 @@ describe('M68K IRQs and stop', () => {
 
     it('says in a Step’s note which request the mask holds back', async () => {
         //a key at level 5 under `stop #$2500`: it is latched, and the processor sleeps on
-        const emulator = await build(
-            KEY_PROGRAM.replace('stop #$2000', 'stop #$2500'),
-            instantKeyboard()
-        )
+        const emulator = await build(KEY_PROGRAM.replace('stop #$2000', 'stop #$2500'))
         const { run } = await runUntilStopped(emulator)
         emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
         emulator.pause()
@@ -3702,7 +3683,7 @@ describe('M68K IRQs and stop', () => {
     })
 
     it('wakes on a key down the program asked an IRQ for, and not on the mouse it did not', async () => {
-        const emulator = await build(KEY_PROGRAM, instantKeyboard())
+        const emulator = await build(KEY_PROGRAM)
         const { run } = await runUntilStopped(emulator)
         emulator.peripherals.mouse.moveTo(10, 10)
         emulator.peripherals.mouse.buttonDown('left')
@@ -3717,8 +3698,50 @@ describe('M68K IRQs and stop', () => {
         emulator.dispose()
     })
 
+    it('lets each key-down handler read the key that raised it', async () => {
+        //the key state changes at the event, as EASy68K's does (ADR 0066): B's handler reads B
+        //with task 19, not A, the key before it
+        const emulator = await build(
+            [
+                '    move.l #key,$74',
+                ...trap(62, ['    move.w #$0501,d1']).trimEnd().split('\n'),
+                'wait:',
+                '    stop #$2000',
+                '    cmp.w #2,d5',
+                '    bne wait',
+                ...trap(9).trimEnd().split('\n'),
+                'key:',
+                ...trap(19, ['    moveq #0,d1']).trimEnd().split('\n'),
+                '    lsl.l #8,d7', //the key before moves up a byte
+                '    move.b d1,d7', //the last key down is the low word
+                '    addq.w #1,d5',
+                '    rte'
+            ].join('\n')
+        )
+        const { run } = await runUntilStopped(emulator)
+        emulator.pause()
+        await run
+        async function stepUntilHandled(count: bigint) {
+            for (let steps = 0; registerOf(emulator, 'D5') < count; steps++) {
+                if (steps > 20) throw new Error(`handler ${count} never ran`)
+                await emulator.step()
+            }
+        }
+        const { keyboard } = emulator.peripherals
+        const [A, B] = [letterKeyCode('a'), letterKeyCode('b')]
+        //typed as a person types: A goes down and up, then B goes down
+        keyboard.pressKey(A)
+        keyboard.releaseKey(A)
+        await stepUntilHandled(1n)
+        keyboard.pressKey(B)
+        await stepUntilHandled(2n)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D7')).toBe(BigInt((A << 8) | B))
+        emulator.dispose()
+    })
+
     it('takes back an IRQ with Undo, which makes its request pending again', async () => {
-        const emulator = await build(KEY_PROGRAM, instantKeyboard())
+        const emulator = await build(KEY_PROGRAM)
         const { run } = await runUntilStopped(emulator)
         emulator.pause()
         await run
@@ -3760,7 +3783,7 @@ describe('M68K IRQs and stop', () => {
     it('says so when a Run takes a pending IRQ first and comes back to its own Breakpoint', async () => {
         //a handler that returns, to the `bra` after the stop
         const code = KEY_PROGRAM.replace('    move.b #9,d0\n    trap #15', '    rte')
-        const emulator = await build(code, instantKeyboard())
+        const emulator = await build(code)
         emulator.toggleBreakpoint(7)
         const { run } = await runUntilStopped(emulator)
         //a key wakes it, the handler returns, and the Run stops on the `bra`'s Breakpoint
@@ -4427,9 +4450,9 @@ describe('M68K 68020 supervisor model', () => {
     const OPT_68020 = '    opt p=68020\n'
 
     /** Built with a history; the body starts at line 3. */
-    async function build(body: string, opt = OPT_68020, options = {}) {
+    async function build(body: string, opt = OPT_68020) {
         const code = opt + ORG + body
-        const emulator = M68KEmulator(code, options)
+        const emulator = M68KEmulator(code)
         await emulator.compile(200, code)
         return emulator
     }
@@ -4542,7 +4565,7 @@ describe('M68K 68020 supervisor model', () => {
     })
 
     it('enters the master state, where A7 and the Stack region follow the MSP', async () => {
-        const emulator = await build(MASTER_STATE + '\n', OPT_68020, instantKeyboard())
+        const emulator = await build(MASTER_STATE + '\n')
         for (let i = 0; i < 6; i++) await emulator.step()
         //`movec d0,msp` is a write of the MSP
         expect(emulator.latestSteps[0].mutations).toEqual([
@@ -4571,7 +4594,7 @@ describe('M68K 68020 supervisor model', () => {
     })
 
     it('takes an interrupt in the master state with a throwaway frame, and rte returns through it', async () => {
-        const emulator = await build(MASTER_STATE + '\n', OPT_68020, instantKeyboard())
+        const emulator = await build(MASTER_STATE + '\n')
         for (let i = 0; i < 9; i++) await emulator.step()
         expect(registerOf(emulator, 'A7')).toBe(0x7ffcn)
         emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)

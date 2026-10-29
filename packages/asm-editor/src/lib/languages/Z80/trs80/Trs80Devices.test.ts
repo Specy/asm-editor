@@ -17,7 +17,7 @@ import {
  */
 function makeDevices() {
     const screen = new Screen({ width: 256, height: 192, penColor: WHITE, backgroundColor: BLACK })
-    const keyboard = new Keyboard({ holdIntervalMs: 0 })
+    const keyboard = new Keyboard()
     const memory = new Uint8Array(0x10000)
     const devices = new Trs80Devices({ screen, keyboard })
     devices.attach(memory)
@@ -166,9 +166,8 @@ describe('the keyboard matrix', () => {
         devices.enable()
         keyboard.pressKey(0x41) //row 0 bit 1
         keyboard.pressKey(KEY_CODES.SPACE) //row 6 bit 7
-        //a read applies one queued transition, so the second press lands on the second read: that
-        //is ADR 0008's hold interval, the same rate the key-state port has always polled at
-        expect(devices.readMemory(0x38ff)).toBe(0b10)
+        //both presses show on the first read, as the wires of a real matrix would (ADR 0066)
+        expect(devices.readMemory(0x38ff)).toBe(0b10000010)
         expect(devices.readMemory(0x3801)).toBe(0b10)
         expect(devices.readMemory(0x3840)).toBe(0b10000000)
         expect(devices.readMemory(0x3841)).toBe(0b10000010)

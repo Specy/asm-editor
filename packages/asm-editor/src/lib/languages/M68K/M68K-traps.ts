@@ -252,7 +252,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.L = four key codes, or 0 for the last keys',
         output: 'D1.L = four $FF/$00 bytes, or the last key up in the high word and the last key down in the low word',
         description:
-            'Reads whether up to four keys are held right now, one byte of the answer per key code in the same order; with D1.L = 0 it answers with the last key released and the last key pressed instead. A key held down is reported at least once however briefly it was tapped, so a polling loop never misses one.'
+            'Reads whether up to four keys are held right now, one byte of the answer per key code in the same order; with D1.L = 0 it answers with the last key released and the last key pressed instead. A key counts as held from the moment it goes down until it comes up, so a key tapped between two reads is not held at the second; the last key pressed and released still name it. In a key IRQ handler, the last key pressed, or released for a key-up IRQ, is the key that raised it.'
     },
     {
         task: 20,

@@ -414,8 +414,9 @@ Each one cost time to rediscover, which is why it is written down.
   them on a virtual clock that jumps to the next firing while the program waits in `stop`, and
   neither has a keyboard or a mouse. So a playground that waits in `stop` needs a timer that wakes
   it: the content test would otherwise wait for ever, and a Testcase fails saying nothing can raise
-  the request. A key-down handler that reads task 19 once can be answered with the key before, as
-  the keyboard applies one queued change per read (ADR 0008), so the lecture counts presses.
+  the request. The key state changes at the event, as EASy68K's does (ADR 0066), so a key-down
+  handler reads the key that raised it with task 19 and `d1.l` = 0; the lecture's handler counts
+  the presses of Space that way, saving `d0` and `d1` with `movem`.
 - The Core counts a 68000's clock cycles. Task 30 clears the counter and task 31 reads it into
   `d1.l`; the reading includes the `moveq #31, d0` before it, 4 cycles. Read every count off a run,
   not the manual.

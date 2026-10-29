@@ -112,13 +112,14 @@ holds the level in its high byte and the events in its low byte: bit 0 for a key
 1 for a key coming up. `move.w #$0501, d1` asks for a level-5 request on every key press, through
 the autovector at `$74`. Task 60 does the same for the mouse, with bit 2 for its moves.
 
-This program counts the keys you press in five seconds, with a level-2 timer counting the
-seconds. Run it, **click the screen panel** so that it gets the keyboard, and press keys: letters,
-Space or the arrows, any key counts. Holding one down counts once. After five seconds the program
+This program counts how many times you press Space in five seconds, with a level-2 timer counting
+the seconds. Run it, **click the screen panel** so that it gets the keyboard, and press Space a few
+times, with other keys in between. Holding Space down counts once. After five seconds the program
 writes on the screen how many there were.
 
 ```m68k|playground|open-screen|no-flags
 SECONDS equ 5
+SPACE   equ $20             ; the Space key's code
 
     move.l #key_down, $74   ; level 5's autovector: a key went down
     move.l #second, $68     ; level 2's autovector: the timer
@@ -142,29 +143,39 @@ wait:
     trap #15
 
 key_down:
-    addq.l #1, d6           ; one more key
+    movem.l d0-d1, -(sp)    ; task 19 changes d0 and d1: save them
+    moveq #0, d1            ; d1.l = 0: the last keys
+    move.b #19, d0
+    trap #15
+    cmp.w #SPACE, d1        ; the last key pressed is in the low word
+    bne not_space
+    addq.l #1, d6           ; one more Space
+not_space:
+    movem.l (sp)+, d0-d1    ; and put them back
     rte
 second:
     addq.w #1, d7           ; one more second
     rte
 
-result: dc.b 'Keys pressed: ', 0
+result: dc.b 'Spaces pressed: ', 0
 ```
 
 `stop` lets the program go on after any request, so the loop checks whether the time is up, and
 waits again when it is not.
 
-A handler could check particular keys with task 19. But the keyboard applies one change per read,
-at least 30 milliseconds apart, as the screen lecture explained, so a single read made at once may
-still report the keys as they were before this press. Counting the presses, as here, needs no read
-at all.
+Every key raises the request, so the handler asks which one it was. Task 19 with `d1.l` = 0
+answers with the last key released in the high word of `d1` and the last key pressed in the low
+word. The keyboard updates both the moment a key goes down or comes up, before the request is
+raised, so in a key-down handler the last key pressed is the key that raised it. The handler uses
+`d0` and `d1` for the task, and the program may be using them too, between `move.l d6, d1` and its
+`trap #15`, so it saves them with `movem` first and puts them back before `rte`.
 
 ## Why interrupts beat polling
 
 The arrow-key program called task 19 about fifty times a second for as long as it ran, and almost
-every answer was "no key". This one asks nothing. A key reaches it the moment it is pressed, and
-between two presses it runs nothing at all. On a real machine that is time the processor can spend
-on other work, or power it does not use.
+every answer was "no key". This one asks only when a key has gone down. A key reaches it the moment
+it is pressed, and between two presses it runs nothing at all. On a real machine that is time the
+processor can spend on other work, or power it does not use.
 
 There is a price. The program no longer decides when the work happens: a handler can run between
 any two of its instructions. So a handler leaves the registers alone, and the program, in turn,

@@ -7,7 +7,7 @@ import { DEFAULT_DOUBLE_CLICK_INTERVAL_MS, Mouse, MOUSE_EVENT_COUNTER_MODULO } f
 function makeMouse(width = 320, height = 200) {
     const size = { width, height }
     const clock = { time: 0 }
-    const keyboard = new Keyboard({ now: () => clock.time })
+    const keyboard = new Keyboard()
     const mouse = new Mouse({
         screen: { getSize: () => size },
         keyboard,

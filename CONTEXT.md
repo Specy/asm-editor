@@ -114,7 +114,7 @@ The Peripheral representing a program's graphical output through its simulator e
 
 ## Keyboard
 
-The Peripheral representing keyboard input for a program interacting with the **Screen**, observed either as typed characters or as key state. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use. On M68K a key going down or up can also raise an **IRQ** the program asked for.
+The Peripheral representing keyboard input for a program interacting with the **Screen**, observed either as typed characters or as key state. Typed characters wait in a queue that never drops one. The key state is EASy68K's: a key is down or up from the moment it goes down or comes up, the codes of the last key pressed and the last key released are kept, and a read answers the state as it is then, with no queue or pacing. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use. On M68K a key going down or up can also raise an **IRQ** the program asked for, whose handler reads the key that raised it. See [ADR 0008](./docs/adr/0008-poll-keyboard-and-mouse-input.md) and [ADR 0066](./docs/adr/0066-key-state-changes-at-the-event.md).
 
 ## Mouse
 

@@ -194,17 +194,17 @@ become visible as flicker.
 ## The keyboard
 
 For movement, task **19** reads up to four named keys. Put their key codes in `d1.l`, one per
-byte, then put `19` in `d0.b` and call `trap #15`. It returns four bytes in `d1.l`: `$FF` for an
-observed down key and `$00` otherwise, in the same order. The highest answer byte belongs to the
+byte, then put `19` in `d0.b` and call `trap #15`. It returns four bytes in `d1.l`: `$FF` for a
+key that is down and `$00` otherwise, in the same order. The highest answer byte belongs to the
 highest request byte.
 
-The keyboard queues presses and releases that reach the focused Screen panel. Each task 19 read
-applies **at most one** queued change; after applying one, it waits at least 30 milliseconds before
-applying the next. Its answer is therefore the key state the program has observed so far, which may
-lag behind the physical key. A quick press and release of a repeatedly polled key is seen as down
-on one read before its release is applied on a later read. A press that never reaches the Screen
-panel—for example, because it lacks focus—cannot be reported. The program must keep polling the
-same key while it runs.
+Task 19 answers with the keys as they are **at the moment of the read**. A key is down from the
+moment it is pressed on the focused Screen panel until it is released, so a program that follows a
+key keeps polling it while it runs, usually once a frame. A tap that begins and ends between two
+reads is already up at the second one. Task 19 with `d1.l` = 0 still catches it: it answers with
+the code of the last key released in the high word and the last key pressed in the low word, and
+both stay until another key replaces them. A press that never reaches the Screen panel—for
+example, because it lacks focus—cannot be reported.
 
 The arrows used below have codes left `$25`, up `$26`, right `$27`, down `$28`. Packing them in
 that order gives the request `$25262728`; the returned high byte answers for left, and the low
