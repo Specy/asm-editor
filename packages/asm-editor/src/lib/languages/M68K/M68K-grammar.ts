@@ -3,7 +3,6 @@ import {
     M68KDirectives,
     M68KRecognizedInstructions,
     M68KRefusedDirectives,
-    M68KRefusedInstructions,
     M68KUnimplementedDialectInstructions
 } from './M68K-documentation'
 
@@ -31,7 +30,7 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
 
     keywords: M68KRecognizedInstructions,
     //the 68010's and 68020's instructions s68k does not implement yet are refused like `stop`
-    refusedKeywords: [...M68KRefusedInstructions, ...M68KUnimplementedDialectInstructions],
+    refusedKeywords: [...M68KUnimplementedDialectInstructions],
     symbols: /[(),.:]/,
     operators: ['+', '-', '*', '/', '\\', '&', '!', '|', '^', '<<', '>>', '~'],
 

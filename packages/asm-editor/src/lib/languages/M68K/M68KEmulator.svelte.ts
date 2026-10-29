@@ -2,11 +2,13 @@ import { memoryLayoutFromItems } from '../memoryRegions'
 import {
     ccrToFlagsArray,
     type CodeWrite,
+    type DeviceEvent,
     type ExecutionStep as CoreExecutionStep,
     type FileDialogMode,
     type InputSettings,
     type InstructionLine,
     Interpreter,
+    type MachineState,
     type MemoryRange,
     InterpreterStatus as CoreInterpreterStatus,
     type Interrupt,
@@ -27,6 +29,7 @@ import {
 import {
     type BuildArtifact,
     type ChangedCode,
+    type CycleCount,
     type DataLabel,
     type Diagnostic,
     type EmulatorDecoration,
@@ -43,7 +46,10 @@ import {
     RegisterSize,
     type StackFrame
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
+import {
+    ANIMATING_PANEL_REFRESH_MS,
+    GenericEmulator
+} from '#lib/languages/GenericEmulator.svelte.ts'
 import type { OpenedSound } from '#lib/languages/peripherals/audio/Audio.ts'
 import type { SynthBus } from '#lib/languages/peripherals/audio/Synth.ts'
 import { SYNTH_BASES, SYNTH_BLOCK_SIZE } from '#lib/languages/synthRegisters.ts'
@@ -54,6 +60,11 @@ import { getM68kErrorMessage, getM68kTerminationMessage } from '#lib/languages/M
 import {
     M68K_FIRST_USER_VECTOR,
     M68K_VECTOR_TABLE_END,
+    m68kAutovectorLevel,
+    m68kExceptionName,
+    m68kInterruptAbove,
+    m68kInterruptMask,
+    m68kIrqGetsThrough,
     m68kVectorAddress,
     m68kVectorName
 } from '#lib/languages/M68K/M68K-vectors.ts'
@@ -71,12 +82,13 @@ import {
     FileSystemGuestError,
     type FileSystemSession
 } from '#lib/languages/peripherals/FileSystem.ts'
-import type { MouseSnapshot } from '#lib/languages/peripherals/Mouse.ts'
+import type { MouseEventKind, MouseSnapshot } from '#lib/languages/peripherals/Mouse.ts'
 import type { TerminalReadOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { echoToScreen } from '#lib/languages/peripherals/screen/textEcho.ts'
 import { ScreenInstructionHistory } from '#lib/languages/peripherals/screen/ScreenInstructionHistory.ts'
 import type { BuildInput, BuildSources } from '#lib/projectFiles.ts'
 import { buildOutputPath } from '#lib/buildOutput.ts'
+import { IrqTimers } from './irqTimers'
 import { m68kAssemblyFiles } from './m68kAssemblyFiles'
 import { s68kDiagnosticToDiagnostic } from './m68kDiagnostics'
 
@@ -244,6 +256,13 @@ export const m68kSRecordOutput = { enabled: false }
  */
 const ENDED_BY_THE_EDITOR = 'The editor ended the program at a trap #15 task it cannot carry out'
 
+/** The Core's name for each Mouse event a program can ask an IRQ for with task 60. */
+const MOUSE_DEVICE_EVENTS: Record<MouseEventKind, DeviceEvent> = {
+    down: 'mouseDown',
+    up: 'mouseUp',
+    move: 'mouseMove'
+}
+
 const sizeMap = {
     [Size.Byte]: RegisterSize.Byte,
     [Size.Word]: RegisterSize.Word,
@@ -298,6 +317,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     } | null = null
     /** The program's labels by address, for the handler an exception went to (`labelAt`). */
     private labels: Map<number, string> | null = null
+    /** The timers the program set with task 32, which the editor runs during a Run. */
+    private readonly irqTimers = new IrqTimers()
+    /** Ends the wait of a processor `stop` stopped, when a key or the mouse woke it. */
+    private wakeFromStop: (() => void) | undefined
+    /** Stops hearing the Screen's Keyboard and Mouse, once the Emulator is disposed. */
+    private readonly stopHearingDevices: () => void
 
     constructor(source: BuildInput, options: EmulatorSettings) {
         super(
@@ -316,6 +341,17 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 initialMemoryValue: options.initialMemoryValue ?? 0xff
             }
         )
+        //a key or the mouse on the Screen is told to the Core as it happens, which raises the IRQ
+        //the program asked for on it ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md))
+        const { keyboard, mouse } = this._peripherals
+        const fromKeyboard = keyboard.onKeyEvent((event) => this.reportDeviceEvent(event))
+        const fromMouse = mouse.onMouseEvent((event) =>
+            this.reportDeviceEvent(MOUSE_DEVICE_EVENTS[event])
+        )
+        this.stopHearingDevices = () => {
+            fromKeyboard()
+            fromMouse()
+        }
     }
 
     protected getInstance(): Interpreter | null {
@@ -453,6 +489,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         })
         this.interpreter = interpreter
         this.forgetPlacedCode()
+        //the program sets its timers itself, with task 32
+        this.irqTimers.clear()
+        this.wakeFromStop = undefined
         //the Synth's registers start at 0, as a chip's do at power-on, where the Core's memory
         //starts at $FF, except where the program put code or data of its own, which is left alone;
         //then every store into them stops the Core, which hands it over as it happens
@@ -480,6 +519,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _dispose(): void {
+        this.stopHearingDevices()
         this.interpreter?.dispose()
         this.program?.dispose()
         this.interpreter = null
@@ -628,16 +668,19 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     frame.label_location === undefined
                         ? m68kAddress(frame.address)
                         : frame.label_name
+                //an IRQ's frame is named for its level, `IRQ 2 → timer`
+                const level = vector === undefined ? undefined : m68kAutovectorLevel(vector)
+                const what = level === undefined ? 'An exception' : `An IRQ at level ${level}`
                 return {
                     address: BigInt(frame.address),
                     name:
                         vector === undefined
                             ? frame.label_name
-                            : `${m68kVectorName(vector)} → ${handler}`,
+                            : `${m68kExceptionName(vector)} → ${handler}`,
                     ...(vector === undefined
                         ? {}
                         : {
-                              detail: `An exception, taken through vector ${vector} at ${m68kVectorAddress(vector)}: \`rte\` returns to ${m68kAddress(frame.source_address)}`
+                              detail: `${what}, taken through vector ${vector} at ${m68kVectorAddress(vector)}: \`rte\` returns to ${m68kAddress(frame.source_address)}`
                           }),
                     line: frame.label_location?.line ?? -1,
                     file: frame.label_location?.file,
@@ -829,6 +872,23 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 }
             }
             const mutations = this.stepMutations(step)
+            //an IRQ ran no instruction: its row is the request it took and the handler it went to,
+            //"IRQ 2 → timer at $102C", on no line ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+            //decision 28)
+            if (step.kind === 'irq') {
+                return {
+                    kind: 'irq',
+                    pc: step.pc,
+                    old_ccr: step.old_ccr,
+                    new_ccr: step.new_ccr,
+                    line: -1,
+                    cycles: step.cycles,
+                    mutations,
+                    ...(mutations.some((mutation) => mutation.type === 'TakeException')
+                        ? {}
+                        : { title: this.unhandledIrqTitle(step) })
+                }
+            }
             //the row of an instruction that wrote into code says so, as the Run's pause did
             if (step.wroteCode) {
                 mutations.push({
@@ -853,6 +913,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 new_ccr: step.new_ccr,
                 line: step.location?.line ?? -1,
                 file: step.location?.file,
+                cycles: step.cycles,
                 mutations,
                 ...(disassembly === undefined ? {} : { disassembly })
             }
@@ -880,7 +941,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                         type: 'TakeException',
                         value: {
                             vector,
-                            name: m68kVectorName(vector),
+                            name: m68kExceptionName(vector),
                             from: BigInt(from),
                             handler: BigInt(handler),
                             ...(label === undefined ? {} : { label })
@@ -915,6 +976,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     })
                     break
                 }
+                case 'SetMachineState':
+                    rest.push(
+                        ...machineStateChanges(mutation.value.old, mutation.value.new, step.new_sr)
+                    )
+                    break
                 default:
                     rest.push(convertMutation(mutation))
             }
@@ -933,6 +999,28 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             })
         }
         return [...exceptions, ...rest]
+    }
+
+    /**
+     * The row of an IRQ the program ended on, whose autovector held no handler, so that it pushed
+     * nothing to name it by: "IRQ 3: vector 27 at $00006C holds no handler", the level read from how
+     * the program ended. Only the newest step can be that one.
+     */
+    private unhandledIrqTitle(step: CoreExecutionStep): string {
+        const interpreter = this.interpreter
+        const ended = interpreter?.getTermination()
+        const newest = interpreter?.getUndoHistory(1)[0]
+        if (
+            ended?.type !== 'Exception' ||
+            ended.value.cause.type !== 'Irq' ||
+            newest?.id !== step.id
+        )
+            return 'IRQ'
+        const { level } = ended.value.cause.value
+        const vector = ended.value.vector
+        return vector === undefined
+            ? `IRQ ${level}`
+            : `IRQ ${level}: vector ${vector} at ${m68kVectorAddress(vector)} holds no handler`
     }
 
     _hasTerminated(): boolean {
@@ -1000,6 +1088,17 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     async _step(): Promise<{ terminated: boolean }> {
         const interpreter = this.requireInterpreter()
         const execution = this.executionController.capture()
+        //a processor `stop` stopped runs nothing until an IRQ above its mask comes, and a Step,
+        //which meets no timer, does not wait for one: it says so ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+        //decision 29). One that a pending request woke takes that IRQ, a step of its own
+        if (interpreter.getStatus() === CoreInterpreterStatus.Stopped) {
+            const mask = m68kInterruptMask(interpreter.getSr())
+            this.addNote({
+                tone: 'info',
+                text: `Step ran nothing: the processor is stopped, waiting for ${m68kInterruptAbove(mask)}, and ${heldBack(interpreter.getMachineState().pendingIrqs)}. Run waits for one, from a timer, a key or the mouse.`
+            })
+            return { terminated: false }
+        }
         interpreter.step()
         if (interpreter.getStatus() === CoreInterpreterStatus.Interrupt) {
             const wait = await this.handleInterrupt(
@@ -1071,6 +1170,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
         }
         const step = interpreter.undo()
+        //a timer the step set, or turned off, is as the Core now has it
+        this.irqTimers.sync(interpreter.getMachineState().autoIrqs, this._peripherals.clock.now())
         //the Synth plays its block as the Core rewound it, a Poke's included
         const readSynth = () => interpreter.readMemoryBytes(SYNTH_BASE, SYNTH_BLOCK_SIZE)
         //a Poke has no instruction identity, so no journal hung anything on it and each must be
@@ -1112,6 +1213,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //a store into the program's own code pauses the Run after it, unless the person turned
         //that off; a Testcase and a Step never pause for it
         const stopOnCodeWrite = this.pausesOnCodeWrite
+        //the timers run during a Run only, counted from its start as EASy68K's are, and what
+        //fired since the last slice reaches the Core here, between two slices
+        this.runTimers(interpreter, request.startsRun === true)
+        //an IRQ ready as the Run starts is its first step, past the Breakpoint it starts on
+        const irqFirst = startsTheRun && hasBreakpoints && this.irqReady(interpreter)
+        const startPc = interpreter.getPc()
         while (!interpreter.hasTerminated()) {
             const remaining = budget - ran()
             if (remaining <= 0) {
@@ -1138,6 +1245,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     }
                     //here we might have reached a breakpoint. It is paused if the status is running
                     if (status === CoreInterpreterStatus.Running) {
+                        if (irqFirst && returnedTo(interpreter, startPc)) {
+                            this.noteIrqBeforeBreakpoint()
+                        }
                         return { reason: 'breakpoint', instructions: ran() }
                     }
                 } else {
@@ -1154,6 +1264,14 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             //directive before pausing, so a later Run or Step continues with the next instruction.
             if (interpreter.getStatus() === CoreInterpreterStatus.Paused) {
                 return { reason: 'paused', instructions: ran() }
+            }
+            //`stop`: the processor waits for an IRQ, and the Run with it, without running anything
+            if (interpreter.getStatus() === CoreInterpreterStatus.Stopped) {
+                return {
+                    reason: 'wait',
+                    instructions: ran(),
+                    wait: this.waitForIrq(interpreter, execution)
+                }
             }
             const stopped = interpreter.getStatus()
             const wait = await this.handleInterpreterInterruption(interpreter, execution)
@@ -1172,6 +1290,152 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             if (wrote && !interpreter.hasTerminated()) return this.pauseForCodeWrite(wrote, ran())
         }
         return { reason: 'terminated', instructions: ran() }
+    }
+
+    /**
+     * The program's timers, task 32's, against the Core's settings, and the IRQs of those that
+     * fired by now raised: a firing reaches the Core between two slices, at most a slice late
+     * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 19). `restart` counts
+     * every timer from now, as a Run starts.
+     */
+    private runTimers(interpreter: Interpreter, restart: boolean): void {
+        const now = this._peripherals.clock.now()
+        this.irqTimers.sync(interpreter.getMachineState().autoIrqs, now)
+        if (restart) this.irqTimers.restart(now)
+        if (interpreter.hasTerminated()) return
+        for (const level of this.irqTimers.due(now)) interpreter.raiseIrq(level)
+    }
+
+    /** Whether a request is pending above the interrupt mask, which the next step takes. */
+    private irqReady(interpreter: Interpreter): boolean {
+        const mask = m68kInterruptMask(interpreter.getSr())
+        return interpreter
+            .getMachineState()
+            .pendingIrqs.some((level) => m68kIrqGetsThrough(level, mask))
+    }
+
+    /**
+     * Says why a Run stopped at once on the Breakpoint it started from: an IRQ was ready, so it was
+     * the Run's first step rather than the Breakpoint's instruction, and its handler came back to
+     * that instruction, whose Breakpoint stops it as any other does
+     * ([ADR 0023](../../../../../../docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md)).
+     */
+    private noteIrqBeforeBreakpoint(): void {
+        this.addNote({
+            tone: 'info',
+            text: 'Run took a pending IRQ first, and its handler returned to the Breakpoint the Run started from, so the Run stopped there again. Run again to go on.'
+        })
+    }
+
+    /**
+     * The wait of a processor `stop` stopped ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+     * decisions 17 and 29). It ends when the next timer fires, when a key or the mouse raises an
+     * IRQ that wakes the processor, at a Pause or at Stop, and spends none of the host's time
+     * meanwhile; the slice after it takes the IRQ. A timer the interrupt mask holds back does not
+     * end it: its firings are latched when the wait ends, as the next slice latches them. Meanwhile
+     * the panels show where the program stopped, and the status line what it waits for. A Pause
+     * leaves the processor stopped, and the status line saying so.
+     *
+     * A wait the next timer ends sooner than the panels' slowest refresh is a program pacing
+     * itself, a game's frame, and refreshes them at the running rate: forcing them every frame read
+     * the whole Core sixty times a second. A longer one, or one only a key or the mouse ends, shows
+     * them current, as an input prompt does.
+     */
+    private waitForIrq(interpreter: Interpreter, execution: ExecutionGeneration): Promise<void> {
+        const clock = this._peripherals.clock
+        this.irqTimers.sync(interpreter.getMachineState().autoIrqs, clock.now())
+        const mask = m68kInterruptMask(interpreter.getSr())
+        const untilTimer = this.irqTimers.untilNext(clock.now(), (level) =>
+            m68kIrqGetsThrough(level, mask)
+        )
+        this.refreshInputState(
+            toInstruction(interpreter.getLastInstruction()),
+            untilTimer === undefined || untilTimer > ANIMATING_PANEL_REFRESH_MS
+        )
+        //the status line says it whether or not the panels were read
+        this.state.runStatus = this._getRunStatus()
+        const timer = new AbortController()
+        const woken = new Promise<void>((resolve) => {
+            this.wakeFromStop = resolve
+            //an aborted timer is one the wait no longer needs
+            if (untilTimer !== undefined)
+                clock.wait(untilTimer, timer.signal).then(resolve, () => {})
+        })
+        const over = () => {
+            timer.abort()
+            this.wakeFromStop = undefined
+        }
+        return this.executionController.whileUnpaused(execution, woken).then(
+            () => {
+                over()
+                //what fired meanwhile, masked timers included, is latched now: a Pause takes no
+                //slice after the wait, and the next Run counts the timers afresh
+                this.runTimers(interpreter, false)
+                //woken: the program runs on, and says what it does next once it is read again
+                if (!this.executionController.pauseRequested) this.state.runStatus = undefined
+            },
+            (error: unknown) => {
+                over()
+                throw error
+            }
+        )
+    }
+
+    /**
+     * A key or the mouse on the Screen, told to the Core as it happens: the Core latches the IRQ the
+     * program asked for on that event with task 62 or 60, if it asked for one, and a processor
+     * `stop` stopped wakes when that request gets past its mask
+     * ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)). A Testcase has no
+     * keyboard or mouse, and a program that has ended takes no request.
+     */
+    private reportDeviceEvent(event: DeviceEvent): void {
+        const interpreter = this.interpreter
+        if (!interpreter || this._peripherals.clock.isVirtual || interpreter.hasTerminated()) return
+        if (interpreter.deviceEvent(event) === null) return
+        if (interpreter.getStatus() !== CoreInterpreterStatus.Stopped) this.wakeFromStop?.()
+    }
+
+    /**
+     * What the program waits for while `stop` has stopped the processor, for the status line
+     * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 29): "Stopped:
+     * waiting for an interrupt above level 3", adding when nothing the program set up can raise
+     * one, and once a request has woken it, that the next step takes it.
+     */
+    _getRunStatus(): string | undefined {
+        const interpreter = this.interpreter
+        if (!interpreter || interpreter.hasTerminated()) return undefined
+        const machine = interpreter.getMachineState()
+        if (!machine.stopped) return undefined
+        const mask = m68kInterruptMask(interpreter.getSr())
+        if (interpreter.getStatus() !== CoreInterpreterStatus.Stopped) {
+            const ready = machine.pendingIrqs.filter((level) => m68kIrqGetsThrough(level, mask))
+            return ready.length > 0
+                ? `Stopped: IRQ ${Math.max(...ready)} is pending, and the next step takes it`
+                : 'Stopped: woken, and the next step goes on'
+        }
+        const waiting = `Stopped: waiting for ${m68kInterruptAbove(mask)}`
+        const sources = [
+            ...machine.autoIrqs.filter((timer) => timer.intervalMs > 0).map((timer) => timer.level),
+            ...Object.values(machine.keyboardLevels),
+            ...Object.values(machine.mouseLevels)
+        ]
+        return sources.some((level) => level > 0 && m68kIrqGetsThrough(level, mask))
+            ? waiting
+            : `${waiting}, which nothing the program set up can raise`
+    }
+
+    /**
+     * The cycle counter under the registers ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+     * decisions 23 and 30): the 68000's clock cycles since the program started or task 30 cleared
+     * it, which Undo takes back, and what the newest step took, an IRQ's 44 included. A Poke ran
+     * nothing, so after one the counter shows no step's cost.
+     */
+    _getCycles(): CycleCount | undefined {
+        const interpreter = this.interpreter
+        if (!interpreter) return undefined
+        const newest = interpreter.getUndoHistory(1)[0]
+        const total = interpreter.getCycles()
+        return newest && newest.kind !== 'poke' ? { total, last: newest.cycles } : { total }
     }
 
     /** The Preference that pauses a Run after the program writes into its code, on by default. */
@@ -1217,6 +1481,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const execution = this.executionController.capture()
         const first = interpreter.getExecutedInstructions()
         while (!interpreter.hasTerminated()) {
+            //a Testcase's timers fire on its virtual clock, which only waits move
+            this.runTimers(interpreter, false)
             //one limit for the whole Testcase, however often a trap or a store into the Synth's
             //block stops the Core: a program looping on either would otherwise never end
             const remaining = limit - (interpreter.getExecutedInstructions() - first)
@@ -1233,11 +1499,56 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             //halt — a subroutine in the usual EASy68K layout — and asserted against registers the
             //program never produced.
             if (interpreter.getStatus() === CoreInterpreterStatus.Paused) return
+            //`stop`: the virtual clock jumps to the next timer that can wake the processor, so a
+            //program driven by its timers runs at once, and one nothing can wake fails saying so
+            //([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 19 and 29)
+            if (interpreter.getStatus() === CoreInterpreterStatus.Stopped) {
+                await this.skipToNextTimer(interpreter, execution)
+                continue
+            }
             //a testcase runs unsliced, so a wait is awaited here; its clock is the virtual one, on
             //which waits complete at once (ADR 0010)
             const wait = await this.handleInterpreterInterruption(interpreter, execution)
             if (wait) await this.executionController.waitFor(execution, () => wait)
         }
+    }
+
+    /**
+     * A Testcase's `stop`: its clock moves on to the next firing of a timer whose level gets past
+     * the interrupt mask, which the loop then raises. A Testcase has no keyboard or mouse, so with
+     * no such timer nothing can ever wake the processor, and the Testcase fails saying why rather
+     * than running into its instruction limit.
+     */
+    private async skipToNextTimer(
+        interpreter: Interpreter,
+        execution: ExecutionGeneration
+    ): Promise<void> {
+        const clock = this._peripherals.clock
+        const now = clock.now()
+        this.irqTimers.sync(interpreter.getMachineState().autoIrqs, now)
+        const mask = m68kInterruptMask(interpreter.getSr())
+        const until = this.irqTimers.untilNext(now, (level) => m68kIrqGetsThrough(level, mask))
+        if (until === undefined)
+            throw { type: 'Raw', value: this.unwakeableStop(interpreter, mask) }
+        await this.executionController.waitFor(execution, () => clock.wait(until))
+    }
+
+    /**
+     * Why a Testcase's program can never wake from its `stop`: "The program stopped at line 9
+     * waiting for an interrupt above level 0, which nothing in a Testcase can raise: it set no
+     * timer with task 32, and a Testcase has no keyboard or mouse".
+     */
+    private unwakeableStop(interpreter: Interpreter, mask: number): string {
+        const line = interpreter.getLastInstruction()?.location.line
+        const where = line === undefined ? '' : ` at line ${line + 1}`
+        const levels = this.irqTimers.levels
+        const timers =
+            levels.length === 0
+                ? 'it set no timer with task 32'
+                : levels.length === 1
+                  ? `its timer, at level ${levels[0]}, is held back by the interrupt mask`
+                  : `its timers, at levels ${levelList(levels)}, are held back by the interrupt mask`
+        return `The program stopped${where} waiting for ${m68kInterruptAbove(mask)}, which nothing in a Testcase can raise: ${timers}, and a Testcase has no keyboard or mouse`
     }
 
     /**
@@ -1302,6 +1613,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             case CoreInterpreterStatus.Paused:
             case CoreInterpreterStatus.Running:
             case CoreInterpreterStatus.TerminatedWithException:
+            case CoreInterpreterStatus.Stopped:
                 break
         }
         return undefined
@@ -1933,6 +2245,33 @@ function mouseFlagsOf(snapshot: MouseSnapshot): number {
     )
 }
 
+/** IRQ levels in a sentence, lowest first: "2", "2 and 5", "1, 2 and 5". */
+function levelList(levels: readonly number[]): string {
+    const sorted = [...levels].sort((a, b) => a - b)
+    const last = sorted.pop()
+    return sorted.length === 0 ? `${last}` : `${sorted.join(', ')} and ${last}`
+}
+
+/**
+ * What a stopped processor has pending, for a Step's note: "none is pending", or "IRQ 2 is pending
+ * but held back by the interrupt mask". Every request it has is held back, since one past the mask
+ * would have woken it.
+ */
+function heldBack(pending: readonly number[]): string {
+    if (pending.length === 0) return 'none is pending'
+    return pending.length === 1
+        ? `IRQ ${pending[0]} is pending but held back by the interrupt mask`
+        : `IRQs ${levelList(pending)} are pending but held back by the interrupt mask`
+}
+
+/** Whether the newest step is an `rte` back to `address`, as an IRQ handler's return. */
+function returnedTo(interpreter: Interpreter, address: number): boolean {
+    const [newest] = interpreter.getUndoHistory(1)
+    return !!newest?.mutations.some(
+        (mutation) => mutation.type === 'PopException' && mutation.value.to === address
+    )
+}
+
 /** The Core's way of saying "the limit I was given ran out": `{ type: 'ExecutionLimit', value }`. */
 function isExecutionLimitError(error: unknown): boolean {
     return (
@@ -2034,7 +2373,7 @@ type CoreMutation = CoreExecutionStep['mutations'][number]
 function convertMutation(
     mutation: Exclude<
         CoreMutation,
-        { type: 'WriteStackPointers' | 'PushException' | 'PopException' }
+        { type: 'WriteStackPointers' | 'PushException' | 'PopException' | 'SetMachineState' }
     >
 ): MutationOperation {
     switch (mutation.type) {
@@ -2108,6 +2447,45 @@ function stackPointerWrite(register: 'usp' | 'ssp', old: number, next: number): 
 
 function isReturnFromException(mutation: MutationOperation): boolean {
     return mutation.type === 'ReturnFromException'
+}
+
+/**
+ * What a step changed of the interrupt state, as the History names it
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28): a timer task 32
+ * set or turned off, "Set the level-2 timer to 500 ms"; a level task 62 or 60 gave an event,
+ * "Key down raises IRQ 5"; a `stop`, "Stopped until an interrupt above level 0"; and the IRQ that
+ * woke the processor, "Woke from stop". The requests the host latched and the IRQ taken say nothing
+ * here: the row of the IRQ names it already. `sr` is the status register after the step.
+ */
+function machineStateChanges(
+    old: MachineState,
+    next: MachineState,
+    sr: number
+): MutationOperation[] {
+    const changes: string[] = []
+    const before = new Map(old.autoIrqs.map((timer) => [timer.level, timer.intervalMs]))
+    const after = new Map(next.autoIrqs.map((timer) => [timer.level, timer.intervalMs]))
+    for (const [level, intervalMs] of after) {
+        if (before.get(level) !== intervalMs) {
+            changes.push(`Set the level-${level} timer to ${intervalMs} ms`)
+        }
+    }
+    for (const level of before.keys()) {
+        if (!after.has(level)) changes.push(`Turned the level-${level} timer off`)
+    }
+    const levels = (name: string, from: number, to: number) => {
+        if (from !== to) changes.push(`${name} raises ${to === 0 ? 'no IRQ' : `IRQ ${to}`}`)
+    }
+    levels('Key down', old.keyboardLevels.keyDown, next.keyboardLevels.keyDown)
+    levels('Key up', old.keyboardLevels.keyUp, next.keyboardLevels.keyUp)
+    levels('Mouse button down', old.mouseLevels.down, next.mouseLevels.down)
+    levels('Mouse button up', old.mouseLevels.up, next.mouseLevels.up)
+    levels('Mouse move', old.mouseLevels.move, next.mouseLevels.move)
+    if (!old.stopped && next.stopped) {
+        changes.push(`Stopped until ${m68kInterruptAbove(m68kInterruptMask(sr))}`)
+    }
+    if (old.stopped && !next.stopped) changes.push('Woke from stop')
+    return changes.map((value) => ({ type: 'Other', value }))
 }
 
 /**

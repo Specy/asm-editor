@@ -9,8 +9,8 @@ import {
 
 /**
  * The Keyboard peripheral: keyboard input for a program interacting with the Screen
- * ([ADR 0008](../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md)). Input is polled, never
- * delivered as a CPU interrupt, and a program observes it in two ways:
+ * ([ADR 0008](../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md)). Input is polled, and a
+ * program observes it in two ways:
  *
  * - the **typed-character queue**, which holds every character in press order and never drops one:
  *   an availability check asks whether it is empty and a read dequeues one character. It also
@@ -23,6 +23,10 @@ import {
  * key state, at most one per read and never faster than the hold interval, so a tap that lasts a
  * millisecond is still observed by a program that polls every frame. Typed characters do not wait
  * for the interval: they enter the queue the moment the key is pressed.
+ *
+ * A key going down or up is also told at once to whoever listens with `onKeyEvent`: the M68K
+ * adapter, whose program can ask for an IRQ on either ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)).
+ * Only that is immediate; the key state the handler then reads still follows the hold interval.
  *
  * Plain TypeScript with no Svelte runes and no DOM types, like the other peripherals: a Core reads
  * it from inside its synchronous execution and it has to run under node in tests. The phase 4
@@ -62,6 +66,9 @@ type KeyTransition = {
     down: boolean
 }
 
+/** A key going down or coming up, as a listener of `onKeyEvent` hears it. */
+export type KeyEventKind = 'keyDown' | 'keyUp'
+
 /** Neither task 19 nor the Z80 key ports have a "no key" code, so both start at zero, as EASy68K's do. */
 const NO_KEY: KeyCode = 0
 
@@ -77,6 +84,7 @@ export class Keyboard {
     /** The keys physically held, as delivered; ahead of `pressed` by the queued transitions. */
     private readonly held = new Set<KeyCode>()
     private readonly listeners = new Set<() => void>()
+    private readonly keyEventListeners = new Set<(event: KeyEventKind) => void>()
     private _lastKeyDown: KeyCode = NO_KEY
     private _lastKeyUp: KeyCode = NO_KEY
     private appliedAt: number | null = null
@@ -116,12 +124,14 @@ export class Keyboard {
         if (this.held.has(code)) return
         this.held.add(code)
         this.transitions.push({ code, down: true })
+        this.tell('keyDown')
     }
 
     /** Queues a release by key code. A key that is not held releases nothing. */
     releaseKey(code: KeyCode): void {
         if (!this.held.delete(code)) return
         this.transitions.push({ code, down: false })
+        this.tell('keyUp')
     }
 
     /**
@@ -194,6 +204,22 @@ export class Keyboard {
         return () => {
             this.listeners.delete(listener)
         }
+    }
+
+    /**
+     * Called when a key goes down or comes up, at the press itself rather than when the program
+     * reads the key state: what a device IRQ needs. Auto-repeat is no new press, and a reset
+     * releases nothing. Returns the unsubscribe.
+     */
+    onKeyEvent(listener: (event: KeyEventKind) => void): () => void {
+        this.keyEventListeners.add(listener)
+        return () => {
+            this.keyEventListeners.delete(listener)
+        }
+    }
+
+    private tell(event: KeyEventKind): void {
+        for (const listener of [...this.keyEventListeners]) listener(event)
     }
 
     // ---------------------------------------------------- key-state reads

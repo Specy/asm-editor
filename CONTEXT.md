@@ -48,7 +48,12 @@ Actionable help supplied with a **Diagnostic** so the learner knows how to corre
 
 ## Interrupt
 
-The generic state "the Emulator is paused mid-execution waiting on the user" (e.g. a program requested keyboard input). Owned by this codebase, not by any Core's type system; language-specific interruption details (like s68k interrupt payloads) are mapped _into_ it. While an Interrupt is pending, execution controls are disabled.
+The generic state "the Emulator is paused mid-execution waiting on the user" (e.g. a program requested keyboard input). Owned by this codebase, not by any Core's type system; language-specific interruption details (like s68k interrupt payloads) are mapped _into_ it. While an Interrupt is pending, execution controls are disabled. Distinct from an **IRQ**, which the processor takes on its own.
+
+## IRQ
+
+An interrupt request on M68K, at a level from 1 to 7: a timer the program set with `trap #15` task 32, or a key or mouse event on the **Screen** it asked for with task 62 or 60. It is latched until the processor takes it, between two instructions, as an **Exception** through the level's autovector, `$60` + 4 × level, once it is above the interrupt mask of the status register or is level 7. Taking one is a step of its own in the History, which Undo takes back, making the request pending again. `stop` waits for one without running anything, and the status line says what it waits for. Timers run only during a Run, on **Program time**. See [ADR 0065](./docs/adr/0065-m68k-devices-deliver-irqs.md).
+_Avoid_: interrupt (in code, which means an **Interrupt**), hardware interrupt
 
 ## Pause
 
@@ -109,11 +114,11 @@ The Peripheral representing a program's graphical output through its simulator e
 
 ## Keyboard
 
-The Peripheral representing keyboard input for a program interacting with the **Screen**, observed either as typed characters or as key state. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use.
+The Peripheral representing keyboard input for a program interacting with the **Screen**, observed either as typed characters or as key state. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use. On M68K a key going down or up can also raise an **IRQ** the program asked for.
 
 ## Mouse
 
-The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up. Its coordinates share the drawing origin at the top left and are independent of GUI zoom.
+The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up. Its coordinates share the drawing origin at the top left and are independent of GUI zoom. On M68K a button going down or up, or a move, can also raise an **IRQ** the program asked for.
 
 ## Audio
 

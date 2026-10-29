@@ -194,6 +194,8 @@ export function formatLatestSteps(
             pc: formatNumber(step.pc),
             //what ran where the source line does not say: no line, or one whose bytes changed
             ...(step.disassembly === undefined ? {} : { disassembly: step.disassembly }),
+            //the clock cycles it took, where the Target counts them (M68K)
+            ...(step.cycles === undefined ? {} : { cycles: step.cycles }),
             mutations: step.mutations.map((mutation) => {
                 switch (mutation.type) {
                     //`old` and `new` are what the Core reports of a write and nothing is
@@ -424,6 +426,17 @@ export function formatEmulatorState(
             : undefined,
         //and as data, which also tells an exit from a program that ran past its last instruction
         termination: emulator.termination,
+        //the M68K's cycle counter, since the start or trap #15 task 30, and the newest step's cost
+        ...(emulator.cycles
+            ? {
+                  cycles: {
+                      total: Number(emulator.cycles.total),
+                      ...(emulator.cycles.last === undefined
+                          ? {}
+                          : { lastStep: emulator.cycles.last })
+                  }
+              }
+            : {}),
         currentInterrupt: emulator.interrupt,
         currentFile: currentFile || undefined,
         stdOut: formattedStdout,

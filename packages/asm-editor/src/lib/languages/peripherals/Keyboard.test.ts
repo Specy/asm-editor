@@ -209,3 +209,35 @@ describe('the hold interval', () => {
         expect(keyboard.areKeysDown([A, B])).toEqual([false, true])
     })
 })
+
+describe('key events as they happen', () => {
+    //what an M68K program's key IRQ hears ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md))
+    it('tells a listener each key down and up at once, before any read applies it', () => {
+        const { keyboard } = makeKeyboard()
+        const heard: string[] = []
+        const stop = keyboard.onKeyEvent((event) => heard.push(event))
+        keyboard.keyDown(keyDown('a'))
+        keyboard.keyDown({ ...keyDown('a'), repeat: true })
+        keyboard.pressKey(SPACE)
+        keyboard.keyUp(keyDown('a'))
+        keyboard.releaseKey(B)
+        expect(heard).toEqual(['keyDown', 'keyDown', 'keyUp'])
+        //the key state still follows the hold interval
+        expect(keyboard.pendingTransitions).toBe(3)
+        keyboard.releaseAll()
+        expect(heard).toEqual(['keyDown', 'keyDown', 'keyUp', 'keyUp'])
+        stop()
+        keyboard.pressKey(A)
+        expect(heard).toHaveLength(4)
+    })
+
+    it('tells nothing of typed text, which presses no key, or of a reset', () => {
+        const { keyboard } = makeKeyboard()
+        const heard: string[] = []
+        keyboard.onKeyEvent((event) => heard.push(event))
+        keyboard.typeText('pasted')
+        keyboard.pressKey(A)
+        keyboard.reset()
+        expect(heard).toEqual(['keyDown'])
+    })
+})

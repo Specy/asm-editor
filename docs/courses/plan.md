@@ -149,13 +149,24 @@ A second topic exists in some courses and not others, the way `rv64` does. Added
 | ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `floating-point` | MIPS, RISC-V, x86; the last lecture of `think-in-assembly`, order 6 | "Floating point and coprocessor 1", "Floating point and the F and D extensions", "Floating point: x87 and SSE" |
 
-It is absent from M68K and Z80 because neither Core has a floating point unit, and absent from the
-General course, so its topic links run between the three Language courses only, which `getTopicLinks`
-handles (no overview, siblings listed). It sits after `subroutines` because it needs the calling
-convention: how a float is passed and returned is part of the lecture. Every Playground in it opens
-on the Register file that holds the answer, with the `fpu`, `sse`, `x87` or `csr` fence flag, and
-every Exercise moves its answer into a general register first, because a Testcase still reads the CPU
-file only (`docs/design/register-files.md`).
+Added 2026-10-29, with s68k's interrupts batch:
+
+| topic                | where it is                                                            | title                   |
+| -------------------- | ---------------------------------------------------------------------- | ----------------------- |
+| `interrupt-requests` | M68K only; the last lecture of `talking-to-the-outside-world`, order 3 | "Interrupts and cycles" |
+
+It follows "Exceptions and the vector table", whose handlers, frames and `rte` it builds on: IRQ
+levels, the interrupt mask and the autovectors, a timer with `stop`, a key-down IRQ on the Screen,
+why interrupts beat polling, and timing a loop with the cycle counter. Only the M68K Core delivers
+device interrupts, so the topic has no siblings and the page draws no topic links.
+
+`floating-point` is absent from M68K and Z80 because neither Core has a floating point unit, and
+absent from the General course, so its topic links run between the three Language courses only,
+which `getTopicLinks` handles (no overview, siblings listed). It sits after `subroutines` because
+it needs the calling convention: how a float is passed and returned is part of the lecture. Every
+Playground in it opens on the Register file that holds the answer, with the `fpu`, `sse`, `x87` or
+`csr` fence flag, and every Exercise moves its answer into a general register first, because a
+Testcase still reads the CPU file only (`docs/design/register-files.md`).
 
 ### The x86 course (`x86`), 21 lectures and 19 Examples
 
@@ -211,11 +222,11 @@ Going 64-bit (RISC-V, after Numbers): registers become 64 bits, `ld` and `sd` jo
 the `w`-suffixed instructions exist because 32-bit results are sign-extended, `li` holds a 64-bit
 constant, one `riscv64` Playground, and how to pick RISC-V-64 when creating a project.
 
-Interrupts lectures explain the machine's real mechanism and state plainly what the editor runs. No
-Core delivers a device interrupt today, while MIPS, RISC-V and, since s68k's exceptions batch, the
-M68K run handlers a program installs for the exceptions it causes; verify in each Core what
-exceptions it raises (division by zero, illegal instruction, address errors) before claiming it on a
-page.
+Interrupts lectures explain the machine's real mechanism and state plainly what the editor runs. Only
+the M68K delivers device interrupts, since s68k's interrupts batch: timers, and the keyboard and
+mouse of the Screen. MIPS, RISC-V and, since s68k's exceptions batch, the M68K run handlers a
+program installs for the exceptions it causes; verify in each Core what exceptions it raises
+(division by zero, illegal instruction, address errors) before claiming it on a page.
 
 ### Module `examples`, "Examples": the ladder, 24 programs
 
@@ -390,13 +401,24 @@ Each one cost time to rediscover, which is why it is written down.
   with `Division by zero at line 3: vector 5 at $000014 holds no handler`. The content test fails a
   playground that ends on an error, so a playground that faults installs its handler. `trap #0` to
   `#14` take vectors 32 to 46; `trap #15` is the simulator's in either mode, and an unknown task goes
-  through vector 47. `rte`, `move usp`, `chk`, `trapv` and `illegal` assemble and run; `stop` and
-  `reset` are refused until the interrupts batch.
+  through vector 47. `rte`, `move usp`, `chk`, `trapv` and `illegal` assemble and run, and since
+  the interrupts batch `stop` and `reset` do too.
 - A program starts in supervisor mode: SR `$2000`, `a7` the SSP at `$1000000`, the USP at
   `$FF0000`. `andi #$dfff, sr` enters user mode, where `a7` is the USP and the privileged
   instructions raise a privilege violation, vector 8, which stacks the instruction's own address, as
   `illegal` and line A/F do. Testcases read and set only the CPU file, `a7` being the active stack
   pointer; the fence flag `system` opens a playground on the System file.
+- Since s68k's third batch (interrupts and cycles), a program asks for IRQs with tasks 32 (`d1.b`
+  = 6, a timer), 62 (a key) and 60 (the mouse), and takes them through the autovectors at `$60` +
+  4 × level. Timers run on program time during a Run only. A Testcase, and the content test, runs
+  them on a virtual clock that jumps to the next firing while the program waits in `stop`, and
+  neither has a keyboard or a mouse. So a playground that waits in `stop` needs a timer that wakes
+  it: the content test would otherwise wait for ever, and a Testcase fails saying nothing can raise
+  the request. A key-down handler that reads task 19 once can be answered with the key before, as
+  the keyboard applies one queued change per read (ADR 0008), so the lecture counts presses.
+- The Core counts a 68000's clock cycles. Task 30 clears the counter and task 31 reads it into
+  `d1.l`; the reading includes the `moveq #31, d0` before it, 4 cycles. Read every count off a run,
+  not the manual.
 - `divu` overflow sets `V` and leaves the register alone.
 - Expected register values are written as unsigned hex.
 - The Core charges its instruction budget per run segment between traps, so a trap-heavy program's
@@ -512,12 +534,13 @@ RARS is a port of MARS, so the RISC-V course re-checked these rather than assumi
 - Testcases cannot script input into the MARS and RARS keyboard receiver, so keyboard MMIO Exercises on
   MIPS and RISC-V are prompts, not checked.
 - RV64 registers are untested in the editor; every claim in Going 64-bit is run before it is written.
-- No Core delivers a device interrupt yet (the MARS keyboard's interrupt-enable bit stops the program,
-  EASy68K's tasks 60 and 62 are refused until s68k's interrupts batch), but MIPS runs a user exception
-  handler at `.ktext 0x80000180` and RISC-V runs one once `ustatus` bit 0 is set; the M68K runs the
-  handlers a program writes into its vector table, and ends the run on a fault whose vector is empty;
-  the Z80 assembles `di`, `ei` and `im` as no-ops. Verified in batch 1, and for the M68K again with
-  s68k's exceptions batch; the interrupt lectures say so.
+- Only the M68K delivers device interrupts, since s68k's interrupts batch: timers with task 32, and
+  the Screen's keyboard and mouse with tasks 62 and 60. The MARS keyboard's interrupt-enable bit
+  stops the program, but MIPS runs a user exception handler at `.ktext 0x80000180` and RISC-V runs
+  one once `ustatus` bit 0 is set; the M68K runs the handlers a program writes into its vector
+  table, and ends the run on a fault whose vector is empty; the Z80 assembles `di`, `ei` and `im` as
+  no-ops. Verified in batch 1, and for the M68K again with s68k's exceptions and interrupts
+  batches; the interrupt lectures say so.
 - x86 had no course until 2026-09-15; the embed always listed it. What it still has no answer for is
   console input and a Screen, which is why its ladder is 19 rungs and not 25.
 - The playground embed boots a full editor per iframe; change B is required before lectures with five

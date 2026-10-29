@@ -272,6 +272,61 @@ describe('an exception in the History panel', () => {
     })
 })
 
+/**
+ * An IRQ in its row of its own (M68K, [m68k-machine.md](../../../../../../../docs/design/m68k-machine.md),
+ * decision 28): no instruction ran, so it reads as the request taken and the handler it went to,
+ * with what taking it wrote underneath.
+ */
+describe('an IRQ in the History panel', () => {
+    function irqRow(mutations: MutationOperation[], title?: string) {
+        const row = renderInstruction([])
+        row.show({
+            kind: 'irq',
+            mutations,
+            pc: 0x102a,
+            line: -1,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            ...(title === undefined ? {} : { title })
+        })
+        return row
+    }
+
+    it('heads its row with the request and the handler, and lists what taking it wrote', () => {
+        const row = irqRow([
+            {
+                type: 'TakeException',
+                value: {
+                    vector: 26,
+                    name: 'IRQ 2',
+                    from: 0x102an,
+                    handler: 0x102cn,
+                    label: 'timer'
+                }
+            },
+            {
+                type: 'WriteMemory',
+                value: { address: 0xfffffan, old: 0xffffn, new: 0x2000n, size: RegisterSize.Word }
+            },
+            { type: 'Other', value: 'Woke from stop' }
+        ])
+        expect(row.text().replace(/\s+/g, ' ')).toContain('IRQ 2 → timer at $102C')
+        //no instruction ran: no PC line to go to, and the heading is not repeated below it
+        expect(row.text()).not.toContain('PC')
+        expect(row.rows()).toEqual(['Wrote Word to $FFFFFA', 'Woke from stop'])
+        row.close()
+    })
+
+    it('says why an IRQ that pushed nothing ended the program', () => {
+        const row = irqRow([], 'IRQ 3: vector 27 at $00006C holds no handler')
+        expect(row.text().replace(/\s+/g, ' ').trim()).toBe(
+            'IRQ 3: vector 27 at $00006C holds no handler'
+        )
+        expect(row.rows()).toEqual([])
+        row.close()
+    })
+})
+
 describe('what an instruction ran where the source does not say', () => {
     it('shows the disassembly of a step on no line, and nothing of the kind on a source line', () => {
         const row = renderInstruction([])
@@ -452,5 +507,50 @@ describe('library calls in the History', () => {
             await unmount(app)
             target.remove()
         }
+    })
+})
+
+/**
+ * The cycles a step took, in its row, on a Target that counts them (M68K,
+ * [m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 30).
+ */
+describe('the cycles of a step in the History panel', () => {
+    const cyclesOf = (text: string) => text.replace(/\s+/g, ' ').match(/Cycles (\S+)/)?.[1]
+
+    it('says what an instruction took, and nothing for a step that carries no count', () => {
+        const row = renderInstruction([])
+        expect(row.text()).not.toContain('Cycles')
+        row.show({
+            kind: 'instruction',
+            mutations: [],
+            pc: 0x1000,
+            line: 3,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            cycles: 1234
+        })
+        expect(cyclesOf(row.text())).toBe('1,234')
+        row.close()
+    })
+
+    it('says what taking an IRQ took, under its heading', () => {
+        const row = renderInstruction([])
+        row.show({
+            kind: 'irq',
+            mutations: [
+                {
+                    type: 'TakeException',
+                    value: { vector: 26, name: 'IRQ 2', from: 0x102an, handler: 0x102cn }
+                }
+            ],
+            pc: 0x102a,
+            line: -1,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            cycles: 44
+        })
+        expect(row.text().replace(/\s+/g, ' ')).toContain('IRQ 2 → the handler at $102C')
+        expect(cyclesOf(row.text())).toBe('44')
+        row.close()
     })
 })

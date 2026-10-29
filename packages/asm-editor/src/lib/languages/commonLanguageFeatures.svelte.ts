@@ -235,7 +235,12 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
  * since no instruction ran, and the panels read `kind` to tell the two apart.
  */
 export type ExecutionStep = {
-    kind: 'instruction' | 'poke'
+    /**
+     * An instruction the program ran, a Poke the person made between two of them, or an IRQ the
+     * processor took between two of them, which ran no instruction of its own (M68K,
+     * [m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 16).
+     */
+    kind: 'instruction' | 'poke' | 'irq'
     /** False for a visible native History barrier whose effects are not journaled. */
     undoable?: boolean
     mutations: MutationOperation[]
@@ -263,6 +268,12 @@ export type ExecutionStep = {
      * Executable's instruction from its Listing reads `Patched jne → je at 0x5555555551f8`.
      */
     title?: string
+    /**
+     * The clock cycles the step took, for a Target that counts them (M68K, with the 68000's
+     * timing: [m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30). Absent
+     * on a Poke, which ran nothing, and on every step of a Target that does not count.
+     */
+    cycles?: number
     /**
      * Set on the instruction that started a Step through library code: the library function it
      * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
@@ -586,6 +597,16 @@ export type EmulatorInterrupt = {
     message?: string
 }
 
+/**
+ * A cycle counter as the panels show it: the clock cycles the program has taken since it started,
+ * or since it last cleared the counter (M68K's `trap #15` task 30), and what the newest step took.
+ */
+export type CycleCount = {
+    total: bigint
+    /** The newest step's cycles; undefined without an Undo history, and after a Poke. */
+    last?: number
+}
+
 export type BaseEmulatorState = {
     code: string
     systemSize: RegisterSize
@@ -634,6 +655,19 @@ export type BaseEmulatorState = {
      * for Step, Undo or another Run, as after a breakpoint.
      */
     paused: boolean
+    /**
+     * What the program waits for while it waits on its own rather than on the person, as the
+     * adapter says it (`_getRunStatus`): an M68K `stop`'s "Stopped: waiting for an interrupt above
+     * level 3". Undefined the rest of the time.
+     */
+    runStatus?: string
+    /**
+     * The cycle counter, for a Target that counts the clock cycles its processor takes: the M68K's
+     * shows under the registers as "Cycles 12,345 (+8)" and ends the Log's exit line
+     * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30). Undefined for
+     * every other Target, and before a Build.
+     */
+    cycles?: CycleCount
     breakpoints: SourceBreakpoint[]
     interrupt?: EmulatorInterrupt
     memory: {

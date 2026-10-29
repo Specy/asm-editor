@@ -1,0 +1,6 @@
+{
+    "name": "Interrupts and cycles",
+    "description": "Interrupt requests from a timer and the keyboard: levels, the interrupt mask, autovectors and stop. Then the cycle counter, to time a loop as a 68000 would run it.",
+    "order": 3,
+    "topic": "interrupt-requests"
+}

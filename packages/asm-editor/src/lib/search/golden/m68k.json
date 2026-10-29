@@ -19,6 +19,35 @@
             "expect": "m68k/exceptions/the-vector-table"
         },
         { "query": "user mode stack pointer", "top": 3, "expect": "m68k/exceptions/modes" },
+        {
+            "query": "cycle counter",
+            "top": 3,
+            "expect": [
+                "m68k/trap-tasks/cycles",
+                "m68k/trap-tasks/task-31",
+                "m68k/exceptions/cycles"
+            ]
+        },
+        {
+            "query": "how many cycles does my loop take",
+            "top": 5,
+            "expect": [
+                "m68k/exceptions/cycles",
+                "m68k/trap-tasks/task-31",
+                "m68k/trap-tasks/cycles"
+            ],
+            "meaning": true
+        },
+        {
+            "query": "interrupt mask",
+            "top": 3,
+            "expect": ["m68k/condition-codes/status-register", "m68k/exceptions/interrupts"]
+        },
+        {
+            "query": "timer interrupt",
+            "top": 3,
+            "expect": ["m68k/trap-tasks/task-32", "m68k/trap-tasks/interrupts"]
+        },
         { "query": "print a number", "top": 1, "expect": "m68k/trap-tasks/task-3" },
         { "query": "how do I print a number", "top": 3, "expect": "m68k/trap-tasks/task-3" },
         { "query": "set the pen color", "top": 1, "expect": "m68k/trap-tasks/task-80" },

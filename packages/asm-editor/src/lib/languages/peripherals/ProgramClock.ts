@@ -50,6 +50,13 @@ export const VIRTUAL_FRAME_INTERVAL_MS = 16
 /** What `nextFrame()` waits under node, where there is no animation frame to wait for. */
 export const HOST_FRAME_FALLBACK_MS = 16
 
+/**
+ * The longest a host timer waits in one go: `setTimeout` keeps its delay in 32 bits, and one longer
+ * fires after about a millisecond instead. A longer wait is armed as several timers, one after the
+ * other, so that a Delay or an M68K timer of 2^31 ms or more waits that long rather than polling.
+ */
+export const LONGEST_HOST_TIMER_MS = 2 ** 31 - 1
+
 /** EASy68K's task 8 and task 23 count in hundredths of a second, so both helpers convert by this. */
 const MS_PER_HUNDREDTH = 10
 
@@ -159,7 +166,12 @@ export class ProgramClock {
             return Promise.resolve()
         }
         return this.schedule((resume) => {
-            const timer = setTimeout(resume, duration)
+            let timer: ReturnType<typeof setTimeout>
+            const arm = (left: number) => {
+                const delay = Math.min(left, LONGEST_HOST_TIMER_MS)
+                timer = setTimeout(delay < left ? () => arm(left - delay) : resume, delay)
+            }
+            arm(duration)
             return () => clearTimeout(timer)
         }, signal)
     }

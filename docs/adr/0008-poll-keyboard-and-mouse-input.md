@@ -1,5 +1,7 @@
 # Poll keyboard and mouse input first
 
+Amended in part by [ADR 0065](./0065-m68k-devices-deliver-irqs.md): on M68K, a key or mouse event on the Screen raises the IRQ the program asked for on it.
+
 The first version of **Keyboard** and **Mouse** input will use polling: programs explicitly inspect device state or available input through their environment's guest interface, and these peripherals will not deliver CPU interrupts. This supports interactive graphics while deferring the additional interrupt routing, handler execution and history semantics that interrupt-driven input requires. Programs requiring device-generated CPU interrupts are outside first-version compatibility, including the interrupt-driven keyboard mode supported by [MARS](https://raw.githubusercontent.com/dpetersanderson/MARS/main/mars/tools/KeyboardAndDisplaySimulator.java); exact polling interfaces remain to be settled, and shared typed input with **Terminal** is covered by [ADR 0009](./0009-share-screen-keyboard-input-with-terminal.md).
 
 ## Live input after Undo

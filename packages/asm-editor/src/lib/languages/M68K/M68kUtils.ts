@@ -91,12 +91,6 @@ function errorParts(
 ): { headline: string; detail?: string } | undefined {
     const value = error.value
     switch (error.type) {
-        //a 68000 instruction the Core does not run yet, named: `stop` and `reset`, which only a
-        //program running bytes it never assembled as code can reach
-        case 'Unimplemented':
-            return typeof value === 'string'
-                ? { headline: `${value} is not implemented yet` }
-                : { headline: 'Unimplemented' }
         case 'DivisionByZero':
             return { headline: 'Division by zero' }
         case 'ExecutionLimit':
@@ -154,6 +148,11 @@ function errorParts(
         case 'UnhandledTrap':
             if (!isRecord(value) || typeof value.vector !== 'number') return undefined
             return { headline: m68kVectorName(value.vector) }
+        //an interrupt request taken through an autovector that holds no handler: "IRQ 2 at line
+        //4: vector 26 at $000068 holds no handler"
+        case 'Irq':
+            if (!isRecord(value) || typeof value.level !== 'number') return undefined
+            return { headline: `IRQ ${value.level}` }
         //a `trap #15` task the Core does not carry out, or one given a value it cannot take: the
         //Core names the task and the register, the trap table says which task it is and why
         case 'UnsupportedTrapTask':

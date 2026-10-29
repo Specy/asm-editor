@@ -863,13 +863,14 @@ export class WorkbenchSession {
             !this.host.readonly && !this.running && !this.building && this.emulator.canPoke
         )
         this.errorStrings = $derived(this.emulator.errors.join('\n'))
-        //the Log's wording, without an error's message, which the Terminal tab shows itself
+        //the Log's wording, without an error's message, which the Terminal tab shows itself; and
+        //while the program runs on, what it waits for on its own, as a stopped M68K does
         this.runInfo = $derived(
             this.emulator.terminated
                 ? terminationSummary(this.emulator.termination, this.emulator.executionTime, {
                       errorMessage: false
                   })
-                : ''
+                : (this.emulator.runStatus ?? '')
         )
         this.executionDisabled = $derived(
             this.host.readonly || this.emulator.terminated || this.emulator.interrupt !== undefined
@@ -1158,7 +1159,8 @@ export class WorkbenchSession {
                         this.appendLog(
                             exitEntry({
                                 executionTimeMs: this.emulator.executionTime,
-                                termination: this.emulator.termination
+                                termination: this.emulator.termination,
+                                cycles: this.emulator.cycles?.total
                             })
                         )
                     for (const note of notes)
@@ -1236,6 +1238,10 @@ export class WorkbenchSession {
     declare readonly pokeable: boolean
     /** The Emulator's runtime errors, which the Terminal tab shows before what the program wrote. */
     declare readonly errorStrings: string
+    /**
+     * The line beside the bottom panel's tabs: how the program ended, or, while it has not, what
+     * it waits for on its own, such as "Stopped: waiting for an interrupt above level 3".
+     */
     declare readonly runInfo: string
     declare readonly executionDisabled: boolean
     declare readonly undoDisabled: boolean

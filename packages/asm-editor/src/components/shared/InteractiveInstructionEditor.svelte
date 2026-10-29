@@ -33,6 +33,7 @@
     import RegistersVisualiser from '#cmp/specific/project/cpu/RegistersRenderer.svelte'
     import RegisterFilesPanel from '#cmp/specific/project/cpu/RegisterFilesPanel.svelte'
     import ProcessorLine from '#cmp/specific/project/cpu/ProcessorLine.svelte'
+    import CyclesLine from '#cmp/specific/project/cpu/CyclesLine.svelte'
     import { onMount, type Snippet, untrack } from 'svelte'
     import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
     import type {
@@ -708,6 +709,10 @@
                     handleRegisterClick(register.value)
                 }}
             />
+        {/if}
+        {#if showRegisters && emulator.cycles && viewport.deviceClass !== 'phone'}
+            <!-- the cycle counter under the registers, which a phone leaves out -->
+            <CyclesLine cycles={emulator.cycles} style="padding: 0.1rem 0.7rem 0.3rem;" />
         {/if}
     </div>
 {/snippet}

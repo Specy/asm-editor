@@ -10,7 +10,6 @@ import { z80ConditionCodes, z80DirectiveNames } from '#lib/languages/Z80/Z80-doc
 import {
     M68KDirectives,
     M68KRefusedDirectives,
-    M68KRefusedInstructions,
     M68KUnimplementedDialectInstructions
 } from '#lib/languages/M68K/M68K-documentation.ts'
 import { M68K_OPT_OPTIONS } from '#lib/languages/M68K/M68K-grammar.ts'
@@ -292,16 +291,16 @@ describe('tokenizeAssembly', () => {
     })
 
     it('reads the words s68k refuses as invalid, and every one of them', () => {
-        expect(kindOf('    stop #$2700', 'M68K', 'stop')).toBe('invalid')
-        expect(kindOf('    bsr reset', 'M68K', 'reset')).toBe('plain')
+        expect(kindOf('    trapeq', 'M68K', 'trapeq')).toBe('invalid')
+        expect(kindOf('    bsr cas', 'M68K', 'cas')).toBe('plain')
         //what the Core has come to assemble is an instruction again
         expect(kindOf('    rte', 'M68K', 'rte')).toBe('mnemonic')
+        expect(kindOf('    stop #$2700', 'M68K', 'stop')).toBe('mnemonic')
+        expect(kindOf('    reset', 'M68K', 'reset')).toBe('mnemonic')
         expect(
-            [
-                ...M68KRefusedInstructions,
-                ...M68KUnimplementedDialectInstructions,
-                ...M68KRefusedDirectives
-            ].filter((name) => kindOf(`    ${name} 1`, 'M68K', name) !== 'invalid')
+            [...M68KUnimplementedDialectInstructions, ...M68KRefusedDirectives].filter(
+                (name) => kindOf(`    ${name} 1`, 'M68K', name) !== 'invalid'
+            )
         ).toEqual([])
         //the 68020's still to come, sized or in the first column, which s68k reads as one there
         expect(kindOf('    trapeq.w #1', 'M68K', 'trapeq')).toBe('invalid')

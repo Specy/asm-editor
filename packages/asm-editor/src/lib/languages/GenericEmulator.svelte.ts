@@ -289,12 +289,14 @@ export abstract class GenericEmulator<T, R extends string>
     /** When `refreshRunningPanels` last read the Core for the panels, see the constant above. */
     private lastPanelRefresh = 0
     /**
-     * The pause the Run button turns into while a program is running. `pauseRequested` is set by
-     * `pause()` and honored by returning from `runSlices` at its next slice boundary, just as for
-     * a breakpoint. Step and Undo can then own the Core, and Run starts a new invocation at its PC.
+     * The pause the Run button turns into while a program is running. `pause()` asks the execution
+     * controller for it, and `runSlices` honors it by returning at its next slice boundary, just as
+     * for a breakpoint. Step and Undo can then own the Core, and Run starts a new invocation at its
+     * PC. Kept in the controller, so that a wait it ends, a stopped M68K's for an IRQ, ends too.
      */
-    private pauseRequested = false
     private runInFlight = false
+    /** Whether the run in flight takes a Pause, which no Testcase's run to `main` does. */
+    private runPausable = false
     /** Turns the Breakpoints the user set into the ones the Core runs with, see `setBreakpointResolver`. */
     private breakpointResolver?: (breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]
     protected fileSystemSession: FileSystemSession | null = null
@@ -1343,7 +1345,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.undoLedger = []
         this.noteList = []
         this.endNoted = false
-        this.pauseRequested = false
+        this.executionController.endPause()
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
         this.resetPeripherals()
@@ -1369,6 +1371,8 @@ export abstract class GenericEmulator<T, R extends string>
             errors: [],
             canUndo: false,
             paused: false,
+            runStatus: undefined,
+            cycles: undefined,
             executionTime: -1,
             canExecute: false,
             latestSteps: [],
@@ -1582,6 +1586,7 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateMemory()
             this.updateData()
             this.updateStatusRegisters()
+            this.state.cycles = this._getCycles?.()
             return execution
         } catch (e) {
             if (!this.executionController.isCurrent(execution)) return execution
@@ -1769,8 +1774,8 @@ export abstract class GenericEmulator<T, R extends string>
      * answered; the GUI disables the button while an input request is pending for that reason.
      */
     pause(): void {
-        if (!this.runInFlight) return
-        this.pauseRequested = true
+        if (!this.runInFlight || !this.runPausable) return
+        this.executionController.requestPause()
     }
 
     /**
@@ -1789,13 +1794,14 @@ export abstract class GenericEmulator<T, R extends string>
         options: SliceLoopOptions = {}
     ): Promise<SliceLoopEnd> {
         this.runInFlight = true
+        this.runPausable = options.pausable !== false
         this.state.paused = false
         try {
             return await this.sliceLoop(haltLimit, execution, options)
         } finally {
             this.runInFlight = false
             //a pause asked for in the slice that ended the run is not inherited by the next one
-            this.pauseRequested = false
+            this.executionController.endPause()
         }
     }
 
@@ -1810,10 +1816,11 @@ export abstract class GenericEmulator<T, R extends string>
         //a breakpoint names it, which is what makes Run continue from a breakpoint instead of
         //stopping on it again for ever (`skipBreakpointAtPc`)
         let firstSlice = options.skipBreakpointAtStart ?? true
+        let startsRun = true
         while (remaining > 0) {
             //the slice boundary is the only place a pause can be taken: a slice is the Core running,
             //and nothing here can interrupt it once it has started
-            if (this.pauseRequested && options.pausable !== false) {
+            if (this.executionController.pauseRequested) {
                 this.state.paused = true
                 return 'paused'
             }
@@ -1835,6 +1842,7 @@ export abstract class GenericEmulator<T, R extends string>
                         ? [...options.breakpoints]
                         : this.runBreakpoints(options.alsoBreakAt),
                     skipBreakpointAtPc: firstSlice,
+                    startsRun,
                     runInstructionLimit: haltLimit,
                     speedCorrection: this.speedCorrection
                 })
@@ -1844,6 +1852,7 @@ export abstract class GenericEmulator<T, R extends string>
                 throw error
             }
             firstSlice = false
+            startsRun = false
             //what the slice started or stopped is heard now, a slice late at most
             this._peripherals.audio.flush()
             this.learnSliceSpeed(
@@ -1933,14 +1942,16 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * The instruction waiting for input, with every panel current before its read suspends. By
-     * default the stop's instruction, which inside library code is the program's call into it.
+     * The instruction waiting for input, with every panel current before its read suspends; or
+     * waiting for an IRQ, as an M68K `stop` does. By default the stop's instruction, which inside
+     * library code is the program's call into it. `force` false is for a wait too short for anyone
+     * to read the panels in, a game's frame: they refresh at the running rate.
      */
-    protected refreshInputState(instruction?: Instruction | null): void {
+    protected refreshInputState(instruction?: Instruction | null, force = true): void {
         if (this._peripherals.terminal.inputSource === 'scripted') return
         if (instruction === undefined) instruction = this.stopInstruction(true)
         this.selectInstruction(instruction)
-        this.refreshRunningPanels(true)
+        this.refreshRunningPanels(force)
     }
 
     /**
@@ -2037,6 +2048,8 @@ export abstract class GenericEmulator<T, R extends string>
         this.updateMemory()
         this.updateData()
         this.updateStatusRegisters()
+        this.state.runStatus = this._getRunStatus?.()
+        this.state.cycles = this._getCycles?.()
     }
 
     /**
@@ -2797,6 +2810,16 @@ export abstract class GenericEmulator<T, R extends string>
 
     get paused() {
         return this.state.paused
+    }
+
+    /** What the program waits for on its own, see `BaseEmulatorState.runStatus`. */
+    get runStatus() {
+        return this.state.runStatus
+    }
+
+    /** The cycle counter, for a Target that counts cycles, see `BaseEmulatorState.cycles`. */
+    get cycles() {
+        return this.state.cycles
     }
 
     get compilerDiagnostics() {

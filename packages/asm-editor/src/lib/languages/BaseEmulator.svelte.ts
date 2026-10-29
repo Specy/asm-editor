@@ -1,4 +1,5 @@
 import {
+    type CycleCount,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorNote,
@@ -226,6 +227,21 @@ export abstract class BaseEmulator<R extends string> {
      * instruction the Core cannot run, say, which only the end's reason and its bytes tell.
      */
     _terminationNotes?(): Omit<EmulatorNote, 'id'>[]
+
+    /**
+     * What the program is doing, in words, while it waits for something other than the person,
+     * such as an M68K processor `stop` stopped: "Stopped: waiting for an interrupt above level 3"
+     * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 29). Undefined while
+     * there is nothing to say, the program running, paused or ended.
+     */
+    _getRunStatus?(): string | undefined
+
+    /**
+     * The cycle counter and the newest step's cycles, for a Target whose Core counts the clock
+     * cycles its processor takes, as the M68K's does with the 68000's timing
+     * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30).
+     */
+    _getCycles?(): CycleCount | undefined
 
     /** Detaches native execution before the host ends its FileSystem capability. */
     _clearExecution?(): void

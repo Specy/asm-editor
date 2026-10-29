@@ -11,6 +11,7 @@
     import { sizeName } from '#lib/languages/sizeNames.ts'
     import { statusFlagsFromBits } from '#lib/languages/statusFlagBits.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import { formatCycles } from '#lib/languages/cycles.ts'
 
     interface Props {
         step: ExecutionStep
@@ -46,6 +47,26 @@
      * register the way the Register file spells it.
      */
     const pokes = $derived(step.kind === 'poke' ? (step.writes ?? []) : [])
+
+    /**
+     * An IRQ is a row of its own too (M68K,
+     * [m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 28): no
+     * instruction ran, so its heading is the request it took and the handler it went to, "IRQ 2 →
+     * timer at $102C", and what follows is what taking it wrote. One whose vector held no handler
+     * pushed nothing, and its title says so.
+     */
+    const irq = $derived(
+        step.kind === 'irq'
+            ? step.mutations.find(
+                  (mutation): mutation is Extract<MutationOperation, { type: 'TakeException' }> =>
+                      mutation.type === 'TakeException'
+              )
+            : undefined
+    )
+    /** What the row lists under its heading: everything but the IRQ the heading names. */
+    const listed = $derived(
+        irq ? step.mutations.filter((mutation) => mutation !== irq) : step.mutations
+    )
 
     function hex(value: bigint): string {
         return value.toString(16).toUpperCase()
@@ -188,6 +209,14 @@
     }
 </script>
 
+<!-- what the step took on a Target that counts cycles, an M68K's with the 68000's timing -->
+{#snippet cyclesRow(cycles: number)}
+    <div class="row space-between">
+        <span> Cycles </span>
+        <span class="cycles">{formatCycles(cycles)}</span>
+    </div>
+{/snippet}
+
 <div class="column step" class:docked>
     <div class="step-header column">
         <button
@@ -225,6 +254,19 @@
                     </div>
                 {/each}
             </div>
+        {:else if step.kind === 'irq'}
+            <div class="irq-title exception">
+                {#if irq}
+                    {irq.value.name} →
+                    {#if irq.value.label}<code class="handler">{irq.value.label}</code>{:else}the
+                        handler{/if} at ${hex(irq.value.handler)}
+                {:else}
+                    {step.title ?? 'IRQ'}
+                {/if}
+            </div>
+            {#if step.cycles !== undefined}
+                {@render cyclesRow(step.cycles)}
+            {/if}
         {:else}
             <div class="row space-between">
                 <span> PC </span>
@@ -287,12 +329,15 @@
                     </span>
                 </div>
             {/if}
+            {#if step.cycles !== undefined}
+                {@render cyclesRow(step.cycles)}
+            {/if}
         {/if}
     </div>
 
-    {#if step.kind !== 'poke' && !step.stretch && step.mutations.length !== 0}
+    {#if step.kind !== 'poke' && !step.stretch && listed.length !== 0}
         <div class="column mutations">
-            {#each step.mutations as mutation, i (i)}
+            {#each listed as mutation, i (i)}
                 {#if isWrite(mutation) && hasValues(mutation)}
                     <!--
                         a write opens to the values its Core reports, and stays marked while open
@@ -345,6 +390,10 @@
         font-size: 0.8rem;
         overflow-wrap: anywhere;
         text-align: right;
+    }
+    .cycles {
+        font-family: 'Fira Code', monospace;
+        font-size: 0.85rem;
     }
     .stretch {
         font-size: 0.8rem;
@@ -464,6 +513,13 @@
 
     .poke-value {
         font-family: monospace;
+    }
+
+    //an IRQ's heading: the request and its handler, the whole of what the row is about
+    .irq-title {
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.15rem 0.3rem;
     }
 
     //the value the Poke found, in the colour the panels give a previous value

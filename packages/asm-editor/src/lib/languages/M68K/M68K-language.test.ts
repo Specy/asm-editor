@@ -4,7 +4,6 @@ import {
     getInstructionDocumentation,
     M68KDirectives,
     M68KRefusedDirectives,
-    M68KRefusedInstructions,
     M68kInstructions
 } from './M68K-documentation'
 import {
@@ -34,7 +33,9 @@ const ADDED_V2_INSTRUCTIONS = [
     'sbcd',
     'nbcd',
     'extb',
-    'rte'
+    'rte',
+    'stop',
+    'reset'
 ]
 
 const CONDITION_CODES = [
@@ -124,6 +125,8 @@ const V2_INSTRUCTIONS = [
     'trap',
     'rtr',
     'rte',
+    'stop',
+    'reset',
     'tas',
     'trapv',
     'chk',
@@ -209,7 +212,6 @@ describe('M68K v2 language tooling', () => {
         for (const name of [...ADDED_V2_INSTRUCTIONS, ...V2_DIRECTIVES]) {
             expect(getInstructionDocumentation(name), `${name} has documentation`).toBeDefined()
         }
-        expect(M68KRefusedInstructions).toEqual(['stop', 'reset'])
         expect(M68KRefusedDirectives).toEqual(
             expect.arrayContaining(['macro', 'endm', 'ifeq', 'endc', 'while', 'endw'])
         )
@@ -515,10 +517,8 @@ describe('M68K v2 language tooling', () => {
         ).toBe('CHK exception: -1 is outside 0..9')
         expect(getM68kErrorMessage({ type: 'OverflowException' })).toContain('TRAPV')
         expect(getM68kErrorMessage({ type: 'IllegalInstruction' })).toContain('Illegal instruction')
-        //what the Core does not run yet, which a program can only reach in bytes it never
-        //assembled as code
-        expect(getM68kErrorMessage({ type: 'Unimplemented', value: '`stop`' }, 4)).toBe(
-            'Error at line 4: `stop` is not implemented yet'
+        expect(getM68kErrorMessage({ type: 'Irq', value: { level: 2 } }, 4)).toBe(
+            'Error at line 4: IRQ 2'
         )
     })
 
@@ -538,6 +538,10 @@ describe('M68K v2 language tooling', () => {
                 4
             )
         ).toBe('TRAP #3 at line 4: vector 35 at $00008C holds no handler')
+        //an IRQ whose autovector holds no handler, named for its level
+        expect(getM68kTerminationMessage(ended({ type: 'Irq', value: { level: 2 } }, 26), 7)).toBe(
+            'IRQ 2 at line 7: vector 26 at $000068 holds no handler'
+        )
         expect(
             getM68kTerminationMessage(
                 ended({ type: 'LineA', value: 0xa123 }, 10),
@@ -576,10 +580,10 @@ describe('M68K v2 language tooling', () => {
         //one no handler could take reads as any other error
         expect(
             getM68kTerminationMessage(
-                ended({ type: 'UnsupportedTrapTask', value: { task: 30 } }),
+                ended({ type: 'UnsupportedTrapTask', value: { task: 10 } }),
                 3
             )
-        ).toBe(getM68kErrorMessage({ type: 'UnsupportedTrapTask', value: { task: 30 } }, 3))
+        ).toBe(getM68kErrorMessage({ type: 'UnsupportedTrapTask', value: { task: 10 } }, 3))
     })
 
     it('says the CPU halted on a double fault, and what pushing the frame raised', () => {

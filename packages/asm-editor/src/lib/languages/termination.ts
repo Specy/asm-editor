@@ -1,4 +1,5 @@
 import { formatTime } from '#lib/utils.ts'
+import { formatCycles } from './cycles'
 
 /**
  * How a program ended, which every adapter reads from its Core when the program has terminated
@@ -40,6 +41,12 @@ export type TerminationWordingOptions = {
      * line beside the console leaves it out, since the console shows the error itself.
      */
     errorMessage?: boolean
+    /**
+     * The cycle counter as the program ended, for a Target that counts cycles: the Log's exit line
+     * says it, "Ran 1,234 cycles in 12ms" (M68K, [m68k-machine.md](../../../../../docs/design/m68k-machine.md),
+     * decision 30).
+     */
+    cycles?: bigint
 }
 
 /**
@@ -89,8 +96,10 @@ function isNoteworthy(termination: Termination | undefined): termination is Term
 /**
  * The sentence for a program that has ended, with its running time when a Run measured one (a
  * negative time is unknown, as after a Step): "Ran in 12ms, exited with code 3", "Ran in 12ms",
- * "Segmentation fault (signal 11)", "Program ended". The Log's exit entry, the Workbench's and the
- * Interactive editor's info lines and the coding agent's state all say it this way.
+ * "Segmentation fault (signal 11)", "Program ended". With the cycles a Target counted, they come
+ * first: "Ran 1,234 cycles in 12ms", "Ran 1,234 cycles, stopped by an error: …". The Log's exit
+ * entry, the Workbench's and the Interactive editor's info lines and the coding agent's state all
+ * say it this way.
  */
 export function terminationSummary(
     termination: Termination | undefined,
@@ -98,8 +107,13 @@ export function terminationSummary(
     options: TerminationWordingOptions = {}
 ): string {
     const detail = isNoteworthy(termination) ? describeTermination(termination, options) : ''
-    if (executionTimeMs >= 0) {
-        const ran = `Ran in ${formatTime(executionTimeMs)}`
+    const time = executionTimeMs >= 0 ? `in ${formatTime(executionTimeMs)}` : ''
+    const cycles =
+        options.cycles === undefined
+            ? ''
+            : `${formatCycles(options.cycles)} ${options.cycles === 1n ? 'cycle' : 'cycles'}`
+    if (time || cycles) {
+        const ran = ['Ran', cycles, time].filter(Boolean).join(' ')
         return detail ? `${ran}, ${detail}` : ran
     }
     return detail ? detail[0].toUpperCase() + detail.slice(1) : 'Program ended'

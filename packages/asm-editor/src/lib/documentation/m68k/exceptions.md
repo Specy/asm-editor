@@ -120,4 +120,48 @@ If taking an exception itself fails, the processor halts, and the program ends w
 
 ## Interrupts
 
-An **interrupt** is an exception a device raises between two instructions, such as a key press or a timer. The 68000 has seven levels, taken through vectors 25 to 31, and the three bits I2 to I0 of the status register are the interrupt mask: a request at or below its level waits, and level 7 is always taken. No device in this editor raises one for now, and `stop`, which waits for an interrupt, and `reset` are refused by the assembler. A program polls its devices instead, as the [trap tasks](/documentation/m68k/traps#input) for the keyboard and the mouse do.
+An **interrupt** is an exception a device raises between two instructions, such as a key press or a timer. The device makes an **interrupt request**, or IRQ, at a level from 1 to 7. The three bits I2 to I0 of the status register are the interrupt mask: a request at or below its level waits, and level 7 is always taken.
+
+When a request gets through, the processor finishes the instruction it is on and takes the request as an exception: it pushes the program counter and the status register, raises the mask to the request's level, so the same level cannot interrupt the handler, and jumps through the level's **autovector**, vector 24 + level, at `$60` + 4 × level. The handler's `rte` puts the mask back as it was. In the History an IRQ is a row of its own, and the Call stack names its frame `IRQ 2 → handler`.
+
+In this editor a timer, a key and the mouse raise requests, which the program sets up with [trap #15 tasks 32, 60 and 62](/documentation/m68k/traps#interrupts). A program waits for one with [stop](/documentation/m68k/instruction/stop), which loads the status register and runs nothing until a request gets past the new mask:
+
+```m68k
+    move.l #tick, $68        ; level 2's autovector
+    move.b #32, d0
+    move.b #6, d1
+    move.b #$82, d2          ; a level-2 timer
+    move.l #200, d3          ; every 200 ms
+    trap #15
+wait:
+    stop #$2000              ; the mask at 0: any level wakes it
+    cmp.l #5, d6
+    bne wait                 ; one second: five ticks
+    simhalt
+
+tick:
+    addq.l #1, d6
+    rte                      ; back to the cmp after the stop
+```
+
+[reset](/documentation/m68k/instruction/reset) does nothing here, as there are no devices for it to reset.
+
+## Cycles {#cycles}
+
+A 68000 works to the beat of a clock, and each beat is a **clock cycle**. Every instruction takes a whole number of them, more when it reaches memory and more when its numbers make more work: `moveq` takes 4 cycles, `add.l d0, d1` 8, a `dbra` that loops back 10, and a division over 100. At 8 MHz, the clock of an Atari ST, a 68000 has eight million cycles a second, so 8,000 cycles take a millisecond.
+
+The editor counts the cycles a 68000 takes, instruction by instruction. The line under the registers shows the count with what the last step took, `Cycles 1,234 (+8)`, each History row shows its own, and the Log gives the count when the program ends. Undo takes a step's cycles back. Exceptions take cycles too: 34 for `trap #0` to `#14`, 38 or more for a division by zero, and 44 for an interrupt request. A `trap #15` task takes none, so printing, drawing or a delay adds nothing, and `stop` takes 4, however long it waits. A program written for the 68010 or the 68020 is counted as a 68000 for now.
+
+To time a piece of code, clear the counter with [trap #15 task 30](/documentation/m68k/traps#task-30) just before it, and read it into `d1` with [task 31](/documentation/m68k/traps#task-31) just after it:
+
+```m68k
+    moveq #30, d0
+    trap #15            ; the counter starts again at 0
+    move.w #99, d2      ; 8 cycles
+loop:
+    dbra d2, loop       ; 99 rounds back at 10 cycles, then 14 for the last
+    moveq #31, d0       ; 4 cycles, counted before the read
+    trap #15            ; d1 = 8 + 990 + 14 + 4 = 1016
+```
+
+The reading includes the `moveq` that asks for it, so the loop and its setup took 1016 − 4 = 1012 cycles.

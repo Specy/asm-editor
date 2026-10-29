@@ -45,6 +45,13 @@ export type ExecutionSliceRequest = {
      */
     skipBreakpointAtPc: boolean
     /**
+     * Whether this is the first slice of a Run, whatever `skipBreakpointAtPc` says. An adapter
+     * whose devices work only while a Run goes on starts them here: the M68K's IRQ timers count
+     * from the start of each Run, as EASy68K's do. Absent from a request made by hand, which starts
+     * nothing.
+     */
+    startsRun?: boolean
+    /**
      * The whole run's instruction limit, which `instructionBudget` counts down from. Only for what
      * an adapter tells the user: the M68K Core reports an exhausted limit by throwing an error that
      * names the halt limit it was given, and that is a slice's share, not the limit the user set.
@@ -78,7 +85,10 @@ export type ExecutionSliceRequest = {
  *   The adapter puts the wait in `wait`; the scheduler awaits it through the execution generation so
  *   Stop cancels it, and then runs the next slice. MIPS and RISC-V leave `wait` out: their Cores
  *   serve the wait inside the slice, which ends once it is over, and the scheduler yields instead.
- *   Either way the slice says nothing about the Core's speed.
+ *   Either way the slice says nothing about the Core's speed. A Pause takes effect once the wait is
+ *   over, unless the adapter made the wait with `ExecutionController.whileUnpaused`, which a Pause
+ *   ends at once: a processor stopped until an IRQ comes (M68K's `stop`) owes the program nothing
+ *   when the wait is cut short, where a Delay does.
  */
 export type ExecutionSliceReason =
     | 'budget'

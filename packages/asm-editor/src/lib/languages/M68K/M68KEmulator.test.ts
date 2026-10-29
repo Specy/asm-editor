@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
 import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
@@ -7,8 +7,11 @@ import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutp
 import { makeMidi, makeWav } from '#lib/languages/peripherals/audio/soundFixtures.ts'
 import type { InputSettings } from '@specy/s68k'
 import { M68KEmulator, m68kSRecordOutput } from '#lib/languages/M68K/M68KEmulator.svelte.ts'
-import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
-import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import {
+    ANIMATING_PANEL_REFRESH_MS,
+    CPU_REGISTER_FILE_ID
+} from '#lib/languages/GenericEmulator.svelte.ts'
+import { InterpreterStatus, RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import {
     memoryHover,
     memoryReasons,
@@ -2069,14 +2072,15 @@ describe('M68K exceptions', () => {
         expect(registerOf(emulator, 'A7')).toBe(0xff0000n)
         expect(emulator.callStack).toEqual([])
         const [rte, addq, violation, andi] = emulator.latestSteps
-        //in the order the processor did it, as an `rts` row is
+        //in the order the processor did it, as an `rts` row is: the Core takes the frame off the
+        //call stack first, so that a return to an odd address faults with the frame gone
         expect(rte.mutations).toEqual([
+            { type: 'ReturnFromException', value: { from: privileged + 4n, to: back } },
             {
                 type: 'WriteRegister',
                 value: { register: 'a7', old: 0xfffffan, new: 0x1000000n, size: RegisterSize.Long }
             },
-            { type: 'Other', value: 'Switched to user mode, so A7 is the USP' },
-            { type: 'ReturnFromException', value: { from: privileged + 4n, to: back } }
+            { type: 'Other', value: 'Switched to user mode, so A7 is the USP' }
         ])
         expect(addq.mutations.map((mutation) => mutation.type)).toEqual(['WriteMemory'])
         expect(violation.mutations[0]).toEqual({
@@ -2934,7 +2938,16 @@ describe('M68K slices', () => {
 describe('M68K trap documentation', () => {
     it('documents a task for every group', async () => {
         const groups = new Set(M68K_TRAP_DOCS.map((doc) => doc.group))
-        expect([...groups].sort()).toEqual(['files', 'graphics', 'input', 'sound', 'text', 'time'])
+        expect([...groups].sort()).toEqual([
+            'cycles',
+            'files',
+            'graphics',
+            'input',
+            'interrupts',
+            'sound',
+            'text',
+            'time'
+        ])
     })
 
     it('converts EASy68K colors both ways', () => {
@@ -3322,5 +3335,526 @@ describe('M68K Synth', () => {
         expect(results[0]?.errors ?? []).toEqual([])
         expect(results[0]?.passed).toBe(true)
         expect(synthWrites(output)).toEqual([])
+    })
+})
+
+describe('M68K IRQs and stop', () => {
+    //[m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 16 to 19 and 29,
+    //and [ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)
+
+    /** A level-2 timer of `ms` milliseconds into `timer`, three firings, then the end. */
+    function timerProgram(ms: number) {
+        return [
+            '    move.l #timer,$68',
+            '    move.b #32,d0',
+            '    move.b #6,d1',
+            '    move.b #$82,d2',
+            `    move.l #${ms},d3`,
+            '    trap #15',
+            'wait:',
+            '    stop #$2000',
+            '    cmp.l #3,d6',
+            '    bne wait',
+            '    move.b #9,d0',
+            '    trap #15',
+            'timer:',
+            '    addq.l #1,d6',
+            '    rte'
+        ].join('\n')
+    }
+
+    /** A level-5 IRQ on key down into `key`, which reads the last key into D7 and ends. */
+    const KEY_PROGRAM = [
+        '    move.l #key,$74',
+        '    move.b #62,d0',
+        '    move.w #$0501,d1',
+        '    trap #15',
+        'wait:',
+        '    stop #$2000',
+        '    bra wait',
+        'key:',
+        '    move.b #19,d0',
+        '    moveq #0,d1',
+        '    trap #15',
+        '    move.l d1,d7',
+        '    move.b #9,d0',
+        '    trap #15'
+    ].join('\n')
+
+    /** `stop` with nothing set up to wake it. */
+    const STOPS_FOR_GOOD = ['    moveq #1,d0', '    stop #$2300', '    moveq #2,d0'].join('\n')
+
+    async function build(body: string, options = {}) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code, options)
+        await emulator.compile(200, code)
+        return emulator
+    }
+
+    /**
+     * Runs until the program waits in `stop`, answering with the Run still going: wrapped, as an
+     * async function answering a promise would wait for it.
+     */
+    async function runUntilStopped(emulator: Awaited<ReturnType<typeof build>>) {
+        const run = emulator.run(INSTRUCTION_LIMIT)
+        await vi.waitFor(() => expect(emulator.runStatus).toMatch(/^Stopped: waiting/))
+        return { run }
+    }
+
+    /** Counts the slices a Run asks for: each wake from `stop` costs one. */
+    function countSlices(emulator: Awaited<ReturnType<typeof build>>) {
+        return vi.spyOn(emulator as unknown as { _runSlice(): Promise<unknown> }, '_runSlice')
+    }
+
+    it('waits in stop for its timer, and takes each IRQ as a step of its own', async () => {
+        const emulator = await build(timerProgram(20))
+        const started = performance.now()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.termination).toEqual({ kind: 'exit' })
+        expect(registerOf(emulator, 'D6')).toBe(3n)
+        //three firings of a 20 ms timer, which nothing ran ahead of
+        expect(performance.now() - started).toBeGreaterThanOrEqual(55)
+        const irqs = emulator.latestSteps.filter((step) => step.kind === 'irq')
+        expect(irqs).toHaveLength(3)
+        const timer = emulator.resolveMemoryLabel('timer')!
+        expect(irqs[0].line).toBe(-1)
+        expect(irqs[0].mutations[0]).toEqual({
+            type: 'TakeException',
+            value: expect.objectContaining({
+                name: 'IRQ 2',
+                vector: 26,
+                label: 'timer',
+                handler: timer
+            })
+        })
+        expect(irqs[0].mutations).toContainEqual({ type: 'Other', value: 'Woke from stop' })
+        emulator.dispose()
+    })
+
+    it('names in the History what the program set up, and its stop', async () => {
+        const emulator = await build(
+            [
+                //key down at level 5, then the mouse's button up and move at level 3
+                ...trap(62, ['    move.w #$0501,d1']).trimEnd().split('\n'),
+                ...trap(60, ['    move.w #$0306,d1']).trimEnd().split('\n'),
+                ...trap(32, ['    move.b #6,d1', '    move.b #$82,d2', '    move.l #500,d3'])
+                    .trimEnd()
+                    .split('\n'),
+                //level 2 off again
+                '    move.b #2,d2',
+                '    trap #15',
+                '    stop #$2000'
+            ].join('\n')
+        )
+        for (let i = 0; i < 14; i++) await emulator.step()
+        const others = emulator.latestSteps
+            .flatMap((step) => step.mutations)
+            .filter((mutation) => mutation.type === 'Other')
+            .map((mutation) => mutation.value)
+        expect(others).toEqual([
+            'Stopped until an interrupt above level 0',
+            'Turned the level-2 timer off',
+            'Set the level-2 timer to 500 ms',
+            'Mouse button up raises IRQ 3',
+            'Mouse move raises IRQ 3',
+            'Key down raises IRQ 5'
+        ])
+        emulator.dispose()
+    })
+
+    it('says what a stopped processor waits for, and Pause ends the wait with it still stopped', async () => {
+        const emulator = await build(STOPS_FOR_GOOD)
+        const { run } = await runUntilStopped(emulator)
+        expect(emulator.runStatus).toBe(
+            'Stopped: waiting for an interrupt above level 3, which nothing the program set up can raise'
+        )
+        //the Run waits on the stop's line, without spending the host's time
+        expect(emulator.line).toBe(2)
+        emulator.pause()
+        await run
+        expect(emulator.paused).toBe(true)
+        expect(emulator.terminated).toBe(false)
+        expect(emulator.runStatus).toMatch(/^Stopped: waiting for an interrupt above level 3/)
+        //and a Step runs nothing, saying why, rather than waiting
+        const steps = emulator.latestSteps.length
+        await emulator.step()
+        expect(emulator.latestSteps).toHaveLength(steps)
+        expect(emulator.notes.at(-1)?.text).toBe(
+            'Step ran nothing: the processor is stopped, waiting for an interrupt above level 3, and none is pending. Run waits for one, from a timer, a key or the mouse.'
+        )
+        //Run waits again, and Stop ends it
+        const again = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        emulator.clear()
+        expect(await again).toBe(InterpreterStatus.Terminated)
+        expect(emulator.canExecute).toBe(false)
+        expect(emulator.runStatus).toBe(undefined)
+        emulator.dispose()
+    })
+
+    it('reads the panels a few times a second while a 16 ms timer paces a drawing program', async () => {
+        //every wait in `stop` read the whole Core for the panels, sixty times a second
+        const emulator = await build(
+            [
+                '    move.l #timer,$68',
+                ...trap(32, ['    move.b #6,d1', '    move.b #$82,d2', '    move.l #16,d3'])
+                    .trimEnd()
+                    .split('\n'),
+                'frame:',
+                '    addq.w #1,d6',
+                ...trap(82, ['    move.w d6,d1', '    moveq #10,d2']).trimEnd().split('\n'),
+                '    stop #$2000',
+                '    bra frame',
+                'timer:',
+                '    rte'
+            ].join('\n')
+        )
+        emulator.peripherals.screen.watch()
+        const panels = vi.spyOn(
+            emulator as unknown as { refreshCoreViews(): void },
+            'refreshCoreViews'
+        )
+        const slices = countSlices(emulator)
+        const started = performance.now()
+        const run = emulator.run(INSTRUCTION_LIMIT)
+        await new Promise((resolve) => setTimeout(resolve, 600))
+        emulator.pause()
+        await run
+        const elapsed = performance.now() - started
+        expect(emulator.errors).toEqual([])
+        //the timer woke the stop for frame after frame
+        expect(slices.mock.calls.length).toBeGreaterThan(10)
+        //and the panels were read at the animating rate, the Pause's own reading included
+        expect(panels.mock.calls.length).toBeLessThanOrEqual(
+            Math.ceil(elapsed / ANIMATING_PANEL_REFRESH_MS) + 2
+        )
+        emulator.dispose()
+    })
+
+    it('shows the panels current in a wait only a key ends, however recently they were read', async () => {
+        const emulator = await build(
+            [
+                ...trap(62, ['    move.w #$0501,d1']).trimEnd().split('\n'),
+                //a trap the editor answers reads the panels just before the stop
+                ...trap(6, ['    moveq #65,d1']).trimEnd().split('\n'),
+                '    moveq #42,d7',
+                '    stop #$2000'
+            ].join('\n')
+        )
+        const { run } = await runUntilStopped(emulator)
+        expect(registerOf(emulator, 'D7')).toBe(42n)
+        emulator.pause()
+        await run
+        emulator.dispose()
+    })
+
+    it('does not wake for timers the mask holds back, and latches their firings when the wait ends', async () => {
+        const emulator = await build(
+            [
+                //a key at level 5, which gets past `stop #$2400`, and timers at levels 2 and 4,
+                //which do not
+                ...trap(62, ['    move.w #$0501,d1']).trimEnd().split('\n'),
+                ...trap(32, ['    move.b #6,d1', '    move.b #$82,d2', '    move.l #10,d3'])
+                    .trimEnd()
+                    .split('\n'),
+                '    move.b #$84,d2',
+                '    trap #15',
+                '    stop #$2400'
+            ].join('\n')
+        )
+        const slices = countSlices(emulator)
+        const { run } = await runUntilStopped(emulator)
+        const waiting = slices.mock.calls.length
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        //ten firings of each, and not one slice for them
+        expect(slices.mock.calls.length).toBe(waiting)
+        emulator.pause()
+        await run
+        //yet each level was latched, as it would have been with the processor awake
+        await emulator.step()
+        expect(emulator.notes.at(-1)?.text).toBe(
+            'Step ran nothing: the processor is stopped, waiting for an interrupt above level 4, and IRQs 2 and 4 are pending but held back by the interrupt mask. Run waits for one, from a timer, a key or the mouse.'
+        )
+        emulator.dispose()
+    })
+
+    it('says in a Step’s note which request the mask holds back', async () => {
+        //a key at level 5 under `stop #$2500`: it is latched, and the processor sleeps on
+        const emulator = await build(
+            KEY_PROGRAM.replace('stop #$2000', 'stop #$2500'),
+            instantKeyboard()
+        )
+        const { run } = await runUntilStopped(emulator)
+        emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
+        emulator.pause()
+        await run
+        await emulator.step()
+        expect(emulator.notes.at(-1)?.text).toBe(
+            'Step ran nothing: the processor is stopped, waiting for an interrupt above level 5, and IRQ 5 is pending but held back by the interrupt mask. Run waits for one, from a timer, a key or the mouse.'
+        )
+        emulator.dispose()
+    })
+
+    it('waits for a timer of 2^31 ms or more without polling', async () => {
+        //`setTimeout` fires a longer delay after about a millisecond, and each firing ran a slice
+        const emulator = await build(
+            [
+                ...trap(32, ['    move.b #6,d1', '    move.b #$82,d2', '    move.l #$FFFFFFFF,d3'])
+                    .trimEnd()
+                    .split('\n'),
+                '    stop #$2000'
+            ].join('\n')
+        )
+        const slices = countSlices(emulator)
+        const { run } = await runUntilStopped(emulator)
+        const waiting = slices.mock.calls.length
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(slices.mock.calls.length).toBe(waiting)
+        emulator.pause()
+        await run
+        emulator.dispose()
+    })
+
+    it('wakes on a key down the program asked an IRQ for, and not on the mouse it did not', async () => {
+        const emulator = await build(KEY_PROGRAM, instantKeyboard())
+        const { run } = await runUntilStopped(emulator)
+        emulator.peripherals.mouse.moveTo(10, 10)
+        emulator.peripherals.mouse.buttonDown('left')
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(emulator.terminated).toBe(false)
+        emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
+        await run
+        expect(emulator.errors).toEqual([])
+        expect(emulator.termination).toEqual({ kind: 'exit' })
+        //the handler read the key the IRQ was for
+        expect(Number(registerOf(emulator, 'D7')) & 0xffff).toBe(KEY_CODES.SPACE)
+        emulator.dispose()
+    })
+
+    it('takes back an IRQ with Undo, which makes its request pending again', async () => {
+        const emulator = await build(KEY_PROGRAM, instantKeyboard())
+        const { run } = await runUntilStopped(emulator)
+        emulator.pause()
+        await run
+        //a key pressed while the Run is paused is the host's input: the next step takes it
+        emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
+        await emulator.step()
+        const [irq] = emulator.latestSteps
+        expect(irq.kind).toBe('irq')
+        expect(irq.mutations[0]).toMatchObject({ type: 'TakeException', value: { name: 'IRQ 5' } })
+        expect(emulator.callStack.map((frame) => frame.name)).toEqual(['IRQ 5 → key'])
+        expect(emulator.line).toBe(9)
+        emulator.undo(1)
+        expect(emulator.latestSteps[0].kind).toBe('instruction')
+        expect(emulator.callStack).toEqual([])
+        expect(emulator.runStatus).toBe('Stopped: IRQ 5 is pending, and the next step takes it')
+        await emulator.step()
+        expect(emulator.latestSteps[0].kind).toBe('irq')
+        expect(emulator.line).toBe(9)
+        emulator.dispose()
+    })
+
+    it('ends on an IRQ whose autovector holds no handler, naming the vector', async () => {
+        const code = KEY_PROGRAM.replace('    move.l #key,$74\n', '')
+        const emulator = await build(code)
+        const { run } = await runUntilStopped(emulator)
+        emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
+        await run
+        expect(emulator.termination).toEqual({
+            kind: 'error',
+            message: 'IRQ 5 at line 6: vector 29 at $000074 holds no handler'
+        })
+        expect(emulator.latestSteps[0]).toMatchObject({
+            kind: 'irq',
+            title: 'IRQ 5: vector 29 at $000074 holds no handler'
+        })
+        emulator.dispose()
+    })
+
+    it('says so when a Run takes a pending IRQ first and comes back to its own Breakpoint', async () => {
+        //a handler that returns, to the `bra` after the stop
+        const code = KEY_PROGRAM.replace('    move.b #9,d0\n    trap #15', '    rte')
+        const emulator = await build(code, instantKeyboard())
+        emulator.toggleBreakpoint(7)
+        const { run } = await runUntilStopped(emulator)
+        //a key wakes it, the handler returns, and the Run stops on the `bra`'s Breakpoint
+        emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
+        await run
+        expect(emulator.line).toBe(7)
+        expect(emulator.notes).toEqual([])
+        //another key while the Run is stopped there: Run takes its IRQ first, as the step it starts
+        //with, and the handler comes back to the same Breakpoint
+        emulator.peripherals.keyboard.releaseKey(KEY_CODES.SPACE)
+        emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.line).toBe(7)
+        expect(emulator.notes.map((note) => note.text)).toEqual([
+            'Run took a pending IRQ first, and its handler returned to the Breakpoint the Run started from, so the Run stopped there again. Run again to go on.'
+        ])
+        //and Run again goes on to the stop
+        const { run: onwards } = await runUntilStopped(emulator)
+        emulator.pause()
+        await onwards
+        expect(emulator.line).toBe(7)
+        emulator.dispose()
+    })
+
+    it('runs a timer-driven program at once in a Testcase, on its virtual clock', async () => {
+        const code = ORG + timerProgram(1000)
+        const emulator = M68KEmulator(code)
+        const started = Date.now()
+        const [result] = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: '',
+                    startingRegisters: {},
+                    expectedRegisters: { D6: 3n },
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
+        //three seconds of program time
+        expect(Date.now() - started).toBeLessThan(2_000)
+        emulator.dispose()
+    })
+
+    it('fails a Testcase whose program stops with nothing to wake it, saying why', async () => {
+        const code = ORG + STOPS_FOR_GOOD
+        const emulator = M68KEmulator(code)
+        const [result] = await emulator.test(
+            code,
+            [
+                {
+                    input: [],
+                    expectedOutput: '',
+                    startingRegisters: {},
+                    expectedRegisters: {},
+                    startingMemory: [],
+                    expectedMemory: []
+                }
+            ],
+            INSTRUCTION_LIMIT
+        )
+        expect(result.passed).toBe(false)
+        expect(result.errors).toEqual([
+            {
+                type: 'runtime-error',
+                message:
+                    'The program stopped at line 3 waiting for an interrupt above level 3, which nothing in a Testcase can raise: it set no timer with task 32, and a Testcase has no keyboard or mouse'
+            }
+        ])
+        emulator.dispose()
+    })
+})
+
+describe('M68K cycles', () => {
+    //[m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 23 and 30: the
+    //68000's cycles under the registers, in each History row, and taken back by Undo
+
+    /** Four rounds of a `dbra` loop: 10 cycles for each round that loops back, 14 for the last. */
+    const LOOP = ['    moveq #3,d2', 'loop:', '    dbra d2,loop', '    add.l d2,d3'].join('\n')
+
+    async function build(body: string) {
+        const code = ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        return emulator
+    }
+
+    it('counts the cycles under the registers, with what the newest step took', async () => {
+        const emulator = await build(LOOP)
+        expect(emulator.cycles).toEqual({ total: 0n })
+        await emulator.step()
+        expect(emulator.cycles).toEqual({ total: 4n, last: 4 })
+        for (let i = 0; i < 4; i++) await emulator.step()
+        expect(emulator.cycles).toEqual({ total: 48n, last: 14 })
+        //each History row says what its step took, the newest first
+        expect(emulator.latestSteps.map((step) => step.cycles)).toEqual([14, 10, 10, 10, 4])
+        emulator.dispose()
+    })
+
+    it('takes a step back off the counter with Undo', async () => {
+        const emulator = await build(LOOP)
+        for (let i = 0; i < 5; i++) await emulator.step()
+        emulator.undo(1)
+        expect(emulator.cycles).toEqual({ total: 34n, last: 10 })
+        emulator.undo(4)
+        expect(emulator.cycles).toEqual({ total: 0n })
+        emulator.dispose()
+    })
+
+    it('shows no step taking anything after a Poke, which ran nothing', async () => {
+        const emulator = await build(LOOP)
+        await emulator.step()
+        emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'D2', value: 1n }])
+        expect(emulator.cycles).toEqual({ total: 4n })
+        expect(emulator.latestSteps[0]).toMatchObject({ kind: 'poke' })
+        expect(emulator.latestSteps[0].cycles).toBeUndefined()
+        emulator.dispose()
+    })
+
+    it('clears the counter with task 30 and reads it into D1 with task 31, which Undo puts back', async () => {
+        const emulator = await build(
+            [
+                '    moveq #3,d2',
+                '    moveq #30,d0',
+                '    trap #15',
+                '    move.w #2,d2',
+                'loop:',
+                '    dbra d2,loop',
+                '    moveq #31,d0',
+                '    trap #15',
+                '    move.b #9,d0',
+                '    trap #15'
+            ].join('\n')
+        )
+        for (let i = 0; i < 3; i++) await emulator.step()
+        //the two `moveq`s, cleared by the trap, which took nothing itself
+        expect(emulator.cycles).toEqual({ total: 0n, last: 0 })
+        emulator.undo(1)
+        expect(emulator.cycles).toEqual({ total: 8n, last: 4 })
+        await emulator.run(INSTRUCTION_LIMIT)
+        //`move.w` 8, two loops back of 10 and the last round's 14, and the `moveq` that asks: 4
+        expect(registerOf(emulator, 'D1')).toBe(46n)
+        //and on to the end, the `move.b #9,d0` before the last trap counted too
+        expect(emulator.cycles?.total).toBe(54n)
+        emulator.dispose()
+    })
+
+    it('gives each IRQ its 44 cycles in its History row', async () => {
+        const emulator = await build(
+            [
+                '    move.l #timer,$68',
+                ...trap(32, ['    move.b #6,d1', '    move.b #$82,d2', '    move.l #10,d3'])
+                    .trimEnd()
+                    .split('\n'),
+                'wait:',
+                '    stop #$2000',
+                '    cmp.l #2,d6',
+                '    bne wait',
+                '    move.b #9,d0',
+                '    trap #15',
+                'timer:',
+                '    addq.l #1,d6',
+                '    rte'
+            ].join('\n')
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        const irqs = emulator.latestSteps.filter((step) => step.kind === 'irq')
+        expect(irqs.map((step) => step.cycles)).toEqual([44, 44])
+        //`stop` takes 4, as it would waiting on a 68000
+        const stops = emulator.latestSteps.filter(
+            (step) => step.kind === 'instruction' && step.line === 8
+        )
+        expect(stops.map((step) => step.cycles)).toEqual([4, 4])
+        emulator.dispose()
     })
 })

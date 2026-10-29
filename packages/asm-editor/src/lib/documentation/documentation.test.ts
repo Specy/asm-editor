@@ -214,10 +214,11 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         for (const entry of entries.filter((entry) => entry.kind === 'instruction')) {
             const patterns = documentPatterns(viewOf(entry, 'instruction').document)
             expect(patterns.length, entry.id).toBeGreaterThan(0)
-            //`rte` is the one M68K instruction privileged in every form; `extb` is the 68020's in all
-            //of its
+            //`rte`, `stop` and `reset` are the M68K instructions privileged in every form; `extb`
+            //is the 68020's in all of its
             if (entry.title === 'extb') expect(entry.tags).toEqual(['68020'])
-            else if (entry.title === 'rte') expect(entry.tags).toEqual(['privileged'])
+            else if (['rte', 'stop', 'reset'].includes(entry.title))
+                expect(entry.tags, entry.id).toEqual(['privileged'])
             else expect(entry.tags, entry.id).toBeUndefined()
         }
     })

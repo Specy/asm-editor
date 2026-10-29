@@ -378,7 +378,7 @@ function exceptions(): Chapter {
         title: 'Exceptions',
         href,
         description:
-            'How the 68000 handles exceptions through its vector table: handlers, frames, `rte`, and user and supervisor mode.',
+            'How the 68000 handles exceptions through its vector table: handlers, frames, `rte`, user and supervisor mode, interrupt requests, and the cycles every step takes.',
         entries: prose('exceptions', href, exceptionsMarkdown)
     }
 }

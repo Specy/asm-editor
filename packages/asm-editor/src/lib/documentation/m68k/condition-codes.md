@@ -6,6 +6,20 @@ For example the [tst](/documentation/m68k/instruction/tst), [cmp](/documentation
 
 The instructions that use the condition codes are: [bcc](/documentation/m68k/instruction/bcc) [dbcc](/documentation/m68k/instruction/dbcc) [scc](/documentation/m68k/instruction/scc)
 
+## The status register {#status-register}
+
+The condition codes are the low byte of the 16-bit **status register**, `sr`. That byte is the **condition code register**, `ccr`, and its five flags are the ones shown above the registers. The high byte is the **system byte**: it holds the processor's own settings, which the **System** register file shows as flags of their own.
+
+| bit  | 15  | 13  | 10–8  | 4   | 3   | 2   | 1   | 0   |
+| ---- | --- | --- | ----- | --- | --- | --- | --- | --- |
+| flag | T   | S   | I2–I0 | X   | N   | Z   | V   | C   |
+
+- T is the trace flag. While it is set, the processor runs a [trace](/documentation/m68k/exceptions#trace) handler after every instruction.
+- S is the supervisor flag. It is set in supervisor mode, where every instruction runs and `a7` is the supervisor stack pointer, and clear in [user mode](/documentation/m68k/exceptions#modes).
+- I2, I1 and I0 are the interrupt mask, a number from 0 to 7. An [interrupt request](/documentation/m68k/exceptions#interrupts) at or below it waits, except at level 7.
+
+A program starts with `sr` at `$2000`: S set, T clear and the mask at 0. Arithmetic and comparisons never change the system byte. The program changes it with [move](/documentation/m68k/instruction/move), [andi](/documentation/m68k/instruction/andi), [ori](/documentation/m68k/instruction/ori) or [eori](/documentation/m68k/instruction/eori) to `sr`, with [stop](/documentation/m68k/instruction/stop) or with [rte](/documentation/m68k/instruction/rte), and only in supervisor mode. An exception changes it too: it sets S and clears T, and an interrupt request also raises the mask to its own level.
+
 ## Condition codes flags
 
 The condition codes X, N, Z, V, C are the individual flags that can be set in the status register.

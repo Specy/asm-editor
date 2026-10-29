@@ -193,3 +193,29 @@ describe('lifecycle', () => {
         expect(mouse.state()).toMatchObject({ x: 0, y: 0, left: false })
     })
 })
+
+describe('mouse events as they happen', () => {
+    //what an M68K program's mouse IRQ hears ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md))
+    it('tells a listener each button down and up and each move to another pixel', () => {
+        const { mouse } = makeMouse(320, 200)
+        const heard: string[] = []
+        const stop = mouse.onMouseEvent((event) => heard.push(event))
+        mouse.moveTo(10, 10)
+        //the same pixel, and a pixel past the edge that clamps to where it is, are no event
+        mouse.moveTo(10.4, 10.7)
+        mouse.buttonDown('left', 10, 10)
+        mouse.buttonDown('left', 10, 10)
+        mouse.moveTo(400, 10)
+        mouse.moveTo(500, 10)
+        mouse.buttonUp('left')
+        expect(heard).toEqual(['move', 'down', 'move', 'up'])
+        //a release for lost focus is an event too
+        mouse.buttonDown('right')
+        mouse.releaseAll()
+        expect(heard.slice(4)).toEqual(['down', 'up'])
+        stop()
+        mouse.moveTo(1, 1)
+        mouse.reset()
+        expect(heard).toHaveLength(6)
+    })
+})

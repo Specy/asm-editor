@@ -69,7 +69,7 @@ describe('assemblyTokenOf', () => {
     })
 
     it('paints a refused word as invalid and a bracket by its level', () => {
-        expect(tokenOf('    stop #1', 'M68K', 'stop')).toBe('invalid')
+        expect(tokenOf('    cas d0,d1,(a0)', 'M68K', 'cas')).toBe('invalid')
         const brackets = tokenizeAssembly('    move.l ((a0)), d0)', 'M68K')[0].filter(
             (t) => t.kind === 'bracket'
         )

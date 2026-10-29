@@ -343,12 +343,23 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
     - a Testcase with an unwakeable `stop` failing with its reason;
     - a key-down IRQ on the Screen.
 - **Estimate:** 3–4 days. This touches the run loop that every language shares.
+- **As built (2026-10-28), against Core 28e9fe9:**
+    - **The shared run loop.** The Pause flag moved into `ExecutionController`, which gained `whileUnpaused(execution, promise)`: a wait that settles on its promise, on Pause (resolved, also when the Pause came before the wait began) or on Stop (`ExecutionSupersededError`). Only the adapter's `stop` wait uses it; a Delay or a MARS `sleep` still runs out before a Pause is taken. `pause()` is refused for a run that takes none, and the slice request gained `startsRun`. The emulator gained `runStatus`, from the adapter's `_getRunStatus`, which the bottom panel's run-info line shows while the program has not ended.
+    - **The adapter.** `irqTimers.ts` runs task 32's timers: synced from `getMachineState().autoIrqs` at each slice, after Undo and before a `stop` wait, restarted at each Run's first slice, and raised between slices. A `Stopped` slice returns a wait on the next timer (`ProgramClock.wait` with an abort signal), on a Keyboard or Mouse event whose `deviceEvent` woke the processor, on Pause or on Stop. A Testcase's `stop` moves the virtual clock to the next timer above the mask, or fails "The program stopped at line 3 waiting for an interrupt above level 3, which nothing in a Testcase can raise: …". A Step while stopped runs nothing and says so in the Log. A Run that starts on a Breakpoint with a request pending, whose handler returns to it, says so in the Log too.
+    - **History and Call stack.** An IRQ step is `kind: 'irq'`, headed "IRQ 2 → timer at $102C"; one that ended the program is titled "IRQ 3: vector 27 at $00006C holds no handler". `SetMachineState` reads "Set the level-2 timer to 500 ms", "Turned the level-2 timer off", "Key down raises IRQ 5", "Mouse move raises IRQ 3", "Stopped until an interrupt above level 0" and "Woke from stop". An autovector's frame is "IRQ 2 → timer".
+    - **Documentation.** Tasks 32, 60 and 62 are a new "Interrupt requests" group of the Trap tasks chapter, task 32's hardware-window parts staying refused. `stop` and `reset` got their entries (E7b's), leaving the refused instruction list empty, and the Exceptions chapter's Interrupts section was rewritten, since it said none existed.
+    - **Found.** A key-down handler that reads task 19 once can see the previous key's release before its own press: the key state still applies one queued transition per read (ADR 0008), so the IRQ is ahead of the state it reports.
 
 ### E4: Cycles in the editor (after C9)
 
 - **Display.** The counter under the registers with the last step's cost, each History row's cycles, and the cycles in the exit line of the Log.
 - **Trap tasks.** Tasks 30 and 31 move from the refused list in [M68K-traps.ts](../../packages/asm-editor/src/lib/languages/M68K/M68K-traps.ts) to the documented tasks, and task 32's #4, #5 and #6 are documented beside its refused parts.
 - **Estimate:** 1 day.
+- **As built (2026-10-29), against Core b5e60d3:**
+    - **The counter.** The adapter's `_getCycles` answers `getCycles()` and the newest step's `cycles`, and no step's cost after a Poke, which ran nothing. The emulator keeps it as `cycles`, read with the other panels and after a Build. `CyclesLine` shows "Cycles 12,345 (+8)" at the foot of the registers card in the Workbench and the Interactive editor, with a tooltip saying what it counts; a phone leaves it out, as it does the run-info line.
+    - **History.** The row of an instruction or an IRQ has a Cycles line: 44 for an IRQ, 4 for `stop`, 0 for a `trap #15` task. The coding agent's steps and state carry the same numbers.
+    - **The Log.** The exit line leads with the cycles: "Ran 1,234 cycles in 12ms", or "Ran 0 cycles, stopped by an error: …" after a Step. The count is the counter's, so it starts from the last task 30. The run-info line beside the Terminal keeps its shorter wording.
+    - **Trap tasks.** Tasks 30 and 31 are a "Cycle counter" group of the Trap tasks chapter. Task 32's #4, #5 and #6 were documented with E3.
 
 ### E5: The S-record Build output (deferred)
 
@@ -388,6 +399,7 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
 - **E7c (batch 3).**
     - Tasks 30, 31, 60 and 62 and the supported parts of 32 documented, and [traps.md](../../packages/asm-editor/src/lib/documentation/m68k/traps.md) updated.
     - The Status flags documentation gains T, S and I2–I0.
+    - **As built (2026-10-29):** tasks 32, 60 and 62 came with E3 and tasks 30 and 31 with E4. The Condition codes chapter gained "The status register", the whole of `sr` with T, S and I2–I0 beside the condition codes; the Exceptions chapter gained "Cycles", what a cycle is, what the editor counts, what exceptions and IRQs cost, and timing a loop with tasks 30 and 31. The agent prompt says how cycles are counted and read, and that a key-down handler reading task 19 can see the key before. Four golden queries: "cycle counter", "how many cycles does my loop take", "interrupt mask" and "timer interrupt".
 - **Estimate:** 2–3 days across the three.
 
 ### E8: Courses (batches 1–3)
@@ -398,6 +410,7 @@ Within a batch the Core leads and the editor follows each milestone. Batches run
     - Every address is re-read from a Build, not computed.
 - **E8b (batch 2).** The M68K lecture `exceptions-and-the-vector-table`, rewritten around real handlers: filling a vector, a `trap #3` service, an address-error handler, `rte`, and user mode with its own stack. The General course's `system-calls-and-traps` and `interrupts-and-exceptions` are updated, along with the facts in `docs/courses/plan.md`.
 - **E8c (batch 3).** An interrupts section in the same lecture or a new one: a timer IRQ with `stop`, and a key-down IRQ on the Screen. `trap-15-and-its-tasks` gains tasks 30, 31, 60 and 62 and the supported parts of 32.
+    - **As built (2026-10-29):** a new lecture, "Interrupts and cycles" (`interrupts-and-cycles`, order 3, topic `interrupt-requests`, which no other course has), after "Exceptions and the vector table", whose Interrupts section now points to it. It covers IRQ levels, the mask in `sr` and the autovectors; a level-2 timer with `stop`; a key-down IRQ on the Screen that counts presses for five seconds, a level-2 timer ending it, since a playground that waits in `stop` with nothing to wake it would never end in the content test; why interrupts beat polling; and timing a `dbra` loop with tasks 30 and 31. Two Exercises: a level-3 timer, and holding a level back with the mask of `stop`. The key-down handler counts and reads no key, as a handler that reads task 19 once can be answered with the key before (E3's finding). `trap-15-and-its-tasks` gained a section on the timer, interrupt and cycle tasks with a playground reading the counter; the General course's `interrupts-and-exceptions` says the M68K's devices interrupt it; `docs/courses/plan.md` records the lecture and the facts. A student review by a separate agent was folded in.
 - **How.** The course-rewrite workflow (student review, then writer, per lecture). The writing guide is being redone, so the rewrites follow whatever guide exists when each batch is written.
 - **Estimate:** 3–5 days across the three.
 

@@ -244,8 +244,9 @@ operating system's handler does the work in supervisor mode, and its `rte` retur
 
 An **interrupt** is an exception a device raises between two instructions, when a key is pressed
 or a timer runs out. It goes through the same vectors, frames and `rte`, and the bits I2 to I0 of
-`sr` tell the processor which devices to ignore for now. No device in this editor raises one for
-now, so a program goes and looks instead, as the previous lecture did with the keyboard.
+`sr` tell the processor which requests to hold back for now. The
+[next lecture](/learn/courses/m68k/talking-to-the-outside-world/interrupts-and-cycles) sets up a
+timer and a key press, and writes their handlers.
 
 ## Your turn
 

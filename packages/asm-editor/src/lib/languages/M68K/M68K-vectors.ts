@@ -46,3 +46,41 @@ export function m68kVectorName(vector: number): string {
 export function m68kVectorAddress(vector: number): string {
     return `$${(vector * 4).toString(16).toUpperCase().padStart(6, '0')}`
 }
+
+/** The first autovector, which a level-1 IRQ goes through; level n goes through 24 + n. */
+const FIRST_AUTOVECTOR = 25
+
+/** The IRQ level an autovector takes, 1 to 7, or undefined for any other vector. */
+export function m68kAutovectorLevel(vector: number): number | undefined {
+    const level = vector - FIRST_AUTOVECTOR + 1
+    return level >= 1 && level <= 7 ? level : undefined
+}
+
+/**
+ * What an exception taken through `vector` is called in the History and the Call stack: an
+ * autovector's is the IRQ it takes, `IRQ 2`, and every other one is its vector's name, `TRAP #3`
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28).
+ */
+export function m68kExceptionName(vector: number): string {
+    const level = m68kAutovectorLevel(vector)
+    return level === undefined ? m68kVectorName(vector) : `IRQ ${level}`
+}
+
+/**
+ * What a processor `stop` stopped waits for, from the mask in its status register's bits 8 to 10:
+ * "an interrupt above level 3", and at mask 7, where only level 7 gets through, "a level-7
+ * interrupt" ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 29).
+ */
+export function m68kInterruptAbove(mask: number): string {
+    return mask >= 7 ? 'a level-7 interrupt' : `an interrupt above level ${mask}`
+}
+
+/** Whether an IRQ at `level` gets past the interrupt mask `mask`: above it, or level 7. */
+export function m68kIrqGetsThrough(level: number, mask: number): boolean {
+    return level === 7 || level > mask
+}
+
+/** The interrupt mask in a status register, its bits 8 to 10. */
+export function m68kInterruptMask(sr: number): number {
+    return (sr >> 8) & 7
+}

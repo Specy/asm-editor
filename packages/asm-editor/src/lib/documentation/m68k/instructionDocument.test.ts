@@ -257,7 +257,7 @@ describe('M68K instruction documents', () => {
     })
 
     it('is undefined for a name with no page', () => {
-        expect(m68kInstructionDocument('stop')).toBeUndefined()
+        expect(m68kInstructionDocument('callm')).toBeUndefined()
         expect(m68kInstructionDocument('dc')).toBeUndefined()
     })
 
@@ -267,7 +267,7 @@ describe('M68K instruction documents', () => {
             modesChapter.href,
             ...modesChapter.entries.map((entry) => entry.href)
         ])
-        expect(PAGE_NAMES.length).toBe(127)
+        expect(PAGE_NAMES.length).toBe(129)
         for (const name of PAGE_NAMES) {
             const built = document(name)
             const explained = new Set(built.operands.map((operand) => operand.symbol))

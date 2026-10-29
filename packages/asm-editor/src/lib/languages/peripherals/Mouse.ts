@@ -19,9 +19,16 @@ import type { ScreenSize } from './screen/Screen'
  * Plain TypeScript with no Svelte runes and no DOM types, like the other peripherals. The phase 4
  * widget owns pointer capture, the context menu and middle-click suppression, and the window-blur
  * release; it calls `moveTo`, `buttonDown`, `buttonUp` and `releaseAll`.
+ *
+ * Each event is also told at once to whoever listens with `onMouseEvent`: the M68K adapter, whose
+ * program can ask for an IRQ on a button going down or up and on a move
+ * ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)).
  */
 
 export type MouseButton = 'left' | 'right' | 'middle'
+
+/** A button going down or coming up, or the pointer moving, as a listener of `onMouseEvent` hears it. */
+export type MouseEventKind = 'down' | 'up' | 'move'
 
 export type MouseSnapshot = {
     x: number
@@ -94,6 +101,7 @@ export class Mouse {
     private _lastUp: MouseSnapshot = EMPTY_SNAPSHOT
     private previousDownButton: MouseButton | null = null
     private previousDownAt: number | null = null
+    private readonly eventListeners = new Set<(event: MouseEventKind) => void>()
 
     constructor(options: MouseOptions) {
         this.screen = options.screen
@@ -107,7 +115,9 @@ export class Mouse {
 
     /** The pointer moved, in logical Screen pixels. A move that clamps to the same pixel is no event. */
     moveTo(x: number, y: number): void {
-        if (this.place(x, y)) this.countEvent()
+        if (!this.place(x, y)) return
+        this.countEvent()
+        this.tell('move')
     }
 
     /** A button went down at the given position, or where the pointer already is. */
@@ -124,6 +134,7 @@ export class Mouse {
         this.previousDownButton = button
         this.previousDownAt = now
         this._lastDown = this.snapshot(double)
+        this.tell('down')
     }
 
     /** A button came up. Losing browser-window focus releases through `releaseAll` instead. */
@@ -133,6 +144,7 @@ export class Mouse {
         this.buttons[button] = false
         this.countEvent()
         this._lastUp = this.snapshot(false)
+        this.tell('up')
     }
 
     /**
@@ -142,6 +154,22 @@ export class Mouse {
      */
     releaseAll(): void {
         for (const button of ['left', 'right', 'middle'] as const) this.buttonUp(button)
+    }
+
+    /**
+     * Called at each event, a button down or up or a move to another pixel, once the views say
+     * it happened: what a device IRQ needs. A move that clamps to the same pixel is no event, and
+     * neither is a reset. Returns the unsubscribe.
+     */
+    onMouseEvent(listener: (event: MouseEventKind) => void): () => void {
+        this.eventListeners.add(listener)
+        return () => {
+            this.eventListeners.delete(listener)
+        }
+    }
+
+    private tell(event: MouseEventKind): void {
+        for (const listener of [...this.eventListeners]) listener(event)
     }
 
     // ----------------------------------------------------------- the views

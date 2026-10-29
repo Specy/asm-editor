@@ -16,7 +16,15 @@
 import { KEY_CODES } from '../peripherals/keyCodes'
 import { rgb, type ScreenColor } from '../peripherals/screen/color'
 
-export type M68KTrapGroup = 'text' | 'graphics' | 'input' | 'time' | 'files' | 'sound'
+export type M68KTrapGroup =
+    | 'text'
+    | 'graphics'
+    | 'input'
+    | 'time'
+    | 'cycles'
+    | 'interrupts'
+    | 'files'
+    | 'sound'
 
 /** The groups the documentation page and the coding agent's prompt show, in that order. */
 export const M68K_TRAP_GROUP_DOCS: {
@@ -40,13 +48,25 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'input',
         title: 'Keyboard and mouse',
         description:
-            'Keyboard and mouse state is polled from the focused screen; there are no input interrupts, so tasks 60 and 62 are unsupported. Tasks 7, 19, and 61 also select [screen input](/documentation/m68k/traps#differences) for subsequent interactive reads.'
+            'A program reads the keyboard and the mouse of the focused screen when it wants to, by polling with these tasks. It can also ask for an [interrupt request](/documentation/m68k/traps#interrupts) when a key or a mouse button is pressed, with tasks 62 and 60. Tasks 7, 19, and 61 also select [screen input](/documentation/m68k/traps#differences) for subsequent interactive reads.'
     },
     {
         group: 'time',
         title: 'Program time',
         description:
             'Reading the clock and delaying execution. Both tasks count in hundredths of a second.'
+    },
+    {
+        group: 'cycles',
+        title: 'Cycle counter',
+        description:
+            'The editor counts the **clock cycles** a 68000 would take to run the program: each instruction’s, each exception’s and each interrupt request’s, as the line under the registers shows. `trap #15` tasks take none. To time a piece of code, clear the counter with task 30 before it and read it with task 31 after it. [Cycles](/documentation/m68k/exceptions#cycles) explains what a cycle is and what the reading includes.'
+    },
+    {
+        group: 'interrupts',
+        title: 'Interrupt requests',
+        description:
+            'An **interrupt request**, or IRQ, makes the processor put aside what it is doing between two instructions and run a handler, then come back. A timer raises one (task 32), and so can a key or a mouse event on the screen (tasks 62 and 60).\n\nThere are seven levels, 1 to 7. Before asking for one, the program puts the address of its handler in that level’s **autovector**, the long word at `$60` + 4 × level: `$68` for level 2, `$74` for level 5. The handler ends with `rte`, which returns to where the program was. The interrupt mask, bits 8 to 10 of the status register, holds back every level at or below it, except level 7; `move.w #$2000,sr` sets it to 0, so every level gets through. A request whose autovector holds no handler ends the program.\n\n`stop #$2000` waits for a request without running anything. Run waits with it, and the line beside the Terminal’s tab says what it waits for. The History shows each IRQ as a row of its own, and Undo takes it back.\n\nWhen a Run starts on a Breakpoint while a request is already pending, the processor takes the request first, so the Breakpoint’s instruction has not run yet when the handler returns to it, and the Run stops there again. Run again to go on. [Exceptions](/documentation/m68k/exceptions#interrupts) explains what the processor does to take a request.'
     },
     {
         group: 'files',
@@ -261,6 +281,34 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
             'Accepted and ignored: the screen panel already hands every key it takes to the program, so there are no simulator shortcuts to give up.'
     },
     {
+        task: 30,
+        group: 'cycles',
+        title: 'Clear the cycle counter',
+        description:
+            'Sets the cycle counter to 0, so it counts again from the next instruction. Undo puts back the count it cleared.'
+    },
+    {
+        task: 31,
+        group: 'cycles',
+        title: 'Read the cycle counter',
+        output: 'D1.L = the cycles since the program started or task 30 last cleared the counter, or 0 once they no longer fit in 32 bits',
+        description:
+            'Reads the counter without changing it. The instruction that puts 31 in D0 runs before the read and counts too: `moveq #31, d0` takes 4 cycles, and `move.b #31, d0` takes 8.',
+        deviation:
+            'The counts are a real 68000’s, so a few differ from EASy68K’s own: `trap #0` to `#14` takes 34 cycles here and 38 in EASy68K.'
+    },
+    {
+        task: 32,
+        group: 'interrupts',
+        title: 'Interrupt timers',
+        input: 'D1.B = 6 to set a timer, with D2.B = which timer and D3.L = its interval in milliseconds; D1.B = 4 or 5 for the simulator settings',
+        output: 'For D1.B = 4, D1.L = the simulator version, $00051001',
+        description:
+            'With D1.B = 6, sets a timer that raises an IRQ over and over at the same interval. D2.B = `$80` plus a level turns that level’s timer on, firing every D3.L milliseconds: `$82` is a level-2 timer. D2.B = 1 to 7 turns that level’s timer off, and D2.B = 0 turns every timer off. With D1.B = 4 it answers EASy68K’s version in D1.L. With D1.B = 5 it turns on EASy68K’s exceptions, which are always on here, so it changes nothing.',
+        deviation:
+            'Timers count only while the program runs: Pause and Step stop them, and each Run starts them counting again. A testcase runs them on its virtual clock, so a program waiting in `stop` goes straight to the next firing. D1.B = 0 to 3 and 7, which show EASy68K’s hardware window and give its devices’ addresses, stop the program with an error: there is no hardware window.'
+    },
+    {
         task: 33,
         group: 'graphics',
         title: 'Set or get the screen size',
@@ -367,6 +415,24 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         output: 'D0.B = Ctrl, Alt, Shift, Double, Middle, Right, Left from bit 6 down; D1.L = Y in the high word, X in the low word',
         description:
             'The pointer position is in screen pixels with the same origin drawing uses, whatever the panel’s zoom. The release and press states persist until the next one, so a program that polls slowly still sees every click; the double bit is only ever set on a press.'
+    },
+    {
+        task: 60,
+        group: 'interrupts',
+        title: 'Mouse IRQ',
+        input: 'D1.W = the level in the high byte, 0 to 7; in the low byte, which events: bit 0 a button down, bit 1 a button up, bit 2 a move',
+        description:
+            'Asks for an IRQ at that level each time one of the chosen mouse events happens on the screen panel: `move.w #$0301,d1` asks for a level-3 IRQ on every button press. Level 0 turns the chosen events’ IRQ off, an event whose bit is clear keeps the level it had, and a level above 7 makes the task do nothing. The handler reads where the mouse is and which buttons are down with task 61.',
+        deviation: 'A testcase has no mouse, so it never raises this IRQ.'
+    },
+    {
+        task: 62,
+        group: 'interrupts',
+        title: 'Keyboard IRQ',
+        input: 'D1.W = the level in the high byte, 0 to 7; in the low byte, which events: bit 0 a key down, bit 1 a key up',
+        description:
+            'Asks for an IRQ at that level each time a key goes down or comes up on the focused screen panel: `move.w #$0501,d1` asks for a level-5 IRQ on every key press. Level 0 turns the chosen events’ IRQ off, an event whose bit is clear keeps the level it had, and a level above 7 makes the task do nothing. The handler reads which key with task 19, whose D1.L = 0 form answers the last key pressed and the last key released.',
+        deviation: 'A testcase has no keyboard, so it never raises this IRQ.'
     },
     {
         task: 70,
@@ -579,9 +645,6 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
     }
 ]
 
-/** Why the cycle counter is rejected, which [the plan's decision 9](../../../../../../docs/design/environment-library-plan.md) settles. */
-const NO_CYCLE_TIMING =
-    'instruction timing is not modeled, so these tasks cannot report a 68000 cycle count'
 const NO_TEXT_GRID = 'the screen holds pixels, not a grid of characters'
 const NO_SERIAL_PORT = 'no serial device is available to a program'
 const NO_NETWORK = 'programs in this editor cannot open network connections'
@@ -590,7 +653,8 @@ const NO_NETWORK = 'programs in this editor cannot open network connections'
  * The tasks that stop the program with an error naming them, each with the reason the error gives,
  * so a user reads why rather than only what. Each either drives something a page in a browser
  * cannot have (a printer, a serial port, the network), or something the editor does not have yet
- * (the cycle counter), or configures what the editor decides for itself (fonts, interrupts). The
+ * (the hardware window), or configures what the editor decides for itself
+ * (fonts). Task 32 is here for its hardware window's parts alone; its timers are supported. The
  * Core refuses them itself, as `UnsupportedTrapTask`.
  */
 export const M68K_REJECTED_TRAP_TASKS: { task: number; title: string; reason: string }[] = [
@@ -602,27 +666,15 @@ export const M68K_REJECTED_TRAP_TASKS: { task: number; title: string; reason: st
     },
     { task: 22, title: 'read a character from the text screen', reason: NO_TEXT_GRID },
     { task: 25, title: 'scroll a text rectangle', reason: NO_TEXT_GRID },
-    { task: 30, title: 'clear the cycle counter', reason: NO_CYCLE_TIMING },
-    { task: 31, title: 'read the cycle counter', reason: NO_CYCLE_TIMING },
     {
         task: 32,
-        title: 'hardware and simulator control',
-        reason: 'there is no hardware window and no automatic IRQ'
+        title: 'with D1.B = 0 to 3 or 7, show the hardware window or give its devices’ addresses',
+        reason: 'there is no hardware window'
     },
     { task: 40, title: 'initialize a serial port', reason: NO_SERIAL_PORT },
     { task: 41, title: 'set the serial port parameters', reason: NO_SERIAL_PORT },
     { task: 42, title: 'read a string from a serial port', reason: NO_SERIAL_PORT },
     { task: 43, title: 'send a string to a serial port', reason: NO_SERIAL_PORT },
-    {
-        task: 60,
-        title: 'enable the mouse IRQ',
-        reason: 'mouse input is polled with task 61, not delivered as an interrupt'
-    },
-    {
-        task: 62,
-        title: 'enable the keyboard IRQ',
-        reason: 'keyboard input is polled with tasks 7 and 19, not delivered as an interrupt'
-    },
     { task: 100, title: 'create a network client', reason: NO_NETWORK },
     { task: 101, title: 'create a network server', reason: NO_NETWORK },
     { task: 102, title: 'send over the network', reason: NO_NETWORK },

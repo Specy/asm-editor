@@ -396,7 +396,9 @@ For \`trap #0\` to \`trap #14\`, the processor pushes the address of the next in
     trapv: 'Raises an overflow exception if the overflow flag V is set, and does nothing otherwise. Put it after arithmetic whose result must fit, to send every overflow to one handler instead of testing V with `bvs` each time. The processor runs the handler whose address is in vector 7, at `$1C`, and that handler’s `rte` returns to the instruction after the `trapv`. A program that has not installed a handler ends at the `trapv`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
     illegal:
         'Raises an illegal-instruction exception, always. It is the one instruction made to be nothing else, so programs use it to mark code that must never run. The processor runs the handler whose address is in vector 4, at `$10`. The exception saves the address of the `illegal` itself, not of the instruction after it, so a handler that wants the program to carry on adds 2 to the saved address before its `rte`; otherwise the `illegal` runs again. A program that has not installed a handler ends at the `illegal`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
-    rte: 'Returns from an exception handler: it pops the status register and then the program counter that the exception pushed, and the interrupted program carries on. Every handler ends with `rte`, as a subroutine ends with [rts](/documentation/m68k/instruction/rts). `rte` restores the whole status register, the S bit included, so a handler entered from user mode returns to user mode, and A7 becomes the user stack pointer again. It is privileged: in user mode it raises a privilege violation. See [writing a handler](/documentation/m68k/exceptions#handlers).'
+    rte: 'Returns from an exception handler: it pops the status register and then the program counter that the exception pushed, and the interrupted program carries on. Every handler ends with `rte`, as a subroutine ends with [rts](/documentation/m68k/instruction/rts). `rte` restores the whole status register, the S bit included, so a handler entered from user mode returns to user mode, and A7 becomes the user stack pointer again. It is privileged: in user mode it raises a privilege violation. See [writing a handler](/documentation/m68k/exceptions#handlers).',
+    stop: 'Loads the status register with the immediate word, then waits, running nothing, until an interrupt request (an IRQ) above the new interrupt mask arrives, or one at level 7. The processor takes that IRQ at once: it runs the handler whose address is in the level’s autovector, and the handler’s `rte` comes back to the instruction after the `stop`. A program uses it to wait for a timer or a key without spinning in a loop. `stop #$2000` stays in supervisor mode with the mask at 0, so every level gets through. While the processor waits, Run waits with it and the status line says what for, and a Step runs nothing. It is privileged: in user mode it raises a privilege violation. See [interrupts](/documentation/m68k/exceptions#interrupts).',
+    reset: 'Resets the devices wired to the processor: a real 68000 holds its RESET line for a moment and then goes on with the next instruction, its own registers unchanged. This editor has no such devices, so `reset` does nothing, as in EASy68K. It is not the reset that starts the processor at power-on, which reads the vectors at `$0` and `$4`. It is privileged: in user mode it raises a privilege violation.'
 }
 const dirsDesc = {
     dc: 'Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words',
@@ -1795,7 +1797,37 @@ END:
         `
 nop
     `
-    )
+    ),
+    stop: makeIns(
+        'stop',
+        [ONLY_Im],
+        NO_SIZE,
+        FLAGS_MATH,
+        desc.stop,
+        'stop #$2000',
+        undefined,
+        `
+* --- Wait for a timer three times ---
+move.l #tick, $68 ; the level-2 autovector is at $68
+move.b #32, d0
+move.b #6, d1
+move.b #$82, d2 ; $80 + 2: a timer at level 2
+move.l #100, d3 ; every 100 ms
+trap #15
+wait:
+stop #$2000 ; wait for an interrupt above level 0
+cmp.l #3, d6
+bne wait ; tick has run three times: 0.3 s
+bra END
+
+tick:
+    addq.l #1, d6 ; count the ticks
+    rte ; back to the instruction after the stop
+
+END:
+    `
+    ),
+    reset: makeIns('reset', [], NO_SIZE, UNAFFECTED, desc.reset, 'reset')
 } satisfies Record<InstructionName, InstructionDocumentation>
 
 export const M68KUncompoundedInstructions = uncompoundInstructions(Object.values(M68kDocumentation))
@@ -1983,13 +2015,6 @@ export const M68KRefusedDirectives = [
     'unless'
 ]
 
-/**
- * The 68000 instructions s68k reads and refuses for now: `stop` and `reset`, which wait for an
- * interrupt and reset the devices, come with its interrupts (milestone C8 of the M68K machine
- * plan), and then need a Documentation entry here instead.
- */
-export const M68KRefusedInstructions = ['stop', 'reset']
-
 /** The conditions of the 68020's `trap<cc>`: the 68000's, and `t` and `f`. */
 const TRAP_CONDITIONS = [
     ...['t', 'f', 'hi', 'ls', 'cc', 'hs', 'cs', 'lo', 'ne', 'eq'],
@@ -2017,5 +2042,5 @@ export const M68kInstructions = Array.from(M68KUncompoundedInstructions.keys()).
     (name) => !documentationFamilyNames.has(name)
 )
 
-export const M68KRecognizedInstructions = [...M68kInstructions, ...M68KRefusedInstructions]
+export const M68KRecognizedInstructions = [...M68kInstructions]
 export const M68KRecognizedDirectives = [...M68KDirectives, ...M68KRefusedDirectives]

@@ -176,6 +176,20 @@ class FakeEmulator extends GenericEmulator<object, FakeRegister> {
         return bytes
     }
 
+    /**
+     * A wait Pause ends as well as Stop, as an adapter makes one for a processor that `stop`
+     * stopped: `wake` is what ends it otherwise, an IRQ coming.
+     */
+    untilWoken(): { wait: Promise<void>; wake: () => void } {
+        let wake!: () => void
+        const woken = new Promise<void>((resolve) => (wake = resolve))
+        const wait = this.executionController.whileUnpaused(
+            this.executionController.capture(),
+            woken
+        )
+        return { wait, wake }
+    }
+
     /** `refreshRunningPanels` is what an adapter calls from inside a slice; it is protected. */
     refreshPanels(force: boolean): void {
         this.refreshRunningPanels(force)
@@ -908,6 +922,20 @@ describe('stop', () => {
         expect(emulator.requests).toHaveLength(1)
     })
 
+    it('cancels a run waiting for an IRQ, which nothing else would end', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = () => ({
+            reason: 'wait',
+            instructions: 1,
+            wait: emulator.untilWoken().wait
+        })
+        const run = emulator.run(1000)
+        await vi.waitFor(() => expect(emulator.requests).toHaveLength(1))
+        emulator.clear()
+        expect(await run).toBe(InterpreterStatus.Terminated)
+        expect(emulator.requests).toHaveLength(1)
+    })
+
     it('ends a test run: the Testcase it cut short is not checked and the rest do not run', async () => {
         const emulator = new FakeEmulator({ automaticChecking: false })
         let runs = 0
@@ -1072,6 +1100,65 @@ describe('pause', () => {
         expect(waited).toBe(true)
         expect(emulator.paused).toBe(true)
         expect(emulator.requests).toHaveLength(1)
+    })
+
+    it('ends a wait for an IRQ at once, unlike a program’s own wait', async () => {
+        //a processor stopped until an IRQ comes owes the program nothing when the wait is cut
+        //short ([m68k-machine.md](../../docs/design/m68k-machine.md), decision 29)
+        const emulator = new FakeEmulator()
+        emulator.behavior = (_request, index) =>
+            index === 0
+                ? { reason: 'wait', instructions: 1, wait: emulator.untilWoken().wait }
+                : { reason: 'budget', instructions: 1 }
+        const run = emulator.run(1000)
+        await vi.waitFor(() => expect(emulator.requests).toHaveLength(1))
+        emulator.pause()
+        expect(await run).toBe(InterpreterStatus.Running)
+        expect(emulator.paused).toBe(true)
+        expect(emulator.requests).toHaveLength(1)
+    })
+
+    it('ends a wait for an IRQ made after a Pause asked for in the same slice', async () => {
+        const emulator = new FakeEmulator()
+        emulator.behavior = () => {
+            emulator.pause()
+            return { reason: 'wait', instructions: 1, wait: emulator.untilWoken().wait }
+        }
+        await emulator.run(1000)
+        expect(emulator.paused).toBe(true)
+        expect(emulator.requests).toHaveLength(1)
+    })
+
+    it('runs on once an IRQ ends the wait, and waits again in the next Run', async () => {
+        const emulator = new FakeEmulator()
+        let woken: { wait: Promise<void>; wake: () => void } | undefined
+        emulator.behavior = (_request, index) => {
+            if (index === 1) return { reason: 'terminated', instructions: 1 }
+            woken = emulator.untilWoken()
+            return { reason: 'wait', instructions: 1, wait: woken.wait }
+        }
+        const run = emulator.run(1000)
+        await vi.waitFor(() => expect(woken).toBeDefined())
+        woken!.wake()
+        await run
+        expect(emulator.requests).toHaveLength(2)
+        expect(emulator.paused).toBe(false)
+        //the Pause of the Run before is not carried into this one's wait
+        emulator.hasEnded = false
+        emulator.behavior = (_request, index) => {
+            woken = emulator.untilWoken()
+            return index === 2
+                ? { reason: 'wait', instructions: 1, wait: woken.wait }
+                : { reason: 'terminated', instructions: 1 }
+        }
+        woken = undefined
+        const again = emulator.run(1000)
+        await vi.waitFor(() => expect(woken).toBeDefined())
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        expect(emulator.requests).toHaveLength(3)
+        woken!.wake()
+        await again
+        expect(emulator.requests).toHaveLength(4)
     })
 
     it('does not carry an idle Pause into the next Run', async () => {

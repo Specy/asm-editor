@@ -74,12 +74,16 @@ instruction made for the job. A vector the program left empty ends the run with 
 it. The M68K also has both modes: a program can drop itself into user mode, with a stack of its own,
 and watch a privileged instruction raise an exception.
 
+The M68K is also the one machine here whose devices interrupt it. A program can ask for an
+interrupt request from a timer, at a regular interval, and from the keyboard and the mouse of the
+screen panel. Each request has a priority level from 1 to 7, and three bits of the status register
+mask the levels the program wants to hold back for now. A program with nothing to do until the next
+request can wait for it with an instruction that runs nothing in the meantime.
+
 The Z80 assembles its interrupt instructions and they change nothing you can observe, because nothing
 in this editor will ever interrupt it.
 
-For now no device here raises an interrupt. The MIPS and RISC-V keyboard has an interrupt-enable
-bit, and a program that sets it is stopped with a message saying that interrupt-driven input is not
-supported and that it should poll the ready bit instead. The M68K's two trap tasks for turning on
-keyboard and mouse interrupts are refused for the same reason. Input in this editor is polled, the
-way the previous lecture polled it, and a program that wants to know whether a key is waiting has to
-go and look.
+On MIPS and RISC-V no device raises an interrupt. Their keyboard has an interrupt-enable bit, and a
+program that sets it is stopped with a message saying that interrupt-driven input is not supported
+and that it should poll the ready bit instead. Input there is polled, the way the previous lecture
+polled it, and a program that wants to know whether a key is waiting has to go and look.

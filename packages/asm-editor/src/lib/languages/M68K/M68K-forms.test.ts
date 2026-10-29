@@ -4,7 +4,6 @@ import {
     instructionsDocumentationList,
     M68kDocumentation,
     M68kInstructions,
-    M68KRefusedInstructions,
     M68KUncompoundedInstructions,
     M68KUnimplementedDialectInstructions
 } from './M68K-documentation'
@@ -60,7 +59,9 @@ describe('M68K instruction forms', () => {
             'move Dn sr',
             'move usp An',
             'ori Im sr',
-            'rte'
+            'reset',
+            'rte',
+            'stop Im'
         ])
     })
 })
@@ -75,12 +76,11 @@ describe('M68K documentation of the Core’s instructions', () => {
         expect(M68kInstructions.filter((mnemonic) => !table.has(mnemonic))).toEqual([])
     })
 
-    //`stop` and `reset` are 68000 instructions the Core does not run until its interrupts, so they
-    //are not in its table and the editor refuses them; once the Core lists one, it needs its
-    //documentation entry and its place among the instructions instead, as `rte` had
-    it('refuses stop and reset, which are not in the Core’s table yet', () => {
-        expect(M68KRefusedInstructions).toEqual(['stop', 'reset'])
-        expect(M68KRefusedInstructions.filter((mnemonic) => table.has(mnemonic))).toEqual([])
+    //the Core runs `stop` and `reset` since its interrupts, so they are instructions like `rte`
+    it('documents stop and reset, which the Core assembles since its interrupts', () => {
+        expect(table.has('stop')).toBe(true)
+        expect(table.has('reset')).toBe(true)
+        expect(M68kInstructions).toEqual(expect.arrayContaining(['stop', 'reset']))
     })
 
     //the 68010's and 68020's instructions the Core reads but refuses in every dialect: none may be

@@ -107,7 +107,7 @@ type Syntax = {
      * editor colours them: the M68K's `opt p=68020,bit`.
      */
     options?: { directive: string; words: RegExp }
-    /** The instructions and directives the assembler knows but refuses, the M68K's `stop`. */
+    /** The instructions and directives the assembler knows but refuses, the M68K's `macro`. */
     refused?: ReadonlySet<string>
     /** The bracket pairs the editor colours by how deeply they nest, each opener before its closer. */
     brackets: string
@@ -166,11 +166,11 @@ const RISCV_CSRS = new Set([
 ])
 
 /**
- * The 68000 instructions s68k refuses (`stop` and `reset`, until its interrupts), the 68010's and
- * 68020's it does not implement yet, and the directives of other assemblers it refuses.
+ * The 68010's and 68020's instructions s68k does not implement yet, and the directives of other
+ * assemblers it refuses.
  */
 const M68K_REFUSED = new Set([
-    ...['stop', 'reset', 'macro', 'endm', 'mexit', 'ifeq', 'ifne', 'iflt'],
+    ...['macro', 'endm', 'mexit', 'ifeq', 'ifne', 'iflt'],
     ...['ifle', 'ifgt', 'ifge', 'ifc', 'ifnc', 'ifarg', 'endc', 'if', 'else', 'endi', 'while'],
     ...['endw', 'for', 'endf', 'repeat', 'until', 'dbloop', 'unless'],
     ...['rtd', 'bkpt', 'movec', 'moves', 'chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk'],
