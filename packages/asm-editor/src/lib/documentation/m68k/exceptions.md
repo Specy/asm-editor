@@ -10,23 +10,23 @@ The default processor is the 68000. `opt p=68010` and `opt p=68020` select proce
 
 The vector table contains **256 vectors**, each a four-byte handler address. On the 68000 it occupies the first 1024 bytes of memory, `$000000` to `$0003FF`. The processor finds a handler at 4 × its **vector number**: division by zero is vector 5, so its handler address is the long at `$14`. The 68010 and 68020 can [relocate the table with VBR](#68010).
 
-| vector | address | cause |
-| -----: | ------- | ----- |
-| 0, 1 | `$000`, `$004` | initial stack pointer and program counter on a real processor's reset |
-| 2 | `$008` | bus error: an access refused by a [`memory`](/documentation/m68k/directive#memory) range, such as a write to read-only memory |
-| 3 | `$00C` | address error: a word or long access at an odd address on the 68000 or 68010, or an instruction at an odd address on any processor |
-| 4 | `$010` | illegal instruction, including [illegal](/documentation/m68k/instruction/illegal) and this editor's [bkpt](/documentation/m68k/instruction/bkpt) on the 68010 or 68020 |
-| 5 | `$014` | division by zero in [divu](/documentation/m68k/instruction/divu) or [divs](/documentation/m68k/instruction/divs), or the 68020's [divsl](/documentation/m68k/instruction/divsl) or [divul](/documentation/m68k/instruction/divul) |
-| 6 | `$018` | value out of range in [chk](/documentation/m68k/instruction/chk) or the 68020's [chk2](/documentation/m68k/instruction/chk2) |
-| 7 | `$01C` | [trapv](/documentation/m68k/instruction/trapv) with V set, or the 68020's [trapcc](/documentation/m68k/instruction/trapcc) with its condition true |
-| 8 | `$020` | privilege violation: a supervisor-only instruction executed in user mode |
-| 9 | `$024` | [trace](#trace): after each instruction with T set, or a selected change of control flow with the 68020's [T0](#68020-trace) set |
-| 10 | `$028` | instruction word starting with `$A`, called line A |
-| 11 | `$02C` | instruction word starting with `$F`, called line F |
-| 14 | `$038` | [format error](#format-error) on the 68010 or 68020: an exception frame `rte` cannot restore |
-| 25–31 | `$064`–`$07C` | interrupts at levels 1 to 7 |
-| 32–46 | `$080`–`$0B8` | `trap #0` to `trap #14` |
-| 47 | `$0BC` | `trap #15` with a task number the simulator does not handle |
+| vector | address        | cause                                                                                                                                                                                                                             |
+| -----: | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   0, 1 | `$000`, `$004` | initial stack pointer and program counter on a real processor's reset                                                                                                                                                             |
+|      2 | `$008`         | bus error: an access refused by a [`memory`](/documentation/m68k/directive#memory) range, such as a write to read-only memory                                                                                                     |
+|      3 | `$00C`         | address error: a word or long access at an odd address on the 68000 or 68010, or an instruction at an odd address on any processor                                                                                                |
+|      4 | `$010`         | illegal instruction, including [illegal](/documentation/m68k/instruction/illegal) and this editor's [bkpt](/documentation/m68k/instruction/bkpt) on the 68010 or 68020                                                            |
+|      5 | `$014`         | division by zero in [divu](/documentation/m68k/instruction/divu) or [divs](/documentation/m68k/instruction/divs), or the 68020's [divsl](/documentation/m68k/instruction/divsl) or [divul](/documentation/m68k/instruction/divul) |
+|      6 | `$018`         | value out of range in [chk](/documentation/m68k/instruction/chk) or the 68020's [chk2](/documentation/m68k/instruction/chk2)                                                                                                      |
+|      7 | `$01C`         | [trapv](/documentation/m68k/instruction/trapv) with V set, or the 68020's [trapcc](/documentation/m68k/instruction/trapcc) with its condition true                                                                                |
+|      8 | `$020`         | privilege violation: a supervisor-only instruction executed in user mode                                                                                                                                                          |
+|      9 | `$024`         | [trace](#trace): after each instruction with T set, or a selected change of control flow with the 68020's [T0](#68020-trace) set                                                                                                  |
+|     10 | `$028`         | instruction word starting with `$A`, called line A                                                                                                                                                                                |
+|     11 | `$02C`         | instruction word starting with `$F`, called line F                                                                                                                                                                                |
+|     14 | `$038`         | [format error](#format-error) on the 68010 or 68020: an exception frame `rte` cannot restore                                                                                                                                      |
+|  25–31 | `$064`–`$07C`  | interrupts at levels 1 to 7                                                                                                                                                                                                       |
+|  32–46 | `$080`–`$0B8`  | `trap #0` to `trap #14`                                                                                                                                                                                                           |
+|     47 | `$0BC`         | `trap #15` with a task number the simulator does not handle                                                                                                                                                                       |
 
 Other vectors are reserved or available for device-supplied interrupt vectors. This editor does not read vectors 0 and 1: execution starts at the program's entry point, in supervisor mode.
 
@@ -67,18 +67,18 @@ The frame's size and contents depend on both the processor and the exception. Bu
 
 Choose the layout for the processor selected by `opt p=`:
 
-| processor | ordinary exceptions | bus and address errors | other frames |
-| --------- | ------------------- | ---------------------- | ------------ |
-| 68000 | 6 bytes, no format word | 14 bytes, no format word | — |
-| [68010](#68010) | 8 bytes, format `$0` | 58 bytes, format `$8` | — |
-| [68020](#68020-frames) | 8 bytes, format `$0` | 32 bytes, format `$A`, for a bus error fetching an instruction; otherwise 92 bytes, format `$B` | 12 bytes, format `$2`, for the exceptions listed [below](#68020-frames); 8-byte [throwaway frame](#throwaway-frame), format `$1` |
+| processor              | ordinary exceptions     | bus and address errors                                                                          | other frames                                                                                                                     |
+| ---------------------- | ----------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 68000                  | 6 bytes, no format word | 14 bytes, no format word                                                                        | —                                                                                                                                |
+| [68010](#68010)        | 8 bytes, format `$0`    | 58 bytes, format `$8`                                                                           | —                                                                                                                                |
+| [68020](#68020-frames) | 8 bytes, format `$0`    | 32 bytes, format `$A`, for a bus error fetching an instruction; otherwise 92 bytes, format `$B` | 12 bytes, format `$2`, for the exceptions listed [below](#68020-frames); 8-byte [throwaway frame](#throwaway-frame), format `$1` |
 
 An ordinary **68000** frame has this layout at handler entry:
 
-| where | size | what |
-| ----- | ---- | ---- |
-| `(sp)` | word | status register before the exception |
-| `2(sp)` | long | return address restored by `rte` |
+| where   | size | what                                 |
+| ------- | ---- | ------------------------------------ |
+| `(sp)`  | word | status register before the exception |
+| `2(sp)` | long | return address restored by `rte`     |
 
 The saved return address depends on the cause. These rules also apply to the corresponding PC field in 68010 and 68020 frames:
 
@@ -88,13 +88,13 @@ The saved return address depends on the cause. These rules also apply to the cor
 
 A **68000 bus or address error** pushes 14 bytes. Eight bytes describing the failed access precede the saved SR and PC:
 
-| where | size | what |
-| ----- | ---- | ---- |
-| `(sp)` | word | access status: bit 4 is set for a read and clear for a write |
-| `2(sp)` | long | address of the failed access |
-| `6(sp)` | word | first word of the instruction |
-| `8(sp)` | word | saved status register |
-| `10(sp)` | long | saved PC, near the instruction that faulted |
+| where    | size | what                                                         |
+| -------- | ---- | ------------------------------------------------------------ |
+| `(sp)`   | word | access status: bit 4 is set for a read and clear for a write |
+| `2(sp)`  | long | address of the failed access                                 |
+| `6(sp)`  | word | first word of the instruction                                |
+| `8(sp)`  | word | saved status register                                        |
+| `10(sp)` | long | saved PC, near the instruction that faulted                  |
 
 A 68000 cannot resume a partially completed instruction from this frame. Its `rte` always reads the first six bytes as SR and PC, so using `rte` directly on an unchanged fault frame reads access information instead of the saved registers. A handler normally reports the fault and ends the program. The 68010 and 68020 use [different fault frames](#68010), which this editor can return from by retrying the instruction.
 
@@ -107,10 +107,10 @@ Bit 13 of `sr`, **S**, selects the privilege mode:
 
 The privileged instructions supported by this editor are:
 
-| processor | supervisor-only instructions |
-| --------- | ---------------------------- |
-| all three | `move` to `sr`; `andi`, `ori` and `eori` to `sr`; `move` to or from `usp`; [rte](/documentation/m68k/instruction/rte); [stop](/documentation/m68k/instruction/stop); [reset](/documentation/m68k/instruction/reset) |
-| 68010 and 68020 | also `move` from `sr`, [movec](/documentation/m68k/instruction/movec) and [moves](/documentation/m68k/instruction/moves) |
+| processor       | supervisor-only instructions                                                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| all three       | `move` to `sr`; `andi`, `ori` and `eori` to `sr`; `move` to or from `usp`; [rte](/documentation/m68k/instruction/rte); [stop](/documentation/m68k/instruction/stop); [reset](/documentation/m68k/instruction/reset) |
+| 68010 and 68020 | also `move` from `sr`, [movec](/documentation/m68k/instruction/movec) and [moves](/documentation/m68k/instruction/moves)                                                                                            |
 
 Instructions that access only `ccr` remain available in user mode. On the 68010 and 68020, use `move ccr, <ea>` to read the flags without reading `sr`. In particular, user code cannot execute `stop` to wait for a timer: it must ask a supervisor handler to do that work.
 
@@ -221,10 +221,10 @@ The **System** register file shows VBR, and the memory view's **Exception vector
 
 **Ordinary frames have eight bytes and format `$0`.** They contain the saved SR and PC followed by a **format/vector-offset word**. Bits 15–12 hold the format number; bits 11–0 hold 4 × the vector number. A handler shared by several vectors can use that offset to identify the cause.
 
-| where | size | what |
-| ----- | ---- | ---- |
-| `(sp)` | word | status register before the exception |
-| `2(sp)` | long | return address restored by `rte` |
+| where   | size | what                                                  |
+| ------- | ---- | ----------------------------------------------------- |
+| `(sp)`  | word | status register before the exception                  |
+| `2(sp)` | long | return address restored by `rte`                      |
 | `6(sp)` | word | format `$0` in bits 15–12; vector offset in bits 11–0 |
 
 A handler that removes an ordinary frame manually must remove eight bytes, rather than the 68000's six.
@@ -253,7 +253,7 @@ The 68010 accepts formats `$0` and `$8`. The 68020 accepts [formats `$0`, `$1`, 
 
 ## On the 68020 {#68020}
 
-Select the 68020 with `opt p=68020`. Like the 68010, it reads vectors relative to VBR and includes a format word in every exception frame. It adds:
+Select the 68020 with `opt p=68020`. It handles exceptions like the 68010: it reads vectors relative to VBR and includes a format word in every exception frame. It adds:
 
 - a [master stack](#master-stack), selected by the M bit, and a [throwaway frame](#throwaway-frame) when an interrupt switches stacks;
 - [additional frame formats](#68020-frames), including a saved instruction address for some exceptions;
@@ -269,11 +269,11 @@ The **System** register file shows T1, T0, S and M, together with USP, ISP, MSP,
 
 On the 68020, bit 12 of `sr`, **M**, selects which supervisor stack `a7` uses. In user mode, `a7` always uses USP:
 
-| S | M | `a7` names |
-| - | - | ---------- |
-| 0 | either | user stack pointer, USP |
-| 1 | 0 | **interrupt stack pointer**, ISP, corresponding to SSP on the 68000 and 68010 |
-| 1 | 1 | **master stack pointer**, MSP |
+| S   | M      | `a7` names                                                                    |
+| --- | ------ | ----------------------------------------------------------------------------- |
+| 0   | either | user stack pointer, USP                                                       |
+| 1   | 0      | **interrupt stack pointer**, ISP, corresponding to SSP on the 68000 and 68010 |
+| 1   | 1      | **master stack pointer**, MSP                                                 |
 
 A program starts with M clear and uses the interrupt stack. An operating system can give each program its own master stack for traps and other program exceptions, while using a shared interrupt stack for IRQ handlers.
 
@@ -320,12 +320,12 @@ tick:
 
 The 68020 uses eight-byte format `$0` frames for most exceptions, with the same SR, PC and format/vector-offset positions as the [68010](#68010). For `chk`, `chk2`, `trapcc`, `trapv`, division by zero and trace, it uses a twelve-byte **format `$2`** frame. The extra long records the address of the instruction that raised the exception:
 
-| where | size | what |
-| ----- | ---- | ---- |
-| `(sp)` | word | status register before the exception |
+| where   | size | what                                                       |
+| ------- | ---- | ---------------------------------------------------------- |
+| `(sp)`  | word | status register before the exception                       |
 | `2(sp)` | long | address at which execution continues after the instruction |
-| `6(sp)` | word | format `$2` in bits 15–12; vector offset in bits 11–0 |
-| `8(sp)` | long | address of the instruction that raised the exception |
+| `6(sp)` | word | format `$2` in bits 15–12; vector offset in bits 11–0      |
+| `8(sp)` | long | address of the instruction that raised the exception       |
 
 For trace, the return address can be the destination of the traced branch or jump. The instruction address at `8(sp)` lets a handler identify the instruction independently of that return address.
 
@@ -345,10 +345,10 @@ out_of_range:
 
 Bus and address errors use larger frames:
 
-| format | size | cause |
-| ------ | ---- | ----- |
-| `$A` | 32 bytes | bus error while fetching an instruction |
-| `$B` | 92 bytes | other bus errors and address errors |
+| format | size     | cause                                   |
+| ------ | -------- | --------------------------------------- |
+| `$A`   | 32 bytes | bus error while fetching an instruction |
+| `$B`   | 92 bytes | other bus errors and address errors     |
 
 Both start with saved SR at `(sp)`, the faulting instruction's address at `2(sp)`, and the format/vector-offset word at `6(sp)`. The access status is at `$A(sp)` and the failed address at `$10(sp)`. In this editor, `rte` removes the entire frame and retries the instruction from its start. Correct the cause before returning.
 

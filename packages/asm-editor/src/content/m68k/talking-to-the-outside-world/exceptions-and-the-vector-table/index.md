@@ -40,7 +40,7 @@ such as printing text and ending the program.
 ## Fill a vector
 
 To handle division by zero, write the handler’s address to vector 5 before the division. The
-handler below ends with `rte`, short for *return from exception*.
+handler below ends with `rte`, short for _return from exception_.
 
 ```m68k|playground|memory|no-flags|allow-open
     move.l #div_zero, $14   ; vector 5: the handler for a division by zero
@@ -151,13 +151,13 @@ bytes long. Programs put it where the code must never get to.
 An address error can stop an instruction during a memory access. On the 68000 its frame is
 14 bytes long. From the current `sp`, its fields appear in ascending address order:
 
-| Offset | Contents |
-| ------ | -------- |
-| `0(sp)` | Access information, 2 bytes |
-| `2(sp)` | Address involved in the access, 4 bytes |
-| `6(sp)` | Instruction register, 2 bytes |
-| `8(sp)` | Saved `sr`, 2 bytes |
-| `10(sp)` | Saved program address, 4 bytes |
+| Offset   | Contents                                |
+| -------- | --------------------------------------- |
+| `0(sp)`  | Access information, 2 bytes             |
+| `2(sp)`  | Address involved in the access, 4 bytes |
+| `6(sp)`  | Instruction register, 2 bytes           |
+| `8(sp)`  | Saved `sr`, 2 bytes                     |
+| `10(sp)` | Saved program address, 4 bytes          |
 
 The saved program address does not reliably identify a place from which to resume the interrupted
 instruction. This handler reports the address involved and ends the program without returning.

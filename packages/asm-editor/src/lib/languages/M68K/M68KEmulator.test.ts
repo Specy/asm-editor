@@ -4519,7 +4519,7 @@ describe('M68K 68020 supervisor model', () => {
             ['CAAR', RegisterSize.Long]
         ])
         //the ISP says on hover that it is the 68000's SSP
-        expect(file.layout[2].description).toContain('which the 68000 calls the SSP')
+        expect(file.layout[2].description).toContain('called SSP on the 68000')
         expect(file.flags.map((flag) => flag.name)).toEqual([
             'T1',
             'T0',
