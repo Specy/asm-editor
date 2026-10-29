@@ -36,7 +36,7 @@ describe('M68K instruction documents', () => {
         ])
         expect(for68010.tags).toEqual(['68010'])
         expect(for68010.explanation).toBe(
-            'The 68010 and the 68020 have these, the 68000 does not: write `opt p=68010` at the top of the program to use them.'
+            'These forms are available on the 68010 and 68020. Select `opt p=68010` or `opt p=68020` before any code or data.'
         )
         expect(for68010.groups.flatMap((group) => group.patterns.map(patternText))).toEqual([
             'move ccr, <ea>'
@@ -101,7 +101,7 @@ describe('M68K instruction documents', () => {
         expect(extb.tags).toEqual(['68020'])
         expect(extb.headerFacts).toEqual([
             'Size .l',
-            '68020 only: write `opt p=68020` at the top of the program'
+            '68020 only: select `opt p=68020` before any code or data'
         ])
         //the tag is the mnemonic's, so its one form is in the untagged section
         expect(extb.sections.map((section) => section.tags)).toEqual([[]])
@@ -113,7 +113,7 @@ describe('M68K instruction documents', () => {
         expect(movec.tags).toEqual(['privileged', '68010'])
         expect(movec.headerFacts).toEqual([
             'Size .l',
-            '68010 and 68020 only: write `opt p=68010` at the top of the program'
+            '68010 and 68020 only: select `opt p=68010` before any code or data'
         ])
         expect(movec.category).toBe('system')
         expect(rows('movec')).toEqual(['movec Rc, Rn', 'movec Rn, Rc'])
@@ -144,7 +144,7 @@ describe('M68K instruction documents', () => {
                 .sections[0].groups.flatMap((group) => group.patterns)
                 .map(patternText)
         ).toContain('move sr, <ea>')
-        expect(document('move').description).toContain('move ccr, d0')
+        expect(document('move').description).toContain('move.w ccr, d0')
     })
 
     it('puts andi into sr under Privileged, and each row its own size', () => {
@@ -195,7 +195,7 @@ describe('M68K instruction documents', () => {
             document(name).operands.find((operand) => operand.symbol === '<ea>')?.meaning
         for (const name of ['move', 'lea', 'jmp', 'add']) {
             expect(meaning(name), name).toContain(
-                'In a program for the 68020, wherever `d(An,Xn)` or `d(PC,Xn)` is allowed, so are the 68020’s indexed modes'
+                'With `opt p=68020`, an allowed `d(An,Xn)` or `d(PC,Xn)` mode also permits the corresponding 68020 indexed and memory indirect forms'
             )
             expect(meaning(name), name).toContain('(/documentation/m68k/addressing-mode#68020)')
         }
@@ -206,7 +206,7 @@ describe('M68K instruction documents', () => {
             const built = document(name)
             //the summary stays the first sentence, which the reach does not run into
             expect(built.summary, name).not.toContain('size')
-            expect(built.description, name).toContain('`.l` is a long branch')
+            expect(built.description, name).toContain('`.l` reaches anywhere in memory')
             expect(built.description, name).toContain(
                 '(/documentation/m68k/addressing-mode#long-branches)'
             )
@@ -338,7 +338,7 @@ describe('M68K instruction documents', () => {
         expect(meaning('muls', 'Dh:Dl')).toMatchObject({
             href: '/documentation/m68k/addressing-mode#register-pairs'
         })
-        expect(meaning('divs', 'Dr:Dq')?.meaning).toContain('the quotient goes into `Dq`')
+        expect(meaning('divs', 'Dr:Dq')?.meaning).toContain('The quotient replaces `Dq`')
         expect(meaning('cas2', '(Rn1):(Rn2)')?.meaning).toContain('`(a0):(a1)`')
     })
 
@@ -360,7 +360,7 @@ describe('M68K instruction documents', () => {
         const bfextu = document('bfextu')
         expect(bfextu.tags).toEqual(['68020', 'opt-bit'])
         expect(bfextu.headerFacts).toEqual([
-            '68020, or 68000 and 68010 with `opt bit`: write `opt p=68020` or `opt bit` at the top of the program'
+            'Select `opt p=68020`, or use `opt bit` with the 68000 or 68010, before any code or data'
         ])
         expect(bfextu.sections.map((section) => section.tags)).toEqual([[]])
         expect(rows('bfextu')).toEqual(['bfextu <ea>{offset:width}, Dn'])
@@ -384,7 +384,7 @@ describe('M68K instruction documents', () => {
         expect(field).toMatchObject({ href: '/documentation/m68k/addressing-mode#bit-fields' })
         //the other 68020 instructions are the 68020's alone
         expect(document('cas').headerFacts.at(-1)).toBe(
-            '68020 only: write `opt p=68020` at the top of the program'
+            '68020 only: select `opt p=68020` before any code or data'
         )
     })
 
@@ -392,18 +392,18 @@ describe('M68K instruction documents', () => {
         const family = document('trapcc')
         expect([family.longName, family.summary]).toEqual([
             'Trap on condition',
-            'Raises an exception if cc, and does nothing otherwise.'
+            'Raises an exception if cc, and continues normally otherwise.'
         ])
         const trapeq = document('trapeq')
         expect([trapeq.longName, trapeq.summary]).toEqual([
             'Trap if equal',
-            'Raises an exception if equal, and does nothing otherwise.'
+            'Raises an exception if equal, and continues normally otherwise.'
         ])
         expect(rows('trapeq')).toEqual(['trapeq', 'trapeq #imm'])
         expect(trapeq.flags?.reads).toEqual(['Z'])
         expect(trapeq.tags).toEqual(['68020'])
         expect(trapeq.operands.find((operand) => operand.symbol === '#imm')?.meaning).toContain(
-            'tell its traps apart'
+            'identify the trap'
         )
         expect(document('trapf').summary).toBe(
             'Never traps, because the false condition never holds.'

@@ -25,10 +25,9 @@ triple:
 end:
 ```
 
-The playground begins with `sp` (also called `a7`) at `$1000000`. Here `bsr triple` is at
-`$1002`, after the two bytes of `move.l #10, d0`. It takes four bytes itself, two for the
-instruction and two for the distance to `triple`, so the instruction after it, `move.l d0,d1`, is
-at `$1006`:
+The playground starts with `sp` (also called `a7`) at `$1000000`. The two-byte
+`move.l #10, d0` puts `bsr triple` at `$1002`. This `bsr` occupies four bytes, including the
+distance to `triple`. Its return address is therefore `$1006`, where `move.l d0,d1` begins:
 
 | moment       | next instruction              | `sp`       | top of stack            |
 | ------------ | ----------------------------- | ---------- | ----------------------- |

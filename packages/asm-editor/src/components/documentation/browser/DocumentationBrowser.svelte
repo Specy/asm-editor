@@ -29,6 +29,8 @@
     import { fromIndex } from './fromIndex'
     import LectureSectionCard from './LectureSectionCard.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
 
     interface Props {
         language: DocumentationLanguage
@@ -61,11 +63,14 @@
 
     let loaded = $state<Chapter[] | null>(null)
     let failed = $state(false)
+    /** Counts the loads Try again asked for, so that asking loads the documentation again. */
+    let attempt = $state(0)
     const chapters = $derived(given ?? loaded)
 
     $effect(() => {
         if (given) return
         const wanted = language
+        void attempt
         loaded = null
         failed = false
         documentationFor(wanted).then(
@@ -354,7 +359,13 @@
     {/if}
 
     {#if failed}
-        <p class="note">The documentation could not be loaded.</p>
+        <ErrorState compact title="The documentation didn't load">
+            Its files could not be downloaded. Check the connection, then try again or reload the
+            page.
+            {#snippet actions()}
+                <Button onClick={() => attempt++}>Try again</Button>
+            {/snippet}
+        </ErrorState>
     {:else if !chapters}
         <p class="note">Loading the documentation…</p>
     {:else if searching && variant === 'panel'}

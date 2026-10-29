@@ -6,6 +6,8 @@
      * Listing's own generation comes first, under the pane's Listing notices.
      */
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
 
     let { group, onRetry }: { group: EditorGroup; onRetry: () => void } = $props()
     const document = $derived(group.requestedPseudocode)
@@ -36,10 +38,13 @@
             <p>The Listing of {group.pseudocodeListing.name} has no function to decompile.</p>
         </div>
     {:else if document?.status === 'failed'}
-        <div class="pseudocode-status" role="status">
-            <h2>No Pseudocode</h2>
-            <p>Couldn't decompile {name}: {document.error}</p>
-            <button type="button" onclick={onRetry}>Try again</button>
+        <div class="pseudocode-status failed">
+            <ErrorState compact title="No Pseudocode">
+                Couldn't decompile {name}: {document.error}
+                {#snippet actions()}
+                    <Button onClick={onRetry}>Try again</Button>
+                {/snippet}
+            </ErrorState>
         </div>
     {:else if document?.status !== 'ready' && !kept}
         <!-- shown only once it takes a moment, so a quick function does not flash it -->
@@ -94,13 +99,9 @@
         background: var(--accent);
         border-radius: inherit;
     }
-    button {
-        margin-top: 0.75rem;
-        padding: 0.4rem 0.9rem;
-        border-radius: 0.4rem;
-        color: var(--accent-text);
-        background: var(--accent);
-        cursor: pointer;
+    /* the failure's card brings its own spacing */
+    .failed {
+        padding: 0;
     }
     .waiting {
         animation: appears 0s 150ms both;

@@ -198,13 +198,14 @@ byte, then put `19` in `d0.b` and call `trap #15`. It returns four bytes in `d1.
 key that is down and `$00` otherwise, in the same order. The highest answer byte belongs to the
 highest request byte.
 
-Task 19 answers with the keys as they are **at the moment of the read**. A key is down from the
-moment it is pressed on the focused Screen panel until it is released, so a program that follows a
-key keeps polling it while it runs, usually once a frame. A tap that begins and ends between two
-reads is already up at the second one. Task 19 with `d1.l` = 0 still catches it: it answers with
-the code of the last key released in the high word and the last key pressed in the low word, and
-both stay until another key replaces them. A press that never reaches the Screen panel—for
-example, because it lacks focus—cannot be reported.
+Task 19 reports the key state at the time of the read. A key stays down from its press until its
+release, so a program usually polls once per frame to track held keys. A quick tap between two
+reads can be missed by this check.
+
+With `d1.l = 0`, task 19 returns the last key released in the high word and the last key pressed
+in the low word. These codes remain until another release or press replaces them. This lets a
+program detect a short tap after the key is up, provided no newer event has replaced it. Only
+events received while the Screen panel has focus reach the program.
 
 The arrows used below have codes left `$25`, up `$26`, right `$27`, down `$28`. Packing them in
 that order gives the request `$25262728`; the returned high byte answers for left, and the low

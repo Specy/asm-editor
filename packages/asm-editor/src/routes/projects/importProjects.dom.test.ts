@@ -243,7 +243,7 @@ it('says the stored projects could not be read rather than that there are none',
     const { target, dispose } = await page()
     try {
         await vi.waitFor(() =>
-            expect(target.querySelector('.empty-title')?.textContent).toBe(
+            expect(target.querySelector('[role="alert"] [role="heading"]')?.textContent).toBe(
                 'Your projects could not be read'
             )
         )

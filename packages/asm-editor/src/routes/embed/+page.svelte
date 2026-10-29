@@ -64,6 +64,11 @@
         { key: 'showPc', label: 'Show PC' },
         { key: 'showRegisters', label: 'Show registers' },
         { key: 'showFlags', label: 'Show flags' },
+        {
+            key: 'showCycles',
+            label: 'Show cycles',
+            description: 'The clock cycles the program has taken so far, on M68K'
+        },
         { key: 'showScreen', label: 'Show screen' },
         { key: 'openScreen', label: 'Screen open' },
         {
@@ -276,6 +281,7 @@
                                         showPc={settings.showPc}
                                         showRegisters={settings.showRegisters}
                                         showFlags={settings.showFlags}
+                                        showCycles={settings.showCycles}
                                         showScreen={settings.showScreen &&
                                             languageHasScreen(settings.language)}
                                         openScreen={settings.openScreen}

@@ -25,6 +25,8 @@ export type PlaygroundSettings = {
     showPc: boolean
     showRegisters: boolean
     showFlags: boolean
+    /** Whether the cycle counter shows above the PC, on a Target that counts cycles: `cycles`. */
+    showCycles: boolean
     showScreen: boolean
     /** Whether the Screen panel starts unfolded instead of behind its "Show screen" bar. */
     openScreen: boolean
@@ -162,6 +164,7 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
             showPc: entries.includes('pc'),
             showRegisters: !entries.includes('no-registers'),
             showFlags: !entries.includes('no-flags'),
+            showCycles: entries.includes('cycles'),
             showScreen,
             openScreen,
             openButton: entries.includes('allow-open'),

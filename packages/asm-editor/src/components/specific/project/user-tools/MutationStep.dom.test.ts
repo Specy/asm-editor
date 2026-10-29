@@ -267,7 +267,7 @@ describe('an exception in the History panel', () => {
         ])
         expect(row.rows()).toEqual([
             'TRAP #3 → vector 35, the handler at $2000',
-            'Returned from the exception to $100C'
+            'Returned from exception to $100C'
         ])
         row.close()
     })
@@ -570,7 +570,7 @@ describe('the cycles of a step in the History panel', () => {
         })
         expect(row.text().replace(/\s+/g, ' ')).toContain('Cycles ≈ 8')
         expect(tooltipText(row.cycles())).toMatch(
-            /^An estimate\. A 68020 overlaps each instruction with the next/
+            /^An estimate\. 68020 timings depend on overlapping instruction execution/
         )
         row.close()
     })
@@ -601,7 +601,7 @@ describe('the cycles of a step in the History panel', () => {
         })
         flushSync()
         expect(tooltipText(target.querySelector('.cycles'))).toMatch(
-            /^An estimate\. A 68000 or a 68010 has no bit-field instructions/
+            /^An estimate\. Bit-field instructions enabled by opt bit/
         )
         void unmount(app)
         target.remove()

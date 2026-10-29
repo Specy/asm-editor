@@ -1,8 +1,10 @@
 ## Calling trap #15
 
-The 68000 instruction set includes `trap #0` to `trap #15`, which hand control to an exception handler. In this editor, as in EASy68K, `trap #15` runs the tasks on this page instead: put the task number in `D0.B`, put its arguments in the listed input registers, then read any answer from the output registers. `trap #0` to `trap #14` run handlers your program installs in their vectors, as [Exceptions](/documentation/m68k/exceptions#traps) explains.
+Call a simulator task with `trap #15`: put the task number in `D0.B`, set the listed input registers, execute the instruction, then read the output registers. These EASy68K-compatible tasks provide console and screen I/O, keyboard and mouse state, time, cycle counts, interrupt configuration, project files and sound.
 
-The simulator supplies these tasks for the console, screen, keyboard, mouse, clock, cycle counter, interrupt requests, project files, and sound. Undo reverses a task's changes along with the instruction's register and memory changes, the text it printed included; a read that is undone asks for its input again when you step it. Testcases use scripted input and their own copy of the project's files.
+A supported task runs without an exception frame or a vector lookup. `trap #0` to `trap #14` use handlers installed by your program. An unknown `trap #15` task number also uses a program handler, through vector 47. See [Exceptions](/documentation/m68k/exceptions#traps) for installation and return rules.
+
+Undo reverses a task's effects together with the instruction's register and memory changes, including printed text. If you undo an input read, stepping it again asks for input again. Testcases read scripted input and use their own copy of the project's files. Their [timers](/documentation/m68k/traps#task-32) run on a virtual clock.
 
 ## Input routing {#differences}
 

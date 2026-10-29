@@ -975,7 +975,7 @@
                         isWholeLine: true,
                         className: 'patched-line',
                         linesDecorationsClassName: 'patched-line-marker',
-                        linesDecorationsTooltip: `Changed at run time: runs ${runsNow} now`,
+                        linesDecorationsTooltip: `Code changed after Build. Current instruction: ${runsNow}`,
                         zIndex: 1
                     }
                 })),

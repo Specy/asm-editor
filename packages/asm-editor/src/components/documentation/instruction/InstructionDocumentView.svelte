@@ -9,7 +9,7 @@
         privileged: 'Privileged',
         '68010': '68010 and later',
         '68020': '68020 only',
-        'opt-bit': '68000 with opt bit'
+        'opt-bit': '68000/68010 with opt bit'
     }
 
     export function sectionHeading(tags: readonly InstructionTag[]): string {

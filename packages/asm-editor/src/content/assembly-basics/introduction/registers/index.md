@@ -64,13 +64,14 @@ The panel writes the registers in hexadecimal, so what you see is:
 | `add.l d1, d0`    | `00000073` | `00000064` | `00001012` |
 
 `0000000A` is 10, `0000000F` is 15, `00000064` is 100 and `00000073` is 115. The two data registers
-count up, `a0` holds `00001012` instead, which is where the assembler put the `100`. The five
-instructions start at `0x1000` and are not all the same size: `lea stored, a0` takes six bytes,
-because the address it loads is part of it, and each of the others takes two. That makes fourteen,
-`simhalt` takes four more, and the data begins eighteen bytes after the start.
+hold the values used in the calculation. `a0` holds `00001012`, the address where the assembler
+placed the `100`. Instructions vary in size: `lea stored, a0` occupies six bytes, including the
+address it loads, and each of the other four occupies two. The instructions start at `0x1000`
+and occupy fourteen bytes. The four-byte `simhalt` follows them, so the data starts eighteen bytes
+after `0x1000`.
 
-`simhalt` stops the program there. Without it the CPU would carry on into the `100` and run those
-four bytes as if they were an instruction, because nothing in memory marks them as data.
+`simhalt` ends the run before the data. Without it, the CPU would try to execute the four bytes
+that hold `100`. The bytes themselves do not tell the CPU whether they are code or data.
 
 Try changing `dc.l 100` to `dc.l 1000` and stepping through it again. `d1` comes out at `000003E8`
 and `a0` does not move, because the address of `stored` is still the same.

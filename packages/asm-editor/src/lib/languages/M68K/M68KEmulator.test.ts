@@ -2055,7 +2055,7 @@ describe('M68K exceptions', () => {
         expect(systemOf(emulator).flags.S).toBe(0)
         await expect(emulator.step()).rejects.toBeDefined()
         const message =
-            'Privilege violation at line 3: vector 8 at $000020 holds no handler (the instruction runs only in supervisor mode, and the program is in user mode)'
+            'Privilege violation at line 3: vector 8 at $000020 holds no handler (the instruction requires supervisor mode, but the program is in user mode)'
         expect(emulator.errors).toEqual([message])
         expect(emulator.termination).toEqual({ kind: 'error', message })
         emulator.dispose()
@@ -2148,7 +2148,7 @@ describe('M68K exceptions', () => {
         const emulator = await build('    move.l #$1000,$80\n    lea $5001,a7\n    trap #0\n')
         await emulator.run(INSTRUCTION_LIMIT)
         const message =
-            'The CPU halted at line 4: a double bus fault while taking TRAP #0 (vector 32), as pushing its frame raised an address error, writing a word at the odd address $4FFF'
+            'The CPU halted at line 4: a double bus fault while handling TRAP #0 (vector 32). Pushing the exception frame raised an address error, writing a word at the odd address $4FFF'
         expect(emulator.errors).toEqual([message])
         expect(emulator.termination).toEqual({ kind: 'error', message })
         expect(emulator.undo(1)).toBe(1)
@@ -2212,7 +2212,7 @@ describe('M68K System Register file', () => {
         ])
         //each says on hover what it is
         expect(file.layout[2].description).toBe(
-            'The supervisor stack pointer: A7 in supervisor mode, where exceptions push their frames.'
+            'Supervisor stack pointer. A7 uses this pointer in supervisor mode. Exception frames are saved on this stack.'
         )
         //EASy68K's reset state: supervisor mode, mask 0, A7 the SSP
         expect(file.registers.map((register) => register.value)).toEqual([
@@ -2360,7 +2360,7 @@ describe('M68K memory regions', () => {
         ])
         expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, 0x8004n)).toBe('ROM')
         expect(memoryReasons(emulator.memoryRegions, 0x8004n)).toEqual([
-            'The program can read and run code here, and its writes are ignored, so the bytes stay as they are; a Poke still changes them.'
+            'The program can read data and execute code here. Program writes are ignored. You can still change these bytes with Poke.'
         ])
         expect(memoryReasons(emulator.memoryRegions, 0x9000n)[0]).toContain('bus error')
         //the debugger is not the program: none of it is read only memory to the memory view
@@ -2412,7 +2412,7 @@ describe('M68K memory map', () => {
             ].join('\n') + '\n'
         )
         const message =
-            "Bus error at line 7: vector 2 at $000008 holds no handler (writing a word at $9000, where the program's memory read line makes $9000-$9FFF read only)"
+            'Bus error at line 7: vector 2 at $000008 holds no handler (writing a word at $9000, where the memory read directive marks $9000-$9FFF as read-only)'
         expect(emulator.errors).toEqual([message])
         expect(emulator.termination).toEqual({ kind: 'error', message })
         //the ROM kept what it held, and the read only range could be read
@@ -2432,7 +2432,7 @@ describe('M68K memory map', () => {
             ].join('\n') + '\n'
         )
         expect(emulator.errors).toEqual([
-            "Bus error at line 5: vector 2 at $000008 holds no handler (reading a word at $A000 in user mode, where the program's memory protected line keeps $A000-$AFFF for supervisor mode)"
+            'Bus error at line 5: vector 2 at $000008 holds no handler (reading a word at $A000 in user mode, where the memory protected directive restricts $A000-$AFFF to supervisor mode)'
         ])
         expect([...emulator.readMemoryBytes(0xa000n, 2)]).toEqual([0, 5])
         emulator.dispose()
@@ -2468,7 +2468,7 @@ describe('M68K memory map', () => {
             ['    memory invalid $0,$3ff', '    ORG $1000', '    divu #0,d0'].join('\n') + '\n'
         )
         expect(emulator.errors).toEqual([
-            "The CPU halted at line 3: a double bus fault while taking Divide by zero (vector 5), as reading its vector at $000014 raised a bus error, where the program's memory invalid line makes $0-$3FF invalid"
+            'The CPU halted at line 3: a double bus fault while handling Divide by zero (vector 5). Reading the vector at $000014 raised a bus error, where the memory invalid directive marks $0-$3FF as invalid'
         ])
         emulator.dispose()
     })
@@ -2486,7 +2486,7 @@ describe('M68K memory map', () => {
             ].join('\n') + '\n'
         )
         expect(emulator.errors).toEqual([
-            "The CPU halted at line 4: a double bus fault while taking Divide by zero (vector 5), as pushing its frame raised a bus error, writing a word at $FFFFFE, where the program's memory read line makes $F00000-$FFFFFF read only"
+            'The CPU halted at line 4: a double bus fault while handling Divide by zero (vector 5). Pushing the exception frame raised a bus error, writing a word at $FFFFFE, where the memory read directive marks $F00000-$FFFFFF as read-only'
         ])
         emulator.dispose()
     })
@@ -2642,13 +2642,13 @@ describe('M68K Build output with the S-record switch on', () => {
         expect(await build('    opt p=68020\n    org $1000\n    extb.l d0\n')).toEqual([
             {
                 tone: 'info',
-                text: "`main.S68` is a program for the 68020 (`opt p=68020`), which EASy68K does not simulate: it runs the 68000's instructions and, of the 68020's, only the bit fields, so the program stops there at the first other instruction the 68000 lacks."
+                text: '`main.S68` targets the 68020 (`opt p=68020`). EASy68K can load this file, but supports only 68000 instructions and 68020 bit-field instructions. It stops at the first unsupported instruction.'
             }
         ])
         expect(await build('    opt p=68010\n    org $1000\n    move.w ccr,d0\n')).toEqual([
             {
                 tone: 'info',
-                text: "`main.S68` is a program for the 68010 (`opt p=68010`), which EASy68K does not simulate: it runs the 68000's instructions alone, so the program stops there at the first instruction the 68000 lacks."
+                text: '`main.S68` targets the 68010 (`opt p=68010`). EASy68K can load this file, but supports only 68000 instructions. It stops at the first unsupported instruction.'
             }
         ])
         //without a host nothing is saved, as in a playground, and there is no File to speak of
@@ -2732,7 +2732,7 @@ describe('M68K writes into code', () => {
         //paused after the `move.w`, on the `move.l` after it
         expect(emulator.line).toBe(3)
         expect(emulator.notes.map((note) => note.text)).toEqual([
-            'The program wrote into its own code at $100C, line 5: `add.l #5,d1`. Run again to go on with the new bytes.'
+            'The program modified its code at $100C, line 5: `add.l #5,d1`. Select Run to continue with the modified instructions.'
         ])
         const [step] = emulator.latestSteps
         expect(step.mutations).toContainEqual({
@@ -2773,7 +2773,7 @@ describe('M68K writes into code', () => {
         expect(emulator.terminated).toBe(false)
         expect(emulator.line).toBe(3)
         expect(emulator.notes.map((note) => note.text)).toContain(
-            'The program wrote into its own code at $E0010C, line 5: `add.l #5,d1`. Run again to go on with the new bytes.'
+            'The program modified its code at $E0010C, line 5: `add.l #5,d1`. Select Run to continue with the modified instructions.'
         )
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.termination).toEqual({ kind: 'exit' })
@@ -2798,7 +2798,7 @@ describe('M68K writes into code', () => {
         expect(emulator.errors).toEqual([])
         expect(emulator.terminated).toBe(false)
         expect(emulator.notes.map((note) => note.text)).toEqual([
-            'The program wrote into its own code at $100C, line 5: `move.l #7,d1`. Run again to go on with the new bytes.'
+            'The program modified its code at $100C, line 5: `move.l #7,d1`. Select Run to continue with the modified instructions.'
         ])
         emulator.dispose()
     })
@@ -3536,7 +3536,7 @@ describe('M68K IRQs and stop', () => {
         const emulator = await build(STOPS_FOR_GOOD)
         const { run } = await runUntilStopped(emulator)
         expect(emulator.runStatus).toBe(
-            'Stopped: waiting for an interrupt above level 3, which nothing the program set up can raise'
+            'Stopped: waiting for an interrupt above level 3. No configured timer or input event can raise one.'
         )
         //the Run waits on the stop's line, without spending the host's time
         expect(emulator.line).toBe(2)
@@ -3550,7 +3550,7 @@ describe('M68K IRQs and stop', () => {
         await emulator.step()
         expect(emulator.latestSteps).toHaveLength(steps)
         expect(emulator.notes.at(-1)?.text).toBe(
-            'Step ran nothing: the processor is stopped, waiting for an interrupt above level 3, and none is pending. Run waits for one, from a timer, a key or the mouse.'
+            'No instruction executed. The processor is waiting for an interrupt above level 3. No IRQ is pending. Select Run to wait for a timer or input event.'
         )
         //Run waits again, and Stop ends it
         const again = emulator.run(INSTRUCTION_LIMIT)
@@ -3643,7 +3643,7 @@ describe('M68K IRQs and stop', () => {
         //yet each level was latched, as it would have been with the processor awake
         await emulator.step()
         expect(emulator.notes.at(-1)?.text).toBe(
-            'Step ran nothing: the processor is stopped, waiting for an interrupt above level 4, and IRQs 2 and 4 are pending but held back by the interrupt mask. Run waits for one, from a timer, a key or the mouse.'
+            'No instruction executed. The processor is waiting for an interrupt above level 4. IRQs 2 and 4 are pending but held back by the interrupt mask. Select Run to wait for a timer or input event.'
         )
         emulator.dispose()
     })
@@ -3657,7 +3657,7 @@ describe('M68K IRQs and stop', () => {
         await run
         await emulator.step()
         expect(emulator.notes.at(-1)?.text).toBe(
-            'Step ran nothing: the processor is stopped, waiting for an interrupt above level 5, and IRQ 5 is pending but held back by the interrupt mask. Run waits for one, from a timer, a key or the mouse.'
+            'No instruction executed. The processor is waiting for an interrupt above level 5. IRQ 5 is pending but held back by the interrupt mask. Select Run to wait for a timer or input event.'
         )
         emulator.dispose()
     })
@@ -3756,7 +3756,7 @@ describe('M68K IRQs and stop', () => {
         emulator.undo(1)
         expect(emulator.latestSteps[0].kind).toBe('instruction')
         expect(emulator.callStack).toEqual([])
-        expect(emulator.runStatus).toBe('Stopped: IRQ 5 is pending, and the next step takes it')
+        expect(emulator.runStatus).toBe('Stopped: IRQ 5 is pending. Step to enter its handler.')
         await emulator.step()
         expect(emulator.latestSteps[0].kind).toBe('irq')
         expect(emulator.line).toBe(9)
@@ -3798,7 +3798,7 @@ describe('M68K IRQs and stop', () => {
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.line).toBe(7)
         expect(emulator.notes.map((note) => note.text)).toEqual([
-            'Run took a pending IRQ first, and its handler returned to the Breakpoint the Run started from, so the Run stopped there again. Run again to go on.'
+            'A pending IRQ ran before the breakpoint instruction. Its handler returned to the same breakpoint, where execution paused again. Select Run to continue.'
         ])
         //and Run again goes on to the stop
         const { run: onwards } = await runUntilStopped(emulator)
@@ -3855,7 +3855,7 @@ describe('M68K IRQs and stop', () => {
             {
                 type: 'runtime-error',
                 message:
-                    'The program stopped at line 3 waiting for an interrupt above level 3, which nothing in a Testcase can raise: it set no timer with task 32, and a Testcase has no keyboard or mouse'
+                    'The program stopped at line 3 waiting for an interrupt above level 3. It cannot resume in this testcase: no timer was configured with task 32. Testcases have no keyboard or mouse input.'
             }
         ])
         emulator.dispose()
@@ -3864,7 +3864,7 @@ describe('M68K IRQs and stop', () => {
 
 describe('M68K cycles', () => {
     //[m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 23 and 30: the
-    //68000's cycles under the registers, in each History row, and taken back by Undo
+    //68000's cycles above the PC, in each History row, and taken back by Undo
 
     /** Four rounds of a `dbra` loop: 10 cycles for each round that loops back, 14 for the last. */
     const LOOP = ['    moveq #3,d2', 'loop:', '    dbra d2,loop', '    add.l d2,d3'].join('\n')
@@ -3876,7 +3876,7 @@ describe('M68K cycles', () => {
         return emulator
     }
 
-    it('counts the cycles under the registers, with what the newest step took', async () => {
+    it('counts the cycles shown above the PC, with what the newest step took', async () => {
         const emulator = await build(LOOP)
         expect(emulator.cycles).toEqual({ total: 0n })
         await emulator.step()
@@ -4066,7 +4066,7 @@ describe('M68K 68010 programs', () => {
         //the region and its labels moved with VBR
         const moved = vectors(emulator)
         expect(moved).toMatchObject({ start: 0x8000n, end: 0x8400n })
-        expect(moved.reason).toContain('VBR, puts the table here, at $8000')
+        expect(moved.reason).toContain('VBR puts the table here, at $8000')
         expect(emulator.resolveMemoryLabel('Divide by zero')).toBe(0x8014n)
         expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, 0x8016n)).toBe(
             'Exception vectors · Divide by zero+2'
@@ -4152,7 +4152,7 @@ describe('M68K 68010 programs', () => {
             { id: 'machine:vectors', start: 0xffff80n, end: 0x1000000n },
             { id: 'machine:vectors:2', start: 0n, end: 0x380n }
         ])
-        expect(tables[1].reason).toContain('wrap round to $0')
+        expect(tables[1].reason).toContain('wrap around from $FFFFFF to $0')
         const [top, wrapped] = tables.map((table) =>
             regionLabels(table, emulator.dataLabels).map((label) => label.name)
         )
@@ -4167,7 +4167,7 @@ describe('M68K 68010 programs', () => {
         //the reset vectors are read only from address 0, so VBR + 0 and + 4 go by their numbers
         expect(top.slice(0, 3)).toEqual(['Vector 0', 'Vector 1', 'Bus error'])
         expect(tables[0].reason).toContain(
-            'Vectors 0 and 1, the reset stack pointer and program counter, are read only from address 0, at reset'
+            'Reset reads the initial stack pointer and program counter from $0 and $4'
         )
         expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, 0xffff84n)).toBe(
             'Exception vectors · Vector 1'
@@ -4222,7 +4222,7 @@ describe('M68K 68010 programs', () => {
         const emulator = await build(FORMAT_3)
         await emulator.run(INSTRUCTION_LIMIT)
         const message =
-            'Format error at line 6: vector 14 at $000038 holds no handler (rte found a frame of format $3, which a 68010 does not make)'
+            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $3, which the 68010 does not support)'
         expect(emulator.errors).toEqual([message])
         expect(emulator.termination).toEqual({ kind: 'error', message })
         emulator.dispose()
@@ -4819,14 +4819,14 @@ describe('M68K 68020 supervisor model', () => {
         const emulator = await build(forgedFrame('$3000'))
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.errors).toEqual([
-            'Format error at line 6: vector 14 at $000038 holds no handler (rte found a frame of format $3, which a 68020 does not make)'
+            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $3, which the 68020 does not support)'
         ])
         emulator.dispose()
         //a 68010's bus fault frame is not one either
         const format8 = await build(forgedFrame('$8008'))
         await format8.run(INSTRUCTION_LIMIT)
         expect(format8.errors).toEqual([
-            'Format error at line 6: vector 14 at $000038 holds no handler (rte found a frame of format $8, which a 68020 does not make)'
+            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $8, which the 68020 does not support)'
         ])
         format8.dispose()
     })
@@ -4869,12 +4869,12 @@ describe('M68K 68020 supervisor model', () => {
         await emulator.run(INSTRUCTION_LIMIT)
         //T0 traces the branch, and not the `moveq` before it
         expect(emulator.errors).toEqual([
-            'Trace exception at line 5: vector 9 at $000024 holds no handler (a trace bit of SR is set: T1 stops the processor after every instruction, and T0 after each branch taken, jump, return and write of SR, and each ANDI, ORI or EORI to CCR)'
+            'Trace exception at line 5: vector 9 at $000024 holds no handler (a trace bit of SR is set: T1 raises an exception after every instruction. T0 raises one after a taken branch, jump, return, write to SR, or ANDI, ORI or EORI to CCR)'
         ])
         emulator.dispose()
     })
 
-    it('marks its cycles as an estimate, under the registers and in each History row', async () => {
+    it('marks its cycles as an estimate, above the PC and in each History row', async () => {
         const emulator = await build('    moveq #1,d0\n    moveq #2,d1\n    simhalt\n')
         expect(emulator.cycles).toEqual({ total: 0n, estimate: true })
         await emulator.step()

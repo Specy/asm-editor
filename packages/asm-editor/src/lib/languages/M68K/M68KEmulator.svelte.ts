@@ -236,16 +236,16 @@ const SYSTEM_FIELDS: Record<SystemRegisterName, keyof SystemRegisters> = {
  * meets it there first.
  */
 const SYSTEM_REGISTER_DESCRIPTIONS: Record<SystemRegisterName, string> = {
-    SR: 'The status register: the condition codes in its low byte, and in its high byte the trace and supervisor bits and the interrupt mask, shown as the flags above.',
-    USP: 'The user stack pointer: A7 in user mode.',
-    SSP: 'The supervisor stack pointer: A7 in supervisor mode, where exceptions push their frames.',
-    ISP: 'The interrupt stack pointer, which the 68000 calls the SSP: A7 in supervisor mode while M is clear, and the stack interrupts push their frames on.',
-    MSP: 'The master stack pointer: A7 in supervisor mode while M is set. It starts at 0, so set it with movec before setting M.',
-    VBR: 'The vector base register: where the vector table starts. Every exception reads its vector at VBR + 4 × its number.',
-    SFC: 'The source function code: the address space moves reads from, three bits.',
-    DFC: 'The destination function code: the address space moves writes to, three bits.',
-    CACR: 'The cache control register. This 68020 has no cache, so only bits 0 (E, enable) and 1 (F, freeze) are kept, and they change nothing.',
-    CAAR: 'The cache address register, which names a cache entry for CACR’s commands. This 68020 has no cache, so it only holds what is written.'
+    SR: 'Status register. The low byte holds the condition codes. The high byte controls tracing, processor mode and the interrupt mask. Its flags appear above.',
+    USP: 'User stack pointer. A7 uses this pointer in user mode.',
+    SSP: 'Supervisor stack pointer. A7 uses this pointer in supervisor mode. Exception frames are saved on this stack.',
+    ISP: 'Interrupt stack pointer, called SSP on the 68000. A7 uses it in supervisor mode when M is clear. Interrupt handlers run on this stack.',
+    MSP: 'Master stack pointer. A7 uses it in supervisor mode when M is set. It starts at 0. Initialize it with movec before setting M.',
+    VBR: 'Vector base register. The vector table starts at this address. Vector n is read at VBR + 4 × n.',
+    SFC: 'Source function code. This three-bit value selects the address space read by moves.',
+    DFC: 'Destination function code. This three-bit value selects the address space written by moves.',
+    CACR: 'Cache control register. The simulator has no instruction cache. Bits 0 (E, enable) and 1 (F, freeze) retain their values but have no effect.',
+    CAAR: 'Cache address register. On hardware it selects an entry for cache commands. The simulator retains its value but has no instruction cache.'
 }
 
 /**
@@ -313,29 +313,29 @@ const MEMORY_MAP_REGIONS: Record<MemoryRange['kind'], Omit<MachineRegion, 'start
     rom: {
         kind: 'rom',
         name: 'ROM',
-        reason: 'The program can read and run code here, and its writes are ignored, so the bytes stay as they are; a Poke still changes them.'
+        reason: 'The program can read data and execute code here. Program writes are ignored. You can still change these bytes with Poke.'
     },
     read: {
         kind: 'readOnly',
         name: 'Read only',
-        reason: 'The program can read and run code here, and a write by it raises a bus error; a Poke still changes it.'
+        reason: 'The program can read data and execute code here. Program writes raise a bus error. You can still change these bytes with Poke.'
     },
     protected: {
         kind: 'protected',
         name: 'Protected',
-        reason: 'Only supervisor mode can use it: in user mode, any access by the program here, a read, a write or running code, raises a bus error. A Poke still changes it.'
+        reason: 'Only supervisor code can access this region. In user mode, reading, writing or executing code here raises a bus error. You can still change these bytes with Poke.'
     },
     invalid: {
         kind: 'invalid',
         name: 'Invalid',
-        reason: 'Any access by the program here, a read, a write or running code, raises a bus error; a Poke still changes it.'
+        reason: 'Reading, writing or executing code here raises a bus error. You can still change these bytes with Poke.'
     }
 }
 
 /** The vector table's region, whose data labels are the vectors' names. */
 const VECTORS_REGION_NAME = 'Exception vectors'
 const VECTORS_REASON =
-    'Each long word is the address of an exception’s handler. An odd one, as every vector holds until the program writes it, means there is no handler.'
+    'Each four-byte entry holds a handler address. Entries start at $FFFFFFFF. An odd address means no handler is installed.'
 
 /**
  * How many instructions the s68k interpreter runs in a millisecond, used to turn a slice's time
@@ -1313,7 +1313,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             const mask = m68kInterruptMask(interpreter.getSr())
             this.addNote({
                 tone: 'info',
-                text: `Step ran nothing: the processor is stopped, waiting for ${m68kInterruptAbove(mask)}, and ${heldBack(interpreter.getMachineState().pendingIrqs)}. Run waits for one, from a timer, a key or the mouse.`
+                text: `No instruction executed. The processor is waiting for ${m68kInterruptAbove(mask)}. ${heldBack(interpreter.getMachineState().pendingIrqs)}. Select Run to wait for a timer or input event.`
             })
             return { terminated: false }
         }
@@ -1554,7 +1554,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     private noteIrqBeforeBreakpoint(): void {
         this.addNote({
             tone: 'info',
-            text: 'Run took a pending IRQ first, and its handler returned to the Breakpoint the Run started from, so the Run stopped there again. Run again to go on.'
+            text: 'A pending IRQ ran before the breakpoint instruction. Its handler returned to the same breakpoint, where execution paused again. Select Run to continue.'
         })
     }
 
@@ -1641,8 +1641,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         if (interpreter.getStatus() !== CoreInterpreterStatus.Stopped) {
             const ready = machine.pendingIrqs.filter((level) => m68kIrqGetsThrough(level, mask))
             return ready.length > 0
-                ? `Stopped: IRQ ${Math.max(...ready)} is pending, and the next step takes it`
-                : 'Stopped: woken, and the next step goes on'
+                ? `Stopped: IRQ ${Math.max(...ready)} is pending. Step to enter its handler.`
+                : 'Stopped: ready to resume on the next step'
         }
         const waiting = `Stopped: waiting for ${m68kInterruptAbove(mask)}`
         const sources = [
@@ -1652,11 +1652,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         ]
         return sources.some((level) => level > 0 && m68kIrqGetsThrough(level, mask))
             ? waiting
-            : `${waiting}, which nothing the program set up can raise`
+            : `${waiting}. No configured timer or input event can raise one.`
     }
 
     /**
-     * The cycle counter under the registers ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+     * The cycle counter above the PC ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
      * decisions 23 and 30): the 68000's clock cycles since the program started or task 30 cleared
      * it, which Undo takes back, and what the newest step took, an IRQ's 44 included. A Poke ran
      * nothing, so after one the counter shows no step's cost.
@@ -1699,7 +1699,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         if (write) {
             this.addNote({
                 tone: 'warning',
-                text: `The program wrote into its own code at ${this.describeCodeWrite(write)}. Run again to go on with the new bytes.`
+                text: `The program modified its code at ${this.describeCodeWrite(write)}. Select Run to continue with the modified instructions.`
             })
         }
         return { reason: 'codeWrite', instructions }
@@ -1790,11 +1790,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const levels = this.irqTimers.levels
         const timers =
             levels.length === 0
-                ? 'it set no timer with task 32'
+                ? 'no timer was configured with task 32'
                 : levels.length === 1
-                  ? `its timer, at level ${levels[0]}, is held back by the interrupt mask`
-                  : `its timers, at levels ${levelList(levels)}, are held back by the interrupt mask`
-        return `The program stopped${where} waiting for ${m68kInterruptAbove(mask)}, which nothing in a Testcase can raise: ${timers}, and a Testcase has no keyboard or mouse`
+                  ? `the level-${levels[0]} timer is blocked by the interrupt mask`
+                  : `the interrupt mask blocks the timers at levels ${levelList(levels)}`
+        return `The program stopped${where} waiting for ${m68kInterruptAbove(mask)}. It cannot resume in this testcase: ${timers}. Testcases have no keyboard or mouse input.`
     }
 
     /**
@@ -2504,7 +2504,7 @@ function levelList(levels: readonly number[]): string {
  * would have woken it.
  */
 function heldBack(pending: readonly number[]): string {
-    if (pending.length === 0) return 'none is pending'
+    if (pending.length === 0) return 'No IRQ is pending'
     return pending.length === 1
         ? `IRQ ${pending[0]} is pending but held back by the interrupt mask`
         : `IRQs ${levelList(pending)} are pending but held back by the interrupt mask`
@@ -2552,9 +2552,9 @@ function processorShown(processor: Processor, bitFields: boolean): string | unde
 function laterProcessorOutputNote(path: string, processor: '68010' | '68020'): string {
     const runs =
         processor === '68020'
-            ? "the 68000's instructions and, of the 68020's, only the bit fields, so the program stops there at the first other instruction the 68000 lacks"
-            : "the 68000's instructions alone, so the program stops there at the first instruction the 68000 lacks"
-    return `\`${path}\` is a program for the ${processor} (\`opt p=${processor}\`), which EASy68K does not simulate: it runs ${runs}.`
+            ? '68000 instructions and 68020 bit-field instructions'
+            : '68000 instructions'
+    return `\`${path}\` targets the ${processor} (\`opt p=${processor}\`). EASy68K can load this file, but supports only ${runs}. It stops at the first unsupported instruction.`
 }
 
 /**
@@ -2579,7 +2579,7 @@ function withMachineRegions(
     const start = m68kVectorTableStart(vbr)
     const end = start + M68K_VECTOR_TABLE_SIZE
     const moved = (where: string): string =>
-        `${VECTORS_REASON} The vector base register, VBR, ${where}. Vectors 0 and 1, the reset stack pointer and program counter, are read only from address 0, at reset, so VBR + 0 and VBR + 4 are not used.`
+        `${VECTORS_REASON} VBR ${where}. Reset reads the initial stack pointer and program counter from $0 and $4. The entries at VBR and VBR + 4 are unused.`
     const region = (from: number, to: number, reason: string): MachineRegion => ({
         kind: 'vectors',
         name: VECTORS_REGION_NAME,
@@ -2598,14 +2598,14 @@ function withMachineRegions(
                     start,
                     M68K_MEMORY_SIZE,
                     moved(
-                        `puts the table here, at ${m68kAddress(start)}, and its last vectors past $FFFFFF, the top of the 24-bit bus, wrap round to $0`
+                        `places the table at ${m68kAddress(start)}. Entries beyond $FFFFFF wrap around to $0 on the 24-bit address bus`
                     )
                 ),
                 region(
                     0,
                     end - M68K_MEMORY_SIZE,
                     moved(
-                        `puts the table at ${m68kAddress(start)}, and these are its last vectors, which run past $FFFFFF, the top of the 24-bit bus, and wrap round to $0`
+                        `places the table at ${m68kAddress(start)}. These entries wrap around from $FFFFFF to $0 on the 24-bit address bus`
                     )
                 )
             ]

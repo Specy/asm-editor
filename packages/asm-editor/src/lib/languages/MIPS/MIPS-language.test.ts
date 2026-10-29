@@ -96,6 +96,14 @@ describe('MIPS hovers', () => {
         expect(add).toContain('`add $t1, $t2, $t3`  \n')
         expect(add).toMatch(/`add \$t1, \$t2, imm` · Pseudo-instruction/)
     })
+
+    it('says nothing about the words of a comment, a label of the same name or not', async () => {
+        const line = 'main: j main # add one, then back to main'
+        expect(await hover(line, 'j main', 2)).toContain('Label **main**')
+        expect(await hover(line, 'to main', 3)).toBe('')
+        expect(await hover(line, 'add')).toBe('')
+        expect(await hover(line, '#')).toBe('')
+    })
 })
 
 describe('MIPS completion', () => {

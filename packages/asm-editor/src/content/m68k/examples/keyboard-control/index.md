@@ -127,11 +127,10 @@ the keys in a different order—left, right, up, down—so the last held key it 
 are down together. For example, holding left and down sets the direction to down. You can use the
 bit positions as a guide; there is no need to memorize them.
 
-Each poll returns the keys as they are _at that moment_: a key is down from the moment it is
-pressed on the focused Screen until it is released. The program polls once a frame, a little more
-than three hundredths of a second apart, so a key held for a frame or longer is always seen, while
-a tap that begins and ends between two polls is not.
-Keys pressed while the Screen lacks focus never reach the program.
+Each poll reports which keys are down at that moment. The program checks once per frame, at
+intervals a little over 30 milliseconds. A held key is seen on successive polls, but a tap that
+begins and ends between two polls is missed. Click the Screen panel to give it focus before
+pressing a key. Key events outside the focused panel do not reach the program.
 
 ## Direction kept between frames
 

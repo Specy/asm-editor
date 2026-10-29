@@ -48,7 +48,7 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'input',
         title: 'Keyboard and mouse',
         description:
-            'A program reads the keyboard and the mouse of the focused screen when it wants to, by polling with these tasks. It can also ask for an [interrupt request](/documentation/m68k/traps#interrupts) when a key or a mouse button is pressed, with tasks 62 and 60. Tasks 7, 19, and 61 also select [screen input](/documentation/m68k/traps#differences) for subsequent interactive reads.'
+            'Poll the keyboard and mouse with these tasks, or configure [interrupt requests](/documentation/m68k/traps#interrupts) for key events with task 62 and mouse events with task 60. The screen panel must have focus to receive keys. Tasks 7, 19 and 61 also select [screen input](/documentation/m68k/traps#differences) for subsequent interactive reads.'
     },
     {
         group: 'time',
@@ -60,13 +60,13 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'cycles',
         title: 'Cycle counter',
         description:
-            'The editor counts the **clock cycles** a 68000 would take to run the program: each instruction’s, each exception’s and each interrupt request’s, as the line under the registers shows. `trap #15` tasks take none. To time a piece of code, clear the counter with task 30 before it and read it with task 31 after it. [Cycles](/documentation/m68k/exceptions#cycles) explains what a cycle is and what the reading includes.'
+            'The cycle counter follows the processor selected by `opt p=`: 68000 by default, 68010 for `opt p=68010`, and estimated 68020 counts for `opt p=68020`. Bit-field instructions enabled by `opt bit` also use estimates. Instructions, exceptions and IRQ entry add cycles; supported `trap #15` tasks add none. Clear the counter with task 30 before the code to measure, then read it with task 31. [Cycles](/documentation/m68k/exceptions#cycles) explains the counts and gives a worked example.'
     },
     {
         group: 'interrupts',
         title: 'Interrupt requests',
         description:
-            'An **interrupt request**, or IRQ, makes the processor put aside what it is doing between two instructions and run a handler, then come back. A timer raises one (task 32), and so can a key or a mouse event on the screen (tasks 62 and 60).\n\nThere are seven levels, 1 to 7. Before asking for one, the program puts the address of its handler in that level’s **autovector**, the long word at `$60` + 4 × level: `$68` for level 2, `$74` for level 5. The handler ends with `rte`, which returns to where the program was. The interrupt mask, bits 8 to 10 of the status register, holds back every level at or below it, except level 7; `move.w #$2000,sr` sets it to 0, so every level gets through. A request whose autovector holds no handler ends the program.\n\n`stop #$2000` waits for a request without running anything. Run waits with it, and the line beside the Terminal’s tab says what it waits for. The History shows each IRQ as a row of its own, and Undo takes it back.\n\nWhen a Run starts on a Breakpoint while a request is already pending, the processor takes the request first, so the Breakpoint’s instruction has not run yet when the handler returns to it, and the Run stops there again. Run again to go on. [Exceptions](/documentation/m68k/exceptions#interrupts) explains what the processor does to take a request.'
+            'An **interrupt request**, or **IRQ**, transfers control to a handler between instructions. Task 32 configures timers; tasks 60 and 62 configure mouse and keyboard events. Each source requests a level from 1 to 7.\n\nInstall the handler before enabling its source. Its **autovector** is the long at `$60` + 4 × level: `$68` for level 2 or `$74` for level 5. Add VBR on the 68010 and 68020 if the vector table has moved. The handler must preserve registers it changes and return with `rte`. A vector with no handler ends the program.\n\nBits 10–8 of `sr` form the interrupt mask. Requests at or below the mask wait, except that level 7 is always taken. If several levels are eligible, the highest runs first. Each level holds one pending request: further requests at that level merge, even from different sources. Turning a source off does not remove an already pending request.\n\nIn supervisor mode, `stop #$2000` sets the mask to 0 and waits without executing instructions. Choose **Run** to wait for timers or input. **Step** can take a pending IRQ but does not run timers. The execution status beside the Terminal tab describes what the processor is waiting for. Each taken IRQ has its own **History** row; Undo restores its pending request.\n\nIf Run starts at a breakpoint with an eligible IRQ pending, the IRQ runs first. The handler returns to the breakpoint before its instruction has executed, so Run stops there again. Run once more to continue. [Exceptions](/documentation/m68k/exceptions#interrupts) explains IRQ entry and includes a complete timer example.'
     },
     {
         group: 'files',
@@ -252,7 +252,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.L = four key codes, or 0 for the last keys',
         output: 'D1.L = four $FF/$00 bytes, or the last key up in the high word and the last key down in the low word',
         description:
-            'Reads whether up to four keys are held right now, one byte of the answer per key code in the same order; with D1.L = 0 it answers with the last key released and the last key pressed instead. A key counts as held from the moment it goes down until it comes up, so a key tapped between two reads is not held at the second; the last key pressed and released still name it. In a key IRQ handler, the last key pressed, or released for a key-up IRQ, is the key that raised it.'
+            'Reads the current state of up to four keys, returning one byte per key in the request order. A key is held from its press until its release, so a tap between two reads can be missed. With D1.L = 0, returns the most recently released and pressed key codes. Each code remains until a newer event replaces it. A key IRQ handler reads this same state. Pending requests can merge, so the codes do not identify a separate event for each IRQ. This task does not provide an event queue.'
     },
     {
         task: 20,
@@ -293,20 +293,20 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Read the cycle counter',
         output: 'D1.L = the cycles since the program started or task 30 last cleared the counter, or 0 once they no longer fit in 32 bits',
         description:
-            'Reads the counter without changing it. The instruction that puts 31 in D0 runs before the read and counts too: `moveq #31, d0` takes 4 cycles, and `move.b #31, d0` takes 8, on the 68000 and the 68010; on the 68020 they take 2 and 4.',
+            'Reads the counter without changing it. Counts follow the selected processor: 68000 by default, 68010 for `opt p=68010`, and estimates for `opt p=68020` or bit-field instructions enabled by `opt bit`. The instruction selecting task 31 runs before the read and is included: `moveq #31, d0` takes 4 cycles and `move.b #31, d0` takes 8 on the 68000 and 68010; on the 68020 they take 2 and 4. The `trap #15` task itself adds no cycles. See the [worked measurement](/documentation/m68k/exceptions#cycles).',
         deviation:
-            'The counts are a real 68000’s, so a few differ from EASy68K’s own: `trap #0` to `#14` takes 34 cycles here and 38 in EASy68K.'
+            'Some cycle costs differ from EASy68K. On the 68000, for example, `trap #0` to `#14` takes 34 cycles here and 38 in EASy68K.'
     },
     {
         task: 32,
         group: 'interrupts',
         title: 'Interrupt timers',
-        input: 'D1.B = 6 to set a timer, with D2.B = which timer and D3.L = its interval in milliseconds; D1.B = 4 or 5 for the simulator settings',
+        input: 'D1.B = operation; for operation 6, D2.B = timer selector and D3.L = interval in milliseconds',
         output: 'For D1.B = 4, D1.L = the simulator version, $00051001',
         description:
-            'With D1.B = 6, sets a timer that raises an IRQ over and over at the same interval. D2.B = `$80` plus a level turns that level’s timer on, firing every D3.L milliseconds: `$82` is a level-2 timer. D2.B = 1 to 7 turns that level’s timer off, and D2.B = 0 turns every timer off. With D1.B = 4 it answers EASy68K’s version in D1.L. With D1.B = 5 it turns on EASy68K’s exceptions, which are always on here, so it changes nothing.',
+            'D1.B selects the operation:\n\n| D1.B | operation |\n| --- | --- |\n| 4 | Return the EASy68K-compatible version value `$00051001` in D1.L. |\n| 5 | Accept the request to enable exceptions. Exceptions are always enabled here, so this changes nothing. |\n| 6 | Configure a periodic IRQ timer with D2.B and D3.L, as below. |\n| 0–3 or 7 | Request the unsupported hardware window or one of its device addresses. End the program with an error. |\n| any other value | Do nothing. |\n\nFor operation 6, D2.B = `$81` to `$87` configures the timer for level 1 to 7. For example, `$82` requests a level-2 IRQ every D3.L milliseconds. A positive interval enables the timer; an interval of 0 leaves it off. Setting a new interval replaces the previous interval for that level. D2.B = 1 to 7 turns that level’s timer off, and D2.B = 0 turns every timer off. Other selector values do nothing.\n\nA level holds only one pending IRQ. Multiple elapsed firings merge while a request remains pending, so a handler counter counts delivered requests rather than every elapsed interval. Turning the timer off does not clear a pending request. See the [complete timer example](/documentation/m68k/exceptions#interrupts) for handler installation, configuration and `stop`.',
         deviation:
-            'Timers count only while the program runs: Pause and Step stop them, and each Run starts them counting again. A testcase runs them on its virtual clock, so a program waiting in `stop` goes straight to the next firing. D1.B = 0 to 3 and 7, which show EASy68K’s hardware window and give its devices’ addresses, stop the program with an error: there is no hardware window.'
+            'Timers run during **Run**, including time spent in `stop`. **Pause** and **Step** do not advance them. Each new Run restarts every enabled timer with a full interval before its next firing.\n\nTestcases use a virtual clock. Waits advance that clock; executing instructions alone does not. A delay advances time by its requested duration, and `stop` advances directly to the next timer that can get past the interrupt mask. If no timer can wake the processor, the testcase fails with an explanation. A busy loop without waits does not advance testcase timers.'
     },
     {
         task: 33,
@@ -422,7 +422,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Mouse IRQ',
         input: 'D1.W = the level in the high byte, 0 to 7; in the low byte, which events: bit 0 a button down, bit 1 a button up, bit 2 a move',
         description:
-            'Asks for an IRQ at that level each time one of the chosen mouse events happens on the screen panel: `move.w #$0301,d1` asks for a level-3 IRQ on every button press. Level 0 turns the chosen events’ IRQ off, an event whose bit is clear keeps the level it had, and a level above 7 makes the task do nothing. The handler reads where the mouse is and which buttons are down with task 61.',
+            'Assigns an IRQ level to each selected mouse event on the screen panel. For example, `move.w #$0301, d1` followed by this task requests level 3 on button presses. Level 0 disables IRQs for the selected events. Events whose bits are clear keep their existing settings; a level above 7 leaves every setting unchanged. Install the level’s autovector before enabling it. The handler can use [task 61](/documentation/m68k/traps#task-61) to read mouse coordinates and button state. Requests at the same level merge while pending; they do not form an event queue.',
         deviation: 'A testcase has no mouse, so it never raises this IRQ.'
     },
     {
@@ -431,7 +431,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         title: 'Keyboard IRQ',
         input: 'D1.W = the level in the high byte, 0 to 7; in the low byte, which events: bit 0 a key down, bit 1 a key up',
         description:
-            'Asks for an IRQ at that level each time a key goes down or comes up on the focused screen panel: `move.w #$0501,d1` asks for a level-5 IRQ on every key press. Level 0 turns the chosen events’ IRQ off, an event whose bit is clear keeps the level it had, and a level above 7 makes the task do nothing. The handler reads which key with task 19, whose D1.L = 0 form answers the last key pressed and the last key released.',
+            'Assigns an IRQ level to each selected key event on the focused screen panel. For example, `move.w #$0501, d1` followed by this task requests level 5 on key presses. Level 0 disables IRQs for the selected events. Events whose bits are clear keep their existing settings; a level above 7 leaves every setting unchanged. Install the level’s autovector before enabling it. The handler can use [task 19](/documentation/m68k/traps#task-19) with D1.L = 0 to read the last key pressed and the last key released. Requests at the same level merge while pending, so this does not provide a queue of every key event.',
         deviation: 'A testcase has no keyboard, so it never raises this IRQ.'
     },
     {

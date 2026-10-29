@@ -90,6 +90,13 @@ describe('x86 hovers', () => {
             "[Intel's reference: ADDPS](https://intel.github.io/SDM/instruction/ADDPS.html)"
         )
     })
+
+    it('says nothing about the words of a comment', async () => {
+        expect(await hover('    ret ; mov the result to rax', 'mov')).toEqual([])
+        expect(await hover('    ret ; mov the result to rax', 'rax')).toEqual([])
+        // A `;` in a string starts no comment.
+        expect(await hover("    db ';', 0 ; mov", 'db')).not.toEqual([])
+    })
 })
 
 /** The suggestions at the end of `line`, under `text`, as `label kind detail sortText insertText`. */

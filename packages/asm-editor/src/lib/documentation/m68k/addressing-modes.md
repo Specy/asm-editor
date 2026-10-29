@@ -34,7 +34,9 @@ Accesses memory at the address register plus a displacement, written as `d` in `
 
 ## Indirect postincrement/predecrement {#indirect-post-pre-increment}
 
-`(An)+` accesses memory at the address in the register, then increases the register after access. `-(An)` decreases the register before access, then accesses memory at the new address. The simulator changes the register by the operation’s size in bytes: 1 for byte, 2 for word or 4 for long, including when the register is `sp`.
+`(An)+` accesses memory at the address in the register, then increases the register. `-(An)` decreases the register first, then accesses memory at the new address. The change is 1 byte for a byte operation, 2 for a word or 4 for a long. A byte operation through `sp` changes it by 2 to keep the stack pointer even.
+
+`pack` and `unpk` have different source and destination widths. Their instruction pages give the change for each operand.
 
 These are separate addressing modes: an instruction that allows `(An)` does not necessarily allow `(An)+` or `-(An)`. Check the instruction’s supported modes.
 
@@ -88,7 +90,7 @@ Accesses memory at the sum of an address register, an index register and an opti
 
 ## Program-counter relative
 
-Write the target label or address before `(pc)`, as in `table(pc)`. The assembler calculates the displacement from two bytes after the instruction’s start to that target. For `d(PC)`, this displacement must fit a signed 16-bit value (`-32768` to `32767`).
+Write the target label or address before `(pc)`, as in `table(pc)`. The assembler calculates the displacement to that target from the operand’s extension word. This is usually two bytes after the instruction’s start, or later if the instruction has other extension words before the operand. For `d(PC)`, the displacement must fit a signed 16-bit value (`-32768` to `32767`).
 
 An indexed operand such as `table(pc,d0.w)` accesses the target address plus the index register. Its calculated displacement must fit a signed 8-bit value (`-128` to `127`). The index uses the same `.w`/`.l` rules as [address-register indexed operands](#address-register-indexed). If the target is omitted, as in `(pc,d0.w)`, the target is the instruction itself, as in EASy68K: the address is the instruction’s start plus the index.
 
@@ -114,7 +116,7 @@ move.w sr,d0
 
 ## User stack pointer
 
-`usp` is the user stack pointer: the `a7` a program has in user mode. In supervisor mode `a7` is the supervisor stack pointer, so supervisor code reaches the other one through `usp`, with [move](/documentation/m68k/instruction/move) to or from an address register, or on the 68010 with [movec](/documentation/m68k/instruction/movec) to or from any data or address register. Every form is long and privileged. See [user and supervisor mode](/documentation/m68k/exceptions#modes).
+`usp` holds the user-mode stack pointer. In user mode it is `a7`. Supervisor code can read or write it with [move](/documentation/m68k/instruction/move) between `usp` and an address register. The 68010 and 68020 also allow [movec](/documentation/m68k/instruction/movec) between `usp` and a data or address register. These transfers are always long and require supervisor mode. See [user and supervisor mode](/documentation/m68k/exceptions#modes).
 
 ```m68k
 move.l a0, usp
@@ -124,15 +126,15 @@ move.l a0, usp
 
 ## Control registers
 
-The 68010 added three registers that only supervisor code uses, and only [movec](/documentation/m68k/instruction/movec) names them, copying one to or from a data or address register. A program has them when it starts with `opt p=68010`; in a 68000 program the names are still reserved, so no label can take them.
+The 68010 adds three control registers. Supervisor code reads or writes them with [movec](/documentation/m68k/instruction/movec), transferring a long to or from a data or address register. Select `opt p=68010` or `opt p=68020` to use them. Their names are reserved on every processor, including the 68000.
 
-- `vbr`, the vector base register, is the address where the [vector table](/documentation/m68k/exceptions#68010) starts. It is 0 until a program moves it.
-- `sfc` and `dfc`, the source and destination function codes, say which address space [moves](/documentation/m68k/instruction/moves) reads from and writes to. Each is three bits.
+- `vbr`, the vector base register, holds the [vector table’s](/documentation/m68k/exceptions#68010) start address. It starts at zero.
+- `sfc` and `dfc`, the source and destination function codes, select the address spaces for [moves](/documentation/m68k/instruction/moves). Each retains the low three bits of a written value. The editor has a single address space, so their values do not change which bytes `moves` accesses.
 
-The 68020 adds four more, which a program has when it starts with `opt p=68020`, and whose names are reserved in every program too:
+The 68020 adds four more control registers. Select `opt p=68020` to use them. Their names are also reserved on every processor:
 
-- `msp` and `isp`, the master and interrupt stack pointers. In supervisor mode `a7` is one of them, chosen by the M bit of `sr`, and `isp` is the 68000's supervisor stack pointer under its 68020 name. See [master and interrupt stacks](/documentation/m68k/exceptions#master-stack).
-- `cacr` and `caar`, the cache control and cache address registers. This editor's 68020 has no cache, so they only keep what is written: `cacr` its bits 0 and 1, and `caar` all of it.
+- `msp` and `isp`, the master and interrupt stack pointers. In supervisor mode, `a7` uses `msp` when M in `sr` is set and `isp` when M is clear. `isp` corresponds to the 68000’s supervisor stack pointer. See [master and interrupt stacks](/documentation/m68k/exceptions#master-stack).
+- `cacr` and `caar`, the cache control and cache address registers. The editor does not simulate a cache. `cacr` retains bits 0 and 1 of a written value, while `caar` retains all 32 bits.
 
 ```m68k
 movec d0, vbr
@@ -148,20 +150,24 @@ movec d0, vbr
 
 ## On the 68020 {#68020}
 
-A program that starts with `opt p=68020` runs on a 68020, which adds the addressing modes and the long branches of the sections below, and the [register pairs](/documentation/m68k/addressing-mode#register-pairs) and [bit fields](/documentation/m68k/addressing-mode#bit-fields) of its new instructions, which the Instructions chapter tags 68020. An instruction takes the new modes wherever it takes `d(An,Xn)` or `d(PC,Xn)`. A program for the 68000 refuses them, with a quick fix that adds the `opt p=68020` line.
+Select the 68020 with `opt p=68020` before any code or data. The choice applies to the whole assembled program, including its included Files.
 
-Their parts go inside the parentheses, separated by commas: `bd` is the base displacement, `Xn` the index register, `k` the index's scale and `od` the outer displacement. Any part can be left out.
+The 68020 adds scaled indexes, larger displacements, memory indirect addressing and long branches. It also adds instructions that use [register pairs](/documentation/m68k/addressing-mode#register-pairs) and [bit fields](/documentation/m68k/addressing-mode#bit-fields). The instruction pages mark the forms that require a later processor.
+
+Where an instruction accepts `d(An,Xn)` or `d(PC,Xn)`, it also accepts the corresponding 68020 forms below. These forms are unavailable on the 68000 and 68010. The editor offers a quick fix to add `opt p=68020` when one is used without selecting that processor.
+
+The parts go inside parentheses, separated by commas. `bd` is the base displacement, `Xn` the index register, `k` its scale, and `od` the outer displacement. Omitted address components contribute zero.
 
 - `(bd,An,Xn*k)`: [Scaled index](/documentation/m68k/addressing-mode#scaled-index), with a [base displacement](/documentation/m68k/addressing-mode#base-displacements)
 - `([bd,An],Xn,od)`: [Memory indirect](/documentation/m68k/addressing-mode#memory-indirect), postindexed
 - `([bd,An,Xn],od)`: Memory indirect, preindexed
 - `(bd,PC,Xn*k)`, `([bd,PC],Xn,od)`, `([bd,PC,Xn],od)`: The same from the program counter, which can read memory but not write it
 
-A line the 68000 can encode keeps its 68000 form, so `opt p=68020` does not change what an existing line assembles to. Where a displacement is too wide for the 68000, or a branch goes further back than `.w` reaches, the assembler takes the 68020's wider form, but only when it already knows the value: a number, or a label defined above the line. For a label defined further down, write the size after it, as in `(far.l,a0,d1.w)` or `bra.l far`. Hover over the instruction after a Build to see what it assembled as.
+The assembler keeps a 68000 encoding when the operand fits it. If a known displacement needs a wider form, or a backward branch exceeds `.w` reach, it selects the 68020 form. A known value is a number or a label already defined in assembly order. Forward references keep the smaller legacy form unless you request the width, as in `(far.l,a0,d1.w)` or `bra.l far`. The full addressing forms have their own [displacement size rules](#base-displacements). Hover over an instruction after Build to inspect its encoding.
 
 ## Scaled index {#scaled-index}
 
-On the 68020, an index can be multiplied before it is added. An index counts bytes, so to read element `d1` of a table of longs a 68000 program first multiplies `d1` by 4; on the 68020 the operand does it, with `*2`, `*4` or `*8` after the index register.
+On the 68020, `*2`, `*4` or `*8` after an index register scales its contribution to the address. The index is a byte displacement. Scaling an element number by 4 therefore selects a long in a table without a separate multiplication. A `.w` index is sign-extended from its low word before scaling. A `.l` index uses the full register. Omitting the index size means `.w`.
 
 ```m68k
     opt p=68020
@@ -174,11 +180,15 @@ table:
     dc.l 10, 20, 30, 40
 ```
 
-The address register can be left out too. `(table,d1.w*4)` reaches the same long with no register holding the table's address, and `(d0.l)` reads memory at the address in `d0`. An index without a size is a word, as on the 68000, so `(d0)` uses only the low word of `d0`: write `(d0.l)` for the whole register. A program for the 68000 refuses `(d0)`; there, put the address in an address register and write `(a0)`.
+The base address register may be omitted. `(table,d1.w*4)` selects the same long directly from `table`, and `(d0.l)` accesses the address held in the full `d0` register. `(d0)` uses only its signed low word. These data-register-only forms require the 68020. On the 68000 or 68010, put the address in an address register and use `(a0)`.
 
 ## Base displacements {#base-displacements}
 
-On the 68020, a displacement can be a word or a long: in `d(An,Xn)`, where the 68000 allows a byte, `-128` to `127`, and in `d(An)`, where it allows a word. Write `.w` or `.l` after the displacement to choose, as in `(512.w,a0,d1.w*2)`, or let the assembler pick, as [on the 68020](/documentation/m68k/addressing-mode#68020) says.
+The 68020’s full addressing forms allow signed word or long base displacements. A word ranges from -32768 to 32767, and a long from -2147483648 to 2147483647. Memory indirect forms allow the same sizes for the outer displacement. Write `.w` or `.l` after either displacement to select its size, as in `(512.w,a0,d1.w*2)` or `([a0],d1.w,100000.l)`.
+
+In a full form with no explicit size, a known zero displacement uses no displacement bytes, a known value that fits a signed word uses `.w`, and any other value uses `.l`. A forward-reference displacement uses `.l`. Omitting a displacement adds zero. Ordinary `d(An)` and `d(An,Xn)` syntax keeps its 68000 form while the displacement fits, following the selection rules [above](#68020).
+
+A PC-relative base displacement still names a target address, not a distance to add yourself. For example, `([table,pc,d1.w*4],4)` reads a pointer from `table + d1 × 4`, then adds 4 to that pointer. The assembler calculates the displacement to `table` from the operand’s extension word. The outer displacement is always a distance, even with a PC-relative base.
 
 ```m68k
     opt p=68020
@@ -194,7 +204,7 @@ grid:
 
 ## Memory indirect {#memory-indirect}
 
-On the 68020, square brackets read a pointer. The operand adds up what is inside the brackets, reads the long stored at that address, and then uses that long as an address, adding what follows the brackets to it.
+On the 68020, square brackets request a pointer read. The processor adds the components inside the brackets, reads a 32-bit pointer from that address, then adds the components outside the brackets to obtain the final address. Even an instruction such as `lea` reads that pointer, although it does not read data at the final address. An inaccessible pointer location can therefore cause a bus error.
 
 - `([bd,An,Xn],od)` is **preindexed**: the index is inside, so it picks which pointer is read, as from a table of pointers.
 - `([bd,An],Xn,od)` is **postindexed**: the index is outside, so it is added to the pointer once it has been read, as to the start of an array.
@@ -223,7 +233,7 @@ two:    dc.b 'two', 0
 2. The long stored there is the address of `two`.
 3. Nothing follows the brackets, so that address is the one the operand names. `lea` puts the address itself in `a1`, where `move` would read the bytes stored there.
 
-Postindexed, the pointer leads to an array, and the index picks an element of it. Here `current` holds the address of the table in use:
+In a postindexed operand, the index selects a location relative to the pointer read. Here `current` holds a table address, and the index selects a word in that table:
 
 ```m68k
     opt p=68020
@@ -236,15 +246,17 @@ scores_a: dc.w 1, 2, 3
 scores_b: dc.w 10, 20, 30
 ```
 
-Changing the long at `current` to `scores_a` makes the same instruction read the other table. A jump table works the same way: `jmp ([handlers,pc,d0.w*4])` jumps to the address in entry `d0` of the table `handlers`.
+Changing the long at `current` to `scores_a` makes the same instruction read the other table. For a jump table, use a preindexed operand: `jmp ([handlers,pc,d0.w*4])` jumps through pointer number `d0` in `handlers`. Here `handlers` is a target address, following the usual PC-relative notation.
 
 ## Suppressed registers {#suppressed-registers}
 
-On the 68020, a `z` before a register's name, `za0` to `za7`, `zd0` to `zd7` and `zpc`, keeps the register's place in the operand but adds nothing for it: `([current,za0],d1.w*2)` reads the same word as `([current],d1.w*2)`. Leaving the register out does the same, so you rarely need to write one, but other assemblers' code and the disassembly of a 68020 instruction can use them. They are registers only inside an operand's parentheses; elsewhere `za0` is an ordinary name, which a label can have. A label named `za0` keeps its meaning inside the parentheses too, wherever the operand still reads with it: `lea (za0),a1` loads the label's address, as on the 68000. In a program for the 68020, where the register could have stood there as well, the editor warns that the name is read as the label, so rename the label to write the register.
+On the 68020, a `z` prefix suppresses a base or index register’s contribution to the address. The names are `za0` through `za7`, `zd0` through `zd7`, and `zpc`. For example, `([current,za0],d1.w*2)` accesses the same word as `([current],d1.w*2)`: the value in `a0` contributes nothing. Omitting that register has the same effect. These explicit names are useful when reading code or disassembly from other assemblers.
+
+Suppressed-register names are recognized only inside addressing parentheses. Elsewhere, `za0` can be an ordinary label. An existing label also takes priority inside parentheses when it forms a valid operand. For example, if `za0` is a label, `lea (za0),a1` loads its address. In a 68020 program the editor warns about this ambiguity. Rename the label if you intend the suppressed register.
 
 ## Long branches {#long-branches}
 
-On the 68020, `.l` makes a long branch, which reaches anywhere in memory. On the 68000 a branch, [bra](/documentation/m68k/instruction/bra), [bsr](/documentation/m68k/instruction/bsr) or [bcc](/documentation/m68k/instruction/bcc), reaches at most 32 KB away, with `.w`.
+On the 68020, `.l` gives [bra](/documentation/m68k/instruction/bra), [bsr](/documentation/m68k/instruction/bsr) and [bcc](/documentation/m68k/instruction/bcc) a signed 32-bit displacement, reaching anywhere in the editor’s memory. On the 68000 and 68010, their widest displacement is a signed word, reaching about 32 KB in either direction.
 
 ```m68k
     opt p=68020
@@ -257,15 +269,15 @@ far_away:
     rts
 ```
 
-In a program for the 68000, `.l` is the same as `.w`, as in EASy68K, so this branch would be too far; [jsr](/documentation/m68k/instruction/jsr) reaches anywhere there. A branch back to a label further than `.w` reaches is made long without the `.l`, as [on the 68020](/documentation/m68k/addressing-mode#68020) says; one forward needs it written.
+On the 68000 and 68010, `.l` is treated as `.w`, as in EASy68K, so this branch would be out of range. Use [jsr](/documentation/m68k/instruction/jsr) to call an address beyond branch reach on those processors. On the 68020, a backward branch beyond `.w` reach automatically uses the long form. A forward branch that needs it must request `.l`.
 
 ## Register pairs {#register-pairs}
 
-On the 68020, a few instructions take two registers in one operand, written with a colon between them.
+Some 68020 instructions use a pair of registers in one operand, separated by a colon. The instruction determines whether they hold one 64-bit value or two separate values.
 
-- `Dh:Dl`, such as `d2:d1`, is one 64-bit number in two data registers, its high long in the first. [muls](/documentation/m68k/instruction/muls) and [mulu](/documentation/m68k/instruction/mulu) with `.l` write a whole 64-bit product there.
-- `Dr:Dq` is a division's remainder and quotient: [divs](/documentation/m68k/instruction/divs), [divu](/documentation/m68k/instruction/divu), [divsl](/documentation/m68k/instruction/divsl) and [divul](/documentation/m68k/instruction/divul) put the quotient in the second register and the remainder in the first. `divs.l` and `divu.l` divide the 64-bit number the two hold.
-- [cas2](/documentation/m68k/instruction/cas2) takes two pairs of data registers, and its two addresses as `(Rn1):(Rn2)`, each register in its own parentheses: `(a0):(a1)`.
+- `Dh:Dl` receives a 64-bit product from [muls.l](/documentation/m68k/instruction/muls) or [mulu.l](/documentation/m68k/instruction/mulu). `Dl` supplies one 32-bit input. The high result replaces `Dh`, and the low result replaces `Dl`. The old value of `Dh` is not an input.
+- `Dr:Dq` receives a remainder in `Dr` and a quotient in `Dq`. [divs.l](/documentation/m68k/instruction/divs) and [divu.l](/documentation/m68k/instruction/divu) also read the pair as a 64-bit dividend, high long first. [divsl.l](/documentation/m68k/instruction/divsl) and [divul.l](/documentation/m68k/instruction/divul) read only `Dq` as their 32-bit dividend. Use different registers to keep both outputs.
+- [cas2](/documentation/m68k/instruction/cas2) takes a pair of compare registers and a pair of update registers. Its two memory addresses are written as `(Rn1):(Rn2)`, with each register in its own parentheses, such as `(a0):(a1)`.
 
 ```m68k
     opt p=68020
@@ -278,14 +290,15 @@ On the 68020, a few instructions take two registers in one operand, written with
 
 ## Bit fields {#bit-fields}
 
-A bit field is a run of bits you choose, anywhere in a data register or in memory: a value packed into fewer bits than a byte, a word or a long, such as the 5 bits of red in a 16-bit colour, or a bitmap with one bit for each slot. The 68020's bit-field instructions read or change one in a single instruction, where a 68000 program shifts and masks.
+A bit field is a run of 1 to 32 bits in a data register or in memory. It can hold a packed value, such as a 5-bit colour component, or part of a bitmap. The 68020’s bit-field instructions test, extract or change these bits directly.
 
-A field is written in braces straight after the operand, `{offset:width}`:
+Write `{offset:width}` immediately after the operand. The offset counts from bit 31 of a data register or bit 7 of the byte at the memory address. The width is the number of bits selected. For example, `d0{24:8}` selects the low byte of `d0`, and `(a0){0:5}` selects the highest five bits of the byte at `a0`.
 
-- `width` is how many bits it has, 1 to 32.
-- `offset` is how many bits come before it, counting from the operand's highest bit: bit 31 of a data register, or bit 7 of the byte at the address. In memory the field can run on into the bytes after that one.
+A literal offset must be from 0 to 31, and a literal width from 1 to 32. Either can instead come from a data register, as in `(a0){d1:d2}`:
 
-So `d0{24:8}` is the low byte of `d0`, and `(a0){0:5}` the five highest bits of the byte at `a0`. Either number can be a data register instead, as in `(a0){d1:d2}`, so that a loop can walk through a bitmap.
+- For a field in a data register, only the offset’s low five bits are used, giving a starting position from 0 to 31. A field that passes bit 0 wraps to bit 31 of the same register.
+- For a field in memory, a register offset is a signed 32-bit bit displacement. Positive offsets move forward through bytes, and negative offsets move backward. Offset -1 selects bit 0 of the preceding byte. A memory field continues into successive bytes without wrapping back to its starting byte.
+- A register-supplied width uses only the low five bits. Values 1 through 31 select that many bits, while zero selects 32. Thus a width register containing 32, 64 or zero selects 32 bits.
 
 | Instruction                                                                                                                                    | What it does with the field                                       |
 | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
@@ -295,9 +308,11 @@ So `d0{24:8}` is the low byte of `d0`, and `(a0){0:5}` the five highest bits of 
 | [bfset](/documentation/m68k/instruction/bfset), [bfclr](/documentation/m68k/instruction/bfclr), [bfchg](/documentation/m68k/instruction/bfchg) | Sets, clears or inverts every bit of it                           |
 | [bfffo](/documentation/m68k/instruction/bfffo)                                                                                                 | Finds its first 1                                                 |
 
-Each sets N to the field's highest bit and Z when the field is 0, and clears V and C.
+N copies the field’s highest bit, and Z is set if the field is zero. V and C are cleared, and X is unchanged. Instructions that change a field use its value before the change for N and Z. `bfins` uses the value being inserted instead.
 
-A program for the 68020 has them. A program for the 68000 or the 68010 has them too when it starts with `opt bit`, EASy68K's option for them, and keeps its own addressing modes. Neither processor has bit fields of its own, so they take the time the 68020's manual gives them, as EASy68K counts them, and once the program has one its [cycle count](/documentation/m68k/exceptions#cycles) is marked as an estimate. This program splits a 16-bit colour into its red, green and blue:
+Bit-field instructions are available with `opt p=68020`. `opt bit` also enables them in a 68000 or 68010 program, as in EASy68K, using that processor’s addressing modes. Since those processors have no hardware bit-field instructions, the editor uses 68020 timings and marks the program’s [cycle count](/documentation/m68k/exceptions#cycles) as an estimate.
+
+This program extracts the red, green and blue components of a 16-bit colour:
 
 ```m68k
     opt bit

@@ -8,10 +8,10 @@
         undocumented: "Left out of the processor's manual",
         privileged: 'The processor reserves it for supervisor or kernel mode',
         '68010':
-            'The 68010 and 68020 have it, the 68000 does not: write opt p=68010 at the top of the program',
-        '68020': 'Only the 68020 has it: write opt p=68020 at the top of the program',
+            'Requires a 68010 or 68020. Select the processor with opt p=68010 or opt p=68020 before any code or data.',
+        '68020': 'Requires a 68020. Write opt p=68020 before any code or data.',
         'opt-bit':
-            'A 68000 or 68010 program has it too when it starts with opt bit, EASy68K’s option for the bit fields'
+            'Also available on the 68000 and 68010 with opt bit, EASy68K’s option for enabling bit-field instructions.'
     }
 </script>
 

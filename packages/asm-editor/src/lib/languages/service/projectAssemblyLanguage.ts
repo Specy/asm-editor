@@ -224,10 +224,12 @@ function relativePath(from: string, to: string): string {
 
 function symbolAt(
     line: string,
-    position: number
+    position: number,
+    options: ProjectAssemblyLanguageOptions
 ): { name: string; start: number; end: number } | null {
     const offset = position - 1
-    for (const match of line.matchAll(/[A-Za-z_@$.][\w@$.]*/g)) {
+    //a comment's words are text, which name no symbol
+    for (const match of lineWithoutComment(line, options).matchAll(/[A-Za-z_@$.][\w@$.]*/g)) {
         const start = match.index
         const end = start + match[0].length
         if (offset >= start && offset <= end) return { name: match[0], start, end }
@@ -394,7 +396,11 @@ export function createProjectSymbolHoverProvider(
         provideHover(model, position) {
             const context = contextForModel(model)
             if (!context) return null
-            const token = symbolAt(model.getLineContent(position.lineNumber), position.column)
+            const token = symbolAt(
+                model.getLineContent(position.lineNumber),
+                position.column,
+                options
+            )
             if (!token) return null
             const matches = sourceSymbols(context.sources, options).filter(
                 (symbol) => symbol.name.toLowerCase() === token.name.toLowerCase()
@@ -460,7 +466,11 @@ export function createProjectDefinitionProvider(
         provideDefinition(model, position) {
             const context = contextForModel(model)
             if (!context) return null
-            const token = symbolAt(model.getLineContent(position.lineNumber), position.column)
+            const token = symbolAt(
+                model.getLineContent(position.lineNumber),
+                position.column,
+                options
+            )
             if (!token) return null
             const definitions = sourceSymbols(context.sources, options).filter(
                 (symbol) => symbol.name === token.name

@@ -22,7 +22,7 @@ registers, holds `00001000`, the address of the first instruction.
 
 Once it has built, four buttons take Build's place:
 
-- **Step** runs exactly one instruction and stops. One press and `d0` goes from `00000000` to `00000001`, and PC from `00001000` to `00001002`, two bytes further on, which is how long that instruction is. An M68K instruction takes two to ten bytes, and each of these five fits in two.
+- **Step** runs one instruction and pauses. Press it once: `d0` changes from `00000000` to `00000001`, and PC advances from `00001000` to `00001002`. This instruction occupies two bytes. A 68000 instruction can occupy two to ten bytes; all five in this example occupy two.
 - **Run** runs the program to the end, or to the next breakpoint. While a program is running that same button says **Pause**. Pausing makes Run, Step and Undo available, just as at a breakpoint.
 - **Undo** takes the last instruction back, one press per instruction. The editor keeps the last 100 steps, which is a setting you can raise.
 - **Stop** throws the run away: the registers go back to zero and the only button left is **Build** again.
@@ -30,11 +30,10 @@ Once it has built, four buttons take Build's place:
 The code is read only from **Build** until the program ends, so **Stop** is also how you get back to
 typing.
 
-Nothing in the program says "stop". After its last instruction come bytes the program never wrote,
-and the simulator ends a program that runs into them. A program with data right after its code would
-run that data as if it were instructions instead, which is why a real program says when it is
-finished, as the lecture on system calls shows. The simulator also ends one that never gets that
-far: a run stops after two million instructions, which is another setting.
+This example has no stop instruction. It ends when execution reaches memory the program has not
+written. If data followed the code, the CPU would try to execute those bytes too. Programs can end
+explicitly to prevent that. The simulator also stops a run after two million instructions, a limit
+you can change in Settings.
 
 ## Watching a register
 

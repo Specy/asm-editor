@@ -18,6 +18,7 @@
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import { functionAtLine } from '#lib/listing/listing.ts'
     import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
     import { ListingIndex } from '#lib/listing/listingNavigation.ts'
@@ -377,7 +378,9 @@
                 <progress max="1" value={progress} aria-label="Listing generated so far"></progress>
             </div>
         {:else if listingDocument.status === 'failed'}
-            <p class="note">The Listing could not be generated: {listingDocument.error}</p>
+            <ErrorState compact title="No Listing">
+                The Listing could not be generated: {listingDocument.error}
+            </ErrorState>
         {:else if total === 0}
             <p class="note">
                 {kind === 'functions' ? 'No functions found.' : 'No strings found.'}

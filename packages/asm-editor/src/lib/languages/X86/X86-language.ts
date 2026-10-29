@@ -1,6 +1,7 @@
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import {
+    inAssemblyComment,
     instructionSnippet,
     parseAssemblyLine,
     splitAssemblyComment,
@@ -326,6 +327,9 @@ function x86HoverDocument(instruction: X86Instruction): InstructionDocument {
 export function createX86HoverProvider(monacoInstance: MonacoType): monaco.languages.HoverProvider {
     return {
         provideHover(model, position) {
+            const line = model.getLineContent(position.lineNumber)
+            if (inAssemblyComment(line, position.column - 1, ';', X86_TEXT_OPTIONS.quotes))
+                return null
             const wordInfo = model.getWordAtPosition(position)
             if (!wordInfo) return null
             const original = wordInfo.word

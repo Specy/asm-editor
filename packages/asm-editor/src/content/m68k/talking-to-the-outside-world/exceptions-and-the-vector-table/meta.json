@@ -1,6 +1,6 @@
 {
     "name": "Exceptions and the vector table",
-    "description": "How the 68000 runs a handler through its vector table: filling a vector, a trap service of your own, rte and the exception frame, and user mode with a stack of its own.",
+    "description": "Handle exceptions and traps on the 68000, and see how the processor returns to a program.",
     "order": 2,
     "topic": "interrupts"
 }

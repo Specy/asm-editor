@@ -62,8 +62,7 @@ export const m68kInstructionNames: Readonly<
     },
     bfffo: {
         longName: 'Find first one in bit field',
-        summary:
-            'Finds the first bit set to 1 in a bit field and puts where it is into a data register.'
+        summary: 'Finds the first 1 in a bit field and writes its bit offset to a data register.'
     },
     bfins: {
         longName: 'Insert bit field',
@@ -201,7 +200,7 @@ export const m68kInstructionNames: Readonly<
     dbcc: {
         longName: 'Test condition, decrement and branch',
         summary:
-            'Decrements the first operand by 1 and branches if the condition named by the suffix is false and the first operand is not -1.'
+            'Tests a condition, then decrements the low-word counter and branches only if the condition is false and the counter has not become -1.'
     },
     dbcs: { longName: 'Decrement and branch until carry set' },
     dbeq: { longName: 'Decrement and branch until equal' },
@@ -265,7 +264,7 @@ export const m68kInstructionNames: Readonly<
     lea: {
         longName: 'Load effective address',
         summary:
-            'Loads the effective address of the first operand into an address register, without reading memory.'
+            'Computes the effective address of the first operand and stores it in an address register.'
     },
     link: {
         longName: 'Link and allocate',

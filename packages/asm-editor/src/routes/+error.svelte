@@ -1,61 +1,44 @@
-<script>
+<script lang="ts">
+    import { page } from '$app/state'
     import { resolve } from '$app/paths'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
-    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
+    import Page from '#cmp/shared/layout/Page.svelte'
+
+    //a missing page is the reader's link or typing; anything else is the site's own failure
+    const missing = $derived(page.status === 404)
 </script>
 
-<main class="page">
-    <div class="center-wrapper">
-        <div class="floating-middle">
-            <div class="go-back">
-                <a href={resolve('/')} {@attach tooltip('Go back to the main page')}>
-                    <div class="go-back-404">404</div>
-                </a>
-                <ButtonLink href={resolve('/')} cssVar="accent2">Click to go back</ButtonLink>
-            </div>
-        </div>
-    </div>
-</main>
+<svelte:head>
+    <title>{missing ? 'Page not found' : 'Something went wrong'}</title>
+</svelte:head>
 
-<style lang="scss">
-    .floating-middle {
-        width: 20rem;
-        height: 20rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 1rem;
-        border-radius: 0.5rem;
-    }
-    .go-back {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    .go-back-404 {
-        color: var(--accent);
-        font-size: 10rem;
-        animation: infinite bounce 1.5s;
-        transform-origin: bottom;
-    }
-    .center-wrapper {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex: 1;
-    }
-    @keyframes bounce {
-        0% {
-            transform: scale(1, 1) translateY(0);
-        }
-        10% {
-            transform: scale(1.1, 0.9) translateY(0);
-        }
-        30% {
-            transform: scale(0.9, 1.1) translateY(-2rem);
-        }
-        50% {
-            transform: scale(1.05, 0.95) translateY(0);
-        }
-    }
-</style>
+<DefaultNavbar />
+<Page hasNavbar fillsScreen>
+    {#if missing}
+        <ErrorState code="Error 404" title="This page doesn't exist">
+            Nothing is at <code>{page.url.pathname}</code>. The link may be out of date, or the
+            address mistyped.
+            {#snippet actions()}
+                <ButtonLink href={resolve('/')}>Home</ButtonLink>
+                <ButtonLink href={resolve('/projects')} cssVar="tertiary">Your projects</ButtonLink>
+                <ButtonLink href={resolve('/documentation')} cssVar="tertiary">
+                    Documentation
+                </ButtonLink>
+            {/snippet}
+        </ErrorState>
+    {:else}
+        <ErrorState
+            code="Error {page.status}"
+            title="Something went wrong"
+            error={page.error?.message}
+            reload
+        >
+            This page failed to load. Reloading it usually fixes that.
+            {#snippet actions()}
+                <ButtonLink href={resolve('/')} cssVar="tertiary">Home</ButtonLink>
+            {/snippet}
+        </ErrorState>
+    {/if}
+</Page>

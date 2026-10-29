@@ -1,21 +1,20 @@
 # Exceptions and the vector table
 
-Some instructions cannot do what they ask. There is no answer to a division by zero, and a word
-cannot be read at an odd address. Other instructions, the traps, are a program asking for help on
-purpose. In every one of these cases the 68000 stops the program where it is and runs a piece of
-code written for that situation. That code is a **handler**, and the interruption is an
-**exception**. When the handler is done, the program carries on.
+Division by zero and a word read from an odd address both raise an **exception**. The 68000
+responds by running a piece of code called a **handler**. The handler might report an error and
+end the program, or it might return control so the program can continue.
 
-This lecture writes handlers of your own: one for a division by zero, a `trap` service, one that
-reports an address error, and one for a program that has given up its own privileges.
+A program can also raise an exception deliberately with `trap`. You can install your own
+handlers, including services that a program calls through a trap.
 
 ## The vector table
 
-The processor finds each handler through a table at the very bottom of memory. The first 1024
-bytes, `$000000` to `$0003FF`, are 256 **vectors** of four bytes each. A vector holds the address
-of one handler, and every cause has its own vector number. The processor multiplies that number
-by 4 and reads the long there, so the handler for a division by zero, vector 5, is found at
-5 × 4 = 20, which is `$14`.
+The processor finds handlers through a table at the bottom of memory. Its first 1024 bytes,
+`$000000` to `$0003FF`, contain 256 **vectors**. Each vector is a four-byte address of a
+handler. Each kind of exception has a vector number.
+
+To find a vector, multiply its number by 4. Division by zero uses vector 5, so its handler
+address is stored at 5 × 4 = 20, or `$14`.
 
 | vector | address         | cause                                                 |
 | -----: | --------------- | ----------------------------------------------------- |
@@ -27,25 +26,21 @@ by 4 and reads the long there, so the handler for a division by zero, vector 5, 
 
 The [Exceptions documentation](/documentation/m68k/exceptions#the-vector-table) lists the rest.
 
-Memory starts filled with `$FF`, so a vector nobody wrote reads `$FFFFFFFF`. That is an odd
-address, and an instruction never starts at an odd address, so the processor has nowhere to go.
-A real 68000 would end up halting. This editor ends the program and names the empty vector:
+Memory starts filled with `$FF`. Until a program installs a handler, a vector contains
+`$FFFFFFFF`. An instruction cannot start at that odd address. A real 68000 would halt; the
+editor ends the program and reports the empty vector:
 
 ```
 Division by zero at line 3: vector 5 at $000014 holds no handler
 ```
 
-So whenever a division by zero or an odd address ended one of your programs, the reason was that
-it had installed no handler.
-
-`trap #15` is different. In EASy68K, and here, the simulator answers it itself, which is how every
-task of the previous lectures ran.
+The simulator handles `trap #15` itself, as EASy68K does. Its numbered tasks provide services
+such as printing text and ending the program.
 
 ## Fill a vector
 
-To handle a division by zero, put the handler's address in vector 5 before the division can
-happen. The handler's last instruction is `rte`, _return from exception_, which the next section
-explains.
+To handle division by zero, write the handler’s address to vector 5 before the division. The
+handler below ends with `rte`, short for *return from exception*.
 
 ```m68k|playground|memory|no-flags|allow-open
     move.l #div_zero, $14   ; vector 5: the handler for a division by zero
@@ -72,44 +67,40 @@ Select **Open in editor** to follow it in the full editor's History: the row of 
 Delete the first line and run it again. The same division now ends the program with the message
 above, at line 3.
 
-A handler is one way to deal with a zero divisor. Testing it first, with `tst.w d1` and `beq`
-before the `divu`, is the other, and the simpler one when the program already knows what to do
-instead.
+A program can also test the divisor with `tst.w d1` and `beq` before executing `divu`. That is
+often simpler when the program already knows how to handle zero.
 
 ## What the processor does
 
-The flags you know, X, N, Z, V and C, are the low byte of a 16-bit register, the **status
-register** or `sr`. Its high byte holds the processor's own settings. One of them, bit 13, is the
-**S** bit: when it is set, the processor is in **supervisor mode**, where every instruction is
-allowed. A program starts with `sr` at `$2000`, which is bit 13 alone, so every program so far has
-run in supervisor mode. A later section of this lecture leaves it.
-
-| bit  | 15  | 14  | 13  | 12-11 | 10-8  | 7-5 | 4-0       |
-| ---- | --- | --- | --- | ----- | ----- | --- | --------- |
-| name | T   |     | S   |       | I2-I0 |     | X N Z V C |
+The **status register** (`sr`) is 16 bits wide. Its low byte holds the X, N, Z, V and C flags;
+the high byte contains processor settings. Bit 13 is the **S** bit. When S is set, the processor
+is in **supervisor mode**, where privileged instructions are allowed. In this simulator, a
+program starts with `sr` at `$2000`, so it starts in supervisor mode.
 
 When the `divu` meets its zero divisor, the processor:
 
-1. keeps a copy of `sr`, and sets S, in case it was clear;
-2. pushes the address of the instruction after the `divu`, then that copy of `sr`, on the stack.
-   These six bytes, a long and a word, are the **exception frame**;
+1. keeps a copy of `sr` and enters supervisor mode. If it was in user mode, `a7` now selects
+   the supervisor stack, leaving the user stack untouched;
+2. pushes the address of the instruction after the `divu`, then the saved `sr`, on the
+   supervisor stack. These six bytes, a long and a word, are the **exception frame**;
 3. reads vector 5 and jumps to the address it holds.
 
-`rte` undoes the last two steps. It pops `sr` and then the address, and the program carries on at
-the instruction after the `divu`, with its own flags. A handler that returns always does so with
-`rte`. `rts` would pop only four of the six bytes, and return to an address made of the wrong ones.
+`rte` pops the saved `sr` and address from the frame. The program continues at that address,
+with its own flags and mode restored. A handler that returns uses `rte`: `rts` would pop only
+four of the six bytes and return to an address made of the wrong ones.
 
-A handler runs between two instructions of a program that did not ask for it. So unless changing
-a register is its job, as it is here, a handler saves every register it uses with `movem` and puts
-them back before its `rte`.
+A handler should preserve registers that the interrupted program expects to keep. For an
+unexpected exception, save registers the handler uses with `movem` and restore them before
+`rte`, except for any register the handler is meant to change. A trap service can also define
+registers for inputs and outputs, as `trap #15` does; its caller must follow that convention.
 
 ## A trap of your own
 
-`trap #0` to `trap #14` let a program call code without knowing its address. On a real machine the
-operating system installs its services in their vectors when it starts, and a program only needs
-the number: `trap #3` reaches whatever is in vector 35 that day. Here the program plays both
-parts. It installs a service on `trap #3`, whose vector, 32 + 3 = 35, is at 35 × 4 = 140, or
-`$8C`, and then calls it.
+`trap #0` to `trap #14` let a program call a handler by number. An operating system can install
+services in these vectors, so a program can call a service without knowing its address.
+
+This example installs a service and calls it. `trap #3` uses vector 32 + 3 = 35, whose address
+is 35 × 4 = 140, or `$8C`. The service takes a number in `d1` and returns its square in `d1`.
 
 ```m68k|playground|memory|console|no-flags|allow-open
     move.l #square, $8C     ; vector 35: the handler for trap #3
@@ -140,8 +131,9 @@ exception frame the `trap` pushed:
 | `$FFFFFC` | `00 00 10 0C` | where `rte` returns: `$100C`, the address of `after`   |
 
 The handler reaches the frame through `a7`: the saved `sr` is at `(sp)` and the return address at
-`2(sp)`. Step once more and `rte` takes the six bytes back: `a7` is `01000000` again, and the
-program counter is at `after`. In the full editor, the Call stack lists the exception, as
+`2(sp)`. At this point `muls` is the next instruction to execute. Step once to execute it and reach
+`rte`, then step again to execute `rte`. It takes the six bytes back: `a7` is `01000000`
+again, and the program counter is at `after`. In the full editor, the Call stack lists the exception, as
 `TRAP #3 → square`, from the `trap` until that `rte`.
 
 ## Where `rte` goes back to
@@ -154,15 +146,21 @@ that wants the program to carry on first adds the instruction's size to the addr
 at `2(sp)`. After a Build, hovering an instruction shows its machine code, and so its size.
 
 The 68000 has an instruction made only to raise an illegal instruction exception: `illegal`, two
-bytes long. Programs put it where the code must never get to. The second exercise below steps past
-it.
+bytes long. Programs put it where the code must never get to.
 
-An address error stops an instruction halfway through a memory access, so the processor pushes
-eight more bytes that describe the access, on top of the usual six. The long at `2(sp)` is now the
-address the instruction tried, and the saved `sr` and return address sit below it, at `8(sp)` and
-`10(sp)`. The return address is only near the instruction, so it cannot simply be resumed. This
-handler does what an operating system does with a program that crashes: it reports what happened
-and ends the program, instead of returning.
+An address error can stop an instruction during a memory access. On the 68000 its frame is
+14 bytes long. From the current `sp`, its fields appear in ascending address order:
+
+| Offset | Contents |
+| ------ | -------- |
+| `0(sp)` | Access information, 2 bytes |
+| `2(sp)` | Address involved in the access, 4 bytes |
+| `6(sp)` | Instruction register, 2 bytes |
+| `8(sp)` | Saved `sr`, 2 bytes |
+| `10(sp)` | Saved program address, 4 bytes |
+
+The saved program address does not reliably identify a place from which to resume the interrupted
+instruction. This handler reports the address involved and ends the program without returning.
 
 ```m68k|playground|console|no-flags
     move.l #odd_address, $0C ; vector 3: address error
@@ -194,12 +192,13 @@ larger frame.
 
 ## User mode and its own stack
 
-An operating system runs in supervisor mode, and starts the programs it loads in **user mode**,
-with S clear. There, the instructions that could take the machine over are refused: writing `sr`
-with `move`, `andi`, `ori` or `eori`, `rte`, and `move` to or from the user stack pointer below.
-Each raises a **privilege violation**, vector 8, instead of running. Everything else still works,
-the flags included: `add`, `cmp` and branches change and read them as before, and so does writing
-the condition codes alone, with `move` to `ccr`.
+An operating system can run programs in **user mode**, with S clear. User mode restricts
+instructions that control the processor. Writing `sr` with `move`, `andi`, `ori` or `eori`,
+executing `rte`, and moving to or from the user stack pointer are privileged. In user mode they
+raise a **privilege violation** through vector 8.
+
+Ordinary arithmetic and branches still work. They can change and read the flags, and a program
+can write the condition codes alone using `move` to `ccr`.
 
 Each mode has its own stack pointer. In supervisor mode `a7` is the **supervisor stack pointer**
 (SSP), which starts at `$1000000`. In user mode it is the **user stack pointer** (USP), which
@@ -236,17 +235,14 @@ is `$0000`, user mode, and the address is `$101A`, the refused `move` itself, wh
 bytes. Its `rte` restores the saved `sr`, with S clear, so the program is back in user mode on its
 own stack, and the `move.l (sp)+, d2` pops the `$1234` it pushed.
 
-So the only way back to supervisor mode is an exception, and a `trap` is the one a program raises
-on purpose. That is what a **system call** is on a real machine: user code asks with `trap`, the
-operating system's handler does the work in supervisor mode, and its `rte` returns to user mode.
+An exception gives user code a controlled way to enter supervisor mode. A **system call** uses
+this mechanism: a program requests a service with `trap`, the operating system’s handler works
+in supervisor mode, and `rte` returns to user mode.
 
 ## Interrupts
 
-An **interrupt** is an exception a device raises between two instructions, when a key is pressed
-or a timer runs out. It goes through the same vectors, frames and `rte`, and the bits I2 to I0 of
-`sr` tell the processor which requests to hold back for now. The
-[next lecture](/learn/courses/m68k/talking-to-the-outside-world/interrupts-and-cycles) sets up a
-timer and a key press, and writes their handlers.
+An **interrupt** is an exception requested by a device, for example when a key is pressed or a
+timer runs out. It uses a vector, an exception frame and `rte` as well.
 
 ## Your turn
 
@@ -254,7 +250,7 @@ timer and a key press, and writes their handlers.
 
 `d0` holds 1000 and `d1` a divisor. Install `div_zero` in vector 5, and write it so that it
 leaves `$FFFFFFFF` in `d0` and returns. When the divisor is zero, `d2` must end at `$FFFFFFFF`;
-otherwise it gets what the `divu` left in `d0`, as before.
+otherwise it gets what the `divu` left in `d0`.
 
 ```m68k|playground|exercise
 * put the address of div_zero in vector 5 here

@@ -588,7 +588,7 @@ function indexed68020(
     register: 'a0' | 'pc'
 ): OperandCompletion[] {
     //from the program counter, the base displacement is written as the label the operand reaches
-    const at = base === 'PC' ? 'the label written as bd' : `${register} + bd`
+    const at = base === 'PC' ? 'the address specified by bd' : `${register} + bd`
     const processor = '68020'
     return [
         {
@@ -597,7 +597,7 @@ function indexed68020(
             label: `(bd,${base},Xn*k)`,
             insertText: `(0,${register},d0.w*4)`,
             detail: 'Scaled index with a base displacement',
-            documentation: `Memory at ${at} + the index × k, where k is 1, 2, 4 or 8, so the index can count elements instead of bytes. bd can be a word or a long, and any part can be left out.`,
+            documentation: `Memory at ${at} + index × k. k is 1, 2, 4 or 8, allowing the index to count elements instead of bytes. bd can be a word or a long word. Any component can be omitted.`,
             processor
         },
         {
@@ -606,7 +606,7 @@ function indexed68020(
             label: `([bd,${base}],Xn,od)`,
             insertText: `([0,${register}],d0.w,0)`,
             detail: 'Memory indirect, postindexed',
-            documentation: `Reads a pointer at ${at}, then adds the index and od to it, and uses memory at that address.`,
+            documentation: `Reads a pointer at ${at}, adds the index and outer displacement od, then accesses memory at the resulting address.`,
             processor
         },
         {
@@ -615,7 +615,7 @@ function indexed68020(
             label: `([bd,${base},Xn],od)`,
             insertText: `([0,${register},d0.w],0)`,
             detail: 'Memory indirect, preindexed',
-            documentation: `Reads a pointer at ${at} + the index, as from a table of pointers, then adds od to it, and uses memory at that address.`,
+            documentation: `Reads a pointer at ${at} + the index, such as an entry in a table of pointers. Adds the outer displacement od to the pointer and accesses memory at that address.`,
             processor
         }
     ]
@@ -693,21 +693,25 @@ const OPERAND_COMPLETIONS: OperandCompletion[] = [
     //and the 68020's: the two supervisor stack pointers M chooses between, and the cache registers
     ...(
         [
-            ['msp', 'Master stack pointer', 'A7 in supervisor mode while M, bit 12 of SR, is set.'],
+            [
+                'msp',
+                'Master stack pointer',
+                'A7 in supervisor mode when the M bit (SR bit 12) is set.'
+            ],
             [
                 'isp',
                 'Interrupt stack pointer',
-                'A7 in supervisor mode while M is clear: the 68000’s SSP, where interrupts push their frames.'
+                "A7 in supervisor mode when the M bit (SR bit 12) is clear. Corresponds to the 68000's SSP and holds interrupt frames."
             ],
             [
                 'cacr',
                 'Cache control register',
-                'Bits 0 (E, enable) and 1 (F, freeze) are kept; this 68020 has no cache, so they change nothing.'
+                'Stores bits 0 (E, enable) and 1 (F, freeze). The simulator does not model a cache, so these bits have no effect.'
             ],
             [
                 'caar',
                 'Cache address register',
-                'Names a cache entry for CACR’s commands; this 68020 has no cache, so it only holds what is written.'
+                'Selects a cache entry for CACR commands. The simulator does not model a cache, so this register only stores the value written to it.'
             ]
         ] as const
     ).map(([name, detail, documentation]) => ({
@@ -722,7 +726,7 @@ const OPERAND_COMPLETIONS: OperandCompletion[] = [
             'Dx:Dy',
             'd0:d1',
             'Register pair',
-            'Two data registers: a 64-bit number, its high long in the first, a division’s remainder and quotient, or the compare or update registers of cas2.'
+            "Two data registers used for a 64-bit value (high long word first), a division's remainder and quotient, or CAS2's compare or update values."
         ),
         processor: '68020'
     },
@@ -733,7 +737,7 @@ const OPERAND_COMPLETIONS: OperandCompletion[] = [
             '(Rx):(Ry)',
             '(a0):(a1)',
             'Pair of addresses',
-            'The two operands of cas2 in memory, each at the address a data or an address register holds.'
+            'Two memory operands for CAS2. Each address is held in a data register or an address register.'
         ),
         processor: '68020'
     },
@@ -847,7 +851,7 @@ const BIT_FIELD = '{offset:width}'
 
 /** What a bit field is, as completion and signature help say it. */
 const BIT_FIELD_TEXT =
-    'A bit field follows the operand: `{offset:width}`, `width` bits starting `offset` bits after its highest bit, as in `d0{24:8}`, the low byte of d0, or `(a0){0:5}`.'
+    'A bit field follows the operand: `{offset:width}` selects `width` bits, counting `offset` from the highest bit. For example, `d0{24:8}` selects the low byte of d0, and `(a0){0:5}` selects the first five bits in memory.'
 
 /** What signature help says of a position that takes a bit field. */
 function bitFieldNote(modes: AddressingMode[]): string | undefined {
@@ -874,7 +878,7 @@ function laterOperandModes(modes: AddressingMode[]): string | undefined {
         labels.length === 1
             ? labels[0]
             : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
-    return `Also ${listed}, ${m68kProcessorFact(later[0].processor!)}.`
+    return `Also accepts ${listed}. ${m68kProcessorFact(later[0].processor!)}.`
 }
 
 /** What an offered item resolves to by its label: the sizes, the modes and the number prefixes. */

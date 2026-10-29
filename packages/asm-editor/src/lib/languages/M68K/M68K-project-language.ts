@@ -40,7 +40,11 @@ function tokenAt(
     column: number
 ): { value: string; start: number; end: number } | null {
     const offset = column - 1
-    for (const match of line.matchAll(/[A-Za-z_.$][\w.$]*/g)) {
+    //a comment's words are text, which name no symbol; s68k also reads the bare text after the
+    //operands as one
+    const comment = S68k.parseLine(line).comment
+    const code = comment ? line.slice(0, s68kColumnToUtf16(line, comment.span.start)) : line
+    for (const match of code.matchAll(/[A-Za-z_.$][\w.$]*/g)) {
         const start = match.index
         const end = start + match[0].length
         if (offset >= start && offset <= end) return { value: match[0], start, end }

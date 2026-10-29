@@ -309,8 +309,8 @@
                         class="disassembly"
                         {@attach tooltip(
                             step.line < 0
-                                ? 'Decoded from memory: no line of the source is here'
-                                : 'Decoded from memory: this line’s bytes changed since the Build'
+                                ? 'Instruction decoded from memory. No source line matches this address.'
+                                : 'Instruction decoded from memory. These instruction bytes changed after Build.'
                         )}>{step.disassembly}</code
                     >
                 </div>
@@ -394,7 +394,7 @@
                     </div>
                 {:else if mutation.type === 'ReturnFromException'}
                     <div class="mutation-plain">
-                        Returned from the exception to ${hex(mutation.value.to)}
+                        Returned from exception to ${hex(mutation.value.to)}
                     </div>
                 {:else if mutation.type === 'Other'}
                     <div class="mutation-plain">{mutation.value}</div>

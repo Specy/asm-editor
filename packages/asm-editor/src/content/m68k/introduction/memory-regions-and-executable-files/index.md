@@ -35,14 +35,13 @@ buffer:   ds.b 16
 ```
 
 Build resolves labels and places instructions and declared bytes directly at their chosen addresses.
-Run starts at the first assembled instruction, here at `$1000`, and finishes after the fourth: the
-bytes after it are memory the program never wrote, and the simulator ends a program that runs into
-them. Directives are not execution steps.
+Run starts at the first assembled instruction, here at `$1000`. After the fourth instruction it
+reaches untouched memory, which ends the run. Directives guide the assembler and do not execute.
 No `main` label or separate executable file is required.
 
-The instructions are bytes in memory too. The four take `$1000` to `$1017`, six bytes each: two
-for the instruction itself and four for the address it carries. The data area has these exact byte
-ranges, including both ends:
+Instructions also occupy bytes in memory. Each of these four instructions takes six bytes,
+including the address in its operand, so together they occupy `$1000` through `$1017`.
+The data occupies these ranges, including both endpoints:
 
 | addresses       | purpose            | initial contents                     |
 | --------------- | ------------------ | ------------------------------------ |
@@ -65,8 +64,8 @@ with sizes fixed during Build. The score can change; "static" describes the stor
 
 The **stack** is working space for temporary values, such as saved registers. The **stack pointer**,
 called `sp` or `a7`, tracks its current position. This simulator initially sets it to `$1000000`,
-one past the last byte of memory, and the stack grows down from there; the example does not use the
-stack.
+one byte beyond the end of memory. The stack grows toward lower addresses. This example does not
+use it.
 
 A **heap** supplies blocks requested during execution and released for reuse. A program could
 request room for an image whose size comes from its input. This editor supplies no heap allocator
@@ -74,10 +73,9 @@ or dedicated heap region. An allocator is code managing those requests; another 
 can provide one.
 
 Calling bytes "code" or "unchanged data" does not itself protect them against writes in this
-simulator. A store into the program's own instructions changes what runs there, as it would on a
-68000, and the editor pauses a Run after one, since it is almost always a mistake. Real hardware can
-have a different map and memory protections. Our addresses are choices for this program, not a
-universal M68K layout.
+simulator. Writing to an instruction changes the code that executes there. The editor pauses the
+run after such a write so you can inspect it. Real hardware can use different memory maps and
+protections. The addresses here are choices for this example.
 
 Devices can occupy address ranges on some machines. **Memory-mapped input/output**, or **MMIO**,
 uses memory reads and writes to communicate with them. A device read can have a side effect, such
@@ -142,9 +140,9 @@ from our `ds.b 16` reservation.
 A **raw binary** contains a sequence of bytes without ELF's loading records. Its loading address
 and entry point must be supplied separately.
 
-An **S-record** file, the format EASy68K uses, writes those bytes as lines of text, each with the
-address its bytes go to, and ends with the entry point. EASy68K's assembler writes one named after
-the source with `.S68`, and its simulator loads and runs it.
+An **S-record** file stores program bytes as text records. Each data record gives the address where
+its bytes should be loaded, and a final record gives the entry point. EASy68K’s assembler saves
+this file with the source name and a `.S68` extension. Its simulator can load and run the file.
 
 ## Check your understanding
 

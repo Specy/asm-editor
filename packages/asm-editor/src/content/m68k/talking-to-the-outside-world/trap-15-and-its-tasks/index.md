@@ -5,10 +5,10 @@ it needs help from the environment running it. On the 68000, `trap #n` is a real
 enters an **exception handler**: code that takes over when the instruction runs.
 The processor provides `trap #0` through `trap #15`. It does not define printing tasks.
 
-This editor, like EASy68K, supplies its own service agreement for `trap #15`. A number in `d0.b`
-selects a **task**, and each task specifies which registers carry its arguments and answer. The
-simulator answers `trap #15` itself. `trap #0` to `trap #14` run handlers that the program
-installs, which the lecture on exceptions, later in this module, writes.
+The editor provides services through `trap #15`, using the same task numbers as EASy68K. Put a
+**task** number in `d0.b`; the task specifies which other registers hold its inputs and results.
+The simulator handles this request directly. `trap #0` through `trap #14` call handlers installed
+by the program.
 
 For each request:
 
@@ -144,19 +144,18 @@ click that panel before typing.
 
 ## Timers, interrupts and the cycle counter
 
-A few tasks reach the processor itself rather than a device. Task 32, with 6 in `d1.b`, sets a
-timer that makes an **interrupt request** at a regular interval, and tasks 62 and 60 make one each
-time a key or the mouse is used on the screen panel. A request runs a handler that the program
-installs, between two of its instructions. The
-[last lecture of this module](/learn/courses/m68k/talking-to-the-outside-world/interrupts-and-cycles)
-sets them up, after the lecture on the exceptions they are built on.
+Task 32 with `d1.b = 6` configures a timer that sends regular **interrupt requests**. Tasks 62
+and 60 enable requests from keyboard and mouse events in the screen panel. These requests let a
+device call a handler while the program runs. See
+[Interrupts and cycles](/learn/courses/m68k/talking-to-the-outside-world/interrupts-and-cycles)
+for complete examples.
 
-Task 31 reads the **cycle counter** into `d1.l`: how many beats of its clock, or cycles, a 68000
-would have taken to run the program so far. Task 30 sets the counter back to 0. The two tasks
-take no cycles themselves, so a program can time a piece of code by clearing the counter before it
-and reading it after it.
+The **cycle counter** records how many clock cycles the selected processor would take to execute
+the program. Task 30 resets it to 0; task 31 reads it into `d1.l`. Both tasks take zero cycles.
+To measure a section of code, reset the counter before it and read the counter afterward. The
+example below uses the default 68000 timings.
 
-```m68k|playground|console|no-flags
+```m68k|playground|console|no-flags|cycles
     moveq #30, d0
     trap #15            ; the counter starts again at 0
     add.l d1, d2        ; 8 cycles
@@ -174,7 +173,7 @@ and reading it after it.
 ```
 
 The console shows `20`: 8 cycles for each `add.l` between two registers, and 4 for the `moveq`
-that asks for the reading. The line under the registers counts the same way as you Step.
+that asks for the reading. The Cycles line over the registers counts the same way as you Step.
 
 ## Files and unsupported tasks
 

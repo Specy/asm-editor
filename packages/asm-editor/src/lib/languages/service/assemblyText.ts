@@ -61,6 +61,17 @@ export function splitAssemblyComment(
     return { code: line }
 }
 
+/** Whether an offset of a line falls in its comment, whose words are text and name nothing. */
+export function inAssemblyComment(
+    line: string,
+    offset: number,
+    delimiter: '#' | ';',
+    quotes = QUOTES
+): boolean {
+    const { comment } = splitAssemblyComment(line, delimiter, quotes)
+    return comment !== undefined && offset >= comment.start
+}
+
 /** Splits operands only at top-level commas; commas in strings and address expressions stay put. */
 export function splitAssemblyOperands(
     text: string,

@@ -3,7 +3,7 @@
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import { isClipboardReadSupported } from '../appsUtils'
-    import { toast } from '#stores/toastStore.ts'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
 
     type CheerpJWindow = Window &
         typeof globalThis & {
@@ -21,6 +21,8 @@
         cheerpjRunJar: (jarUrl: string) => void
         cheerpjCreateDisplay: (width?: number, height?: number, container?: HTMLElement) => void
     }>(null)
+    /** Why CheerpJ did not load or start, said in place of the empty page it would leave. */
+    let failure = $state<unknown>(undefined)
     onMount(() => {
         async function onload() {
             const clipboardSupported = await isClipboardReadSupported()
@@ -41,7 +43,7 @@
         //a CheerpJ that fails to load or start would otherwise leave the page empty without a word
         function fail(error: unknown) {
             console.error(error)
-            toast.error('Could not start RARS')
+            failure = error
         }
         function start() {
             onload().catch(fail)
@@ -86,7 +88,14 @@
 
 <Page hasNavbar fillsScreen>
     <h1 class="visually-hidden">RARS - RISC-V simulator</h1>
-    <div bind:this={wrapper} class="wrapper"></div>
+    {#if failure !== undefined}
+        <ErrorState title="RARS didn't start" error={failure} reload>
+            RARS is a Java program, run in the browser by CheerpJ, which could not be downloaded or
+            started. Check the connection and reload the page.
+        </ErrorState>
+    {:else}
+        <div bind:this={wrapper} class="wrapper"></div>
+    {/if}
 </Page>
 
 <style>

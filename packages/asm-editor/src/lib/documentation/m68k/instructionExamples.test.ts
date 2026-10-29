@@ -74,7 +74,7 @@ describe('M68K instruction examples', () => {
 /**
  * Every whole program in the M68K Documentation's chapters, run as an instruction's example is: a
  * fence that opens by choosing its processor with `opt p=`, the 68010's and the 68020's, or the bit
- * fields with `opt bit`, which a reader copies into a Project of their own. What a comment says a data register ends up holding,
+ * fields with `opt bit`, plus the exception chapter's default-processor examples. What a comment says a data register ends up holding,
  * `d0 = 30`, and what it says the program prints, `prints "two"`, it must.
  */
 const chapterPrograms = chapters().flatMap((chapter) =>
@@ -82,7 +82,7 @@ const chapterPrograms = chapters().flatMap((chapter) =>
         const markdown = entry.view.type === 'markdown' ? entry.view.markdown : ''
         return [...markdown.matchAll(/```m68k\n([\s\S]*?)```/g)]
             .map((fence) => fence[1])
-            .filter((code) => CHOOSES_ITS_PROCESSOR.test(code))
+            .filter((code) => CHOOSES_ITS_PROCESSOR.test(code) || chapter.id === 'exceptions')
             .map((code, index) => ({ name: `${entry.id} #${index + 1}`, code }))
     })
 )

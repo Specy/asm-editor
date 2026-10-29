@@ -19,7 +19,7 @@
 
 <div class="processor-line" {style}>
     <span class="label">Processor</span>
-    <span class="processor" {@attach tooltip(`This program is written for the ${processor}`)}
+    <span class="processor" {@attach tooltip(`Processor selected for this program: ${processor}`)}
         >{processor}</span
     >
 </div>

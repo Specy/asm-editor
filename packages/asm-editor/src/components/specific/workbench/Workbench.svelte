@@ -15,7 +15,13 @@
     import type { WorkbenchProps } from '#lib/workbench/hostApi.ts'
     import WorkbenchShell from './WorkbenchShell.svelte'
 
-    let { project, activePanel = $bindable(null), loading, ...shell }: WorkbenchProps = $props()
+    let {
+        project,
+        activePanel = $bindable(null),
+        loading,
+        failureActions,
+        ...shell
+    }: WorkbenchProps = $props()
 
     //the Emulator starts on the Selected program's Settings, Display and Entry, which the session
     //keeps up to date from then on; with no Program, on the sources the session's `sourceInput`
@@ -39,6 +45,7 @@
             {source}
             language={project.language}
             {loading}
+            {failureActions}
             settings={{
                 automaticChecking: false,
                 display: project.selected?.display,

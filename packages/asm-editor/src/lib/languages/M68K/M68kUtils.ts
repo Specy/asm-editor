@@ -65,7 +65,7 @@ export function getM68kTerminationMessage(
     const parts = errorParts(termination.value.cause, memoryMap, processor)
     if (termination.type === 'Halted') {
         const { cause, vector } = termination.value
-        const halted = `The CPU halted${where}: a double bus fault while taking ${m68kVectorName(vector)} (vector ${vector})`
+        const halted = `The CPU halted${where}: a double bus fault while handling ${m68kVectorName(vector)} (vector ${vector})`
         //the vector itself, read from a range the memory map makes invalid: the bus error is at
         //the vector's own address, where the frame's are writes below the stack pointer
         const refused = cause.type === 'BusError' ? cause.value : undefined
@@ -74,14 +74,14 @@ export function getM68kTerminationMessage(
             refused.access === 'Read' &&
             refused.address >>> 0 === m68kVectorLocation(vector, vbr)
         ) {
-            return `${halted}, as reading its vector at ${m68kVectorAddress(vector, vbr)} raised a bus error, ${refusal(refused.range, memoryMap)}`
+            return `${halted}. Reading the vector at ${m68kVectorAddress(vector, vbr)} raised a bus error, ${refusal(refused.range, memoryMap)}`
         }
         //what pushing the frame raised: an address error, on an odd supervisor stack pointer, or a
         //bus error, where the memory map refuses the frame
         const raised = parts
             ? `${article(parts.headline)} ${parts.headline[0].toLowerCase()}${parts.headline.slice(1)}${parts.detail ? `, ${parts.detail}` : ''}`
             : getM68kErrorMessage(cause)
-        return `${halted}, as pushing its frame raised ${raised}`
+        return `${halted}. Pushing the exception frame raised ${raised}`
     }
     const { cause, vector } = termination.value
     if (vector === undefined) {
@@ -149,7 +149,7 @@ function errorParts(
         case 'PrivilegeViolation':
             return {
                 headline: 'Privilege violation',
-                detail: 'the instruction runs only in supervisor mode, and the program is in user mode'
+                detail: 'the instruction requires supervisor mode, but the program is in user mode'
             }
         //the 68020 has two trace bits: T1, the 68000's T, and T0, which traces a change of flow
         case 'Trace':
@@ -157,8 +157,8 @@ function errorParts(
                 headline: 'Trace exception',
                 detail:
                     processor === '68020'
-                        ? 'a trace bit of SR is set: T1 stops the processor after every instruction, and T0 after each branch taken, jump, return and write of SR, and each ANDI, ORI or EORI to CCR'
-                        : 'the T bit of SR is set, so the processor stops after every instruction'
+                        ? 'a trace bit of SR is set: T1 raises an exception after every instruction. T0 raises one after a taken branch, jump, return, write to SR, or ANDI, ORI or EORI to CCR'
+                        : 'the T bit of SR is set, which raises a trace exception after every instruction'
             }
         //a word no instruction of the processor starts with, kept by the Core
         case 'LineA':
@@ -226,7 +226,7 @@ function chk2Detail(value: Record<PropertyKey, unknown>): string {
     const { lower, upper } = value
     const outside = `${value.value} is outside ${lower}..${upper}`
     if (typeof lower !== 'number' || typeof upper !== 'number' || lower <= upper) return outside
-    return `${outside}, read as an unsigned range since ${upper} is below ${lower}`
+    return `${outside}, interpreted as an unsigned range because ${upper} is below ${lower}`
 }
 
 /**
@@ -245,8 +245,8 @@ const VERSIONED_FORMATS = { '68010': 0x8, '68020': 0xb } as const
 function formatErrorDetail(format: number, processor: '68010' | '68020'): string {
     const name = `$${format.toString(16).toUpperCase()}`
     return format === VERSIONED_FORMATS[processor]
-        ? `rte found a format ${name} frame whose version number is not the one a ${processor} writes`
-        : `rte found a frame of format ${name}, which a ${processor} does not make`
+        ? `RTE found a format ${name} frame with a version number the ${processor} does not support`
+        : `RTE found an exception frame with format ${name}, which the ${processor} does not support`
 }
 
 /**
@@ -285,11 +285,11 @@ function refusal(kind: unknown, memoryMap?: readonly MemoryRange[]): string {
     const which = range ? 'where' : 'which'
     switch (kind) {
         case 'read':
-            return `${which} the program's memory read line makes ${span}read only`
+            return `${which} the memory read directive marks ${span}as read-only`
         case 'protected':
-            return `${which} the program's memory protected line keeps ${span}for supervisor mode`
+            return `${which} the memory protected directive restricts ${span}to supervisor mode`
         default:
-            return `${which} the program's memory invalid line makes ${span}invalid`
+            return `${which} the memory invalid directive marks ${span}as invalid`
     }
 }
 

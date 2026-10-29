@@ -194,6 +194,36 @@
     /** Whether the dock holds the view switch and nothing else, as a pane's beside the controls. */
     const switchOnly = $derived(!!views && !beforeViews && !hasEnd)
     const progress = $derived(building ? buildProgress : undefined)
+
+    /**
+     * Hides labels while the dock is too narrow for them and only then, after the widths below have
+     * taken away what they foresee: the caller's actions' first, whose words no width can know in
+     * advance, then the rest of the far end's, then every one. A button without its label is still named by
+     * its tooltip and to a screen reader. It measures on every change of the dock's size and of what
+     * it holds, all at once, so a cut label is never drawn and then put right. The step is an
+     * attribute rather than a class, which Svelte would write over with the class directives.
+     */
+    function fitLabels(dock: HTMLElement) {
+        //jsdom lays nothing out, so there is nothing to measure
+        if (typeof ResizeObserver === 'undefined') return
+        const fit = () => {
+            delete dock.dataset.squeeze
+            for (const step of ['actions', 'end', 'all']) {
+                if (dock.scrollWidth <= dock.clientWidth) return
+                dock.dataset.squeeze = step
+            }
+        }
+        const resizes = new ResizeObserver(fit)
+        resizes.observe(dock)
+        //buttons come and go and labels change their words while the dock keeps its size; the
+        //attribute it writes is no change of these, so measuring does not set it off again
+        const changes = new MutationObserver(fit)
+        changes.observe(dock, { childList: true, subtree: true, characterData: true })
+        return () => {
+            resizes.disconnect()
+            changes.disconnect()
+        }
+    }
 </script>
 
 <div
@@ -211,6 +241,7 @@
     class:with-views={!!views}
     class:with-wide-views={(views?.options.length ?? 0) > 2}
     class:switch-only={switchOnly}
+    {@attach fitLabels}
 >
     <div class="toolbar">
         {#if !debugging}
@@ -456,7 +487,7 @@
             {#each actions as action (action.label)}
                 <button
                     type="button"
-                    class="tool {action.tone ?? ''}"
+                    class="tool action {action.tone ?? ''}"
                     onclick={action.onClick}
                     {@attach tooltip(action.title)}
                     aria-label={action.label}
@@ -558,6 +589,13 @@
 
     .label {
         margin-left: 0.45rem;
+    }
+
+    /* the labels `fitLabels` takes away, as the dock is measured too narrow for them */
+    .execution-controls:global([data-squeeze='actions']) .action .label,
+    .execution-controls:global([data-squeeze='end']) .end .label,
+    .execution-controls:global([data-squeeze='all']) .label {
+        display: none;
     }
 
     /* Build while it says what it waits for: busy rather than unavailable, so its words stay

@@ -4,6 +4,7 @@ import { normalizeBuildInput } from '#lib/projectFiles.ts'
 import { registerLanguageSession } from './sessionRegistry'
 import { projectSourceUri } from './uri'
 import {
+    createProjectDefinitionProvider,
     createProjectDocumentLinkProvider,
     createProjectDocumentSymbolProvider,
     createProjectSymbolCompletionProvider,
@@ -164,6 +165,30 @@ describe('common Project language features', () => {
         expect(hover?.contents[0]).toEqual(
             expect.objectContaining({ value: expect.stringContaining('constant') })
         )
+    })
+
+    it('finds no symbol in a comment, a label of the same name or not', async () => {
+        const line = 'j main # back to main'
+        const currentModel = { ...model('src/main.s'), getLineContent: () => line } as never
+        const at = async (from: string, offset: number) => {
+            const position = { lineNumber: 1, column: line.indexOf(from) + offset + 1 } as never
+            return {
+                hover: await createProjectSymbolHoverProvider(monaco, options).provideHover(
+                    currentModel,
+                    position,
+                    {} as never
+                ),
+                definition: await createProjectDefinitionProvider(
+                    monaco,
+                    options
+                ).provideDefinition(currentModel, position, {} as never)
+            }
+        }
+        expect(await at('main', 1)).toEqual({
+            hover: expect.objectContaining({ contents: expect.anything() }),
+            definition: expect.objectContaining({ range: expect.anything() })
+        })
+        expect(await at('to main', 4)).toEqual({ hover: null, definition: null })
     })
 
     it.each([

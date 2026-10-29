@@ -392,7 +392,9 @@ describe('M68K v2 language tooling', () => {
             contents: [
                 { value: '# org' },
                 { value: '**Sizes:** Not sized ' },
-                { value: 'Sets the current position in memory for the following instructions' },
+                {
+                    value: 'Sets the address where the following instructions or data are assembled. For example, `org $2000` places the next item at `$2000`. Within a section, it changes that section’s location counter.'
+                },
                 { value: 'org $1000' }
             ]
         })
@@ -401,8 +403,8 @@ describe('M68K v2 language tooling', () => {
         expect(dc?.contents.map((content) => content.value)).toEqual([
             '# DC',
             '**Sizes:** b, w, l ',
-            expect.stringMatching(/^Defines constants, /),
-            "dc.b 'Hello world!', 4, %10, $F, @8, 'a', some_label"
+            expect.stringMatching(/^Stores a comma-separated list of values in memory\./),
+            "dc.b 'Hello world!', 4, %10, $F, @10, 'a', some_label"
         ])
     })
 
@@ -465,7 +467,7 @@ describe('M68K v2 language tooling', () => {
         const [extb] = await value('    extb.l d0', 6)
         //the fact says it once, without the tag beside it
         expect(extb.split('\n\n')[1]).toBe(
-            '*Arithmetic · Size .l · 68020 only: write `opt p=68020` at the top of the program*'
+            '*Arithmetic · Size .l · 68020 only: select `opt p=68020` before any code or data*'
         )
         //the first six of move's seven rows, the 68010's last, which its page lists
         const rows = (await value('    move.w d0,d1', 6)).find((block) =>
@@ -487,7 +489,7 @@ describe('M68K v2 language tooling', () => {
         const [extb] = (await completions('    ext')).filter((item) => item.label === 'extb')
         expect(extb.detail).toBe('M68K instruction, 68020 only')
         expect(extb.documentation).toEqual({
-            value: 'Sign extends the low byte of a data register directly to a long.\n\n68020 only: write `opt p=68020` at the top of the program.'
+            value: 'Sign-extends the low byte of a data register to a full long. For example, if `d0` is `$12345680`, `extb.l d0` makes it `$FFFFFF80` (-128). N and Z describe the long result, V and C are cleared, and X is unchanged.\n\n68020 only: select `opt p=68020` before any code or data.'
         })
         const resolved = await provider.resolveCompletionItem!(
             { label: 'extb', insertText: 'extb' } as never,
@@ -601,7 +603,7 @@ describe('M68K v2 language tooling', () => {
                 value: { value: 5, lower: 16, upper: -16 }
             })
         ).toBe(
-            'CHK2 exception: 5 is outside 16..-16, read as an unsigned range since -16 is below 16'
+            'CHK2 exception: 5 is outside 16..-16, interpreted as an unsigned range because -16 is below 16'
         )
     })
 
@@ -647,7 +649,7 @@ describe('M68K v2 language tooling', () => {
             'Line A instruction at $1000: vector 10 at $000028 holds no handler ($A123: the processor has no instruction starting with $A)'
         )
         expect(getM68kTerminationMessage(ended({ type: 'Trace' }, 9))).toBe(
-            'Trace exception: vector 9 at $000024 holds no handler (the T bit of SR is set, so the processor stops after every instruction)'
+            'Trace exception: vector 9 at $000024 holds no handler (the T bit of SR is set, which raises a trace exception after every instruction)'
         )
         expect(
             getM68kTerminationMessage(
@@ -697,13 +699,13 @@ describe('M68K v2 language tooling', () => {
                 4
             )
         ).toBe(
-            'The CPU halted at line 4: a double bus fault while taking TRAP #0 (vector 32), as pushing its frame raised an address error, writing a word at the odd address $4FFF'
+            'The CPU halted at line 4: a double bus fault while handling TRAP #0 (vector 32). Pushing the exception frame raised an address error, writing a word at the odd address $4FFF'
         )
     })
 
     it('reads every new cause of an error on its own, as the toasts show it', () => {
         expect(getM68kErrorMessage({ type: 'PrivilegeViolation' }, 3)).toBe(
-            'Error at line 3: Privilege violation: the instruction runs only in supervisor mode, and the program is in user mode'
+            'Error at line 3: Privilege violation: the instruction requires supervisor mode, but the program is in user mode'
         )
         expect(getM68kErrorMessage({ type: 'LineF', value: 0xf000 })).toBe(
             'Line F instruction: $F000: the processor has no instruction starting with $F'
@@ -738,12 +740,12 @@ describe('M68K v2 language tooling', () => {
         expect(
             getM68kErrorMessage(busError(0x9000, 'Word', 'Write', 'read'), 4, undefined, map)
         ).toBe(
-            "Error at line 4: Bus error: writing a word at $9000, where the program's memory read line makes $9000-$9FFF read only"
+            'Error at line 4: Bus error: writing a word at $9000, where the memory read directive marks $9000-$9FFF as read-only'
         )
         expect(
             getM68kErrorMessage(busError(0xa002, 'Byte', 'Read', 'protected'), 5, undefined, map)
         ).toBe(
-            "Error at line 5: Bus error: reading a byte at $A002 in user mode, where the program's memory protected line keeps $A000-$AFFF for supervisor mode"
+            'Error at line 5: Bus error: reading a byte at $A002 in user mode, where the memory protected directive restricts $A000-$AFFF to supervisor mode'
         )
         expect(
             getM68kErrorMessage(
@@ -753,18 +755,18 @@ describe('M68K v2 language tooling', () => {
                 map
             )
         ).toBe(
-            "Error at $200: Bus error: fetching code at $200, where the program's memory invalid line makes $0-$3FF invalid"
+            'Error at $200: Bus error: fetching code at $200, where the memory invalid directive marks $0-$3FF as invalid'
         )
         //without the Program's map, as a toast has it, the line is named alone
         expect(getM68kErrorMessage(busError(0x9000, 'Long', 'Write', 'read'))).toBe(
-            "Bus error: writing a long word at $9000, which the program's memory read line makes read only"
+            'Bus error: writing a long word at $9000, which the memory read directive marks as read-only'
         )
         const ended = {
             type: 'Exception',
             value: { cause: busError(0x9000, 'Word', 'Write', 'read'), vector: 2 }
         } as Parameters<typeof getM68kTerminationMessage>[0]
         expect(getM68kTerminationMessage(ended, 4, undefined, map)).toBe(
-            "Bus error at line 4: vector 2 at $000008 holds no handler (writing a word at $9000, where the program's memory read line makes $9000-$9FFF read only)"
+            'Bus error at line 4: vector 2 at $000008 holds no handler (writing a word at $9000, where the memory read directive marks $9000-$9FFF as read-only)'
         )
     })
 
@@ -801,7 +803,7 @@ describe('M68K v2 language tooling', () => {
                 map
             )
         ).toBe(
-            "The CPU halted at line 3: a double bus fault while taking Divide by zero (vector 5), as reading its vector at $000014 raised a bus error, where the program's memory invalid line makes $0-$3FF invalid"
+            'The CPU halted at line 3: a double bus fault while handling Divide by zero (vector 5). Reading the vector at $000014 raised a bus error, where the memory invalid directive marks $0-$3FF as invalid'
         )
         expect(
             getM68kTerminationMessage(
@@ -817,7 +819,7 @@ describe('M68K v2 language tooling', () => {
                 map
             )
         ).toBe(
-            "The CPU halted at line 3: a double bus fault while taking Bus error (vector 2), as pushing its frame raised a bus error, writing a word at $FFFFFE, where the program's memory read line makes $F00000-$FFFFFF read only"
+            'The CPU halted at line 3: a double bus fault while handling Bus error (vector 2). Pushing the exception frame raised a bus error, writing a word at $FFFFFE, where the memory read directive marks $F00000-$FFFFFF as read-only'
         )
     })
 
@@ -1003,7 +1005,7 @@ describe('the 68020’s addressing modes in the editor', () => {
         expect(post.detail).toBe('Memory indirect, postindexed, 68020 only')
         expect(pre.detail).toBe('Memory indirect, preindexed, 68020 only')
         expect(scaled.documentation).toEqual({
-            value: 'Memory at a0 + bd + the index × k, where k is 1, 2, 4 or 8, so the index can count elements instead of bytes. bd can be a word or a long, and any part can be left out.\n\n68020 only: write `opt p=68020` at the top of the program.'
+            value: 'Memory at a0 + bd + index × k. k is 1, 2, 4 or 8, allowing the index to count elements instead of bytes. bd can be a word or a long word. Any component can be omitted.\n\n68020 only: select `opt p=68020` before any code or data.'
         })
         //resolving keeps the tag
         const resolved = await provider.resolveCompletionItem!(
@@ -1045,10 +1047,10 @@ describe('the 68020’s addressing modes in the editor', () => {
         expect(move?.activeParameter).toBe(1)
         const [source, destination] = move!.signatures[0].parameters
         expect(source.documentation).toEqual({
-            value: 'Also `(bd,An,Xn*k)`, `([bd,An],Xn,od)`, `([bd,An,Xn],od)`, `(bd,PC,Xn*k)`, `([bd,PC],Xn,od)` and `([bd,PC,Xn],od)`, 68020 only: write `opt p=68020` at the top of the program.'
+            value: 'Also accepts `(bd,An,Xn*k)`, `([bd,An],Xn,od)`, `([bd,An,Xn],od)`, `(bd,PC,Xn*k)`, `([bd,PC],Xn,od)` and `([bd,PC,Xn],od)`. 68020 only: select `opt p=68020` before any code or data.'
         })
         expect(destination.documentation).toEqual({
-            value: 'Also `(bd,An,Xn*k)`, `([bd,An],Xn,od)` and `([bd,An,Xn],od)`, 68020 only: write `opt p=68020` at the top of the program.'
+            value: 'Also accepts `(bd,An,Xn*k)`, `([bd,An],Xn,od)` and `([bd,An,Xn],od)`. 68020 only: select `opt p=68020` before any code or data.'
         })
         const [count] = (await parameters('    moveq '))!.signatures[0].parameters
         expect(count.documentation).toBeUndefined()
@@ -1176,7 +1178,7 @@ describe('the 68020’s instructions in the editor', () => {
         const tst = await completions('    tst.w ')
         expect(tst.find((item) => item.label === 'Dn')?.sortText).toBeUndefined()
         expect(tst.find((item) => item.label === 'An')?.documentation).toEqual({
-            value: '68020 only: write `opt p=68020` at the top of the program.'
+            value: '68020 only: select `opt p=68020` before any code or data.'
         })
         //cmpi compares with a PC-relative destination on the 68020, and its immediate is the 68000's
         expect(await tagged('    cmpi.w #1,')).toEqual([
@@ -1192,9 +1194,9 @@ describe('the 68020’s instructions in the editor', () => {
 
     it('says in completion that a bit field is the 68020’s or 68000 with opt bit', async () => {
         const [bfextu] = (await completions('    bfext')).filter((item) => item.label === 'bfextu')
-        expect(bfextu.detail).toBe('M68K instruction, 68020, or 68000 with opt bit')
+        expect(bfextu.detail).toBe('M68K instruction, 68020, or 68000 and 68010 with opt bit')
         expect((bfextu.documentation as { value: string }).value).toMatch(
-            /\n\n68020, or 68000 and 68010 with `opt bit`: write `opt p=68020` or `opt bit` at the top of the program\.$/
+            /\n\nSelect `opt p=68020`, or use `opt bit` with the 68000 or 68010, before any code or data\.$/
         )
         const [cas] = (await completions('    cas')).filter((item) => item.label === 'cas')
         expect(cas.detail).toBe('M68K instruction, 68020 only')
@@ -1249,13 +1251,13 @@ describe('the 68020’s instructions in the editor', () => {
             'bfextu Dn/(An)/d(An)/d(An,Xn)/Ea/<label>/d(PC)/d(PC,Xn){offset:width}, Dn'
         )
         expect((bfextu.parameters[0].documentation as { value: string }).value).toMatch(
-            /^A bit field follows the operand: `\{offset:width\}`.*\n\nAlso `\(bd,An,Xn\*k\)`/s
+            /^A bit field follows the operand: `\{offset:width\}`.*\n\nAlso accepts `\(bd,An,Xn\*k\)`/s
         )
         const [, destination] = (await parameters('    muls.l d0,'))!.parameters
         expect(destination).toEqual({
             label: 'Dn/Dx:Dy',
             documentation: {
-                value: 'Also `Dx:Dy`, 68020 only: write `opt p=68020` at the top of the program.'
+                value: 'Also accepts `Dx:Dy`. 68020 only: select `opt p=68020` before any code or data.'
             }
         })
         //cas2 is the 68020's in all of it: its positions say nothing more
@@ -1277,7 +1279,7 @@ describe('the 68020’s instructions in the editor', () => {
         )
         const [header, , , rows] = hover!.contents.map((content) => content.value)
         expect(header.split('\n\n')[1]).toBe(
-            '*Logic · 68020, or 68000 and 68010 with `opt bit`: write `opt p=68020` or `opt bit` at the top of the program*'
+            '*Logic · Select `opt p=68020`, or use `opt bit` with the 68000 or 68010, before any code or data*'
         )
         expect(rows).toBe('`bfextu <ea>{offset:width}, Dn`')
     })

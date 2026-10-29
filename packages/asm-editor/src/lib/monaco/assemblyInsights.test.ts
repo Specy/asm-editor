@@ -277,7 +277,9 @@ describe('assembly Build hovers', () => {
             expect(markdown(result)).toContain(
                 'Address `0x1000` Machine code `70 05`, assembled as `MOVEQ #5,D0`'
             )
-            expect(markdown(result)).toContain('Changed at run time: runs `NOP` now')
+            expect(markdown(result)).toContain(
+                'Code changed after Build. Current instruction: `NOP`'
+            )
         } finally {
             clear()
         }

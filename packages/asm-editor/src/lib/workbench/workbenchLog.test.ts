@@ -180,7 +180,7 @@ describe('exitEntry', () => {
                 termination: { kind: 'end', unwrittenMemory: '$1012' },
                 cycles: 1n
             }).text
-        ).toBe('Ran 1 cycle in 12ms, ran into memory the program never wrote, at $1012')
+        ).toBe('Ran 1 cycle in 12ms, reached unwritten memory at $1012')
         //a Step measured no time, and the cycles still say how far it got
         expect(
             exitEntry({

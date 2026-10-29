@@ -277,7 +277,7 @@ function buildArtifactMarkdown(artifacts: readonly BuildArtifact[]): string {
             ? `, assembled as ${inlineCode(artifact.assembledAs)}`
             : ''
         const runsNow = artifact.runsNow
-            ? `\n- Changed at run time: runs ${inlineCode(artifact.runsNow)} now`
+            ? `\n- Code changed after Build. Current instruction: ${inlineCode(artifact.runsNow)}`
             : ''
         return `${placed}${assembledAs}${runsNow}`
     })

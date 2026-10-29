@@ -36,10 +36,10 @@ not printed. Keep it when you change the text.
 Task 13 prints from the address in `a1` through the character before the zero, then starts a new
 line. The second call uses task 17: it prints the string at `a1`, followed immediately by the
 signed decimal value in `d1.l`. The space after `is` is part of the string, which is why the output
-reads `is 42`. Task 17 adds no newline. Task 9 then ends the program. Without it the processor
-would carry on into whatever bytes follow the last `trap #15` and try to run them as instructions:
-here memory the program never wrote, where the simulator ends it, but strings placed right after
-the code would run as if they were code.
+reads `is 42`. Task 17 adds no newline. Task 9 ends the program explicitly. Without it, the CPU
+would try to execute the bytes following the last `trap #15`. Here it would reach untouched memory,
+which ends the run. If the strings were placed immediately after the code, the CPU would try to
+execute their bytes.
 
 `move.b #13, d0` writes only `d0`'s low byte, called `d0.b`; the upper bytes of `d0` stay as they
 were. This simulator reads that low byte to choose the task. A different task can use the same

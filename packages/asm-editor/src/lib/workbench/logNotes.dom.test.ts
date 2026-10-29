@@ -207,7 +207,7 @@ describe('notes in the Log', () => {
         }
         await session.build()
         flushSync()
-        //the counter as the M68K shows it under the registers, which the exit line ends with
+        //the counter as the M68K shows it above the PC, which the exit line ends with
         ;(emulator as typeof emulator & { cycles?: CycleCount }).cycles = {
             total: 1_234_567n,
             last: 8

@@ -17,7 +17,7 @@ export const CYCLE_ESTIMATE_MARK = '≈'
  * only the time of the case where each instruction is in the cache already.
  */
 export const CYCLE_ESTIMATE_REASON =
-    'A 68020 overlaps each instruction with the next and keeps recent code in a cache, so the time of one depends on its neighbours. Its manual gives each instruction’s time for the case where the instruction is in the cache already, which is what is counted here.'
+    '68020 timings depend on overlapping instruction execution and the instruction cache. This estimate uses the manual’s timings for instructions already in the cache.'
 
 /**
  * How the panels name a processor that `opt bit` gave the 68020's bit fields: `68000 with bit
@@ -32,21 +32,21 @@ export const WITH_BIT_FIELDS = 'with bit fields'
  */
 export function cycleEstimateReason(processor?: string): string {
     return processor?.endsWith(WITH_BIT_FIELDS)
-        ? 'A 68000 or a 68010 has no bit-field instructions, so those `opt bit` adds take the time the 68020’s manual gives them, with the instruction in its cache already, as EASy68K counts them. Every other instruction takes its exact time.'
+        ? 'Bit-field instructions enabled by opt bit use the 68020 manual’s timings for instructions already in the cache, as in EASy68K. All other instructions use exact 68000 or 68010 timings.'
         : CYCLE_ESTIMATE_REASON
 }
 
 /**
- * What the counter under the registers says on hover
+ * What the counter above the PC says on hover
  * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30): whose cycles they
  * are, the processor the program is written for, the 68000 unless it says otherwise, and for an
  * estimate why it is one.
  */
 export function cycleCounterTooltip(count: CycleCount, processor = '68000'): string {
-    const since = `${formatCycles(count.total)} since it started or trap #15 task 30 last cleared the counter`
+    const since = `${formatCycles(count.total)} since the program started or trap #15 task 30 last reset the counter`
     const total = count.estimate
-        ? `An estimate of the clock cycles a ${processor} takes to run this program: ${since}. ${cycleEstimateReason(processor)}`
-        : `The clock cycles a ${processor} takes to run this program: ${since}.`
+        ? `Estimated ${processor} clock cycles: ${since}. ${cycleEstimateReason(processor)}`
+        : `${processor} clock cycles: ${since}.`
     if (count.last === undefined) return total
-    return `${total} The newest step took ${formatCycles(count.last)}.`
+    return `${total} Last step: ${formatCycles(count.last)} ${count.last === 1 ? 'cycle' : 'cycles'}.`
 }

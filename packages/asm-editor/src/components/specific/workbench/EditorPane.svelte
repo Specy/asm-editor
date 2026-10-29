@@ -1,5 +1,6 @@
 <script lang="ts">
     import Editor from '#cmp/specific/project/Editor.svelte'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
@@ -592,11 +593,10 @@
                 <progress max="1" value={progress} aria-label="Listing generated so far"></progress>
             </div>
         {:else if pendingListing?.status === 'failed'}
-            <div class="file-notice">
-                <h2>No Listing</h2>
-                <p>
+            <div class="file-notice missing">
+                <ErrorState compact title="No Listing">
                     The Listing of {pendingListing.name} could not be generated: {pendingListing.error}
-                </p>
+                </ErrorState>
             </div>
         {:else if group.displayedView === 'pseudocode' && group.pseudocodeListing}
             <PseudocodeStatus
@@ -609,9 +609,10 @@
         {:else if group.displayedListing}
             <!-- an Executable shown as its Listing -->
         {:else if !group.displayedFile}
-            <div class="file-notice">
-                <h2>File not found</h2>
-                <p>{group.displayedPath} does not currently name a File.</p>
+            <div class="file-notice missing">
+                <ErrorState compact title="File not found">
+                    {group.displayedPath} does not currently name a File.
+                </ErrorState>
             </div>
         {/if}
         {#if docked}
@@ -733,6 +734,10 @@
     .file-notice p {
         max-width: 30rem;
         opacity: 0.72;
+    }
+    /* a failure's card brings its own spacing */
+    .missing {
+        padding: 0;
     }
     .file-notice progress {
         width: min(16rem, 80%);

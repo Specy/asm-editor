@@ -8,7 +8,8 @@ import {
     createM68kDefinitionProvider,
     createM68kDocumentLinkProvider,
     createM68kDocumentSymbolProvider,
-    createM68kProjectCompletionProvider
+    createM68kProjectCompletionProvider,
+    createM68kProjectHoverProvider
 } from './M68K-project-language'
 
 class Range {
@@ -139,6 +140,34 @@ describe('M68K Project providers', () => {
                 range: expect.objectContaining({ startLineNumber: 1, startColumn: 1, endColumn: 7 })
             })
         )
+    })
+
+    it('finds no symbol in a comment, nor in the bare text after the operands', async () => {
+        const definition = createM68kDefinitionProvider(monacoStub)
+        const hover = createM68kProjectHoverProvider(monacoStub)
+        const at = async (text: string, from: string, offset: number) => {
+            const position = { lineNumber: 1, column: text.indexOf(from) + offset + 1 }
+            const currentModel = model('c.m68k', text) as never
+            return {
+                definition: await definition.provideDefinition(
+                    currentModel,
+                    position as never,
+                    {} as never
+                ),
+                hover: await hover.provideHover(currentModel, position as never, {} as never)
+            }
+        }
+        const explicit = '    move.w target,d0 ; then target again'
+        expect(await at(explicit, 'target,', 2)).toEqual({
+            definition: expect.objectContaining({ range: expect.anything() }),
+            hover: expect.objectContaining({ contents: expect.anything() })
+        })
+        expect(await at(explicit, 'n target', 4)).toEqual({ definition: null, hover: null })
+        expect(await at('* target', 'target', 2)).toEqual({ definition: null, hover: null })
+        expect(await at('    move.w target,d0    then target', 'n target', 4)).toEqual({
+            definition: null,
+            hover: null
+        })
     })
 
     /**

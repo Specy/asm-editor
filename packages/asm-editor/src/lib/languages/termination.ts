@@ -69,7 +69,7 @@ export function describeTermination(
         case 'end':
             return termination.unwrittenMemory === undefined
                 ? 'ran past its last instruction'
-                : `ran into memory the program never wrote, at ${termination.unwrittenMemory}`
+                : `reached unwritten memory at ${termination.unwrittenMemory}`
         case 'signal':
             return (
                 termination.unsupported ??

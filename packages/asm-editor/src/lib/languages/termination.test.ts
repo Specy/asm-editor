@@ -24,7 +24,7 @@ describe('describeTermination', () => {
         expect(describeTermination({ kind: 'end' })).toBe('ran past its last instruction')
         //an M68K program, at EASy68K's SIMHALT outside the bytes it placed
         expect(describeTermination({ kind: 'end', unwrittenMemory: '$1012' })).toBe(
-            'ran into memory the program never wrote, at $1012'
+            'reached unwritten memory at $1012'
         )
         expect(describeTermination(SEGFAULT)).toBe('Segmentation fault (signal 11)')
         //what the emulator cannot run, in place of the signal it raised
@@ -57,10 +57,10 @@ describe('terminationSummary', () => {
         ).toBe('Ran in 3ms, stopped by an error')
         //where an M68K program that did not end itself got to
         expect(terminationSummary({ kind: 'end', unwrittenMemory: '$1012' }, 12)).toBe(
-            'Ran in 12ms, ran into memory the program never wrote, at $1012'
+            'Ran in 12ms, reached unwritten memory at $1012'
         )
         expect(terminationSummary({ kind: 'end', unwrittenMemory: '$1012' }, -1)).toBe(
-            'Ran into memory the program never wrote, at $1012'
+            'Reached unwritten memory at $1012'
         )
     })
 

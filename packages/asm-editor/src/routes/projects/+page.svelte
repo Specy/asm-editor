@@ -2,6 +2,7 @@
     import { IMPORTABLE_FILES, importFiles, importFromData } from '#lib/projectImport.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import ProjectCard from '#cmp/specific/project/ProjectCard.svelte'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import { onMount } from 'svelte'
     import FaPlus from '~icons/fa-solid/plus'
     import Button from '#cmp/shared/button/Button.svelte'
@@ -166,12 +167,16 @@
                 />
             </div>
             {#if ProjectStore.loadFailed}
-                <div class="empty">
-                    <div class="empty-title">Your projects could not be read</div>
-                    <div class="empty-hint">
+                <div class="empty load-failed">
+                    <ErrorState
+                        compact
+                        align="start"
+                        title="Your projects could not be read"
+                        reload
+                    >
                         The browser did not let this page open its storage. Reload the page, or
                         check that the browser allows this site to store data.
-                    </div>
+                    </ErrorState>
                 </div>
             {:else if ProjectStore.projects.length === 0}
                 <div class="empty">
@@ -272,6 +277,10 @@
         border-radius: var(--wb-radius);
         background-color: var(--wb-surface);
         color: var(--secondary-text);
+    }
+
+    .load-failed {
+        padding: 0;
     }
 
     .empty-title {

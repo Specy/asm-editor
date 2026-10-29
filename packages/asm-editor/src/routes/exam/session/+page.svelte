@@ -7,6 +7,7 @@
     import Column from '#cmp/shared/layout/Column.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import Input from '#cmp/shared/input/Input.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
@@ -64,6 +65,8 @@
     let sections = $state([] as ExamSection[])
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let errorMessage = $state('Invalid exam link.')
+    /** What went wrong when the failure was the page's own rather than the link's, to report. */
+    let loadError = $state<unknown>(undefined)
     let activeSectionId = $state('')
     let examDisabled = $state(false)
     let unlockPasswordInput = $state('')
@@ -654,6 +657,7 @@
             console.error(e)
             status = 'error'
             errorMessage = 'Unexpected error while loading the exam.'
+            loadError = e
         }
     }
 
@@ -724,10 +728,22 @@
     {/if}
 
     {#if status === 'error'}
-        <div class="overlay">
-            <h1 class="error">Failed to load exam</h1>
-            <p>{errorMessage}</p>
-            <Button onClick={() => goto(resolve('/exam'))}>Back to exam builder</Button>
+        <div class="failure">
+            <ErrorState
+                title="This exam didn't open"
+                error={loadError}
+                reload={loadError !== undefined}
+            >
+                {errorMessage}
+                {#snippet actions()}
+                    <Button
+                        cssVar={loadError !== undefined ? 'tertiary' : 'unset'}
+                        onClick={() => goto(resolve('/exam'))}
+                    >
+                        Back to exam builder
+                    </Button>
+                {/snippet}
+            </ErrorState>
         </div>
     {/if}
 
@@ -1030,6 +1046,13 @@
         font-size: 0.9rem;
     }
 
+    .failure {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        display: flex;
+    }
+
     .overlay {
         position: fixed;
         top: 0;
@@ -1049,11 +1072,6 @@
     }
     .loading {
         font-size: 2.6rem;
-    }
-
-    .error {
-        color: var(--red);
-        font-size: 2rem;
     }
 
     .meta-line {

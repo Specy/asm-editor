@@ -1,89 +1,111 @@
-Everything until now decided for itself where to go next: the program counter moved to the next
-instruction, and a branch moved it somewhere else. Two things can take that decision away from the
-program. It can ask for something the CPU cannot carry out, and the outside world can arrive while
-the program was busy with something else.
+Normally the CPU follows the program's instructions, including branches and subroutine calls. Some
+other events also transfer control to code called a **handler**:
 
-## Three words for one piece of machinery
+- An **exception** is raised by an instruction or a condition encountered while executing it. For
+  example, a machine may raise one when it cannot decode an instruction or when a memory address is
+  not aligned as required. A four-byte word, for example, may need an address divisible by four.
+- An **interrupt** is a request from outside the running instruction, such as a timer or keyboard
+  signalling that it needs attention. It can arrive while the program is doing unrelated work.
+- A **trap** can be an instruction used deliberately to transfer control, for example to request a
+  numbered system service. Machines also use the word for other kinds of exception, so its exact
+  meaning depends on the machine.
 
-- An **exception** is the CPU refusing to carry out the instruction it is on. Dividing by zero,
-  reading a word from an address that is not a multiple of four, decoding bits that are not an
-  instruction. The program caused it, at an instruction the program chose, and the same program run
-  again raises it in the same place.
-- An **interrupt** comes from a device: a key was pressed, a timer ran out, a disk finished. It
-  arrives between two instructions and has nothing to do with which two they were, so a program that
-  is doing nothing wrong gets stopped in the middle anyway.
-- A **trap** is the previous lecture, an instruction the program ran on purpose to hand control over.
+## Following an interrupt
 
-You will also see **fault** and **abort** for kinds of exception, and **IRQ**, for interrupt request,
-for the signal a device raises. All of them go through the same machinery, because the machinery is
-the useful part: stop, remember where you were, go somewhere else, come back.
+Suppose a program is adding up numbers when a timer requests attention:
 
-## Vectors and handlers
+```text
+program adds numbers → timer requests interrupt → CPU enters handler
+                                                → handler deals with timer
+program continues     ← return from handler     ← handler restores its registers
+```
 
-The somewhere else is a **handler**, a piece of code that deals with one cause, and the CPU finds it
-through a **vector**, which is an address kept where the CPU knows to look. Most machines have a
-whole table of them at a fixed address, one entry per cause, and it is called the **vector table**;
-some machines look for a single handler at one address and let it work out the cause for itself.
-Filling that table in is one of the first things an operating system does.
+The CPU saves a return location and any other state required by that machine. It may enter
+**supervisor mode**, where privileged operations are allowed. The handler deals with the event and
+uses a special return instruction. Depending on the machine, this restores state such as the earlier
+mode as well as the instruction address. The CPU and handler may save state on a stack, in special
+registers, or both.
 
-What happens next is the same wherever you look:
+The handler must preserve ordinary registers it uses. Imagine the interrupted program has a running
+total of 12 in a register and will add the next number to it. If the handler changes that register
+to 0 and leaves it there, the program continues with the wrong total. Saving 12 before using the
+register and restoring it before returning prevents that error.
 
-1. The CPU finishes, or abandons, the instruction it is on.
-2. It saves where it was, so the handler can get back. Some machines push that address on the stack,
-   others put it in a register kept for the purpose.
-3. It looks the cause up and jumps to the handler, usually switching to supervisor mode on the way.
-4. The handler saves any register it is about to use, deals with the cause, and puts those registers
-   back.
-5. It returns with an instruction made for the job, which restores the saved address and carries on
-   where the program left off.
+## Finding a handler
 
-Step 4 is what makes a handler awkward to write. It runs between two instructions of a program that
-knows nothing about it, so a handler that leaves a register different from how it found it is a bug
-in a program that never mentions that register, appearing at a moment nobody chose.
+A machine needs a known place to find handler code. Some use a **vector table**, a list of handler
+addresses. For example, an M68K division-by-zero exception selects vector 5. With the table at
+address zero, entry 5 is at address 5 × 4 = 20: the four-byte value stored there is the handler's address.
+The CPU reads that value and transfers control to the handler. Other causes select other entries.
 
-## Why interrupts exist
+Another design transfers every exception to one fixed handler. That handler can read information
+about the cause and decide what to do. In either design, the handler must be installed before the
+event occurs. This means placing handler code at the required address and, when a vector table is
+used, writing its address into the appropriate entry. Otherwise the machine or simulator may stop
+the program.
 
-Polling, from the previous lecture, works and wastes the whole CPU: the program spins reading a
-status bit, and it has to keep going back to look. An interrupt turns that around. The program stops
-looking and gets on with its own work, and the device says something when it has something to say.
+## Where does execution return?
 
-That is how one machine keeps up with a keyboard, a timer, a disk and a network card at once, and it
-is why an operating system can let your program run at all while the rest of the machine carries on.
-It also explains the shape of the code: the work of dealing with a key is in the handler, and the
-program that gets interrupted has no line anywhere in it that mentions the keyboard.
+The saved address is not always the same kind of address. For an interrupt it generally identifies
+where execution can continue; for an exception it may identify the instruction that caused the
+exception or a later instruction. The machine and the cause determine what was saved. Some events
+cannot safely be resumed at all.
 
-A CPU can also be told to ignore interrupts for a while, which is called **masking** or **disabling**
-them. Short pieces of code that must not be stopped halfway run with interrupts off and turn them
-back on afterwards. Many machines give each cause a **priority**, so an urgent device can interrupt
-the handler of a less urgent one, and keep a few causes **non-maskable**, which no program is allowed
-to ignore.
+If the saved address points to a failed instruction, a handler might fix the cause and return to
+retry it. If it deliberately skips the instruction, it must adjust the saved address when the
+machine permits that. Skipping means the instruction's intended result may be missing, so the
+program needs a sensible way to continue. Returning without fixing the cause or changing the address
+can cause the same exception again.
 
-## What this editor does
+For example, in this editor's MIPS simulator, an exception saves the faulting instruction address
+in **EPC**. If a handler decides to skip an instruction at `0x1000`, it changes EPC to `0x1004`,
+because these instructions are four bytes long. `eret` then returns to `0x1004`. Leaving EPC at
+`0x1000` retries the instruction; it will fault again if the cause remains. This is an example of a
+choice for that simulator, not a rule for every exception on every machine.
 
-A simulator is not a machine with an operating system on it, and the ones here answer a fault
-differently from each other.
+## Interrupts and polling
 
-MIPS, RISC-V and the M68K all run a handler you wrote, for exceptions the program causes itself.
-MIPS looks for it at one fixed address and keeps the address of the faulting instruction in a
-register called **EPC**, the exception program counter, which the handler has to step past before
-returning, or the same instruction faults again forever.
+With **polling**, a program reads a device's status to check whether it is ready. It can check in a
+busy loop or return to the check between other work. With an interrupt, the device requests
+attention when needed, so the program need not keep checking. For example, a timer can request an
+interrupt while the program continues its calculations; its handler deals with the timer, then the
+calculations continue.
 
-The M68K has a whole vector table. A program writes a handler's address into the vector for a
-division by zero, an illegal instruction or one of its traps, and the handler returns with the
-instruction made for the job. A vector the program left empty ends the run with a message naming
-it. The M68K also has both modes: a program can drop itself into user mode, with a stack of its own,
-and watch a privileged instruction raise an exception.
+A program can temporarily **mask** some interrupts, holding them back while it performs work that
+must not be interrupted. Machines may assign interrupt requests different priority levels and allow
+some urgent requests even when others are masked. Exact rules depend on the machine.
 
-The M68K is also the one machine here whose devices interrupt it. A program can ask for an
-interrupt request from a timer, at a regular interval, and from the keyboard and the mouse of the
-screen panel. Each request has a priority level from 1 to 7, and three bits of the status register
-mask the levels the program wants to hold back for now. A program with nothing to do until the next
-request can wait for it with an instruction that runs nothing in the meantime.
+## In this editor
 
-The Z80 assembles its interrupt instructions and they change nothing you can observe, because nothing
-in this editor will ever interrupt it.
+The simulators do not all provide the same events or handler mechanism:
 
-On MIPS and RISC-V no device raises an interrupt. Their keyboard has an interrupt-enable bit, and a
-program that sets it is stopped with a message saying that interrupt-driven input is not supported
-and that it should poll the ready bit instead. Input there is polled, the way the previous lecture
-polled it, and a program that wants to know whether a key is waiting has to go and look.
+- MIPS uses a fixed exception handler address. EPC holds the faulting address and `eret` returns to
+  the address in EPC. No device interrupts are delivered.
+- RISC-V can use a handler whose address the program places in `utvec`; the simulator also requires
+  the user interrupt-enable bit to be set for handler entry. It saves the interrupted instruction
+  address in `uepc`, and `uret` returns to it. Device input is not interrupt-driven here.
+- M68K uses a vector table for exceptions and supports timer, keyboard and mouse interrupts. An
+  installed handler returns with `rte`. A missing handler stops the run with a message. See the
+  [M68K exception reference](/documentation/m68k/exceptions) for the vector entries, interrupt
+  levels, masks and waiting instruction.
+- Z80 interrupt instructions assemble, but no device in this editor raises an interrupt for them.
+
+For MIPS and RISC-V keyboard input, poll the ready bit. Setting the device's interrupt-enable bit
+instead stops the program with a message that interrupt-driven input is unsupported.
+
+## Check your understanding
+
+1. A timer interrupts a program while a register holds a running total. What must the handler do if
+   it needs that register?
+2. A MIPS exception saves `0x1000` in EPC. What will `eret` do if the handler leaves it unchanged?
+   What happens if the handler changes it to `0x1004`?
+3. A program checks a keyboard's ready bit once between calculations. Is it polling even though it
+   is not waiting in a busy loop?
+
+<details>
+<summary>Show answers</summary>
+
+The handler must save and restore the register. `eret` returns to `0x1000` in the first case and
+`0x1004` in the second; retrying may raise the exception again. The keyboard check is polling.
+
+</details>

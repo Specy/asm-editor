@@ -107,4 +107,13 @@ describe('Z80 hovers', () => {
         expect(await formLine('add: add c', 'add')).toBeUndefined()
         expect(await formLine('    add c', 'c')).toBeUndefined()
     })
+
+    it('says nothing about the words of a comment, a label of the same name or not', async () => {
+        const line = 'loop: djnz loop ; ld a, then back to loop'
+        expect(await hover(line, 'djnz loop', 5)).toEqual(['Label **loop**'])
+        expect(await hover(line, 'to loop', 3)).toEqual([])
+        expect(await hover(line, 'ld')).toEqual([])
+        // The `'` of `af'` opens no string, so the comment after it is still one.
+        expect(await hover("    ex af,af' ; ld a", 'ld')).toEqual([])
+    })
 })

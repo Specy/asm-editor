@@ -118,8 +118,7 @@ function instructions(): Chapter {
         language: 'm68k',
         title: 'Instructions',
         href,
-        description:
-            'Every instruction the assembler accepts, with its sizes and the addressing modes of its operands.',
+        description: 'Supported instructions, operand sizes and addressing modes.',
         entries
     }
 }
@@ -206,7 +205,7 @@ function conditionCodes(): Chapter {
         title: 'Condition codes',
         href,
         description:
-            'The flags an instruction leaves in the status register, and the conditions that branches, sets and loops test.',
+            'Status flags and the conditions tested by branches, conditional sets, loops and traps.',
         entries: [...prose('condition-codes', href, conditionCodesMarkdown), ...codes]
     }
 }
@@ -377,7 +376,7 @@ function trapTasks(): Chapter {
         title: 'Trap tasks',
         href,
         description:
-            'The editor’s services, which `trap #15` asks for. Put the task number in D0.B (the values below are decimal); the task’s other inputs and results use the listed registers. `trap #0` to `trap #14` run handlers the program installs instead.',
+            'Call an editor service with `trap #15`. Put its decimal task number in D0.B and use the registers listed for its inputs and results. `trap #0` through `trap #14` call handlers installed by the program.',
         entries
     }
 }
@@ -390,7 +389,7 @@ function exceptions(): Chapter {
         title: 'Exceptions',
         href,
         description:
-            'How the 68000 handles exceptions through its vector table: handlers, frames, `rte`, user and supervisor mode, interrupt requests, and the cycles every step takes.',
+            'Exception vectors, handler entry and return, stack frames, processor modes, interrupts and cycle counts for the 68000, 68010 and 68020.',
         entries: prose('exceptions', href, exceptionsMarkdown)
     }
 }
@@ -423,7 +422,7 @@ function directives(): Chapter {
         title: 'Directives',
         href,
         description:
-            'What the assembler does before the program runs: data, space, constants, sections and other Files.',
+            'Assembler directives for data, reserved space, constants, sections and included files.',
         entries
     }
 }

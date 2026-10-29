@@ -32,10 +32,9 @@ leaves 4 in `d0`, and moves `a0` to `$2002`, where the 8 is stored.
 loop does not read from that address. The final `dbra` makes the low word of `d1` `$FFFF` and
 falls through to `simhalt`, which stops the program.
 
-The stop matters. The processor runs whatever bytes come after the last instruction, and nothing in
-memory marks the six words as data rather than code: only where the program stops keeps them from
-running. Here `org $2000` also leaves memory nobody wrote between the code and the numbers, which
-the simulator would end the program on, but a program should not count on that.
+The CPU keeps executing bytes until something stops it. It cannot tell that the six words are data.
+Here `org $2000` leaves a gap of untouched memory between the code and the numbers, and reaching
+that gap would also end the run. `simhalt` gives the program an explicit stopping point.
 
 ## Run it and follow the pointer
 
@@ -51,19 +50,18 @@ stepping to watch `a0` advance by two at each read and `d0` grow to `0000006C`.
 ## Run into the data
 
 Delete the `simhalt` line and the `org $2000` line, so the six words come straight after `dbra`.
-Select **Build** and **Run**, and predict what happens to `d0` and what the program does after the
-loop.
+Predict the final value of `d0` and what executes after the loop. Then select **Build** and **Run**.
 
 <details>
 <summary>Show answer</summary>
 
-The loop still adds the six words, so `d0` is `0000006C`, but then the processor carries on into
-`numbers` and runs its words as instructions. The first two, 4 and 8, read as `ORI.B #$8,D4`,
-which puts 8 in `d4`. The third word, 15, is no instruction at all, so the run ends with
+The loop produces the same sum, `0000006C` in `d0`. Execution then continues into `numbers`.
+The first two words, 4 and 8, encode `ORI.B #$8,D4`, which puts 8 in the initially empty `d4`.
+The next word, 15, is not a valid instruction, so the run ends with
 `Illegal instruction at $1016: vector 4 at $000010 holds no handler`: the program installed no
-handler for an illegal instruction, as the exceptions lecture explains. Opened in the editor, the
-History lists those two steps with no source line, each with what ran: `ORI.B #$8,D4`, then
-`DC.W $000F`, a word that decodes to no instruction. A real 68000 does the same.
+handler for an illegal instruction. Use **Open in editor** to inspect the History. It shows two
+steps without matching source instructions: `ORI.B #$8,D4`, then `DC.W $000F`, the disassembler’s
+notation for an unrecognized instruction word.
 
 </details>
 

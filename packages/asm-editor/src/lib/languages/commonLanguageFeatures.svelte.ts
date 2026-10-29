@@ -683,7 +683,7 @@ export type BaseEmulatorState = {
     runStatus?: string
     /**
      * The cycle counter, for a Target that counts the clock cycles its processor takes: the M68K's
-     * shows under the registers as "Cycles 12,345 (+8)" and ends the Log's exit line
+     * shows above the PC as "Cycles 12,345 (+8)" and ends the Log's exit line
      * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30). Undefined for
      * every other Target, and before a Build.
      */

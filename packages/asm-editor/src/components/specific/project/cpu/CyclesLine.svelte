@@ -1,7 +1,8 @@
 <script lang="ts">
     /**
-     * The cycle counter under the registers, for a Target whose Core counts the clock cycles its
-     * processor takes: "Cycles 12,345 (+8)", the newest step's cost in parentheses
+     * The cycle counter above the PC, for a Target whose Core counts the clock cycles its processor
+     * takes: "Cycles 12,345 (+8)", the newest step's cost in parentheses at the line's right end, so
+     * that a count growing a digit moves nothing
      * ([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 30). An
      * estimate, a 68020 program's, is marked "Cycles ≈ 12,345 (+8)", and the hover says why. The
      * host draws nothing for a Target that does not count.
@@ -42,24 +43,33 @@
         display: flex;
         flex: none;
         align-items: baseline;
-        gap: 0.4rem;
+        gap: 0.5rem;
         min-width: 0;
-        font-size: 0.85rem;
         white-space: nowrap;
         overflow: hidden;
     }
 
+    /* the fonts of the PC's row under it: its name's for the label, its value's for the count */
     .label {
-        opacity: 0.8;
+        font-family: Rubik;
+        font-size: 0.9rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        color: var(--secondary-text);
     }
 
     .count {
-        font-family: 'Fira Code', monospace;
+        font-family: monospace;
+        font-size: 1rem;
+        opacity: 0.8;
     }
 
-    /* the newest step's cost, in the colour the panels give what the newest step changed */
+    /* the newest step's cost, in the colour the panels give what the newest step changed, at the
+       right end, where neither the count before it nor its own width moves the rest */
     .last {
-        font-family: 'Fira Code', monospace;
+        margin-left: auto;
+        font-family: monospace;
+        font-size: 0.9rem;
         color: var(--accent);
     }
 </style>

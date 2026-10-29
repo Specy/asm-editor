@@ -327,7 +327,8 @@ Four things a person can do once this is in, to show where each decision lands.
     - A Step while stopped takes a pending IRQ if there is one. Otherwise it reports that nothing can run.
     - A Testcase whose program stops with no timer to wake it fails with that reason.
 
-30. **The cycle counter** appears under the registers, with the cost of the last step, in each History row, and in the Log when the program exits. Under the 68020 it is marked as an estimate.
+30. **The cycle counter** appears above the PC, with the cost of the last step, in each History row, and in the Log when the program exits. Under the 68020 it is marked as an estimate.
+    - _Amended 2026-10-29, the owner's call:_ the line moved from under the Register files to above the PC, with its look unchanged, and the last step's cost sits at the line's right end, so that a growing count moves nothing. A Playground shows it only when asked: the `cycles` fence flag, or `showCycles=true` in an embed's link, which the embed builder's Show cycles switch writes.
 
 31. **Memory regions.**
     - `$000`–`$3FF` is the "Exception vectors" region. Its vectors are its data labels, listed by name (Reset SSP, Reset PC, Bus error, …, TRAP #15, Level 7 autovector), so the picker and the hover name them. Under the 68010 and 68020 it starts at VBR.

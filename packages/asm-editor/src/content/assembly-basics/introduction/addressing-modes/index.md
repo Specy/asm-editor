@@ -58,11 +58,10 @@ numbers: dc.l 10, 20, 30, 40
 | `move.l (a0), d3`     | indirect  | the address is whatever is in `a0` when the line runs             |
 | `move.l (a0, d4), d5` | indexed   | the address is `a0` plus `d4`, added while the line runs          |
 
-The four longs are written by the assembler right after the code, and `simhalt` stops the program
-before it gets to them, since the CPU would otherwise run their bytes as instructions. The eight
-instructions start at `0x1000` and take two to six bytes each, 28 in all: the ones that name
-`numbers` hold its address, and the ones that only name registers are two bytes. With the four
-bytes of `simhalt`, `numbers` begins at `0x1020`, which is also where `a0` ends up.
+The assembler places the four longs immediately after the code. `simhalt` ends the run before the
+CPU tries to execute that data. The eight instructions start at `0x1000` and occupy 28 bytes in
+total. Each takes two to six bytes, depending on its operands. The four-byte `simhalt` brings the
+total to 32, so `numbers` begins at `0x1020`. That is the address loaded into `a0`.
 Click `a0` in the registers panel and the memory panel jumps to that address, where the four longs
 are:
 

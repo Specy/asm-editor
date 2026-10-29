@@ -1,9 +1,9 @@
 <script lang="ts">
     /**
-     * The registers of a Debug session: the CPU's Status flags and the PC on top, the processor the
-     * program is written for when it is a later one than the Target's first (`ProcessorLine`), then
-     * the Register files with their tabs, one register per row, and under them the cycle counter of a
-     * Target that counts cycles (`CyclesLine`). A click on a register's name moves memory to its
+     * The registers of a Debug session: the CPU's Status flags on top, the cycle counter of a Target
+     * that counts cycles (`CyclesLine`), the PC, the processor the program is written for when it is
+     * a later one than the Target's first (`ProcessorLine`), then the Register files with their tabs,
+     * one register per row. A click on a register's name moves memory to its
      * value, and a right click on a value, the PC's too, opens its pointer menu (`pointerMenu.ts`).
      * A rule from edge to edge of the card separates the flags from the PC. The PC has no padding
      * of its own and lines up with the registers under it, and the Register files reach the card's
@@ -35,8 +35,22 @@
 <div class="registers-area" {style}>
     {#if emulator.statusRegisters && emulator.statusRegisters.length > 0}
         <div class="inset">
-            <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
+            <!-- a little shallower than elsewhere, for the cycle counter's room -->
+            <StatusCodesVisualiser
+                statusCodes={emulator.statusRegisters}
+                style="padding: 0.1rem 0.3rem;"
+            />
         </div>
+        <div class="rule"></div>
+    {/if}
+    {#if emulator.cycles && ui.deviceClass !== 'phone'}
+        <!-- the cycle counter, above the PC: a phone leaves it out, as it does the run-info line,
+             to keep the registers what the card is about -->
+        <CyclesLine
+            cycles={emulator.cycles}
+            processor={emulator.processor}
+            style="padding: 0 0.4rem;"
+        />
         <div class="rule"></div>
     {/if}
     <!-- the side padding is the register rows', so the PC's name sits over theirs -->
@@ -69,15 +83,6 @@
             {valueMenu}
         />
     </div>
-    {#if emulator.cycles && ui.deviceClass !== 'phone'}
-        <!-- the cycle counter, under the registers: a phone leaves it out, as it does the run-info
-             line, to keep the registers what the card is about -->
-        <CyclesLine
-            cycles={emulator.cycles}
-            processor={emulator.processor}
-            style="padding: 0 0.45rem 0.3rem;"
-        />
-    {/if}
 </div>
 
 <style>
@@ -87,7 +92,7 @@
         gap: 0.3rem;
         min-height: 0;
         min-width: 0;
-        padding-top: 0.3rem;
+        padding-top: 0.2rem;
         overflow: hidden;
         /* the Register files meet the card's edges, where a rounded corner would only show a gap */
         --panel-radius: 0px;

@@ -77,9 +77,10 @@ doubled:
 end:
 ```
 
-Here is where we see the stack being used. An instruction takes as many bytes as it needs, two to
-ten: here each `bsr` and the `bra` take four, because the distance to jump is part of them, and the
-others take two. The program starts at `0x1000`, so the instructions sit at these addresses:
+Each call puts a return address on the stack. To trace those addresses, we need the size of each
+instruction. A 68000 instruction occupies two to ten bytes. Here each `bsr` and `bra` occupies
+four, including the branch distance, and the other instructions occupy two. Starting at `0x1000`,
+the instructions are laid out as follows:
 
 |  address | instruction      |
 | -------: | ---------------- |

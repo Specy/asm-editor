@@ -5,7 +5,7 @@ import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 import type { CycleCount } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 
 /**
- * The cycle counter under the registers ([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md),
+ * The cycle counter above the PC ([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md),
  * decision 30): the count in thousands, then what the newest step took.
  */
 const cleanups: (() => void)[] = []
@@ -29,7 +29,7 @@ describe('the cycle counter', () => {
         const shown = render({ total: 12_345n, last: 8 })
         expect(shown.text).toBe('Cycles 12,345 (+8)')
         expect(shown.tooltip).toBe(
-            'The clock cycles a 68000 takes to run this program: 12,345 since it started or trap #15 task 30 last cleared the counter. The newest step took 8.'
+            '68000 clock cycles: 12,345 since the program started or trap #15 task 30 last reset the counter. Last step: 8 cycles.'
         )
     })
 
@@ -43,7 +43,7 @@ describe('the cycle counter', () => {
 
     it('names the processor a later program is written for', () => {
         expect(render({ total: 38n }, '68010').tooltip).toBe(
-            'The clock cycles a 68010 takes to run this program: 38 since it started or trap #15 task 30 last cleared the counter.'
+            '68010 clock cycles: 38 since the program started or trap #15 task 30 last reset the counter.'
         )
     })
 
@@ -52,7 +52,7 @@ describe('the cycle counter', () => {
         const shown = render({ total: 12_345n, last: 8, estimate: true }, '68020')
         expect(shown.text).toBe('Cycles ≈ 12,345 (+8)')
         expect(shown.tooltip).toBe(
-            'An estimate of the clock cycles a 68020 takes to run this program: 12,345 since it started or trap #15 task 30 last cleared the counter. A 68020 overlaps each instruction with the next and keeps recent code in a cache, so the time of one depends on its neighbours. Its manual gives each instruction’s time for the case where the instruction is in the cache already, which is what is counted here. The newest step took 8.'
+            'Estimated 68020 clock cycles: 12,345 since the program started or trap #15 task 30 last reset the counter. 68020 timings depend on overlapping instruction execution and the instruction cache. This estimate uses the manual’s timings for instructions already in the cache. Last step: 8 cycles.'
         )
     })
 
@@ -61,7 +61,7 @@ describe('the cycle counter', () => {
         const shown = render({ total: 40n, last: 8, estimate: true }, '68000 with bit fields')
         expect(shown.text).toBe('Cycles ≈ 40 (+8)')
         expect(shown.tooltip).toBe(
-            'An estimate of the clock cycles a 68000 with bit fields takes to run this program: 40 since it started or trap #15 task 30 last cleared the counter. A 68000 or a 68010 has no bit-field instructions, so those `opt bit` adds take the time the 68020’s manual gives them, with the instruction in its cache already, as EASy68K counts them. Every other instruction takes its exact time. The newest step took 8.'
+            'Estimated 68000 with bit fields clock cycles: 40 since the program started or trap #15 task 30 last reset the counter. Bit-field instructions enabled by opt bit use the 68020 manual’s timings for instructions already in the cache, as in EASy68K. All other instructions use exact 68000 or 68010 timings. Last step: 8 cycles.'
         )
     })
 })

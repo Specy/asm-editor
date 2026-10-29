@@ -1,6 +1,6 @@
 {
     "name": "Interrupts and cycles",
-    "description": "Interrupt requests from a timer and the keyboard: levels, the interrupt mask, autovectors and stop. Then the cycle counter, to time a loop as a 68000 would run it.",
+    "description": "Handle timer and keyboard interrupts, control their priority with the interrupt mask, and measure code with the cycle counter.",
     "order": 3,
     "topic": "interrupt-requests"
 }

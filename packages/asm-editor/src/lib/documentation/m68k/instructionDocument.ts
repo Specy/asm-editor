@@ -125,7 +125,7 @@ const SIZE_SUFFIXES: Record<M68KInstructionForm['sizes'][number], string> = {
 
 /** The 68000 reserves these for supervisor mode, and s68k enforces it. */
 const PRIVILEGED_EXPLANATION =
-    'These run only in supervisor mode, where a program starts. In user mode they raise a privilege violation instead; see [user and supervisor mode](/documentation/m68k/exceptions#modes).'
+    'These forms require supervisor mode, the mode a program starts in. In user mode they raise a privilege violation. See [user and supervisor mode](/documentation/m68k/exceptions#modes).'
 
 /**
  * What the forms a later processor brought need: the `opt p=` line that writes the program for it
@@ -134,10 +134,10 @@ const PRIVILEGED_EXPLANATION =
  */
 const PROCESSOR_EXPLANATIONS = {
     '68010':
-        'The 68010 and the 68020 have these, the 68000 does not: write `opt p=68010` at the top of the program to use them.',
-    '68020': 'Only the 68020 has these: write `opt p=68020` at the top of the program to use them.',
+        'These forms are available on the 68010 and 68020. Select `opt p=68010` or `opt p=68020` before any code or data.',
+    '68020': 'These forms require the 68020. Select `opt p=68020` before any code or data.',
     'opt-bit':
-        'A program for the 68000 or the 68010 has these too when it starts with `opt bit`, EASy68K’s option for the bit fields.'
+        'These forms are also available in a 68000 or 68010 program with `opt bit`, EASy68K’s option for bit-field instructions.'
 } as const
 
 /**
@@ -167,7 +167,7 @@ export function isM68kLaterProcessor(name: string): name is M68kLaterProcessor {
  * `opt bit` gives the 68000 and the 68010, says so.
  */
 export function m68kProcessorOnly(processor: M68kLaterProcessor, bitField = false): string {
-    return bitField ? '68020, or 68000 with opt bit' : PROCESSOR_ONLY[processor]
+    return bitField ? '68020, or 68000 and 68010 with opt bit' : PROCESSOR_ONLY[processor]
 }
 
 /**
@@ -177,8 +177,8 @@ export function m68kProcessorOnly(processor: M68kLaterProcessor, bitField = fals
  */
 export function m68kProcessorFact(processor: M68kLaterProcessor, bitField = false): string {
     if (bitField)
-        return '68020, or 68000 and 68010 with `opt bit`: write `opt p=68020` or `opt bit` at the top of the program'
-    return `${PROCESSOR_ONLY[processor]}: write \`opt p=${processor}\` at the top of the program`
+        return 'Select `opt p=68020`, or use `opt bit` with the 68000 or 68010, before any code or data'
+    return `${PROCESSOR_ONLY[processor]}: select \`opt p=${processor}\` before any code or data`
 }
 
 /** Whether a tag is one the processor fact says again: a later processor, or `opt bit`. */
