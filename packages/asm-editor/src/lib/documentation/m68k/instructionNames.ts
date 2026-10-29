@@ -80,6 +80,7 @@ export const m68kInstructionNames: Readonly<
         longName: 'Branch if unsigned higher or same',
         summary: 'Branches to the specified address if unsigned higher or same.'
     },
+    bkpt: { longName: 'Breakpoint' },
     ble: {
         longName: 'Branch if less than or equal',
         summary: 'Branches to the specified address if less than or equal.'
@@ -234,6 +235,7 @@ export const m68kInstructionNames: Readonly<
         longName: 'Move multiple registers',
         summary: 'Moves a list of registers such as d0-d7 and a0-a7 to or from memory.'
     },
+    movec: { longName: 'Move control register' },
     movep: { longName: 'Move peripheral data' },
     moveq: {
         longName: 'Move quick',
@@ -270,6 +272,7 @@ export const m68kInstructionNames: Readonly<
         longName: 'Push effective address',
         summary: 'Computes the effective address of the operand and pushes it onto the stack.'
     },
+    moves: { longName: 'Move address space' },
     rod: { longName: 'Rotate' },
     rol: { longName: 'Rotate left' },
     ror: { longName: 'Rotate right' },
@@ -280,6 +283,7 @@ export const m68kInstructionNames: Readonly<
         longName: 'Return and restore condition codes',
         summary: 'Returns by popping ccr and then the program counter from the stack.'
     },
+    rtd: { longName: 'Return and deallocate' },
     rte: { longName: 'Return from exception' },
     rts: {
         longName: 'Return from subroutine',

@@ -76,6 +76,9 @@ const UNNAMED_ROLES = new Set(['exg', 'chk'])
 /** The modes a register list position takes: a list, or one register as a list of one. */
 const LIST_MODES = new Set(['Dn', 'An', '<register list>'])
 
+/** The modes `movec` names a control register by: the USP, or VBR, SFC and DFC. */
+const CONTROL_MODES = new Set(['usp', 'Rc'])
+
 const SIZE_SUFFIXES: Record<M68KInstructionForm['sizes'][number], string> = {
     byte: '.b',
     word: '.w',
@@ -95,6 +98,15 @@ const PROCESSOR_EXPLANATIONS = {
     '68010':
         'The 68010 and the 68020 have these, the 68000 does not: write `opt p=68010` at the top of the program to use them.',
     '68020': 'Only the 68020 has these: write `opt p=68020` at the top of the program to use them.'
+} as const
+
+/**
+ * What a row says of a form a later processor made privileged that its own first processor did not,
+ * `move sr, <ea>`, read from the table's `privilegedFrom`: the 68000 runs it in user mode.
+ */
+const PRIVILEGED_FROM = {
+    '68010': 'Privileged on the 68010 and 68020',
+    '68020': 'Privileged on the 68020'
 } as const
 
 /** The processors that have what a later one brought: s68k's family ends at the 68020. */
@@ -142,6 +154,9 @@ function positionSymbol(modes: readonly string[], branch: boolean): string {
     if (modes.includes('<register list>') && modes.every((mode) => LIST_MODES.has(mode))) {
         return '<register list>'
     }
+    // the manual's `Rc` and `Rn`, which keep `movec`'s and `moves`'s two directions apart
+    if (modes.every((mode) => CONTROL_MODES.has(mode))) return 'Rc'
+    if (modes.length === 2 && modes.includes('Dn') && modes.includes('An')) return 'Rn'
     return '<ea>'
 }
 
@@ -165,6 +180,13 @@ function sizeFact(
     return [
         `Sizes ${suffixes.join(' ')}${byDefault ? `, ${SIZE_SUFFIXES[byDefault]} by default` : ''}`
     ]
+}
+
+/** "Privileged on the 68010 and 68020", for a form only a later processor reserves. */
+function privilegedFromFact(form: M68KInstructionForm): string[] {
+    const from = form.privilegedFrom
+    if (form.privileged || from === undefined || !isM68kLaterProcessor(from)) return []
+    return [PRIVILEGED_FROM[from]]
 }
 
 function formInput(
@@ -195,7 +217,7 @@ function formInput(
         code: symbols.length > 0 ? `${name} ${symbols.join(', ')}` : name,
         parts,
         tags: m68kFormTags(form),
-        facts: sizeFact(form, defaultSize),
+        facts: [...sizeFact(form, defaultSize), ...privilegedFromFact(form)],
         // Two forms with the same symbols take different modes: they stay apart.
         split: JSON.stringify([form.operands, form.sizes]),
         details

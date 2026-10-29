@@ -65,8 +65,8 @@ describe('the M68K Documentation', () => {
             chapters().map((chapter) => [chapter.id, chapter.entries.length])
         )
         expect(counts).toEqual({
-            instructions: 72,
-            'addressing-modes': 11,
+            instructions: 76,
+            'addressing-modes': 12,
             //the explanation's three sections, then the 16 codes
             'condition-codes': 19,
             'shift-directions': 1,
@@ -75,8 +75,8 @@ describe('the M68K Documentation', () => {
             'trap-tasks': 79,
             //the introduction and the seven sections after it
             synth: 8,
-            //the introduction and the ten sections after it
-            exceptions: 11,
+            //the introduction and the eleven sections after it, the 68010's last
+            exceptions: 12,
             directives: 19,
             'assembler-features': 1
         })

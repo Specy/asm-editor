@@ -29,7 +29,8 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
     tokenPostfix: '.m68k',
 
     keywords: M68KRecognizedInstructions,
-    //the 68010's and 68020's instructions s68k does not implement yet are refused like `stop`
+    //the 68020's instructions s68k does not implement yet are refused, as words the assembler
+    //refuses are
     refusedKeywords: [...M68KUnimplementedDialectInstructions],
     symbols: /[(),.:]/,
     operators: ['+', '-', '*', '/', '\\', '&', '!', '|', '^', '<<', '>>', '~'],
@@ -112,7 +113,7 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
                         cases: {
                             '$1~[dD][0-7]': 'data-register',
                             '$1~(?:[aA][0-7]|sp)': 'address-register',
-                            '$1~(?:pc|sr|ccr|usp)': 'variable.predefined',
+                            '$1~(?:pc|sr|ccr|usp|sfc|dfc|vbr)': 'variable.predefined',
                             '@default': 'identifier'
                         }
                     },

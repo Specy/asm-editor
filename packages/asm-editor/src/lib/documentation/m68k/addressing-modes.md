@@ -2,7 +2,7 @@
 
 ## Direct
 
-Names a register directly. Data registers are `d0` to `d7`; address registers are `a0` to `a7`. `sp` is another name for `a7`. The instruction determines whether the register is read or written.
+Names a register directly. Data registers are `d0` to `d7`; address registers are `a0` to `a7`. `sp` is another name for `a7`. The instruction determines whether the register is read or written. Where an operand can be either kind, the instruction's forms write it `Rn`.
 
 ```m68k
 d0, a0, sp
@@ -10,6 +10,7 @@ d0, a0, sp
 
 - `Dn`: Data register
 - `An`: Address register
+- `Rn`: Data or address register
 
 ## Indirect
 
@@ -113,10 +114,25 @@ move.w sr,d0
 
 ## User stack pointer
 
-`usp` is the user stack pointer: the `a7` a program has in user mode. In supervisor mode `a7` is the supervisor stack pointer, so supervisor code reaches the other one through `usp`, and only with [move](/documentation/m68k/instruction/move) to or from an address register. Both forms are long and privileged. See [user and supervisor mode](/documentation/m68k/exceptions#modes).
+`usp` is the user stack pointer: the `a7` a program has in user mode. In supervisor mode `a7` is the supervisor stack pointer, so supervisor code reaches the other one through `usp`, with [move](/documentation/m68k/instruction/move) to or from an address register, or on the 68010 with [movec](/documentation/m68k/instruction/movec) to or from any data or address register. Every form is long and privileged. See [user and supervisor mode](/documentation/m68k/exceptions#modes).
 
 ```m68k
 move.l a0, usp
 ```
 
 - `usp`: User stack pointer
+
+## Control registers
+
+The 68010 added three registers that only supervisor code uses, and only [movec](/documentation/m68k/instruction/movec) names them, copying one to or from a data or address register. A program has them when it starts with `opt p=68010`; in a 68000 program the names are still reserved, so no label can take them.
+
+- `vbr`, the vector base register, is the address where the [vector table](/documentation/m68k/exceptions#68010) starts. It is 0 until a program moves it.
+- `sfc` and `dfc`, the source and destination function codes, say which address space [moves](/documentation/m68k/instruction/moves) reads from and writes to. Each is three bits.
+
+```m68k
+movec d0, vbr
+```
+
+- `vbr`: Vector base register
+- `sfc`: Source function code
+- `dfc`: Destination function code

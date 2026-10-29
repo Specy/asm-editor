@@ -36,6 +36,7 @@ import {
     type ReadOnlyMemory,
     numbersOfSizeToSlice,
     type RegisterFile,
+    type RegisterFileDescriptor,
     type RegisterPoke,
     type RegisterSize,
     resolveRegisterFileLayout,
@@ -219,6 +220,8 @@ export abstract class GenericEmulator<T, R extends string>
     implements BaseEmulatorActions, BaseEmulatorState
 {
     private memoryLayout = $state<MemoryLayout | undefined>()
+    /** What `_getMemoryLayoutKey` read when `memoryLayout` was read. */
+    private memoryLayoutKey: number | bigint | string | undefined
     private heapBounds = $state<HeapBounds | undefined>()
     private stackTop = $state<bigint | undefined>()
     private deviceRegions = $state<DeviceRegion[]>([])
@@ -467,6 +470,15 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.decorations = decorations.decorations
         this.state.compiledCode = decorations.code
         this.state.buildArtifacts = this._getBuildArtifacts()
+        this.readMemoryLayout()
+    }
+
+    /**
+     * The Build's layout, with the names compiled code gives its labels, and the reading of what it
+     * depends on that the program can change (`_getMemoryLayoutKey`), which `updateData` compares.
+     */
+    private readMemoryLayout() {
+        this.memoryLayoutKey = this._getMemoryLayoutKey?.()
         const layout = this._getMemoryLayout?.() ?? { sections: [], dataLabels: [] }
         this.memoryLayout = {
             ...layout,
@@ -663,6 +675,18 @@ export abstract class GenericEmulator<T, R extends string>
                 } satisfies RegisterFile
             })
         ]
+    }
+
+    /**
+     * Declares the Register files beyond the CPU one anew, for a Target whose files follow the
+     * program it built: an M68K program for the 68010 has VBR, SFC and DFC in its System file, one
+     * for the 68000 has not. The files are built again as `createRegisterFiles` builds them, zeroed
+     * until the next refresh reads them; descriptors already in force change nothing.
+     */
+    protected redeclareRegisterFiles(descriptors: RegisterFileDescriptor[]): void {
+        if (descriptors === this._registerFiles) return
+        this._registerFiles = descriptors
+        this.state.registerFiles = this.createRegisterFiles()
     }
 
     /**
@@ -939,6 +963,14 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.callStack = this._getCallStack()
         this.heapBounds = this._getHeapBounds?.()
         this.stackTop = this._getStackTop?.()
+        //a layout that moved with the program, as an M68K vector table follows VBR, is read again,
+        //and its Arguments captured again with it
+        if (
+            this.memoryLayout &&
+            this._getMemoryLayoutKey &&
+            this._getMemoryLayoutKey() !== this.memoryLayoutKey
+        )
+            this.readMemoryLayout()
         this.captureArguments()
         this.deviceRegions = this._getDeviceRegions?.() ?? []
         this.state.latestSteps = this.visibleHistory(VISIBLE_HISTORY_STEPS)
@@ -1330,6 +1362,7 @@ export abstract class GenericEmulator<T, R extends string>
     private forgetBuild(): void {
         this._buildSources = undefined
         this.memoryLayout = undefined
+        this.memoryLayoutKey = undefined
         this.heapBounds = undefined
         this.stackTop = undefined
         this.deviceRegions = []

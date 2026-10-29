@@ -130,7 +130,7 @@ function instructions(): Chapter {
  */
 const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
     overview: ['<ea>'],
-    direct: ['Dn', 'An'],
+    direct: ['Dn', 'An', 'Rn'],
     indirect: ['(An)'],
     'address-register-displacement': ['d(An)'],
     'indirect-post-pre-increment': ['(An)+', '-(An)'],
@@ -139,7 +139,8 @@ const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
     'address-register-indexed': ['d(An,Xn)'],
     'program-counter-relative': ['d(PC)', 'd(PC,Xn)'],
     'status-registers': ['sr', 'ccr'],
-    'user-stack-pointer': ['usp']
+    'user-stack-pointer': ['usp'],
+    'control-registers': ['Rc', 'vbr', 'sfc', 'dfc']
 }
 
 function addressingModes(): Chapter {

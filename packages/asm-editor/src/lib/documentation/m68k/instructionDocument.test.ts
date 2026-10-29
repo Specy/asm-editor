@@ -108,6 +108,45 @@ describe('M68K instruction documents', () => {
         expect(rows('extb')).toEqual(['extb Dn'])
     })
 
+    it('writes the 68010’s movec and moves in the manual’s Rc and Rn, privileged and the 68010’s', () => {
+        const movec = document('movec')
+        expect(movec.tags).toEqual(['privileged', '68010'])
+        expect(movec.headerFacts).toEqual([
+            'Size .l',
+            '68010 and 68020 only: write `opt p=68010` at the top of the program'
+        ])
+        expect(movec.category).toBe('system')
+        expect(rows('movec')).toEqual(['movec Rc, Rn', 'movec Rn, Rc'])
+        expect(documentPatterns(movec)[0].details).toEqual([
+            { label: 'Source', values: ['usp', 'Rc'], name: undefined },
+            { label: 'Destination', values: ['Dn', 'An'], name: undefined }
+        ])
+        expect(movec.operands.map((operand) => [operand.symbol, operand.href])).toEqual([
+            ['Rc', '/documentation/m68k/addressing-mode#control-registers'],
+            ['Rn', '/documentation/m68k/addressing-mode#direct']
+        ])
+        expect(rows('moves')).toEqual(['moves Rn, <ea>', 'moves <ea>, Rn'])
+        expect(document('moves').tags).toEqual(['privileged', '68010'])
+        expect(rows('rtd')).toEqual(['rtd #imm'])
+        expect(document('rtd').tags).toEqual(['68010'])
+        expect(document('rtd').category).toBe('control-flow')
+        expect(document('bkpt').operands[0].meaning).toContain('`0` to `7`')
+    })
+
+    it('says on move’s row from sr that the 68010 made it privileged, from privilegedFrom', () => {
+        const fromSr = documentPatterns(document('move')).find(
+            (pattern) => patternText(pattern) === 'move sr, <ea>'
+        )!
+        expect(fromSr.facts).toEqual(['Size .w', 'Privileged on the 68010 and 68020'])
+        //it stays in the untagged section: the 68000 runs it in user mode
+        expect(
+            document('move')
+                .sections[0].groups.flatMap((group) => group.patterns)
+                .map(patternText)
+        ).toContain('move sr, <ea>')
+        expect(document('move').description).toContain('move ccr, d0')
+    })
+
     it('puts andi into sr under Privileged, and each row its own size', () => {
         const andi = document('andi')
         expect(andi.sections.map((section) => section.tags)).toEqual([[], ['privileged']])
@@ -267,7 +306,7 @@ describe('M68K instruction documents', () => {
             modesChapter.href,
             ...modesChapter.entries.map((entry) => entry.href)
         ])
-        expect(PAGE_NAMES.length).toBe(129)
+        expect(PAGE_NAMES.length).toBe(133)
         for (const name of PAGE_NAMES) {
             const built = document(name)
             const explained = new Set(built.operands.map((operand) => operand.symbol))

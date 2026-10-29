@@ -17,6 +17,11 @@ import { M68KLanguage } from './M68K-grammar'
 import type { MemoryRange } from '@specy/s68k'
 import { tokenizeAssembly } from '#lib/content/assemblyHighlight.ts'
 
+/** What the code blocks of the Documentation and the courses colour a piece of an M68K line. */
+function kindOf(line: string, text: string) {
+    return tokenizeAssembly(line, 'M68K')[0].find((token) => token.text === text)?.kind
+}
+
 const ADDED_V2_INSTRUCTIONS = [
     'movep',
     'tas',
@@ -35,7 +40,11 @@ const ADDED_V2_INSTRUCTIONS = [
     'extb',
     'rte',
     'stop',
-    'reset'
+    'reset',
+    'rtd',
+    'bkpt',
+    'movec',
+    'moves'
 ]
 
 const CONDITION_CODES = [
@@ -131,6 +140,10 @@ const V2_INSTRUCTIONS = [
     'trapv',
     'chk',
     'illegal',
+    'rtd',
+    'bkpt',
+    'movec',
+    'moves',
     ...CONDITION_CODES.map((code) => `b${code}`),
     ...[...CONDITION_CODES, 't', 'f'].map((code) => `db${code}`),
     'dbra',
@@ -215,6 +228,35 @@ describe('M68K v2 language tooling', () => {
         expect(M68KRefusedDirectives).toEqual(
             expect.arrayContaining(['macro', 'endm', 'ifeq', 'endc', 'while', 'endw'])
         )
+    })
+
+    //the 68010's control registers are coloured as `usp` is, in the editor and in the code blocks
+    it('colours sfc, dfc and vbr as usp, and completes them as movec’s operands', async () => {
+        const operands = M68KLanguage.tokenizer.operands as unknown[]
+        const cases = operands.flatMap((rule) => {
+            const actions = Array.isArray(rule) ? rule[1] : undefined
+            const first = Array.isArray(actions) ? actions[0] : undefined
+            return first && typeof first === 'object' && 'cases' in first
+                ? [first.cases as Record<string, string>]
+                : []
+        })
+        expect(cases).toHaveLength(1)
+        const [key] = Object.entries(cases[0]).find(([, token]) => token === 'variable.predefined')!
+        const predefined = new RegExp(`^(?:${key.replace(/^\$1~/, '')})$`, 'i')
+        for (const name of ['usp', 'sfc', 'dfc', 'vbr', 'VBR'])
+            expect(predefined.test(name), name).toBe(true)
+        expect(predefined.test('vbrx')).toBe(false)
+        for (const name of ['sfc', 'dfc', 'vbr']) {
+            expect(kindOf(`    movec d0,${name}`, name)).toBe(kindOf('    move.l a0,usp', 'usp'))
+        }
+        expect((await completions('    movec ')).map((item) => item.label)).toEqual([
+            'An',
+            'Dn',
+            'usp',
+            'vbr',
+            'sfc',
+            'dfc'
+        ])
     })
 
     //the Core reads and enforces EASy68K's memory map, so the line is a directive like any other

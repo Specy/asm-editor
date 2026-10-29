@@ -8,26 +8,27 @@ The processor finds each handler through the vector table at the bottom of memor
 
 The first 1024 bytes of memory, `$000000` to `$0003FF`, are **256 vectors** of four bytes each. A vector holds the address of one handler. The processor finds it by multiplying the cause's **vector number** by 4 and reading the long there, so division by zero, vector 5, reads its handler's address at `$14`.
 
-| vector | address         | cause                                                                                                                      |
-| -----: | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-|   0, 1 | `$000`, `$004`  | the stack pointer and the program counter a 68000 starts with                                                              |
-|      2 | `$008`          | bus error, an access a [`memory`](/documentation/m68k/directive#memory) range refuses, such as a write to read-only memory |
-|      3 | `$00C`          | address error, a word or long at an odd address                                                                            |
-|      4 | `$010`          | illegal instruction, such as [illegal](/documentation/m68k/instruction/illegal)                                            |
-|      5 | `$014`          | division by zero, in [divu](/documentation/m68k/instruction/divu) or [divs](/documentation/m68k/instruction/divs)          |
-|      6 | `$018`          | [chk](/documentation/m68k/instruction/chk) with a value out of range                                                       |
-|      7 | `$01C`          | [trapv](/documentation/m68k/instruction/trapv) with V set                                                                  |
-|      8 | `$020`          | privilege violation, a supervisor-only instruction in user mode                                                            |
-|      9 | `$024`          | trace, after every instruction while the T bit is set                                                                      |
-|     10 | `$028`          | an instruction word that starts with `$A`, "line A"                                                                        |
-|     11 | `$02C`          | an instruction word that starts with `$F`, "line F"                                                                        |
-|  25-31 | `$064` - `$07C` | interrupts at levels 1 to 7                                                                                                |
-|  32-46 | `$080` - `$0B8` | `trap #0` to `trap #14`                                                                                                    |
-|     47 | `$0BC`          | `trap #15`, when its task number is not one of the simulator's                                                             |
+| vector | address         | cause                                                                                                                                         |
+| -----: | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+|   0, 1 | `$000`, `$004`  | the stack pointer and the program counter a 68000 starts with                                                                                 |
+|      2 | `$008`          | bus error, an access a [`memory`](/documentation/m68k/directive#memory) range refuses, such as a write to read-only memory                    |
+|      3 | `$00C`          | address error, a word or long at an odd address                                                                                               |
+|      4 | `$010`          | illegal instruction, such as [illegal](/documentation/m68k/instruction/illegal), or [bkpt](/documentation/m68k/instruction/bkpt) on the 68010 |
+|      5 | `$014`          | division by zero, in [divu](/documentation/m68k/instruction/divu) or [divs](/documentation/m68k/instruction/divs)                             |
+|      6 | `$018`          | [chk](/documentation/m68k/instruction/chk) with a value out of range                                                                          |
+|      7 | `$01C`          | [trapv](/documentation/m68k/instruction/trapv) with V set                                                                                     |
+|      8 | `$020`          | privilege violation, a supervisor-only instruction in user mode                                                                               |
+|      9 | `$024`          | trace, after every instruction while the T bit is set                                                                                         |
+|     10 | `$028`          | an instruction word that starts with `$A`, "line A"                                                                                           |
+|     11 | `$02C`          | an instruction word that starts with `$F`, "line F"                                                                                           |
+|     14 | `$038`          | format error, on the 68010: a frame `rte` cannot read ([below](#68010))                                                                       |
+|  25-31 | `$064` - `$07C` | interrupts at levels 1 to 7                                                                                                                   |
+|  32-46 | `$080` - `$0B8` | `trap #0` to `trap #14`                                                                                                                       |
+|     47 | `$0BC`          | `trap #15`, when its task number is not one of the simulator's                                                                                |
 
 The others are reserved, or used by interrupts that devices number themselves. Nothing in this editor reads vectors 0 and 1: a program starts at its entry point, in supervisor mode.
 
-Memory starts filled with `$FF` bytes, so every vector a program has not written reads `$FFFFFFFF`. Instructions are always at even addresses, so an odd address in a vector means there is no handler there. The memory view shows the table as its Exception vectors region, each vector named.
+Memory starts filled with `$FF` bytes, so every vector a program has not written reads `$FFFFFFFF`. Instructions are always at even addresses, so an odd address in a vector means there is no handler there. The memory view shows the table as its Exception vectors region, each vector named. A program for the 68010 can move the table elsewhere; see [on the 68010](#68010).
 
 ## Writing a handler {#handlers}
 
@@ -92,9 +93,9 @@ Such an instruction cannot simply be resumed, so a handler for one usually repor
 The S bit of the status register, bit 13, says which mode the processor is in.
 
 - **Supervisor mode** is where a program starts: the status register is `$2000`, as in EASy68K. Every instruction runs.
-- **User mode** is where an operating system would run the programs it loads. A program enters it by clearing S, with `andi #$dfff, sr`. The privileged instructions then raise a privilege violation: [move](/documentation/m68k/instruction/move) to `sr`, [andi](/documentation/m68k/instruction/andi), [ori](/documentation/m68k/instruction/ori) and [eori](/documentation/m68k/instruction/eori) to `sr`, `move` to or from `usp`, and [rte](/documentation/m68k/instruction/rte). Everything else runs as before, the flags included, and so does writing `ccr` alone.
+- **User mode** is where an operating system would run the programs it loads. A program enters it by clearing S, with `andi #$dfff, sr`. The privileged instructions then raise a privilege violation: [move](/documentation/m68k/instruction/move) to `sr`, [andi](/documentation/m68k/instruction/andi), [ori](/documentation/m68k/instruction/ori) and [eori](/documentation/m68k/instruction/eori) to `sr`, `move` to or from `usp`, and [rte](/documentation/m68k/instruction/rte). Everything else runs as before, the flags included, and so does writing `ccr` alone. On the 68010, `move` from `sr`, [movec](/documentation/m68k/instruction/movec) and [moves](/documentation/m68k/instruction/moves) are privileged too.
 
-Each mode has its own stack pointer, and `a7` is the one of the current mode. The supervisor stack pointer, SSP, starts at `$1000000`, and the user stack pointer, USP, at `$FF0000`. Supervisor code sets the USP before it enters user mode, with `move.l a0, usp`; `usp` is read and written only through an address register. The System register file shows the status register's system bits and both stack pointers.
+Each mode has its own stack pointer, and `a7` is the one of the current mode. The supervisor stack pointer, SSP, starts at `$1000000`, and the user stack pointer, USP, at `$FF0000`. Supervisor code sets the USP before it enters user mode, with `move.l a0, usp`; `usp` is read and written only through an address register. The System register file shows the status register's system bits and both stack pointers, and in a program for the 68010 its control registers VBR, SFC and DFC.
 
 The only way back from user mode is an exception, which always switches to supervisor mode and pushes its frame on the supervisor stack. A `trap` is the one a program raises on purpose, so it is how user code asks supervisor code to do something for it. The handler's `rte` returns to user mode, since the status register it restores has S clear. `trap #15` works in either mode.
 
@@ -150,7 +151,7 @@ tick:
 
 A 68000 works to the beat of a clock, and each beat is a **clock cycle**. Every instruction takes a whole number of them, more when it reaches memory and more when its numbers make more work: `moveq` takes 4 cycles, `add.l d0, d1` 8, a `dbra` that loops back 10, and a division over 100. At 8 MHz, the clock of an Atari ST, a 68000 has eight million cycles a second, so 8,000 cycles take a millisecond.
 
-The editor counts the cycles a 68000 takes, instruction by instruction. The line under the registers shows the count with what the last step took, `Cycles 1,234 (+8)`, each History row shows its own, and the Log gives the count when the program ends. Undo takes a step's cycles back. Exceptions take cycles too: 34 for `trap #0` to `#14`, 38 or more for a division by zero, and 44 for an interrupt request. A `trap #15` task takes none, so printing, drawing or a delay adds nothing, and `stop` takes 4, however long it waits. A program written for the 68010 or the 68020 is counted as a 68000 for now.
+The editor counts the cycles a 68000 takes, instruction by instruction. The line under the registers shows the count with what the last step took, `Cycles 1,234 (+8)`, each History row shows its own, and the Log gives the count when the program ends. Undo takes a step's cycles back. Exceptions take cycles too: 34 for `trap #0` to `#14`, 38 or more for a division by zero, and 44 for an interrupt request. A `trap #15` task takes none, so printing, drawing or a delay adds nothing, and `stop` takes 4, however long it waits. A program written for the 68010 counts a 68010's cycles, which are a little different (see [on the 68010](#68010)), and one for the 68020 counts as a 68010 for now.
 
 To time a piece of code, clear the counter with [trap #15 task 30](/documentation/m68k/traps#task-30) just before it, and read it into `d1` with [task 31](/documentation/m68k/traps#task-31) just after it:
 
@@ -165,3 +166,45 @@ loop:
 ```
 
 The reading includes the `moveq` that asks for it, so the loop and its setup took 1016 − 4 = 1012 cycles.
+
+## On the 68010 {#68010}
+
+A program that starts with `opt p=68010` runs on a 68010, which takes exceptions the way a 68000 does, with these differences.
+
+**The vector table can move.** The vector base register, VBR, holds the address where the table starts. It is 0 when the program starts, so the table is where a 68000 keeps it, until supervisor code moves it with [movec](/documentation/m68k/instruction/movec). From then on every exception, interrupts included, reads its vector at VBR + 4 × the vector number. An operating system can keep a table for each program and switch between them with one instruction.
+
+```m68k
+    opt p=68010
+    move.l #div_zero, $8000+5*4  ; vector 5 of a table at $8000
+    move.l #$8000, d0
+    movec d0, vbr            ; vectors are read at $8000 from now on
+    moveq #0, d1
+    divu d1, d0              ; div_zero runs, found at $8014
+    simhalt
+
+div_zero:
+    moveq #-1, d0
+    rte
+```
+
+The System register file shows VBR, and the memory view's Exception vectors region moves with it.
+
+**Every frame has a format word.** The frame is 8 bytes: the 6 a 68000 pushes, then one more word. Its top four bits are the frame's **format**, `$0` here, and the rest is 4 × the vector number, so one handler installed in several vectors can tell which one it was called for.
+
+| where   | size | what                                                     |
+| ------- | ---- | -------------------------------------------------------- |
+| `(sp)`  | word | the status register as it was before the exception       |
+| `2(sp)` | long | the address `rte` returns to                             |
+| `6(sp)` | word | the format in bits 15 to 12, 4 × the vector number below |
+
+A handler that takes the frame off the stack by hand takes 8 bytes, not 6.
+
+**Bus and address errors push a 58-byte frame,** format `$8`. It starts as the short one does, with the format word `$8` and the vector's offset at `6(sp)`, then says how the access was made at `8(sp)` (bit 8 is set for a read) and the address it tried at `10(sp)`. The rest is the processor's internal state. The address at `2(sp)` is the instruction that faulted, and `rte` runs it again, so a handler either removes the cause first or does not return.
+
+**`rte` checks the format.** It reads the format word first and pops the whole frame: 8 bytes for format `$0`, 58 for format `$8`. Any other format means the stack does not hold a frame the processor pushed, usually because the handler left something on the stack or took too much off. Rather than return to a wrong address, `rte` then raises a **format error**, vector 14, at `$38`, and with no handler there the program ends:
+
+```text
+Format error at line 9: vector 14 at $000038 holds no handler (rte found a frame of format $3, which a 68010 does not make)
+```
+
+The 68010 also has [bkpt](/documentation/m68k/instruction/bkpt), which takes vector 4 here, as `illegal` does, and makes `move` from `sr` privileged, so user code reads the flags with `move ccr, <ea>`. Its cycles differ a little: an exception takes 38 and an interrupt 46, and `rte` 24. A `dbra` that loops back over one short instruction, such as `move.w (a0)+, (a1)+`, enters **loop mode** after its first turn: the processor stops fetching the two instructions again, so each further turn takes fewer cycles. The History says when a loop enters and leaves it.

@@ -3858,3 +3858,253 @@ describe('M68K cycles', () => {
         emulator.dispose()
     })
 })
+
+/**
+ * A program for the 68010 (`opt p=68010`): the System file's control registers, the vector table
+ * that follows VBR, the format word of its frames and `rte`'s check of it
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3).
+ */
+describe('M68K 68010 programs', () => {
+    const OPT_68010 = '    opt p=68010\n'
+
+    /** Built with a history, so every step can be undone; the body starts at line 3. */
+    async function build(body: string) {
+        const code = OPT_68010 + ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        return emulator
+    }
+
+    function system(emulator: Awaited<ReturnType<typeof build>>) {
+        const file = emulator.registerFiles.find((candidate) => candidate.id === 'system')!
+        return Object.fromEntries(file.registers.map((register) => [register.name, register.value]))
+    }
+
+    function vectors(emulator: Awaited<ReturnType<typeof build>>) {
+        return emulator.memoryRegions.find((region) => region.kind === 'vectors')!
+    }
+
+    /** `movec` moves the table to $8000, whose vector 5 the program fills first. */
+    const MOVED_TABLE =
+        [
+            '    move.l #div_zero,$8000+5*4',
+            '    move.l #$8000,d0',
+            '    movec d0,vbr',
+            '    moveq #0,d1',
+            '    divu d1,d0',
+            '    simhalt',
+            'div_zero:',
+            '    moveq #-1,d2',
+            '    rte'
+        ].join('\n') + '\n'
+
+    it('shows VBR, SFC and DFC after the stack pointers, and only for a later processor', async () => {
+        const emulator = await build('    moveq #1,d0\n    simhalt\n')
+        const file = emulator.registerFiles.find((candidate) => candidate.id === 'system')!
+        expect(file.layout).toEqual([
+            { name: 'SR', size: RegisterSize.Word, kind: 'integer' },
+            { name: 'USP', size: RegisterSize.Long, kind: 'integer' },
+            { name: 'SSP', size: RegisterSize.Long, kind: 'integer' },
+            { name: 'VBR', size: RegisterSize.Long, kind: 'integer' },
+            { name: 'SFC', size: RegisterSize.Byte, kind: 'integer' },
+            { name: 'DFC', size: RegisterSize.Byte, kind: 'integer' }
+        ])
+        expect(system(emulator)).toEqual({
+            SR: 0x2000n,
+            USP: 0xff0000n,
+            SSP: 0x1000000n,
+            VBR: 0n,
+            SFC: 0n,
+            DFC: 0n
+        })
+        //a Build of a program for the 68000 takes them away, and one for the 68020 has them
+        await emulator.compile(200, ORG + '    moveq #1,d0\n    simhalt\n')
+        expect(Object.keys(system(emulator))).toEqual(['SR', 'USP', 'SSP'])
+        expect(emulator.canPokeRegister('system', 'VBR')).toBe(false)
+        await emulator.compile(200, '    opt p=68020\n' + ORG + '    extb.l d0\n    simhalt\n')
+        expect(Object.keys(system(emulator))).toEqual(['SR', 'USP', 'SSP', 'VBR', 'SFC', 'DFC'])
+        emulator.dispose()
+    })
+
+    it('moves the vector table with movec, and takes an exception through the moved table', async () => {
+        const emulator = await build(MOVED_TABLE)
+        //before the `movec`, the table is where a 68000 keeps it, vector 14 the format error
+        expect(vectors(emulator)).toMatchObject({ start: 0n, end: 0x400n })
+        expect(
+            regionLabels(vectors(emulator), emulator.dataLabels).find(
+                (label) => label.address === 0x38n
+            )?.name
+        ).toBe('Format error')
+        for (let i = 0; i < 3; i++) await emulator.step()
+        expect(system(emulator).VBR).toBe(0x8000n)
+        //the `movec` row says what it wrote, as a write of VBR
+        expect(emulator.latestSteps[0].mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: 'vbr', old: 0n, new: 0x8000n, size: RegisterSize.Long }
+            }
+        ])
+        //the region and its labels moved with VBR
+        const moved = vectors(emulator)
+        expect(moved).toMatchObject({ start: 0x8000n, end: 0x8400n })
+        expect(moved.reason).toContain('VBR, puts the table here, at $8000')
+        expect(emulator.resolveMemoryLabel('Divide by zero')).toBe(0x8014n)
+        expect(memoryHover(emulator.memoryRegions, emulator.dataLabels, 0x8016n)).toBe(
+            'Exception vectors · Divide by zero+2'
+        )
+        expect(regionsAt(emulator.memoryRegions, 0x14n).map((region) => region.kind)).not.toContain(
+            'vectors'
+        )
+
+        //the division by zero reads its handler at $8014 and pushes an eight-byte frame
+        await emulator.step()
+        await emulator.step()
+        const handler = emulator.resolveMemoryLabel('div_zero')!
+        expect(emulator.pc).toBe(handler)
+        const [divu] = emulator.latestSteps
+        expect(divu.mutations[0]).toMatchObject({
+            type: 'TakeException',
+            value: { vector: 5, name: 'Divide by zero', handler, label: 'div_zero' }
+        })
+        expect(divu.mutations).toContainEqual({
+            type: 'WriteRegister',
+            value: { register: 'a7', old: 0x1000000n, new: 0xfffff8n, size: RegisterSize.Long }
+        })
+        //the format word under the return address: format $0, vector 5's offset
+        expect([...emulator.readMemoryBytes(0xfffffen, 2)]).toEqual([0x00, 0x14])
+        expect(emulator.callStack[0].detail).toBe(
+            'An exception, taken through vector 5 at $008014: `rte` returns to $1018'
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D2')).toBe(0xffffffffn)
+        expect(registerOf(emulator, 'A7')).toBe(0x1000000n)
+
+        //Undo takes the `movec` back, and the table with it
+        emulator.undo(emulator.latestSteps.length)
+        expect(system(emulator).VBR).toBe(0n)
+        expect(vectors(emulator)).toMatchObject({ start: 0n, end: 0x400n })
+        emulator.dispose()
+    })
+
+    it('names the vector of an exception with no handler where the moved table holds it', async () => {
+        const emulator = await build(
+            '    move.l #$8000,d0\n    movec d0,vbr\n    moveq #0,d1\n    divu d1,d0\n'
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        const message = 'Division by zero at line 6: vector 5 at $008014 holds no handler'
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
+        emulator.dispose()
+    })
+
+    it('pokes VBR, SFC and DFC, each a step of its own, and the table follows a poked VBR', async () => {
+        const emulator = await build('    moveq #1,d0\n    simhalt\n')
+        await emulator.step()
+        expect(emulator.pokeRegisters('system', [{ register: 'VBR', value: 0x9000n }])).toBe(true)
+        expect(system(emulator).VBR).toBe(0x9000n)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 'VBR', old: 0n, new: 0x9000n }
+        ])
+        expect(vectors(emulator)).toMatchObject({ start: 0x9000n, end: 0x9400n })
+        //a function code keeps its three bits
+        expect(emulator.pokeRegisters('system', [{ register: 'SFC', value: 9n }])).toBe(true)
+        expect(system(emulator).SFC).toBe(1n)
+        expect(emulator.pokeRegisters('system', [{ register: 'DFC', value: 5n }])).toBe(true)
+        expect(system(emulator).DFC).toBe(5n)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 'DFC', old: 0n, new: 5n }
+        ])
+        //a byte row refuses what does not fit a byte, as the panel does
+        expect(() =>
+            emulator.pokeRegisters('system', [{ register: 'SFC', value: 0x100n }])
+        ).toThrow()
+        emulator.undo(3)
+        expect(system(emulator)).toMatchObject({ VBR: 0n, SFC: 0n, DFC: 0n })
+        expect(vectors(emulator)).toMatchObject({ start: 0n, end: 0x400n })
+        emulator.dispose()
+    })
+
+    //`rte` reads the format word first, and refuses a frame the processor never pushes
+    const FORMAT_3 =
+        [
+            '    move.w #$3000,-(sp)',
+            '    move.l #back,-(sp)',
+            '    move.w #$2000,-(sp)',
+            '    rte',
+            'back:',
+            '    simhalt'
+        ].join('\n') + '\n'
+
+    it('ends on a format error, saying what rte found', async () => {
+        const emulator = await build(FORMAT_3)
+        await emulator.run(INSTRUCTION_LIMIT)
+        const message =
+            'Format error at line 6: vector 14 at $000038 holds no handler (rte found a frame of format $3, which a 68010 does not make)'
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
+        emulator.dispose()
+    })
+
+    it('takes a format error through vector 14 when the program handles it', async () => {
+        const emulator = await build(
+            '    move.l #bad_frame,$38\n' + FORMAT_3 + 'bad_frame:\n    moveq #14,d3\n    simhalt\n'
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D3')).toBe(14n)
+        //the `rte` on line 7, the History's lines counting from 0
+        const rte = emulator.latestSteps.find((step) => step.line === 6)!
+        expect(rte.mutations[0]).toMatchObject({
+            type: 'TakeException',
+            value: { vector: 14, name: 'Format error', label: 'bad_frame' }
+        })
+        emulator.dispose()
+    })
+
+    it('says in the History when a dbra loop enters and leaves loop mode', async () => {
+        const emulator = await build(
+            [
+                '    lea from,a0',
+                '    lea to,a1',
+                '    moveq #3,d0',
+                'copy:',
+                '    move.w (a0)+,(a1)+',
+                '    dbra d0,copy',
+                '    simhalt',
+                'from: dc.w 1,2,3,4',
+                'to: ds.w 4'
+            ].join('\n') + '\n'
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        const dbra = emulator.resolveMemoryLabel('copy')! + 2n
+        const notes = emulator.latestSteps
+            .flatMap((step) => step.mutations)
+            .filter((mutation) => mutation.type === 'Other')
+            .map((mutation) => mutation.value)
+            .reverse()
+        expect(notes).toEqual([
+            `Entered loop mode at $${dbra.toString(16).toUpperCase()}: the loop's next turns fetch no instructions, so they take fewer cycles`,
+            'Left loop mode'
+        ])
+        //looped, `move.w (a0)+,(a1)+` takes 8 cycles and `dbra` 6, where they took 12 and 10
+        const cycles = emulator.latestSteps
+            .filter((step) => step.kind === 'instruction')
+            .map((step) => step.cycles)
+            .reverse()
+        expect(cycles.slice(3, 9)).toEqual([12, 10, 8, 6, 8, 6])
+        emulator.dispose()
+    })
+
+    it('names vector 14 reserved in the table of a program for the 68000', async () => {
+        const code = ORG + '    moveq #1,d0\n    simhalt\n'
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        const table = emulator.memoryRegions.find((region) => region.kind === 'vectors')!
+        expect(
+            regionLabels(table, emulator.dataLabels).find((label) => label.address === 0x38n)?.name
+        ).toBe('Reserved vector 14')
+        emulator.dispose()
+    })
+})

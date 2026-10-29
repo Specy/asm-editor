@@ -27,7 +27,8 @@ export const M68K_MODE_SYMBOLS: Readonly<Record<string, string>> = {
     '<register list>': '<register list>',
     sr: 'sr',
     ccr: 'ccr',
-    usp: 'usp'
+    usp: 'usp',
+    Rc: 'Rc'
 }
 
 /** The modes in the manual's order, as the pages write them. */
@@ -87,6 +88,10 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
     Dn: { meaning: 'A data register, `d0` to `d7`.', href: `${MODES}#direct` },
     An: {
         meaning: 'An address register, `a0` to `a7`; `sp` is another name for `a7`.',
+        href: `${MODES}#direct`
+    },
+    Rn: {
+        meaning: 'A data or address register, `d0` to `d7` or `a0` to `a7`.',
         href: `${MODES}#direct`
     },
     '(An)': {
@@ -153,6 +158,11 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
             'The user stack pointer: the `a7` a program has in user mode. Supervisor code reads and sets it through an address register, as in `move.l usp, a0`.',
         href: `${MODES}#user-stack-pointer`
     },
+    Rc: {
+        meaning:
+            'A control register of the 68010: `vbr`, the vector base register, where the vector table starts; `sfc` or `dfc`, the source or destination function code; or `usp`, the user stack pointer.',
+        href: `${MODES}#control-registers`
+    },
     '<register list>': {
         meaning:
             'A register list using `/` to separate registers and `-` for ranges. For example, `d0-d2/a0` selects `d0`, `d1`, `d2` and `a0`. A single data or address register is also valid.'
@@ -175,6 +185,8 @@ const IMMEDIATE_MEANINGS: Readonly<Record<string, string>> = {
     bset: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
     bclr: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
     bchg: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
+    rtd: 'A signed 16-bit number of bytes added to the stack pointer once the return address is popped: the size of the arguments, for example `#8`.',
+    bkpt: 'A breakpoint number from `0` to `7`, which a hardware debugger would read.',
     trap: 'A trap number from `0` to `15`. `#0` to `#14` run the handler in vectors 32 to 46; `#15` runs the simulator’s task numbered in `d0.b`.',
     link: 'A signed 16-bit displacement added to the stack pointer. Use a negative value to reserve stack space, for example `#-16`.'
 }

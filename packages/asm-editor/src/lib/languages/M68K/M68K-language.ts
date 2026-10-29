@@ -578,7 +578,11 @@ const OPERAND_COMPLETIONS: [
     ],
     [AddressingMode.StatusRegister, 'Variable', 'sr', 'sr', 'Status register'],
     [AddressingMode.ConditionCodeRegister, 'Variable', 'ccr', 'ccr', 'Condition-code register'],
-    [AddressingMode.UserStackPointer, 'Variable', 'usp', 'usp', 'User stack pointer']
+    [AddressingMode.UserStackPointer, 'Variable', 'usp', 'usp', 'User stack pointer'],
+    //the 68010's control registers, `Rc`, which `movec` names one by one
+    [AddressingMode.ControlRegister, 'Variable', 'vbr', 'vbr', 'Vector base register'],
+    [AddressingMode.ControlRegister, 'Variable', 'sfc', 'sfc', 'Source function code'],
+    [AddressingMode.ControlRegister, 'Variable', 'dfc', 'dfc', 'Destination function code']
 ]
 
 function getAddressingModes(

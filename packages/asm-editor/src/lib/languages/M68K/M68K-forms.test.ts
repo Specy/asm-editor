@@ -31,19 +31,50 @@ describe('M68K instruction forms', () => {
         }
     })
 
-    it('tags the forms a later processor brought with it: move from ccr, and extb', () => {
+    it('tags the forms a later processor brought with it: the 68010’s, and extb', () => {
         const later = [...table].flatMap(([mnemonic, forms]) =>
             forms
                 .filter((form) => form.processor !== '68000')
                 .map((form) => `${mnemonic} ${form.operands.map((modes) => modes[0]).join(',')}`)
         )
-        expect(later.sort()).toEqual(['extb Dn', 'move ccr,Dn'])
+        expect(later.sort()).toEqual([
+            'bkpt Im',
+            'extb Dn',
+            'move ccr,Dn',
+            'movec Dn,usp',
+            'movec usp,Dn',
+            'moves (An),Dn',
+            'moves Dn,(An)',
+            'rtd Im'
+        ])
         const moveFromCcr = table.get('move')!.find((form) => form.operands[0][0] === 'ccr')!
         expect(m68kFormTags(moveFromCcr)).toEqual(['68010'])
         expect(table.get('extb')!.map(m68kFormTags)).toEqual([['68020']])
+        //privileged on the 68010, its first processor, as well as of it
+        expect(table.get('movec')!.map(m68kFormTags)).toEqual([
+            ['privileged', '68010'],
+            ['privileged', '68010']
+        ])
+        expect(table.get('rtd')!.map(m68kFormTags)).toEqual([['68010']])
         expect(m68kFirstProcessor({ name: 'move' })).toBe('68000')
         expect(m68kFirstProcessor({ name: 'extb' })).toBe('68020')
+        for (const name of ['rtd', 'bkpt', 'movec', 'moves'])
+            expect(m68kFirstProcessor({ name }), name).toBe('68010')
         expect(m68kFirstProcessor({ name: 'dc' })).toBe('68000')
+    })
+
+    //`move sr,<ea>` is the 68000's in either mode, and the 68010 made it privileged: the table says
+    //so with `privilegedFrom`, which the page writes on its row
+    it('reads privilegedFrom: move from sr is privileged from the 68010 on', () => {
+        const later = [...table].flatMap(([mnemonic, forms]) =>
+            forms
+                .filter((form) => !form.privileged && form.privilegedFrom !== undefined)
+                .map(
+                    (form) =>
+                        `${mnemonic} ${form.operands.map((modes) => modes[0]).join(',')} from ${form.privilegedFrom}`
+                )
+        )
+        expect(later).toEqual(['move sr,Dn from 68010'])
     })
 
     it('marks as privileged what the 68000 runs only in supervisor mode', () => {
@@ -58,6 +89,10 @@ describe('M68K instruction forms', () => {
             'move An usp',
             'move Dn sr',
             'move usp An',
+            'movec Dn usp',
+            'movec usp Dn',
+            'moves (An) Dn',
+            'moves Dn (An)',
             'ori Im sr',
             'reset',
             'rte',
@@ -83,9 +118,9 @@ describe('M68K documentation of the Core’s instructions', () => {
         expect(M68kInstructions).toEqual(expect.arrayContaining(['stop', 'reset']))
     })
 
-    //the 68010's and 68020's instructions the Core reads but refuses in every dialect: none may be
-    //in its table, where it would need a Documentation entry and to leave this list (milestones E6b
-    //and E6c), and each must still be one the Core reads as an instruction and refuses
+    //the 68020's instructions the Core reads but refuses in every dialect: none may be in its table,
+    //where it would need a Documentation entry and to leave this list (milestone E6c; the 68010's
+    //left it with E6b), and each must still be one the Core reads as an instruction and refuses
     it.each(M68KUnimplementedDialectInstructions)(
         'colours %s as refused while the Core reads it and refuses it',
         (mnemonic) => {
@@ -98,15 +133,38 @@ describe('M68K documentation of the Core’s instructions', () => {
         }
     )
 
-    it('writes the program for the 68020 in extb’s example, which builds', () => {
-        const example = M68kDocumentation.extb.example!
-        expect(example).toMatch(/^\s*opt p=68020\n/)
-        const result = S68k.assemble(example)
-        try {
-            expect(result.diagnostics).toEqual([])
-            expect(result.program?.getProcessor()).toBe('68020')
-        } finally {
-            result.program?.dispose()
+    it('leaves no 68010 instruction among the refused ones, which the Core assembles now', () => {
+        for (const mnemonic of ['rtd', 'bkpt', 'movec', 'moves']) {
+            expect(M68KUnimplementedDialectInstructions).not.toContain(mnemonic)
+            expect(table.has(mnemonic), mnemonic).toBe(true)
         }
     })
+
+    //an instruction a later processor brought writes the program for that processor first, in its
+    //short example and in the one the page opens in an editor
+    it.each([
+        ['extb', '68020'],
+        ['rtd', '68010'],
+        ['bkpt', '68010'],
+        ['movec', '68010'],
+        ['moves', '68010']
+    ] as const)(
+        'writes the program for the processor in %s’s examples, which build',
+        (name, processor) => {
+            const entry = M68kDocumentation[name]
+            const examples = [entry.example!, entry.interactiveExample?.code].filter(
+                (example): example is string => example !== undefined
+            )
+            for (const example of examples) {
+                expect(example).toMatch(new RegExp(`^\\s*opt p=${processor}\\n`))
+                const result = S68k.assemble(example)
+                try {
+                    expect(result.diagnostics).toEqual([])
+                    expect(result.program?.getProcessor()).toBe(processor)
+                } finally {
+                    result.program?.dispose()
+                }
+            }
+        }
+    )
 })

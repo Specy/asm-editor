@@ -132,8 +132,11 @@ const RISCV_REGISTER = new RegExp(
     `^(?:x${UPTO_31}|f${UPTO_31}|zero|ra|sp|gp|tp|fp|pc|t[0-6]|a[0-7]|s(?:[0-9]|1[01])|ft(?:[0-9]|1[01])|fa[0-7]|fs(?:[0-9]|1[01]))$`
 )
 
-/** The data and address registers and the special ones, a size suffix (`d0.w`) included. */
-const M68K_REGISTER = /^(?:[da][0-7]|sp|pc|sr|ccr|usp)(?:\.[bwl])?$/
+/**
+ * The data and address registers and the special ones, the 68010's control registers among them, a
+ * size suffix (`d0.w`) included.
+ */
+const M68K_REGISTER = /^(?:[da][0-7]|sp|pc|sr|ccr|usp|sfc|dfc|vbr)(?:\.[bwl])?$/
 
 /**
  * The 8 and 16-bit registers, the undocumented halves of the index registers, and the alternate
@@ -166,14 +169,14 @@ const RISCV_CSRS = new Set([
 ])
 
 /**
- * The 68010's and 68020's instructions s68k does not implement yet, and the directives of other
- * assemblers it refuses.
+ * The 68020's instructions s68k does not implement yet, and the directives of other assemblers it
+ * refuses. The 68010's are all implemented, and are instructions like any other.
  */
 const M68K_REFUSED = new Set([
     ...['macro', 'endm', 'mexit', 'ifeq', 'ifne', 'iflt'],
     ...['ifle', 'ifgt', 'ifge', 'ifc', 'ifnc', 'ifarg', 'endc', 'if', 'else', 'endi', 'while'],
     ...['endw', 'for', 'endf', 'repeat', 'until', 'dbloop', 'unless'],
-    ...['rtd', 'bkpt', 'movec', 'moves', 'chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk'],
+    ...['chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk'],
     ...['divsl', 'divul', 'callm', 'rtm', 'bftst', 'bfextu', 'bfchg', 'bfexts', 'bfclr'],
     ...['bfffo', 'bfset', 'bfins'],
     //`trap<cc>`: the 68020's conditional trap, on each condition and `t` and `f`

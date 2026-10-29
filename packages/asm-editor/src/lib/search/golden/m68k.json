@@ -20,6 +20,12 @@
         },
         { "query": "user mode stack pointer", "top": 3, "expect": "m68k/exceptions/modes" },
         {
+            "query": "vbr",
+            "top": 3,
+            "expect": ["m68k/addressing-modes/control-registers", "m68k/instructions/movec"]
+        },
+        { "query": "format error", "top": 3, "expect": "m68k/exceptions/68010" },
+        {
             "query": "cycle counter",
             "top": 3,
             "expect": [

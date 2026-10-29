@@ -327,6 +327,12 @@ export abstract class BaseEmulator<R extends string> {
      */
     _getChangedCode?(): import('./commonLanguageFeatures.svelte').ChangedCode[]
     _getMemoryLayout?(): import('./commonLanguageFeatures.svelte').MemoryLayout
+    /**
+     * What `_getMemoryLayout` reads that the program can change as it runs, for a Core whose layout
+     * moves with it: the M68K's VBR, where its vector table starts. Read at every refresh, and the
+     * layout is read again when it differs from the reading the layout was made with.
+     */
+    _getMemoryLayoutKey?(): number | bigint | string | undefined
     _getHeapBounds?(): import('./commonLanguageFeatures.svelte').HeapBounds | undefined
     _getStackTop?(): bigint
     /**

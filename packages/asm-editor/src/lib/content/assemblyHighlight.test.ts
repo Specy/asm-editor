@@ -163,8 +163,25 @@ describe('tokenizeAssembly', () => {
             ])
         ).toEqual([])
         expect(unknown('X86', X86Registers)).toEqual([])
-        expect(unknown('M68K', ['d0', 'd7', 'a0', 'a7', 'sp', 'pc', 'sr', 'ccr', 'usp'])).toEqual(
-            []
+        //the 68010's control registers too, which `movec` names
+        expect(
+            unknown('M68K', [
+                'd0',
+                'd7',
+                'a0',
+                'a7',
+                'sp',
+                'pc',
+                'sr',
+                'ccr',
+                'usp',
+                'sfc',
+                'dfc',
+                'vbr'
+            ])
+        ).toEqual([])
+        expect(kindOf('    movec d0,vbr', 'M68K', 'vbr')).toBe(
+            kindOf('    move.l a0,usp', 'M68K', 'usp')
         )
     })
 
@@ -297,6 +314,9 @@ describe('tokenizeAssembly', () => {
         expect(kindOf('    rte', 'M68K', 'rte')).toBe('mnemonic')
         expect(kindOf('    stop #$2700', 'M68K', 'stop')).toBe('mnemonic')
         expect(kindOf('    reset', 'M68K', 'reset')).toBe('mnemonic')
+        //and the 68010's, all four of which it assembles now
+        for (const name of ['rtd', 'bkpt', 'movec', 'moves'])
+            expect(kindOf(`    ${name} #1`, 'M68K', name), name).toBe('mnemonic')
         expect(
             [...M68KUnimplementedDialectInstructions, ...M68KRefusedDirectives].filter(
                 (name) => kindOf(`    ${name} 1`, 'M68K', name) !== 'invalid'

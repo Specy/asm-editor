@@ -15,7 +15,9 @@ export enum AddressingMode {
     PcIndex = 2048,
     StatusRegister = 4096,
     ConditionCodeRegister = 8192,
-    UserStackPointer = 16384
+    UserStackPointer = 16384,
+    /** The 68010's control registers that `movec` names: `vbr`, `sfc` and `dfc`. */
+    ControlRegister = 32768
 }
 
 export function addressingModeToString(addressingMode: AddressingMode): string {
@@ -51,6 +53,8 @@ export function addressingModeToString(addressingMode: AddressingMode): string {
             return 'ccr'
         case AddressingMode.UserStackPointer:
             return 'usp'
+        case AddressingMode.ControlRegister:
+            return 'Rc'
         default:
             return '_'
     }
@@ -111,6 +115,7 @@ const Pi = AddressingMode.PcIndex
 const Sr = AddressingMode.StatusRegister
 const Ccr = AddressingMode.ConditionCodeRegister
 const Usp = AddressingMode.UserStackPointer
+const Rc = AddressingMode.ControlRegister
 
 /** The same mode groups as s68k's v2 instruction table, aggregated for documentation/completion. */
 const MEMORY = [In, Ipi, Ipd, Id, Ix, Ea, Pd, Pi]
@@ -133,6 +138,10 @@ const REGISTER_LIST_OR_REGISTER = [Da, Ad, Rl]
 const STATUS_DESTINATION = [...NO_IM_OR_Ad, Sr, Ccr]
 /** `move`'s destinations: an address register too, which it writes as `movea`, and the USP. */
 const MOVE_DESTINATION = [Da, Ad, In, Ipi, Ipd, Id, Ea, Ix, Sr, Ccr, Usp]
+/** Either operand of `movec`: a general register, or a control register, the USP among them. */
+const MOVEC_OPERAND = [Da, Ad, Usp, Rc]
+/** Either operand of `moves`: a general register, or memory that can be written. */
+const MOVES_OPERAND = [Da, Ad, In, Ipi, Ipd, Id, Ix, Ea]
 
 const NO_SIZE: Size[] = []
 const ANY_SIZE = [Size.Byte, Size.Word, Size.Long]
@@ -317,7 +326,7 @@ export const directionsDescriptions = new Map<string, string>([
     ['r', 'Right']
 ])
 const desc = {
-    move: 'Moves the value from the first operand to second operand. If the second operand is an address register, the [MOVEA](/documentation/m68k/instruction/movea) instruction is used instead. `move.l a0, usp` sets the user stack pointer, the `a7` a program has in user mode, and `move.l usp, a0` reads it; only supervisor code may use either. See [user and supervisor mode](/documentation/m68k/exceptions#modes).',
+    move: 'Moves the value from the first operand to second operand. If the second operand is an address register, the [MOVEA](/documentation/m68k/instruction/movea) instruction is used instead. `move.l a0, usp` sets the user stack pointer, the `a7` a program has in user mode, and `move.l usp, a0` reads it; only supervisor code may use either. See [user and supervisor mode](/documentation/m68k/exceptions#modes).\n\n`move sr, d0` copies the whole status register. A 68000 lets any code do it, but the 68010 and the 68020 let only supervisor code: in user mode it raises a privilege violation there. User code on those processors reads the condition codes with `move ccr, d0` instead, which they added.',
     moveq: 'Moves an 8-bit encoded value from -128 through 255 into a data register and sign extends it to 32 bits. Values 128 through 255 are the unsigned spellings of -128 through -1.',
     movea: 'Moves the value from the first operand to second operand. If the size is word, it is sign extended to long. It does not change the SR. When using word size, the first operand is sign extended to long and the second is written as a long.',
     movem:
@@ -396,8 +405,12 @@ For \`trap #0\` to \`trap #14\`, the processor pushes the address of the next in
     trapv: 'Raises an overflow exception if the overflow flag V is set, and does nothing otherwise. Put it after arithmetic whose result must fit, to send every overflow to one handler instead of testing V with `bvs` each time. The processor runs the handler whose address is in vector 7, at `$1C`, and that handler’s `rte` returns to the instruction after the `trapv`. A program that has not installed a handler ends at the `trapv`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
     illegal:
         'Raises an illegal-instruction exception, always. It is the one instruction made to be nothing else, so programs use it to mark code that must never run. The processor runs the handler whose address is in vector 4, at `$10`. The exception saves the address of the `illegal` itself, not of the instruction after it, so a handler that wants the program to carry on adds 2 to the saved address before its `rte`; otherwise the `illegal` runs again. A program that has not installed a handler ends at the `illegal`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
-    rte: 'Returns from an exception handler: it pops the status register and then the program counter that the exception pushed, and the interrupted program carries on. Every handler ends with `rte`, as a subroutine ends with [rts](/documentation/m68k/instruction/rts). `rte` restores the whole status register, the S bit included, so a handler entered from user mode returns to user mode, and A7 becomes the user stack pointer again. It is privileged: in user mode it raises a privilege violation. See [writing a handler](/documentation/m68k/exceptions#handlers).',
+    rte: 'Returns from an exception handler: it pops the status register and then the program counter that the exception pushed, and the interrupted program carries on. Every handler ends with `rte`, as a subroutine ends with [rts](/documentation/m68k/instruction/rts). `rte` restores the whole status register, the S bit included, so a handler entered from user mode returns to user mode, and A7 becomes the user stack pointer again. It is privileged: in user mode it raises a privilege violation. See [writing a handler](/documentation/m68k/exceptions#handlers).\n\nOn the 68010 and the 68020 the frame also holds a format word, which says how big the frame is: `rte` reads it first, pops the whole frame, and raises a format error if the word is not one the processor writes. See [on the 68010](/documentation/m68k/exceptions#68010).',
     stop: 'Loads the status register with the immediate word, then waits, running nothing, until an interrupt request (an IRQ) above the new interrupt mask arrives, or one at level 7. The processor takes that IRQ at once: it runs the handler whose address is in the level’s autovector, and the handler’s `rte` comes back to the instruction after the `stop`. A program uses it to wait for a timer or a key without spinning in a loop. `stop #$2000` stays in supervisor mode with the mask at 0, so every level gets through. While the processor waits, Run waits with it and the status line says what for, and a Step runs nothing. It is privileged: in user mode it raises a privilege violation. See [interrupts](/documentation/m68k/exceptions#interrupts).',
+    rtd: 'Returns from a subroutine and removes its arguments from the stack in one instruction. It pops the return address, as [rts](/documentation/m68k/instruction/rts) does, then adds the displacement to the stack pointer. A caller that pushed 8 bytes of arguments before its `bsr` gets them taken off by `rtd #8`, so it does not need its own `addq.l #8, sp` after every call.',
+    bkpt: 'Marks a breakpoint for a hardware debugger. On a 68010 board with a debugger attached, the processor stops there and hands over to the debugger. With none attached, as in this editor, it raises an illegal-instruction exception instead, as [illegal](/documentation/m68k/instruction/illegal) does: the processor runs the handler whose address is in vector 4, at `$10`. The saved address is the `bkpt`’s own, so a handler that wants the program to carry on adds 2 to it before its `rte`. A program that has not installed a handler ends at the `bkpt`. The number, 0 to 7, says which breakpoint it is. To stop a program while you debug it here, set a breakpoint beside the line numbers instead.',
+    movec: 'Copies a control register into a data or address register, or a data or address register into a control register. The 68010’s control registers are `vbr`, the vector base register, which says where the vector table starts; `sfc` and `dfc`, the function codes that [moves](/documentation/m68k/instruction/moves) uses; and `usp`, the user stack pointer. Moving the vector table is its main use: after `movec d0, vbr`, every exception reads its handler’s address at VBR + 4 × the vector number instead of at 4 × the vector number. It is always long, leaves the flags alone, and is privileged: in user mode it raises a privilege violation. See [on the 68010](/documentation/m68k/exceptions#68010).',
+    moves: 'Moves a byte, word or long between a register and memory in another address space. An operating system uses it to reach the memory of a user program, which it keeps apart from its own: on a 68010 each memory access goes to an address space named by a three-bit function code, and `moves` reads from the space in `sfc` and writes to the space in `dfc`, which [movec](/documentation/m68k/instruction/movec) sets. This editor has one memory for everything, so `moves` reaches the same bytes `move` does, whatever `sfc` and `dfc` hold. One operand is a data or address register and the other is memory. It leaves the flags alone, and is privileged: in user mode it raises a privilege violation.',
     reset: 'Resets the devices wired to the processor: a real 68000 holds its RESET line for a moment and then goes on with the next instruction, its own registers unchanged. This editor has no such devices, so `reset` does nothing, as in EASy68K. It is not the reset that starts the processor at power-on, which reads the vectors at `$0` and `$4`. It is privileged: in user mode it raises a privilege violation.'
 }
 const dirsDesc = {
@@ -427,7 +440,7 @@ const dirsDesc = {
         '',
         'A **bus error** is the exception the processor takes when memory refuses an access, vector 2. It runs the handler whose address is at `$8`, as for any [exception](/documentation/m68k/exceptions#handlers); a program that installed none ends, and the Log says what it tried to access and which range refused it. A program has at most one range of each kind: a second `memory` line of the same kind replaces the first. The rules are for the program alone: the debugger still reads and changes these bytes, and the memory view shows each range as a region.'
     ].join('\n'),
-    opt: "Chooses the processor the program is written for. Write `opt p=68010` or `opt p=68020` at the top of the program to use an instruction a later processor added, such as the 68020's `extb`; a program without the line is written for the 68000. Only a few of the 68010's and 68020's instructions are available so far. `bit` asks for the 68020's bit-field instructions, which are not available yet. EASy68K's listing options, `cre`, `mex`, `sex`, `war` and `cex`, each also with `no` before it, are accepted and change nothing.",
+    opt: "Chooses the processor the program is written for. Write `opt p=68010` or `opt p=68020` at the top of the program to use an instruction a later processor added, such as the 68010's `movec` or the 68020's `extb`; a program without the line is written for the 68000. The 68010 is complete; only a few of the 68020's own instructions are available so far. `bit` asks for the 68020's bit-field instructions, which are not available yet. EASy68K's listing options, `cre`, `mex`, `sex`, `war` and `cex`, each also with `no` before it, are accepted and change nothing.",
     list: 'Accepted for compatibility and ignored.',
     nolist: 'Accepted for compatibility and ignored.',
     page: 'Accepted for compatibility and ignored.'
@@ -1827,7 +1840,110 @@ tick:
 END:
     `
     ),
-    reset: makeIns('reset', [], NO_SIZE, UNAFFECTED, desc.reset, 'reset')
+    reset: makeIns('reset', [], NO_SIZE, UNAFFECTED, desc.reset, 'reset'),
+    //the 68010's, so their examples write the program for the 68010 first
+    rtd: makeIns(
+        'rtd',
+        [ONLY_Im],
+        NO_SIZE,
+        UNAFFECTED,
+        desc.rtd,
+        '    opt p=68010\n    rtd #8',
+        undefined,
+        `
+opt p=68010
+* --- A subroutine that removes its own arguments ---
+move.l #5, -(sp) ; first argument
+move.l #7, -(sp) ; second argument
+bsr add_args
+move.l d0, d1 ; d1 = 12, and sp is back where it was before the pushes
+bra END
+
+add_args:
+    move.l 4(sp), d0 ; the second argument, just above the return address
+    add.l 8(sp), d0 ; plus the first
+    rtd #8 ; return, then take the 8 bytes of arguments off the stack
+
+END:
+    `
+    ),
+    bkpt: makeIns(
+        'bkpt',
+        [ONLY_Im],
+        NO_SIZE,
+        UNAFFECTED,
+        desc.bkpt,
+        '    opt p=68010\n    bkpt #0',
+        undefined,
+        `
+opt p=68010
+* --- No debugger is attached, so vector 4 takes the breakpoint ---
+move.l #met, $10 ; vector 4 is at $10
+moveq #1, d0
+bkpt #3 ; met runs
+moveq #2, d0 ; and the program carries on here
+bra END
+
+met:
+    addq.l #1, d7 ; count the breakpoints met
+    addq.l #2, 2(sp) ; the saved address is the bkpt's own: step past it
+    rte
+
+END:
+    `
+    ),
+    movec: makeIns(
+        'movec',
+        [MOVEC_OPERAND, MOVEC_OPERAND],
+        ONLY_LONG,
+        UNAFFECTED,
+        desc.movec,
+        '    opt p=68010\n    movec d0, vbr',
+        Size.Long,
+        `
+opt p=68010
+* --- Move the vector table to $8000 ---
+move.l #div_zero, $8000+5*4 ; vector 5 of the new table
+move.l #$8000, d0
+movec d0, vbr ; from now on, vectors are read at $8000
+moveq #0, d1
+divu d1, d0 ; division by zero: the handler at $8014 runs
+movec vbr, d2 ; read it back: d2 = $8000
+bra END
+
+div_zero:
+    moveq #-1, d0
+    rte
+
+END:
+    `
+    ),
+    moves: makeIns(
+        'moves',
+        [MOVES_OPERAND, MOVES_OPERAND],
+        ANY_SIZE,
+        UNAFFECTED,
+        desc.moves,
+        '    opt p=68010\n    moves.w d0, (a0)',
+        Size.Word,
+        `
+opt p=68010
+* --- Reach the memory of user data from supervisor code ---
+moveq #1, d0 ; function code 1: user data
+movec d0, sfc ; moves reads from user data
+movec d0, dfc ; and writes to user data
+lea buffer, a0
+move.w #$1234, d1
+moves.w d1, (a0) ; write the word
+moves.w (a0), d2 ; read it back: d2 = $1234
+bra END
+
+buffer:
+    ds.w 1
+
+END:
+    `
+    )
 } satisfies Record<InstructionName, InstructionDocumentation>
 
 export const M68KUncompoundedInstructions = uncompoundInstructions(Object.values(M68kDocumentation))
@@ -2022,14 +2138,13 @@ const TRAP_CONDITIONS = [
 ]
 
 /**
- * The 68010's and 68020's instructions s68k reads and refuses in every dialect for now: the ones its
- * 68010 and 68020 dialects do not implement yet, which leave this list for a Documentation entry
- * once its instruction table lists them (milestones E6b and E6c of the M68K machine plan), and the
- * 68020's module call, `callm` and `rtm`, which s68k's 68020 leaves out for good. The editor
- * colours them as words the assembler refuses.
+ * The 68020's instructions s68k reads and refuses in every dialect for now: the ones its 68020
+ * dialect does not implement yet, which leave this list for a Documentation entry once its
+ * instruction table lists them (milestone E6c of the M68K machine plan; the 68010's left it with
+ * E6b), and the 68020's module call, `callm` and `rtm`, which s68k's 68020 leaves out for good. The
+ * editor colours them as words the assembler refuses.
  */
 export const M68KUnimplementedDialectInstructions = [
-    ...['rtd', 'bkpt', 'movec', 'moves'],
     ...['chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk', 'divsl', 'divul'],
     ...TRAP_CONDITIONS.map((condition) => `trap${condition}`),
     ...['bftst', 'bfextu', 'bfchg', 'bfexts', 'bfclr', 'bfffo', 'bfset', 'bfins'],

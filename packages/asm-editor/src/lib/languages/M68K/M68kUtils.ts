@@ -1,6 +1,6 @@
 import type { Termination as CoreTermination, MemoryRange } from '@specy/s68k'
 import { describeInvalidTrapArgument, describeUnsupportedTrapTask } from './M68K-traps'
-import { m68kVectorAddress, m68kVectorName } from './M68K-vectors'
+import { m68kVectorAddress, m68kVectorLocation, m68kVectorName } from './M68K-vectors'
 
 /**
  * A Core error as the Log says it. `lineNumber` (1-based) is the line of the instruction that
@@ -43,13 +43,16 @@ export function getM68kErrorMessage(
  * double fault, "The CPU halted at line 4: a double bus fault while taking TRAP #0 (vector 32) …"
  * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 9 and 10). An
  * exception with no vector, such as a `trap #15` task s68k does not carry out, reads as any other
- * error. `lineNumber`, `address` and `memoryMap` are as for `getM68kErrorMessage`.
+ * error. `lineNumber`, `address` and `memoryMap` are as for `getM68kErrorMessage`; `vbr` is where
+ * the vector table starts, which a 68010 program can move with `movec`, so that the message names
+ * the vector where the processor read it: "vector 5 at $008014".
  */
 export function getM68kTerminationMessage(
     termination: Extract<CoreTermination, { type: 'Exception' | 'Halted' }>,
     lineNumber?: number,
     address?: number,
-    memoryMap?: readonly MemoryRange[]
+    memoryMap?: readonly MemoryRange[],
+    vbr = 0
 ): string {
     const where = lineNumber
         ? ` at line ${lineNumber}`
@@ -63,8 +66,12 @@ export function getM68kTerminationMessage(
         //the vector itself, read from a range the memory map makes invalid: the bus error is at
         //the vector's own address, where the frame's are writes below the stack pointer
         const refused = cause.type === 'BusError' ? cause.value : undefined
-        if (refused && refused.access === 'Read' && refused.address >>> 0 === vector * 4) {
-            return `${halted}, as reading its vector at ${m68kVectorAddress(vector)} raised a bus error, ${refusal(refused.range, memoryMap)}`
+        if (
+            refused &&
+            refused.access === 'Read' &&
+            refused.address >>> 0 === m68kVectorLocation(vector, vbr)
+        ) {
+            return `${halted}, as reading its vector at ${m68kVectorAddress(vector, vbr)} raised a bus error, ${refusal(refused.range, memoryMap)}`
         }
         //what pushing the frame raised: an address error, on an odd supervisor stack pointer, or a
         //bus error, where the memory map refuses the frame
@@ -77,7 +84,7 @@ export function getM68kTerminationMessage(
     if (vector === undefined) return getM68kErrorMessage(cause, lineNumber, address, memoryMap)
     const headline = parts?.headline ?? getM68kErrorMessage(cause)
     const detail = parts?.detail ? ` (${parts.detail})` : ''
-    return `${headline}${where}: vector ${vector} at ${m68kVectorAddress(vector)} holds no handler${detail}`
+    return `${headline}${where}: vector ${vector} at ${m68kVectorAddress(vector, vbr)} holds no handler${detail}`
 }
 
 /**
@@ -176,8 +183,26 @@ function errorParts(
         case 'InvalidArgument':
             if (typeof value !== 'string') return undefined
             return { headline: 'Invalid argument', detail: value }
+        //the 68010's `rte` reads the format word of the frame it returns from, and refuses one it
+        //never pushes: a format other than $0 and $8, or a format $8 frame of another version
+        case 'FormatError':
+            if (!isRecord(value) || typeof value.format !== 'number') return undefined
+            return { headline: 'Format error', detail: formatErrorDetail(value.format) }
     }
     return undefined
+}
+
+/**
+ * Why `rte` refused the frame on the stack: "rte found a frame of format $3, which a 68010 does not
+ * make", or for a format $8 frame, which a 68010 does make, that its version is not the one it
+ * writes. A frame a program pushed by hand, or one the handler moved the stack pointer off, is the
+ * usual cause.
+ */
+function formatErrorDetail(format: number): string {
+    const name = `$${format.toString(16).toUpperCase()}`
+    return format === 8
+        ? 'rte found a format $8 frame whose version number is not the one a 68010 writes'
+        : `rte found a frame of format ${name}, which a 68010 does not make`
 }
 
 /**
