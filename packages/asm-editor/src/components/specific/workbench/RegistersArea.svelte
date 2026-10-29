@@ -72,7 +72,11 @@
     {#if emulator.cycles && ui.deviceClass !== 'phone'}
         <!-- the cycle counter, under the registers: a phone leaves it out, as it does the run-info
              line, to keep the registers what the card is about -->
-        <CyclesLine cycles={emulator.cycles} style="padding: 0 0.45rem 0.3rem;" />
+        <CyclesLine
+            cycles={emulator.cycles}
+            processor={emulator.processor}
+            style="padding: 0 0.45rem 0.3rem;"
+        />
     {/if}
 </div>
 

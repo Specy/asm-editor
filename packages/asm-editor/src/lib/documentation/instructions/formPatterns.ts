@@ -96,7 +96,8 @@ const DEFAULT_TAG_EXPLANATIONS: Record<InstructionTag, string> = {
         "Left out of the processor's manual, but the processor and this emulator run them.",
     privileged: 'The processor reserves these for supervisor or kernel mode.',
     '68010': 'A 68010 or a later processor has these.',
-    '68020': 'Only a 68020 has these.'
+    '68020': 'Only a 68020 has these.',
+    'opt-bit': 'A 68000 or a 68010 has these too, with `opt bit`.'
 }
 
 const TAG_ORDER = new Map<InstructionTag, number>(

@@ -8,7 +8,7 @@ import {
 } from '#lib/languages/M68K/M68K-documentation.ts'
 import { m68kInstructionForms, type M68KInstructionForm } from '#lib/languages/M68K/M68K-forms.ts'
 import { plainText, summaryOf } from '../entries'
-import { m68kFormTags } from '../instructions/formTags'
+import { M68K_BIT_FIELD_MODE, m68kFormTags } from '../instructions/formTags'
 import {
     descriptionAfterSummary,
     type FlagMarkKind,
@@ -26,7 +26,13 @@ import {
 } from '../instructions/formPatterns'
 import { m68kEntryName, m68kInstructionCategory } from './families'
 import { m68kDescription, m68kLongName, m68kSummary } from './instructionNames'
-import { M68K_MODE_ORDER, M68K_MODE_SYMBOLS, m68kModeClass, m68kOperandLine } from './operands'
+import {
+    M68020_INDEXED,
+    M68K_MODE_ORDER,
+    M68K_MODE_SYMBOLS,
+    m68kModeClass,
+    m68kOperandLine
+} from './operands'
 
 /**
  * An M68K instruction as the shared instruction view draws it
@@ -65,19 +71,50 @@ const READS: Readonly<Record<string, string[]>> = {
 }
 
 /** The families whose members test a condition, and where the condition starts in the mnemonic. */
-const CONDITION_FAMILIES: Readonly<Record<string, number>> = { bcc: 1, scc: 1, dbcc: 2 }
+const CONDITION_FAMILIES: Readonly<Record<string, number>> = { bcc: 1, scc: 1, dbcc: 2, trapcc: 4 }
 
 /** The entries whose lone `Ea/<label>` operand is a branch target, written `label`. */
 const BRANCHES = new Set(['bra', 'bsr', 'bcc', 'dbcc', 'dbra'])
 
 /** The entries whose operands are neither a source nor a destination. */
-const UNNAMED_ROLES = new Set(['exg', 'chk'])
+const UNNAMED_ROLES = new Set(['exg', 'chk', 'chk2', 'cmp2'])
 
 /** The modes a register list position takes: a list, or one register as a list of one. */
 const LIST_MODES = new Set(['Dn', 'An', '<register list>'])
 
+/** The 68000's indexed modes, where the 68020 takes its own indexed modes too. */
+const INDEXED_MODES = new Set(['d(An,Xn)', 'd(PC,Xn)'])
+
 /** The modes `movec` names a control register by: the USP, or VBR, SFC and DFC. */
 const CONTROL_MODES = new Set(['usp', 'Rc'])
+
+/** s68k's name for the 68020's pair of data registers, `d1:d2`. */
+const REGISTER_PAIR = 'Dx:Dy'
+
+/**
+ * How a row writes a pair of data registers, in the manual's letters for what each holds: a
+ * product's high and low longs, `cas2`'s compare and update registers, and otherwise a division's
+ * remainder and quotient.
+ */
+function registerPairSymbol(entry: string | undefined, index: number): string {
+    if (entry === 'cas2') return index === 0 ? 'Dc1:Dc2' : 'Du1:Du2'
+    if (entry === 'muls' || entry === 'mulu') return 'Dh:Dl'
+    return 'Dr:Dq'
+}
+
+/**
+ * The 68020's long multiplies and divides write one data register or a pair, which s68k lists as
+ * one form and the manual as two rows, `muls.l <ea>, Dl` and `muls.l <ea>, Dh:Dl`: a form whose
+ * position takes both is split into one form each.
+ */
+function splitPairs(form: M68KInstructionForm): M68KInstructionForm[] {
+    const at = form.operands.findIndex((modes) => modes.length > 1 && modes.includes(REGISTER_PAIR))
+    if (at < 0) return [form]
+    return form.operands[at].map((mode) => ({
+        ...form,
+        operands: form.operands.map((modes, index) => (index === at ? [mode] : modes))
+    }))
+}
 
 const SIZE_SUFFIXES: Record<M68KInstructionForm['sizes'][number], string> = {
     byte: '.b',
@@ -92,12 +129,15 @@ const PRIVILEGED_EXPLANATION =
 
 /**
  * What the forms a later processor brought need: the `opt p=` line that writes the program for it
- * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3).
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3), or for the bit
+ * fields EASy68K's `opt bit`.
  */
 const PROCESSOR_EXPLANATIONS = {
     '68010':
         'The 68010 and the 68020 have these, the 68000 does not: write `opt p=68010` at the top of the program to use them.',
-    '68020': 'Only the 68020 has these: write `opt p=68020` at the top of the program to use them.'
+    '68020': 'Only the 68020 has these: write `opt p=68020` at the top of the program to use them.',
+    'opt-bit':
+        'A program for the 68000 or the 68010 has these too when it starts with `opt bit`, EASy68K’s option for the bit fields.'
 } as const
 
 /**
@@ -122,17 +162,28 @@ export function isM68kLaterProcessor(name: string): name is M68kLaterProcessor {
     return Object.hasOwn(PROCESSOR_ONLY, name)
 }
 
-/** Which processors have an instruction only a later one brought: "68020 only". */
-export function m68kProcessorOnly(processor: M68kLaterProcessor): string {
-    return PROCESSOR_ONLY[processor]
+/**
+ * Which processors have an instruction only a later one brought: "68020 only". A bit field, which
+ * `opt bit` gives the 68000 and the 68010, says so.
+ */
+export function m68kProcessorOnly(processor: M68kLaterProcessor, bitField = false): string {
+    return bitField ? '68020, or 68000 with opt bit' : PROCESSOR_ONLY[processor]
 }
 
 /**
  * What the header, the hover and completion say of an instruction every form of which a later
- * processor brought, `extb`: the program has to be written for that processor.
+ * processor brought, `extb`: the program has to be written for that processor. A bit field's
+ * program can be one for the 68000 or the 68010 with `opt bit`, as in EASy68K.
  */
-export function m68kProcessorFact(processor: M68kLaterProcessor): string {
+export function m68kProcessorFact(processor: M68kLaterProcessor, bitField = false): string {
+    if (bitField)
+        return '68020, or 68000 and 68010 with `opt bit`: write `opt p=68020` or `opt bit` at the top of the program'
     return `${PROCESSOR_ONLY[processor]}: write \`opt p=${processor}\` at the top of the program`
+}
+
+/** Whether a tag is one the processor fact says again: a later processor, or `opt bit`. */
+export function isM68kProcessorTag(tag: string): boolean {
+    return tag === 'opt-bit' || isM68kLaterProcessor(tag)
 }
 
 const MODE_RANK = new Map(M68K_MODE_ORDER.map((mode, index) => [mode, index]))
@@ -144,11 +195,22 @@ function modeNames(modes: readonly string[]): string[] {
     )
 }
 
-/** How a row writes an operand position: its one mode, a register list, or `<ea>`. */
-function positionSymbol(modes: readonly string[], branch: boolean): string {
+/**
+ * How a row writes an operand position: its one mode, a register list, or `<ea>`; a pair in the
+ * letters of what it holds. A bit field's position is written by what the field is in, and the
+ * field after it.
+ */
+function positionSymbol(
+    allModes: readonly string[],
+    branch: boolean,
+    entry: string | undefined,
+    index: number
+): string {
+    const modes = allModes.filter((mode) => mode !== M68K_BIT_FIELD_MODE)
     if (modes.length === 1) {
         const [mode] = modes
         if (mode === 'Ea/<label>' && branch) return 'label'
+        if (mode === REGISTER_PAIR) return registerPairSymbol(entry, index)
         return M68K_MODE_SYMBOLS[mode] ?? mode
     }
     if (modes.includes('<register list>') && modes.every((mode) => LIST_MODES.has(mode))) {
@@ -198,12 +260,27 @@ function formInput(
     const branch = entry !== undefined && BRANCHES.has(entry)
     const parts: InputPart[] = [literal(name)]
     const details: PatternDetail[] = []
-    const symbols = form.operands.map((modes) => positionSymbol(modes, branch))
-    form.operands.forEach((modes, index) => {
+    const symbols = form.operands.map((modes, index) => positionSymbol(modes, branch, entry, index))
+    const written = form.operands.map((modes, index) =>
+        modes.includes(M68K_BIT_FIELD_MODE)
+            ? `${symbols[index]}${M68K_BIT_FIELD_MODE}`
+            : symbols[index]
+    )
+    form.operands.forEach((allModes, index) => {
         const symbol = symbols[index]
         parts.push(literal(index === 0 ? ' ' : ', '))
         // Every form is its own row, so the member is the symbol itself.
         parts.push({ symbol, member: symbol, memberText: symbol, memberSymbolic: true })
+        //the field straight after what it is in, as s68k names it: `<ea>{offset:width}`
+        if (allModes.includes(M68K_BIT_FIELD_MODE)) {
+            parts.push({
+                symbol: M68K_BIT_FIELD_MODE,
+                member: M68K_BIT_FIELD_MODE,
+                memberText: M68K_BIT_FIELD_MODE,
+                memberSymbolic: true
+            })
+        }
+        const modes = allModes.filter((mode) => mode !== M68K_BIT_FIELD_MODE)
         if (modes.length > 1) {
             const values = modeNames(modes)
             details.push({
@@ -214,7 +291,7 @@ function formInput(
         }
     })
     return {
-        code: symbols.length > 0 ? `${name} ${symbols.join(', ')}` : name,
+        code: written.length > 0 ? `${name} ${written.join(', ')}` : name,
         parts,
         tags: m68kFormTags(form),
         facts: [...sizeFact(form, defaultSize), ...privilegedFromFact(form)],
@@ -259,22 +336,31 @@ export function m68kInstructionDocument(name: string): InstructionDocument | und
     const forms = own.length > 0 ? own : m68kInstructionForms(instruction)
 
     const result = buildFormPatterns(
-        forms.map((form) => formInput(name, entry, form, instruction.defaultSize)),
+        forms
+            .flatMap(splitPairs)
+            .map((form) => formInput(name, entry, form, instruction.defaultSize)),
         { tagExplanations: { privileged: PRIVILEGED_EXPLANATION, ...PROCESSOR_EXPLANATIONS } }
     )
     const laterProcessor = result.tags.find(isM68kLaterProcessor)
-    const processorFact = laterProcessor ? m68kProcessorFact(laterProcessor) : undefined
+    const processorFact = laterProcessor
+        ? m68kProcessorFact(laterProcessor, result.tags.includes('opt-bit'))
+        : undefined
 
     // The rows' own symbols, and `#imm` where an opened row lists it, since its range is the
     // instruction's own (`1` to `8` for a shift). The other modes an opened row lists are the
     // Addressing Modes Chapter's, which `<ea>` links to.
     const symbols = new Set<string>()
     let immediate = false
+    //an `<ea>` that takes an indexed mode takes the 68020's too, which no row lists
+    let indexed = false
     for (const section of result.sections) {
         for (const group of section.groups) {
             for (const pattern of group.patterns) {
                 for (const part of pattern.parts) if (part.symbol) symbols.add(part.text)
-                for (const detail of pattern.details) immediate ||= detail.values.includes('#imm')
+                for (const detail of pattern.details) {
+                    immediate ||= detail.values.includes('#imm')
+                    indexed ||= detail.values.some((mode) => INDEXED_MODES.has(mode))
+                }
             }
         }
     }
@@ -282,7 +368,11 @@ export function m68kInstructionDocument(name: string): InstructionDocument | und
     const listed = [...symbols]
     const operands: OperandSymbol[] = listed.flatMap((symbol) => {
         const line = m68kOperandLine(symbol, entry)
-        return line ? [{ symbol, ...line }] : []
+        if (!line) return []
+        if (symbol === '<ea>' && indexed) {
+            return [{ symbol, ...line, meaning: `${line.meaning} ${M68020_INDEXED}` }]
+        }
+        return [{ symbol, ...line }]
     })
 
     const summary = m68kSummary(name)

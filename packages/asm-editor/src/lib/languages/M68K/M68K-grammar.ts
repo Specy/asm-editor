@@ -3,7 +3,7 @@ import {
     M68KDirectives,
     M68KRecognizedInstructions,
     M68KRefusedDirectives,
-    M68KUnimplementedDialectInstructions
+    M68KRefusedInstructions
 } from './M68K-documentation'
 
 function alternatives(words: string[]): string {
@@ -22,6 +22,46 @@ const sizeSuffix = '(?:\\.[bwlsBWLS](?![\\w.]))?'
  */
 export const M68K_OPT_OPTIONS = '(?:p|bit|(?:no)?(?:cre|mex|sex|war|cex))'
 
+/** How an operand's words are coloured, by what they name. */
+type RegisterCases = Record<string, string>
+
+/**
+ * The special registers: the program counter, the status register and its low byte, the user stack
+ * pointer, and the control registers `movec` names, the 68010's and the 68020's.
+ */
+const SPECIAL_REGISTERS = 'sr|ccr|usp|sfc|dfc|vbr|msp|isp|cacr|caar'
+
+/** The data and address registers, and the special ones, the control registers among them. */
+const OPERAND_REGISTERS: RegisterCases = {
+    '$1~[dD][0-7]': 'data-register',
+    '$1~(?:[aA][0-7]|sp)': 'address-register',
+    [`$1~(?:pc|${SPECIAL_REGISTERS})`]: 'variable.predefined',
+    '@default': 'identifier'
+}
+
+/**
+ * The same inside an operand's parentheses, where the 68020's suppressed registers are registers
+ * too: `za0` to `za7`, `zd0` to `zd7` and `zpc`. Outside them they are names like any other.
+ */
+const PARENTHESISED_REGISTERS: RegisterCases = {
+    '$1~z?[dD][0-7]': 'data-register',
+    '$1~(?:z?[aA][0-7]|sp)': 'address-register',
+    [`$1~(?:z?pc|${SPECIAL_REGISTERS})`]: 'variable.predefined',
+    '@default': 'identifier'
+}
+
+/** The rules an operand is read by, registers coloured by `registers`. */
+function operandRules(registers: RegisterCases): monaco.languages.IMonarchLanguageRule[] {
+    return [
+        // the size an absolute address or an expression is taken at: `($1000).w`, and a
+        // displacement's width: `(1000.w,a0,d1)`. Before the rule below reads `.w` as a dotted name
+        [/\.[bwlsBWLS](?![\w.])/, 'keyword.size'],
+        // `d0.w` is the `d0` register, its index sized as a word
+        [new RegExp(`(\\.?[A-Za-z_]\\w*)(${sizeSuffix})`), [{ cases: registers }, 'keyword.size']],
+        { include: '@common' }
+    ]
+}
+
 /** Monaco's lexical view of the v2 grammar. Meaning and diagnostics remain the Core's job. */
 export const M68KLanguage: monaco.languages.IMonarchLanguage = {
     defaultToken: '',
@@ -29,10 +69,11 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
     tokenPostfix: '.m68k',
 
     keywords: M68KRecognizedInstructions,
-    //the 68020's instructions s68k does not implement yet are refused, as words the assembler
-    //refuses are
-    refusedKeywords: [...M68KUnimplementedDialectInstructions],
-    symbols: /[(),.:]/,
+    //the 68020's module call, which s68k leaves out, is refused, as words the assembler refuses are
+    refusedKeywords: [...M68KRefusedInstructions],
+    //`[` and `]` are the 68020's memory indirection, `([4,a0],d1.w*4,8)`, `{` and `}` its bit
+    //fields, `d0{4:8}`, and `:` joins its register pairs, `d0:d1` and `(a0):(a1)`
+    symbols: /[()[\]{},.:]/,
     operators: ['+', '-', '*', '/', '\\', '&', '!', '|', '^', '<<', '>>', '~'],
 
     // A statement's first word is its instruction or directive and the words after it are its
@@ -102,25 +143,17 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
         // the rest of the statement, until the next line starts another one
         operands: [
             [/^/, { token: '', next: '@pop' }],
-            // the size an absolute address or an expression is taken at: `($1000).w`, before the
-            // rule below reads `.w` as a dotted name
-            [/\.[bwlsBWLS](?![\w.])/, 'keyword.size'],
-            // `d0.w` is the `d0` register, its index sized as a word
-            [
-                new RegExp(`(\\.?[A-Za-z_]\\w*)(${sizeSuffix})`),
-                [
-                    {
-                        cases: {
-                            '$1~[dD][0-7]': 'data-register',
-                            '$1~(?:[aA][0-7]|sp)': 'address-register',
-                            '$1~(?:pc|sr|ccr|usp|sfc|dfc|vbr)': 'variable.predefined',
-                            '@default': 'identifier'
-                        }
-                    },
-                    'keyword.size'
-                ]
-            ],
-            { include: '@common' }
+            [/\(/, { token: 'delimiter', next: '@parentheses' }],
+            ...operandRules(OPERAND_REGISTERS)
+        ],
+
+        // inside an operand's parentheses, where the 68020's suppressed registers are registers:
+        // `([4,za0],d1.w*4)`. A parenthesis left open ends with its line, as the operands do
+        parentheses: [
+            [/^/, { token: '', next: '@popall' }],
+            [/\(/, { token: 'delimiter', next: '@push' }],
+            [/\)/, { token: 'delimiter', next: '@pop' }],
+            ...operandRules(PARENTHESISED_REGISTERS)
         ],
 
         common: [
@@ -144,14 +177,22 @@ export const M68KLanguage: monaco.languages.IMonarchLanguage = {
 
 export const M68KLanguageConfiguration: monaco.languages.LanguageConfiguration = {
     comments: { lineComment: ';' },
-    brackets: [['(', ')']],
+    brackets: [
+        ['(', ')'],
+        ['[', ']'],
+        ['{', '}']
+    ],
     autoClosingPairs: [
         { open: '(', close: ')' },
+        { open: '[', close: ']' },
+        { open: '{', close: '}' },
         { open: "'", close: "'" },
         { open: '"', close: '"' }
     ],
     surroundingPairs: [
         { open: '(', close: ')' },
+        { open: '[', close: ']' },
+        { open: '{', close: '}' },
         { open: "'", close: "'" },
         { open: '"', close: '"' }
     ]

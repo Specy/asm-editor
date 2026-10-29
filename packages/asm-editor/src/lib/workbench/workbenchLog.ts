@@ -127,6 +127,8 @@ export type ExitReport = {
     termination?: Termination
     /** The cycle counter as it ended, for a Target that counts cycles. */
     cycles?: bigint
+    /** Whether that count is an estimate, a 68020 program's. */
+    cyclesEstimate?: boolean
 }
 
 /**
@@ -148,7 +150,10 @@ export function exitEntry(report: ExitReport): LogDraft {
     return {
         kind: 'exit',
         tone,
-        text: terminationSummary(termination, report.executionTimeMs, { cycles: report.cycles }),
+        text: terminationSummary(termination, report.executionTimeMs, {
+            cycles: report.cycles,
+            cyclesEstimate: report.cyclesEstimate
+        }),
         details: []
     }
 }

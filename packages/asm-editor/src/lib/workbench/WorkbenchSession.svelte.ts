@@ -1160,7 +1160,8 @@ export class WorkbenchSession {
                             exitEntry({
                                 executionTimeMs: this.emulator.executionTime,
                                 termination: this.emulator.termination,
-                                cycles: this.emulator.cycles?.total
+                                cycles: this.emulator.cycles?.total,
+                                cyclesEstimate: this.emulator.cycles?.estimate
                             })
                         )
                     for (const note of notes)

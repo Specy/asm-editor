@@ -25,6 +25,18 @@
             "expect": ["m68k/addressing-modes/control-registers", "m68k/instructions/movec"]
         },
         { "query": "format error", "top": 3, "expect": "m68k/exceptions/68010" },
+        { "query": "master stack pointer", "top": 3, "expect": "m68k/exceptions/master-stack" },
+        { "query": "throwaway frame", "first": "m68k/exceptions/throwaway-frame" },
+        { "query": "68020 exceptions", "top": 3, "expect": "m68k/exceptions/68020" },
+        { "query": "memory indirect", "top": 3, "expect": "m68k/addressing-modes/memory-indirect" },
+        { "query": "scaled index", "first": "m68k/addressing-modes/scaled-index" },
+        { "query": "long branch", "top": 3, "expect": "m68k/addressing-modes/long-branches" },
+        { "query": "68020 addressing modes", "top": 3, "expect": "m68k/addressing-modes/68020" },
+        { "query": "bra.l", "first": "m68k/instructions/bra" },
+        { "query": "bit field", "top": 3, "expect": "m68k/addressing-modes/bit-fields" },
+        { "query": "bfextu", "first": "m68k/instructions/bfextu" },
+        { "query": "trapeq", "first": "m68k/instructions/trapcc" },
+        { "query": "register pair", "top": 3, "expect": "m68k/addressing-modes/register-pairs" },
         {
             "query": "cycle counter",
             "top": 3,

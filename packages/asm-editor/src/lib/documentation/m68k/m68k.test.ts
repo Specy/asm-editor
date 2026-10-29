@@ -65,8 +65,10 @@ describe('the M68K Documentation', () => {
             chapters().map((chapter) => [chapter.id, chapter.entries.length])
         )
         expect(counts).toEqual({
-            instructions: 76,
-            'addressing-modes': 12,
+            instructions: 93,
+            //the 68000's modes, the 68010's control registers, and the 68020's: its introduction,
+            //four modes, its long branches, and its instructions' register pairs and bit fields
+            'addressing-modes': 20,
             //the explanation's three sections, then the 16 codes
             'condition-codes': 19,
             'shift-directions': 1,
@@ -75,8 +77,9 @@ describe('the M68K Documentation', () => {
             'trap-tasks': 79,
             //the introduction and the seven sections after it
             synth: 8,
-            //the introduction and the eleven sections after it, the 68010's last
-            exceptions: 12,
+            //the introduction and the eighteen sections after it, the 68010's and then the
+            //68020's seven last
+            exceptions: 19,
             directives: 19,
             'assembler-features': 1
         })
@@ -96,6 +99,8 @@ describe('the M68K Documentation', () => {
         expect(owner('dbf')).toBe('dbcc')
         expect(owner('st')).toBe('scc')
         expect(owner('asl')).toBe('asd')
+        expect(owner('trapeq')).toBe('trapcc')
+        expect(owner('trapt')).toBe('trapcc')
         expect(owner('roxr')).toBe('roxd')
         expect(owner('move')).toBe('move')
     })

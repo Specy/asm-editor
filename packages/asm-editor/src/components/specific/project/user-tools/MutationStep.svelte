@@ -11,7 +11,11 @@
     import { sizeName } from '#lib/languages/sizeNames.ts'
     import { statusFlagsFromBits } from '#lib/languages/statusFlagBits.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import { formatCycles } from '#lib/languages/cycles.ts'
+    import {
+        CYCLE_ESTIMATE_MARK,
+        CYCLE_ESTIMATE_REASON,
+        formatCycles
+    } from '#lib/languages/cycles.ts'
 
     interface Props {
         step: ExecutionStep
@@ -209,11 +213,20 @@
     }
 </script>
 
-<!-- what the step took on a Target that counts cycles, an M68K's with the 68000's timing -->
+<!--
+    what the step took on a Target that counts cycles, an M68K's with its processor's timing, marked
+    "≈ 8" where that is an estimate, the 68020's cache case, which the hover explains
+-->
 {#snippet cyclesRow(cycles: number)}
     <div class="row space-between">
         <span> Cycles </span>
-        <span class="cycles">{formatCycles(cycles)}</span>
+        {#if step.cyclesEstimate}
+            <span class="cycles" {@attach tooltip(`An estimate. ${CYCLE_ESTIMATE_REASON}`)}
+                >{CYCLE_ESTIMATE_MARK} {formatCycles(cycles)}</span
+            >
+        {:else}
+            <span class="cycles">{formatCycles(cycles)}</span>
+        {/if}
     </div>
 {/snippet}
 

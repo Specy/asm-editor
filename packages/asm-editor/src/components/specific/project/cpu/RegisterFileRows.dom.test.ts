@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import RegisterFileRows from './RegisterFileRows.svelte'
+import { tooltipText } from '#cmp/shared/floating/__fixtures__/tooltipText.ts'
 import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import type { ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
 import {
@@ -128,6 +129,24 @@ function press(input: HTMLInputElement, key: string) {
     input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
     flushSync()
 }
+
+describe('a register’s name', () => {
+    //the M68K 68020's ISP says it is the 68000's SSP
+    it('says on hover what the register is, when its file describes it', () => {
+        const described: RegisterFileDescriptor = {
+            ...descriptor,
+            registers: [{ name: 'd0', description: 'The first data register.' }, { name: 'd1' }]
+        }
+        const panel = render({
+            file: { ...described, layout: resolveRegisterFileLayout(described), blanks: [] }
+        })
+        const names = [...panel.target.querySelectorAll<HTMLElement>('.register-name')]
+        expect(names.map((name) => name.textContent?.trim())).toEqual(['D0', 'D1'])
+        expect(tooltipText(names[0])).toBe('The first data register.')
+        expect(tooltipText(names[1])).toBeUndefined()
+        panel.close()
+    })
+})
 
 describe('poking a register row', () => {
     it('opens an input holding what the chunk shows', () => {

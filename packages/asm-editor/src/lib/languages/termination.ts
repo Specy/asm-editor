@@ -47,6 +47,8 @@ export type TerminationWordingOptions = {
      * decision 30).
      */
     cycles?: bigint
+    /** Whether `cycles` is an estimate, a 68020 program's: "Ran about 1,234 cycles in 12ms". */
+    cyclesEstimate?: boolean
 }
 
 /**
@@ -97,7 +99,8 @@ function isNoteworthy(termination: Termination | undefined): termination is Term
  * The sentence for a program that has ended, with its running time when a Run measured one (a
  * negative time is unknown, as after a Step): "Ran in 12ms, exited with code 3", "Ran in 12ms",
  * "Segmentation fault (signal 11)", "Program ended". With the cycles a Target counted, they come
- * first: "Ran 1,234 cycles in 12ms", "Ran 1,234 cycles, stopped by an error: …". The Log's exit
+ * first: "Ran 1,234 cycles in 12ms", "Ran 1,234 cycles, stopped by an error: …", and an estimate
+ * says so, "Ran about 1,234 cycles in 12ms". The Log's exit
  * entry, the Workbench's and the Interactive editor's info lines and the coding agent's state all
  * say it this way.
  */
@@ -111,7 +114,7 @@ export function terminationSummary(
     const cycles =
         options.cycles === undefined
             ? ''
-            : `${formatCycles(options.cycles)} ${options.cycles === 1n ? 'cycle' : 'cycles'}`
+            : `${options.cyclesEstimate ? 'about ' : ''}${formatCycles(options.cycles)} ${options.cycles === 1n ? 'cycle' : 'cycles'}`
     if (time || cycles) {
         const ran = ['Ran', cycles, time].filter(Boolean).join(' ')
         return detail ? `${ran}, ${detail}` : ran

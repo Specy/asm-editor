@@ -275,6 +275,11 @@ export type ExecutionStep = {
      */
     cycles?: number
     /**
+     * Whether `cycles` is an estimate rather than the processor's own time: an M68K program for the
+     * 68020, whose manual gives each instruction's time for its cache case, as the row marks it.
+     */
+    cyclesEstimate?: boolean
+    /**
      * Set on the instruction that started a Step through library code: the library function it
      * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
      * takes back together.
@@ -403,10 +408,16 @@ export type RegisterFileRegister = {
     name: string
     size?: RegisterSize
     kind?: 'integer' | 'float'
+    /**
+     * What the register is, which its name shows on hover: the M68K 68020's ISP says it is the
+     * 68000's SSP. A register with none has no hover.
+     */
+    description?: string
 }
 
 /** A `RegisterFileRegister` with the file's defaults filled in: what the renderers read. */
-export type ResolvedRegisterFileRegister = Required<RegisterFileRegister>
+export type ResolvedRegisterFileRegister = Required<Omit<RegisterFileRegister, 'description'>> &
+    Pick<RegisterFileRegister, 'description'>
 
 /**
  * What an adapter declares about a Register file it can read out of its Core
@@ -468,7 +479,8 @@ export function resolveRegisterFileLayout(
     return file.registers.map((register) => ({
         name: register.name,
         size: register.size ?? file.size,
-        kind: register.kind ?? kind
+        kind: register.kind ?? kind,
+        ...(register.description ? { description: register.description } : {})
     }))
 }
 
@@ -605,6 +617,13 @@ export type CycleCount = {
     total: bigint
     /** The newest step's cycles; undefined without an Undo history, and after a Poke. */
     last?: number
+    /**
+     * Whether the counts are an estimate rather than the processor's own time: an M68K program for
+     * the 68020, whose manual can give only each instruction's cache case, since on the chip the
+     * time of one depends on its neighbours ([m68k-machine.md](../../../../../docs/design/m68k-machine.md),
+     * decisions 3 and 30). The panels mark them "≈".
+     */
+    estimate?: boolean
 }
 
 export type BaseEmulatorState = {

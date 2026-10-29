@@ -18,6 +18,18 @@ The condition codes are the low byte of the 16-bit **status register**, `sr`. Th
 - S is the supervisor flag. It is set in supervisor mode, where every instruction runs and `a7` is the supervisor stack pointer, and clear in [user mode](/documentation/m68k/exceptions#modes).
 - I2, I1 and I0 are the interrupt mask, a number from 0 to 7. An [interrupt request](/documentation/m68k/exceptions#interrupts) at or below it waits, except at level 7.
 
+A 68020 has two more bits in the system byte, and calls T **T1**:
+
+| bit  | 15  | 14  | 13  | 12  | 10–8  |
+| ---- | --- | --- | --- | --- | ----- |
+| flag | T1  | T0  | S   | M   | I2–I0 |
+
+- T1 is the 68000's T: it traces every instruction.
+- T0 is a second trace flag, which traces only an instruction that changes the flow of the program, such as a branch taken, a jump or a return.
+- M is the master flag. In supervisor mode it chooses which of the 68020's two supervisor stack pointers `a7` is: the interrupt stack pointer while it is clear, and the master stack pointer while it is set.
+
+See [tracing on the 68020](/documentation/m68k/exceptions#68020-trace) and [master and interrupt stacks](/documentation/m68k/exceptions#master-stack). On the 68000 and the 68010 the two bits always read 0.
+
 A program starts with `sr` at `$2000`: S set, T clear and the mask at 0. Arithmetic and comparisons never change the system byte. The program changes it with [move](/documentation/m68k/instruction/move), [andi](/documentation/m68k/instruction/andi), [ori](/documentation/m68k/instruction/ori) or [eori](/documentation/m68k/instruction/eori) to `sr`, with [stop](/documentation/m68k/instruction/stop) or with [rte](/documentation/m68k/instruction/rte), and only in supervisor mode. An exception changes it too: it sets S and clears T, and an interrupt request also raises the mask to its own level.
 
 ## Condition codes flags

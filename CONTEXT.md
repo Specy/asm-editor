@@ -25,7 +25,7 @@ _Avoid_: size alias, operand size, B/W/L
 
 ## Status flag
 
-A named one-bit condition of an **Emulator**, shown as 0 or 1 with its change highlighted. The CPU has a row of them (the M68K CCR bits, the x86 EFLAGS bits, the Z80 F bits; MIPS and RISC-V have none), and a **Register file** may carry a row of its own, such as the MIPS FPU condition flags or the M68K System file's T, S and I2–I0, the system byte of its SR.
+A named one-bit condition of an **Emulator**, shown as 0 or 1 with its change highlighted. The CPU has a row of them (the M68K CCR bits, the x86 EFLAGS bits, the Z80 F bits; MIPS and RISC-V have none), and a **Register file** may carry a row of its own, such as the MIPS FPU condition flags or the M68K System file's T, S and I2–I0, the system byte of its SR (T1, T0, S, M and I2–I0 in a program for the 68020).
 _Avoid_: status register, status codes, condition codes, CCR (except for the M68K register itself)
 
 ## Exception
@@ -498,7 +498,7 @@ _Avoid_: template, shape, syntax line, variant
 
 ## Instruction tag
 
-A fact about an **Instruction form** as its assembler or its real processor defines it, from one shared list: Pseudo-instruction, RV64 only, Undocumented, Privileged, 68010 and 68020. Privileged means the processor reserves the form for supervisor mode, even where the **Core** runs every program in that mode, as s68k does. 68010 and 68020 name the first M68K processor that has the form, when it is a later one than the 68000, which a program chooses with `opt p=`. A form can have several or none; a mnemonic shows a tag beside its name only when every one of its forms has it, and otherwise the tag sits on the forms that have it. Unlike an **Instruction category**, a tag says nothing about the kind of work done.
+A fact about an **Instruction form** as its assembler or its real processor defines it, from one shared list: Pseudo-instruction, RV64 only, Undocumented, Privileged, 68010, 68020 and 68000 with opt bit. Privileged means the processor reserves the form for supervisor mode, even where the **Core** runs every program in that mode, as s68k does. 68010 and 68020 name the first M68K processor that has the form, when it is a later one than the 68000, which a program chooses with `opt p=`. 68000 with opt bit marks the 68020's bit fields, which EASy68K's `opt bit` gives a program for the 68000 or the 68010 as well. A form can have several or none; a mnemonic shows a tag beside its name only when every one of its forms has it, and otherwise the tag sits on the forms that have it. Unlike an **Instruction category**, a tag says nothing about the kind of work done.
 _Avoid_: category, flag (a **Status flag** is a CPU bit), badge, attribute
 
 ## Instruction example

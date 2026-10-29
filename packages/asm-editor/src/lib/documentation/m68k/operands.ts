@@ -28,7 +28,10 @@ export const M68K_MODE_SYMBOLS: Readonly<Record<string, string>> = {
     sr: 'sr',
     ccr: 'ccr',
     usp: 'usp',
-    Rc: 'Rc'
+    Rc: 'Rc',
+    //the 68020's: `cas2`'s two addresses, in the manual's letters. A pair of data registers is
+    //written by what it holds, on each page
+    '(Rx):(Ry)': '(Rn1):(Rn2)'
 }
 
 /** The modes in the manual's order, as the pages write them. */
@@ -78,6 +81,14 @@ export function m68kModeClass(modes: readonly string[]): string | undefined {
 
 export type M68KOperandLine = { meaning: string; href?: string }
 
+/**
+ * What a legend says of a position that takes `d(An,Xn)` or `d(PC,Xn)`: under `opt p=68020` it takes
+ * the 68020's indexed modes too, which its pages list in no row of their own
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3).
+ */
+export const M68020_INDEXED =
+    'In a program for the 68020, wherever `d(An,Xn)` or `d(PC,Xn)` is allowed, so are the 68020’s indexed modes, such as `(a0,d1.w*4)` and `([4,a0],d1.w)`: see [on the 68020](/documentation/m68k/addressing-mode#68020).'
+
 /** What each symbol of an M68K row stands for: one line of markdown each. */
 export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = {
     '<ea>': {
@@ -114,8 +125,7 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
         href: `${MODES}#address-register-displacement`
     },
     'd(An,Xn)': {
-        meaning:
-            'Memory at the sum of an address register, an index register and a signed 8-bit displacement, for example `4(a0,d1.w)`. `Xn` is a data or address register; `.w` uses its signed low word, and `.l` uses its full long value.',
+        meaning: `Memory at the sum of an address register, an index register and a signed 8-bit displacement, for example \`4(a0,d1.w)\`. \`Xn\` is a data or address register; \`.w\` uses its signed low word, and \`.l\` uses its full long value. ${M68020_INDEXED}`,
         href: `${MODES}#address-register-indexed`
     },
     abs: {
@@ -134,8 +144,7 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
         href: `${MODES}#program-counter-relative`
     },
     'd(PC,Xn)': {
-        meaning:
-            'Memory at a target address plus an index register, for example `4(pc,d0.w)`. The assembler computes a signed 8-bit displacement from two bytes after the instruction’s start to the target; without one, as in `(pc,d0.w)`, the target is the instruction itself. `Xn` is a data or address register; `.w` uses its signed low word, and `.l` its full long value. This addressing mode cannot write memory.',
+        meaning: `Memory at a target address plus an index register, for example \`4(pc,d0.w)\`. The assembler computes a signed 8-bit displacement from two bytes after the instruction’s start to the target; without one, as in \`(pc,d0.w)\`, the target is the instruction itself. \`Xn\` is a data or address register; \`.w\` uses its signed low word, and \`.l\` its full long value. This addressing mode cannot write memory. ${M68020_INDEXED}`,
         href: `${MODES}#program-counter-relative`
     },
     '#imm': {
@@ -160,12 +169,43 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
     },
     Rc: {
         meaning:
-            'A control register of the 68010: `vbr`, the vector base register, where the vector table starts; `sfc` or `dfc`, the source or destination function code; or `usp`, the user stack pointer.',
+            'A control register: on the 68010 `vbr`, the vector base register, where the vector table starts; `sfc` or `dfc`, the source or destination function code; or `usp`, the user stack pointer. The 68020 adds `msp` and `isp`, its master and interrupt stack pointers, and `cacr` and `caar`, its cache registers.',
         href: `${MODES}#control-registers`
     },
     '<register list>': {
         meaning:
             'A register list using `/` to separate registers and `-` for ranges. For example, `d0-d2/a0` selects `d0`, `d1`, `d2` and `a0`. A single data or address register is also valid.'
+    },
+    //the 68020's register pairs and bit fields
+    'Dh:Dl': {
+        meaning:
+            'Two data registers holding one 64-bit number, written with a colon between them, for example `d2:d1`: the high long in `Dh` and the low long in `Dl`.',
+        href: `${MODES}#register-pairs`
+    },
+    'Dr:Dq': {
+        meaning:
+            'Two data registers written with a colon between them, for example `d2:d1`: the quotient goes into `Dq` and the remainder into `Dr`. Where the number divided has 64 bits, `Dr` holds its high long and `Dq` its low long.',
+        href: `${MODES}#register-pairs`
+    },
+    'Dc1:Dc2': {
+        meaning:
+            'Two data registers written with a colon between them, for example `d0:d1`: the values the two operands are expected to hold. When either differs, both registers get what the operands hold now.',
+        href: `${MODES}#register-pairs`
+    },
+    'Du1:Du2': {
+        meaning:
+            'Two data registers written with a colon between them, for example `d2:d3`: the new values, written into the two operands when both held what was expected.',
+        href: `${MODES}#register-pairs`
+    },
+    '(Rn1):(Rn2)': {
+        meaning:
+            'Two addresses written with a colon between them, each held in a data or an address register, for example `(a0):(a1)`: the two operands in memory.',
+        href: `${MODES}#register-pairs`
+    },
+    '{offset:width}': {
+        meaning:
+            'A bit field, written straight after the operand: `width` bits, 1 to 32, starting `offset` bits after the operand’s highest bit, as in `d0{24:8}` or `(a0){0:5}`. Each is a number, or a data register, as in `{d1:d2}`.',
+        href: `${MODES}#bit-fields`
     }
 }
 
@@ -188,7 +228,10 @@ const IMMEDIATE_MEANINGS: Readonly<Record<string, string>> = {
     rtd: 'A signed 16-bit number of bytes added to the stack pointer once the return address is popped: the size of the arguments, for example `#8`.',
     bkpt: 'A breakpoint number from `0` to `7`, which a hardware debugger would read.',
     trap: 'A trap number from `0` to `15`. `#0` to `#14` run the handler in vectors 32 to 46; `#15` runs the simulator’s task numbered in `d0.b`.',
-    link: 'A signed 16-bit displacement added to the stack pointer. Use a negative value to reserve stack space, for example `#-16`.'
+    link: 'A signed 16-bit displacement added to the stack pointer, or 32-bit with `link.l`. Use a negative value to reserve stack space, for example `#-16`.',
+    trapcc: 'A word or a long the processor does not use, for example `#3`: a handler can read it to tell its traps apart.',
+    pack: 'The adjustment, a word added to the two digits before they are packed, for example `#0`.',
+    unpk: 'The adjustment, a word added to the two unpacked digits, for example `#$3030`, which makes them ASCII digits.'
 }
 
 /** A symbol's legend line on one instruction's page; `entry` is its Documentation entry. */

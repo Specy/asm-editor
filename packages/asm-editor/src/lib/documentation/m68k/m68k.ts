@@ -140,7 +140,18 @@ const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
     'program-counter-relative': ['d(PC)', 'd(PC,Xn)'],
     'status-registers': ['sr', 'ccr'],
     'user-stack-pointer': ['usp'],
-    'control-registers': ['Rc', 'vbr', 'sfc', 'dfc']
+    'control-registers': ['Rc', 'vbr', 'sfc', 'dfc', 'msp', 'isp', 'cacr', 'caar'],
+    //the 68020's, under `opt p=68020`
+    68020: ['opt p=68020'],
+    'scaled-index': ['(bd,An,Xn*k)', '(bd,PC,Xn*k)'],
+    'base-displacements': ['(bd.w,An,Xn)', '(bd.l,An,Xn)'],
+    'memory-indirect': ['([bd,An],Xn,od)', '([bd,An,Xn],od)', '([bd,PC],Xn,od)', '([bd,PC,Xn],od)'],
+    'suppressed-registers': ['za0', 'zd0', 'zpc'],
+    //not `bra.l` alone, which an exact search would take from `bra`'s own page
+    'long-branches': ['bra.l label', 'bsr.l label', 'b<cc>.l label'],
+    //the 68020's instructions' operands, as their pages and s68k's diagnostics write them
+    'register-pairs': ['Dh:Dl', 'Dr:Dq', '(Rn1):(Rn2)', 'Dx:Dy', '(Rx):(Ry)'],
+    'bit-fields': ['{offset:width}', 'opt bit']
 }
 
 function addressingModes(): Chapter {
@@ -169,11 +180,11 @@ function conditionCodes(): Chapter {
     const href = `${BASE}/condition-codes`
     const codes = branchConditions.map((code): DocumentationEntry => {
         const description = `${branchConditionsDescriptions.get(code) ?? code}.`
-        //the three instructions that test it, which the explanation names only as families
-        const [branch, loop, set] = [`b${code}`, `db${code}`, `s${code}`].map(
+        //the four instructions that test it, which the explanation names only as families
+        const [branch, loop, set, trap] = [`b${code}`, `db${code}`, `s${code}`, `trap${code}`].map(
             (name) => `[${name}](${BASE}/instruction/${name})`
         )
-        const markdown = `${description}\n\nUsed by ${branch}, ${loop} and ${set}.`
+        const markdown = `${description}\n\nUsed by ${branch}, ${loop}, ${set} and, on the 68020, ${trap}.`
         return {
             id: `m68k/condition-codes/${code}`,
             language: 'm68k',

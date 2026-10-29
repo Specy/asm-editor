@@ -167,6 +167,134 @@ describe('quick fixes from the Core', () => {
         expect(assembles(written)).toEqual({ processor: '68000', errors: [] })
     })
 
+    //the 68020's data register indirect: the 68000's way is to copy the register written into an
+    //address register and write `(a0)`, which the hint says; the Core offers no fix that writes it,
+    //since only the student knows which address register is free
+    it('say how the 68000 writes `(d0)`, and add `opt p=68020` for it', () => {
+        const program = '    org $1000\n    move.l (d0),d1\n'
+        const [refused] = diagnosticsOf(sourcesOf({ 'main.m68k': program }))
+        expect(refused).toMatchObject({
+            code: 'needs_a_later_processor',
+            lineIndex: 1,
+            column: 12,
+            endColumn: 16,
+            message: '`(d0)` is a 68020 addressing mode, and this program is written for the 68000.'
+        })
+        //the marker shows the hint under the message
+        expect(refused.formatted).toBe(
+            `${refused.message}\nOn the 68000, copy \`d0\` into an address register, \`movea.w d0,a0\`, and write \`(a0)\`, as a 68000 has no data register indirect mode; or add \`opt p=68020\` at the top of the program to write it for the 68020`
+        )
+        expect(refused.fixes!.map((fix) => fix.title)).toEqual([
+            'Add `opt p=68020` at the top of the program'
+        ])
+        const [opt] = refused.fixes!
+        const for68020 = applyEdit(program, quickFixRange(opt), opt.text)
+        expect(for68020).toBe('    opt p=68020\n    org $1000\n    move.l (d0),d1\n')
+        expect(assembles(for68020)).toEqual({ processor: '68020', errors: [] })
+        //what the hint says to write builds for the 68000
+        expect(
+            assembles(program.replace('move.l (d0),d1', 'movea.w d0,a0\n    move.l (a0),d1'))
+        ).toEqual({
+            processor: '68000',
+            errors: []
+        })
+
+        //through the provider, as Monaco asks for the marker's actions
+        const model = fakeModel('file:///main')
+        const current = fakeMonaco([model])
+        const marked = { ...marker(2, refused.formatted), owner: 'M68K' } as never
+        setModelQuickFixes(current, model, 'M68K', [
+            {
+                marker: marked,
+                fixes: refused.fixes!.map((fix) => ({
+                    title: fix.title,
+                    resource: model.uri,
+                    range: quickFixRange(fix),
+                    text: fix.text
+                }))
+            }
+        ])
+        const actions = quickFixActions(current, model, [marked])
+        expect(actions.map((action) => [action.title, action.isPreferred])).toEqual([
+            ['Add opt p=68020 at the top of the program', true]
+        ])
+        expect(actions[0].edit?.edits[0]).toMatchObject({
+            textEdit: { range: quickFixRange(opt), text: '    opt p=68020\n' }
+        })
+
+        //a 68010 program changes its own `opt` line, and every 68020 mode is refused the same way
+        const for68010 = '    opt p=68010\n    org $1000\n    move.l (4,a0,d1.w*4),d1\n'
+        const [later] = diagnosticsOf(sourcesOf({ 'main.m68k': for68010 }))
+        expect(later.message).toBe(
+            '`(4,a0,d1.w*4)` is a 68020 addressing mode, and this program is written for the 68010.'
+        )
+        const [change] = later.fixes!
+        expect(change.title).toBe('Change `opt p=68010` to `opt p=68020`')
+        expect(assembles(applyEdit(for68010, quickFixRange(change), change.text))).toEqual({
+            processor: '68020',
+            errors: []
+        })
+    })
+
+    //EASy68K's `opt bit` gives a 68000 or 68010 program the 68020's bit fields: the Core offers it
+    //as a second fix, beside the processor's, and the provider carries both
+    it('offer `opt bit` for a bit field in an earlier program, beside `opt p=68020`', () => {
+        const program = '    org $1000\n    bfextu d0{24:8},d1\n'
+        const [refused] = diagnosticsOf(sourcesOf({ 'main.m68k': program }))
+        expect(refused).toMatchObject({
+            code: 'needs_a_later_processor',
+            message: '`bfextu` is a 68020 instruction, and this program is written for the 68000.'
+        })
+        expect(refused.fixes!.map((fix) => fix.title)).toEqual([
+            'Add `opt p=68020` at the top of the program',
+            'Add `opt bit` at the top of the program'
+        ])
+        const [, bit] = refused.fixes!
+        const withBit = applyEdit(program, quickFixRange(bit), bit.text)
+        expect(withBit).toBe('    opt bit\n    org $1000\n    bfextu d0{24:8},d1\n')
+        expect(assembles(withBit)).toEqual({ processor: '68000', errors: [] })
+
+        //through the provider, as Monaco asks for the marker's actions
+        const model = fakeModel('file:///main')
+        const current = fakeMonaco([model])
+        const marked = { ...marker(2, refused.formatted), owner: 'M68K' } as never
+        setModelQuickFixes(current, model, 'M68K', [
+            {
+                marker: marked,
+                fixes: refused.fixes!.map((fix) => ({
+                    title: fix.title,
+                    resource: model.uri,
+                    range: quickFixRange(fix),
+                    text: fix.text
+                }))
+            }
+        ])
+        const actions = quickFixActions(current, model, [marked])
+        expect(actions.map((action) => action.title)).toEqual([
+            'Add opt p=68020 at the top of the program',
+            'Add opt bit at the top of the program'
+        ])
+        expect(actions[1].edit?.edits[0]).toMatchObject({
+            textEdit: { range: quickFixRange(bit), text: '    opt bit\n' }
+        })
+
+        //a 68010 program's own `opt` line gains `bit`
+        const for68010 = '    opt p=68010\n    bfset (a0){0:4}\n'
+        const [later] = diagnosticsOf(sourcesOf({ 'main.m68k': for68010 }))
+        expect(later.fixes!.map((fix) => fix.title)).toEqual([
+            'Change `opt p=68010` to `opt p=68020`',
+            'Write `opt p=68010,bit`'
+        ])
+        const written = applyEdit(for68010, quickFixRange(later.fixes![1]), later.fixes![1].text)
+        expect(written).toBe('    opt p=68010,bit\n    bfset (a0){0:4}\n')
+        expect(assembles(written)).toEqual({ processor: '68010', errors: [] })
+        //a 68020 instruction that is no bit field has the processor's fix alone
+        const [cas] = diagnosticsOf(sourcesOf({ 'main.m68k': '    cas.l d0,d1,(a0)\n' }))
+        expect(cas.fixes!.map((fix) => fix.title)).toEqual([
+            'Add `opt p=68020` at the top of the program'
+        ])
+    })
+
     it('point a fix into the entry File when the instruction is in an included one', () => {
         const sources = sourcesOf(
             {

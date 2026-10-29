@@ -17,7 +17,20 @@ export enum AddressingMode {
     ConditionCodeRegister = 8192,
     UserStackPointer = 16384,
     /** The 68010's control registers that `movec` names: `vbr`, `sfc` and `dfc`. */
-    ControlRegister = 32768
+    ControlRegister = 32768,
+    /**
+     * The 68020's pair of data registers, `d1:d2`: a product's 64 bits, a division's remainder and
+     * quotient, or `cas2`'s two compare and two update registers.
+     */
+    RegisterPair = 65536,
+    /** `cas2`'s two addresses, each in a data or an address register: `(a0):(d1)`. */
+    IndirectPair = 131072,
+    /**
+     * A bit field written straight after the operand, `d0{4:8}`: the operand of the 68020's
+     * bit-field instructions, which take nothing without one. It marks the position; the modes
+     * beside it are what the field is in.
+     */
+    BitField = 262144
 }
 
 export function addressingModeToString(addressingMode: AddressingMode): string {
@@ -55,6 +68,12 @@ export function addressingModeToString(addressingMode: AddressingMode): string {
             return 'usp'
         case AddressingMode.ControlRegister:
             return 'Rc'
+        case AddressingMode.RegisterPair:
+            return 'Dx:Dy'
+        case AddressingMode.IndirectPair:
+            return '(Rx):(Ry)'
+        case AddressingMode.BitField:
+            return '{offset:width}'
         default:
             return '_'
     }
@@ -116,6 +135,9 @@ const Sr = AddressingMode.StatusRegister
 const Ccr = AddressingMode.ConditionCodeRegister
 const Usp = AddressingMode.UserStackPointer
 const Rc = AddressingMode.ControlRegister
+const Rp = AddressingMode.RegisterPair
+const Ip = AddressingMode.IndirectPair
+const Bf = AddressingMode.BitField
 
 /** The same mode groups as s68k's v2 instruction table, aggregated for documentation/completion. */
 const MEMORY = [In, Ipi, Ipd, Id, Ix, Ea, Pd, Pi]
@@ -142,6 +164,16 @@ const MOVE_DESTINATION = [Da, Ad, In, Ipi, Ipd, Id, Ea, Ix, Sr, Ccr, Usp]
 const MOVEC_OPERAND = [Da, Ad, Usp, Rc]
 /** Either operand of `moves`: a general register, or memory that can be written. */
 const MOVES_OPERAND = [Da, Ad, In, Ipi, Ipd, Id, Ix, Ea]
+/** The 68020's long multiplies and divides write one data register, or a pair of them. */
+const ONE_OR_TWO_DATA_REGISTERS = [Da, Rp]
+/** The memory `cas` compares and swaps: the memory alterable modes. */
+const CAS_OPERAND = [In, Ipi, Ipd, Id, Ix, Ea]
+/** The bounds `chk2` and `cmp2` read, a lower then an upper one: the control modes. */
+const BOUNDS = [In, Id, Ix, Ea, Pd, Pi]
+/** The bit fields that are read, in a data register or in memory through a control mode. */
+const BIT_FIELD_SOURCE = [Da, In, Id, Ix, Ea, Pd, Pi, Bf]
+/** The bit fields that are written, which a PC-relative operand cannot be. */
+const BIT_FIELD_DESTINATION = [Da, In, Id, Ix, Ea, Bf]
 
 const NO_SIZE: Size[] = []
 const ANY_SIZE = [Size.Byte, Size.Word, Size.Long]
@@ -151,6 +183,8 @@ const ONLY_WORD = [Size.Word]
 const ONLY_LONG = [Size.Long]
 const BYTE_OR_LONG = [Size.Byte, Size.Long]
 const BRANCH_SIZES = [Size.Byte, Size.Short, Size.Word, Size.Long]
+/** `trap<cc>` takes no size without an operand, and `.w` or `.l` with one. */
+const TRAPCC_SIZES = [Size.Word, Size.Long]
 
 export enum AffectedFlagKind {
     ToZero = 'to-zero',
@@ -325,6 +359,33 @@ export const directionsDescriptions = new Map<string, string>([
     ['l', 'Left'],
     ['r', 'Right']
 ])
+/** How far a branch reaches by its size, which `bra`, `bsr` and `bcc` share. */
+const BRANCH_REACH =
+    'The size says how far the branch reaches: `.s` (or `.b`) about 128 bytes either way, and `.w` 32 KB. Without one, the assembler makes it `.s` when the label is above the line and that close, and `.w` otherwise. In a program for the 68020, `.l` is a long branch, which reaches anywhere in memory; see [long branches](/documentation/m68k/addressing-mode#long-branches). On the 68000 `.l` is the same as `.w`, as in EASy68K.'
+
+/** The 68020's long multiplies, which `muls` and `mulu` say after the 68000's. */
+function longMultiply(name: 'muls' | 'mulu'): string {
+    return `On the 68020, \`${name}.l\` multiplies two longs. \`${name}.l d0, d1\` keeps the low 32 bits of the product in \`d1\`, and sets V when the product does not fit in them; \`${name}.l d0, d2:d1\` keeps all 64 bits, the high long in \`d2\` and the low long in \`d1\`.`
+}
+
+/** The 68020's long divides, which `divs` and `divu` say after the 68000's. */
+function longDivide(name: 'divs' | 'divu', withRemainder: 'divsl' | 'divul'): string {
+    return `On the 68020, \`${name}.l\` divides by a long. \`${name}.l d0, d1\` divides the long in \`d1\` and keeps only the quotient; \`${name}.l d0, d2:d1\` divides the 64-bit number whose high long is in \`d2\` and low long in \`d1\`, and puts the quotient in \`d1\` and the remainder in \`d2\`. A quotient too large for 32 bits sets V and leaves the registers unchanged. [${withRemainder}](/documentation/m68k/instruction/${withRemainder}) divides a long and keeps the remainder too.`
+}
+
+/** How `chk2` and `cmp2` read their bounds, and how they compare the register with them. */
+const BOUNDS_OPERAND =
+    'The operand is the address of the two bounds, stored one after the other, the lower one first, each of the instruction’s size. A data register is compared at that size; an address register is compared whole, against the bounds sign-extended to a long.'
+const BOUNDS_COMPARISON =
+    'The bounds are compared as signed numbers, as `dc.w -5, 5` would be, unless the upper bound is below the lower one as signed numbers. In `dc.b 16, 240`, 240 is -16 as a signed byte, so the range is the unsigned one instead: 16 to 240.'
+
+/** What a bit field is, which each bit-field instruction says after what it does. */
+const BIT_FIELD =
+    'A bit field is a run of 1 to 32 bits in a data register or in memory, written `{offset:width}` straight after the operand: `width` bits, starting `offset` bits after the operand’s highest bit, which is bit 31 of a register, or bit 7 of the byte at the address. See [bit fields](/documentation/m68k/addressing-mode#bit-fields).'
+
+/** The flags of the bit-field instructions that change the field, from the field as it was. */
+const BIT_FIELD_FLAGS_BEFORE =
+    'The flags describe the field before the change: N is its highest bit, and Z is set when every bit of it was 0.'
 const desc = {
     move: 'Moves the value from the first operand to second operand. If the second operand is an address register, the [MOVEA](/documentation/m68k/instruction/movea) instruction is used instead. `move.l a0, usp` sets the user stack pointer, the `a7` a program has in user mode, and `move.l usp, a0` reads it; only supervisor code may use either. See [user and supervisor mode](/documentation/m68k/exceptions#modes).\n\n`move sr, d0` copies the whole status register. A 68000 lets any code do it, but the 68010 and the 68020 let only supervisor code: in user mode it raises a privilege violation there. User code on those processors reads the condition codes with `move ccr, d0` instead, which they added.',
     moveq: 'Moves an 8-bit encoded value from -128 through 255 into a data register and sign extends it to 32 bits. Values 128 through 255 are the unsigned spellings of -128 through -1.',
@@ -341,29 +402,35 @@ const desc = {
     suba: 'Subtracts the value of the first operand from second operand and stores in the second. It does not change the SR. When using word size, the first operand is sign extended to long and the second is read and written as a long.',
     subq: 'Subtracts the value of the first operand from second operand and stores in the second. The first operand value must be between 1 and 8. If the destination is an address register, it is always treated as a long, and the condition codes are not affected.',
     subi: 'Subtracts the immediate value to the second operand',
-    divs: 'Divides (signed) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long.\n\nDividing by zero raises a division-by-zero exception: the processor runs the handler whose address is in vector 5, at `$14`, and leaves the destination unchanged. A program that has not installed one ends there, at the `divs`. See [writing a handler](/documentation/m68k/exceptions#handlers). A quotient too large for 16 bits is no exception: V is set and the destination is left unchanged, so test it with `bvs` after the division.',
-    divu: 'Divides (unsigned) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long.\n\nDividing by zero raises a division-by-zero exception: the processor runs the handler whose address is in vector 5, at `$14`, and leaves the destination unchanged. A program that has not installed one ends there, at the `divu`. See [writing a handler](/documentation/m68k/exceptions#handlers). A quotient too large for 16 bits is no exception: V is set and the destination is left unchanged, so test it with `bvs` after the division.',
-    muls: 'Multiplies the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long',
-    mulu: 'Multiplies (unsigned) the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long',
+    divs:
+        'Divides (signed) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long.\n\nDividing by zero raises a division-by-zero exception: the processor runs the handler whose address is in vector 5, at `$14`, and leaves the destination unchanged. A program that has not installed one ends there, at the `divs`. See [writing a handler](/documentation/m68k/exceptions#handlers). A quotient too large for 16 bits is no exception: V is set and the destination is left unchanged, so test it with `bvs` after the division.' +
+        '\n\n' +
+        longDivide('divs', 'divsl'),
+    divu:
+        'Divides (unsigned) the value of the second operand by the value of the first operand (op2 / op1). The quotient is stored in the low 16 bits of the destination register and the remainder in its high 16 bits. The first operand is read as a word, the second as a long.\n\nDividing by zero raises a division-by-zero exception: the processor runs the handler whose address is in vector 5, at `$14`, and leaves the destination unchanged. A program that has not installed one ends there, at the `divu`. See [writing a handler](/documentation/m68k/exceptions#handlers). A quotient too large for 16 bits is no exception: V is set and the destination is left unchanged, so test it with `bvs` after the division.' +
+        '\n\n' +
+        longDivide('divu', 'divul'),
+    muls: `Multiplies the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long.\n\n${longMultiply('muls')}`,
+    mulu: `Multiplies (unsigned) the value of the first operand by the second operand. The result is stored in the second operand. The first operand is read as a word, the second as a long.\n\n${longMultiply('mulu')}`,
     swap: 'Swaps the two words of the register, you can see the register as [a,b] after the swap it will be [b,a]',
     clr: 'Sets to 0 all the bits of the destination operand, how many bits are set to 0 depends on the specified size, defaults to word',
     exg: 'Exchanges the values of the two operands, only works in 32 bits',
     neg: 'Flips the sign of the operand, depending on the specified size, defaults to word',
     ext: 'Extends the sign of the operand, depending on the specified size. If the part to extend is negative, it will be filled with 1s, otherwise it will be filled with 0s. Defaults to word',
-    tst: 'Compares the operand with 0',
-    cmp: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. Works by subtracting the first operand from the second operand and setting the flags. If the second operand is an address register, the [CMPA](/documentation/m68k/instruction/cmpa) instruction is used instead.',
+    tst: 'Compares the operand with 0, setting the flags as `cmp #0` would.\n\nOn the 68020, `tst` also takes an address register, as a word or a long, an immediate, and an operand relative to the program counter, such as `tst.w count(pc)`.',
+    cmp: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. Works by subtracting the first operand from the second operand and setting the flags. If the second operand is an address register, the [CMPA](/documentation/m68k/instruction/cmpa) instruction is used instead.\n\nOn the 68020, an immediate can also be compared with an operand relative to the program counter, as in `cmp.w #1, flag(pc)`, which is [cmpi](/documentation/m68k/instruction/cmpi).',
     cmpa: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions. When using word size, the first operand is sign extended to long and the second is read and written as a long.',
     cmpm: 'Compares two memory regions, only valid operand is the postincrement, it sets the flags accordingly which will be used by the branching instructions.',
-    cmpi: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.',
-    bcc: 'Branches to the specified address if {condition code}',
+    cmpi: 'Compares the second operand with the first operand, it sets the flags accordingly which will be used by the branching instructions.\n\nOn the 68020, the second operand can also be relative to the program counter, as in `cmpi.w #1, flag(pc)`.',
+    bcc: `Branches to the specified address if {condition code}.\n\n${BRANCH_REACH}`,
     scc: 'Sets the first byte of the destination operand to $FF (-1) if flags {condition code} is true, otherwise it sets it to 0',
     dbcc: 'Decrements the first operand by 1 and branches to the specified address if {condition code} is false and the first operand is not -1. dbra is the same as dbf (will decrement until it reaches -1). It reads the operand as a word, so it can run at maximum 64k times',
     lea: 'Loads the address of the first operand into the second operand, when using indirect addressing, the value is not read, only the address is loaded. For example "lea 4(a0), a1" will load a0 + 4 in a1',
     pea: 'Same as lea, but it pushes the address to the stack',
     dbra: 'Decrements the first operand by 1 and branches to the specified address if the first operand is not -1. dbra is the same as dbf (will decrement until it reaches -1)',
-    bra: 'Branches to the specified address unconditionally',
+    bra: `Branches to the specified address unconditionally.\n\n${BRANCH_REACH}`,
     jmp: 'Jumps to the specified address unconditionally',
-    link: 'Pushes to the stack the long content of the address register, sets the address register to the current stack pointer and then decrements the stack pointer by the specified amount',
+    link: 'Pushes to the stack the long content of the address register, sets the address register to the current stack pointer and then decrements the stack pointer by the specified amount.\n\nOn the 68020, `link.l` takes a 32-bit displacement, for a frame larger than 32 KB.',
     unlk: 'Sets the SP to the address register, then pops a long value from the stack and stores the result in the address register',
     not: 'Inverts the bits of the operand depending on the specified size',
     and: 'Performs a logical AND between the first and second operand, stores the result in the second operand',
@@ -380,7 +447,7 @@ const desc = {
     bclr: 'Clears the bit of the second operand at the position of the value of the first operand',
     bset: 'Sets to 1 the bit of the second operand at the position of the value of the first operand',
     bchg: 'Inverts the bit of the second operand at the position of the value of the first operand',
-    bsr: 'Branches to the specified address and stores the return address in the stack',
+    bsr: `Branches to the specified address and stores the return address in the stack.\n\n${BRANCH_REACH}`,
     rts: 'Returns from a subroutine, pops the return address from the stack and jumps to it',
     jsr: 'Jumps to the specified address, like the "lea" instruction, when resolving the address, it does not read the memory, so "jsr 4(a0)" will jump to the value of "a0 + 4", the address is loaded and stores the return address in the stack',
     trap: `
@@ -401,17 +468,34 @@ For \`trap #0\` to \`trap #14\`, the processor pushes the address of the next in
     extb: 'Sign extends the low byte of a data register directly to a long.',
     tas: 'Tests the original byte into the condition codes, then sets its top bit.',
     rtr: 'Returns by popping the condition-code byte and then the program counter from the stack.',
-    chk: 'Checks that the low word of a data register is between 0 and an upper bound, as a program checks an index before it uses it. Both are read as signed words. If the value is in range, nothing happens. If it is below 0 or above the bound, the processor raises a CHK exception: it runs the handler whose address is in vector 6, at `$18`, and that handler’s `rte` returns to the instruction after the `chk`. N tells the handler which end was crossed: set below 0, clear above the bound. A program that has not installed a handler ends at the `chk`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
+    chk: 'Checks that the low word of a data register is between 0 and an upper bound, as a program checks an index before it uses it. Both are read as signed words. If the value is in range, nothing happens. If it is below 0 or above the bound, the processor raises a CHK exception: it runs the handler whose address is in vector 6, at `$18`, and that handler’s `rte` returns to the instruction after the `chk`. N tells the handler which end was crossed: set below 0, clear above the bound. A program that has not installed a handler ends at the `chk`. See [writing a handler](/documentation/m68k/exceptions#handlers).\n\nOn the 68020, `chk.l` checks the whole register against a long bound, and [chk2](/documentation/m68k/instruction/chk2) takes a lower bound of your own too. There `chk` also changes Z, V and C, in ways the manual leaves undefined, so a handler should read only N.',
     trapv: 'Raises an overflow exception if the overflow flag V is set, and does nothing otherwise. Put it after arithmetic whose result must fit, to send every overflow to one handler instead of testing V with `bvs` each time. The processor runs the handler whose address is in vector 7, at `$1C`, and that handler’s `rte` returns to the instruction after the `trapv`. A program that has not installed a handler ends at the `trapv`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
     illegal:
         'Raises an illegal-instruction exception, always. It is the one instruction made to be nothing else, so programs use it to mark code that must never run. The processor runs the handler whose address is in vector 4, at `$10`. The exception saves the address of the `illegal` itself, not of the instruction after it, so a handler that wants the program to carry on adds 2 to the saved address before its `rte`; otherwise the `illegal` runs again. A program that has not installed a handler ends at the `illegal`. See [writing a handler](/documentation/m68k/exceptions#handlers).',
-    rte: 'Returns from an exception handler: it pops the status register and then the program counter that the exception pushed, and the interrupted program carries on. Every handler ends with `rte`, as a subroutine ends with [rts](/documentation/m68k/instruction/rts). `rte` restores the whole status register, the S bit included, so a handler entered from user mode returns to user mode, and A7 becomes the user stack pointer again. It is privileged: in user mode it raises a privilege violation. See [writing a handler](/documentation/m68k/exceptions#handlers).\n\nOn the 68010 and the 68020 the frame also holds a format word, which says how big the frame is: `rte` reads it first, pops the whole frame, and raises a format error if the word is not one the processor writes. See [on the 68010](/documentation/m68k/exceptions#68010).',
+    rte: 'Returns from an exception handler: it pops the status register and then the program counter that the exception pushed, and the interrupted program carries on. Every handler ends with `rte`, as a subroutine ends with [rts](/documentation/m68k/instruction/rts). `rte` restores the whole status register, the S bit included, so a handler entered from user mode returns to user mode, and A7 becomes the user stack pointer again. It is privileged: in user mode it raises a privilege violation. See [writing a handler](/documentation/m68k/exceptions#handlers).\n\nOn the 68010 and the 68020 the frame also holds a format word, which says how big the frame is: `rte` reads it first, pops the whole frame, and raises a format error if the word is not one the processor writes. See [on the 68010](/documentation/m68k/exceptions#68010).\n\nOn the 68020, an interrupt taken on the master stack leaves a second frame on the interrupt stack, the throwaway frame: `rte` pops it first, which takes `a7` back to the master stack, then pops the real frame there. See [the throwaway frame](/documentation/m68k/exceptions#throwaway-frame).',
     stop: 'Loads the status register with the immediate word, then waits, running nothing, until an interrupt request (an IRQ) above the new interrupt mask arrives, or one at level 7. The processor takes that IRQ at once: it runs the handler whose address is in the level’s autovector, and the handler’s `rte` comes back to the instruction after the `stop`. A program uses it to wait for a timer or a key without spinning in a loop. `stop #$2000` stays in supervisor mode with the mask at 0, so every level gets through. While the processor waits, Run waits with it and the status line says what for, and a Step runs nothing. It is privileged: in user mode it raises a privilege violation. See [interrupts](/documentation/m68k/exceptions#interrupts).',
     rtd: 'Returns from a subroutine and removes its arguments from the stack in one instruction. It pops the return address, as [rts](/documentation/m68k/instruction/rts) does, then adds the displacement to the stack pointer. A caller that pushed 8 bytes of arguments before its `bsr` gets them taken off by `rtd #8`, so it does not need its own `addq.l #8, sp` after every call.',
     bkpt: 'Marks a breakpoint for a hardware debugger. On a 68010 board with a debugger attached, the processor stops there and hands over to the debugger. With none attached, as in this editor, it raises an illegal-instruction exception instead, as [illegal](/documentation/m68k/instruction/illegal) does: the processor runs the handler whose address is in vector 4, at `$10`. The saved address is the `bkpt`’s own, so a handler that wants the program to carry on adds 2 to it before its `rte`. A program that has not installed a handler ends at the `bkpt`. The number, 0 to 7, says which breakpoint it is. To stop a program while you debug it here, set a breakpoint beside the line numbers instead.',
-    movec: 'Copies a control register into a data or address register, or a data or address register into a control register. The 68010’s control registers are `vbr`, the vector base register, which says where the vector table starts; `sfc` and `dfc`, the function codes that [moves](/documentation/m68k/instruction/moves) uses; and `usp`, the user stack pointer. Moving the vector table is its main use: after `movec d0, vbr`, every exception reads its handler’s address at VBR + 4 × the vector number instead of at 4 × the vector number. It is always long, leaves the flags alone, and is privileged: in user mode it raises a privilege violation. See [on the 68010](/documentation/m68k/exceptions#68010).',
+    movec: 'Copies a control register into a data or address register, or a data or address register into a control register. The 68010’s control registers are `vbr`, the vector base register, which says where the vector table starts; `sfc` and `dfc`, the function codes that [moves](/documentation/m68k/instruction/moves) uses; and `usp`, the user stack pointer. Moving the vector table is its main use: after `movec d0, vbr`, every exception reads its handler’s address at VBR + 4 × the vector number instead of at 4 × the vector number. It is always long, leaves the flags alone, and is privileged: in user mode it raises a privilege violation. See [on the 68010](/documentation/m68k/exceptions#68010).\n\nThe 68020 adds four control registers. `msp` and `isp` are its master and interrupt stack pointers: in supervisor mode the M bit of `sr` makes `a7` one of them, and `isp` is the 68000’s supervisor stack pointer. The master stack pointer starts at 0, so a program sets it with `movec` before it sets M. `cacr` and `caar` are the cache control and cache address registers; this editor’s 68020 has no cache, so they only keep what is written. See [master and interrupt stacks](/documentation/m68k/exceptions#master-stack).',
     moves: 'Moves a byte, word or long between a register and memory in another address space. An operating system uses it to reach the memory of a user program, which it keeps apart from its own: on a 68010 each memory access goes to an address space named by a three-bit function code, and `moves` reads from the space in `sfc` and writes to the space in `dfc`, which [movec](/documentation/m68k/instruction/movec) sets. This editor has one memory for everything, so `moves` reaches the same bytes `move` does, whatever `sfc` and `dfc` hold. One operand is a data or address register and the other is memory. It leaves the flags alone, and is privileged: in user mode it raises a privilege violation.',
-    reset: 'Resets the devices wired to the processor: a real 68000 holds its RESET line for a moment and then goes on with the next instruction, its own registers unchanged. This editor has no such devices, so `reset` does nothing, as in EASy68K. It is not the reset that starts the processor at power-on, which reads the vectors at `$0` and `$4`. It is privileged: in user mode it raises a privilege violation.'
+    reset: 'Resets the devices wired to the processor: a real 68000 holds its RESET line for a moment and then goes on with the next instruction, its own registers unchanged. This editor has no such devices, so `reset` does nothing, as in EASy68K. It is not the reset that starts the processor at power-on, which reads the vectors at `$0` and `$4`. It is privileged: in user mode it raises a privilege violation.',
+    trapcc: 'Raises an exception if {condition code}, and does nothing otherwise. It is [trapv](/documentation/m68k/instruction/trapv) for every condition a branch can test: `trapvs` traps on overflow as `trapv` does, `trapeq` when Z is set, and so on, with `trapt`, which always traps, and `trapf`, which never does. Put it where a result must not be what the condition says, to send that case to one handler instead of branching away each time. The processor runs the handler whose address is in vector 7, at `$1C`, the vector `trapv` uses, and that handler’s `rte` returns to the instruction after the trap. A program that has not installed a handler ends there. See [writing a handler](/documentation/m68k/exceptions#handlers).\n\nA word or a long can follow it, as in `trapeq.w #3`. The processor does nothing with it, but a handler can read it to tell its traps apart: it is the word or the long just before the address `rte` returns to. Without one, write no size.',
+    chk2: `Checks that a register is between a lower and an upper bound, as a program checks an index before it uses it. It is [chk](/documentation/m68k/instruction/chk) with a lower bound of your own instead of 0. ${BOUNDS_OPERAND} If the value is in range, nothing happens. If it is outside, the processor raises a CHK exception: it runs the handler whose address is in vector 6, at \`$18\`, the vector \`chk\` uses, and that handler’s \`rte\` returns to the instruction after the \`chk2\`. A program that has not installed a handler ends at the \`chk2\`. See [writing a handler](/documentation/m68k/exceptions#handlers).\n\nZ is set when the register equals either bound, and C when it is outside them; N and V change too, in ways the manual leaves undefined. ${BOUNDS_COMPARISON} [cmp2](/documentation/m68k/instruction/cmp2) compares the same way without the exception.`,
+    cmp2: `Compares a register with a lower and an upper bound and sets the flags: Z when the register equals either bound, and C when it is outside them, so \`bcs\` after it branches when the value is out of range. ${BOUNDS_OPERAND} It is [chk2](/documentation/m68k/instruction/chk2) without the exception, for a program that decides itself what to do with a value out of range.\n\nN and V change too, in ways the manual leaves undefined. ${BOUNDS_COMPARISON}`,
+    cas: 'Compare and swap: compares a data register with an operand in memory, and writes a second register there only if they are equal. `cas.l d0, d1, (a0)` compares `d0` with the long at `(a0)`. If they are equal, it writes `d1` there; if not, it writes nothing and copies the long at `(a0)` into `d0`, so the program has the value that is there now. The flags are those of the comparison, so `beq` after it means the write happened.\n\nThe reading, the comparison and the writing are one step that nothing can come between, not even an interrupt. That makes it the way to update a value that an interrupt handler or another program also changes: read the value, work out the new one, and let `cas` store it only if the value is still the one read, trying again otherwise. [cas2](/documentation/m68k/instruction/cas2) does the same with two values at once.',
+    cas2: 'Compares and swaps two operands at once: `cas2.l d0:d1, d2:d3, (a0):(a1)` compares `d0` with the long at `(a0)` and `d1` with the long at `(a1)`. Only if both are equal does it write `d2` to `(a0)` and `d3` to `(a1)`; otherwise it writes neither, and copies the two values into `d0` and `d1`. Each address is held in a data or an address register. As with [cas](/documentation/m68k/instruction/cas), it is one step that nothing can come between, so two values that must change together, such as the two ends of a queue, never change one without the other. The flags are those of the first comparison, or of the second when the first is equal, so `beq` after it means both were written.',
+    pack: "Packs two decimal digits into one byte of packed decimal, where each half of the byte is one digit, so `$42` stands for 42. The digits come one in each byte of a word, in its low four bits, as they are in the ASCII text `'42'`, the word `$3432`. `pack` adds the adjustment to that word, then keeps bits 11 to 8 as the high digit and bits 3 to 0 as the low one. The operands are two data registers, reading the low word of the first and writing the low byte of the second, or two predecrement operands, which read the two bytes below the first address and write one byte below the second, so a string of digits is packed from its end. [unpk](/documentation/m68k/instruction/unpk) does the opposite, and [abcd](/documentation/m68k/instruction/abcd) adds numbers in packed decimal. It leaves the flags as they were.",
+    unpk: "Unpacks a byte of packed decimal into two bytes, one digit in the low four bits of each, then adds the adjustment: `unpk d0, d1, #$3030` turns `$42` into `$3432`, the ASCII text `'42'`, ready to print. The operands are two data registers, reading the low byte of the first and writing the low word of the second, or two predecrement operands, which read the byte below the first address and write two bytes below the second. [pack](/documentation/m68k/instruction/pack) does the opposite. It leaves the flags as they were.",
+    divsl: 'Divides a long by a long, signed, and keeps both the quotient and the remainder: `divsl.l d0, d1:d2` divides `d2` by `d0`, puts the quotient in `d2` and the remainder in `d1`. The remainder has the sign of the number divided, so -7 divided by 2 is -3 with -1 left over. It is the 32-bit division of [divs](/documentation/m68k/instruction/divs) with the remainder kept: `divs.l d0, d2` divides the same way and keeps only the quotient. Dividing by zero raises a division-by-zero exception, through vector 5 at `$14`, as `divs` does. The one quotient too large for 32 bits, -2147483648 divided by -1, sets V and leaves the registers unchanged.',
+    divul: 'Divides a long by a long, unsigned, and keeps both the quotient and the remainder: `divul.l d0, d1:d2` divides `d2` by `d0`, puts the quotient in `d2` and the remainder in `d1`. It is the 32-bit division of [divu](/documentation/m68k/instruction/divu) with the remainder kept: `divu.l d0, d2` divides the same way and keeps only the quotient. Dividing by zero raises a division-by-zero exception, through vector 5 at `$14`, as `divu` does.',
+    bftst: `Tests a bit field: N becomes its highest bit, Z is set when every bit of it is 0, and V and C are cleared. The field is left as it is, as [tst](/documentation/m68k/instruction/tst) leaves its operand. ${BIT_FIELD}`,
+    bfextu: `Copies a bit field into the low bits of a data register and fills the bits above it with 0s, reading the field as an unsigned number: \`bfextu d0{24:8}, d1\` copies the low byte of \`d0\` into \`d1\`. It takes out a value packed into fewer bits than a byte, a word or a long, such as the 5 bits of red in a 16-bit colour. The flags are the field’s: N its highest bit, and Z set when it is 0. ${BIT_FIELD} [bfexts](/documentation/m68k/instruction/bfexts) reads the field as a signed number instead.`,
+    bfexts: `Copies a bit field into the low bits of a data register and fills the bits above it with copies of the field’s highest bit, reading the field as a signed number: a field of 4 bits holding \`%1110\` becomes -2. The flags are the field’s: N its highest bit, and Z set when it is 0. ${BIT_FIELD} [bfextu](/documentation/m68k/instruction/bfextu) reads the field as an unsigned number instead.`,
+    bfffo: `Finds the first bit set to 1 in a bit field, starting from its highest bit, and puts where it is into a data register: the field’s offset plus how many 0s come before the 1. If every bit of the field is 0, the register gets the offset plus the width, one past the field’s end. So \`bfffo d0{0:32}, d1\` counts the 0s above the highest 1 of \`d0\`, and 31 minus that count is the number of the bit. Programs use it to find the first free slot in a bitmap, or the highest bit set in a number. The flags are the field’s, so Z is set when it has no 1 at all. ${BIT_FIELD}`,
+    bfchg: `Inverts every bit of a bit field, as [bchg](/documentation/m68k/instruction/bchg) inverts one bit. ${BIT_FIELD_FLAGS_BEFORE} ${BIT_FIELD}`,
+    bfclr: `Clears every bit of a bit field to 0, as [bclr](/documentation/m68k/instruction/bclr) clears one bit: \`bfclr d0{20:12}\` clears the low 12 bits of \`d0\`. ${BIT_FIELD_FLAGS_BEFORE} ${BIT_FIELD}`,
+    bfset: `Sets every bit of a bit field to 1, as [bset](/documentation/m68k/instruction/bset) sets one bit: \`bfset (a0){3:4}\` sets bits 4 to 1 of the byte at \`a0\`. ${BIT_FIELD_FLAGS_BEFORE} ${BIT_FIELD}`,
+    bfins: `Inserts the low bits of a data register into a bit field, as many as the field is wide, and leaves the bits around the field as they were: \`bfins d1, (a0){0:5}\` writes the low 5 bits of \`d1\` into the first 5 bits at \`a0\`. It puts a value into fewer bits than a byte, a word or a long, such as the red of a 16-bit colour. The flags describe the value inserted: N is its highest bit, and Z is set when it is 0. ${BIT_FIELD} [bfextu](/documentation/m68k/instruction/bfextu) reads a field back.`
 }
 const dirsDesc = {
     dc: 'Defines constants, following the directive there can be a list of constants separated by commas, the size of each constant depends on the selected size. If no size is selected, the size is determined by the value of the constant. If the constant is a string, it will be stored as a sequence of bytes, if it is a number, it will be stored as a sequence of words',
@@ -440,16 +524,22 @@ const dirsDesc = {
         '',
         'A **bus error** is the exception the processor takes when memory refuses an access, vector 2. It runs the handler whose address is at `$8`, as for any [exception](/documentation/m68k/exceptions#handlers); a program that installed none ends, and the Log says what it tried to access and which range refused it. A program has at most one range of each kind: a second `memory` line of the same kind replaces the first. The rules are for the program alone: the debugger still reads and changes these bytes, and the memory view shows each range as a region.'
     ].join('\n'),
-    opt: "Chooses the processor the program is written for. Write `opt p=68010` or `opt p=68020` at the top of the program to use an instruction a later processor added, such as the 68010's `movec` or the 68020's `extb`; a program without the line is written for the 68000. The 68010 is complete; only a few of the 68020's own instructions are available so far. `bit` asks for the 68020's bit-field instructions, which are not available yet. EASy68K's listing options, `cre`, `mex`, `sex`, `war` and `cex`, each also with `no` before it, are accepted and change nothing.",
+    opt: "Chooses the processor the program is written for. Write `opt p=68010` or `opt p=68020` at the top of the program to use an instruction or an addressing mode a later processor added, such as the 68010's `movec`, the 68020's `extb`, or its [scaled index and memory indirect modes](/documentation/m68k/addressing-mode#68020) and long branches; a program without the line is written for the 68000. Every instruction of both is there, the 68020's [bit fields](/documentation/m68k/addressing-mode#bit-fields), long multiplies and divides, `cas`, `chk2` and `trap<cc>` among them, but for the 68020's module call, `callm` and `rtm`. `opt bit` gives a program for the 68000 or the 68010 the 68020's bit-field instructions, as it does in EASy68K, with that processor's addressing modes; `opt p=68020` has them already. EASy68K's listing options, `cre`, `mex`, `sex`, `war` and `cex`, each also with `no` before it, are accepted and change nothing.",
     list: 'Accepted for compatibility and ignored.',
     nolist: 'Accepted for compatibility and ignored.',
     page: 'Accepted for compatibility and ignored.'
 }
 
 export function getAddressingModeNames(addressingModes: AddressingMode[]): string {
-    const args = addressingModes.map((am) => addressingModeToString(am))
+    const args = addressingModes
+        .filter((am) => am !== AddressingMode.BitField)
+        .map((am) => addressingModeToString(am))
     //removes duplicates
-    return args.filter((value, index, self) => self.indexOf(value) === index).join('/')
+    const names = args.filter((value, index, self) => self.indexOf(value) === index).join('/')
+    //a bit field follows the operand it is in: `Dn/(An)/…{offset:width}`
+    return addressingModes.includes(AddressingMode.BitField)
+        ? `${names}${addressingModeToString(AddressingMode.BitField)}`
+        : names
 }
 
 export const M68KDirectiveDocumentation = {
@@ -743,8 +833,8 @@ subq.l #1, d0
     ),
     divs: makeIns(
         'divs',
-        [NO_Ad, ONLY_Da],
-        ONLY_WORD,
+        [NO_Ad, ONE_OR_TWO_DATA_REGISTERS],
+        ONLY_LONG_OR_WORD,
         FLAGS_DIV,
         desc.divs,
         'divs #2, d1',
@@ -770,8 +860,8 @@ move.w d3, d5 ; d5 = remainder (-1)
     ),
     divu: makeIns(
         'divu',
-        [NO_Ad, ONLY_Da],
-        ONLY_WORD,
+        [NO_Ad, ONE_OR_TWO_DATA_REGISTERS],
+        ONLY_LONG_OR_WORD,
         FLAGS_DIV,
         desc.divu,
         'divu #4, d1',
@@ -794,8 +884,8 @@ move.w d3, d5 ; d5 = remainder ($FFFE)
     ),
     muls: makeIns(
         'muls',
-        [NO_Ad, ONLY_Da],
-        ONLY_WORD,
+        [NO_Ad, ONE_OR_TWO_DATA_REGISTERS],
+        ONLY_LONG_OR_WORD,
         FLAGS_LOGIC,
         desc.muls,
         'muls d0, d1',
@@ -814,8 +904,8 @@ muls #$100, d2 ; d2 = $10000
     ),
     mulu: makeIns(
         'mulu',
-        [NO_Ad, ONLY_Da],
-        ONLY_WORD,
+        [NO_Ad, ONE_OR_TWO_DATA_REGISTERS],
+        ONLY_LONG_OR_WORD,
         FLAGS_LOGIC,
         desc.mulu,
         'mulu d5, d2',
@@ -1351,7 +1441,7 @@ skip:
     link: makeIns(
         'link',
         [ONLY_Ad, ONLY_Im],
-        NO_SIZE,
+        ONLY_LONG,
         UNAFFECTED,
         desc.link,
         'link a0, #-16',
@@ -1730,7 +1820,7 @@ END:
     chk: makeIns(
         'chk',
         [NO_Ad, ONLY_Da],
-        ONLY_WORD,
+        ONLY_LONG_OR_WORD,
         FLAGS_CHK,
         desc.chk,
         'chk.w #10,d0',
@@ -1943,6 +2033,409 @@ buffer:
 
 END:
     `
+    ),
+    //the 68020's, so their examples write the program for the 68020 first
+    trapcc: {
+        ...makeIns(
+            'trapcc',
+            [ONLY_Im],
+            TRAPCC_SIZES,
+            UNAFFECTED,
+            desc.trapcc,
+            '    opt p=68020\n    trapeq.w #3',
+            Size.Word,
+            `
+opt p=68020
+* --- Send a value that must not be zero to a handler ---
+move.l #was_zero, $1C ; vector 7 is at $1C
+moveq #5, d0
+tst.l d0
+trapeq.w #1 ; d0 is not zero: nothing happens
+moveq #0, d0
+tst.l d0
+trapeq.w #2 ; d0 is zero: was_zero runs
+move.w d2, d1 ; rte comes back here: d1 = 2
+bra END
+
+was_zero:
+    move.l 2(sp), a0 ; the address rte returns to, just past the trap's number
+    move.w -2(a0), d2 ; the number written after the trapeq: d2 = 2
+    rte
+
+END:
+    `
+        ),
+        compundNames: setConditions.map((c) => `trap${c}`)
+    },
+    chk2: makeIns(
+        'chk2',
+        [BOUNDS, ONLY_REG],
+        ANY_SIZE,
+        FLAGS_CMP,
+        desc.chk2,
+        '    opt p=68020\n    chk2.w (a0), d0',
+        Size.Word,
+        `
+opt p=68020
+* --- Keep a row number between 1 and 5 ---
+move.l #out_of_range, $18 ; vector 6 is at $18
+moveq #3, d0
+chk2.w rows, d0 ; 3 is between 1 and 5: nothing happens
+moveq #9, d0
+chk2.w rows, d0 ; 9 is above 5: out_of_range runs
+move.w d0, d1 ; rte comes back here: d1 = 5
+bra END
+
+out_of_range:
+    moveq #5, d0 ; use the last row instead
+    rte
+
+rows:
+    dc.w 1, 5 ; the lower bound, then the upper one
+
+END:
+    `
+    ),
+    cmp2: makeIns(
+        'cmp2',
+        [BOUNDS, ONLY_REG],
+        ANY_SIZE,
+        FLAGS_CMP,
+        desc.cmp2,
+        '    opt p=68020\n    cmp2.b (a0), d0',
+        Size.Word,
+        `
+opt p=68020
+* --- Count the digits in a string ---
+lea text, a0
+moveq #0, d1 ; the count
+next:
+    move.b (a0)+, d0
+    beq END ; the 0 that ends the string
+    cmp2.b digits, d0 ; C is set when d0 is not from '0' to '9'
+    bcs next
+    addq.l #1, d1 ; at the end, d1 = 3
+    bra next
+
+text:
+    dc.b 'a1b22cd', 0
+digits:
+    dc.b '0', '9' ; the lower bound, then the upper one
+
+END:
+    `
+    ),
+    cas: makeIns(
+        'cas',
+        [ONLY_Da, ONLY_Da, CAS_OPERAND],
+        ANY_SIZE,
+        FLAGS_CMP,
+        desc.cas,
+        '    opt p=68020\n    cas.l d0, d1, (a0)',
+        Size.Word,
+        `
+opt p=68020
+* --- Add 5 to a counter that an interrupt handler could also change ---
+lea counter, a0
+retry:
+    move.l (a0), d0 ; the value read
+    move.l d0, d1
+    addq.l #5, d1 ; the value wanted
+    cas.l d0, d1, (a0) ; write d1 only if the counter still holds d0
+    bne retry ; it changed in between: try again
+move.l counter, d2 ; d2 = 15
+bra END
+
+counter:
+    dc.l 10
+
+END:
+    `
+    ),
+    cas2: makeIns(
+        'cas2',
+        [[Rp], [Rp], [Ip]],
+        ONLY_LONG_OR_WORD,
+        FLAGS_CMP,
+        desc.cas2,
+        '    opt p=68020\n    cas2.l d0:d1, d2:d3, (a0):(a1)',
+        Size.Word,
+        `
+opt p=68020
+* --- Move both ends of a queue, but only if neither has changed ---
+lea head, a0
+lea tail, a1
+move.l (a0), d0 ; the head read: 1
+move.l (a1), d1 ; the tail read: 4
+moveq #2, d2 ; the new head
+moveq #5, d3 ; the new tail
+cas2.l d0:d1, d2:d3, (a0):(a1) ; both still hold what was read: both are written
+move.l head, d4 ; d4 = 2
+move.l tail, d5 ; d5 = 5
+bra END
+
+head:
+    dc.l 1
+tail:
+    dc.l 4
+
+END:
+    `
+    ),
+    pack: makeIns(
+        'pack',
+        [EXTENDED_PAIR, EXTENDED_PAIR, ONLY_Im],
+        NO_SIZE,
+        UNAFFECTED,
+        desc.pack,
+        '    opt p=68020\n    pack d0, d1, #0',
+        undefined,
+        `
+opt p=68020
+* --- The text "42" as one byte of packed decimal ---
+move.w #'42', d0 ; the two ASCII digits: $3432
+pack d0, d1, #0 ; d1 = 66, which is $42: a 4 and a 2
+
+* --- A string of digits, packed from its end ---
+lea digits+4, a0 ; just past the four digits
+lea packed+2, a1 ; just past the two bytes they pack into
+pack -(a0), -(a1), #0 ; "34" into $34
+pack -(a0), -(a1), #0 ; "12" into $12
+move.w packed, d2 ; d2 = 4660, which is $1234
+bra END
+
+digits:
+    dc.b '1234'
+packed:
+    ds.b 2
+
+END:
+    `
+    ),
+    unpk: makeIns(
+        'unpk',
+        [EXTENDED_PAIR, EXTENDED_PAIR, ONLY_Im],
+        NO_SIZE,
+        UNAFFECTED,
+        desc.unpk,
+        '    opt p=68020\n    unpk d0, d1, #$3030',
+        undefined,
+        `
+opt p=68020
+* --- Print a byte of packed decimal as two digits ---
+move.b #$42, d0 ; 42 in packed decimal
+unpk d0, d1, #$3030 ; d1 = 13362, which is $3432: the text "42"
+lea text, a1
+move.w d1, (a1)
+move.b #14, d0
+trap #15 ; prints "42"
+bra END
+
+text:
+    dc.b 0, 0, 0, 0 ; the two digits, and the 0 that ends the text
+
+END:
+    `
+    ),
+    divsl: makeIns(
+        'divsl',
+        [NO_Ad, [Rp]],
+        ONLY_LONG,
+        FLAGS_DIV,
+        desc.divsl,
+        '    opt p=68020\n    divsl.l d0, d1:d2',
+        Size.Long,
+        `
+opt p=68020
+* --- A quotient and a remainder of 32 bits ---
+move.l #-100007, d2 ; the number to divide
+divsl.l #10, d1:d2 ; d2 = -10000, and the remainder has its sign: d1 = -7
+    `
+    ),
+    divul: makeIns(
+        'divul',
+        [NO_Ad, [Rp]],
+        ONLY_LONG,
+        FLAGS_DIV,
+        desc.divul,
+        '    opt p=68020\n    divul.l d0, d1:d2',
+        Size.Long,
+        `
+opt p=68020
+* --- Seconds as hours and the seconds left over ---
+move.l #100000, d2 ; the seconds
+divul.l #3600, d1:d2 ; 27 hours, and d1 = 2800 seconds left over
+move.l d2, d3 ; d3 = 27
+    `
+    ),
+    //the bit fields, the 68020's, which `opt bit` gives a program for the 68000 or the 68010 too
+    bftst: makeIns(
+        'bftst',
+        [BIT_FIELD_SOURCE],
+        NO_SIZE,
+        FLAGS_LOGIC,
+        desc.bftst,
+        '    opt p=68020\n    bftst d0{28:4}',
+        undefined,
+        `
+opt p=68020
+* --- Is any of the low 4 bits set? ---
+move.l #%10110000, d0
+bftst d0{28:4} ; bits 3 to 0 are all 0: Z is set
+seq d1 ; d1 = 255
+    `
+    ),
+    bfextu: makeIns(
+        'bfextu',
+        [BIT_FIELD_SOURCE, ONLY_Da],
+        NO_SIZE,
+        FLAGS_LOGIC,
+        desc.bfextu,
+        '    opt p=68020\n    bfextu d0{24:8}, d1',
+        undefined,
+        `
+opt p=68020
+* --- The red, green and blue of a 16-bit colour ---
+lea color, a0
+bfextu (a0){0:5}, d0 ; the first 5 bits, red: d0 = 31
+bfextu (a0){5:6}, d1 ; the next 6, green: d1 = 0
+bfextu (a0){11:5}, d2 ; the last 5, blue: d2 = 12
+bra END
+
+color:
+    dc.w %1111100000001100
+
+END:
+    `
+    ),
+    bfexts: makeIns(
+        'bfexts',
+        [BIT_FIELD_SOURCE, ONLY_Da],
+        NO_SIZE,
+        FLAGS_LOGIC,
+        desc.bfexts,
+        '    opt p=68020\n    bfexts (a0){4:4}, d0',
+        undefined,
+        `
+opt p=68020
+* --- Two signed numbers of 4 bits in one byte ---
+lea pair, a0
+bfexts (a0){0:4}, d0 ; %0011: d0 = 3
+bfexts (a0){4:4}, d1 ; %1110, its top bit copied above it: d1 = -2
+bfextu (a0){4:4}, d2 ; the same bits as an unsigned number: d2 = 14
+bra END
+
+pair:
+    dc.b %00111110, 0
+
+END:
+    `
+    ),
+    bfffo: makeIns(
+        'bfffo',
+        [BIT_FIELD_SOURCE, ONLY_Da],
+        NO_SIZE,
+        FLAGS_LOGIC,
+        desc.bfffo,
+        '    opt p=68020\n    bfffo d0{0:32}, d1',
+        undefined,
+        `
+opt p=68020
+* --- The highest bit set in a number ---
+move.l #$12345, d0
+bfffo d0{0:32}, d1 ; 15 zeros come before the first 1: d1 = 15
+moveq #31, d2
+sub.l d1, d2 ; d2 = 16: bit 16 is the highest bit set
+
+* --- The first free slot of a bitmap, where 1 is free ---
+lea slots, a0
+bfffo (a0){0:16}, d3 ; slots 0 to 4 are taken: d3 = 5
+bra END
+
+slots:
+    dc.w %0000010000000000
+
+END:
+    `
+    ),
+    bfchg: makeIns(
+        'bfchg',
+        [BIT_FIELD_DESTINATION],
+        NO_SIZE,
+        FLAGS_LOGIC,
+        desc.bfchg,
+        '    opt p=68020\n    bfchg d0{26:4}',
+        undefined,
+        `
+opt p=68020
+* --- Invert the middle four bits of a byte ---
+move.l #%11110000, d0
+bfchg d0{26:4} ; bits 5 to 2: d0 = 204, which is %11001100
+    `
+    ),
+    bfclr: makeIns(
+        'bfclr',
+        [BIT_FIELD_DESTINATION],
+        NO_SIZE,
+        FLAGS_LOGIC,
+        desc.bfclr,
+        '    opt p=68020\n    bfclr d0{20:12}',
+        undefined,
+        `
+opt p=68020
+* --- Round an address down to the start of its 4 KB page ---
+move.l #$12345, d0
+bfclr d0{20:12} ; the low 12 bits: d0 = 73728, which is $12000
+    `
+    ),
+    bfset: makeIns(
+        'bfset',
+        [BIT_FIELD_DESTINATION],
+        NO_SIZE,
+        FLAGS_LOGIC,
+        desc.bfset,
+        '    opt p=68020\n    bfset (a0){3:4}',
+        undefined,
+        `
+opt p=68020
+* --- Mark slots 3 to 6 of a bitmap as taken ---
+lea slots, a0
+bfset (a0){3:4} ; bits 4 to 1 of the first byte
+move.b (a0), d0 ; d0 = 30, which is %00011110
+bra END
+
+slots:
+    dc.b 0, 0
+
+END:
+    `
+    ),
+    bfins: makeIns(
+        'bfins',
+        [ONLY_Da, BIT_FIELD_DESTINATION],
+        NO_SIZE,
+        FLAGS_LOGIC,
+        desc.bfins,
+        '    opt p=68020\n    bfins d1, (a0){0:5}',
+        undefined,
+        `
+opt p=68020
+* --- Build a 16-bit colour from its red, green and blue ---
+lea color, a0
+moveq #31, d0
+bfins d0, (a0){0:5} ; red, in the first 5 bits
+moveq #0, d0
+bfins d0, (a0){5:6} ; green, in the next 6
+moveq #12, d0
+bfins d0, (a0){11:5} ; blue, in the last 5
+move.w (a0), d1 ; d1 = 63500, which is %1111100000001100
+bra END
+
+color:
+    dc.w 0
+
+END:
+    `
     )
 } satisfies Record<InstructionName, InstructionDocumentation>
 
@@ -1989,6 +2482,12 @@ export function uncompoundInstructions(
                     description = description.replace(
                         '{condition code}',
                         `**${lowerFirst(setConditionsDescriptions.get(code))}**`
+                    )
+                }
+                if (name === 'trapcc') {
+                    description = description.replace(
+                        '{condition code}',
+                        `**${lowerFirst(setConditionsDescriptions.get(n.substring(4)))}**`
                     )
                 }
                 if (name === 'scc') {
@@ -2131,25 +2630,12 @@ export const M68KRefusedDirectives = [
     'unless'
 ]
 
-/** The conditions of the 68020's `trap<cc>`: the 68000's, and `t` and `f`. */
-const TRAP_CONDITIONS = [
-    ...['t', 'f', 'hi', 'ls', 'cc', 'hs', 'cs', 'lo', 'ne', 'eq'],
-    ...['vc', 'vs', 'pl', 'mi', 'ge', 'lt', 'gt', 'le']
-]
-
 /**
- * The 68020's instructions s68k reads and refuses in every dialect for now: the ones its 68020
- * dialect does not implement yet, which leave this list for a Documentation entry once its
- * instruction table lists them (milestone E6c of the M68K machine plan; the 68010's left it with
- * E6b), and the 68020's module call, `callm` and `rtm`, which s68k's 68020 leaves out for good. The
- * editor colours them as words the assembler refuses.
+ * The 68020's module call, `callm` and `rtm`, which s68k's 68020 leaves out for good: the Core reads
+ * them as instructions and refuses them, and the editor colours them as words the assembler refuses.
+ * Every other instruction of the 68000, the 68010 and the 68020 is in the Core's table.
  */
-export const M68KUnimplementedDialectInstructions = [
-    ...['chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk', 'divsl', 'divul'],
-    ...TRAP_CONDITIONS.map((condition) => `trap${condition}`),
-    ...['bftst', 'bfextu', 'bfchg', 'bfexts', 'bfclr', 'bfffo', 'bfset', 'bfins'],
-    ...['callm', 'rtm']
-]
+export const M68KRefusedInstructions = ['callm', 'rtm']
 
 const documentationFamilyNames = new Set(['asd', 'lsd', 'rod', 'roxd'])
 /** Every implemented mnemonic, with documentation-family placeholders removed. */

@@ -189,6 +189,30 @@ describe('M68K instruction documents', () => {
         })
     })
 
+    //the 68020's indexed modes go wherever `d(An,Xn)` and `d(PC,Xn)` do, and no row lists them
+    it('says in the legend of an <ea> that takes an indexed mode that the 68020 has more', () => {
+        const meaning = (name: string) =>
+            document(name).operands.find((operand) => operand.symbol === '<ea>')?.meaning
+        for (const name of ['move', 'lea', 'jmp', 'add']) {
+            expect(meaning(name), name).toContain(
+                'In a program for the 68020, wherever `d(An,Xn)` or `d(PC,Xn)` is allowed, so are the 68020’s indexed modes'
+            )
+            expect(meaning(name), name).toContain('(/documentation/m68k/addressing-mode#68020)')
+        }
+    })
+
+    it('says how far each size of a branch reaches, the 68020’s long branch included', () => {
+        for (const name of ['bra', 'bsr', 'bcc', 'beq']) {
+            const built = document(name)
+            //the summary stays the first sentence, which the reach does not run into
+            expect(built.summary, name).not.toContain('size')
+            expect(built.description, name).toContain('`.l` is a long branch')
+            expect(built.description, name).toContain(
+                '(/documentation/m68k/addressing-mode#long-branches)'
+            )
+        }
+    })
+
     it('writes movem with a register list', () => {
         expect(rows('movem')).toEqual([
             'movem <register list>, <ea>',
@@ -295,8 +319,87 @@ describe('M68K instruction documents', () => {
         expect(m68kModeClass(['Dn', 'An'])).toBeUndefined()
     })
 
+    //the 68020's long multiplies and divides write a register or a pair, one form in s68k's table
+    //and two rows in the manual's, each pair in the letters of what it holds
+    it('writes the 68020’s pairs in the manual’s letters, a register or a pair as two rows', () => {
+        expect(rows('muls')).toEqual(['muls <ea>, Dn', 'muls <ea>, Dn', 'muls <ea>, Dh:Dl'])
+        const muls = document('muls')
+        expect(muls.sections.map((section) => section.tags)).toEqual([[], ['68020']])
+        expect(documentPatterns(muls).map((pattern) => pattern.facts)).toEqual([
+            ['Size .w'],
+            ['Size .l'],
+            ['Size .l']
+        ])
+        expect(rows('divu')).toEqual(['divu <ea>, Dn', 'divu <ea>, Dn', 'divu <ea>, Dr:Dq'])
+        expect(rows('divul')).toEqual(['divul <ea>, Dr:Dq'])
+        expect(rows('cas2')).toEqual(['cas2 Dc1:Dc2, Du1:Du2, (Rn1):(Rn2)'])
+        const meaning = (name: string, symbol: string) =>
+            document(name).operands.find((operand) => operand.symbol === symbol)
+        expect(meaning('muls', 'Dh:Dl')).toMatchObject({
+            href: '/documentation/m68k/addressing-mode#register-pairs'
+        })
+        expect(meaning('divs', 'Dr:Dq')?.meaning).toContain('the quotient goes into `Dq`')
+        expect(meaning('cas2', '(Rn1):(Rn2)')?.meaning).toContain('`(a0):(a1)`')
+    })
+
+    it('writes a bit field after its operand, the 68020’s or the 68000’s with opt bit', () => {
+        const bfextu = document('bfextu')
+        expect(bfextu.tags).toEqual(['68020', 'opt-bit'])
+        expect(bfextu.headerFacts).toEqual([
+            '68020, or 68000 and 68010 with `opt bit`: write `opt p=68020` or `opt bit` at the top of the program'
+        ])
+        expect(bfextu.sections.map((section) => section.tags)).toEqual([[]])
+        expect(rows('bfextu')).toEqual(['bfextu <ea>{offset:width}, Dn'])
+        expect(rows('bfins')).toEqual(['bfins Dn, <ea>{offset:width}'])
+        //what the field is in: a data register, or memory through a control mode
+        const [pattern] = documentPatterns(bfextu)
+        expect(pattern.details).toEqual([
+            {
+                label: 'Source',
+                values: ['Dn', '(An)', 'd(An)', 'd(An,Xn)', 'abs', 'd(PC)', 'd(PC,Xn)']
+            }
+        ])
+        expect(documentPatterns(document('bfset'))[0].details[0].values).toEqual([
+            'Dn',
+            '(An)',
+            'd(An)',
+            'd(An,Xn)',
+            'abs'
+        ])
+        const field = bfextu.operands.find((operand) => operand.symbol === '{offset:width}')
+        expect(field).toMatchObject({ href: '/documentation/m68k/addressing-mode#bit-fields' })
+        //the other 68020 instructions are the 68020's alone
+        expect(document('cas').headerFacts.at(-1)).toBe(
+            '68020 only: write `opt p=68020` at the top of the program'
+        )
+    })
+
+    it('gives trap<cc> a family page and one for each condition, with and without its operand', () => {
+        const family = document('trapcc')
+        expect([family.longName, family.summary]).toEqual([
+            'Trap on condition',
+            'Raises an exception if cc, and does nothing otherwise.'
+        ])
+        const trapeq = document('trapeq')
+        expect([trapeq.longName, trapeq.summary]).toEqual([
+            'Trap if equal',
+            'Raises an exception if equal, and does nothing otherwise.'
+        ])
+        expect(rows('trapeq')).toEqual(['trapeq', 'trapeq #imm'])
+        expect(trapeq.flags?.reads).toEqual(['Z'])
+        expect(trapeq.tags).toEqual(['68020'])
+        expect(trapeq.operands.find((operand) => operand.symbol === '#imm')?.meaning).toContain(
+            'tell its traps apart'
+        )
+        expect(document('trapf').summary).toBe(
+            'Never traps, because the false condition never holds.'
+        )
+        expect(document('trapt').flags?.reads).toBeUndefined()
+    })
+
     it('is undefined for a name with no page', () => {
         expect(m68kInstructionDocument('callm')).toBeUndefined()
+        expect(m68kInstructionDocument('rtm')).toBeUndefined()
         expect(m68kInstructionDocument('dc')).toBeUndefined()
     })
 
@@ -306,7 +409,7 @@ describe('M68K instruction documents', () => {
             modesChapter.href,
             ...modesChapter.entries.map((entry) => entry.href)
         ])
-        expect(PAGE_NAMES.length).toBe(133)
+        expect(PAGE_NAMES.length).toBe(167)
         for (const name of PAGE_NAMES) {
             const built = document(name)
             const explained = new Set(built.operands.map((operand) => operand.symbol))

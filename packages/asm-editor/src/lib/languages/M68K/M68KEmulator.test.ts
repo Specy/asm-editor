@@ -2190,11 +2190,15 @@ describe('M68K System Register file', () => {
         const emulator = await stepped('    moveq #1,d0\n    simhalt\n')
         expect(emulator.registerFiles.map((file) => file.label)).toEqual(['CPU', 'System'])
         const file = system(emulator)
-        expect(file.layout).toEqual([
+        expect(file.layout).toMatchObject([
             { name: 'SR', size: RegisterSize.Word, kind: 'integer' },
             { name: 'USP', size: RegisterSize.Long, kind: 'integer' },
             { name: 'SSP', size: RegisterSize.Long, kind: 'integer' }
         ])
+        //each says on hover what it is
+        expect(file.layout[2].description).toBe(
+            'The supervisor stack pointer: A7 in supervisor mode, where exceptions push their frames.'
+        )
         //EASy68K's reset state: supervisor mode, mask 0, A7 the SSP
         expect(file.registers.map((register) => register.value)).toEqual([
             0x2000n,
@@ -3901,7 +3905,7 @@ describe('M68K 68010 programs', () => {
     it('shows VBR, SFC and DFC after the stack pointers, and only for a later processor', async () => {
         const emulator = await build('    moveq #1,d0\n    simhalt\n')
         const file = emulator.registerFiles.find((candidate) => candidate.id === 'system')!
-        expect(file.layout).toEqual([
+        expect(file.layout).toMatchObject([
             { name: 'SR', size: RegisterSize.Word, kind: 'integer' },
             { name: 'USP', size: RegisterSize.Long, kind: 'integer' },
             { name: 'SSP', size: RegisterSize.Long, kind: 'integer' },
@@ -3917,12 +3921,23 @@ describe('M68K 68010 programs', () => {
             SFC: 0n,
             DFC: 0n
         })
-        //a Build of a program for the 68000 takes them away, and one for the 68020 has them
+        //a Build of a program for the 68000 takes them away, and one for the 68020 has them, among
+        //its own
         await emulator.compile(200, ORG + '    moveq #1,d0\n    simhalt\n')
         expect(Object.keys(system(emulator))).toEqual(['SR', 'USP', 'SSP'])
         expect(emulator.canPokeRegister('system', 'VBR')).toBe(false)
         await emulator.compile(200, '    opt p=68020\n' + ORG + '    extb.l d0\n    simhalt\n')
-        expect(Object.keys(system(emulator))).toEqual(['SR', 'USP', 'SSP', 'VBR', 'SFC', 'DFC'])
+        expect(Object.keys(system(emulator))).toEqual([
+            'SR',
+            'USP',
+            'ISP',
+            'MSP',
+            'VBR',
+            'SFC',
+            'DFC',
+            'CACR',
+            'CAAR'
+        ])
         emulator.dispose()
     })
 
@@ -4106,5 +4121,543 @@ describe('M68K 68010 programs', () => {
             regionLabels(table, emulator.dataLabels).find((label) => label.address === 0x38n)?.name
         ).toBe('Reserved vector 14')
         emulator.dispose()
+    })
+})
+
+/**
+ * The 68020's own instructions under `opt p=68020`, and the bit fields under `opt bit`
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3, milestone E6c):
+ * the exceptions `trap<cc>` and `chk2` raise through the vectors of `trapv` and `chk`, named after
+ * the instruction in the History and worded for a learner when no handler takes them.
+ */
+describe('M68K 68020 programs', () => {
+    /** Built with a history; the body starts at line 3. */
+    async function build(body: string, opt = '    opt p=68020\n') {
+        const code = opt + ORG + body
+        const emulator = M68KEmulator(code)
+        await emulator.compile(200, code)
+        return emulator
+    }
+
+    const TRAPEQ = [
+        '    move.l #was_zero,$1C',
+        '    moveq #0,d0',
+        '    trapeq.w #2',
+        '    moveq #1,d1',
+        '    simhalt',
+        'was_zero:',
+        '    moveq #7,d7',
+        '    rte'
+    ]
+
+    it('names a trap<cc> after itself in the History, taken through vector 7', async () => {
+        const emulator = await build(TRAPEQ.join('\n') + '\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D7')).toBe(7n)
+        expect(registerOf(emulator, 'D1')).toBe(1n)
+        //the `trapeq` on line 5, the History's lines counting from 0
+        const trapeq = emulator.latestSteps.find((step) => step.line === 4)!
+        expect(trapeq.mutations[0]).toMatchObject({
+            type: 'TakeException',
+            value: { vector: 7, name: 'TRAPEQ', label: 'was_zero' }
+        })
+        emulator.dispose()
+    })
+
+    it('ends on a trap<cc> whose vector holds no handler, saying what it is', async () => {
+        const emulator = await build('    moveq #0,d0\n    trapeq\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        const message =
+            'Conditional trap at line 4: vector 7 at $00001C holds no handler (a TRAPcc instruction ran while its condition was true)'
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
+        emulator.dispose()
+    })
+
+    const CHK2 = ['    lea rows,a0', '    moveq #9,d0', '    chk2.w (a0),d0']
+
+    it('names chk2 after itself in the History, and keeps trapv and chk their own', async () => {
+        const handled = await build(
+            [
+                '    move.l #out_of_range,$18',
+                ...CHK2,
+                '    simhalt',
+                'out_of_range:',
+                '    moveq #5,d0',
+                '    rte',
+                'rows: dc.w 1,5'
+            ].join('\n') + '\n'
+        )
+        await handled.run(INSTRUCTION_LIMIT)
+        expect(handled.errors).toEqual([])
+        expect(registerOf(handled, 'D0')).toBe(5n)
+        const chk2 = handled.latestSteps.find((step) => step.line === 5)!
+        expect(chk2.mutations[0]).toMatchObject({
+            type: 'TakeException',
+            value: { vector: 6, name: 'CHK2', label: 'out_of_range' }
+        })
+        handled.dispose()
+
+        const trapv = await build(
+            [
+                '    move.l #overflow,$1C',
+                '    move.w #$4000,d0',
+                '    add.w d0,d0',
+                '    trapv',
+                '    simhalt',
+                'overflow:',
+                '    rte'
+            ].join('\n') + '\n'
+        )
+        await trapv.run(INSTRUCTION_LIMIT)
+        expect(trapv.latestSteps.find((step) => step.line === 5)!.mutations[0]).toMatchObject({
+            type: 'TakeException',
+            value: { vector: 7, name: 'TRAPV' }
+        })
+        trapv.dispose()
+    })
+
+    it('ends on a chk2 whose vector holds no handler, with the value and the bounds', async () => {
+        const emulator = await build([...CHK2, '    simhalt', 'rows: dc.w 1,5'].join('\n') + '\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        const message =
+            'CHK2 exception at line 5: vector 6 at $000018 holds no handler (9 is outside 1..5)'
+        expect(emulator.errors).toEqual([message])
+        expect(emulator.termination).toEqual({ kind: 'error', message })
+        emulator.dispose()
+    })
+
+    //EASy68K's `opt bit`: a 68000 program with the 68020's bit fields and the 68000's modes
+    it('runs a bit field in a 68000 program with opt bit, which stays the 68000’s', async () => {
+        const emulator = await build(
+            ['    move.l #$12345678,d0', '    bfextu d0{8:8},d1', '    simhalt'].join('\n') + '\n',
+            '    opt bit\n'
+        )
+        expect(emulator.compilerDiagnostics).toEqual([])
+        expect(emulator.processor).toBeUndefined()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D1')).toBe(0x34n)
+        emulator.dispose()
+    })
+})
+
+/**
+ * The 68020's supervisor model under `opt p=68020`
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 3, 25, 28 and 30,
+ * milestone E6c): T1, T0 and M in SR, three stack pointers with the master and interrupt stacks,
+ * the throwaway frame of an interrupt taken in the master state, the cache registers, data at odd
+ * addresses, its frames, and its cycles marked as an estimate.
+ */
+describe('M68K 68020 supervisor model', () => {
+    const OPT_68020 = '    opt p=68020\n'
+
+    /** Built with a history; the body starts at line 3. */
+    async function build(body: string, opt = OPT_68020, options = {}) {
+        const code = opt + ORG + body
+        const emulator = M68KEmulator(code, options)
+        await emulator.compile(200, code)
+        return emulator
+    }
+
+    type Built = Awaited<ReturnType<typeof build>>
+
+    function systemFile(emulator: Built) {
+        return emulator.registerFiles.find((candidate) => candidate.id === 'system')!
+    }
+
+    function system(emulator: Built) {
+        const file = systemFile(emulator)
+        return Object.fromEntries(file.registers.map((register) => [register.name, register.value]))
+    }
+
+    function flags(emulator: Built) {
+        return Object.fromEntries(systemFile(emulator).flags.map((flag) => [flag.name, flag.value]))
+    }
+
+    function stack(emulator: Built) {
+        const region = emulator.memoryRegions.find((candidate) => candidate.kind === 'stack')
+        return region && { start: region.start, end: region.end }
+    }
+
+    /** What a step's row says beyond its writes. */
+    function notes(step: { mutations: { type: string; value: unknown }[] }) {
+        return step.mutations
+            .filter((mutation) => mutation.type === 'Other')
+            .map((mutation) => mutation.value)
+    }
+
+    /**
+     * Sets the MSP and M, pushes a long on the master stack, and waits in a loop for a key down,
+     * which raises IRQ 5; its handler reads A7 into D7 and returns.
+     */
+    const MASTER_STATE = [
+        '    move.l #key,$74',
+        '    move.b #62,d0',
+        '    move.w #$0501,d1',
+        '    trap #15',
+        '    move.l #$8000,d0',
+        '    movec d0,msp',
+        '    ori #$1000,sr',
+        '    move.l #1,-(sp)',
+        'wait:',
+        '    bra wait',
+        'key:',
+        '    move.l sp,d7',
+        '    rte'
+    ].join('\n')
+
+    it('shows T1, T0, S and M, and the three stack pointers and the cache registers', async () => {
+        const emulator = await build('    moveq #1,d0\n    simhalt\n')
+        const file = systemFile(emulator)
+        expect(file.layout.map(({ name, size }) => [name, size])).toEqual([
+            ['SR', RegisterSize.Word],
+            ['USP', RegisterSize.Long],
+            ['ISP', RegisterSize.Long],
+            ['MSP', RegisterSize.Long],
+            ['VBR', RegisterSize.Long],
+            ['SFC', RegisterSize.Byte],
+            ['DFC', RegisterSize.Byte],
+            ['CACR', RegisterSize.Long],
+            ['CAAR', RegisterSize.Long]
+        ])
+        //the ISP says on hover that it is the 68000's SSP
+        expect(file.layout[2].description).toContain('which the 68000 calls the SSP')
+        expect(file.flags.map((flag) => flag.name)).toEqual([
+            'T1',
+            'T0',
+            'S',
+            'M',
+            'I2',
+            'I1',
+            'I0'
+        ])
+        expect(flags(emulator)).toEqual({ T1: 0, T0: 0, S: 1, M: 0, I2: 0, I1: 0, I0: 0 })
+        expect(system(emulator)).toEqual({
+            SR: 0x2000n,
+            USP: 0xff0000n,
+            ISP: 0x1000000n,
+            MSP: 0n,
+            VBR: 0n,
+            SFC: 0n,
+            DFC: 0n,
+            CACR: 0n,
+            CAAR: 0n
+        })
+        emulator.dispose()
+    })
+
+    it('switches its rows and flags cleanly between Builds of each processor', async () => {
+        const emulator = await build('    moveq #1,d0\n    simhalt\n')
+        const rows = () => systemFile(emulator).layout.map((register) => register.name)
+        const flagNames = () => systemFile(emulator).flags.map((flag) => flag.name)
+        await emulator.compile(200, ORG + '    moveq #1,d0\n    simhalt\n')
+        expect(rows()).toEqual(['SR', 'USP', 'SSP'])
+        expect(flagNames()).toEqual(['T', 'S', 'I2', 'I1', 'I0'])
+        expect(emulator.canPokeRegister('system', 'MSP')).toBe(false)
+        await emulator.compile(200, '    opt p=68010\n' + ORG + '    moveq #1,d0\n    simhalt\n')
+        expect(rows()).toEqual(['SR', 'USP', 'SSP', 'VBR', 'SFC', 'DFC'])
+        expect(flagNames()).toEqual(['T', 'S', 'I2', 'I1', 'I0'])
+        await emulator.compile(200, OPT_68020 + ORG + '    moveq #1,d0\n    simhalt\n')
+        expect(rows()).toEqual(['SR', 'USP', 'ISP', 'MSP', 'VBR', 'SFC', 'DFC', 'CACR', 'CAAR'])
+        expect(flagNames()).toEqual(['T1', 'T0', 'S', 'M', 'I2', 'I1', 'I0'])
+        //read at once, not zeroed until a step
+        expect(system(emulator).ISP).toBe(0x1000000n)
+        expect(emulator.canPokeRegister('system', 'MSP')).toBe(true)
+        emulator.dispose()
+    })
+
+    it('enters the master state, where A7 and the Stack region follow the MSP', async () => {
+        const emulator = await build(MASTER_STATE + '\n', OPT_68020, instantKeyboard())
+        for (let i = 0; i < 6; i++) await emulator.step()
+        //`movec d0,msp` is a write of the MSP
+        expect(emulator.latestSteps[0].mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: 'msp', old: 0n, new: 0x8000n, size: RegisterSize.Long }
+            }
+        ])
+        await emulator.step()
+        //`ori #$1000,sr` sets M: a write of SR, and A7 is the MSP
+        expect(emulator.latestSteps[0].mutations).toEqual([
+            {
+                type: 'WriteRegister',
+                value: { register: 'sr', old: 0x2000n, new: 0x3000n, size: RegisterSize.Word }
+            },
+            { type: 'Other', value: 'Switched to the master stack, so A7 is the MSP' }
+        ])
+        expect(flags(emulator)).toMatchObject({ S: 1, M: 1 })
+        expect(registerOf(emulator, 'A7')).toBe(0x8000n)
+        await emulator.step()
+        expect(registerOf(emulator, 'A7')).toBe(0x7ffcn)
+        expect(system(emulator)).toMatchObject({ ISP: 0x1000000n, MSP: 0x7ffcn })
+        //the Stack region is the master stack's, from A7 to its own top
+        expect(stack(emulator)).toEqual({ start: 0x7ffcn, end: 0x8000n })
+        emulator.dispose()
+    })
+
+    it('takes an interrupt in the master state with a throwaway frame, and rte returns through it', async () => {
+        const emulator = await build(MASTER_STATE + '\n', OPT_68020, instantKeyboard())
+        for (let i = 0; i < 9; i++) await emulator.step()
+        expect(registerOf(emulator, 'A7')).toBe(0x7ffcn)
+        emulator.peripherals.keyboard.pressKey(KEY_CODES.SPACE)
+        await emulator.step()
+        const [irq] = emulator.latestSteps
+        expect(irq.kind).toBe('irq')
+        const key = emulator.resolveMemoryLabel('key')!
+        expect(irq.mutations[0]).toMatchObject({
+            type: 'TakeException',
+            value: { name: 'IRQ 5', vector: 29, label: 'key', handler: key }
+        })
+        //its frame on the master stack, then the throwaway frame on the interrupt stack
+        const switched = irq.mutations.findIndex((mutation) => mutation.type === 'Other')
+        expect(notes(irq)).toEqual([
+            'Switched to the interrupt stack for the handler, so A7 is the ISP, and pushed the throwaway frame there'
+        ])
+        const sp = (mutations: typeof irq.mutations) =>
+            mutations.flatMap((mutation) =>
+                mutation.type === 'WriteRegister' && mutation.value.register === 'a7'
+                    ? [[mutation.value.old, mutation.value.new]]
+                    : []
+            )
+        expect(sp(irq.mutations.slice(0, switched))).toEqual([[0x7ffcn, 0x7ff4n]])
+        expect(sp(irq.mutations.slice(switched))).toEqual([[0x1000000n, 0xfffff8n]])
+        //the format words: $0 and the vector's offset, then the throwaway frame's $1
+        expect([...emulator.readMemoryBytes(0x7ffan, 2)]).toEqual([0x00, 0x74])
+        expect([...emulator.readMemoryBytes(0xfffffen, 2)]).toEqual([0x10, 0x74])
+        //the throwaway frame's SR has S and M set, which takes rte back to the master stack
+        expect([...emulator.readMemoryBytes(0xfffff8n, 2)]).toEqual([0x30, 0x00])
+        expect(emulator.callStack.map((frame) => frame.name)).toEqual(['IRQ 5 → key'])
+        expect(flags(emulator)).toMatchObject({ S: 1, M: 0, I2: 1, I1: 0, I0: 1 })
+        expect(system(emulator)).toMatchObject({ ISP: 0xfffff8n, MSP: 0x7ff4n })
+        expect(stack(emulator)).toEqual({ start: 0xfffff8n, end: 0x1000000n })
+
+        await emulator.step()
+        expect(registerOf(emulator, 'D7')).toBe(0xfffff8n)
+        await emulator.step()
+        const [rte] = emulator.latestSteps
+        expect(notes(rte)).toEqual([
+            'Popped the throwaway frame and switched to the master stack, so A7 is the MSP'
+        ])
+        expect(rte.mutations).toContainEqual({
+            type: 'ReturnFromException',
+            value: { from: key + 2n, to: emulator.resolveMemoryLabel('wait')! }
+        })
+        expect(registerOf(emulator, 'A7')).toBe(0x7ffcn)
+        expect(flags(emulator)).toMatchObject({ S: 1, M: 1, I2: 0, I0: 0 })
+        expect(emulator.callStack).toEqual([])
+        expect(stack(emulator)).toEqual({ start: 0x7ffcn, end: 0x8000n })
+
+        //Undo walks back through it all
+        emulator.undo(3)
+        expect(registerOf(emulator, 'A7')).toBe(0x7ffcn)
+        expect(system(emulator)).toMatchObject({ ISP: 0x1000000n, MSP: 0x7ffcn, SR: 0x3000n })
+        expect(emulator.callStack).toEqual([])
+        emulator.dispose()
+    })
+
+    it('names the stack an exception from user mode enters by M, and user mode on the way back', async () => {
+        const emulator = await build(
+            [
+                '    move.l #handler,$80',
+                '    move.l #$8000,d0',
+                '    movec d0,msp',
+                '    move.w #$1000,sr',
+                '    trap #0',
+                '    simhalt',
+                'handler:',
+                '    rte'
+            ].join('\n') + '\n'
+        )
+        for (let i = 0; i < 4; i++) await emulator.step()
+        //S clear and M set: user mode, and A7 the USP
+        expect(notes(emulator.latestSteps[0])).toEqual(['Switched to user mode, so A7 is the USP'])
+        await emulator.step()
+        //the trap enters supervisor mode with M still set: the master stack
+        expect(notes(emulator.latestSteps[0])).toEqual([
+            'Switched to supervisor mode on the master stack, so A7 is the MSP'
+        ])
+        expect(registerOf(emulator, 'A7')).toBe(0x8000n - 8n)
+        await emulator.step()
+        expect(notes(emulator.latestSteps[0])).toEqual(['Switched to user mode, so A7 is the USP'])
+        emulator.dispose()
+    })
+
+    it('pokes the ISP, the MSP, CACR and CAAR, each a step Undo takes back', async () => {
+        const emulator = await build('    moveq #1,d0\n    simhalt\n')
+        await emulator.step()
+        expect(emulator.pokeRegisters('system', [{ register: 'MSP', value: 0x9000n }])).toBe(true)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 'MSP', old: 0n, new: 0x9000n }
+        ])
+        //the ISP is A7 while M is clear
+        expect(emulator.pokeRegisters('system', [{ register: 'ISP', value: 0xf00000n }])).toBe(true)
+        expect(registerOf(emulator, 'A7')).toBe(0xf00000n)
+        expect(emulator.latestSteps[0].writes).toEqual([
+            { type: 'register', name: 'ISP', old: 0x1000000n, new: 0xf00000n }
+        ])
+        //CACR keeps E and F, its bits 0 and 1, and CAAR all of it
+        expect(emulator.pokeRegisters('system', [{ register: 'CACR', value: 0xffn }])).toBe(true)
+        expect(system(emulator).CACR).toBe(3n)
+        expect(emulator.pokeRegisters('system', [{ register: 'CAAR', value: 0x1234n }])).toBe(true)
+        expect(system(emulator).CAAR).toBe(0x1234n)
+        //SR with M set makes A7 the MSP
+        expect(emulator.pokeRegisters('system', [{ register: 'SR', value: 0x3000n }])).toBe(true)
+        expect(registerOf(emulator, 'A7')).toBe(0x9000n)
+        expect(flags(emulator)).toMatchObject({ S: 1, M: 1 })
+        emulator.undo(5)
+        expect(system(emulator)).toMatchObject({
+            SR: 0x2000n,
+            ISP: 0x1000000n,
+            MSP: 0n,
+            CACR: 0n,
+            CAAR: 0n
+        })
+        expect(registerOf(emulator, 'A7')).toBe(0x1000000n)
+        emulator.dispose()
+    })
+
+    it('says in the History what movec wrote to CACR and CAAR', async () => {
+        const emulator = await build(
+            ['    moveq #-1,d0', '    movec d0,cacr', '    movec d0,caar', '    simhalt'].join(
+                '\n'
+            ) + '\n'
+        )
+        for (let i = 0; i < 3; i++) await emulator.step()
+        expect(emulator.latestSteps.slice(0, 2).map((step) => step.mutations)).toEqual([
+            [
+                {
+                    type: 'WriteRegister',
+                    value: {
+                        register: 'caar',
+                        old: 0n,
+                        new: 0xffffffffn,
+                        size: RegisterSize.Long
+                    }
+                }
+            ],
+            [
+                {
+                    type: 'WriteRegister',
+                    value: { register: 'cacr', old: 0n, new: 3n, size: RegisterSize.Long }
+                }
+            ]
+        ])
+        emulator.dispose()
+    })
+
+    /** A word and a long at odd addresses, read and written. */
+    const UNALIGNED = [
+        '    lea bytes,a0',
+        '    move.w 1(a0),d0',
+        '    move.l d0,3(a0)',
+        '    move.l 3(a0),d1',
+        '    simhalt',
+        'bytes: dc.b $11,$22,$33,$44,$55,$66,$77,$88'
+    ].join('\n')
+
+    it('reads and writes a word and a long at an odd address, where a 68000 faults', async () => {
+        const emulator = await build(UNALIGNED + '\n')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D0')).toBe(0x2233n)
+        expect(registerOf(emulator, 'D1')).toBe(0x2233n)
+        emulator.dispose()
+
+        const m68000 = await build(UNALIGNED + '\n', '')
+        await m68000.run(INSTRUCTION_LIMIT)
+        expect(m68000.errors[0]).toMatch(
+            /^Address error at line 3: vector 3 at \$00000C holds no handler \(reading a word at the odd address/
+        )
+        m68000.dispose()
+    })
+
+    //`rte` takes $0, $1, $2, $A and $B on a 68020, and nothing else, a 68010's $8 frame among them
+    function forgedFrame(format: string) {
+        return (
+            [
+                `    move.w #${format},-(sp)`,
+                '    move.l #back,-(sp)',
+                '    move.w #$2000,-(sp)',
+                '    rte',
+                'back:',
+                '    simhalt'
+            ].join('\n') + '\n'
+        )
+    }
+
+    it('ends on a format error, saying the frame is not one a 68020 makes', async () => {
+        const emulator = await build(forgedFrame('$3000'))
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([
+            'Format error at line 6: vector 14 at $000038 holds no handler (rte found a frame of format $3, which a 68020 does not make)'
+        ])
+        emulator.dispose()
+        //a 68010's bus fault frame is not one either
+        const format8 = await build(forgedFrame('$8008'))
+        await format8.run(INSTRUCTION_LIMIT)
+        expect(format8.errors).toEqual([
+            'Format error at line 6: vector 14 at $000038 holds no handler (rte found a frame of format $8, which a 68020 does not make)'
+        ])
+        format8.dispose()
+    })
+
+    it('pushes the 12-byte format $2 frame for chk, with the address of the chk itself', async () => {
+        const emulator = await build(
+            [
+                '    move.l #out_of_range,$18',
+                '    moveq #9,d0',
+                'check:',
+                '    chk.w #5,d0',
+                '    simhalt',
+                'out_of_range:',
+                '    move.w 6(sp),d1',
+                '    move.l 8(sp),d2',
+                '    moveq #5,d0',
+                '    rte'
+            ].join('\n') + '\n'
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(registerOf(emulator, 'D1')).toBe(0x2018n)
+        expect(registerOf(emulator, 'D2')).toBe(emulator.resolveMemoryLabel('check'))
+        //rte popped all twelve bytes
+        expect(registerOf(emulator, 'A7')).toBe(0x1000000n)
+        const chk = emulator.latestSteps.find((step) => step.line === 5)!
+        expect(chk.mutations).toContainEqual({
+            type: 'WriteRegister',
+            value: { register: 'a7', old: 0x1000000n, new: 0xfffff4n, size: RegisterSize.Long }
+        })
+        emulator.dispose()
+    })
+
+    it('says a trace bit traced the program when T0 has no handler', async () => {
+        const emulator = await build(
+            ['    ori #$4000,sr', '    moveq #1,d0', '    bra next', 'next:', '    simhalt'].join(
+                '\n'
+            ) + '\n'
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        //T0 traces the branch, and not the `moveq` before it
+        expect(emulator.errors).toEqual([
+            'Trace exception at line 5: vector 9 at $000024 holds no handler (a trace bit of SR is set: T1 stops the processor after every instruction, and T0 after each branch, jump or return)'
+        ])
+        emulator.dispose()
+    })
+
+    it('marks its cycles as an estimate, under the registers and in each History row', async () => {
+        const emulator = await build('    moveq #1,d0\n    moveq #2,d1\n    simhalt\n')
+        expect(emulator.cycles).toEqual({ total: 0n, estimate: true })
+        await emulator.step()
+        expect(emulator.cycles).toMatchObject({ total: 4n, last: 4, estimate: true })
+        expect(emulator.latestSteps[0]).toMatchObject({ cycles: 4, cyclesEstimate: true })
+        emulator.dispose()
+        //a 68010's are its own, and exact
+        const m68010 = await build('    moveq #1,d0\n    simhalt\n', '    opt p=68010\n')
+        await m68010.step()
+        expect(m68010.cycles).toEqual({ total: 4n, last: 4 })
+        expect(m68010.latestSteps[0].cyclesEstimate).toBeUndefined()
+        m68010.dispose()
     })
 })

@@ -189,6 +189,15 @@ describe('exitEntry', () => {
                 cycles: 0n
             }).text
         ).toBe('Ran 0 cycles, stopped by an error: Bad load')
+        //a 68020 program's count is an estimate, the manual's cache case
+        expect(
+            exitEntry({
+                executionTimeMs: 12,
+                termination: { kind: 'exit' },
+                cycles: 1234n,
+                cyclesEstimate: true
+            }).text
+        ).toBe('Ran about 1,234 cycles in 12ms')
     })
 })
 

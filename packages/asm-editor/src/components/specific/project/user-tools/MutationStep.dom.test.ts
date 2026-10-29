@@ -80,6 +80,7 @@ function renderInstruction(mutations: MutationOperation[], pc = 0x1000) {
         rows: () => rows().map((row) => row.textContent?.replace(/\s+/g, ' ').trim()),
         expandable: () => rows().map((row) => row.classList.contains('mutation')),
         text: () => target.textContent ?? '',
+        cycles: () => target.querySelector<HTMLElement>('.cycles'),
         expanded: () => rows().map((row) => row.classList.contains('expanded')),
         click: (index: number) => {
             rows()[index].click()
@@ -551,6 +552,26 @@ describe('the cycles of a step in the History panel', () => {
         })
         expect(row.text().replace(/\s+/g, ' ')).toContain('IRQ 2 → the handler at $102C')
         expect(cyclesOf(row.text())).toBe('44')
+        row.close()
+    })
+
+    //a 68020 program's, which are the manual's cache case
+    it('marks an estimate, and says on hover why it is one', () => {
+        const row = renderInstruction([])
+        row.show({
+            kind: 'instruction',
+            mutations: [],
+            pc: 0x1000,
+            line: 3,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            cycles: 8,
+            cyclesEstimate: true
+        })
+        expect(row.text().replace(/\s+/g, ' ')).toContain('Cycles ≈ 8')
+        expect(tooltipText(row.cycles())).toMatch(
+            /^An estimate\. A 68020 overlaps each instruction with the next/
+        )
         row.close()
     })
 })

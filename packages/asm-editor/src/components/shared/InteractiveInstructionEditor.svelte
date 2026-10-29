@@ -712,7 +712,11 @@
         {/if}
         {#if showRegisters && emulator.cycles && viewport.deviceClass !== 'phone'}
             <!-- the cycle counter under the registers, which a phone leaves out -->
-            <CyclesLine cycles={emulator.cycles} style="padding: 0.1rem 0.7rem 0.3rem;" />
+            <CyclesLine
+                cycles={emulator.cycles}
+                processor={emulator.processor}
+                style="padding: 0.1rem 0.7rem 0.3rem;"
+            />
         {/if}
     </div>
 {/snippet}

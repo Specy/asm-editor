@@ -69,6 +69,11 @@ type Syntax = {
     percentIsBinary: boolean
     /** Whether an operand, lower-cased, names a register, as the editor colours one. */
     isRegister: (name: string) => boolean
+    /**
+     * Whether an operand, lower-cased, names a register inside an operand's parentheses, where the
+     * M68K's 68020 reads its suppressed registers, `za0`, `zd0` and `zpc`, which are names outside.
+     */
+    isParenthesisedRegister?: (name: string) => boolean
     /** Whether a name with a leading dot is a directive (`.text`) or, as in x86, just a name. */
     dotDirectives: boolean
     /**
@@ -109,6 +114,12 @@ type Syntax = {
     options?: { directive: string; words: RegExp }
     /** The instructions and directives the assembler knows but refuses, the M68K's `macro`. */
     refused?: ReadonlySet<string>
+    /**
+     * Whether a colon among an instruction's operands joins two of them, as the M68K's 68020 does
+     * in its register pairs, `d0:d1` and `(a0):(a1)`, and its bit fields, `d0{4:8}`, rather than
+     * ending a label.
+     */
+    operandColons?: boolean
     /** The bracket pairs the editor colours by how deeply they nest, each opener before its closer. */
     brackets: string
     /** What opens a string or character, and which of those read a backslash as an escape. */
@@ -133,10 +144,13 @@ const RISCV_REGISTER = new RegExp(
 )
 
 /**
- * The data and address registers and the special ones, the 68010's control registers among them, a
- * size suffix (`d0.w`) included.
+ * The data and address registers and the special ones, the 68010's and the 68020's control
+ * registers among them, a size suffix (`d0.w`) included.
  */
-const M68K_REGISTER = /^(?:[da][0-7]|sp|pc|sr|ccr|usp|sfc|dfc|vbr)(?:\.[bwl])?$/
+const M68K_REGISTER = /^(?:[da][0-7]|sp|pc|sr|ccr|usp|sfc|dfc|vbr|msp|isp|cacr|caar)(?:\.[bwl])?$/
+
+/** The 68020's suppressed registers, `za0` to `za7`, `zd0` to `zd7` and `zpc`, an index's size included. */
+const M68K_SUPPRESSED_REGISTER = /^(?:z[da][0-7]|zpc)(?:\.[bwl])?$/
 
 /**
  * The 8 and 16-bit registers, the undocumented halves of the index registers, and the alternate
@@ -169,19 +183,15 @@ const RISCV_CSRS = new Set([
 ])
 
 /**
- * The 68020's instructions s68k does not implement yet, and the directives of other assemblers it
- * refuses. The 68010's are all implemented, and are instructions like any other.
+ * The directives of other assemblers s68k refuses, and the 68020's module call, `callm` and `rtm`,
+ * which its 68020 leaves out for good. Every other instruction of the 68000, the 68010 and the
+ * 68020 is implemented, and is an instruction like any other.
  */
 const M68K_REFUSED = new Set([
     ...['macro', 'endm', 'mexit', 'ifeq', 'ifne', 'iflt'],
     ...['ifle', 'ifgt', 'ifge', 'ifc', 'ifnc', 'ifarg', 'endc', 'if', 'else', 'endi', 'while'],
     ...['endw', 'for', 'endf', 'repeat', 'until', 'dbloop', 'unless'],
-    ...['chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk'],
-    ...['divsl', 'divul', 'callm', 'rtm', 'bftst', 'bfextu', 'bfchg', 'bfexts', 'bfclr'],
-    ...['bfffo', 'bfset', 'bfins'],
-    //`trap<cc>`: the 68020's conditional trap, on each condition and `t` and `f`
-    ...['t', 'f', 'hi', 'ls', 'cc', 'hs', 'cs', 'lo', 'ne', 'eq'].map((c) => `trap${c}`),
-    ...['vc', 'vs', 'pl', 'mi', 'ge', 'lt', 'gt', 'le'].map((c) => `trap${c}`)
+    ...['callm', 'rtm']
 ])
 
 /** What `opt` takes: `p=` and the processor, `bit`, and the listing options, `no` or not. */
@@ -231,6 +241,7 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         dollarIsHex: true,
         percentIsBinary: true,
         isRegister: (name) => M68K_REGISTER.test(name),
+        isParenthesisedRegister: (name) => M68K_SUPPRESSED_REGISTER.test(name),
         //s68k's directives have no dot: `.loop` is a local label
         dotDirectives: false,
         operandDirectives: false,
@@ -241,7 +252,10 @@ const SYNTAX: Record<AvailableLanguages, Syntax> = {
         columnDirectives: true,
         options: { directive: 'opt', words: M68K_OPT_OPTIONS },
         refused: M68K_REFUSED,
-        brackets: '()',
+        operandColons: true,
+        //`[` and `]` are the 68020's memory indirection, `([4,a0],d1.w*4,8)`, and `{` and `}` its
+        //bit fields, `d0{4:8}`
+        brackets: '()[]{}',
         quotes: `"'`,
         escapingQuotes: `"'`,
         decimalFractions: false,
@@ -329,12 +343,16 @@ function isDirective(name: string, syntax: Syntax): boolean {
     return !!directives && (directives.has(name) || directives.has(name.replace(/\.[bwls]$/, '')))
 }
 
-/** What a name in operand position is, `name` lower-cased. */
+/**
+ * What a name in operand position is, `name` lower-cased; `parenthesised` when it is inside an
+ * operand's parentheses.
+ */
 function operandKind(
     name: string,
     syntax: Syntax,
     mnemonic: string,
-    operands: number
+    operands: number,
+    parenthesised: boolean
 ): AssemblyTokenKind {
     const conditions = syntax.conditions
     if (operands === 0 && conditions?.after.has(mnemonic) && conditions.names.has(name)) {
@@ -344,6 +362,7 @@ function operandKind(
     if (syntax.sizes?.has(name)) return 'size'
     if (mnemonic === syntax.options?.directive && syntax.options.words.test(name)) return 'size'
     if (syntax.csrs?.has(name) && mnemonic.startsWith('csr')) return 'register'
+    if (parenthesised && syntax.isParenthesisedRegister?.(name)) return 'register'
     return syntax.isRegister(name) ? 'register' : 'plain'
 }
 
@@ -364,6 +383,8 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
     //only one as the first operand of a jump, a call or a return
     let mnemonic = ''
     let operands = 0
+    //how deeply the line's parentheses nest here; an operand never runs onto the next line
+    let parentheses = 0
     const push = (kind: AssemblyTokenKind, text: string) => {
         if (text.length === 0) return
         const last = tokens[tokens.length - 1]
@@ -441,7 +462,7 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
                 end += 1
             }
             const name = line.slice(cursor, end)
-            if (line[end] === ':') {
+            if (line[end] === ':' && !(seenInstruction && syntax.operandColons)) {
                 pushLabel(name)
                 cursor = end + 1
                 continue
@@ -478,7 +499,10 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
                     )
                 }
             } else {
-                pushSized(operandKind(name.toLowerCase(), syntax, mnemonic, operands), name)
+                pushSized(
+                    operandKind(name.toLowerCase(), syntax, mnemonic, operands, parentheses > 0),
+                    name
+                )
                 operands += 1
             }
             cursor = end
@@ -548,6 +572,8 @@ function tokenizeLine(line: string, syntax: Syntax): AssemblyToken[] {
             continue
         }
 
+        if (char === '(') parentheses += 1
+        else if (char === ')') parentheses = Math.max(0, parentheses - 1)
         push(syntax.brackets.includes(char) ? 'bracket' : 'plain', char)
         cursor += 1
     }

@@ -135,17 +135,45 @@ const SYSTEM_FILE_ID = 'system'
 
 /** SR's supervisor bit: set, A7 is the SSP; clear, the program is in user mode and A7 is the USP. */
 const SR_SUPERVISOR = 0x2000
-/** The bits of SR's system byte a 68000 has: trace, supervisor and the interrupt mask. */
-const SR_SYSTEM_BITS = 0xa700
+/** SR's master bit, the 68020's: in supervisor mode, set, A7 is the MSP, and clear, the ISP. */
+const SR_MASTER = 0x1000
+/**
+ * The bits of SR's system byte a processor has: on the 68000 and the 68010 trace, supervisor and
+ * the interrupt mask, `$A7`, and on the 68020 its second trace bit and M too, `$F7`. The others
+ * always read 0, so a change of these is a change of the system byte on every processor.
+ */
+const SR_SYSTEM_BITS = 0xf700
+
+/** A Status flag of the System file: its name and its bit in SR. */
+type SystemFlag = { name: string; bit: number }
 
 /** SR's system byte as the System file's Status flags show it, from its high bit down. */
-const M68K_SYSTEM_FLAGS = [
+const M68K_SYSTEM_FLAGS: readonly SystemFlag[] = [
     { name: 'T', bit: 15 },
     { name: 'S', bit: 13 },
     { name: 'I2', bit: 10 },
     { name: 'I1', bit: 9 },
     { name: 'I0', bit: 8 }
-] as const
+]
+
+/**
+ * The 68020's: T1, the 68000's T, which traces every instruction, and T0, which traces a change of
+ * flow, then S and M, which choose between its three stack pointers, and the mask.
+ */
+const M68K_020_SYSTEM_FLAGS: readonly SystemFlag[] = [
+    { name: 'T1', bit: 15 },
+    { name: 'T0', bit: 14 },
+    { name: 'S', bit: 13 },
+    { name: 'M', bit: 12 },
+    { name: 'I2', bit: 10 },
+    { name: 'I1', bit: 9 },
+    { name: 'I0', bit: 8 }
+]
+
+/** Each Status flag's bit in SR, by the name a System file gives it. */
+const SYSTEM_FLAG_BITS = new Map(
+    [...M68K_SYSTEM_FLAGS, ...M68K_020_SYSTEM_FLAGS].map(({ name, bit }) => [name, bit])
+)
 
 /** The 68000's system registers, as the System file names them. */
 const SYSTEM_REGISTERS_68000 = [
@@ -165,44 +193,111 @@ const SYSTEM_REGISTERS_68010 = [
     { name: 'DFC', size: RegisterSize.Byte }
 ] as const
 
-type SystemRegisterName = (typeof SYSTEM_REGISTERS_68010)[number]['name']
+/**
+ * The 68020's: its three stack pointers, the SSP under its 68020 name, the interrupt stack pointer,
+ * beside the master stack pointer, then the 68010's control registers and its own cache registers,
+ * which hold what `movec` writes with no cache behind them. ISP's hover says it is the 68000's SSP.
+ */
+const SYSTEM_REGISTERS_68020 = [
+    { name: 'SR', size: RegisterSize.Word },
+    { name: 'USP' },
+    { name: 'ISP' },
+    { name: 'MSP' },
+    { name: 'VBR' },
+    { name: 'SFC', size: RegisterSize.Byte },
+    { name: 'DFC', size: RegisterSize.Byte },
+    { name: 'CACR' },
+    { name: 'CAAR' }
+] as const
+
+type SystemRegisterName =
+    | (typeof SYSTEM_REGISTERS_68010)[number]['name']
+    | (typeof SYSTEM_REGISTERS_68020)[number]['name']
 
 /** Where each row of the System file is in the Core's `getSystem()`. */
 const SYSTEM_FIELDS: Record<SystemRegisterName, keyof SystemRegisters> = {
     SR: 'sr',
     USP: 'usp',
     SSP: 'ssp',
+    ISP: 'isp',
+    MSP: 'msp',
     VBR: 'vbr',
     SFC: 'sfc',
-    DFC: 'dfc'
+    DFC: 'dfc',
+    CACR: 'cacr',
+    CAAR: 'caar'
+}
+
+/**
+ * What each of the System file's registers is, which its name shows on hover, for the learner who
+ * meets it there first.
+ */
+const SYSTEM_REGISTER_DESCRIPTIONS: Record<SystemRegisterName, string> = {
+    SR: 'The status register: the condition codes in its low byte, and in its high byte the trace and supervisor bits and the interrupt mask, shown as the flags above.',
+    USP: 'The user stack pointer: A7 in user mode.',
+    SSP: 'The supervisor stack pointer: A7 in supervisor mode, where exceptions push their frames.',
+    ISP: 'The interrupt stack pointer, which the 68000 calls the SSP: A7 in supervisor mode while M is clear, and the stack interrupts push their frames on.',
+    MSP: 'The master stack pointer: A7 in supervisor mode while M is set. It starts at 0, so set it with movec before setting M.',
+    VBR: 'The vector base register: where the vector table starts. Every exception reads its vector at VBR + 4 × its number.',
+    SFC: 'The source function code: the address space moves reads from, three bits.',
+    DFC: 'The destination function code: the address space moves writes to, three bits.',
+    CACR: 'The cache control register. This 68020 has no cache, so only bits 0 (E, enable) and 1 (F, freeze) are kept, and they change nothing.',
+    CAAR: 'The cache address register, which names a cache entry for CACR’s commands. This 68020 has no cache, so it only holds what is written.'
 }
 
 /**
  * The 68000's system registers as a Register file of their own, "System"
  * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 3 and 25): the
  * whole status register, with its system byte as Status flags (trace, supervisor, the interrupt
- * mask), then both stack pointers, and in a program for the 68010 or the 68020 the 68010's control
- * registers VBR, SFC and DFC. A7 in the CPU file is whichever of the two stack pointers S makes
- * active, and the CPU file's Status flags stay the condition codes. Every register takes Pokes
- * through the Core's own setters, which journal them.
+ * mask), then the stack pointers, and in a program for the 68010 or the 68020 the 68010's control
+ * registers VBR, SFC and DFC, and the 68020's MSP, CACR and CAAR, its SSP named ISP. A7 in the CPU
+ * file is whichever stack pointer S, and on a 68020 M, makes active, and the CPU file's Status flags
+ * stay the condition codes. Every register takes Pokes through the Core's own setters, which journal
+ * them.
  */
-function systemFiles(registers: readonly { name: string; size?: RegisterSize }[]) {
+function systemFiles(
+    registers: readonly { name: SystemRegisterName; size?: RegisterSize }[],
+    flags: readonly SystemFlag[]
+) {
     return [
         {
             id: SYSTEM_FILE_ID,
             label: 'System',
             size: RegisterSize.Long,
             formats: ['hex'],
-            flagNames: M68K_SYSTEM_FLAGS.map((flag) => flag.name),
-            registers: [...registers]
+            flagNames: flags.map((flag) => flag.name),
+            registers: registers.map((register) => ({
+                ...register,
+                description: SYSTEM_REGISTER_DESCRIPTIONS[register.name]
+            }))
         }
     ] satisfies RegisterFileDescriptor[]
 }
 
 /** The Register files of a program for the 68000, which every program is until its Build. */
-const M68K_REGISTER_FILES: RegisterFileDescriptor[] = systemFiles(SYSTEM_REGISTERS_68000)
-/** And of a program for the 68010, or for the 68020, which has the 68010's control registers. */
-const M68K_010_REGISTER_FILES: RegisterFileDescriptor[] = systemFiles(SYSTEM_REGISTERS_68010)
+const M68K_REGISTER_FILES: RegisterFileDescriptor[] = systemFiles(
+    SYSTEM_REGISTERS_68000,
+    M68K_SYSTEM_FLAGS
+)
+/** Of a program for the 68010. */
+const M68K_010_REGISTER_FILES: RegisterFileDescriptor[] = systemFiles(
+    SYSTEM_REGISTERS_68010,
+    M68K_SYSTEM_FLAGS
+)
+/** And of one for the 68020, with its second trace bit and M among the flags. */
+const M68K_020_REGISTER_FILES: RegisterFileDescriptor[] = systemFiles(
+    SYSTEM_REGISTERS_68020,
+    M68K_020_SYSTEM_FLAGS
+)
+
+/** The Register files of a program for `processor`. */
+function registerFilesOf(processor: Processor): RegisterFileDescriptor[] {
+    return processor === '68020'
+        ? M68K_020_REGISTER_FILES
+        : processor === '68010'
+          ? M68K_010_REGISTER_FILES
+          : M68K_REGISTER_FILES
+}
 
 /**
  * The ranges of EASy68K's memory map as the memory view names them, with what each does to the
@@ -322,6 +417,11 @@ export function M68KEmulator(source: BuildInput, options: EmulatorSettings = {})
 
 class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterName> {
     private program: Program | null = null
+    /**
+     * The processor the Build's program is written for, read once from it, since every read of
+     * the Program's information copies its symbols out of the Core.
+     */
+    private programProcessor: Processor = '68000'
     private interpreter: Interpreter | null = null
     private screenInstructions: ScreenInstructionHistory | null = null
     /**
@@ -492,12 +592,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //S-record that EASy68K cannot run it; one for the 68000, which is every program without
         //an `opt p=` line, says nothing
         const processor = result.program.getProcessor()
-        //and its System file has the 68010's control registers, which the 68000 has not. The
-        //files stay as this Build made them until the next one, a Stop included, so that they do
-        //not shrink and grow back while a Build clears them
-        this.redeclareRegisterFiles(
-            processor === '68000' ? M68K_REGISTER_FILES : M68K_010_REGISTER_FILES
-        )
+        this.programProcessor = processor
+        //and its System file has the 68010's control registers, which the 68000 has not, and the
+        //68020's stack pointers and cache registers. The files stay as this Build made them until
+        //the next one, a Stop included, so that they do not shrink and grow back while a Build
+        //clears them
+        this.redeclareRegisterFiles(registerFilesOf(processor))
         if (!m68kSRecordOutput.enabled) {
             return { ok: true, diagnostics, ...(processor === '68000' ? {} : { processor }) }
         }
@@ -738,7 +838,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         )
     }
 
-    /** SR, USP and SSP, and VBR, SFC and DFC where the program's processor has them. */
+    /**
+     * SR, USP and SSP, VBR, SFC and DFC where the program's processor has them, and the 68020's
+     * ISP, MSP, CACR and CAAR.
+     */
     _getRegisterFileValues(id: string): bigint[] {
         if (id !== SYSTEM_FILE_ID) throw new Error(`Unknown register file: ${id}`)
         const system = this.interpreter?.getSystem()
@@ -754,25 +857,27 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     /**
-     * SR's system byte, T S I2 I1 I0, with the SR the newest step found as the previous value, as
-     * the CPU file's condition codes take theirs (`_getFlags`).
+     * SR's system byte, T S I2 I1 I0, or on a 68020 T1 T0 S M I2 I1 I0, the flags the last Build
+     * declared, with the SR the newest step found as the previous value, as the CPU file's
+     * condition codes take theirs (`_getFlags`).
      */
     _getRegisterFileFlags(id: string): { name: string; value: number; prev?: number }[] {
         if (id !== SYSTEM_FILE_ID) throw new Error(`Unknown register file: ${id}`)
         const interpreter = this.interpreter
         const sr = interpreter?.getSr() ?? 0
         const prev = interpreter?.getUndoHistory(1)[0]?.old_sr ?? sr
-        return M68K_SYSTEM_FLAGS.map(({ name, bit }) => ({
-            name,
-            value: (sr >>> bit) & 1,
-            prev: (prev >>> bit) & 1
-        }))
+        const file = this.getRegisterFileDescriptors().find((file) => file.id === SYSTEM_FILE_ID)
+        return (file?.flagNames ?? []).map((name) => {
+            const bit = SYSTEM_FLAG_BITS.get(name) ?? 0
+            return { name, value: (sr >>> bit) & 1, prev: (prev >>> bit) & 1 }
+        })
     }
 
     /**
-     * A Poke of SR, the USP, the SSP, or of the 68010's VBR, SFC and DFC, through the Core's
-     * setters, which journal it inside a Poke: SR is cut to the bits a 68000 has, a change of S
-     * makes A7 the other stack pointer, and a function code keeps its three bits.
+     * A Poke of SR, the USP, the SSP, of the 68010's VBR, SFC and DFC, or of the 68020's ISP, MSP,
+     * CACR and CAAR, through the Core's setters, which journal it inside a Poke: SR is cut to the
+     * bits the processor has, a change of S, or on a 68020 of M, makes A7 another stack pointer, a
+     * function code keeps its three bits and CACR its two.
      */
     _setRegisterFileValue(id: string, register: string, value: bigint): void {
         if (id !== SYSTEM_FILE_ID) throw new Error(`Unknown register file: ${id}`)
@@ -784,6 +889,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         else if (register === 'VBR') interpreter.setVbr(word)
         else if (register === 'SFC') interpreter.setSfc(word)
         else if (register === 'DFC') interpreter.setDfc(word)
+        else if (register === 'ISP') interpreter.setIsp(word)
+        else if (register === 'MSP') interpreter.setMsp(word)
+        else if (register === 'CACR') interpreter.setCacr(word)
+        else if (register === 'CAAR') interpreter.setCaar(word)
         else throw new Error(`No System register named ${register}`)
     }
 
@@ -926,6 +1035,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const changed = steps.some((step) => step.kind === 'instruction' && step.location)
             ? this.changedCodeAt()
             : new Map<number, string>()
+        //a 68020 program's cycles are an estimate, which each row marks
+        const estimate = this.cyclesAreAnEstimate() ? { cyclesEstimate: true } : {}
         return steps.map((step): ExecutionStep => {
             if (step.kind === 'poke') {
                 //a Poke ran no instruction, so it has no line to go to and no mutations of its
@@ -953,6 +1064,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     new_ccr: step.new_ccr,
                     line: -1,
                     cycles: step.cycles,
+                    ...estimate,
                     mutations,
                     ...(mutations.some((mutation) => mutation.type === 'TakeException')
                         ? {}
@@ -984,6 +1096,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 line: step.location?.line ?? -1,
                 file: step.location?.file,
                 cycles: step.cycles,
+                ...estimate,
                 mutations,
                 ...(disassembly === undefined ? {} : { disassembly })
             }
@@ -995,14 +1108,18 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28). An exception
      * it raised comes first, since that is what the row is about, with the handler's label, and the
      * frame the processor pushed follows it. A swap of the stack pointers says which mode the
-     * processor went into, a write of SR's system byte by the instruction itself is a write of SR,
-     * `move An,usp` is a write of the USP, and the 68010's `movec` a write of VBR, SFC or DFC; its
-     * loop mode, which changes only the cycles, says when a loop enters and leaves it.
+     * processor went into, and on a 68020 which of its three stacks A7 became, a write of SR's
+     * system byte by the instruction itself is a write of SR, `move An,usp` is a write of the USP,
+     * and `movec` a write of the register it names; the 68010's loop mode, which changes only the
+     * cycles, says when a loop enters and leaves it.
      */
     private stepMutations(step: CoreExecutionStep): MutationOperation[] {
         const exceptions: MutationOperation[] = []
         const rest: MutationOperation[] = []
-        let supervisor = (step.old_sr & SR_SUPERVISOR) !== 0
+        const m68020 = this.programProcessor === '68020'
+        //what each swap of the stack pointers did, in the step's order
+        const swaps = stackSwaps(step, m68020)
+        let swap = 0
         for (const mutation of step.mutations) {
             switch (mutation.type) {
                 case 'PushException': {
@@ -1012,7 +1129,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                         type: 'TakeException',
                         value: {
                             vector,
-                            name: m68kExceptionName(vector),
+                            //named after the instruction where two share a vector: `TRAPEQ`
+                            name: m68kExceptionName(vector, step.ran?.text),
                             from: BigInt(from),
                             handler: BigInt(handler),
                             ...(label === undefined ? {} : { label })
@@ -1028,23 +1146,24 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     break
                 case 'WriteStackPointers': {
                     const { old, new: next } = mutation.value
-                    const writes = (['usp', 'ssp'] as const).flatMap((register) =>
+                    //the 68020 calls the SSP its ISP, as the System file does
+                    const writes = (['usp', 'ssp', 'msp'] as const).flatMap((register) =>
                         old[register] === next[register]
                             ? []
-                            : [stackPointerWrite(register, old[register], next[register])]
+                            : [
+                                  stackPointerWrite(
+                                      m68020 && register === 'ssp' ? 'isp' : register,
+                                      old[register],
+                                      next[register]
+                                  )
+                              ]
                     )
                     if (writes.length > 0) {
                         rest.push(...writes)
                         break
                     }
-                    //a change of S moves no value: A7 becomes the other stack pointer
-                    supervisor = !supervisor
-                    rest.push({
-                        type: 'Other',
-                        value: supervisor
-                            ? 'Switched to supervisor mode, so A7 is the SSP'
-                            : 'Switched to user mode, so A7 is the USP'
-                    })
+                    //a change of S, or of M, moves no value: A7 becomes another stack pointer
+                    rest.push({ type: 'Other', value: swaps[swap++] ?? 'Switched stacks' })
                     break
                 }
                 case 'SetMachineState':
@@ -1188,7 +1307,13 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     _stringifyError(error: unknown, line?: number): string {
-        return getM68kErrorMessage(error, line, undefined, this.program?.getMemoryMap())
+        return getM68kErrorMessage(
+            error,
+            line,
+            undefined,
+            this.program?.getMemoryMap(),
+            this.programProcessor
+        )
     }
 
     /**
@@ -1212,10 +1337,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 line,
                 address,
                 memoryMap,
-                this.vectorBase()
+                this.vectorBase(),
+                this.programProcessor
             )
         }
-        return getM68kErrorMessage(error, line, address, memoryMap)
+        return getM68kErrorMessage(error, line, address, memoryMap, this.programProcessor)
     }
 
     /**
@@ -1512,7 +1638,22 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         if (!interpreter) return undefined
         const newest = interpreter.getUndoHistory(1)[0]
         const total = interpreter.getCycles()
-        return newest && newest.kind !== 'poke' ? { total, last: newest.cycles } : { total }
+        const estimate = this.cyclesAreAnEstimate() ? { estimate: true } : {}
+        return newest && newest.kind !== 'poke'
+            ? { total, last: newest.cycles, ...estimate }
+            : { total, ...estimate }
+    }
+
+    /**
+     * Whether the counts are an estimate rather than the processor's own time
+     * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 3 and 30): a
+     * 68020 program's, which the Core counts from the manual's cache case, the 68020 overlapping
+     * instructions in ways no table can follow (Core milestone C13d). Read from the processor for
+     * now; should the Core's `ProgramInfo` come to say it, as a `cyclesExact` flag, read that here
+     * instead, kept at the Build as `programProcessor` is.
+     */
+    private cyclesAreAnEstimate(): boolean {
+        return this.program !== null && this.programProcessor === '68020'
     }
 
     /** The Preference that pauses a Run after the program writes into its code, on by default. */
@@ -2525,7 +2666,8 @@ function convertMutation(
                 type: 'Other',
                 value: inputSettingsChange(mutation.value.old, mutation.value.new)
             }
-        //`movec` into VBR, SFC or DFC, as a write of that register: "Wrote long to VBR"
+        //`movec` into VBR, SFC, DFC, CACR or CAAR, as a write of that register: "Wrote long to
+        //VBR"; a function code is three bits, drawn as a byte as the System file draws it
         case 'WriteControlRegister': {
             const { register, old, new: next } = mutation.value
             return {
@@ -2534,7 +2676,10 @@ function convertMutation(
                     register,
                     old: BigInt(old >>> 0),
                     new: BigInt(next >>> 0),
-                    size: register === 'vbr' ? RegisterSize.Long : RegisterSize.Byte
+                    size:
+                        register === 'sfc' || register === 'dfc'
+                            ? RegisterSize.Byte
+                            : RegisterSize.Long
                 }
             }
         }
@@ -2557,8 +2702,12 @@ function loopModeChange(value: { new?: number | null }): string {
         : `Entered loop mode at ${m68kAddress(loop)}: the loop's next turns fetch no instructions, so they take fewer cycles`
 }
 
-/** `move An,usp`, or a poke of either stack pointer, as a write of that register. */
-function stackPointerWrite(register: 'usp' | 'ssp', old: number, next: number): MutationOperation {
+/** `move An,usp`, `movec` of a stack pointer, or a poke of one, as a write of that register. */
+function stackPointerWrite(
+    register: 'usp' | 'ssp' | 'isp' | 'msp',
+    old: number,
+    next: number
+): MutationOperation {
     return {
         type: 'WriteRegister',
         value: {
@@ -2568,6 +2717,102 @@ function stackPointerWrite(register: 'usp' | 'ssp', old: number, next: number): 
             size: RegisterSize.Long
         }
     }
+}
+
+/** A stack pointer A7 can be: the USP, the ISP, which is the 68000's SSP, or the 68020's MSP. */
+type Stack = 'usp' | 'isp' | 'msp'
+
+/** Which stack pointer A7 is under status register `sr`. */
+function activeStack(sr: number): Stack {
+    return (sr & SR_SUPERVISOR) === 0 ? 'usp' : (sr & SR_MASTER) === 0 ? 'isp' : 'msp'
+}
+
+/**
+ * What made a swap of the stack pointers: an exception's entry from user mode, which sets S; the
+ * throwaway frame of a 68020's interrupt in the master state, which clears M after its frame; the
+ * throwaway frame `rte` pops, whose status register it writes before the frame under it; or any
+ * other write of SR, an instruction's, or `rte`'s of the frame it returns from.
+ */
+type SwapCause = 'entry' | 'throwaway' | 'unwind' | 'write'
+
+/**
+ * What each swap of the stack pointers in a step did, in the step's order, as the History says it
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 25 and 28): "Switched
+ * to user mode, so A7 is the USP", and on a 68020, whose M chooses between two supervisor stacks,
+ * "Switched to the master stack, so A7 is the MSP".
+ *
+ * A swap moves no value, and the Core journals it without saying which pointer A7 became, so the
+ * step as a whole says: the last swap leaves A7 where the step's new SR has it; an interrupt's
+ * throwaway frame goes on the interrupt stack, after an entry from user mode onto the master stack,
+ * as only M set makes one; a write of SR before an exception's entry left user mode's A7, as only
+ * an entry from user mode swaps; and the throwaway frame `rte` pops names the master stack. Any
+ * other swap, of an `rte` that pops a frame a program made by hand, goes to a stack that is neither
+ * the one before nor the one after it. A 68000 and a 68010 have two stacks, which alternate.
+ */
+function stackSwaps(step: CoreExecutionStep, m68020: boolean): string[] {
+    const mutations = step.mutations
+    const isSwap = (mutation: CoreMutation) =>
+        mutation.type === 'WriteStackPointers' &&
+        (['usp', 'ssp', 'msp'] as const).every(
+            (register) => mutation.value.old[register] === mutation.value.new[register]
+        )
+    const causes: SwapCause[] = []
+    mutations.forEach((mutation, at) => {
+        if (!isSwap(mutation)) return
+        //what the swap comes before: the frame of the exception it entered, or the one `rte` pops
+        const next = mutations
+            .slice(at + 1)
+            .find(
+                (later) =>
+                    later.type === 'PushException' || later.type === 'PopException' || isSwap(later)
+            )
+        const afterFrame = mutations
+            .slice(0, at)
+            .some((earlier) => earlier.type === 'PushException')
+        causes.push(
+            step.kind === 'irq' && afterFrame
+                ? 'throwaway'
+                : next?.type === 'PushException'
+                  ? 'entry'
+                  : next?.type === 'PopException'
+                    ? 'unwind'
+                    : 'write'
+        )
+    })
+    const stacks: Stack[] = m68020 ? ['msp', 'isp', 'usp'] : ['isp', 'usp']
+    //where each swap left A7, from the last back to the first where its cause says
+    const to: (Stack | undefined)[] = causes.map((cause, i) => {
+        if (i === causes.length - 1) return activeStack(step.new_sr)
+        if (cause === 'throwaway') return 'isp'
+        if (cause === 'entry' && causes[i + 1] === 'throwaway') return 'msp'
+        if (cause === 'write' && causes[i + 1] === 'entry') return 'usp'
+        if (cause === 'unwind' && m68020) return 'msp'
+        return undefined
+    })
+    let from = activeStack(step.old_sr)
+    return causes.map((cause, i) => {
+        const stack =
+            to[i] ?? stacks.find((candidate) => candidate !== from && candidate !== to[i + 1])!
+        const text = stackSwapText(from, stack, cause, m68020)
+        from = stack
+        return text
+    })
+}
+
+/** One swap of the stack pointers as the History says it, from `from` to `to`. */
+function stackSwapText(from: Stack, to: Stack, cause: SwapCause, m68020: boolean): string {
+    if (to === 'usp') return 'Switched to user mode, so A7 is the USP'
+    if (!m68020) return 'Switched to supervisor mode, so A7 is the SSP'
+    const name = to === 'msp' ? 'MSP' : 'ISP'
+    const stack = to === 'msp' ? 'the master stack' : 'the interrupt stack'
+    if (from === 'usp') return `Switched to supervisor mode on ${stack}, so A7 is the ${name}`
+    if (cause === 'throwaway') {
+        return `Switched to ${stack} for the handler, so A7 is the ${name}, and pushed the throwaway frame there`
+    }
+    if (cause === 'unwind') {
+        return `Popped the throwaway frame and switched to ${stack}, so A7 is the ${name}`
+    }
+    return `Switched to ${stack}, so A7 is the ${name}`
 }
 
 function isReturnFromException(mutation: MutationOperation): boolean {

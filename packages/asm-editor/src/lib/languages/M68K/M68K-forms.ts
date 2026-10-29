@@ -1,5 +1,6 @@
 import { S68k, type InstructionForm, type Processor } from '@specy/s68k'
 import type { InstructionDocumentation } from './M68K-documentation'
+import { isM68kBitFieldForm } from '#lib/documentation/instructions/formTags.ts'
 
 /**
  * The **Instruction forms** of the M68K's documented instructions, from s68k's own instruction
@@ -53,4 +54,15 @@ export function m68kFirstProcessor(
         .reduce((first, processor) =>
             PROCESSOR_ORDER.indexOf(processor) < PROCESSOR_ORDER.indexOf(first) ? processor : first
         )
+}
+
+/**
+ * Whether an instruction is one of the 68020's bit fields in every form, `bfextu`: those EASy68K's
+ * `opt bit` gives a program for the 68000 or the 68010 as well.
+ */
+export function m68kIsBitField(
+    instruction: Pick<InstructionDocumentation, 'name' | 'compundNames'>
+): boolean {
+    const forms = m68kInstructionForms(instruction)
+    return forms.length > 0 && forms.every(isM68kBitFieldForm)
 }

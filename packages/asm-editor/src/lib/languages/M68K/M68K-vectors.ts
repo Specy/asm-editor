@@ -77,14 +77,24 @@ export function m68kAutovectorLevel(vector: number): number | undefined {
     return level >= 1 && level <= 7 ? level : undefined
 }
 
+/** The 68020's `trap<cc>`, as the disassembler prints its mnemonic: `TRAPEQ`, `TRAPT`. */
+const CONDITIONAL_TRAP = /^TRAP(?:T|F|HI|LS|CC|HS|CS|LO|NE|EQ|VC|VS|PL|MI|GE|LT|GT|LE)$/
+
 /**
  * What an exception taken through `vector` is called in the History and the Call stack: an
  * autovector's is the IRQ it takes, `IRQ 2`, and every other one is its vector's name, `TRAP #3`
- * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28).
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 28). The 68020's
+ * `chk2` raises vector 6 as `chk` does, and its `trap<cc>` vector 7 as `trapv` does, so where the
+ * instruction that raised it is known, `ran` as the disassembler prints it (`TRAPEQ.W #$3`), the
+ * exception is named after that instruction: `CHK2`, `TRAPEQ`.
  */
-export function m68kExceptionName(vector: number): string {
+export function m68kExceptionName(vector: number, ran?: string): string {
     const level = m68kAutovectorLevel(vector)
-    return level === undefined ? m68kVectorName(vector) : `IRQ ${level}`
+    if (level !== undefined) return `IRQ ${level}`
+    const mnemonic = ran?.trim().split(/[\s.]/, 1)[0].toUpperCase() ?? ''
+    if (vector === 6 && mnemonic === 'CHK2') return 'CHK2'
+    if (vector === 7 && CONDITIONAL_TRAP.test(mnemonic)) return mnemonic
+    return m68kVectorName(vector)
 }
 
 /**

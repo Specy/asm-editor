@@ -210,14 +210,25 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         ])
         // a family's forms are its members' own
         expect(await sectionsOf('bcc')).toEqual([[[], ['bcc label']]])
+        //the 68020's shapes of a 68000 instruction are a section of their own
+        expect(await sectionsOf('muls')).toEqual([
+            [[], ['muls <ea>, Dn']],
+            [['68020'], ['muls <ea>, Dn', 'muls <ea>, Dh:Dl']]
+        ])
         const entries = entriesOf(await documentationFor('m68k'))
+        //the 68020's own instructions, and the bit fields, which `opt bit` gives the 68000 too
+        const for68020 = ['extb', 'trapcc', 'chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk']
+        const bitFields = ['bftst', 'bfextu', 'bfexts', 'bfffo', 'bfchg', 'bfclr', 'bfset', 'bfins']
         for (const entry of entries.filter((entry) => entry.kind === 'instruction')) {
             const patterns = documentPatterns(viewOf(entry, 'instruction').document)
             expect(patterns.length, entry.id).toBeGreaterThan(0)
             //`rte`, `stop` and `reset` are the M68K instructions privileged in every form; `extb`
-            //is the 68020's in all of its, `rtd` and `bkpt` the 68010's, and `movec` and `moves`
-            //the 68010's and privileged
-            if (entry.title === 'extb') expect(entry.tags).toEqual(['68020'])
+            //and the 68020's own instructions are the 68020's in all of theirs, `rtd` and `bkpt`
+            //the 68010's, and `movec` and `moves` the 68010's and privileged
+            if ([...for68020, 'divsl', 'divul'].includes(entry.title))
+                expect(entry.tags, entry.id).toEqual(['68020'])
+            else if (bitFields.includes(entry.title))
+                expect(entry.tags, entry.id).toEqual(['68020', 'opt-bit'])
             else if (['rtd', 'bkpt'].includes(entry.title))
                 expect(entry.tags, entry.id).toEqual(['68010'])
             else if (['movec', 'moves'].includes(entry.title))

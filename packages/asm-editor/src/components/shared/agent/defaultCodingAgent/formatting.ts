@@ -426,14 +426,16 @@ export function formatEmulatorState(
             : undefined,
         //and as data, which also tells an exit from a program that ran past its last instruction
         termination: emulator.termination,
-        //the M68K's cycle counter, since the start or trap #15 task 30, and the newest step's cost
+        //the M68K's cycle counter, since the start or trap #15 task 30, and the newest step's cost;
+        //a 68020 program's are an estimate, the manual's cache case, and every step's with them
         ...(emulator.cycles
             ? {
                   cycles: {
                       total: Number(emulator.cycles.total),
                       ...(emulator.cycles.last === undefined
                           ? {}
-                          : { lastStep: emulator.cycles.last })
+                          : { lastStep: emulator.cycles.last }),
+                      ...(emulator.cycles.estimate ? { estimate: true } : {})
                   }
               }
             : {}),

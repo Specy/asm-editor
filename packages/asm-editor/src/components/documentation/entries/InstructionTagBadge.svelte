@@ -9,7 +9,9 @@
         privileged: 'The processor reserves it for supervisor or kernel mode',
         '68010':
             'The 68010 and 68020 have it, the 68000 does not: write opt p=68010 at the top of the program',
-        '68020': 'Only the 68020 has it: write opt p=68020 at the top of the program'
+        '68020': 'Only the 68020 has it: write opt p=68020 at the top of the program',
+        'opt-bit':
+            'A 68000 or 68010 program has it too when it starts with opt bit, EASy68K’s option for the bit fields'
     }
 </script>
 

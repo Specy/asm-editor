@@ -2,24 +2,33 @@
     /**
      * The cycle counter under the registers, for a Target whose Core counts the clock cycles its
      * processor takes: "Cycles 12,345 (+8)", the newest step's cost in parentheses
-     * ([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 30). The host
-     * draws nothing for a Target that does not count.
+     * ([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 30). An
+     * estimate, a 68020 program's, is marked "Cycles ≈ 12,345 (+8)", and the hover says why. The
+     * host draws nothing for a Target that does not count.
      */
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { CycleCount } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-    import { cycleCounterTooltip, formatCycles } from '#lib/languages/cycles.ts'
+    import {
+        CYCLE_ESTIMATE_MARK,
+        cycleCounterTooltip,
+        formatCycles
+    } from '#lib/languages/cycles.ts'
 
     interface Props {
         cycles: CycleCount
+        /** The processor the program is written for, when it is a later one than the 68000. */
+        processor?: string
         style?: string
     }
 
-    let { cycles, style = '' }: Props = $props()
+    let { cycles, processor, style = '' }: Props = $props()
 </script>
 
-<div class="cycles-line" {style} {@attach tooltip(cycleCounterTooltip(cycles))}>
+<div class="cycles-line" {style} {@attach tooltip(cycleCounterTooltip(cycles, processor))}>
     <span class="label">Cycles</span>
-    <span class="count">{formatCycles(cycles.total)}</span>
+    <span class="count"
+        >{cycles.estimate ? `${CYCLE_ESTIMATE_MARK} ` : ''}{formatCycles(cycles.total)}</span
+    >
     {#if cycles.last !== undefined}
         <span class="last">(+{formatCycles(cycles.last)})</span>
     {/if}

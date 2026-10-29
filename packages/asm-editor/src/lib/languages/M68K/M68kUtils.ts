@@ -1,4 +1,4 @@
-import type { Termination as CoreTermination, MemoryRange } from '@specy/s68k'
+import type { Termination as CoreTermination, MemoryRange, Processor } from '@specy/s68k'
 import { describeInvalidTrapArgument, describeUnsupportedTrapTask } from './M68K-traps'
 import { m68kVectorAddress, m68kVectorLocation, m68kVectorName } from './M68K-vectors'
 
@@ -6,13 +6,15 @@ import { m68kVectorAddress, m68kVectorLocation, m68kVectorName } from './M68K-ve
  * A Core error as the Log says it. `lineNumber` (1-based) is the line of the instruction that
  * raised it; `address` stands in for it where no line was laid out, as when the program ran into
  * its data, whose words decode as instructions too. `memoryMap`, the Program's, gives a bus error
- * the bounds of the range that refused it.
+ * the bounds of the range that refused it, and `processor`, the Program's, says what a format
+ * error's frame was to it and which bits of SR trace.
  */
 export function getM68kErrorMessage(
     error: unknown,
     lineNumber?: number,
     address?: number,
-    memoryMap?: readonly MemoryRange[]
+    memoryMap?: readonly MemoryRange[],
+    processor?: Processor
 ): string {
     //"Error at line 3: Division by zero", or the message alone, which a caller's own sentence
     //follows with a space of its own ("Error executing code. Division by zero")
@@ -26,7 +28,7 @@ export function getM68kErrorMessage(
         return at(`${error}`)
     }
     if (error.type === 'Raw' && typeof error.value === 'string') return error.value
-    const parts = errorParts(error, memoryMap)
+    const parts = errorParts(error, memoryMap, processor)
     if (parts) return at(parts.detail ? `${parts.headline}: ${parts.detail}` : parts.headline)
     if (typeof error.message === 'string') {
         if (error.message === 'unreachable') {
@@ -45,21 +47,22 @@ export function getM68kErrorMessage(
  * exception with no vector, such as a `trap #15` task s68k does not carry out, reads as any other
  * error. `lineNumber`, `address` and `memoryMap` are as for `getM68kErrorMessage`; `vbr` is where
  * the vector table starts, which a 68010 program can move with `movec`, so that the message names
- * the vector where the processor read it: "vector 5 at $008014".
+ * the vector where the processor read it: "vector 5 at $008014"; `processor` is the Program's.
  */
 export function getM68kTerminationMessage(
     termination: Extract<CoreTermination, { type: 'Exception' | 'Halted' }>,
     lineNumber?: number,
     address?: number,
     memoryMap?: readonly MemoryRange[],
-    vbr = 0
+    vbr = 0,
+    processor?: Processor
 ): string {
     const where = lineNumber
         ? ` at line ${lineNumber}`
         : address !== undefined
           ? ` at $${hex(address)}`
           : ''
-    const parts = errorParts(termination.value.cause, memoryMap)
+    const parts = errorParts(termination.value.cause, memoryMap, processor)
     if (termination.type === 'Halted') {
         const { cause, vector } = termination.value
         const halted = `The CPU halted${where}: a double bus fault while taking ${m68kVectorName(vector)} (vector ${vector})`
@@ -81,7 +84,9 @@ export function getM68kTerminationMessage(
         return `${halted}, as pushing its frame raised ${raised}`
     }
     const { cause, vector } = termination.value
-    if (vector === undefined) return getM68kErrorMessage(cause, lineNumber, address, memoryMap)
+    if (vector === undefined) {
+        return getM68kErrorMessage(cause, lineNumber, address, memoryMap, processor)
+    }
     const headline = parts?.headline ?? getM68kErrorMessage(cause)
     const detail = parts?.detail ? ` (${parts.detail})` : ''
     return `${headline}${where}: vector ${vector} at ${m68kVectorAddress(vector, vbr)} holds no handler${detail}`
@@ -94,7 +99,8 @@ export function getM68kTerminationMessage(
  */
 function errorParts(
     error: Record<PropertyKey, unknown>,
-    memoryMap?: readonly MemoryRange[]
+    memoryMap?: readonly MemoryRange[],
+    processor?: Processor
 ): { headline: string; detail?: string } | undefined {
     const value = error.value
     switch (error.type) {
@@ -128,6 +134,16 @@ function errorParts(
                 headline: 'Overflow exception',
                 detail: 'TRAPV ran while the overflow flag was set'
             }
+        //the 68020's: `trap<cc>` with its condition true, through vector 7 as `trapv`, and `chk2`
+        //with the register outside its bounds, through vector 6 as `chk`
+        case 'ConditionalTrap':
+            return {
+                headline: 'Conditional trap',
+                detail: 'a TRAPcc instruction ran while its condition was true'
+            }
+        case 'Chk2OutOfBounds':
+            if (!isRecord(value)) return undefined
+            return { headline: 'CHK2 exception', detail: chk2Detail(value) }
         case 'IllegalInstruction':
             return { headline: 'Illegal instruction' }
         case 'PrivilegeViolation':
@@ -135,10 +151,14 @@ function errorParts(
                 headline: 'Privilege violation',
                 detail: 'the instruction runs only in supervisor mode, and the program is in user mode'
             }
+        //the 68020 has two trace bits: T1, the 68000's T, and T0, which traces a change of flow
         case 'Trace':
             return {
                 headline: 'Trace exception',
-                detail: 'the T bit of SR is set, so the processor stops after every instruction'
+                detail:
+                    processor === '68020'
+                        ? 'a trace bit of SR is set: T1 stops the processor after every instruction, and T0 after each branch, jump or return'
+                        : 'the T bit of SR is set, so the processor stops after every instruction'
             }
         //a word no instruction of the processor starts with, kept by the Core
         case 'LineA':
@@ -183,26 +203,50 @@ function errorParts(
         case 'InvalidArgument':
             if (typeof value !== 'string') return undefined
             return { headline: 'Invalid argument', detail: value }
-        //the 68010's `rte` reads the format word of the frame it returns from, and refuses one it
-        //never pushes: a format other than $0 and $8, or a format $8 frame of another version
+        //the 68010's and the 68020's `rte` reads the format word of the frame it returns from, and
+        //refuses one it never pushes: on a 68010 a format other than $0 and $8, on a 68020 other
+        //than $0, $1, $2, $A and $B, or a bus fault frame of another version
         case 'FormatError':
             if (!isRecord(value) || typeof value.format !== 'number') return undefined
-            return { headline: 'Format error', detail: formatErrorDetail(value.format) }
+            return {
+                headline: 'Format error',
+                detail: formatErrorDetail(value.format, processor === '68020' ? '68020' : '68010')
+            }
     }
     return undefined
 }
 
 /**
- * Why `rte` refused the frame on the stack: "rte found a frame of format $3, which a 68010 does not
- * make", or for a format $8 frame, which a 68010 does make, that its version is not the one it
- * writes. A frame a program pushed by hand, or one the handler moved the stack pointer off, is the
- * usual cause.
+ * Where the register was, against the bounds `chk2` read, each sign-extended as the processor
+ * compared it: "12 is outside 1..5". Bounds whose upper one is below the lower one as signed
+ * numbers are an unsigned range, as `dc.b 16,240` is: "5 is outside 16..-16, read as an unsigned
+ * range since -16 is below 16".
  */
-function formatErrorDetail(format: number): string {
+function chk2Detail(value: Record<PropertyKey, unknown>): string {
+    const { lower, upper } = value
+    const outside = `${value.value} is outside ${lower}..${upper}`
+    if (typeof lower !== 'number' || typeof upper !== 'number' || lower <= upper) return outside
+    return `${outside}, read as an unsigned range since ${upper} is below ${lower}`
+}
+
+/**
+ * The formats of the frames whose version number `rte` checks, by processor: the 68010's bus fault
+ * frame, $8, and the 68020's long one, $B. Any other format `rte` refuses is one it never makes.
+ */
+const VERSIONED_FORMATS = { '68010': 0x8, '68020': 0xb } as const
+
+/**
+ * Why `rte` refused the frame on the stack: "rte found a frame of format $3, which a 68010 does not
+ * make", "…, which a 68020 does not make", or for the bus fault frame it does make, $8 on a 68010
+ * and $B on a 68020, that its version is not the one it writes. A frame a program pushed by hand,
+ * or one the handler moved the stack pointer off, is the usual cause; on a 68020 also a 68010's
+ * format $8 frame.
+ */
+function formatErrorDetail(format: number, processor: '68010' | '68020'): string {
     const name = `$${format.toString(16).toUpperCase()}`
-    return format === 8
-        ? 'rte found a format $8 frame whose version number is not the one a 68010 writes'
-        : `rte found a frame of format ${name}, which a 68010 does not make`
+    return format === VERSIONED_FORMATS[processor]
+        ? `rte found a format ${name} frame whose version number is not the one a ${processor} writes`
+        : `rte found a frame of format ${name}, which a ${processor} does not make`
 }
 
 /**
