@@ -42,7 +42,7 @@ export function getM68kErrorMessage(
 /**
  * How a program the 68000's exception machinery ended reads in the Log: an exception whose vector
  * held no handler, "Division by zero at line 12: vector 5 at $000014 holds no handler", or a
- * double fault, "The CPU halted at line 4: a double bus fault while taking TRAP #0 (vector 32) …"
+ * double fault, "The CPU halted at line 4: a double fault while handling TRAP #0 (vector 32) …"
  * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 9 and 10). An
  * exception with no vector, such as a `trap #15` task s68k does not carry out, reads as any other
  * error. `lineNumber`, `address` and `memoryMap` are as for `getM68kErrorMessage`; `vbr` is where
@@ -65,7 +65,7 @@ export function getM68kTerminationMessage(
     const parts = errorParts(termination.value.cause, memoryMap, processor)
     if (termination.type === 'Halted') {
         const { cause, vector } = termination.value
-        const halted = `The CPU halted${where}: a double bus fault while handling ${m68kVectorName(vector)} (vector ${vector})`
+        const halted = `The CPU halted${where}: a double fault while handling ${m68kVectorName(vector)} (vector ${vector})`
         //the vector itself, read from a range the memory map makes invalid: the bus error is at
         //the vector's own address, where the frame's are writes below the stack pointer
         const refused = cause.type === 'BusError' ? cause.value : undefined
@@ -76,12 +76,15 @@ export function getM68kTerminationMessage(
         ) {
             return `${halted}. Reading the vector at ${m68kVectorAddress(vector, vbr)} raised a bus error, ${refusal(refused.range, memoryMap)}`
         }
-        //what pushing the frame raised: an address error, on an odd supervisor stack pointer, or a
-        //bus error, where the memory map refuses the frame
+        //a second fault while saving the frame, or fetching a bus/address error's handler
         const raised = parts
             ? `${article(parts.headline)} ${parts.headline[0].toLowerCase()}${parts.headline.slice(1)}${parts.detail ? `, ${parts.detail}` : ''}`
             : getM68kErrorMessage(cause)
-        return `${halted}. Pushing the exception frame raised ${raised}`
+        const action =
+            refused?.access === 'Program'
+                ? 'Fetching the exception handler'
+                : 'Saving the exception frame on the supervisor stack'
+        return `${halted}. ${action} raised ${raised}`
     }
     const { cause, vector } = termination.value
     if (vector === undefined) {
@@ -245,8 +248,8 @@ const VERSIONED_FORMATS = { '68010': 0x8, '68020': 0xb } as const
 function formatErrorDetail(format: number, processor: '68010' | '68020'): string {
     const name = `$${format.toString(16).toUpperCase()}`
     return format === VERSIONED_FORMATS[processor]
-        ? `RTE found a format ${name} frame with a version number the ${processor} does not support`
-        : `RTE found an exception frame with format ${name}, which the ${processor} does not support`
+        ? `RTE found a format ${name} frame with a version number the ${processor} processor does not support`
+        : `RTE found an exception frame with format ${name}, which the ${processor} processor does not support`
 }
 
 /**

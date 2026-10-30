@@ -178,11 +178,12 @@ describe('quick fixes from the Core', () => {
             lineIndex: 1,
             column: 12,
             endColumn: 16,
-            message: '`(d0)` is a 68020 addressing mode, and this program is written for the 68000.'
+            message:
+                'The addressing mode `(d0)` requires the 68020 processor or newer. This program targets the 68000 processor.'
         })
         //the marker shows the hint under the message
         expect(refused.formatted).toBe(
-            `${refused.message}\nOn the 68000, copy \`d0\` into an address register, \`movea.w d0,a0\`, and write \`(a0)\`, as a 68000 has no data register indirect mode; or add \`opt p=68020\` at the top of the program to write it for the 68020`
+            `${refused.message}\nFor the 68000 processor, copy \`d0\` into an address register, \`movea.w d0,a0\`, and write \`(a0)\`, as the 68000 processor has no data register indirect mode. Otherwise, add \`opt p=68020\` before the first instruction`
         )
         expect(refused.fixes!.map((fix) => fix.title)).toEqual([
             'Add `opt p=68020` at the top of the program'
@@ -226,7 +227,7 @@ describe('quick fixes from the Core', () => {
         const for68010 = '    opt p=68010\n    org $1000\n    move.l (4,a0,d1.w*4),d1\n'
         const [later] = diagnosticsOf(sourcesOf({ 'main.m68k': for68010 }))
         expect(later.message).toBe(
-            '`(4,a0,d1.w*4)` is a 68020 addressing mode, and this program is written for the 68010.'
+            'The addressing mode `(4,a0,d1.w*4)` requires the 68020 processor or newer. This program targets the 68010 processor.'
         )
         const [change] = later.fixes!
         expect(change.title).toBe('Change `opt p=68010` to `opt p=68020`')
@@ -243,7 +244,8 @@ describe('quick fixes from the Core', () => {
         const [refused] = diagnosticsOf(sourcesOf({ 'main.m68k': program }))
         expect(refused).toMatchObject({
             code: 'needs_a_later_processor',
-            message: '`bfextu` is a 68020 instruction, and this program is written for the 68000.'
+            message:
+                '`bfextu` requires the 68020 processor or newer. This program targets the 68000 processor.'
         })
         expect(refused.fixes!.map((fix) => fix.title)).toEqual([
             'Add `opt p=68020` at the top of the program',
@@ -301,7 +303,8 @@ describe('quick fixes from the Core', () => {
         const [refused] = diagnosticsOf(sourcesOf({ 'main.m68k': program }))
         expect(refused).toMatchObject({
             code: 'needs_a_later_processor',
-            message: '`msp` is a 68020 control register, and this program is written for the 68000.'
+            message:
+                'The control register `msp` requires the 68020 processor or newer. This program targets the 68000 processor.'
         })
         expect(refused.fixes!.map((fix) => fix.title)).toEqual([
             'Add `opt p=68020` at the top of the program'
@@ -329,7 +332,7 @@ describe('quick fixes from the Core', () => {
         expect(refused).toMatchObject({
             code: 'needs_a_later_processor',
             message:
-                '`link.w a6,#-8` is a 68020 instruction, and this program is written for the 68000.'
+                '`link.w a6,#-8` requires the 68020 processor or newer. This program targets the 68000 processor.'
         })
         expect(refused.fixes!.map((fix) => fix.title)).toEqual([
             'Add `opt p=68020` at the top of the program',

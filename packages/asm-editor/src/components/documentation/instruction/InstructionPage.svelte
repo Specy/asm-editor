@@ -80,7 +80,9 @@
     )}
 </svelte:head>
 
-<Page contentStyle="padding: 1rem; gap: 1rem;">
+<!-- the page ends on the example's card, not on prose: the content pages' room under the last
+     paragraph would only be empty space under it, so the column's own padding is all it keeps -->
+<Page style="padding-bottom: 0;" contentStyle="padding: 1rem; gap: 1rem;">
     <InstructionDocumentView
         {document}
         {language}

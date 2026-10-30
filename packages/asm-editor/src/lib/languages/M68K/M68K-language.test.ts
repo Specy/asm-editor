@@ -699,7 +699,7 @@ describe('M68K v2 language tooling', () => {
                 4
             )
         ).toBe(
-            'The CPU halted at line 4: a double bus fault while handling TRAP #0 (vector 32). Pushing the exception frame raised an address error, writing a word at the odd address $4FFF'
+            'The CPU halted at line 4: a double fault while handling TRAP #0 (vector 32). Saving the exception frame on the supervisor stack raised an address error, writing a word at the odd address $4FFF'
         )
     })
 
@@ -803,7 +803,7 @@ describe('M68K v2 language tooling', () => {
                 map
             )
         ).toBe(
-            'The CPU halted at line 3: a double bus fault while handling Divide by zero (vector 5). Reading the vector at $000014 raised a bus error, where the memory invalid directive marks $0-$3FF as invalid'
+            'The CPU halted at line 3: a double fault while handling Divide by zero (vector 5). Reading the vector at $000014 raised a bus error, where the memory invalid directive marks $0-$3FF as invalid'
         )
         expect(
             getM68kTerminationMessage(
@@ -819,7 +819,23 @@ describe('M68K v2 language tooling', () => {
                 map
             )
         ).toBe(
-            'The CPU halted at line 3: a double bus fault while handling Bus error (vector 2). Pushing the exception frame raised a bus error, writing a word at $FFFFFE, where the memory read directive marks $F00000-$FFFFFF as read-only'
+            'The CPU halted at line 3: a double fault while handling Bus error (vector 2). Saving the exception frame on the supervisor stack raised a bus error, writing a word at $FFFFFE, where the memory read directive marks $F00000-$FFFFFF as read-only'
+        )
+        expect(
+            getM68kTerminationMessage(
+                halted(
+                    {
+                        type: 'BusError',
+                        value: { address: 0x200, size: 'Word', access: 'Program', range: 'invalid' }
+                    },
+                    2
+                ),
+                3,
+                undefined,
+                map
+            )
+        ).toBe(
+            'The CPU halted at line 3: a double fault while handling Bus error (vector 2). Fetching the exception handler raised a bus error, fetching code at $200, where the memory invalid directive marks $0-$3FF as invalid'
         )
     })
 

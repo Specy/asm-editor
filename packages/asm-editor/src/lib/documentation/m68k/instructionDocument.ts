@@ -7,6 +7,7 @@ import {
     type InstructionDocumentation
 } from '#lib/languages/M68K/M68K-documentation.ts'
 import { m68kInstructionForms, type M68KInstructionForm } from '#lib/languages/M68K/M68K-forms.ts'
+import { m68kDialectHas, m68kFormShown, type M68kDialect } from '#lib/languages/M68K/m68kDialect.ts'
 import { plainText, summaryOf } from '../entries'
 import { M68K_BIT_FIELD_MODE, m68kFormTags } from '../instructions/formTags'
 import {
@@ -31,7 +32,8 @@ import {
     M68K_MODE_ORDER,
     M68K_MODE_SYMBOLS,
     m68kModeClass,
-    m68kOperandLine
+    m68kOperandLine,
+    withoutThe68020
 } from './operands'
 
 /**
@@ -244,10 +246,14 @@ function sizeFact(
     ]
 }
 
-/** "Privileged on the 68010 and 68020", for a form only a later processor reserves. */
-function privilegedFromFact(form: M68KInstructionForm): string[] {
+/**
+ * "Privileged on the 68010 and 68020", for a form only a later processor reserves; nothing in a
+ * program for a processor before it, which runs the form in user mode.
+ */
+function privilegedFromFact(form: M68KInstructionForm, dialect?: M68kDialect): string[] {
     const from = form.privilegedFrom
     if (form.privileged || from === undefined || !isM68kLaterProcessor(from)) return []
+    if (dialect && !m68kDialectHas(dialect, { processor: from })) return []
     return [PRIVILEGED_FROM[from]]
 }
 
@@ -255,7 +261,8 @@ function formInput(
     name: string,
     entry: string | undefined,
     form: M68KInstructionForm,
-    defaultSize: InstructionDocumentation['defaultSize']
+    defaultSize: InstructionDocumentation['defaultSize'],
+    dialect?: M68kDialect
 ): FormInput {
     const branch = entry !== undefined && BRANCHES.has(entry)
     const parts: InputPart[] = [literal(name)]
@@ -294,7 +301,7 @@ function formInput(
         code: written.length > 0 ? `${name} ${written.join(', ')}` : name,
         parts,
         tags: m68kFormTags(form),
-        facts: [...sizeFact(form, defaultSize), ...privilegedFromFact(form)],
+        facts: [...sizeFact(form, defaultSize), ...privilegedFromFact(form, dialect)],
         // Two forms with the same symbols take different modes: they stay apart.
         split: JSON.stringify([form.operands, form.sizes]),
         details
@@ -323,22 +330,42 @@ function flagStrip(
 }
 
 /**
+ * The forms an instruction's document draws: a member's own where s68k lists it (`beq`), else its
+ * family's (`asd` is no mnemonic), as the instruction page reads them, and with a `dialect` only
+ * those a program written for it can write.
+ */
+export function m68kDocumentForms(name: string, dialect?: M68kDialect): M68KInstructionForm[] {
+    const instruction = M68KUncompoundedInstructions.get(name)
+    if (!instruction) return []
+    const own = m68kInstructionForms({ name })
+    const forms = own.length > 0 ? own : m68kInstructionForms(instruction)
+    return dialect ? forms.filter((form) => m68kFormShown(form, dialect)) : forms
+}
+
+/**
  * The document of an M68K instruction page: any of the Documentation's names, a family's (`bcc`,
  * `asd`) and its members' (`beq`, `asl`) alike. Undefined for a name with no page.
+ *
+ * With a `dialect`, it is the document the Workbench's Documentation panel shows a program written
+ * for it, without what a later processor brought: the rows of its forms, the privilege only a
+ * later processor gives a form, and what the legend says of the 68020 alone
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36). Undefined then
+ * too for an instruction the program cannot write in any form.
  */
-export function m68kInstructionDocument(name: string): InstructionDocument | undefined {
+export function m68kInstructionDocument(
+    name: string,
+    dialect?: M68kDialect
+): InstructionDocument | undefined {
     const instruction = M68KUncompoundedInstructions.get(name)
     if (!instruction) return undefined
     const entry = m68kEntryName(name)
-    // A member's own forms where s68k lists it (`beq`), else its family's (`asd` is no mnemonic),
-    // as the instruction page reads them.
-    const own = m68kInstructionForms({ name })
-    const forms = own.length > 0 ? own : m68kInstructionForms(instruction)
+    const forms = m68kDocumentForms(name, dialect)
+    if (dialect && forms.length === 0) return undefined
 
     const result = buildFormPatterns(
         forms
             .flatMap(splitPairs)
-            .map((form) => formInput(name, entry, form, instruction.defaultSize)),
+            .map((form) => formInput(name, entry, form, instruction.defaultSize, dialect)),
         { tagExplanations: { privileged: PRIVILEGED_EXPLANATION, ...PROCESSOR_EXPLANATIONS } }
     )
     const laterProcessor = result.tags.find(isM68kLaterProcessor)
@@ -366,10 +393,12 @@ export function m68kInstructionDocument(name: string): InstructionDocument | und
     }
     if (immediate) symbols.add('#imm')
     const listed = [...symbols]
+    const m68020 = !dialect || m68kDialectHas(dialect, { processor: '68020' })
     const operands: OperandSymbol[] = listed.flatMap((symbol) => {
-        const line = m68kOperandLine(symbol, entry)
-        if (!line) return []
-        if (symbol === '<ea>' && indexed) {
+        const written = m68kOperandLine(symbol, entry)
+        if (!written) return []
+        const line = m68020 ? written : withoutThe68020(written)
+        if (symbol === '<ea>' && indexed && m68020) {
             return [{ symbol, ...line, meaning: `${line.meaning} ${M68020_INDEXED}` }]
         }
         return [{ symbol, ...line }]

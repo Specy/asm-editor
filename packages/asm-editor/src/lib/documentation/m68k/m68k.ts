@@ -9,7 +9,12 @@ import {
     M68KDirectiveDocumentationList,
     type Size
 } from '#lib/languages/M68K/M68K-documentation.ts'
-import { m68kInstructionForms } from '#lib/languages/M68K/M68K-forms.ts'
+import {
+    m68kDialectHas,
+    m68kDialectKey,
+    type M68kDialect,
+    type M68kNeeds
+} from '#lib/languages/M68K/m68kDialect.ts'
 import {
     M68K_COLORS,
     M68K_KEY_CODE_DOCS,
@@ -35,7 +40,7 @@ import { m68kInstructionCategories } from './categories'
 import { m68kFormTags } from '../instructions/formTags'
 import { withInstructionCategory } from '../instructions/resolve'
 import { documentSignature } from '../instructions/document'
-import { m68kInstructionDocument } from './instructionDocument'
+import { m68kDocumentForms, m68kInstructionDocument } from './instructionDocument'
 import addressingModesMarkdown from './addressing-modes.md?raw'
 import assemblerFeaturesMarkdown from './assembler-features.md?raw'
 import conditionCodesMarkdown from './condition-codes.md?raw'
@@ -43,6 +48,7 @@ import exceptionsMarkdown from './exceptions.md?raw'
 import shiftDirectionsMarkdown from './shift-directions.md?raw'
 import trapsMarkdown from './traps.md?raw'
 import { synthEntries } from '../synth'
+import type { ProgramDocumentation } from '../documentation'
 
 /**
  * The M68K Documentation. Instructions, directives, condition codes and trap tasks come from the
@@ -83,12 +89,19 @@ function prose(
     }))
 }
 
-function instructions(): Chapter {
+/**
+ * The Instructions Chapter; with a `dialect`, as a program written for it reads it: each
+ * instruction with only the forms it can write, and without those it can write in none
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
+ */
+function instructions(dialect?: M68kDialect): Chapter {
     const href = `${BASE}/instruction`
-    const entries = instructionsDocumentationList.map((instruction): DocumentationEntry => {
-        const forms = m68kInstructionForms(instruction)
-        const document = m68kInstructionDocument(instruction.name)!
-        return withInstructionCategory(
+    const entries = instructionsDocumentationList.flatMap((instruction): DocumentationEntry[] => {
+        //the forms of its rows, whose shared tags are the entry's
+        const forms = m68kDocumentForms(instruction.name, dialect)
+        const document = m68kInstructionDocument(instruction.name, dialect)
+        if (!document) return []
+        const entry = withInstructionCategory(
             {
                 id: `m68k/instructions/${instruction.name}`,
                 language: 'm68k',
@@ -112,6 +125,7 @@ function instructions(): Chapter {
             m68kInstructionCategories[instruction.name],
             forms.map(m68kFormTags)
         )
+        return [entry]
     })
     return {
         id: 'instructions',
@@ -468,4 +482,90 @@ export function chapters(): Chapter[] {
         assemblerFeatures()
     ]
     return cached
+}
+
+const THE_68010: M68kNeeds = { processor: '68010' }
+const THE_68020: M68kNeeds = { processor: '68020' }
+
+/**
+ * The sections of the Chapters only a program for a later processor needs, by Chapter and anchor,
+ * with what each needs. The Workbench's Documentation panel leaves them out for a program written
+ * for an earlier processor ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+ * decision 36); the site's pages show them all. The format error is the 68010's and the 68020's,
+ * the control registers start with the 68010's three, and the bit fields are the 68020's and those
+ * `opt bit` gives an earlier processor.
+ */
+export const M68K_LATER_PROCESSOR_SECTIONS: Readonly<
+    Record<string, Readonly<Record<string, M68kNeeds>>>
+> = {
+    exceptions: {
+        68010: THE_68010,
+        'format-error': THE_68010,
+        68020: THE_68020,
+        'master-stack': THE_68020,
+        'throwaway-frame': THE_68020,
+        '68020-frames': THE_68020,
+        '68020-trace': THE_68020,
+        'odd-addresses': THE_68020,
+        '68020-cycles': THE_68020
+    },
+    'addressing-modes': {
+        'control-registers': THE_68010,
+        68020: THE_68020,
+        'scaled-index': THE_68020,
+        'base-displacements': THE_68020,
+        'memory-indirect': THE_68020,
+        'suppressed-registers': THE_68020,
+        'long-branches': THE_68020,
+        'register-pairs': THE_68020,
+        'bit-fields': { processor: '68020', bitField: true }
+    }
+}
+
+/** Whether a program written for `dialect` reads a section: all but those a later processor needs. */
+function sectionShown(entry: DocumentationEntry, dialect: M68kDialect): boolean {
+    const needs = M68K_LATER_PROCESSOR_SECTIONS[entry.chapter]?.[entry.anchor]
+    return !needs || m68kDialectHas(dialect, needs)
+}
+
+const byDialect = new Map<string, ProgramDocumentation>()
+
+/**
+ * The Chapters as the Workbench's Documentation panel shows them to a program written for
+ * `dialect`, without what a later processor brought: the instructions it can write in no form, the
+ * rows of the forms it cannot write, and the sections only a later processor needs; and the ids of
+ * the entries left out, which its search results leave out too
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36). A 68020 program
+ * has everything.
+ */
+export function chaptersFor(dialect: M68kDialect): ProgramDocumentation {
+    const key = m68kDialectKey(dialect)
+    let made = byDialect.get(key)
+    if (!made) {
+        made = m68kDialectHas(dialect, THE_68020)
+            ? { chapters: chapters(), hidden: new Set() }
+            : leftOut(dialect)
+        byDialect.set(key, made)
+    }
+    return made
+}
+
+/** The Chapters as a program for the 68000 or the 68010 reads them, and what they leave out. */
+function leftOut(dialect: M68kDialect): ProgramDocumentation {
+    const all = chapters()
+    const shown = all.map((chapter) =>
+        chapter.id === 'instructions'
+            ? instructions(dialect)
+            : {
+                  ...chapter,
+                  entries: chapter.entries.filter((entry) => sectionShown(entry, dialect))
+              }
+    )
+    const kept = new Set(shown.flatMap((chapter) => chapter.entries.map((entry) => entry.id)))
+    const hidden = new Set(
+        all
+            .flatMap((chapter) => chapter.entries.map((entry) => entry.id))
+            .filter((id) => !kept.has(id))
+    )
+    return { chapters: shown, hidden }
 }

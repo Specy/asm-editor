@@ -8,6 +8,8 @@ Status: proposed on 2026-10-21. The owner reviewed it the same day:
 
 On 2026-10-28 the owner confirmed ("ok go") design decision 3's choice of `opt p=` in the source over a per-Program Setting, and the plan's planning decisions 11 (the dialect plumbing ships in batch 1) and 12 (the pause on a write into code is a Preference). Batch 1 is being implemented. The editor ADR numbers moved, since 0055–0064 were taken in the meantime: the IRQs will be ADR 0065. The same day the owner deferred the Build output's format (32), so an M68K Build saves no File for now and the S-record Build output has no ADR.
 
+On 2026-10-30 the owner decided that the Workbench's Documentation panel and completion follow the processor the program chooses (36).
+
 The remaining decisions are recommendations drawn from three fact bases and from a read of the s68k Core and the editor summarised in the [plan](./m68k-machine-plan.md)'s Starting point. The fact bases are:
 
 - [EASy68K's machine behaviour](../research/easy68k-machine-behaviour.md), read from its 5.16.1 source;
@@ -352,6 +354,15 @@ Four things a person can do once this is in, to show where each decision lands.
     - Every form of the instruction table's export is assembled, encoded, decoded and compared, at every size and with one operand per mode.
     - An opt-in test compares each encoding with GNU `as -m68000` for m68k, one instruction at a time, and checks the decoder against `objdump`. `objdump` decodes the 68020's index words whatever processor is selected, so that check uses canonical encodings only.
     - Musashi's sixty self-checking 68000 programs (MIT) run as integration tests.
+
+### Documentation and completion
+
+36. **The Documentation panel, completion and hovers follow the program's processor.** The owner's call, 2026-10-30.
+    - In the Workbench they leave out what a later processor brought than the one the program chooses: instructions, the rows of their forms and the privilege only a later processor gives one (`move sr,<ea>`'s "Privileged on the 68010 and 68020"), Chapter sections such as the exceptions page's "On the 68020", addressing modes, the panel's search results, and completion's mnemonics, sizes, modes and control registers. `opt bit` or `opt p=68020` brings the bit fields.
+    - A hover of an instruction the program cannot write in any form, `extb` in a 68000 program, keeps its whole document, which says the processor it needs. Hovers followed the processor from the same day, once the owner saw the 68010's privilege in a 68000 program's hover.
+    - The site's pages show everything, tagged, and so does a host with no live analysis of the program, whose processor is unknown: a Playground, a lecture or an embed.
+    - `opt p=` stays the only choice of processor (3). A "68000 · 68010 · 68020" switch in the panel's header, to look ahead without editing the code, is built and kept off behind a code flag, `m68kProcessorSwitch` in [`m68kDialect.ts`](../../packages/asm-editor/src/lib/languages/M68K/m68kDialect.ts).
+    - s68k's assembly says the processor while the code has an error too (the Core's ADR 0011, amendment of 2026-10-30), and the live analysis carries it to all three.
 
 ## Glossary changes
 

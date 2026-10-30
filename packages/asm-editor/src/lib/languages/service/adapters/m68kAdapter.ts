@@ -113,7 +113,8 @@ export function analyzeM68kProject(
                 )
             ],
             occurrences: [],
-            fileStatus
+            fileStatus,
+            m68kDialect: { processor: result.processor, bitFields: result.bitFields }
         }
     } finally {
         result.program?.dispose()

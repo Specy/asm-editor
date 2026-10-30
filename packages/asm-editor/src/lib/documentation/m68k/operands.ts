@@ -89,6 +89,26 @@ export type M68KOperandLine = { meaning: string; href?: string }
 export const M68020_INDEXED =
     'With `opt p=68020`, an allowed `d(An,Xn)` or `d(PC,Xn)` mode also permits the corresponding 68020 indexed and memory indirect forms. See [68020 addressing](/documentation/m68k/addressing-mode#68020).'
 
+/** What the legend of a control register says of the 68020's four. */
+const M68020_CONTROL_REGISTERS =
+    'The 68020 adds `msp` and `isp`, its master and interrupt stack pointers, and `cacr` and `caar`, its cache registers.'
+
+/**
+ * The sentences of the legend about the 68020 alone, which the Workbench's Documentation panel
+ * leaves out for a program written for an earlier processor
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
+ */
+const M68020_SENTENCES = [M68020_INDEXED, M68020_CONTROL_REGISTERS]
+
+/** A legend line without what it says of the 68020 alone. */
+export function withoutThe68020(line: M68KOperandLine): M68KOperandLine {
+    const meaning = M68020_SENTENCES.reduce(
+        (text, sentence) => text.replace(` ${sentence}`, ''),
+        line.meaning
+    )
+    return { ...line, meaning }
+}
+
 /** What each symbol of an M68K row stands for: one line of markdown each. */
 export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = {
     '<ea>': {
@@ -168,8 +188,7 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
         href: `${MODES}#user-stack-pointer`
     },
     Rc: {
-        meaning:
-            'A control register: on the 68010 `vbr`, the vector base register, where the vector table starts; `sfc` or `dfc`, the source or destination function code; or `usp`, the user stack pointer. The 68020 adds `msp` and `isp`, its master and interrupt stack pointers, and `cacr` and `caar`, its cache registers.',
+        meaning: `A control register: on the 68010 \`vbr\`, the vector base register, where the vector table starts; \`sfc\` or \`dfc\`, the source or destination function code; or \`usp\`, the user stack pointer. ${M68020_CONTROL_REGISTERS}`,
         href: `${MODES}#control-registers`
     },
     '<register list>': {

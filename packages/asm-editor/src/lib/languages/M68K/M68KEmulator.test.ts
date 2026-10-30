@@ -104,7 +104,7 @@ describe('M68K diagnostics', () => {
                 code: 'symbol_named_like_a_register',
                 lineIndex: 2,
                 message:
-                    "`za0` is read as the symbol of that name here, not as the 68020's suppressed register."
+                    '`za0` refers to your symbol here, which takes precedence over the suppressed register with the same name on the 68020 processor.'
             })
             await emulator.compile(10, code)
             await emulator.step()
@@ -2148,7 +2148,7 @@ describe('M68K exceptions', () => {
         const emulator = await build('    move.l #$1000,$80\n    lea $5001,a7\n    trap #0\n')
         await emulator.run(INSTRUCTION_LIMIT)
         const message =
-            'The CPU halted at line 4: a double bus fault while handling TRAP #0 (vector 32). Pushing the exception frame raised an address error, writing a word at the odd address $4FFF'
+            'The CPU halted at line 4: a double fault while handling TRAP #0 (vector 32). Saving the exception frame on the supervisor stack raised an address error, writing a word at the odd address $4FFF'
         expect(emulator.errors).toEqual([message])
         expect(emulator.termination).toEqual({ kind: 'error', message })
         expect(emulator.undo(1)).toBe(1)
@@ -2468,7 +2468,7 @@ describe('M68K memory map', () => {
             ['    memory invalid $0,$3ff', '    ORG $1000', '    divu #0,d0'].join('\n') + '\n'
         )
         expect(emulator.errors).toEqual([
-            'The CPU halted at line 3: a double bus fault while handling Divide by zero (vector 5). Reading the vector at $000014 raised a bus error, where the memory invalid directive marks $0-$3FF as invalid'
+            'The CPU halted at line 3: a double fault while handling Divide by zero (vector 5). Reading the vector at $000014 raised a bus error, where the memory invalid directive marks $0-$3FF as invalid'
         ])
         emulator.dispose()
     })
@@ -2486,7 +2486,7 @@ describe('M68K memory map', () => {
             ].join('\n') + '\n'
         )
         expect(emulator.errors).toEqual([
-            'The CPU halted at line 4: a double bus fault while handling Divide by zero (vector 5). Pushing the exception frame raised a bus error, writing a word at $FFFFFE, where the memory read directive marks $F00000-$FFFFFF as read-only'
+            'The CPU halted at line 4: a double fault while handling Divide by zero (vector 5). Saving the exception frame on the supervisor stack raised a bus error, writing a word at $FFFFFE, where the memory read directive marks $F00000-$FFFFFF as read-only'
         ])
         emulator.dispose()
     })
@@ -4222,7 +4222,7 @@ describe('M68K 68010 programs', () => {
         const emulator = await build(FORMAT_3)
         await emulator.run(INSTRUCTION_LIMIT)
         const message =
-            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $3, which the 68010 does not support)'
+            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $3, which the 68010 processor does not support)'
         expect(emulator.errors).toEqual([message])
         expect(emulator.termination).toEqual({ kind: 'error', message })
         emulator.dispose()
@@ -4819,14 +4819,14 @@ describe('M68K 68020 supervisor model', () => {
         const emulator = await build(forgedFrame('$3000'))
         await emulator.run(INSTRUCTION_LIMIT)
         expect(emulator.errors).toEqual([
-            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $3, which the 68020 does not support)'
+            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $3, which the 68020 processor does not support)'
         ])
         emulator.dispose()
         //a 68010's bus fault frame is not one either
         const format8 = await build(forgedFrame('$8008'))
         await format8.run(INSTRUCTION_LIMIT)
         expect(format8.errors).toEqual([
-            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $8, which the 68020 does not support)'
+            'Format error at line 6: vector 14 at $000038 holds no handler (RTE found an exception frame with format $8, which the 68020 processor does not support)'
         ])
         format8.dispose()
     })

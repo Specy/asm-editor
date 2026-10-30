@@ -25,15 +25,25 @@ import {
     m68kProcessorOnly,
     type M68kLaterProcessor
 } from '#lib/documentation/m68k/instructionDocument.ts'
-import { m68kFirstProcessor, m68kInstructionForms, m68kIsBitField } from './M68K-forms'
+import {
+    m68kFirstProcessor,
+    m68kHiddenModes,
+    m68kHiddenSizes,
+    m68kInstructionForms,
+    m68kInstructionShown,
+    m68kIsBitField
+} from './M68K-forms'
+import { m68kDialectHas, m68kDialectKey, type M68kDialect } from './m68kDialect'
+import { m68kModelDialect } from './M68K-project-language'
 
 const completionTokens = [...M68kInstructions, ...M68KDirectives]
 
 /**
  * What completion says of an operation: an instruction only a later processor has, `extb`, says
  * which and how to write the program for it, and a bit field that `opt bit` gives the 68000 too. It
- * is offered all the same in a 68000 program, where the quick fix on the diagnostic it gets adds the
- * `opt` line.
+ * is offered all the same where the program's processor is unknown, and the quick fix on the
+ * diagnostic it gets adds the `opt` line; a program whose processor the analysis knows is offered
+ * only what that processor has.
  */
 function operationCompletionText(name: string): {
     detail: string | undefined
@@ -239,6 +249,9 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
             )
             const suggestions: monaco.languages.CompletionItem[] = []
             const parsed = S68k.parseLine(data)
+            //in a Project whose analysis knows the program's processor, what a later processor
+            //brought is left out (m68k-machine.md, decision 36); unknown, everything is offered
+            const dialect = m68kModelDialect(model)
 
             //numeric values
             function addNumerical() {
@@ -269,7 +282,11 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
                 const lowerPrefix = operationContext.prefix.toLowerCase()
                 suggestions.push(
                     ...completionTokens
-                        .filter((keyword) => keyword.startsWith(lowerPrefix))
+                        .filter(
+                            (keyword) =>
+                                keyword.startsWith(lowerPrefix) &&
+                                (!dialect || m68kInstructionShown({ name: keyword }, dialect))
+                        )
                         .map((keyword) => {
                             const { detail, documentation } = operationCompletionText(keyword)
                             return {
@@ -300,12 +317,16 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
                     position.lineNumber,
                     s68kColumnToUtf16(data, sizeSpan.end) + 1
                 )
+                const hiddenSizes = dialect
+                    ? m68kHiddenSizes(firstArgDoc, dialect)
+                    : new Set<string>()
                 suggestions.push(
                     ...firstArgDoc.sizes.flatMap((size) => {
                         const name = fromSizeToString(size)
                         if (
                             !name.startsWith(typedSize.toLowerCase()) ||
-                            !hasOwnKey(SIZE_COMPLETIONS, name)
+                            !hasOwnKey(SIZE_COMPLETIONS, name) ||
+                            hiddenSizes.has(fromSizeToString(size, true))
                         ) {
                             return []
                         }
@@ -340,7 +361,11 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
                         firstArgDoc.args[operandPosition],
                         monaco,
                         range,
-                        laterFormModes(firstArgDoc, operandPosition)
+                        laterFormModes(firstArgDoc, operandPosition),
+                        dialect && {
+                            dialect,
+                            hiddenModes: m68kHiddenModes(firstArgDoc, operandPosition, dialect)
+                        }
                     )
                 )
             }
@@ -362,10 +387,20 @@ export function createM68KCompletion(monaco: MonacoType): monaco.languages.Compl
 
 const hoverDocuments = new Map<string, InstructionDocument | undefined>()
 
-/** An instruction's shared document, built once per name; none for a name with no page. */
-function m68kHoverDocument(name: string): InstructionDocument | undefined {
-    if (!hoverDocuments.has(name)) hoverDocuments.set(name, m68kInstructionDocument(name))
-    return hoverDocuments.get(name)
+/**
+ * An instruction's shared document, built once per name and Processor dialect; none for a name
+ * with no page. Where the program's dialect is known it leaves out what a later processor brought,
+ * as the Documentation panel and completion do
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36); an instruction
+ * the program cannot write in any form keeps its whole document, which says what it needs.
+ */
+function m68kHoverDocument(name: string, dialect?: M68kDialect): InstructionDocument | undefined {
+    const key = dialect ? `${name} ${m68kDialectKey(dialect)}` : name
+    if (!hoverDocuments.has(key)) {
+        const shown = dialect && m68kInstructionDocument(name, dialect)
+        hoverDocuments.set(key, shown || m68kInstructionDocument(name))
+    }
+    return hoverDocuments.get(key)
 }
 
 export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
@@ -390,7 +425,10 @@ export function createM68kHoverProvider(monaco: MonacoType): monaco.languages.Ho
                     s68kColumnToUtf16(line, operation.nameSpan.end) + 1
                 )
                 const name = operation.name.toLowerCase()
-                const document = parsed.kind === 'instruction' ? m68kHoverDocument(name) : undefined
+                const document =
+                    parsed.kind === 'instruction'
+                        ? m68kHoverDocument(name, m68kModelDialect(model))
+                        : undefined
                 if (document) {
                     // The same header and first rows as the page and the panel row (the plan,
                     // decision 22). An instruction only a later processor has says so in a header
@@ -624,8 +662,10 @@ function indexed68020(
 /**
  * The addressing modes completion offers at an operand, in the order it offers them: the mode, its
  * kind of completion, its label and insert text, the detail and documentation it resolves to, and
- * the later processor that brought it, which it is tagged with in a 68000 program too, as an
- * instruction is (E6a of the plan): the quick fix on the diagnostic adds the `opt p=` line.
+ * the later processor that brought it, which it is tagged with wherever it is offered. Where the
+ * program's processor is unknown that is in a 68000 program too, as an instruction is (E6a of the
+ * plan), and the quick fix on the diagnostic adds the `opt p=` line; a program whose processor the
+ * analysis knows is offered only what that processor has.
  */
 const OPERAND_COMPLETIONS: OperandCompletion[] = [
     operand(AddressingMode.AddressRegister, 'Variable', 'An', 'a0', 'Address register'),
@@ -803,18 +843,37 @@ function laterFormModes(
     return later
 }
 
+/**
+ * What a program whose processor the analysis knows can write at an operand position: its
+ * dialect, and the modes there only the instruction's forms it cannot write take, by s68k's names.
+ */
+type OperandProgram = { dialect: M68kDialect; hiddenModes: ReadonlySet<string> }
+
+/**
+ * Whether a program can write an operand completion: not a mode its processor lacks,
+ * `(bd,An,Xn*k)` before the 68020, nor one only forms it cannot write take, every mode of `movec`
+ * in a 68000 program ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
+ */
+function operandShown(completion: OperandCompletion, program: OperandProgram): boolean {
+    const { processor } = completion
+    if (processor && !m68kDialectHas(program.dialect, { processor })) return false
+    return !program.hiddenModes.has(addressingModeToString(completion.mode))
+}
+
 function getAddressingModes(
     am: AddressingMode[] | undefined,
     monaco: MonacoType,
     range: monaco.IRange,
-    later: ReadonlyMap<AddressingMode, M68kLaterProcessor> = new Map()
+    later: ReadonlyMap<AddressingMode, M68kLaterProcessor> = new Map(),
+    program?: OperandProgram
 ): monaco.languages.CompletionItem[] {
     if (!am) return []
     const allowed = new Set([...am, ...later.keys()])
-    const items = OPERAND_COMPLETIONS.filter(({ mode }) => allowed.has(mode)).map((offered) => {
+    const items = OPERAND_COMPLETIONS.filter(({ mode }) => allowed.has(mode)).flatMap((offered) => {
         //a mode a later processor's form of the instruction brought is tagged with it here
         const processor = offered.processor ?? later.get(offered.mode)
         const completion = processor ? { ...offered, processor } : offered
+        if (program && !operandShown(completion, program)) return []
         return {
             kind: monaco.languages.CompletionItemKind[completion.kind],
             label: completion.label,

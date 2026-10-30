@@ -10,11 +10,24 @@ import {
 import { projectSourceUri, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { LanguageSymbol } from '#lib/languages/service/protocol.ts'
 import { s68kColumnToUtf16 } from './m68kDiagnostics'
+import type { M68kDialect } from './m68kDialect'
 
 /** The symbols that describe this model, which a Build snapshot has for its unchanged Files too. */
 function liveSymbols(context: ModelSources | null): LanguageSymbol[] {
     if (!context) return []
     return analysisForModel(context.session, context.identity, context.sources)?.symbols ?? []
+}
+
+/**
+ * The **Processor dialect** of the program a model is a File of, from the live analysis of its
+ * Project, which completion follows ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+ * decision 36). Unknown for a model no analysed Project holds, a Playground's or a lecture's, which
+ * is offered everything, as before.
+ */
+export function m68kModelDialect(model: monaco.editor.ITextModel): M68kDialect | undefined {
+    const context = modelSources(model)
+    if (!context) return undefined
+    return analysisForModel(context.session, context.identity, context.sources)?.m68kDialect
 }
 
 function completionSymbols(context: ModelSources) {
