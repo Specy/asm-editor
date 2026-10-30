@@ -38,7 +38,7 @@ Each instruction's **Documentation entry** names the kind of work it does (arith
     - Browsing: the Instructions Chapter in the Workbench's Documentation panel shows the categories in the order of (4), with mnemonics alphabetical under each. The sidebar of the documentation site did too until the owner made it one alphabetical list again ([instruction-layout-plan.md](./instruction-layout-plan.md), decision 32).
     - Searching: the groups drop away and results come back best first ([ADR 0025](../adr/0025-documentation-is-a-list-of-entries.md)), each row carrying its category.
     - The instruction's page and its expanded row name its mnemonic-level tags, and the list of forms shows each form's tags. They named its category too until the shared instruction layout left that to the sidebar and the Chapter's headings ([instruction-layout-plan.md](./instruction-layout-plan.md), decision 30).
-    - The editor's hover shows the category and the tags.
+    - The editor's hover shows the tags. It showed the category too until the owner dropped it on 2026-10-30 to shorten the hover, which the Documentation's grouping does not need.
 11. **Search text.** The category's name is indexed with the entry, as x86 already indexes its NASM section, so "shift" or "atomic" matches every member. A large group (Floating point has about 100 mnemonics on MIPS and on RISC-V) is still cut at the panel's 30 results; browsing is how a whole group is seen.
 
 ## Follow-ups

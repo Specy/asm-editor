@@ -98,19 +98,17 @@ describe('RISC-V hovers', () => {
         expect(result).toBeNull()
     })
 
-    it('names the category and the tags of the forms the Target accepts', async () => {
+    it('names the tags of the forms the Target accepts, and no category', async () => {
         const addw = await hover('addw a0, a1, a2', 'addw', 0, true)
         expect(addw).toMatch(/^\*\*addw\*\*/)
-        expect(addw.split('\n\n')[1]).toBe('*Arithmetic · RV64 only*')
+        expect(addw.split('\n\n')[1]).toBe('*RV64 only*')
         // RV32 does not accept `addw` at all.
         expect(await hover('addw a0, a1, a2', 'addw')).toBe('')
         // RV32 has `slli` too, with a 5 bit shift amount.
         const slli = await hover('slli a0, a0, 3', 'slli', 0, true)
-        expect(slli.split('\n\n')[1]).toBe('*Shifts and rotates*')
+        expect(slli.split('\n\n')[1]).not.toMatch(/^\*/)
         expect(slli).not.toContain('RV64 only')
-        expect((await hover('li a0, 5', 'li')).split('\n\n')[1]).toBe(
-            '*Data movement · Pseudo-instruction*'
-        )
+        expect((await hover('li a0, 5', 'li')).split('\n\n')[1]).toBe('*Pseudo-instruction*')
     })
 })
 

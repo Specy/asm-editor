@@ -63,16 +63,16 @@ async function hover(line: string, at: string) {
 }
 
 describe('x86 hovers', () => {
-    it('names the category and the tags every form has on the italic line', async () => {
+    it('names the tags every form has on the italic line, and no category', async () => {
         const [sysret] = await hover('    sysret', 'sysret')
         expect(sysret).toMatch(/^\*\*sysret\*\*/)
-        expect(sysret.split('\n\n')[1]).toMatch(/^\*System · Privileged · .+ and later\*$/)
+        expect(sysret.split('\n\n')[1]).toMatch(/^\*Privileged · .+ and later\*$/)
     })
 
     it('leaves a tag only some forms have off the line', async () => {
         // Eight of `mov`'s forms reach the control and debug registers, which are privileged.
         const [mov] = await hover('    mov rax, rbx', 'mov')
-        expect(mov.split('\n\n')[1]).toMatch(/^\*Data movement · .+ and later\*$/)
+        expect(mov.split('\n\n')[1]).toMatch(/^\*[^·]+ and later\*$/)
         expect(mov).not.toContain('Privileged')
     })
 

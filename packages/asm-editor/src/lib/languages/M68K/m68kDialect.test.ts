@@ -207,11 +207,13 @@ async function hoverRows(line: string, header?: string) {
 describe('hovers in a program whose processor is known', () => {
     it('leave out the forms and the privilege a later processor brought', async () => {
         const for68000 = await hoverRows('    move.w sr,d0', '')
-        expect(for68000).toContain('`move sr, <ea>` · Size .w')
+        expect(for68000).toContain('| `move sr, <ea>` | Size .w |')
         expect(for68000).not.toContain('Privileged on the 68010')
         expect(for68000).not.toContain('`move ccr, <ea>`')
         const for68010 = await hoverRows('    move.w sr,d0', '    opt p=68010')
-        expect(for68010).toContain('`move sr, <ea>` · Size .w · Privileged on the 68010 and 68020')
+        expect(for68010).toContain(
+            '| `move sr, <ea>` | Size .w · Privileged on the 68010 and 68020 |'
+        )
     })
 
     it('keep the whole of an instruction the program cannot write, which says what it needs', async () => {

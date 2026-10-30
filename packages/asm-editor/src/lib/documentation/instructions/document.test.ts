@@ -76,11 +76,47 @@ describe('documentHover', () => {
             { href: '/documentation/x86/instruction/ret' }
         )
         expect(blocks).toEqual([
-            '**ret** Return\n\n*Control flow · 8086 and later*',
+            '**ret** Return\n\n*8086 and later*',
             'Returns to the caller.',
-            '`ret`  \n`ret imm16`  \n`ret x` · Privileged',
+            [
+                '| Form | Details |',
+                '| --- | --- |',
+                '| `ret` |  |',
+                '| `ret imm16` |  |',
+                '| `ret x` | Privileged |'
+            ].join('\n'),
             '[Documentation](/documentation/x86/instruction/ret)'
         ])
+    })
+
+    it('lists the rows alone when none of them says more than its syntax', () => {
+        expect(documentHover(document([{ rows: ['ret', 'ret imm16'] }]))[2]).toBe(
+            '`ret`  \n`ret imm16`'
+        )
+    })
+
+    it('puts the flags in a table, each over its mark, with what the marks it uses mean', () => {
+        const built = document([{ rows: ['add'] }])
+        built.flags = {
+            order: ['X', 'N', 'Z', 'V', 'C'],
+            marks: {
+                X: { kind: 'unchanged' },
+                N: { kind: 'changed' },
+                Z: { kind: 'changed' },
+                V: { kind: 'cleared' },
+                C: { kind: 'cleared' }
+            },
+            varies: true
+        }
+        expect(documentHover(built)[2]).toBe(
+            [
+                '| X | N | Z | V | C |',
+                '| :-: | :-: | :-: | :-: | :-: |',
+                '| – | ● | ● | 0 | 0 |',
+                '',
+                '*Most forms. – not changed · ● set from the result · 0 always 0*'
+            ].join('\n')
+        )
     })
 
     it("ends with the architecture's own page beside its Documentation", () => {

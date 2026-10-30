@@ -427,7 +427,7 @@ describe('M68K v2 language tooling', () => {
         ).toBeNull()
     })
 
-    it('names the category of a family member under its heading', async () => {
+    it('heads a family member with its own name, and names no category', async () => {
         const provider = createM68kHoverProvider(monacoStub)
         const value = async (line: string, column: number) => {
             const hover = await provider.provideHover(
@@ -437,18 +437,16 @@ describe('M68K v2 language tooling', () => {
             )
             return hover?.contents.map((content) => content.value) ?? []
         }
-        // `beq` is a member of the Bcc family, whose category it takes.
+        // `beq` is a member of the Bcc family; its hover says its sizes, and not its category,
+        // which the Documentation groups by.
         const [beq, summary, flags, rows] = await value('    beq loop', 6)
-        expect(beq.split('\n\n')).toEqual([
-            '**beq** Branch if equal',
-            '*Control flow · Sizes .b .s .w .l*'
-        ])
+        expect(beq.split('\n\n')).toEqual(['**beq** Branch if equal', '*Sizes .b .s .w .l*'])
         expect(summary).toMatch(/^Branches /)
-        expect(flags).toBe('Flags: X – · N – · Z – · V – · C –')
+        expect(flags).toBe('*Leaves every flag unchanged*')
         expect(rows).toBe('`beq label`')
-        // `move <ea>,sr` is privileged, but `move` is not in all of its forms.
+        // `move <ea>,sr` is privileged, but `move` is not in all of its forms, so it has no line.
         const [move] = await value('    move.w d0,d1', 6)
-        expect(move.split('\n\n')[1]).toBe('*Data movement*')
+        expect(move).toBe('**move** Move data')
         // Directives have no category.
         const [org] = await value('    org $1000', 6)
         expect(org).not.toContain('*')
@@ -467,21 +465,22 @@ describe('M68K v2 language tooling', () => {
         const [extb] = await value('    extb.l d0', 6)
         //the fact says it once, without the tag beside it
         expect(extb.split('\n\n')[1]).toBe(
-            '*Arithmetic · Size .l · 68020 only: select `opt p=68020` before any code or data*'
+            '*Size .l · 68020 only: select `opt p=68020` before any code or data*'
         )
         //the first six of move's seven rows, the 68010's last, which its page lists
         const rows = (await value('    move.w d0,d1', 6)).find((block) =>
             block.includes('`move usp, An`')
         )
-        expect(rows?.split('  \n').slice(3)).toEqual([
-            '`move <ea>, sr` · Size .w · Privileged',
-            '`move usp, An` · Size .l · Privileged',
-            '`move An, usp` · Size .l · Privileged',
+        expect(rows?.split('\n').slice(-5)).toEqual([
+            '| `move <ea>, sr` | Size .w · Privileged |',
+            '| `move usp, An` | Size .l · Privileged |',
+            '| `move An, usp` | Size .l · Privileged |',
+            '',
             '… 1 more on its page'
         ])
         //rte is privileged in its one form, so the tag is the instruction's
         const [rte] = await value('    rte', 6)
-        expect(rte.split('\n\n')[1]).toBe('*System · Privileged*')
+        expect(rte.split('\n\n')[1]).toBe('*Privileged*')
     })
 
     it('says in completion that an instruction is the 68020’s, and still offers it', async () => {
@@ -1295,7 +1294,7 @@ describe('the 68020’s instructions in the editor', () => {
         )
         const [header, , , rows] = hover!.contents.map((content) => content.value)
         expect(header.split('\n\n')[1]).toBe(
-            '*Logic · Select `opt p=68020`, or use `opt bit` with the 68000 or 68010, before any code or data*'
+            '*Select `opt p=68020`, or use `opt bit` with the 68000 or 68010, before any code or data*'
         )
         expect(rows).toBe('`bfextu <ea>{offset:width}, Dn`')
     })

@@ -23,7 +23,6 @@ import {
     runtimeFunctionDocumentation,
     runtimeFunctionsForModel
 } from '#lib/sourceRuntime/runtimeLanguage.ts'
-import { x86InstructionCategories } from '#lib/documentation/x86/categories.ts'
 import { mnemonicTags } from '#lib/documentation/instructions/categories.ts'
 import { x86FormTags } from '#lib/documentation/instructions/formTags.ts'
 import { documentHover, instructionHoverLine } from '#lib/documentation/instructions/hoverLine.ts'
@@ -354,11 +353,9 @@ export function createX86HoverProvider(monacoInstance: MonacoType): monaco.langu
                 const extensions = instruction.features.length
                     ? `, ${instruction.features.join(', ')}`
                     : ''
-                // Only the documented mnemonics have a category; the tags come from every form
-                // NASM lists, not just the few the hover shows.
+                // The tags come from every form NASM lists, not just the few the hover shows.
                 const unsupported = x86SupportNote(instruction)
                 const kind = instructionHoverLine(
-                    x86InstructionCategories[word],
                     mnemonicTags(instruction.forms.map(x86FormTags)),
                     since ? `${since}${extensions}` : ''
                 )
