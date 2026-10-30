@@ -89,6 +89,8 @@ export interface WorkbenchProps {
     /** Host actions above the workspace, with access to its responsive menu state. */
     header?: Snippet<[WorkbenchUi]>
     loading?: Snippet
+    /** Host actions offered beside Reload when the Project's emulator fails to load. */
+    failureActions?: Snippet
 }
 
 /** The sections of the Settings panel, in their order. */

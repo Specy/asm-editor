@@ -34,6 +34,10 @@ describe('assemblyTokenOf', () => {
         expect(tokenOf('    move.l d0, sp', 'M68K', 'sp')).toBe('address-register')
         expect(tokenOf('    move.w d0, sr', 'M68K', 'sr')).toBe('variable.predefined')
         expect(tokenOf('    lea msg(pc), a0', 'M68K', 'pc')).toBe('variable.predefined')
+        //the 68020's suppressed registers, as the registers they leave out
+        expect(tokenOf('    move.l ([za0],zd1.w*4), d0', 'M68K', 'za0')).toBe('address-register')
+        expect(tokenOf('    move.l ([za0],zd1.w*4), d0', 'M68K', 'zd1')).toBe('data-register')
+        expect(tokenOf('    jmp ([zpc],d0.w*4)', 'M68K', 'zpc')).toBe('variable.predefined')
         expect(tokenOf('    add t0, t1, t2', 'RISC-V', 't1')).toBe('variable.predefined')
         expect(tokenOf('    ld a, b', 'Z80', 'b')).toBe('variable.predefined')
     })
@@ -69,7 +73,7 @@ describe('assemblyTokenOf', () => {
     })
 
     it('paints a refused word as invalid and a bracket by its level', () => {
-        expect(tokenOf('    stop #1', 'M68K', 'stop')).toBe('invalid')
+        expect(tokenOf('    callm #0,(a0)', 'M68K', 'callm')).toBe('invalid')
         const brackets = tokenizeAssembly('    move.l ((a0)), d0)', 'M68K')[0].filter(
             (t) => t.kind === 'bracket'
         )

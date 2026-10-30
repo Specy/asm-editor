@@ -156,6 +156,16 @@ export function mergeMemoryRegions(
             kind: run.kind
         }))
     )
+    //what the machine gives a meaning, named by itself: the vectors' names are labels of its section.
+    //A kind can have several, two `memory rom` lines or a vector table that wraps round the top of
+    //memory, and each after the first of its kind is numbered, so that every id stays unique
+    const machineKinds = new Map<string, number>()
+    for (const region of layout.machineRegions ?? []) {
+        const count = (machineKinds.get(region.kind) ?? 0) + 1
+        machineKinds.set(region.kind, count)
+        const id = count === 1 ? `machine:${region.kind}` : `machine:${region.kind}:${count}`
+        regions.push({ ...region, id, section: region.name })
+    }
     if (heap) regions.push({ ...heap, id: 'heap', name: 'Heap', kind: 'heap' })
     if (stack)
         regions.push({
@@ -184,10 +194,23 @@ export function mergeMemoryRegions(
     return regions
 }
 
+/**
+ * Which region draws its outline where several overlap, the first of them: a device, then the
+ * exception vectors, whose labels cut them into one chunk per vector, then a range of the memory
+ * map, and then what the program placed. The hover names every one of them either way.
+ */
+function overlapRank(kind: MemoryRegion['kind']): number {
+    if (kind === 'device') return 0
+    if (kind === 'vectors') return 1
+    if (kind === 'rom' || kind === 'readOnly' || kind === 'protected' || kind === 'invalid')
+        return 2
+    return 3
+}
+
 export function regionsAt(regions: readonly MemoryRegion[], address: bigint): MemoryRegion[] {
     return regions
         .filter((region) => address >= region.start && address < region.end)
-        .sort((a, b) => Number(b.kind === 'device') - Number(a.kind === 'device'))
+        .sort((a, b) => overlapRank(a.kind) - overlapRank(b.kind))
 }
 
 export function regionLabels(region: MemoryRegion, labels: readonly DataLabel[]): DataLabel[] {
@@ -203,14 +226,20 @@ export function regionLabels(region: MemoryRegion, labels: readonly DataLabel[])
  * Where the chunk holding `address` starts: the nearest data label at or below it inside the
  * region, or the region's own start before its first label. A chunk is the part of a region one
  * label names, so the memory view can draw each variable's bytes apart. Only the program's data
- * and reserved runs and its Arguments have labels, so every other region is one chunk.
+ * and reserved runs, its Arguments and the 68000's exception vectors have labels, so every other
+ * region is one chunk.
  */
 export function regionChunkStart(
     region: MemoryRegion,
     labels: readonly DataLabel[],
     address: bigint
 ): bigint {
-    if (region.kind !== 'data' && region.kind !== 'reserved' && region.kind !== 'arguments')
+    if (
+        region.kind !== 'data' &&
+        region.kind !== 'reserved' &&
+        region.kind !== 'arguments' &&
+        region.kind !== 'vectors'
+    )
         return region.start
     let start = region.start
     for (const label of regionLabels(region, labels))
@@ -239,6 +268,14 @@ export function memoryHover(
         .join(' · ')
 }
 
+/**
+ * What the regions at `address` mean to the program, for those the machine defines, one line
+ * each: why a ROM ignores the program's writes, what a vector holds. Empty elsewhere.
+ */
+export function memoryReasons(regions: readonly MemoryRegion[], address: bigint): string[] {
+    return regionsAt(regions, address).flatMap((region) => (region.reason ? [region.reason] : []))
+}
+
 const regionColors = {
     code: '#508ff5',
     data: '#38ad68',
@@ -247,6 +284,12 @@ const regionColors = {
     stack: '#30b4bd',
     arguments: '#d462b6',
     device: '#e75b75',
+    //what the machine defines: the 68000's exception vectors, and EASy68K's memory map
+    vectors: '#ec8a2e',
+    rom: '#8d99ae',
+    readOnly: '#b0a33b',
+    protected: '#7a6ad8',
+    invalid: '#b8473a',
     //an Executable's own tables in the Hex editor: its headers, symbols and strings
     metadata: '#94a3b8'
 } as const

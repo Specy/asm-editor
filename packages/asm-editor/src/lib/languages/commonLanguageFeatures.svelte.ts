@@ -53,6 +53,26 @@ type DiagnosticBase = {
     /** Actionable help supplied by the Core, shown directly after the message when present. */
     hint?: string
     formatted: string
+    /** The changes the Core suggests, offered as quick fixes on it, the one to prefer first. */
+    fixes?: DiagnosticFix[]
+}
+
+/**
+ * A change a Core suggests for a diagnostic: `text` replaces the range, and an empty range inserts
+ * it. Lines are zero-based and columns one-based UTF-16, as a diagnostic's are; the range may be in
+ * another File than the diagnostic's.
+ */
+export type DiagnosticFix = {
+    /** What applying it does: "Add `opt p=68020` at the top of the program". */
+    title: string
+    file: string
+    lineIndex: number
+    column: number
+    endLineIndex: number
+    /** One-based, exclusive. */
+    endColumn: number
+    /** What replaces the range, with its own line breaks. */
+    text: string
 }
 
 /**
@@ -215,7 +235,12 @@ export function makeRegister(name: string, v: bigint | number, _size: RegisterSi
  * since no instruction ran, and the panels read `kind` to tell the two apart.
  */
 export type ExecutionStep = {
-    kind: 'instruction' | 'poke'
+    /**
+     * An instruction the program ran, a Poke the person made between two of them, or an IRQ the
+     * processor took between two of them, which ran no instruction of its own (M68K,
+     * [m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 16).
+     */
+    kind: 'instruction' | 'poke' | 'irq'
     /** False for a visible native History barrier whose effects are not journaled. */
     undoable?: boolean
     mutations: MutationOperation[]
@@ -231,10 +256,29 @@ export type ExecutionStep = {
     /** What a Poke wrote, one entry per register and per run of consecutive memory bytes. */
     writes?: PokeWrite[]
     /**
+     * What ran, decoded from the words the step ran, which a later write into code leaves alone,
+     * where the source does not say: an instruction on no line, as in data the program ran into, or
+     * on a line whose bytes the program or a Poke changed since the Build (M68K,
+     * [m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 28). Absent on a step
+     * that ran nothing, an instruction fetched from an odd address.
+     */
+    disassembly?: string
+    /**
      * What a Poke did, in words, when it is more than the values it wrote: a patch of an
      * Executable's instruction from its Listing reads `Patched jne → je at 0x5555555551f8`.
      */
     title?: string
+    /**
+     * The clock cycles the step took, for a Target that counts them (M68K, with the 68000's
+     * timing: [m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30). Absent
+     * on a Poke, which ran nothing, and on every step of a Target that does not count.
+     */
+    cycles?: number
+    /**
+     * Whether `cycles` is an estimate rather than the processor's own time: an M68K program for the
+     * 68020, whose manual gives each instruction's time for its cache case, as the row marks it.
+     */
+    cyclesEstimate?: boolean
     /**
      * Set on the instruction that started a Step through library code: the library function it
      * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
@@ -316,6 +360,30 @@ export type MutationOperation =
               from: bigint
           }
       }
+    /**
+     * The processor took an exception: it pushed a frame and jumped through `vector` to the
+     * handler at `handler`, named `label` when a label is there (M68K,
+     * [m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 28).
+     */
+    | {
+          type: 'TakeException'
+          value: {
+              vector: number
+              /** What the vector is for, as a learner reads it: `Divide by zero`, `TRAP #3`. */
+              name: string
+              from: bigint
+              handler: bigint
+              label?: string
+          }
+      }
+    /** A return from an exception, `rte` on M68K, from the instruction at `from` to `to`. */
+    | {
+          type: 'ReturnFromException'
+          value: {
+              to: bigint
+              from: bigint
+          }
+      }
     | {
           type: 'Other'
           value: string
@@ -340,10 +408,16 @@ export type RegisterFileRegister = {
     name: string
     size?: RegisterSize
     kind?: 'integer' | 'float'
+    /**
+     * What the register is, which its name shows on hover: the M68K 68020's ISP says it is the
+     * 68000's SSP. A register with none has no hover.
+     */
+    description?: string
 }
 
 /** A `RegisterFileRegister` with the file's defaults filled in: what the renderers read. */
-export type ResolvedRegisterFileRegister = Required<RegisterFileRegister>
+export type ResolvedRegisterFileRegister = Required<Omit<RegisterFileRegister, 'description'>> &
+    Pick<RegisterFileRegister, 'description'>
 
 /**
  * What an adapter declares about a Register file it can read out of its Core
@@ -405,7 +479,8 @@ export function resolveRegisterFileLayout(
     return file.registers.map((register) => ({
         name: register.name,
         size: register.size ?? file.size,
-        kind: register.kind ?? kind
+        kind: register.kind ?? kind,
+        ...(register.description ? { description: register.description } : {})
     }))
 }
 
@@ -433,6 +508,12 @@ export type MemoryLayout = {
     dataLabels: DataLabel[]
     /** Memory the Core reads but takes no Pokes into, such as a text segment of statements. */
     readOnly?: ReadOnlyMemory[]
+    /**
+     * Memory the machine itself gives a meaning, whatever the program placed there: the 68000's
+     * exception vectors, and the ranges of an M68K program's memory map. The vectors' names are
+     * data labels of their region, in its section.
+     */
+    machineRegions?: MachineRegion[]
     /** Where the program's Arguments are, once the Core has stored them (`withArgumentsArea`). */
     arguments?: { name: string; start: bigint; end: bigint }
 }
@@ -453,12 +534,28 @@ export type ArgumentsArea = {
 export type ReadOnlyMemory = { start: bigint; end: bigint; reason: string }
 export type HeapBounds = { start: bigint; end: bigint }
 export type DeviceRegion = { name: string; start: bigint; end: bigint }
+/**
+ * The kinds of memory the machine defines: an exception vector table, and the four ranges of
+ * EASy68K's memory map, ROM (the program's writes are ignored), read only (a write raises a bus
+ * error), protected (any access from user mode does) and invalid (any access does).
+ */
+export type MachineRegionKind = 'vectors' | 'rom' | 'readOnly' | 'protected' | 'invalid'
+/** A half-open range the machine defines, with what it means, which the memory view's hover says. */
+export type MachineRegion = {
+    name: string
+    start: bigint
+    end: bigint
+    kind: MachineRegionKind
+    reason: string
+}
 export type MemoryRegion = DeviceRegion & {
     id: string
-    kind: MemoryRunKind | 'heap' | 'stack' | 'arguments' | 'device'
+    kind: MemoryRunKind | 'heap' | 'stack' | 'arguments' | 'device' | MachineRegionKind
     section?: string
     /** The live stack jumps to SP, including when its extent is empty. */
     destination?: bigint
+    /** What the memory means to the program, for a region the machine defines. */
+    reason?: string
 }
 
 export type EmulatorDecoration = {
@@ -471,6 +568,20 @@ export type EmulatorDecoration = {
     instructions?: { address: bigint; code: string }[]
 }
 
+/**
+ * A line whose bytes in memory are no longer what its Build placed, because the program or a Poke
+ * wrote over them: where it is, and what runs there now, as the Core disassembles memory. The line
+ * keeps its place in the source; only what it runs has changed
+ * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 27).
+ */
+export type ChangedCode = {
+    file: string
+    /** Zero-based source line. */
+    line: number
+    address: bigint
+    runsNow: string
+}
+
 export type BuildArtifact = {
     file: string
     /** Zero-based source line. */
@@ -478,6 +589,19 @@ export type BuildArtifact = {
     address: bigint
     /** Emitted instruction bytes or machine word, written in hexadecimal, when the Core exposes it. */
     opcode?: string
+    /**
+     * What the line assembled as, in the Core's own syntax, where the assembler chose something
+     * the line did not write: another mnemonic (`add.l #1,d0` is `ADDQ.L #1,D0`), a branch size
+     * (`bra loop` is `BRA.S loop`) or an address in a word. The M68K Core says so; the others
+     * show what they expand a line into as Assembled instructions below it instead.
+     */
+    assembledAs?: string
+    /**
+     * What runs at `address` now, as the Core disassembles memory, when the program or a Poke has
+     * changed the bytes the Build placed there: the Workbench adds it from `changedCode` for the
+     * hover, and a Build never sets it.
+     */
+    runsNow?: string
 }
 
 export type EmulatorInterrupt = {
@@ -485,10 +609,34 @@ export type EmulatorInterrupt = {
     message?: string
 }
 
+/**
+ * A cycle counter as the panels show it: the clock cycles the program has taken since it started,
+ * or since it last cleared the counter (M68K's `trap #15` task 30), and what the newest step took.
+ */
+export type CycleCount = {
+    total: bigint
+    /** The newest step's cycles; undefined without an Undo history, and after a Poke. */
+    last?: number
+    /**
+     * Whether the counts are an estimate rather than the processor's own time: an M68K program for
+     * the 68020, whose manual can give only each instruction's cache case, since on the chip the
+     * time of one depends on its neighbours ([m68k-machine.md](../../../../../docs/design/m68k-machine.md),
+     * decisions 3 and 30). The panels mark them "≈".
+     */
+    estimate?: boolean
+}
+
 export type BaseEmulatorState = {
     code: string
     systemSize: RegisterSize
     compiledCode?: string
+    /**
+     * The processor the Build's program is written for, while it is one of the Target's later
+     * processors: an M68K program's `opt p=68020`; or the one a Target starts on with what an
+     * option added to it, `68000 with bit fields` for `opt bit`. Undefined for the processor a
+     * Target starts on as it is, and before a Build.
+     */
+    processor?: string
     registers: Register[]
     /**
      * Every Register file the Emulator exposes. The CPU file is always element 0 and its
@@ -500,6 +648,8 @@ export type BaseEmulatorState = {
     hiddenRegisters: string[]
     decorations: EmulatorDecoration[]
     buildArtifacts: BuildArtifact[]
+    /** The lines whose code the program or a Poke changed since the Build, see `ChangedCode`. */
+    changedCode: ChangedCode[]
     statusRegisters: StatusRegister[]
     errors: string[]
     compilerDiagnostics: Diagnostic[]
@@ -525,6 +675,19 @@ export type BaseEmulatorState = {
      * for Step, Undo or another Run, as after a breakpoint.
      */
     paused: boolean
+    /**
+     * What the program waits for while it waits on its own rather than on the person, as the
+     * adapter says it (`_getRunStatus`): an M68K `stop`'s "Stopped: waiting for an interrupt above
+     * level 3". Undefined the rest of the time.
+     */
+    runStatus?: string
+    /**
+     * The cycle counter, for a Target that counts the clock cycles its processor takes: the M68K's
+     * shows above the PC as "Cycles 12,345 (+8)" and ends the Log's exit line
+     * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30). Undefined for
+     * every other Target, and before a Build.
+     */
+    cycles?: CycleCount
     breakpoints: SourceBreakpoint[]
     interrupt?: EmulatorInterrupt
     memory: {

@@ -32,6 +32,8 @@
     import StatusCodesVisualiser from '#cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import RegistersVisualiser from '#cmp/specific/project/cpu/RegistersRenderer.svelte'
     import RegisterFilesPanel from '#cmp/specific/project/cpu/RegisterFilesPanel.svelte'
+    import ProcessorLine from '#cmp/specific/project/cpu/ProcessorLine.svelte'
+    import CyclesLine from '#cmp/specific/project/cpu/CyclesLine.svelte'
     import { onMount, type Snippet, untrack } from 'svelte'
     import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
     import type {
@@ -76,6 +78,7 @@
     import FaListOl from '~icons/fa-solid/list-ol'
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { watchViewport } from '#lib/workbench/viewport.svelte.ts'
+    import { changedLinesOf, withChangedCode } from '#lib/languages/changedCode.ts'
 
     let running = $state(false)
     let building = $state(false)
@@ -99,6 +102,12 @@
         showPc?: boolean
         showRegisters?: boolean
         showFlags?: boolean
+        /**
+         * Whether the cycle counter shows above the PC, on a Target that counts cycles. Off by
+         * default: an example is about what its instructions do, and a Playground about timing
+         * asks for it.
+         */
+        showCycles?: boolean
         showScreen?: boolean
         /** Whether the Screen panel starts unfolded; the small layout folds it away by default. */
         openScreen?: boolean
@@ -140,6 +149,7 @@
         showConsole: showConsoleProp,
         showTestcases: showTestcasesProp,
         showPc: showPcProp,
+        showCycles: showCyclesProp = false,
         showScreen: showScreenProp,
         openScreen = false,
         hideUntilBuilt = false,
@@ -196,9 +206,15 @@
     const displayedAssemblyFile = $derived(
         selectedFile ?? emulator.buildSources?.entry ?? emulator.entry
     )
+    //what runs now where the program or a Poke changed its code goes in the hover beside the
+    //machine code the Build placed, and on the line's mark
     const buildArtifacts = $derived(
-        emulator.buildArtifacts.filter((artifact) => artifact.file === displayedAssemblyFile)
+        withChangedCode(
+            emulator.buildArtifacts.filter((artifact) => artifact.file === displayedAssemblyFile),
+            emulator.changedCode
+        )
     )
+    const changedLines = $derived(changedLinesOf(emulator.changedCode, displayedAssemblyFile))
     const viewZones = $derived(
         preferencesStore.values.showPseudoInstructions.value
             ? emulator.decorations
@@ -284,6 +300,14 @@
     let showConsole = $derived((showConsoleProp ?? layout === 'fullscreen') || consoleRevealed)
     let showTestcases = $derived(showTestcasesProp ?? false)
     let showPc = $derived((showPcProp ?? layout === 'fullscreen') && revealed)
+    //a phone leaves the counter out, as the Workbench does, to keep the registers what the card is
+    //about
+    let showCycles = $derived(
+        showCyclesProp &&
+            revealed &&
+            emulator.cycles !== undefined &&
+            viewport.deviceClass !== 'phone'
+    )
     //A shared editor only shows the Screen when its caller asks for it. Documentation playgrounds
     //derive that explicit request from their `screen` fence flag; x86 has no graphics device.
     let showScreen = $derived((showScreenProp ?? false) && languageHasScreen(language) && revealed)
@@ -447,7 +471,7 @@
     )
 
     let showRegsColumn = $derived(
-        showPc || showRegisters || (showFlags && emulator.statusRegisters?.length > 0)
+        showPc || showCycles || showRegisters || (showFlags && emulator.statusRegisters?.length > 0)
     )
 
     const sound = new DockSoundState(() => emulator.audioActivity)
@@ -600,6 +624,7 @@
                 retainedModelKeys={session ? Object.keys(session.project.files) : undefined}
                 codeOverride={session ? undefined : emulator.compiledCode}
                 {buildArtifacts}
+                {changedLines}
                 {viewZones}
                 breakpointsEditable={!selectedIsSource}
                 breakpoints={emulator.breakpoints
@@ -645,7 +670,8 @@
 
 {#snippet regsColumn(fullscreen: boolean)}
     <!-- the Workbench's registers card: the flags inset on top and ruled off from edge to edge, then
-         the PC, then the Register files reaching the card's edges -->
+         the cycle counter and the PC, ruled off from each other, then the Register files reaching
+         the card's edges -->
     <!-- in the small layout outside an embed the files ask for 15.85rem and no more, from a zero
          basis, so the row is as tall as the tallest of what sits beside them and they fill it,
          scrolling inside -->
@@ -657,9 +683,25 @@
     >
         {#if emulator.statusRegisters?.length > 0 && showFlags}
             <div class="inset">
-                <StatusCodesVisualiser statusCodes={emulator.statusRegisters} />
+                <!-- a little shallower than elsewhere, for the cycle counter's room -->
+                <StatusCodesVisualiser
+                    statusCodes={emulator.statusRegisters}
+                    style="padding: 0.1rem 0.3rem;"
+                />
             </div>
-            <!-- the Register files' own header sets them apart, so only the PC is ruled off -->
+            <!-- the Register files' own header sets them apart, so only the lines above them are
+                 ruled off -->
+            {#if showPc || showCycles}
+                <div class="rule"></div>
+            {/if}
+        {/if}
+        {#if showCycles && emulator.cycles}
+            <!-- the cycle counter above the PC, when the host asks for it -->
+            <CyclesLine
+                cycles={emulator.cycles}
+                processor={emulator.processor}
+                style="padding: 0 0.9rem;"
+            />
             {#if showPc}
                 <div class="rule"></div>
             {/if}
@@ -675,6 +717,10 @@
                 withoutHeader
                 position="bottom"
             />
+        {/if}
+        {#if showRegisters && emulator.processor}
+            <!-- a program written for a later processor, `opt p=68020`, says so beside them -->
+            <ProcessorLine processor={emulator.processor} style="padding: 0.1rem 0.7rem;" />
         {/if}
         {#if showRegisters}
             <RegisterFilesPanel
@@ -939,7 +985,7 @@
         .inset {
             flex: none;
             min-width: 0;
-            padding: 0.3rem 0.3rem 0;
+            padding: 0.2rem 0.3rem 0;
         }
 
         /* a border rather than a 1px fill: at a fractional screen scale a fill can round to two

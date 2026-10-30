@@ -18,22 +18,32 @@ function rows(name: string): string[] {
 const PAGE_NAMES = [...M68KUncompoundedInstructions.keys()]
 
 describe('M68K instruction documents', () => {
-    it('writes move as its five forms, the one into sr privileged', () => {
+    it('writes move as its seven forms, those into sr and with usp privileged, the one from ccr the 68010’s', () => {
         const move = document('move')
-        const [forms, privileged] = move.sections
+        const [forms, privileged, for68010] = move.sections
         expect(forms.tags).toEqual([])
         expect(forms.groups.flatMap((group) => group.patterns.map(patternText))).toEqual([
             'move <ea>, <ea>',
             'move <ea>, ccr',
-            'move sr, <ea>',
-            'move ccr, <ea>'
+            'move sr, <ea>'
         ])
         expect(privileged.tags).toEqual(['privileged'])
-        expect(privileged.explanation).toContain('supervisor mode')
+        expect(privileged.explanation).toContain('privilege violation')
         expect(privileged.groups.flatMap((group) => group.patterns.map(patternText))).toEqual([
-            'move <ea>, sr'
+            'move <ea>, sr',
+            'move usp, An',
+            'move An, usp'
         ])
+        expect(for68010.tags).toEqual(['68010'])
+        expect(for68010.explanation).toBe(
+            'These forms are available on the 68010 and 68020. Select `opt p=68010` or `opt p=68020` before any code or data.'
+        )
+        expect(for68010.groups.flatMap((group) => group.patterns.map(patternText))).toEqual([
+            'move ccr, <ea>'
+        ])
+        expect(move.sections).toHaveLength(3)
         expect(move.tags).toEqual([])
+        expect(move.headerFacts).toEqual([])
 
         const [general] = documentPatterns(move)
         expect(general.details).toEqual([
@@ -86,6 +96,57 @@ describe('M68K instruction documents', () => {
         ])
     })
 
+    it('says extb is the 68020’s alone, and how to write a program for it', () => {
+        const extb = document('extb')
+        expect(extb.tags).toEqual(['68020'])
+        expect(extb.headerFacts).toEqual([
+            'Size .l',
+            '68020 only: select `opt p=68020` before any code or data'
+        ])
+        //the tag is the mnemonic's, so its one form is in the untagged section
+        expect(extb.sections.map((section) => section.tags)).toEqual([[]])
+        expect(rows('extb')).toEqual(['extb Dn'])
+    })
+
+    it('writes the 68010’s movec and moves in the manual’s Rc and Rn, privileged and the 68010’s', () => {
+        const movec = document('movec')
+        expect(movec.tags).toEqual(['privileged', '68010'])
+        expect(movec.headerFacts).toEqual([
+            'Size .l',
+            '68010 and 68020 only: select `opt p=68010` before any code or data'
+        ])
+        expect(movec.category).toBe('system')
+        expect(rows('movec')).toEqual(['movec Rc, Rn', 'movec Rn, Rc'])
+        expect(documentPatterns(movec)[0].details).toEqual([
+            { label: 'Source', values: ['usp', 'Rc'], name: undefined },
+            { label: 'Destination', values: ['Dn', 'An'], name: undefined }
+        ])
+        expect(movec.operands.map((operand) => [operand.symbol, operand.href])).toEqual([
+            ['Rc', '/documentation/m68k/addressing-mode#control-registers'],
+            ['Rn', '/documentation/m68k/addressing-mode#direct']
+        ])
+        expect(rows('moves')).toEqual(['moves Rn, <ea>', 'moves <ea>, Rn'])
+        expect(document('moves').tags).toEqual(['privileged', '68010'])
+        expect(rows('rtd')).toEqual(['rtd #imm'])
+        expect(document('rtd').tags).toEqual(['68010'])
+        expect(document('rtd').category).toBe('control-flow')
+        expect(document('bkpt').operands[0].meaning).toContain('`0` to `7`')
+    })
+
+    it('says on move’s row from sr that the 68010 made it privileged, from privilegedFrom', () => {
+        const fromSr = documentPatterns(document('move')).find(
+            (pattern) => patternText(pattern) === 'move sr, <ea>'
+        )!
+        expect(fromSr.facts).toEqual(['Size .w', 'Privileged on the 68010 and 68020'])
+        //it stays in the untagged section: the 68000 runs it in user mode
+        expect(
+            document('move')
+                .sections[0].groups.flatMap((group) => group.patterns)
+                .map(patternText)
+        ).toContain('move sr, <ea>')
+        expect(document('move').description).toContain('move.w ccr, d0')
+    })
+
     it('puts andi into sr under Privileged, and each row its own size', () => {
         const andi = document('andi')
         expect(andi.sections.map((section) => section.tags)).toEqual([[], ['privileged']])
@@ -100,6 +161,56 @@ describe('M68K instruction documents', () => {
             label: 'Destination',
             name: 'data alterable'
         })
+    })
+
+    it('says rte is privileged in its one form, a system instruction that restores every flag', () => {
+        const rte = document('rte')
+        expect(rte.longName).toBe('Return from exception')
+        expect(rte.category).toBe('system')
+        //every form is privileged, so the tag is the mnemonic's, and its row is in the untagged section
+        expect(rte.tags).toEqual(['privileged'])
+        expect(rte.sections.map((section) => section.tags)).toEqual([[]])
+        expect(rows('rte')).toEqual(['rte'])
+        expect(Object.values(rte.flags?.marks ?? {}).map((mark) => mark.kind)).toEqual([
+            'changed',
+            'changed',
+            'changed',
+            'changed',
+            'changed'
+        ])
+    })
+
+    it('explains usp in move’s legend, linked to its addressing mode', () => {
+        expect(document('move').operands.find((operand) => operand.symbol === 'usp')).toEqual({
+            symbol: 'usp',
+            meaning:
+                'The user stack pointer: the `a7` a program has in user mode. Supervisor code reads and sets it through an address register, as in `move.l usp, a0`.',
+            href: '/documentation/m68k/addressing-mode#user-stack-pointer'
+        })
+    })
+
+    //the 68020's indexed modes go wherever `d(An,Xn)` and `d(PC,Xn)` do, and no row lists them
+    it('says in the legend of an <ea> that takes an indexed mode that the 68020 has more', () => {
+        const meaning = (name: string) =>
+            document(name).operands.find((operand) => operand.symbol === '<ea>')?.meaning
+        for (const name of ['move', 'lea', 'jmp', 'add']) {
+            expect(meaning(name), name).toContain(
+                'With `opt p=68020`, an allowed `d(An,Xn)` or `d(PC,Xn)` mode also permits the corresponding 68020 indexed and memory indirect forms'
+            )
+            expect(meaning(name), name).toContain('(/documentation/m68k/addressing-mode#68020)')
+        }
+    })
+
+    it('says how far each size of a branch reaches, the 68020’s long branch included', () => {
+        for (const name of ['bra', 'bsr', 'bcc', 'beq']) {
+            const built = document(name)
+            //the summary stays the first sentence, which the reach does not run into
+            expect(built.summary, name).not.toContain('size')
+            expect(built.description, name).toContain('`.l` reaches anywhere in memory')
+            expect(built.description, name).toContain(
+                '(/documentation/m68k/addressing-mode#long-branches)'
+            )
+        }
     })
 
     it('writes movem with a register list', () => {
@@ -208,8 +319,101 @@ describe('M68K instruction documents', () => {
         expect(m68kModeClass(['Dn', 'An'])).toBeUndefined()
     })
 
+    //the 68020's long multiplies and divides write a register or a pair, one form in s68k's table
+    //and two rows in the manual's, each pair in the letters of what it holds
+    it('writes the 68020’s pairs in the manual’s letters, a register or a pair as two rows', () => {
+        expect(rows('muls')).toEqual(['muls <ea>, Dn', 'muls <ea>, Dn', 'muls <ea>, Dh:Dl'])
+        const muls = document('muls')
+        expect(muls.sections.map((section) => section.tags)).toEqual([[], ['68020']])
+        expect(documentPatterns(muls).map((pattern) => pattern.facts)).toEqual([
+            ['Size .w'],
+            ['Size .l'],
+            ['Size .l']
+        ])
+        expect(rows('divu')).toEqual(['divu <ea>, Dn', 'divu <ea>, Dn', 'divu <ea>, Dr:Dq'])
+        expect(rows('divul')).toEqual(['divul <ea>, Dr:Dq'])
+        expect(rows('cas2')).toEqual(['cas2 Dc1:Dc2, Du1:Du2, (Rn1):(Rn2)'])
+        const meaning = (name: string, symbol: string) =>
+            document(name).operands.find((operand) => operand.symbol === symbol)
+        expect(meaning('muls', 'Dh:Dl')).toMatchObject({
+            href: '/documentation/m68k/addressing-mode#register-pairs'
+        })
+        expect(meaning('divs', 'Dr:Dq')?.meaning).toContain('The quotient replaces `Dq`')
+        expect(meaning('cas2', '(Rn1):(Rn2)')?.meaning).toContain('`(a0):(a1)`')
+    })
+
+    //the 68000's `link` takes no size, and the 68020 writes it `link.w`, the same words, or
+    //`link.l`, with a long displacement
+    it('writes link without a size, and link.w and link.l as the 68020’s', () => {
+        const link = document('link')
+        expect(link.sections.map((section) => section.tags)).toEqual([[], ['68020']])
+        expect(rows('link')).toEqual(['link An, #imm', 'link An, #imm', 'link An, #imm'])
+        expect(documentPatterns(link).map((pattern) => pattern.facts)).toEqual([
+            [],
+            ['Size .w'],
+            ['Size .l']
+        ])
+        expect(link.description).toContain('`link.w` is the same instruction')
+    })
+
+    it('writes a bit field after its operand, the 68020’s or the 68000’s with opt bit', () => {
+        const bfextu = document('bfextu')
+        expect(bfextu.tags).toEqual(['68020', 'opt-bit'])
+        expect(bfextu.headerFacts).toEqual([
+            'Select `opt p=68020`, or use `opt bit` with the 68000 or 68010, before any code or data'
+        ])
+        expect(bfextu.sections.map((section) => section.tags)).toEqual([[]])
+        expect(rows('bfextu')).toEqual(['bfextu <ea>{offset:width}, Dn'])
+        expect(rows('bfins')).toEqual(['bfins Dn, <ea>{offset:width}'])
+        //what the field is in: a data register, or memory through a control mode
+        const [pattern] = documentPatterns(bfextu)
+        expect(pattern.details).toEqual([
+            {
+                label: 'Source',
+                values: ['Dn', '(An)', 'd(An)', 'd(An,Xn)', 'abs', 'd(PC)', 'd(PC,Xn)']
+            }
+        ])
+        expect(documentPatterns(document('bfset'))[0].details[0].values).toEqual([
+            'Dn',
+            '(An)',
+            'd(An)',
+            'd(An,Xn)',
+            'abs'
+        ])
+        const field = bfextu.operands.find((operand) => operand.symbol === '{offset:width}')
+        expect(field).toMatchObject({ href: '/documentation/m68k/addressing-mode#bit-fields' })
+        //the other 68020 instructions are the 68020's alone
+        expect(document('cas').headerFacts.at(-1)).toBe(
+            '68020 only: select `opt p=68020` before any code or data'
+        )
+    })
+
+    it('gives trap<cc> a family page and one for each condition, with and without its operand', () => {
+        const family = document('trapcc')
+        expect([family.longName, family.summary]).toEqual([
+            'Trap on condition',
+            'Raises an exception if cc, and continues normally otherwise.'
+        ])
+        const trapeq = document('trapeq')
+        expect([trapeq.longName, trapeq.summary]).toEqual([
+            'Trap if equal',
+            'Raises an exception if equal, and continues normally otherwise.'
+        ])
+        expect(rows('trapeq')).toEqual(['trapeq', 'trapeq #imm'])
+        expect(trapeq.flags?.reads).toEqual(['Z'])
+        expect(trapeq.tags).toEqual(['68020'])
+        expect(trapeq.operands.find((operand) => operand.symbol === '#imm')?.meaning).toContain(
+            'identify the trap'
+        )
+        expect(document('trapf').summary).toBe(
+            'Never traps, because the false condition never holds.'
+        )
+        expect(document('trapt').flags?.reads).toBeUndefined()
+    })
+
     it('is undefined for a name with no page', () => {
-        expect(m68kInstructionDocument('rte')).toBeUndefined()
+        expect(m68kInstructionDocument('callm')).toBeUndefined()
+        expect(m68kInstructionDocument('rtm')).toBeUndefined()
         expect(m68kInstructionDocument('dc')).toBeUndefined()
     })
 
@@ -219,7 +423,7 @@ describe('M68K instruction documents', () => {
             modesChapter.href,
             ...modesChapter.entries.map((entry) => entry.href)
         ])
-        expect(PAGE_NAMES.length).toBe(126)
+        expect(PAGE_NAMES.length).toBe(167)
         for (const name of PAGE_NAMES) {
             const built = document(name)
             const explained = new Set(built.operands.map((operand) => operand.symbol))

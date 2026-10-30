@@ -9,6 +9,8 @@ import lzstring from 'lz-string'
 import { serializer } from '#lib/json.ts'
 import { createSharePayload } from '#lib/utils.ts'
 import {
+    buildOutputEncoding,
+    buildOutputPath,
     buildOutputStale,
     cleanBuildRecords,
     isUntouchedBuildOutput,
@@ -50,6 +52,18 @@ function project() {
     created.setOpenTabs(['main.asm', 'main'], 'main')
     return created
 }
+
+describe('where a Build saves its output', () => {
+    it('names an executable as the Command line runs it, and an S-record with EASy68K’s extension', () => {
+        const sources = (entry: string): BuildSources => ({ entry, files: {} })
+        expect(buildOutputPath(sources('src/main.asm'))).toBe('src/main')
+        expect(buildOutputPath(sources('main.x68'), 'srecord')).toBe('main.S68')
+        expect(buildOutputPath(sources('src/game.s'), 'srecord')).toBe('src/game.S68')
+        //an executable is bytes, an S-record text to be read
+        expect(buildOutputEncoding('executable')).toBe('base64')
+        expect(buildOutputEncoding('srecord')).toBe('plain')
+    })
+})
 
 describe('a Build record', () => {
     it('fingerprints each File the Build read but the Build outputs, and its configuration', () => {

@@ -46,8 +46,10 @@ import {
     buildOutputStale,
     buildRecordAt,
     isUntouchedBuildOutput,
+    buildOutputEncoding,
     makeBuildRecord,
     type BuildOutputClaim,
+    type BuildOutputFormat,
     type BuildOutputState
 } from '#lib/buildOutput.ts'
 import {
@@ -861,13 +863,14 @@ export class WorkbenchSession {
             !this.host.readonly && !this.running && !this.building && this.emulator.canPoke
         )
         this.errorStrings = $derived(this.emulator.errors.join('\n'))
-        //the Log's wording, without an error's message, which the Terminal tab shows itself
+        //the Log's wording, without an error's message, which the Terminal tab shows itself; and
+        //while the program runs on, what it waits for on its own, as a stopped M68K does
         this.runInfo = $derived(
             this.emulator.terminated
                 ? terminationSummary(this.emulator.termination, this.emulator.executionTime, {
                       errorMessage: false
                   })
-                : ''
+                : (this.emulator.runStatus ?? '')
         )
         this.executionDisabled = $derived(
             this.host.readonly || this.emulator.terminated || this.emulator.interrupt !== undefined
@@ -905,7 +908,8 @@ export class WorkbenchSession {
         )
         emulator.setBuildOutputHost({
             claim: (path, signal) => this.claimBuildOutput(path, signal),
-            save: (sources, path, bytes) => this.saveBuildOutput(sources, path, bytes),
+            save: (sources, path, bytes, format) =>
+                this.saveBuildOutput(sources, path, bytes, format),
             isBuildOutput: (path) => this.buildOutputs.has(path)
         })
         this.executionSourceLocation = $derived.by(() => {
@@ -1155,7 +1159,9 @@ export class WorkbenchSession {
                         this.appendLog(
                             exitEntry({
                                 executionTimeMs: this.emulator.executionTime,
-                                termination: this.emulator.termination
+                                termination: this.emulator.termination,
+                                cycles: this.emulator.cycles?.total,
+                                cyclesEstimate: this.emulator.cycles?.estimate
                             })
                         )
                     for (const note of notes)
@@ -1233,6 +1239,10 @@ export class WorkbenchSession {
     declare readonly pokeable: boolean
     /** The Emulator's runtime errors, which the Terminal tab shows before what the program wrote. */
     declare readonly errorStrings: string
+    /**
+     * The line beside the bottom panel's tabs: how the program ended, or, while it has not, what
+     * it waits for on its own, such as "Stopped: waiting for an interrupt above level 3".
+     */
     declare readonly runInfo: string
     declare readonly executionDisabled: boolean
     declare readonly undoDisabled: boolean
@@ -3986,13 +3996,19 @@ export class WorkbenchSession {
     }
 
     /**
-     * Saves the program a Build of `sources` linked as the Build output at `path`, stored as bytes
-     * as an uploaded Executable is, with the record of what it was built from.
+     * Saves the program a Build of `sources` linked as the Build output at `path`, with the record
+     * of what it was built from: an executable stored as bytes, as an uploaded Executable is, and
+     * an M68K S-record as text, which opens to be read.
      */
-    private saveBuildOutput(sources: BuildSources, path: string, bytes: Uint8Array) {
+    private saveBuildOutput(
+        sources: BuildSources,
+        path: string,
+        bytes: Uint8Array,
+        format: BuildOutputFormat
+    ) {
         const fileSystem = this.project.fileSystem
         const outputs = this.project.builds.map((record) => record.outputPath)
-        fileSystem.writeBytes(path, bytes, true, 'base64')
+        fileSystem.writeBytes(path, bytes, true, buildOutputEncoding(format))
         this.project.recordBuild(makeBuildRecord(sources, path, fileSystem.files[path], outputs))
     }
 

@@ -52,7 +52,7 @@ function makeDevices() {
         },
         removeMemoryObserver: () => {}
     }
-    const keyboard = new Keyboard({ holdIntervalMs: 0 })
+    const keyboard = new Keyboard()
     const { terminal, execution } = makeTerminal()
     const devices = new MarsDevices({
         screen: new Screen({ width: 64, height: 64 }),
@@ -241,7 +241,7 @@ function makeFramebuffer(display = FOUR_BLOCKS, segmentWords = Infinity) {
     const screen = new Screen({ width: 64, height: 64 })
     const devices = new MarsDevices({
         screen,
-        keyboard: new Keyboard({ holdIntervalMs: 0 }),
+        keyboard: new Keyboard(),
         terminal: makeTerminal().terminal
     })
     devices.attach(core, display)

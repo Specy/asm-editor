@@ -129,7 +129,12 @@ describe('an x86 Build of main.asm', () => {
         const host = savingHost(emulator)
         await emulator.compile(100, sources)
         expect(host.claim).toHaveBeenCalledWith('main', expect.any(AbortSignal))
-        expect(host.save).toHaveBeenCalledWith(sources, 'main', expect.any(Uint8Array))
+        expect(host.save).toHaveBeenCalledWith(
+            sources,
+            'main',
+            expect.any(Uint8Array),
+            'executable'
+        )
         const saved = emulator.peripherals.fileSystem.files.main
         expect([...fileBytes(saved).subarray(0, 4)]).toEqual(ELF_MAGIC)
         //the Debug session shows it as one of the Build's Files

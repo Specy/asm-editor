@@ -77,21 +77,22 @@ doubled:
 end:
 ```
 
-Here is where we see the stack being used. In this simulator every instruction takes four bytes (a
-real 68000 packs them in two to ten, the idea is the same) and the program starts at `0x1000`, so
-the instructions sit at these addresses:
+Each call puts a return address on the stack. To trace those addresses, we need the size of each
+instruction. A 68000 instruction occupies two to ten bytes. Here each `bsr` and `bra` occupies
+four, including the branch distance, and the other instructions occupy two. Starting at `0x1000`,
+the instructions are laid out as follows:
 
 |  address | instruction      |
 | -------: | ---------------- |
 | `0x1000` | `move.l #10, d0` |
-| `0x1004` | `bsr quadrupled` |
-| `0x1008` | `move.l d0, d1`  |
-| `0x100C` | `bra end`        |
+| `0x1002` | `bsr quadrupled` |
+| `0x1006` | `move.l d0, d1`  |
+| `0x1008` | `bra end`        |
+| `0x100C` | `bsr doubled`    |
 | `0x1010` | `bsr doubled`    |
-| `0x1014` | `bsr doubled`    |
+| `0x1014` | `rts`            |
+| `0x1016` | `add.l d0, d0`   |
 | `0x1018` | `rts`            |
-| `0x101C` | `add.l d0, d0`   |
-| `0x1020` | `rts`            |
 
 Before the first call the stack is empty and `a7` holds `0x1000000`, one past the last byte of
 memory (🟢 is the stack pointer, `????????` is memory we know nothing about):
@@ -102,41 +103,41 @@ memory (🟢 is the stack pointer, `????????` is memory we know nothing about):
 |  `0xFFFFFC` | ???????? |
 | `0x1000000` |    🟢    |
 
-The `bsr quadrupled` at `0x1004` pushes the address of the instruction after it, `0x1008`, and then
+The `bsr quadrupled` at `0x1002` pushes the address of the instruction after it, `0x1006`, and then
 jumps:
 
 |     address |    value    |
 | ----------: | :---------: |
 |  `0xFFFFF8` |  ????????   |
-|  `0xFFFFFC` | 🟢 00001008 |
+|  `0xFFFFFC` | 🟢 00001006 |
 | `0x1000000` |             |
 
-`quadrupled` calls `doubled`, and that `bsr`, at `0x1010`, pushes `0x1014` under the return address
+`quadrupled` calls `doubled`, and that `bsr`, at `0x100C`, pushes `0x1010` under the return address
 already there:
 
 |     address |    value    |
 | ----------: | :---------: |
-|  `0xFFFFF8` | 🟢 00001014 |
-|  `0xFFFFFC` |  00001008   |
+|  `0xFFFFF8` | 🟢 00001010 |
+|  `0xFFFFFC` |  00001006   |
 | `0x1000000` |             |
 
-The `rts` of `doubled` pops `0x1014` into the program counter, so the program goes on at the second
+The `rts` of `doubled` pops `0x1010` into the program counter, so the program goes on at the second
 `bsr doubled`, and the stack pointer climbs back by 4. The value stays in memory, we are just not
 supposed to read it any more:
 
 |     address |    value    |
 | ----------: | :---------: |
-|  `0xFFFFF8` |  00001014   |
-|  `0xFFFFFC` | 🟢 00001008 |
+|  `0xFFFFF8` |  00001010   |
+|  `0xFFFFFC` | 🟢 00001006 |
 | `0x1000000` |             |
 
-That second `bsr doubled` pushes `0x1018` the same way and its `rts` pops it, and then the `rts` of
-`quadrupled` pops `0x1008`:
+That second `bsr doubled` pushes `0x1014` the same way and its `rts` pops it, and then the `rts` of
+`quadrupled` pops `0x1006`:
 
 |     address |  value   |
 | ----------: | :------: |
-|  `0xFFFFF8` | 00001018 |
-|  `0xFFFFFC` | 00001008 |
+|  `0xFFFFF8` | 00001014 |
+|  `0xFFFFFC` | 00001006 |
 | `0x1000000` |    🟢    |
 
 ## The return address in a register
@@ -210,21 +211,21 @@ end:
 ```
 
 Step through it and watch `a7` fall as the calls go deeper and climb back as they return. The
-`bsr factorial` inside the routine is at `0x101C`, so it pushes `0x1020`, the `move.l (sp)+, d1`
-after it, and the first call, the one at `0x1004` outside the routine, pushed `0x1008`. With `n = 5`
+`bsr factorial` inside the routine is at `0x1018`, so it pushes `0x101A`, the `move.l (sp)+, d1`
+after it, and the first call, the one at `0x1002` outside the routine, pushed `0x1006`. With `n = 5`
 the deepest point comes when `d0` reaches 1:
 
 |    address |    value    |
 | ---------: | :---------: |
-| `0xFFFFDC` | 🟢 00001020 |
+| `0xFFFFDC` | 🟢 0000101A |
 | `0xFFFFE0` |  00000002   |
-| `0xFFFFE4` |  00001020   |
+| `0xFFFFE4` |  0000101A   |
 | `0xFFFFE8` |  00000003   |
-| `0xFFFFEC` |  00001020   |
+| `0xFFFFEC` |  0000101A   |
 | `0xFFFFF0` |  00000004   |
-| `0xFFFFF4` |  00001020   |
+| `0xFFFFF4` |  0000101A   |
 | `0xFFFFF8` |  00000005   |
-| `0xFFFFFC` |  00001008   |
+| `0xFFFFFC` |  00001006   |
 
 Five return addresses and four copies of `n`, one per call, and we never had to choose an address
 for any of them, the stack pointer did it.

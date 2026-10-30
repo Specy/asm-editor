@@ -252,6 +252,39 @@ describe('assembly Build hovers', () => {
         }
     })
 
+    it('says what a line assembled as, and what runs there once its bytes changed', async () => {
+        const uri = 'asm-editor://project/session/build/1/main.x68'
+        const line = '    move.l #5,d0'
+        const clear = setModelBuildArtifacts(uri, [
+            {
+                file: 'main.x68',
+                line: 0,
+                address: 0x1000n,
+                opcode: '70 05',
+                assembledAs: 'MOVEQ #5,D0',
+                runsNow: 'NOP'
+            }
+        ])
+        try {
+            const result = await createBuildArtifactHoverProvider(
+                monacoStub,
+                operationSpan
+            ).provideHover?.(
+                model(line, uri) as never,
+                position(line, 'move') as never,
+                {} as never
+            )
+            expect(markdown(result)).toContain(
+                'Address `0x1000` Machine code `70 05`, assembled as `MOVEQ #5,D0`'
+            )
+            expect(markdown(result)).toContain(
+                'Code changed after Build. Current instruction: `NOP`'
+            )
+        } finally {
+            clear()
+        }
+    })
+
     it('does not let an obsolete editor cleanup remove newer Build data', async () => {
         const uri = 'asm-editor://project/session/build/1/main.asm'
         const line = 'move d0,d1'

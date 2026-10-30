@@ -1,4 +1,5 @@
 import {
+    type CycleCount,
     type Diagnostic,
     type EmulatorDecoration,
     type EmulatorNote,
@@ -12,6 +13,7 @@ import {
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { BuildSources, ProjectFiles } from '#lib/projectFiles.ts'
+import type { BuildOutputFormat } from '#lib/buildOutput.ts'
 
 type MaybePromise<T> = T | PromiseLike<T>
 
@@ -24,11 +26,16 @@ export type CompileResult =
           ok: true
           diagnostics?: Diagnostic[]
           /**
-           * The executable the Build linked, for a Target whose Builds link one (x86): the Build
-           * output, at the path the Command line names ([ADR 0050](../../../../../docs/adr/0050-the-built-program-is-a-build-output-never-saved.md)).
+           * The program the Build made, for a Target whose Builds make a file of it: the Build
+           * output ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)).
+           * x86 links an executable, at the path the Command line names; M68K writes EASy68K's
+           * S-record of the program, `programFormat` `srecord`, only while `m68kSRecordOutput` is
+           * on ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 32).
            * None for a Build that loaded an Executable, which is a File already.
            */
           program?: Uint8Array
+          /** What `program` is, an `executable` unless the Target says otherwise. */
+          programFormat?: BuildOutputFormat
           /**
            * The Runtime library members or the start code the program was linked with, which the
            * debugger opens as `buildLibraryFiles`.
@@ -36,6 +43,17 @@ export type CompileResult =
           libraryFiles?: ProjectFiles
           /** What the Log should say about the program built, such as a library it lacks. */
           notes?: Omit<EmulatorNote, 'id'>[]
+          /**
+           * What the Log should say about `program` once a person's Build has saved it as the Build
+           * output, and only then: M68K's for an S-record EASy68K cannot run as written.
+           */
+          outputNotes?: Omit<EmulatorNote, 'id'>[]
+          /**
+           * The processor the program is written for, when the Target has several and the program
+           * chose a later one than the one it starts on: M68K's `opt p=68010` or `opt p=68020`; or
+           * what an option added to the one it starts on, `68000 with bit fields` for `opt bit`.
+           */
+          processor?: string
       }
     | { ok: false; diagnostics: Diagnostic[]; report: string }
 
@@ -143,6 +161,15 @@ export abstract class BaseEmulator<R extends string> {
     }
 
     /**
+     * What the error a program failed on says, `_stringifyError`'s words unless the adapter can
+     * say more of where the program was. Only a program's end reads it: anything else that fails,
+     * a memory view's read, an Undo or a Poke, is not where the program stopped.
+     */
+    _stringifyRuntimeError(error: unknown, line?: number): string {
+        return this._stringifyError(error, line)
+    }
+
+    /**
      * `undoSize` is the undo-history depth for the program being assembled, as `_initialize` gets
      * it. It is passed here (and not only to `_initialize`) because some cores allocate their backstep buffer during
      * assembly and therefore have to be told the depth *before* the code is assembled (MIPS).
@@ -201,6 +228,21 @@ export abstract class BaseEmulator<R extends string> {
      * instruction the Core cannot run, say, which only the end's reason and its bytes tell.
      */
     _terminationNotes?(): Omit<EmulatorNote, 'id'>[]
+
+    /**
+     * What the program is doing, in words, while it waits for something other than the person,
+     * such as an M68K processor `stop` stopped: "Stopped: waiting for an interrupt above level 3"
+     * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 29). Undefined while
+     * there is nothing to say, the program running, paused or ended.
+     */
+    _getRunStatus?(): string | undefined
+
+    /**
+     * The cycle counter and the newest step's cycles, for a Target whose Core counts the clock
+     * cycles its processor takes, as the M68K's does with the 68000's timing
+     * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30).
+     */
+    _getCycles?(): CycleCount | undefined
 
     /** Detaches native execution before the host ends its FileSystem capability. */
     _clearExecution?(): void
@@ -280,7 +322,18 @@ export abstract class BaseEmulator<R extends string> {
     abstract _getPc(): bigint
 
     /** Static layout is read once after Build; moving bounds are read at panel refresh. */
+    /**
+     * The lines whose bytes in memory differ from what the Build placed, for a Core whose code is
+     * memory the program can write (M68K): read again at every refresh, as the History is.
+     */
+    _getChangedCode?(): import('./commonLanguageFeatures.svelte').ChangedCode[]
     _getMemoryLayout?(): import('./commonLanguageFeatures.svelte').MemoryLayout
+    /**
+     * What `_getMemoryLayout` reads that the program can change as it runs, for a Core whose layout
+     * moves with it: the M68K's VBR, where its vector table starts. Read at every refresh, and the
+     * layout is read again when it differs from the reading the layout was made with.
+     */
+    _getMemoryLayoutKey?(): number | bigint | string | undefined
     _getHeapBounds?(): import('./commonLanguageFeatures.svelte').HeapBounds | undefined
     _getStackTop?(): bigint
     /**

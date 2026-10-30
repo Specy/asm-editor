@@ -13,7 +13,8 @@ import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
 import { LINE_KIND } from '#lib/listing/listing.ts'
 import { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
-import { fileBytes, type BuildSources } from '#lib/projectFiles.ts'
+import { fileBytes, fileText, type BuildSources } from '#lib/projectFiles.ts'
+import type { BuildOutputFormat } from '#lib/buildOutput.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
 
 //an ELF stands in for the program a Build links: the session never runs it
@@ -54,13 +55,18 @@ function setup(host: { readonly?: boolean } = {}) {
     emulator.listings = new ListingDocuments((order) =>
         Promise.resolve(generateListing(decoder, { ...order, version: 'v1' }))
     )
-    const linked = { bytes: program, fail: false, path: 'main' }
+    const linked = {
+        bytes: program,
+        fail: false,
+        path: 'main',
+        format: 'executable' as BuildOutputFormat
+    }
     emulator.compile = async (_historySize, sources: BuildSources) => {
         await tick()
         if (linked.fail) throw new Error('main.asm:1: error')
         const outputs = fixture.buildOutputHost()
         const claim = await outputs.claim(linked.path, new AbortController().signal)
-        if (claim === 'save') outputs.save(sources, linked.path, linked.bytes)
+        if (claim === 'save') outputs.save(sources, linked.path, linked.bytes, linked.format)
         else if (claim !== 'present')
             emulator.notes = [
                 ...emulator.notes,
@@ -128,6 +134,21 @@ describe('the Build output in the Workbench', () => {
         expect(group.bytesReadOnly).toBeUndefined()
         expect(project.fileViews?.main).toBe('hex')
         expect(project.openTabs).toContain('main')
+    })
+
+    it('saves an M68K S-record as text, which the editor opens to be read', async () => {
+        const { session, project, linked } = setup()
+        const srecord = 'S1071000700560FE1D\r\nS804001000EB\r\n'
+        Object.assign(linked, {
+            bytes: new TextEncoder().encode(srecord),
+            path: 'main.S68',
+            format: 'srecord'
+        })
+        await built(session)
+        expect(project.files['main.S68']).toEqual({ encoding: 'plain', content: srecord })
+        expect(fileText(project.files['main.S68'])).toBe(srecord)
+        expect(project.builds).toEqual([expect.objectContaining({ outputPath: 'main.S68' })])
+        expect(session.buildOutputs.get('main.S68')).toEqual({ entry: 'main.asm', stale: false })
     })
 
     it('is replaced by the next Build without a question while nobody changed it', async () => {

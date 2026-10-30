@@ -9,12 +9,12 @@ Decided on 2026-09-14 in a design interview. Every **Emulator** exposes one or m
 | MIPS              | CPU; FPU (`$f0..$f31`, with the eight condition flags `0..7` as its Status flags); CP0 (`$8 (vaddr)`, `$12 (status)`, `$13 (cause)`, `$14 (epc)`)                                                                                                                                                                |
 | RISC-V, RISC-V-64 | CPU; FPU (`ft0..ft7`, `fs0`, `fs1`, `fa0..fa7`, `fs2..fs11`, `ft8..ft11`, which is register-number order `f0..f31`); CSR (the seventeen RARS holds: `ustatus`, `fflags`, `frm`, `fcsr`, `uie`, `utvec`, `uscratch`, `uepc`, `ucause`, `utval`, `uip`, `cycle`, `time`, `instret`, `cycleh`, `timeh`, `instreth`) |
 | x86               | CPU; SSE (`xmm0..xmm15`, `mxcsr`); AVX (`ymm0..ymm15`, 256-bit rows, the SSE registers being their low halves); x87 (`st0..st7`, `fctrl`, `fstat`, `ftag`)                                                                                                                                                       |
-| M68K              | CPU only                                                                                                                                                                                                                                                                                                         |
+| M68K              | CPU; System (`SR`, with its system byte `T`, `S`, `I2`, `I1`, `I0` as its Status flags, then `USP` and `SSP`), added on 2026-10-28 by [m68k-machine.md](./m68k-machine.md), decision 25                                                                                                                          |
 | Z80               | CPU only                                                                                                                                                                                                                                                                                                         |
 
 The rule behind the list: the first version shows what the reference tool's register window shows, in the spirit of [ADR 0003](../adr/0003-preserve-simulator-graphics-conventions.md). MARS has Registers, Coproc 1 and Coproc 0 tabs; RARS has Registers, Floating Point and Control and Status; gdb's `info registers` and `info float` are the x86 reference. Register names are spelled as those tools spell them.
 
-Left out deliberately, both reachable without a Core change should they ever be wanted: the M68K SR (s68k stores its high byte but it is inert, and the low byte is the CCR the Status flags row already shows) and the Z80's I, R, IFF1, IFF2 and IM (they matter only to interrupt-driven code, which the environment does not run under [ADR 0008](../adr/0008-poll-keyboard-and-mouse-input.md), and R changes on every instruction, so its highlight would be permanent noise).
+Left out deliberately, reachable without a Core change should they ever be wanted: the Z80's I, R, IFF1, IFF2 and IM (they matter only to interrupt-driven code, which the environment does not run under [ADR 0008](../adr/0008-poll-keyboard-and-mouse-input.md), and R changes on every instruction, so its highlight would be permanent noise). The M68K SR was left out too while s68k's system byte was inert; it became the System file once the Core took the 68000's exceptions, with supervisor and user mode and two stack pointers ([m68k-machine.md](./m68k-machine.md), decision 25).
 
 The program counter and the CPU's Status flags stay outside the model, where they are today.
 
@@ -46,7 +46,7 @@ The program counter and the CPU's Status flags stay outside the model, where the
 
 ### Tabs
 
-- A segmented control replaces the "Registers" title in the panel header: CPU, FPU, CP0 for MIPS; CPU, FPU, CSR for RISC-V; CPU, SSE, AVX, x87 for x86. It is not rendered at all for a language with one file, so M68K and Z80 look exactly as they do now.
+- A segmented control replaces the "Registers" title in the panel header: CPU, FPU, CP0 for MIPS; CPU, FPU, CSR for RISC-V; CPU, SSE, AVX, x87 for x86; CPU, System for M68K. It is not rendered at all for a language with one file, so Z80 looks exactly as it did.
 - One file is visible at a time and the Format selector on the right belongs to it. A file's own Status flags row sits at the top of its tab, mirroring the CPU column's flags-then-registers order. This is MARS's and RARS's layout; the known trade-off is that `$t0` and `$f0` cannot be watched together, which those tools cannot do either.
 - The CPU tab is selected by default and the tab never switches by itself when another file changes.
 - The header is one tinted block holding everything above the rows. At the width of the register column three tabs and a selector cannot share a line, so with tabs the strip keeps a line of its own and the selectors fall to the next, right aligned and at their natural width; a stretched grouping strip reads as a second row of tabs and is what the first attempt got wrong. A single file keeps the one line it always had, the "Registers" title with the grouping strip beside it.
@@ -54,7 +54,7 @@ The program counter and the CPU's Status flags stay outside the model, where the
 
 ### Playgrounds
 
-The lower-case tab label is a fence flag (`fpu`, `cp0`, `csr`, `sse`, `x87`) that opens a Playground on that tab. Without one a Playground opens on CPU, so no existing Lecture changes.
+The lower-case tab label is a fence flag (`fpu`, `cp0`, `csr`, `sse`, `x87`, `system`) that opens a Playground on that tab. Without one a Playground opens on CPU, so no existing Lecture changes.
 
 ## Undo
 

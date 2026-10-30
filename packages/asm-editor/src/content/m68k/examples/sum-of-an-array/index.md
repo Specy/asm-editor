@@ -11,6 +11,7 @@ count equ 6
 loop:
     add.w (a0)+, d0     ; add this word, then advance a0 by two bytes
     dbra d1, loop       ; repeat until all six words have been read
+    simhalt             ; stop here: the sum is done
 
     org $2000
 numbers: dc.w 4, 8, 15, 16, 23, 42
@@ -29,8 +30,11 @@ leaves 4 in `d0`, and moves `a0` to `$2002`, where the 8 is stored.
 `dbra` runs the body once more than the starting value in its low word. Starting `d1` at
 `count-1`, or 5, gives six reads. After the sixth read, `a0` is `$200C`, just past the array; the
 loop does not read from that address. The final `dbra` makes the low word of `d1` `$FFFF` and
-falls through. In this playground, execution ends after that last assembled instruction. The
-`dc.w` values are data, so Run does not execute them as instructions.
+falls through to `simhalt`, which stops the program.
+
+The CPU keeps executing bytes until something stops it. It cannot tell that the six words are data.
+Here `org $2000` leaves a gap of untouched memory between the code and the numbers, and reaching
+that gap would also end the run. `simhalt` gives the program an explicit stopping point.
 
 ## Run it and follow the pointer
 
@@ -42,6 +46,24 @@ Select **Build** again to reset the program, then select **Step** once per instr
 `lea`, `a0` is `00002000`. After the first `add.w`, `d0` is `00000004` and `a0` is `00002002`.
 The following `dbra` changes `d1` from `00000005` to `00000004` and returns to `loop`. Keep
 stepping to watch `a0` advance by two at each read and `d0` grow to `0000006C`.
+
+## Run into the data
+
+Delete the `simhalt` line and the `org $2000` line, so the six words come straight after `dbra`.
+Predict the final value of `d0` and what executes after the loop. Then select **Build** and **Run**.
+
+<details>
+<summary>Show answer</summary>
+
+The loop produces the same sum, `0000006C` in `d0`. Execution then continues into `numbers`.
+The first two words, 4 and 8, encode `ORI.B #$8,D4`, which puts 8 in the initially empty `d4`.
+The next word, 15, is not a valid instruction, so the run ends with
+`Illegal instruction at $1016: vector 4 at $000010 holds no handler`: the program installed no
+handler for an illegal instruction. Use **Open in editor** to inspect the History. It shows two
+steps without matching source instructions: `ORI.B #$8,D4`, then `DC.W $000F`, the disassembler’s
+notation for an unrecognized instruction word.
+
+</details>
 
 ## Try a seventh number
 

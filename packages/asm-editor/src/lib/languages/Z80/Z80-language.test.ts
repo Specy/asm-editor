@@ -62,13 +62,14 @@ describe('Z80 hovers', () => {
         )
     })
 
-    it('names the category and the tags every form has, right under the name', async () => {
+    it('names the tags every form has right under the name, and no category', async () => {
         const [heading] = await hover('    add a,c', 'add')
         expect(heading).toMatch(/^\*\*add\*\*/)
-        expect(heading.split('\n\n')[1]).toBe('*Arithmetic*')
+        //the summary comes next, with no italic line before it
+        expect(heading.split('\n\n')[1]).not.toMatch(/^\*/)
         // Every form of `sll` is one Zilog's manual leaves out.
         const [sll] = await hover('    sll b', 'sll')
-        expect(sll.split('\n\n')[1]).toBe('*Shifts and rotates · Undocumented*')
+        expect(sll.split('\n\n')[1]).toBe('*Undocumented*')
     })
 
     it('tags a pseudo spelling, though it shares its table row with the real form', async () => {
@@ -92,7 +93,7 @@ describe('Z80 hovers', () => {
         expect(blocks).toHaveLength(3)
         expect(blocks[0]).toMatch(/^\*\*add\*\*/)
         expect(blocks[1]).toBe('*This form: Pseudo-instruction*')
-        expect(blocks[2]).toMatch(/^Adds .+\n\nFlags: S ● · .+\n\n`add a, r` · /)
+        expect(blocks[2]).toMatch(/^Adds .+\n\n\| S \| [\s\S]+\n\| `add a, r` \| /)
     })
 
     it('reads an expression at the end of the line as finished', async () => {
@@ -106,5 +107,14 @@ describe('Z80 hovers', () => {
         // A label spelled like a mnemonic is not the instruction.
         expect(await formLine('add: add c', 'add')).toBeUndefined()
         expect(await formLine('    add c', 'c')).toBeUndefined()
+    })
+
+    it('says nothing about the words of a comment, a label of the same name or not', async () => {
+        const line = 'loop: djnz loop ; ld a, then back to loop'
+        expect(await hover(line, 'djnz loop', 5)).toEqual(['Label **loop**'])
+        expect(await hover(line, 'to loop', 3)).toEqual([])
+        expect(await hover(line, 'ld')).toEqual([])
+        // The `'` of `af'` opens no string, so the comment after it is still one.
+        expect(await hover("    ex af,af' ; ld a", 'ld')).toEqual([])
     })
 })

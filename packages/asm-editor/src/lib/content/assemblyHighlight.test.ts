@@ -9,9 +9,11 @@ import {
 import { z80ConditionCodes, z80DirectiveNames } from '#lib/languages/Z80/Z80-documentation.ts'
 import {
     M68KDirectives,
+    M68kInstructions,
     M68KRefusedDirectives,
     M68KRefusedInstructions
 } from '#lib/languages/M68K/M68K-documentation.ts'
+import { M68K_OPT_OPTIONS } from '#lib/languages/M68K/M68K-grammar.ts'
 import { X86Registers } from '#lib/languages/X86/X86-grammar.ts'
 
 /**
@@ -162,9 +164,32 @@ describe('tokenizeAssembly', () => {
             ])
         ).toEqual([])
         expect(unknown('X86', X86Registers)).toEqual([])
-        expect(unknown('M68K', ['d0', 'd7', 'a0', 'a7', 'sp', 'pc', 'sr', 'ccr', 'usp'])).toEqual(
-            []
-        )
+        //the 68010's and the 68020's control registers too, which `movec` names
+        expect(
+            unknown('M68K', [
+                'd0',
+                'd7',
+                'a0',
+                'a7',
+                'sp',
+                'pc',
+                'sr',
+                'ccr',
+                'usp',
+                'sfc',
+                'dfc',
+                'vbr',
+                'msp',
+                'isp',
+                'cacr',
+                'caar'
+            ])
+        ).toEqual([])
+        for (const name of ['vbr', 'msp', 'isp', 'cacr', 'caar']) {
+            expect(kindOf(`    movec d0,${name}`, 'M68K', name), name).toBe(
+                kindOf('    move.l a0,usp', 'M68K', 'usp')
+            )
+        }
     })
 
     it("reads x86's directives, which have no dot, and its dotted names, which are not directives", () => {
@@ -290,13 +315,124 @@ describe('tokenizeAssembly', () => {
     })
 
     it('reads the words s68k refuses as invalid, and every one of them', () => {
-        expect(kindOf('    stop #$2700', 'M68K', 'stop')).toBe('invalid')
-        expect(kindOf('    bsr reset', 'M68K', 'reset')).toBe('plain')
+        expect(kindOf('    callm #0,(a0)', 'M68K', 'callm')).toBe('invalid')
+        expect(kindOf('    bsr rtm', 'M68K', 'rtm')).toBe('plain')
+        //what the Core has come to assemble is an instruction again
+        expect(kindOf('    rte', 'M68K', 'rte')).toBe('mnemonic')
+        expect(kindOf('    stop #$2700', 'M68K', 'stop')).toBe('mnemonic')
+        expect(kindOf('    reset', 'M68K', 'reset')).toBe('mnemonic')
         expect(
             [...M68KRefusedInstructions, ...M68KRefusedDirectives].filter(
                 (name) => kindOf(`    ${name} 1`, 'M68K', name) !== 'invalid'
             )
         ).toEqual([])
+        //sized or in the first column, which s68k reads as one there
+        expect(kindOf('    rtm.w d0', 'M68K', 'rtm')).toBe('invalid')
+        expect(kindOf('rtm d0', 'M68K', 'rtm')).toBe('invalid')
+    })
+
+    //the 68010's and the 68020's, all of which it assembles now, the module call aside
+    it('reads every instruction s68k assembles as an instruction, sized or in the first column', () => {
+        expect(
+            M68kInstructions.filter((name) => kindOf(`    ${name} 1`, 'M68K', name) !== 'mnemonic')
+        ).toEqual([])
+        expect(kindOf('    trapeq.w #1', 'M68K', 'trapeq')).toBe('mnemonic')
+        expect(kindOf('pack d0,d1,#0', 'M68K', 'pack')).toBe('mnemonic')
+    })
+
+    //the 68020's register pairs, `d1:d2` and `(a0):(a1)`, and its bit fields, `d0{4:8}`
+    it('reads the 68020’s pairs as registers and a bit field’s braces as brackets', () => {
+        const kinds = (line: string) =>
+            tokenizeAssembly(line, 'M68K')[0]
+                .filter((token) => token.text.trim())
+                .map((token) => `${token.kind}:${token.text.trim()}`)
+        expect(kinds('    cas2.l d0:d1,d2:d3,(a0):(d4)')).toEqual([
+            'mnemonic:cas2',
+            'size:.l',
+            'register:d0',
+            'plain::',
+            'register:d1',
+            'plain:,',
+            'register:d2',
+            'plain::',
+            'register:d3',
+            'plain:,',
+            'bracket:(',
+            'register:a0',
+            'bracket:)',
+            'plain::',
+            'bracket:(',
+            'register:d4',
+            'bracket:)'
+        ])
+        expect(kinds('    bfins d1,(a0){d2:d3}')).toEqual([
+            'mnemonic:bfins',
+            'register:d1',
+            'plain:,',
+            'bracket:(',
+            'register:a0',
+            'bracket:)',
+            'bracket:{',
+            'register:d2',
+            'plain::',
+            'register:d3',
+            'bracket:}'
+        ])
+        expect(kinds('    bfextu d0{#24:8},d1')).toEqual([
+            'mnemonic:bfextu',
+            'register:d0',
+            'bracket:{',
+            'immediate:#',
+            'number:24',
+            'plain::',
+            'number:8',
+            'bracket:}',
+            'plain:,',
+            'register:d1'
+        ])
+        //a brace nests with the parentheses and brackets around it, as the editor counts them
+        const [line] = tokenizeAssembly('    bfextu ([4,a0]){0:8},d0', 'M68K')
+        expect(
+            line.filter((token) => token.kind === 'bracket').map((t) => `${t.text}${t.level}`)
+        ).toEqual(['(0', '[1', ']1', ')0', '{0', '}0'])
+        //a label's colon still ends it, in the first column and before the instruction
+        expect(kinds('d0: dc.l 0')[0]).toBe('label:d0')
+        expect(kinds('loop: muls.l d0,d2:d1').slice(0, 2)).toEqual(['label:loop', 'plain::'])
+    })
+
+    it('reads an opt line as the directive and its options, as the editor does', () => {
+        const kinds = (line: string) =>
+            tokenizeAssembly(line, 'M68K')[0]
+                .filter((token) => token.text.trim())
+                .map((token) => `${token.kind}:${token.text.trim()}`)
+        expect(kinds('    opt p=68020,bit ; the 68020')).toEqual([
+            'directive:opt',
+            'size:p',
+            'plain:=',
+            'number:68020',
+            'plain:,',
+            'size:bit',
+            'comment:; the 68020'
+        ])
+        //in the first column it is the directive still, not a label for its options
+        expect(kinds('OPT P=68010')).toEqual(['directive:OPT', 'size:P', 'plain:=', 'number:68010'])
+        expect(kinds('    opt nomex,cre,xref')).toEqual([
+            'directive:opt',
+            'size:nomex',
+            'plain:,',
+            'size:cre',
+            'plain:,xref'
+        ])
+        //the same options as the editor's grammar
+        const options = new RegExp(`^${M68K_OPT_OPTIONS}$`, 'i')
+        const option = (word: string) =>
+            tokenizeAssembly(`    opt ${word}`, 'M68K')[0].find((t) => t.text.trim() === word)?.kind
+        for (const word of ['p', 'bit', 'mex', 'nomex', 'cre', 'nocre', 'sex', 'war', 'cex'])
+            expect([options.test(word), option(word)], word).toEqual([true, 'size'])
+        for (const word of ['xref', 'nobit', 'pp'])
+            expect([options.test(word), option(word)], word).toEqual([false, 'plain'])
+        //elsewhere the words are names as ever
+        expect(kindOf('    move.w bit,d0', 'M68K', 'bit')).toBe('plain')
     })
 
     it('reads strings as NASM does: escapes only in a backquoted one', () => {
@@ -322,6 +458,44 @@ describe('tokenizeAssembly', () => {
         expect(brackets('    li t0, [1]', 'RISC-V')).toEqual([])
         //and never inside a string or a comment
         expect(brackets('    li t0, 1 # (x)', 'RISC-V')).toEqual([])
+    })
+
+    //the 68020's operands under `opt p=68020`, as Monaco's grammar reads them
+    //(`M68K-language.test.ts` holds the two side by side)
+    it('reads the 68020’s indexed operands: a scale, brackets and the suppressed registers', () => {
+        const line = '    move.w ([4,za0,zd1.w*2],8),d0'
+        expect(rebuild(line, 'M68K')).toBe(line)
+        const pieces = tokenizeAssembly(line, 'M68K')[0]
+            .filter((t) => t.kind !== 'plain')
+            .map((t) => `${t.kind}:${t.text}`)
+        expect(pieces).toEqual([
+            'mnemonic:move',
+            'size:.w',
+            'bracket:(',
+            'bracket:[',
+            'number:4',
+            'register:za0',
+            'register:zd1',
+            'size:.w',
+            'number:2',
+            'bracket:]',
+            'number:8',
+            'bracket:)',
+            'register:d0'
+        ])
+        //the square brackets nest with the parentheses, as the editor colours them
+        expect(
+            tokenizeAssembly(line, 'M68K')[0]
+                .filter((t) => t.kind === 'bracket')
+                .map((t) => `${t.text}${t.level}`)
+        ).toEqual(['(0', '[1', ']1', ')0'])
+        expect(kindOf('    jmp ([zpc],d0.w*4)', 'M68K', 'zpc')).toBe('register')
+        //a displacement's width is a size
+        expect(kindOf('    lea (far.l,a0,d1.w),a1', 'M68K', '.l')).toBe('size')
+        //outside an operand's parentheses they are names, which a label can have
+        expect(kindOf('    move.l za0,d0', 'M68K', 'za0')).toBe('plain')
+        expect(kindOf('za0: dc.l 0', 'M68K', 'za0')).toBe('label')
+        expect(kindOf('    move.l (a0),zd0', 'M68K', 'zd0')).toBe('plain')
     })
 
     it('reads a Z80 condition only where a jump, call or return takes one', () => {

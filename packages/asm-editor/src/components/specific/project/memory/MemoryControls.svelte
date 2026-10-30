@@ -16,6 +16,7 @@
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { SvelteMap } from 'svelte/reactivity'
     import Form from '#cmp/shared/layout/Form.svelte'
     import { clampBigInt } from '#lib/utils.ts'
     import { type RegisterSize, toHexString } from '#lib/languages/commonLanguageFeatures.svelte.ts'
@@ -69,6 +70,19 @@
     let filter = $state('')
     let showLibrary = $state(false)
     let chosen = $state<bigint | undefined>()
+    /**
+     * The picker's groups someone folded or unfolded, by row key, whether folded; every other group
+     * keeps its default. Kept for as long as the controls live, so a group stays as it was left when
+     * the picker opens again and across Builds, whose region ids do not change.
+     */
+    const foldChoices = new SvelteMap<string, boolean>()
+    /**
+     * Whether a group's rows are hidden. Only the 68000's exception vectors start folded: a label
+     * for each of their 65 entries pushed everything listed after them out of sight.
+     */
+    function folded(key: string, byDefault = false) {
+        return foldChoices.get(key) ?? byDefault
+    }
     const regions = $derived(emulator?.memoryRegions ?? [])
     const labels = $derived(emulator?.dataLabels ?? [])
     /** The labels the field completes and the picker lists: the library's only when asked for. */
@@ -157,10 +171,15 @@
         disabled?: boolean
         region?: MemoryRegion
         label?: DataLabel
+        /** Whether the group this row heads is open: a section of several runs, or a region's labels. */
+        expanded?: boolean
     }
     const destinations = $derived.by(() => {
         const rows: Destination[] = []
         const matches = (text: string) => text.toLowerCase().includes(filter.toLowerCase())
+        //a filter lists every match, folded or not, so it finds what a folded group hides
+        const filtering = filter !== ''
+        const open = (key: string, byDefault = false) => filtering || !folded(key, byDefault)
         const names = [
             ...new Set(
                 regions
@@ -182,42 +201,63 @@
                         matches(`${label.name} ${label.displayName ?? ''} ${label.preview ?? ''}`)
                 )
                 if (regionMatch || matchingLabels.length) {
+                    const key = `${region.id}:region`
+                    const labelsOpen = open(key, region.kind === 'vectors')
                     children.push({
-                        key: `${region.id}:region`,
+                        key,
                         searchText: `${region.name} ${region.kind}`,
                         value: region.destination ?? region.start,
-                        region
+                        region,
+                        expanded: filtering || !members.length ? undefined : labelsOpen
                     })
-                    for (const label of matchingLabels)
-                        children.push({
-                            key: `${region.id}:${label.name}:${label.address}`,
-                            searchText: label.displayName ?? label.name,
-                            value: label.address,
-                            region,
-                            label
-                        })
+                    if (labelsOpen)
+                        for (const label of matchingLabels)
+                            children.push({
+                                key: `${region.id}:${label.name}:${label.address}`,
+                                searchText: label.displayName ?? label.name,
+                                value: label.address,
+                                region,
+                                label
+                            })
                 }
             }
             if (children.length) {
-                if (group.length > 1) rows.push({ key: name, value: undefined, disabled: true })
-                rows.push(...children)
+                const sectionOpen = group.length === 1 || open(name)
+                if (group.length > 1)
+                    rows.push({
+                        key: name,
+                        value: undefined,
+                        disabled: true,
+                        expanded: filtering ? undefined : sectionOpen
+                    })
+                if (sectionOpen) rows.push(...children)
             }
         }
         const devices = regions.filter((region) => region.kind === 'device' && matches(region.name))
-        if (devices.length)
-            rows.push(
-                { key: 'Devices', value: undefined, disabled: true },
-                ...devices.map((region) => ({
-                    key: region.id,
-                    searchText: region.name,
-                    value: region.start,
-                    region
-                }))
-            )
+        if (devices.length) {
+            const devicesOpen = open('Devices')
+            rows.push({
+                key: 'Devices',
+                value: undefined,
+                disabled: true,
+                expanded: filtering ? undefined : devicesOpen
+            })
+            if (devicesOpen)
+                rows.push(
+                    ...devices.map((region) => ({
+                        key: region.id,
+                        searchText: region.name,
+                        value: region.start,
+                        region
+                    }))
+                )
+        }
         if (!rows.length)
             rows.push({ key: 'No matching regions', value: undefined, disabled: true })
         return rows
     })
+    /** Whether any row folds, which gives every region row a chevron's room so their swatches line up. */
+    const foldable = $derived(destinations.some((row) => row.expanded !== undefined))
     const currentRegion = $derived(
         memoryHover(regions, labels, currentAddress) ||
             regions.find((region) => region.start === currentAddress && region.end === region.start)
@@ -372,7 +412,9 @@
                             emulator?.buildSources ? undefined : 'Build to see memory regions'
                         )}
                         ariaLabel="Memory regions"
-                        popupWidth={360}
+                        popupWidth={400}
+                        listStyle="border: 1px solid var(--tertiary);"
+                        onToggle={(row) => foldChoices.set(String(row.key), !!row.expanded)}
                         wrapperStyle="height: 100%;"
                         style="padding: 0.4rem 0.6rem; height: 100%; gap: 0.4rem; font-size: 0.8rem; border: 1px solid var(--memory-control-border);"
                         onChange={(address) => {
@@ -409,13 +451,29 @@
                                 </div>
                             </div>
                         {/snippet}
-                        {#snippet item(row)}
+                        {#snippet item(row, { toggle })}
                             {@const destination = row as Destination}
                             <div
                                 class="destination"
                                 class:data-label={!!destination.label}
+                                class:foldable
                                 title={destination.label && labelTooltip(destination.label)}
                             >
+                                <!-- the arrow keys fold a group, so the chevron is for the
+                                     pointer; a click on the rest of a region's row goes there -->
+                                {#if destination.expanded !== undefined}
+                                    <span
+                                        class="disclosure"
+                                        class:expanded={destination.expanded}
+                                        aria-hidden="true"
+                                        onclick={(event) => {
+                                            event.stopPropagation()
+                                            toggle()
+                                        }}><FaAngleRight /></span
+                                    >
+                                {:else if foldable && !destination.label}
+                                    <span class="disclosure-spacer"></span>
+                                {/if}
                                 {#if destination.region && !destination.label}<span
                                         class="swatch"
                                         style:background={memoryRegionColor(
@@ -426,8 +484,7 @@
                                 {#if destination.value !== undefined}<small
                                         >0x{destination.value.toString(
                                             16
-                                        )}{#if !destination.label && destination.region}
-                                            · {destination.region.end - destination.region.start} B{/if}</small
+                                        )}{#if !destination.label && destination.region}{` · ${destination.region.end - destination.region.start} B`}{/if}</small
                                     >{/if}
                             </div>
                         {/snippet}
@@ -471,6 +528,7 @@
         gap: 0.8rem;
     }
     .destination {
+        position: relative;
         display: flex;
         align-items: center;
         gap: 0.4rem;
@@ -483,6 +541,55 @@
     }
     .data-label {
         padding-left: 1.3rem;
+    }
+    /* the name under its region's, past the chevron's room */
+    .data-label.foldable {
+        padding-left: 2.7rem;
+    }
+    .disclosure,
+    .disclosure-spacer {
+        display: grid;
+        flex: 0 0 1rem;
+        place-items: center;
+        width: 1rem;
+        height: 1rem;
+    }
+    .disclosure {
+        /* how far the click area reaches past the chevron's 1rem slot: left over the Select
+           option's 0.75rem padding to the row's edge, right to just before what follows */
+        --reach-left: 0.75rem;
+        --reach-right: 0.2rem;
+        font-size: 0.7rem;
+        cursor: pointer;
+        /* what takes the click: that reach, over the row's whole height and its 0.5rem padding.
+           Placed against the row, so it covers a row whose address wrapped too */
+        &::before {
+            content: '';
+            position: absolute;
+            top: -0.5rem;
+            bottom: -0.5rem;
+            left: calc(-1 * var(--reach-left));
+            width: calc(var(--reach-left) + 1rem + var(--reach-right));
+            border-radius: 0.3rem;
+        }
+        &:hover::before {
+            background: color-mix(in srgb, currentColor 18%, transparent);
+        }
+        /* the icon turns, not the span, whose turning would carry the click area round with it.
+           Moved to the middle of that area, and positioned so it is drawn over its hover colour */
+        & > :global(svg) {
+            position: relative;
+            left: calc((var(--reach-right) - var(--reach-left)) / 2);
+            transition: transform 120ms ease;
+        }
+        &.expanded > :global(svg) {
+            transform: rotate(90deg);
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .disclosure > :global(svg) {
+            transition: none;
+        }
     }
     .swatch {
         width: 0.9rem;

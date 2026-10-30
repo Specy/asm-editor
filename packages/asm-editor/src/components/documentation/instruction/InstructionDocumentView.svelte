@@ -6,7 +6,10 @@
         pseudo: 'Pseudo-instructions',
         'rv64-only': 'RV64 only',
         undocumented: 'Undocumented',
-        privileged: 'Privileged'
+        privileged: 'Privileged',
+        '68010': '68010 and later',
+        '68020': '68020 only',
+        'opt-bit': '68000/68010 with opt bit'
     }
 
     export function sectionHeading(tags: readonly InstructionTag[]): string {
@@ -178,9 +181,8 @@
             {#if document.headerFacts.length > 0}
                 <p class="header-facts">
                     {#each document.headerFacts as fact, index (index)}
-                        {#if index > 0}<span aria-hidden="true"> · </span>{/if}<InlineMarkdown
-                            source={fact}
-                        />
+                        {#if index > 0}<span class="fact-dot" aria-hidden="true">·</span
+                            >{/if}<InlineMarkdown source={fact} />
                     {/each}
                 </p>
             {/if}
@@ -227,7 +229,7 @@
                 {@const rows = rowCount(section)}
                 {#snippet body()}
                     {#if section.explanation}
-                        <p class="explanation">{section.explanation}</p>
+                        <p class="explanation"><InlineMarkdown source={section.explanation} /></p>
                     {/if}
                     {#each cards(visibleGroups(section, index)) as card, cardIndex (cardIndex)}
                         <div class="group">
@@ -381,6 +383,10 @@
         margin: 0;
         font-size: 0.9rem;
         color: var(--background-text-muted);
+    }
+    /* its own spaces, which Svelte would trim from the span's text */
+    .fact-dot {
+        margin: 0 0.3em;
     }
     /* a page on another site: the link colour and underline, and the icon for leaving */
     .reference {

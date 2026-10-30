@@ -13,6 +13,7 @@ import {
     type Z80InstructionVariant
 } from './Z80-documentation'
 import {
+    inAssemblyComment,
     instructionSnippet,
     splitAssemblyComment,
     type AssemblyTextOptions
@@ -121,6 +122,19 @@ function tokenizeLine(line: string): AsmToken[] {
     } catch {
         // Completion runs on every keystroke, including on lines the tokenizer cannot read at all.
         return []
+    }
+}
+
+/**
+ * Whether an offset of a line falls in its comment, as the assembler reads the line: the `'` of
+ * `af'` opens no string, which a plain quote scan would take it for and miss the comment.
+ */
+function inComment(line: string, offset: number): boolean {
+    try {
+        const comment = new AsmTokenizer(line).tokens.find((token) => token.tag === 'comment')
+        return comment !== undefined && offset >= comment.begin
+    } catch {
+        return inAssemblyComment(line, offset, ';')
     }
 }
 
@@ -483,6 +497,8 @@ function formatInstructionHover(name: string): { heading: string; table: string 
 export function createZ80HoverProvider(monaco: MonacoType): monaco.languages.HoverProvider {
     return {
         provideHover: (model, position) => {
+            const line = model.getLineContent(position.lineNumber)
+            if (inComment(line, position.column - 1)) return null
             const found = model.getWordAtPosition(position)
             if (!found) return null
             const range = new monaco.Range(

@@ -52,3 +52,49 @@ it('gives a frame the tooltip its name shortens, and none to one it does not', (
         null
     ])
 })
+
+//an exception frame is named for its vector and its handler, and says where `rte` returns
+//([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 28)
+it('names an exception frame by its vector and handler, above the call it interrupted', () => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const app = mount(CallStack, {
+        target,
+        props: {
+            stack: [
+                {
+                    name: 'compute',
+                    address: 0x1100n,
+                    destination: 0x1008n,
+                    sp: 0xfffffcn,
+                    line: 9,
+                    color: 'red'
+                },
+                {
+                    name: 'TRAP #3 → trap3_handler',
+                    detail: 'An exception, taken through vector 35 at $00008C: `rte` returns to $1104',
+                    address: 0x1200n,
+                    destination: 0x1104n,
+                    sp: 0xfffff6n,
+                    line: 14,
+                    color: 'blue'
+                }
+            ],
+            onGoToLabel: vi.fn(),
+            onGoToInstruction: vi.fn()
+        }
+    })
+    flushSync()
+    dispose = () => {
+        void unmount(app)
+        target.remove()
+    }
+    const names = [...target.querySelectorAll<HTMLButtonElement>('.label-name')]
+    expect(names.map((button) => button.textContent?.trim())).toEqual([
+        'TRAP #3 → trap3_handler',
+        'compute'
+    ])
+    expect(names[0].getAttribute('title')).toContain('vector 35')
+    const returns = [...target.querySelectorAll<HTMLButtonElement>('.return-address')]
+    expect(returns.map((button) => button.textContent?.trim())).toEqual(['0x1104', '0x1008'])
+})

@@ -65,18 +65,22 @@ describe('the M68K Documentation', () => {
             chapters().map((chapter) => [chapter.id, chapter.entries.length])
         )
         expect(counts).toEqual({
-            instructions: 69,
-            'addressing-modes': 10,
-            //the explanation's two sections, then the 16 codes
-            'condition-codes': 18,
+            instructions: 93,
+            //the 68000's modes, the 68010's control registers, and the 68020's: its introduction,
+            //four modes, its long branches, and its instructions' register pairs and bit fields
+            'addressing-modes': 20,
+            //the explanation's three sections, then the 16 codes
+            'condition-codes': 19,
             'shift-directions': 1,
-            //the introduction, 6 groups, the colors, the key codes, how sound differs, 59 tasks and
-            //the 2 closing sections
-            'trap-tasks': 72,
+            //the two opening sections, 8 groups, the colors, the pictures, the key codes, how sound
+            //differs, 64 tasks and the closing list of unsupported tasks
+            'trap-tasks': 79,
             //the introduction and the seven sections after it
             synth: 8,
-            exceptions: 4,
-            directives: 18,
+            //the introduction and the nineteen sections after it, the 68010's, its format errors and
+            //then the 68020's seven last
+            exceptions: 20,
+            directives: 19,
             'assembler-features': 1
         })
     })
@@ -95,6 +99,8 @@ describe('the M68K Documentation', () => {
         expect(owner('dbf')).toBe('dbcc')
         expect(owner('st')).toBe('scc')
         expect(owner('asl')).toBe('asd')
+        expect(owner('trapeq')).toBe('trapcc')
+        expect(owner('trapt')).toBe('trapcc')
         expect(owner('roxr')).toBe('roxd')
         expect(owner('move')).toBe('move')
     })
@@ -110,7 +116,7 @@ describe('the M68K Documentation', () => {
     })
 
     it('has every trap task at the anchor the page has always given it', () => {
-        expect(M68K_TRAP_DOCS).toHaveLength(59)
+        expect(M68K_TRAP_DOCS).toHaveLength(64)
         for (const task of M68K_TRAP_DOCS) {
             const found = entry('trap-tasks', `task-${task.task}`)
             expect(found.kind).toBe('trap-task')
@@ -125,6 +131,8 @@ describe('the M68K Documentation', () => {
             'graphics',
             'input',
             'time',
+            'cycles',
+            'interrupts',
             'files',
             'sound',
             'sound-differences',
@@ -199,10 +207,11 @@ describe('the M68K Documentation', () => {
     it('groups rejected tasks by reason and leaves the sound tasks out of them', () => {
         const text = markdownOf(entry('trap-tasks', 'unsupported')).join('\n')
         const lines = text.split('\n')
-        expect(lines.find((line) => line.includes('`30`'))).toContain('`31`')
-        expect(lines.find((line) => line.includes('`30`'))).toContain('cycle count')
+        expect(lines.find((line) => line.includes('`40`'))).toContain('`43`')
+        expect(lines.find((line) => line.includes('`40`'))).toContain('serial')
         expect(lines.find((line) => line.includes('`100`'))).toContain('`107`')
-        expect(text).not.toMatch(/`(?:12|16|5[0-9]|7[0-7])`/)
+        //the sound tasks and the cycle counter's are carried out
+        expect(text).not.toMatch(/`(?:12|16|30|31|5[0-9]|7[0-7])`/)
         expect(markdownOf(entry('trap-tasks', 'text')).join('\n')).toContain('Windows-1252')
     })
 
@@ -229,7 +238,7 @@ describe('the M68K Documentation', () => {
 
     it('leaves an instruction without an example without one, so its page says so', () => {
         expect(M68KUncompoundedInstructions.get('roxl')?.interactiveExample).toBeUndefined()
-        expect(M68KUncompoundedInstructions.get('chk')?.interactiveExample).toBeUndefined()
+        expect(M68KUncompoundedInstructions.get('rtr')?.interactiveExample).toBeUndefined()
         expect(M68KUncompoundedInstructions.get('move')?.interactiveExample?.code).toContain(
             'move.b #$FF, d0'
         )

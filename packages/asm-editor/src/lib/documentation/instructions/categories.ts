@@ -31,7 +31,7 @@ export const INSTRUCTION_CATEGORIES = [
         usedBy: ['m68k', 'mips', 'risc-v', 'x86', 'z80']
     },
     { id: 'floating-point', label: 'Floating point', usedBy: ['mips', 'risc-v'] },
-    { id: 'atomic', label: 'Atomic', usedBy: ['mips', 'risc-v', 'x86'] },
+    { id: 'atomic', label: 'Atomic', usedBy: ['m68k', 'mips', 'risc-v', 'x86'] },
     { id: 'block-and-string', label: 'Block and string', usedBy: ['x86', 'z80'] },
     { id: 'input-output', label: 'Input/output', usedBy: ['x86', 'z80'] },
     { id: 'system', label: 'System', usedBy: ['m68k', 'mips', 'risc-v', 'x86', 'z80'] }
@@ -50,7 +50,12 @@ export const INSTRUCTION_TAGS = [
     { id: 'pseudo', label: 'Pseudo-instruction' },
     { id: 'rv64-only', label: 'RV64 only' },
     { id: 'undocumented', label: 'Undocumented' },
-    { id: 'privileged', label: 'Privileged' }
+    { id: 'privileged', label: 'Privileged' },
+    //the first M68K processor that has a form, where it is a later one than the 68000
+    { id: '68010', label: '68010' },
+    { id: '68020', label: '68020' },
+    //the 68020's bit fields, which EASy68K's `opt bit` gives a program for the 68000 or the 68010
+    { id: 'opt-bit', label: '68000 with opt bit' }
 ] as const
 
 export type InstructionTag = (typeof INSTRUCTION_TAGS)[number]['id']

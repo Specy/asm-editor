@@ -5,8 +5,10 @@ import {
     memoryRegionColor,
     mergeMemoryRegions,
     memoryHover,
+    memoryReasons,
     readOnlyMemoryAt,
     regionChunkStart,
+    regionLabels,
     regionsAt,
     resolveMemoryAddress,
     textSegmentsReadOnly,
@@ -287,5 +289,98 @@ describe('the Arguments region', () => {
         const colour = memoryRegionColor('arguments')
         expect(kinds.map(memoryRegionColor)).not.toContain(colour)
         expect(colour).toMatch(/^color-mix\(in srgb, #[0-9a-f]{6} 85%, var\(--secondary-text\)\)$/)
+    })
+})
+
+/**
+ * What the machine itself gives a meaning ([m68k-machine.md](../../../../../docs/design/m68k-machine.md),
+ * decision 31): the 68000's exception vectors, named one label per vector, and the ranges of an
+ * M68K program's memory map, each with what it does to the program.
+ */
+describe('regions the machine defines', () => {
+    const vectorLabel = (name: string, address: bigint) => ({
+        name,
+        address,
+        section: 'Exception vectors',
+        fromLibrary: false
+    })
+    const layout = {
+        ...memoryLayoutFromItems(
+            [
+                //a program that writes its own reset vectors, then its code over a ROM range
+                { start: 0n, length: 8n, kind: 'data', section: 'Section 0' },
+                { start: 0x1000n, length: 4n, kind: 'code', section: 'Section 1' }
+            ],
+            [{ name: 'reset', address: 0n, fromLibrary: false }]
+        ),
+        machineRegions: [
+            {
+                kind: 'vectors' as const,
+                name: 'Exception vectors',
+                start: 0n,
+                end: 0x400n,
+                reason: 'Each long word is a handler’s address.'
+            },
+            {
+                kind: 'rom' as const,
+                name: 'ROM',
+                start: 0x1000n,
+                end: 0x1100n,
+                reason: 'The program’s writes here are ignored.'
+            }
+        ]
+    }
+    layout.dataLabels.push(
+        vectorLabel('Reset SSP', 0n),
+        vectorLabel('Reset PC', 4n),
+        vectorLabel('Bus error', 8n)
+    )
+    const regions = mergeMemoryRegions(layout, undefined, undefined, [])
+
+    it('lists each after the program’s own runs, in a section of its own name', () => {
+        expect(regions.map((region) => [region.id, region.kind, region.section])).toEqual([
+            ['Section 0:0', 'data', 'Section 0'],
+            ['Section 1:0', 'code', 'Section 1'],
+            ['machine:vectors', 'vectors', 'Exception vectors'],
+            ['machine:rom', 'rom', 'ROM']
+        ])
+        const vectors = regions.find((region) => region.kind === 'vectors')!
+        expect(regionLabels(vectors, layout.dataLabels).map((label) => label.name)).toEqual([
+            'Reset SSP',
+            'Reset PC',
+            'Bus error'
+        ])
+    })
+
+    it('outlines the vectors and the map over what the program placed, and names them all', () => {
+        expect(regionsAt(regions, 4n).map((region) => region.kind)).toEqual(['vectors', 'data'])
+        expect(regionsAt(regions, 0x1000n).map((region) => region.kind)).toEqual(['rom', 'code'])
+        expect(memoryHover(regions, layout.dataLabels, 6n)).toBe(
+            'Exception vectors · Reset PC+2 · Section 0 · reset+6'
+        )
+        expect(memoryHover(regions, layout.dataLabels, 0x1002n)).toBe('ROM · Section 1')
+    })
+
+    it('cuts the vectors into one chunk per vector, and leaves the map’s ranges whole', () => {
+        const vectors = regions.find((region) => region.kind === 'vectors')!
+        expect(regionChunkStart(vectors, layout.dataLabels, 6n)).toBe(4n)
+        expect(regionChunkStart(vectors, layout.dataLabels, 0x200n)).toBe(8n)
+        const rom = regions.find((region) => region.kind === 'rom')!
+        expect(regionChunkStart(rom, layout.dataLabels, 0x1080n)).toBe(0x1000n)
+    })
+
+    it('says what each means to the program, and nothing where the machine defines nothing', () => {
+        expect(memoryReasons(regions, 0x1002n)).toEqual(['The program’s writes here are ignored.'])
+        expect(memoryReasons(regions, 4n)).toEqual(['Each long word is a handler’s address.'])
+        expect(memoryReasons(regions, 0x2000n)).toEqual([])
+    })
+
+    it('gives each kind a colour no other kind has', () => {
+        const kinds = [
+            ...['code', 'data', 'reserved', 'heap', 'stack', 'arguments', 'device'],
+            ...['vectors', 'rom', 'readOnly', 'protected', 'invalid']
+        ] as const
+        const colours = kinds.map(memoryRegionColor)
+        expect(new Set(colours).size).toBe(kinds.length)
     })
 })

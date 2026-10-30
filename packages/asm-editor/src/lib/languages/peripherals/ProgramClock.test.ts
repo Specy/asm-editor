@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { HOST_FRAME_FALLBACK_MS, ProgramClock, VIRTUAL_FRAME_INTERVAL_MS } from './ProgramClock'
+import {
+    HOST_FRAME_FALLBACK_MS,
+    LONGEST_HOST_TIMER_MS,
+    ProgramClock,
+    VIRTUAL_FRAME_INTERVAL_MS
+} from './ProgramClock'
 
 /** A settled promise takes one microtask, which is what "resolves immediately" means here. */
 function flush() {
@@ -77,6 +82,35 @@ describe('host mode', () => {
         await wait
         expect(resumed).toBe(true)
         expect(clock.pendingWaits).toBe(0)
+    })
+
+    it('waits out a wait longer than one host timer holds, rather than resuming at once', async () => {
+        //`setTimeout` fires a delay past 32 bits after about a millisecond: an M68K timer of
+        //$80000000 ms made a stopped program's wait poll, and a Delay that long ended at once
+        vi.useFakeTimers()
+        const clock = new ProgramClock()
+        let resumed = false
+        const wait = clock.wait(LONGEST_HOST_TIMER_MS + 1000).then(() => (resumed = true))
+        await vi.advanceTimersByTimeAsync(10)
+        expect(resumed).toBe(false)
+        await vi.advanceTimersByTimeAsync(LONGEST_HOST_TIMER_MS)
+        expect(resumed).toBe(false)
+        await vi.advanceTimersByTimeAsync(990)
+        await wait
+        expect(resumed).toBe(true)
+        expect(clock.pendingWaits).toBe(0)
+    })
+
+    it('disarms the timer a long wait is on at the time it is cancelled', async () => {
+        vi.useFakeTimers()
+        const clock = new ProgramClock()
+        const controller = new AbortController()
+        const wait = clock.wait(2 * LONGEST_HOST_TIMER_MS, controller.signal).catch(() => {})
+        await vi.advanceTimersByTimeAsync(LONGEST_HOST_TIMER_MS + 10)
+        expect(vi.getTimerCount()).toBe(1)
+        controller.abort()
+        await wait
+        expect(vi.getTimerCount()).toBe(0)
     })
 
     it('falls back to a timer for a frame where there is no animation frame', async () => {

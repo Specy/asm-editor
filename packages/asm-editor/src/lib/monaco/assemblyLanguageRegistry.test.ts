@@ -30,7 +30,8 @@ function registrationStub(failAt?: string) {
         registerLinkProvider: registration('links'),
         registerDocumentFormattingEditProvider: registration('formatting'),
         registerDocumentRangeFormattingEditProvider: registration('rangeFormatting'),
-        registerFoldingRangeProvider: registration('folding')
+        registerFoldingRangeProvider: registration('folding'),
+        registerCodeActionProvider: registration('codeActions')
     }
     return {
         monaco: { languages } as unknown as MonacoType,
@@ -57,7 +58,8 @@ function completeDescriptor(): AssemblyLanguageDescriptor {
             links: [provider],
             formatting: [provider],
             rangeFormatting: [provider],
-            folding: [provider]
+            folding: [provider],
+            codeActions: [provider]
         }
     }
 }
@@ -91,7 +93,8 @@ describe('assembly language provider registry', () => {
             'links',
             'formatting',
             'rangeFormatting',
-            'folding'
+            'folding',
+            'codeActions'
         ])
         expect(registrations).toHaveLength(stub.registered.length)
     })

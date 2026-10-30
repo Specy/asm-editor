@@ -7,7 +7,7 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount } from 'svelte'
-import type { EmulatorNote } from '#lib/languages/commonLanguageFeatures.svelte.ts'
+import type { CycleCount, EmulatorNote } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { TestcaseResult } from '#lib/Project.svelte.ts'
 import { ExecutionSupersededError } from '#lib/languages/ExecutionController.ts'
 import { toast } from '#stores/toastStore.ts'
@@ -198,6 +198,24 @@ describe('notes in the Log', () => {
         emulator.notes = [...emulator.notes]
         flushSync()
         expect(session.log.filter((entry) => entry.kind === 'note')).toHaveLength(2)
+    })
+
+    it('follow an exit that says the cycles of a Target that counts them', async () => {
+        const { session, emulator } = setup()
+        emulator.compile = async () => {
+            emulator.canExecute = true
+        }
+        await session.build()
+        flushSync()
+        //the counter as the M68K shows it above the PC, which the exit line ends with
+        ;(emulator as typeof emulator & { cycles?: CycleCount }).cycles = {
+            total: 1_234_567n,
+            last: 8
+        }
+        emulator.terminated = true
+        emulator.termination = { kind: 'exit' }
+        flushSync()
+        expect(kinds(session.log).at(-1)).toBe('exit: Ran 1,234,567 cycles in 12ms')
     })
 
     it('are left out of a test run, whose entry says how each Testcase went', async () => {

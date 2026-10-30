@@ -63,16 +63,16 @@ async function hover(line: string, at: string) {
 }
 
 describe('x86 hovers', () => {
-    it('names the category and the tags every form has on the italic line', async () => {
+    it('names the tags every form has on the italic line, and no category', async () => {
         const [sysret] = await hover('    sysret', 'sysret')
         expect(sysret).toMatch(/^\*\*sysret\*\*/)
-        expect(sysret.split('\n\n')[1]).toMatch(/^\*System · Privileged · .+ and later\*$/)
+        expect(sysret.split('\n\n')[1]).toMatch(/^\*Privileged · .+ and later\*$/)
     })
 
     it('leaves a tag only some forms have off the line', async () => {
         // Eight of `mov`'s forms reach the control and debug registers, which are privileged.
         const [mov] = await hover('    mov rax, rbx', 'mov')
-        expect(mov.split('\n\n')[1]).toMatch(/^\*Data movement · .+ and later\*$/)
+        expect(mov.split('\n\n')[1]).toMatch(/^\*[^·]+ and later\*$/)
         expect(mov).not.toContain('Privileged')
     })
 
@@ -89,6 +89,13 @@ describe('x86 hovers', () => {
         expect(await hover('    vaddps ymm0, ymm1, ymm2', 'vaddps')).toContain(
             "[Intel's reference: ADDPS](https://intel.github.io/SDM/instruction/ADDPS.html)"
         )
+    })
+
+    it('says nothing about the words of a comment', async () => {
+        expect(await hover('    ret ; mov the result to rax', 'mov')).toEqual([])
+        expect(await hover('    ret ; mov the result to rax', 'rax')).toEqual([])
+        // A `;` in a string starts no comment.
+        expect(await hover("    db ';', 0 ; mov", 'db')).not.toEqual([])
     })
 })
 

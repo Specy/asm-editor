@@ -1,4 +1,3 @@
-import { hostNow, type ClockReader } from './ProgramClock'
 import {
     KEY_CODES,
     keyCodeFromEvent,
@@ -9,40 +8,36 @@ import {
 
 /**
  * The Keyboard peripheral: keyboard input for a program interacting with the Screen
- * ([ADR 0008](../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md)). Input is polled, never
- * delivered as a CPU interrupt, and a program observes it in two ways:
+ * ([ADR 0008](../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md)). Input is polled, and a
+ * program observes it in two ways:
  *
  * - the **typed-character queue**, which holds every character in press order and never drops one:
  *   an availability check asks whether it is empty and a read dequeues one character. It also
  *   answers the Terminal's character, string and numeric reads in graphical use
  *   ([ADR 0009](../../../../../../docs/adr/0009-share-screen-keyboard-input-with-terminal.md)).
+ *   EASy68K keeps one pending character, which a second keystroke overwrites; this queue keeps them
+ *   all, on purpose.
  * - the **key-state view**, which answers whether given keys are down and remembers the last key
  *   pressed and the last key released, in EASy68K's key codes.
  *
- * Key transitions are queued as the GUI delivers them and applied only when the program reads the
- * key state, at most one per read and never faster than the hold interval, so a tap that lasts a
- * millisecond is still observed by a program that polls every frame. Typed characters do not wait
- * for the interval: they enter the queue the moment the key is pressed.
+ * The key state is EASy68K's ([ADR 0066](../../../../../../docs/adr/0066-key-state-changes-at-the-event.md)):
+ * a key going down is down at once and becomes the last key pressed, a key coming up is up at once
+ * and becomes the last key released, and a read answers the state as it is now, with no queue and
+ * no pacing. Its `FormKeyDown` and `FormKeyUp` set `keys[]`, `keyDownCode` and `keyUpCode` in the
+ * event itself, and `getKeyState`, task 19, only reads them (`simIOu.cpp` in EASy68K 5.16.1). A tap
+ * that falls between two reads is gone from the held keys, but the last-key codes keep it.
+ *
+ * A key going down or up is also told at once to whoever listens with `onKeyEvent`: the M68K
+ * adapter, whose program can ask for an IRQ on either ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)).
+ * The state is changed before the listener hears of it, so a handler reads the key that raised it.
+ *
+ * Key state is live input: Undo does not replay it (ADR 0008).
  *
  * Plain TypeScript with no Svelte runes and no DOM types, like the other peripherals: a Core reads
- * it from inside its synchronous execution and it has to run under node in tests. The phase 4
+ * it from inside its synchronous execution and it has to run under node in tests. The Screen
  * widget owns focus, shortcut suppression and the DOM listeners; it calls `keyDown`, `keyUp`,
  * `typeText` and `releaseAll` and nothing here knows a Screen exists.
  */
-
-/**
- * The shortest time a queued transition is held before the next one may be applied. 30 ms is a
- * placeholder to validate in phase 8: long enough that a program polling once a frame sees every
- * state, short enough that fast typing is not throttled into a visible lag. Program time coincides
- * with host time, which is why the interval is in milliseconds (ADR 0010).
- */
-export const DEFAULT_KEY_HOLD_INTERVAL_MS = 30
-
-export type KeyboardOptions = {
-    /** Host time source, injected so tests can drive the hold interval. */
-    now?: ClockReader
-    holdIntervalMs?: number
-}
 
 /** The modifier keys a Mouse snapshot records, as EASy68K's task 61 reports them. */
 export type KeyModifiers = {
@@ -57,51 +52,36 @@ export type LastKeys = {
     up: KeyCode
 }
 
-type KeyTransition = {
-    code: KeyCode
-    down: boolean
-}
+/** A key going down or coming up, as a listener of `onKeyEvent` hears it. */
+export type KeyEventKind = 'keyDown' | 'keyUp'
 
 /** Neither task 19 nor the Z80 key ports have a "no key" code, so both start at zero, as EASy68K's do. */
 const NO_KEY: KeyCode = 0
 
 export class Keyboard {
-    private readonly now: ClockReader
-    private readonly _holdIntervalMs: number
     /** Typed characters as code points, in press order. Nothing but a read or a reset removes one. */
     private readonly typed: number[] = []
-    /** Transitions the GUI delivered and the program has not observed yet. */
-    private readonly transitions: KeyTransition[] = []
-    /** The key state the program sees, which only `applyPendingTransition` changes. */
-    private readonly pressed = new Set<KeyCode>()
-    /** The keys physically held, as delivered; ahead of `pressed` by the queued transitions. */
-    private readonly held = new Set<KeyCode>()
+    /** The keys held now, EASy68K's `keys[]`. */
+    private readonly down = new Set<KeyCode>()
     private readonly listeners = new Set<() => void>()
+    private readonly keyEventListeners = new Set<(event: KeyEventKind) => void>()
     private _lastKeyDown: KeyCode = NO_KEY
     private _lastKeyUp: KeyCode = NO_KEY
-    private appliedAt: number | null = null
-
-    constructor(options: KeyboardOptions = {}) {
-        this.now = options.now ?? hostNow
-        this._holdIntervalMs = options.holdIntervalMs ?? DEFAULT_KEY_HOLD_INTERVAL_MS
-    }
-
-    get holdIntervalMs(): number {
-        return this._holdIntervalMs
-    }
 
     // ------------------------------------------------------------ GUI input
 
     /**
-     * A key went down. Types the character it produced and queues the transition; auto-repeat types
-     * again, like a terminal, but queues nothing, because the key never came back up.
+     * A key went down. Types the character it produced and presses the key. Auto-repeat types
+     * again, like a terminal, and goes down again, as EASy68K's `FormKeyDown` does on every repeat
+     * Windows sends: the key is down, it is the last key down, and a key-down IRQ is raised again.
      */
     keyDown(event: KeyboardEventLike): void {
         const character = typedCharacterFromEvent(event)
         if (character !== undefined) this.typeText(character)
         const code = keyCodeFromEvent(event)
-        if (code === undefined || event.repeat) return
-        this.pressKey(code)
+        if (code === undefined) return
+        if (event.repeat) this.repeatKey(code)
+        else this.pressKey(code)
     }
 
     /** A key came up. Types nothing: a character is typed when the key goes down. */
@@ -111,26 +91,45 @@ export class Keyboard {
         this.releaseKey(code)
     }
 
-    /** Queues a press by key code, without typing a character. */
+    /**
+     * Presses a key by its code, without typing a character: it is down and the last key pressed from
+     * now on, before any listener hears of it. A key already down presses nothing.
+     */
     pressKey(code: KeyCode): void {
-        if (this.held.has(code)) return
-        this.held.add(code)
-        this.transitions.push({ code, down: true })
+        if (this.down.has(code)) return
+        this.down.add(code)
+        this._lastKeyDown = code
+        this.tell('keyDown')
     }
 
-    /** Queues a release by key code. A key that is not held releases nothing. */
+    /**
+     * An auto-repeat of a key held down: it goes down again, whether or not the key state still had
+     * it down, becomes the last key down again and is told again, so a program that asked for a
+     * key-down IRQ gets one per repeat, as in EASy68K.
+     */
+    repeatKey(code: KeyCode): void {
+        this.down.add(code)
+        this._lastKeyDown = code
+        this.tell('keyDown')
+    }
+
+    /**
+     * Releases a key by its code: it is up and the last key released from now on, before any listener
+     * hears of it. A key that is not down releases nothing.
+     */
     releaseKey(code: KeyCode): void {
-        if (!this.held.delete(code)) return
-        this.transitions.push({ code, down: false })
+        if (!this.down.delete(code)) return
+        this._lastKeyUp = code
+        this.tell('keyUp')
     }
 
     /**
      * Releases every held key, for focus loss: a release the Screen never received must not leave a
-     * key stuck down for the program (ADR 0008). The releases are queued like any other transition,
-     * so a program still observes the presses that preceded them.
+     * key stuck down for the program (ADR 0008). Each is an ordinary release, which updates the last
+     * key released and tells the listeners.
      */
     releaseAll(): void {
-        for (const code of [...this.held]) this.releaseKey(code)
+        for (const code of [...this.down]) this.releaseKey(code)
     }
 
     /**
@@ -196,80 +195,57 @@ export class Keyboard {
         }
     }
 
+    /**
+     * Called when a key goes down or comes up, once the key state shows it: what a device IRQ needs.
+     * Each auto-repeat is told as a key going down, as EASy68K raises its key-down IRQ on every
+     * repeat; a reset releases nothing. Returns the unsubscribe.
+     */
+    onKeyEvent(listener: (event: KeyEventKind) => void): () => void {
+        this.keyEventListeners.add(listener)
+        return () => {
+            this.keyEventListeners.delete(listener)
+        }
+    }
+
+    private tell(event: KeyEventKind): void {
+        for (const listener of [...this.keyEventListeners]) listener(event)
+    }
+
     // ---------------------------------------------------- key-state reads
 
-    /** Whether one key is down. Applies at most one queued transition, like every key-state read. */
+    /** Whether one key is down now. */
     isKeyDown(code: KeyCode): boolean {
-        this.applyPendingTransition()
-        return this.pressed.has(code)
+        return this.down.has(code)
     }
 
     /** EASy68K's task 19 with up to four key codes: one answer per code, in the same order. */
     areKeysDown(codes: readonly KeyCode[]): boolean[] {
-        this.applyPendingTransition()
-        return codes.map((code) => this.pressed.has(code))
+        return codes.map((code) => this.down.has(code))
     }
 
     anyKeyDown(): boolean {
-        this.applyPendingTransition()
-        return this.pressed.size > 0
+        return this.down.size > 0
     }
 
     /** EASy68K's task 19 with D1.L = 0. Both codes are 0 until the first press and release. */
     lastKeys(): LastKeys {
-        this.applyPendingTransition()
         return { down: this._lastKeyDown, up: this._lastKeyUp }
     }
 
-    /** How many transitions are still queued; the tests and the phase 4 widget look at it. */
-    get pendingTransitions(): number {
-        return this.transitions.length
-    }
-
-    /**
-     * The modifiers a Mouse snapshot records. Read from the physically held keys rather than from
-     * the applied state, and applying nothing: a click carries the modifiers that were down when it
-     * happened, and the hold interval exists to pace key-state polling, not to distort a snapshot.
-     */
+    /** The modifiers a Mouse snapshot records: those held when the click happened. */
     modifiers(): KeyModifiers {
         return {
-            shift: this.held.has(KEY_CODES.SHIFT),
-            alt: this.held.has(KEY_CODES.ALT),
-            ctrl: this.held.has(KEY_CODES.CTRL)
+            shift: this.down.has(KEY_CODES.SHIFT),
+            alt: this.down.has(KEY_CODES.ALT),
+            ctrl: this.down.has(KEY_CODES.CTRL)
         }
     }
 
     /** The Keyboard's half of the Terminal's clear path. Subscriptions survive it, the GUI's do. */
     reset(): void {
         this.typed.length = 0
-        this.transitions.length = 0
-        this.pressed.clear()
-        this.held.clear()
+        this.down.clear()
         this._lastKeyDown = NO_KEY
         this._lastKeyUp = NO_KEY
-        this.appliedAt = null
-    }
-
-    /**
-     * Applies one queued transition when the hold interval has passed since the last one. One per
-     * read means a program observes every state at least once however slowly it polls; the interval
-     * means a state lasts long enough for a program that polls once a frame to see it (ADR 0008).
-     * This mirrors the upstream TRS-80 keyboard, which releases one queued transition per 50,000
-     * t-states measured at read time.
-     */
-    private applyPendingTransition(): void {
-        const next = this.transitions[0]
-        if (next === undefined) return
-        const now = this.now()
-        if (this.appliedAt !== null && now - this.appliedAt < this._holdIntervalMs) return
-        this.transitions.shift()
-        this.appliedAt = now
-        if (next.down) {
-            this.pressed.add(next.code)
-            this._lastKeyDown = next.code
-        } else {
-            this.pressed.delete(next.code)
-            this._lastKeyUp = next.code
-        }
     }
 }

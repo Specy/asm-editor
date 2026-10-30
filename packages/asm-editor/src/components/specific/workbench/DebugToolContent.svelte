@@ -38,6 +38,7 @@
     <MutationsViewer
         {docked}
         {language}
+        processor={emulator.processor}
         statusRegisterNames={emulator.statusRegisters.map((r) => r.name)}
         onUndo={(index) => session.undoSteps(index)}
         onHighlight={(step) => {

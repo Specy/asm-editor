@@ -41,7 +41,19 @@ export function s68kDiagnosticToLanguageDiagnostic(
         related: error.related.map((related) => ({
             location: sourceLocation(related.location, sources),
             message: related.message
-        }))
+        })),
+        //`needs_a_later_processor` carries the `opt p=` line to add and the 68000's own way of
+        //writing the same, and `processor_chosen_after_code` the deletion of its late line, which
+        //the editor offers as quick fixes
+        ...(error.fixes
+            ? {
+                  fixes: error.fixes.map((fix) => ({
+                      title: fix.title,
+                      location: sourceLocation(fix.location, sources),
+                      text: fix.text
+                  }))
+              }
+            : {})
     }
 }
 

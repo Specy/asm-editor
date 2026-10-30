@@ -192,6 +192,10 @@ export function formatLatestSteps(
             file: step.file ?? null,
             line: formatSourceLine(code, step.line, step.file).line,
             pc: formatNumber(step.pc),
+            //what ran where the source line does not say: no line, or one whose bytes changed
+            ...(step.disassembly === undefined ? {} : { disassembly: step.disassembly }),
+            //the clock cycles it took, where the Target counts them (M68K)
+            ...(step.cycles === undefined ? {} : { cycles: step.cycles }),
             mutations: step.mutations.map((mutation) => {
                 switch (mutation.type) {
                     //`old` and `new` are what the Core reports of a write and nothing is
@@ -221,10 +225,21 @@ export function formatLatestSteps(
                         }
                     case 'PushCallStack':
                     case 'PopCallStack':
+                    case 'ReturnFromException':
                         return {
                             type: mutation.type,
                             from: formatNumber(mutation.value.from),
                             to: formatNumber(mutation.value.to)
+                        }
+                    //the exception the instruction raised and the handler it went to
+                    case 'TakeException':
+                        return {
+                            type: mutation.type,
+                            exception: mutation.value.name,
+                            vector: mutation.value.vector,
+                            from: formatNumber(mutation.value.from),
+                            handler: formatNumber(mutation.value.handler),
+                            label: mutation.value.label ?? null
                         }
                     case 'Other':
                         return { type: mutation.type, value: mutation.value }
@@ -411,6 +426,19 @@ export function formatEmulatorState(
             : undefined,
         //and as data, which also tells an exit from a program that ran past its last instruction
         termination: emulator.termination,
+        //the M68K's cycle counter, since the start or trap #15 task 30, and the newest step's cost;
+        //a 68020 program's are an estimate, the manual's cache case, and every step's with them
+        ...(emulator.cycles
+            ? {
+                  cycles: {
+                      total: Number(emulator.cycles.total),
+                      ...(emulator.cycles.last === undefined
+                          ? {}
+                          : { lastStep: emulator.cycles.last }),
+                      ...(emulator.cycles.estimate ? { estimate: true } : {})
+                  }
+              }
+            : {}),
         currentInterrupt: emulator.interrupt,
         currentFile: currentFile || undefined,
         stdOut: formattedStdout,

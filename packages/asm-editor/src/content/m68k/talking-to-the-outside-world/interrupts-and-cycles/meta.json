@@ -1,0 +1,6 @@
+{
+    "name": "Interrupts and cycles",
+    "description": "Handle timer and keyboard interrupts, control their priority with the interrupt mask, and measure code with the cycle counter.",
+    "order": 3,
+    "topic": "interrupt-requests"
+}

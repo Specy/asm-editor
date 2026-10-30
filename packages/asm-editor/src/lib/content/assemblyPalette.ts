@@ -28,9 +28,12 @@ const bracketPaint = (level: number | undefined): AssemblyBracketPaint =>
         ? 'bracket-unexpected'
         : (`bracket-${(level % 3) + 1}` as AssemblyBracketPaint)
 
-/** `a0`..`a7` and `sp`, which the M68K grammar colours apart from the data registers. */
-const M68K_ADDRESS_REGISTER = /^(?:a[0-7]|sp)$/i
-const M68K_DATA_REGISTER = /^d[0-7]$/i
+/**
+ * `a0`..`a7` and `sp`, which the M68K grammar colours apart from the data registers, and the
+ * 68020's suppressed `za0` and `zd0` as the registers they leave out.
+ */
+const M68K_ADDRESS_REGISTER = /^(?:z?a[0-7]|sp)$/i
+const M68K_DATA_REGISTER = /^z?d[0-7]$/i
 /** `0x1F`, `$1F` and `1Fh`, after an immediate's `#`; the M68K writes hex with `$` alone. */
 const HEX_LITERAL = /^#?(?:0x|\$|[0-9][0-9a-f]*h$)/i
 const M68K_HEX_LITERAL = /^#?\$/

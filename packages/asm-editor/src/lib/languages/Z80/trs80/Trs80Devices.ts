@@ -167,8 +167,7 @@ export class Trs80Devices {
             }
         }
         if (codes.length === 0) return 0
-        //one call for the whole read: a key-state read applies at most one queued transition, and
-        //asking key by key would let a single scan burn through the hold interval (ADR 0008)
+        //the matrix is wired to the keys, so a read sees the keys held now (ADR 0066)
         const down = this.host.keyboard.areKeysDown(codes)
         let value = 0
         for (let index = 0; index < down.length; index++) {

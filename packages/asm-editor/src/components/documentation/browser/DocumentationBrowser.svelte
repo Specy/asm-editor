@@ -9,7 +9,9 @@
      * **Instruction category**, pinned under the Chapter's. With a query, the Chapters give way to
      * the ranked results, entries and **Lecture sections** in one list, each instruction naming its
      * category, an entry named exactly what was typed opened already. A link from one entry to
-     * another is followed in place, with Back.
+     * another is followed in place, with Back. For an M68K program whose processor is known, the
+     * panel leaves out what a later processor brought, from the Chapters and from the results
+     * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
      */
     import { tick, untrack } from 'svelte'
     import { prefersReducedMotion } from 'svelte/motion'
@@ -18,7 +20,12 @@
     import FaArrowLeft from '~icons/fa-solid/arrow-left'
     import FaChevronRight from '~icons/fa-solid/chevron-right'
     import SearchField from '#cmp/search/SearchField.svelte'
-    import { documentationFor } from '#lib/documentation/documentation.ts'
+    import {
+        documentationFor,
+        m68kDocumentationFor,
+        type ProgramDocumentation
+    } from '#lib/documentation/documentation.ts'
+    import { m68kDialectKey, type M68kDialect } from '#lib/languages/M68K/m68kDialect.ts'
     import type { Chapter, DocumentationEntry } from '#lib/documentation/entries.ts'
     import { categoryLabel, groupByCategory } from '#lib/documentation/instructions/categories.ts'
     import { resolveDocumentationLink, type DocumentationTarget } from '#lib/documentation/links.ts'
@@ -29,6 +36,8 @@
     import { fromIndex } from './fromIndex'
     import LectureSectionCard from './LectureSectionCard.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
 
     interface Props {
         language: DocumentationLanguage
@@ -48,6 +57,12 @@
          * asks. A new `token` is a new request.
          */
         request?: { token: number; query?: string; href?: string } | null
+        /**
+         * The **Processor dialect** of the M68K program the panel is beside, from its live
+         * analysis: the loaded Chapters and the search results then leave out what a later
+         * processor brought. Unknown, or given Chapters, they show everything, as the site does.
+         */
+        m68kDialect?: M68kDialect
     }
 
     let {
@@ -56,21 +71,48 @@
         scope,
         variant = 'panel',
         disableLinks = false,
-        request = null
+        request = null,
+        m68kDialect
     }: Props = $props()
 
-    let loaded = $state<Chapter[] | null>(null)
+    let loaded = $state<ProgramDocumentation | null>(null)
     let failed = $state(false)
-    const chapters = $derived(given ?? loaded)
+    /** Counts the loads Try again asked for, so that asking loads the documentation again. */
+    let attempt = $state(0)
+    const chapters = $derived(given ?? loaded?.chapters ?? null)
+    /** The entries the program's processor leaves out, which the search results leave out too. */
+    const hidden = $derived<ReadonlySet<string>>(given ? new Set() : (loaded?.hidden ?? new Set()))
+
+    /**
+     * The program's dialect as one word: the analysis of every keystroke says the same dialect in a
+     * new object, and only a new dialect loads the Chapters again.
+     */
+    const dialectKey = $derived(
+        language === 'm68k' && m68kDialect ? m68kDialectKey(m68kDialect) : undefined
+    )
+    /** The language the shown Chapters are of, which a new dialect keeps on screen until its own come. */
+    let loadedLanguage: DocumentationLanguage | undefined
 
     $effect(() => {
         if (given) return
         const wanted = language
-        loaded = null
+        const key = dialectKey
+        void attempt
+        if (loadedLanguage !== wanted) loaded = null
         failed = false
-        documentationFor(wanted).then(
-            (chapters) => {
-                if (language === wanted) loaded = chapters
+        const dialect = untrack(() => m68kDialect)
+        const loading =
+            key !== undefined && dialect
+                ? m68kDocumentationFor(dialect)
+                : documentationFor(wanted).then((chapters) => ({
+                      chapters,
+                      hidden: new Set<string>()
+                  }))
+        loading.then(
+            (documentation) => {
+                if (language !== wanted || dialectKey !== key) return
+                loaded = documentation
+                loadedLanguage = wanted
             },
             () => {
                 if (language === wanted) failed = true
@@ -170,7 +212,8 @@
                     results = answer.results
                     searched = text
                     const exact = answer.results.find(
-                        (result) => result.kind === 'entry' && result.exact
+                        (result) =>
+                            result.kind === 'entry' && result.exact && !hidden.has(result.entry.id)
                     )
                     const ids: string[] = []
                     if (untrack(() => pinned)) ids.push(untrack(() => pinned)!)
@@ -229,12 +272,17 @@
 
     type Shown = SearchResult | { pinnedEntry: DocumentationEntry }
 
+    /** The results but the entries the program's processor leaves out. */
+    const found = $derived(
+        hidden.size === 0
+            ? results
+            : results.filter((result) => result.kind !== 'entry' || !hidden.has(result.entry.id))
+    )
+
     const shown = $derived.by((): Shown[] => {
-        if (!pinned) return results
+        if (!pinned) return found
         const first = byId.get(pinned)
-        const rest = results.filter(
-            (result) => result.kind !== 'entry' || result.entry.id !== pinned
-        )
+        const rest = found.filter((result) => result.kind !== 'entry' || result.entry.id !== pinned)
         return first ? [{ pinnedEntry: first }, ...rest] : rest
     })
 
@@ -354,7 +402,13 @@
     {/if}
 
     {#if failed}
-        <p class="note">The documentation could not be loaded.</p>
+        <ErrorState compact title="The documentation didn't load">
+            Its files could not be downloaded. Check the connection, then try again or reload the
+            page.
+            {#snippet actions()}
+                <Button onClick={() => attempt++}>Try again</Button>
+            {/snippet}
+        </ErrorState>
     {:else if !chapters}
         <p class="note">Loading the documentation…</p>
     {:else if searching && variant === 'panel'}

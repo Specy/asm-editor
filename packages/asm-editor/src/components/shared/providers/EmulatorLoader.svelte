@@ -3,7 +3,8 @@
     import { createEmulator, type Emulator } from '#lib/languages/Emulator.ts'
     import { onDestroy, untrack, type Snippet } from 'svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
-    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import { createInjectedPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
     import Column from '#cmp/shared/layout/Column.svelte'
@@ -19,6 +20,8 @@
         source?: BuildInput
         children: Snippet<[Emulator]>
         loading?: Snippet
+        /** The host's own ways out, shown beside Reload when the Core fails to load. */
+        failureActions?: Snippet
         settings?: Omit<EmulatorSettings, 'language'>
         emulator?: Emulator | null
     }
@@ -29,6 +32,7 @@
         source,
         children,
         loading,
+        failureActions,
         settings,
         emulator = $bindable(null)
     }: Props = $props()
@@ -92,16 +96,13 @@
 {:then data}
     {@render children(data)}
 {:catch error}
-    <Header>
-        <h1>Error</h1>
-        <p>Failed to load the emulator.</p>
-        <p>
-            {#if error instanceof Error}
-                {error.message}
-            {:else}
-                {JSON.stringify(error)}
-            {/if}
-        </p>
-        <ButtonLink href="/projects">Go to Projects</ButtonLink>
-    </Header>
+    <ErrorState
+        title={`The ${languageLabel(language)} emulator didn't load`}
+        {error}
+        reload
+        actions={failureActions}
+    >
+        Its code could not be downloaded or started. This usually happens when the site was updated
+        while this page was open, or when the connection dropped, and reloading the page fixes it.
+    </ErrorState>
 {/await}

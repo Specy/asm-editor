@@ -80,6 +80,10 @@ reads is typed in the same panel, after that output. While a program waits for i
 stopped in the middle of that one instruction, which is exactly what happens on a real machine. A program that
 reads a lot of input spends most of its life inside a system call.
 
+In the M68K simulator, a program starts in supervisor mode and can switch to user mode. It can also
+install its own trap handlers. The simulator handles `trap #15` services itself; `trap #0` through
+`trap #14` call the handlers installed by the program.
+
 The services on offer are much the same wherever you look, because programs want the same things:
 
 - print a string, a number or a single character

@@ -257,6 +257,7 @@ type FormattedStep = {
     line?: string
     pc?: { hex: string }
     writes?: unknown[]
+    disassembly?: string
 }
 
 /**
@@ -1613,6 +1614,46 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
             expect(formatted.kind).toBe('instruction')
             expect(formatted.line).toBe('1 | move.l #1,d0')
             expect(formatted.writes).toBeUndefined()
+        })
+
+        it('says what an instruction on no source line ran, as the Core decodes it', () => {
+            //an M68K program that ran on into its data
+            const inData: ExecutionStep = {
+                kind: 'instruction',
+                mutations: [],
+                pc: 0x1002,
+                line: -1,
+                old_ccr: { bits: 0 },
+                new_ccr: { bits: 0 },
+                disassembly: 'NOP'
+            }
+
+            const [formatted] = formatLatestSteps('move.l #1,d0', [inData]) as FormattedStep[]
+            expect(formatted.line).toBe('No current source line')
+            expect(formatted.disassembly).toBe('NOP')
+        })
+
+        it('says what a step ran on the real Core after a later step overwrote its code', async () => {
+            //the `addq` runs, then the store makes a `nop` of it, which memory holds now
+            const code = [
+                '    ORG $1000',
+                'target: add.l #5,d1',
+                '    lea target,a0',
+                '    move.w #$4E71,(a0)',
+                '    simhalt'
+            ].join('\n')
+            const emulator = M68KEmulator(code)
+            try {
+                await emulator.compile(200, code)
+                for (let i = 0; i < 3; i++) await emulator.step()
+                const steps = formatLatestSteps(code, emulator.latestSteps) as FormattedStep[]
+                expect(steps[2]).toMatchObject({
+                    line: 'main:2 | target: add.l #5,d1',
+                    disassembly: 'ADDQ.L #5,D1'
+                })
+            } finally {
+                emulator.dispose()
+            }
         })
 
         //a Poke made through the tool reaches the prompt as well, so the model knows what it is for

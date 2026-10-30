@@ -10,11 +10,24 @@ import {
 import { projectSourceUri, type ProjectModelIdentity } from '#lib/languages/service/uri.ts'
 import type { LanguageSymbol } from '#lib/languages/service/protocol.ts'
 import { s68kColumnToUtf16 } from './m68kDiagnostics'
+import type { M68kDialect } from './m68kDialect'
 
 /** The symbols that describe this model, which a Build snapshot has for its unchanged Files too. */
 function liveSymbols(context: ModelSources | null): LanguageSymbol[] {
     if (!context) return []
     return analysisForModel(context.session, context.identity, context.sources)?.symbols ?? []
+}
+
+/**
+ * The **Processor dialect** of the program a model is a File of, from the live analysis of its
+ * Project, which completion follows ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+ * decision 36). Unknown for a model no analysed Project holds, a Playground's or a lecture's, which
+ * is offered everything, as before.
+ */
+export function m68kModelDialect(model: monaco.editor.ITextModel): M68kDialect | undefined {
+    const context = modelSources(model)
+    if (!context) return undefined
+    return analysisForModel(context.session, context.identity, context.sources)?.m68kDialect
 }
 
 function completionSymbols(context: ModelSources) {
@@ -40,7 +53,11 @@ function tokenAt(
     column: number
 ): { value: string; start: number; end: number } | null {
     const offset = column - 1
-    for (const match of line.matchAll(/[A-Za-z_.$][\w.$]*/g)) {
+    //a comment's words are text, which name no symbol; s68k also reads the bare text after the
+    //operands as one
+    const comment = S68k.parseLine(line).comment
+    const code = comment ? line.slice(0, s68kColumnToUtf16(line, comment.span.start)) : line
+    for (const match of code.matchAll(/[A-Za-z_.$][\w.$]*/g)) {
         const start = match.index
         const end = start + match[0].length
         if (offset >= start && offset <= end) return { value: match[0], start, end }

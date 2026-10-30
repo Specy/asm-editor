@@ -26,7 +26,12 @@ export const M68K_MODE_SYMBOLS: Readonly<Record<string, string>> = {
     Im: '#imm',
     '<register list>': '<register list>',
     sr: 'sr',
-    ccr: 'ccr'
+    ccr: 'ccr',
+    usp: 'usp',
+    Rc: 'Rc',
+    //the 68020's: `cas2`'s two addresses, in the manual's letters. A pair of data registers is
+    //written by what it holds, on each page
+    '(Rx):(Ry)': '(Rn1):(Rn2)'
 }
 
 /** The modes in the manual's order, as the pages write them. */
@@ -76,16 +81,48 @@ export function m68kModeClass(modes: readonly string[]): string | undefined {
 
 export type M68KOperandLine = { meaning: string; href?: string }
 
+/**
+ * What a legend says of a position that takes `d(An,Xn)` or `d(PC,Xn)`: under `opt p=68020` it takes
+ * the 68020's indexed modes too, which its pages list in no row of their own
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3).
+ */
+export const M68020_INDEXED =
+    'With `opt p=68020`, an allowed `d(An,Xn)` or `d(PC,Xn)` mode also permits the corresponding 68020 indexed and memory indirect forms. See [68020 addressing](/documentation/m68k/addressing-mode#68020).'
+
+/** What the legend of a control register says of the 68020's four. */
+const M68020_CONTROL_REGISTERS =
+    'The 68020 adds `msp` and `isp`, its master and interrupt stack pointers, and `cacr` and `caar`, its cache registers.'
+
+/**
+ * The sentences of the legend about the 68020 alone, which the Workbench's Documentation panel
+ * leaves out for a program written for an earlier processor
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
+ */
+const M68020_SENTENCES = [M68020_INDEXED, M68020_CONTROL_REGISTERS]
+
+/** A legend line without what it says of the 68020 alone. */
+export function withoutThe68020(line: M68KOperandLine): M68KOperandLine {
+    const meaning = M68020_SENTENCES.reduce(
+        (text, sentence) => text.replace(` ${sentence}`, ''),
+        line.meaning
+    )
+    return { ...line, meaning }
+}
+
 /** What each symbol of an M68K row stands for: one line of markdown each. */
 export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = {
     '<ea>': {
         meaning:
-            'An operand using one of the instruction’s supported addressing modes, such as `d0`, `(a0)+` or `4(a1)`. It may name a register, memory or an immediate value.',
+            'An operand using one of the addressing modes listed for this form. The list determines whether it can be a register, memory or an immediate value.',
         href: MODES
     },
     Dn: { meaning: 'A data register, `d0` to `d7`.', href: `${MODES}#direct` },
     An: {
         meaning: 'An address register, `a0` to `a7`; `sp` is another name for `a7`.',
+        href: `${MODES}#direct`
+    },
+    Rn: {
+        meaning: 'A data or address register, `d0` to `d7` or `a0` to `a7`.',
         href: `${MODES}#direct`
     },
     '(An)': {
@@ -94,12 +131,12 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
     },
     '(An)+': {
         meaning:
-            'Memory at the address stored in an address register, for example `(a0)+`. After access, the simulator increases the register by the operation’s size in bytes.',
+            'Memory at an address register, followed by an increase of 1, 2 or 4 bytes for a byte, word or long access. A byte access through `sp` increases it by 2 to keep it even.',
         href: `${MODES}#indirect-post-pre-increment`
     },
     '-(An)': {
         meaning:
-            'The simulator first decreases the address register by the operation’s size in bytes, then accesses memory at the new address, for example `-(sp)`.',
+            'Decreases an address register by 1, 2 or 4 bytes for a byte, word or long access, then accesses memory there. A byte access through `sp` decreases it by 2 to keep it even.',
         href: `${MODES}#indirect-post-pre-increment`
     },
     'd(An)': {
@@ -108,8 +145,7 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
         href: `${MODES}#address-register-displacement`
     },
     'd(An,Xn)': {
-        meaning:
-            'Memory at the sum of an address register, an index register and a signed 8-bit displacement, for example `4(a0,d1.w)`. `Xn` is a data or address register; `.w` uses its signed low word, and `.l` uses its full long value.',
+        meaning: `Memory at the sum of an address register, an index register and a signed 8-bit displacement, for example \`4(a0,d1.w)\`. \`Xn\` is a data or address register; \`.w\` uses its signed low word, and \`.l\` uses its full long value. ${M68020_INDEXED}`,
         href: `${MODES}#address-register-indexed`
     },
     abs: {
@@ -124,12 +160,11 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
     },
     'd(PC)': {
         meaning:
-            'Memory addressed relative to the program counter, based two bytes after the instruction’s start. Write the target label or address, as in `table(pc)`; the assembler computes a signed 16-bit displacement. This addressing mode cannot write memory.',
+            'Memory addressed relative to the program counter. Write a target label or address, as in `table(pc)`. The assembler computes a signed 16-bit displacement from the operand’s extension word, usually two bytes after the instruction starts. This mode cannot write memory.',
         href: `${MODES}#program-counter-relative`
     },
     'd(PC,Xn)': {
-        meaning:
-            'Memory at a target address plus an index register, for example `4(pc,d0.w)`. The assembler computes a signed 8-bit displacement from two bytes after the instruction’s start to the target. `Xn` is a data or address register; `.w` uses its signed low word, and `.l` its full long value. This addressing mode cannot write memory.',
+        meaning: `Memory at a target address plus an index register, for example \`table(pc,d0.w)\`. The assembler computes a signed 8-bit displacement to the target from the operand’s extension word. With no target, as in \`(pc,d0.w)\`, the target is the instruction itself. \`Xn\` is a data or address register. \`.w\` uses its signed low word, and \`.l\` its full long value. This mode cannot write memory. ${M68020_INDEXED}`,
         href: `${MODES}#program-counter-relative`
     },
     '#imm': {
@@ -147,9 +182,49 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
             'The condition-code register: the low byte of `sr`, containing the `X`, `N`, `Z`, `V` and `C` flags.',
         href: `${MODES}#status-registers`
     },
+    usp: {
+        meaning:
+            'The user stack pointer: the `a7` a program has in user mode. Supervisor code reads and sets it through an address register, as in `move.l usp, a0`.',
+        href: `${MODES}#user-stack-pointer`
+    },
+    Rc: {
+        meaning: `A control register: on the 68010 \`vbr\`, the vector base register, where the vector table starts; \`sfc\` or \`dfc\`, the source or destination function code; or \`usp\`, the user stack pointer. ${M68020_CONTROL_REGISTERS}`,
+        href: `${MODES}#control-registers`
+    },
     '<register list>': {
         meaning:
             'A register list using `/` to separate registers and `-` for ranges. For example, `d0-d2/a0` selects `d0`, `d1`, `d2` and `a0`. A single data or address register is also valid.'
+    },
+    //the 68020's register pairs and bit fields
+    'Dh:Dl': {
+        meaning:
+            'Two data registers for a 64-bit product, for example `d2:d1`. `Dl` supplies the 32-bit multiplicand. The result’s high long replaces `Dh`, and its low long replaces `Dl`. Use different registers for the two halves.',
+        href: `${MODES}#register-pairs`
+    },
+    'Dr:Dq': {
+        meaning:
+            'A remainder register followed by a quotient register, for example `d2:d1`. For `divs.l` and `divu.l`, both supply the 64-bit dividend, high long first. For `divsl.l` and `divul.l`, only `Dq` supplies the 32-bit dividend. The quotient replaces `Dq` and the remainder replaces `Dr`.',
+        href: `${MODES}#register-pairs`
+    },
+    'Dc1:Dc2': {
+        meaning:
+            'The compare registers for the first and second memory operands, for example `d0:d1`. If either comparison fails, both registers receive the corresponding memory values.',
+        href: `${MODES}#register-pairs`
+    },
+    'Du1:Du2': {
+        meaning:
+            'The update registers for the first and second memory operands, for example `d2:d3`. Both values are written only if both comparisons succeed.',
+        href: `${MODES}#register-pairs`
+    },
+    '(Rn1):(Rn2)': {
+        meaning:
+            'Two memory addresses, each held in a data or address register, for example `(a0):(a1)`. The first uses `Dc1` and `Du1`, and the second uses `Dc2` and `Du2`.',
+        href: `${MODES}#register-pairs`
+    },
+    '{offset:width}': {
+        meaning:
+            'A field of 1 to 32 bits, written immediately after the operand. Literal offsets range from 0 to 31, and literal widths from 1 to 32. Either may be a data register, as in `{d1:d2}`. See the linked section for register values, negative memory offsets and wrapping.',
+        href: `${MODES}#bit-fields`
     }
 }
 
@@ -169,8 +244,19 @@ const IMMEDIATE_MEANINGS: Readonly<Record<string, string>> = {
     bset: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
     bclr: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
     bchg: 'An immediate value. As the first operand, it selects a bit: `0` to `31` for a data register, or `0` to `7` for memory.',
-    trap: 'A trap vector from `0` to `15`. Use `#15` to call the simulator’s service handler.',
-    link: 'A signed 16-bit displacement added to the stack pointer. Use a negative value to reserve stack space, for example `#-16`.'
+    rtd: 'A signed 16-bit number of bytes added to the stack pointer once the return address is popped: the size of the arguments, for example `#8`.',
+    bkpt: 'A breakpoint number from `0` to `7`, which a hardware debugger would read.',
+    trap: 'A trap number from `0` to `15`. `#0` to `#14` run the handler in vectors 32 to 46; `#15` runs the simulator’s task numbered in `d0.b`.',
+    stop: 'A 16-bit status-register value, written after `#`, for example `#$2000`. It sets the interrupt mask and processor mode before the wait.',
+    link: 'A signed 16-bit displacement added to the stack pointer, or 32-bit with `link.l`. Use a negative value to reserve stack space, for example `#-16`.',
+    trapcc: 'An optional word or long immediate, for example `#3`. The processor ignores its value, but the handler can read it to identify the trap.',
+    pack: 'A 16-bit adjustment added to the source word before packing, for example `#0`.',
+    unpk: 'A 16-bit adjustment added after unpacking, for example `#$3030` to produce ASCII digits.'
+}
+
+const PREDECREMENT_MEANINGS: Readonly<Record<string, string>> = {
+    pack: 'The source address decreases by 2 before reading two bytes. The destination address decreases by 1 before writing one byte, or by 2 if it is `sp`.',
+    unpk: 'The source address decreases by 1 before reading one byte, or by 2 if it is `sp`. The destination address decreases by 2 before writing two bytes.'
 }
 
 /** A symbol's legend line on one instruction's page; `entry` is its Documentation entry. */
@@ -181,6 +267,9 @@ export function m68kOperandLine(
     const line = M68K_OPERAND_MEANINGS[symbol]
     if (symbol === '#imm' && entry !== undefined && entry in IMMEDIATE_MEANINGS) {
         return { ...line, meaning: IMMEDIATE_MEANINGS[entry] }
+    }
+    if (symbol === '-(An)' && entry !== undefined && entry in PREDECREMENT_MEANINGS) {
+        return { ...line, meaning: PREDECREMENT_MEANINGS[entry] }
     }
     return line
 }

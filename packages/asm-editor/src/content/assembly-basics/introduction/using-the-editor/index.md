@@ -22,7 +22,7 @@ registers, holds `00001000`, the address of the first instruction.
 
 Once it has built, four buttons take Build's place:
 
-- **Step** runs exactly one instruction and stops. One press and `d0` goes from `00000000` to `00000001`, and PC from `00001000` to `00001004`, four bytes further on.
+- **Step** runs one instruction and pauses. Press it once: `d0` changes from `00000000` to `00000001`, and PC advances from `00001000` to `00001002`. This instruction occupies two bytes. A 68000 instruction can occupy two to ten bytes; all five in this example occupy two.
 - **Run** runs the program to the end, or to the next breakpoint. While a program is running that same button says **Pause**. Pausing makes Run, Step and Undo available, just as at a breakpoint.
 - **Undo** takes the last instruction back, one press per instruction. The editor keeps the last 100 steps, which is a setting you can raise.
 - **Stop** throws the run away: the registers go back to zero and the only button left is **Build** again.
@@ -30,9 +30,10 @@ Once it has built, four buttons take Build's place:
 The code is read only from **Build** until the program ends, so **Stop** is also how you get back to
 typing.
 
-Nothing in the program says "stop". The simulator ends a program when there is no next instruction to
-run, and it also ends one that never gets there: a run stops after two million instructions, which is
-another setting.
+This example has no stop instruction. It ends when execution reaches memory the program has not
+written. If data followed the code, the CPU would try to execute those bytes too. Programs can end
+explicitly to prevent that. The simulator also stops a run after two million instructions, a limit
+you can change in Settings.
 
 ## Watching a register
 
@@ -51,14 +52,14 @@ the address that register holds.
 Press **Stop**, then click in the narrow margin to the left of the code, on the line
 `add.l #4, d0`. A dot appears there, which is a **breakpoint**. Press **Build** and then **Run**.
 
-The program stops _before_ running that line, with `d0` at `00000006` and PC at `0000100C`, and
+The program stops _before_ running that line, with `d0` at `00000006` and PC at `00001006`, and
 **Run** carries on from there. Click the dot again to take it away. A breakpoint is what you use
 instead of pressing Step fifty times to reach the one instruction you want to look at.
 
 ## Undo
 
 With the program stopped at the breakpoint, press **Undo**. It goes backwards one instruction, `d0`
-returns to `00000003` and PC to `00001008`. The simulator recorded what every instruction changed, so
+returns to `00000003` and PC to `00001004`. The simulator recorded what every instruction changed, so
 it can put each one back, and that is the quickest way to look again at something that went past
 while you were reading the other panel.
 

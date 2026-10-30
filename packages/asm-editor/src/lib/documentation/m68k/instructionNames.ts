@@ -45,6 +45,32 @@ export const m68kInstructionNames: Readonly<
     asd: { longName: 'Arithmetic shift' },
     asl: { longName: 'Arithmetic shift left' },
     asr: { longName: 'Arithmetic shift right' },
+    bfchg: { longName: 'Test bit field and change' },
+    bfclr: {
+        longName: 'Test bit field and clear',
+        summary: 'Clears every bit of a bit field to 0.'
+    },
+    bfexts: {
+        longName: 'Extract bit field signed',
+        summary:
+            'Copies a bit field into a data register as a signed number, filling the bits above it with copies of its highest bit.'
+    },
+    bfextu: {
+        longName: 'Extract bit field unsigned',
+        summary:
+            'Copies a bit field into a data register as an unsigned number, filling the bits above it with 0s.'
+    },
+    bfffo: {
+        longName: 'Find first one in bit field',
+        summary: 'Finds the first 1 in a bit field and writes its bit offset to a data register.'
+    },
+    bfins: {
+        longName: 'Insert bit field',
+        summary:
+            'Inserts the low bits of a data register into a bit field, leaving the bits around it as they were.'
+    },
+    bfset: { longName: 'Test bit field and set', summary: 'Sets every bit of a bit field to 1.' },
+    bftst: { longName: 'Test bit field' },
     bcc: {
         longName: 'Branch conditionally',
         summary: 'Branches to the specified address if the condition named by the suffix holds.'
@@ -80,6 +106,7 @@ export const m68kInstructionNames: Readonly<
         longName: 'Branch if unsigned higher or same',
         summary: 'Branches to the specified address if unsigned higher or same.'
     },
+    bkpt: { longName: 'Breakpoint' },
     ble: {
         longName: 'Branch if less than or equal',
         summary: 'Branches to the specified address if less than or equal.'
@@ -128,7 +155,18 @@ export const m68kInstructionNames: Readonly<
         longName: 'Branch if overflow set',
         summary: 'Branches to the specified address if overflow set.'
     },
+    cas: {
+        longName: 'Compare and swap with operand',
+        summary:
+            'Compares a data register with an operand in memory, and writes a second register there only if they are equal.'
+    },
+    cas2: {
+        longName: 'Compare and swap with two operands',
+        summary:
+            'Compares two data registers with two operands in memory, and writes two other registers there only if both are equal.'
+    },
     chk: { longName: 'Check register against bounds' },
+    chk2: { longName: 'Check register against lower and upper bounds' },
     clr: {
         longName: 'Clear',
         summary:
@@ -149,6 +187,11 @@ export const m68kInstructionNames: Readonly<
         summary:
             'Subtracts the immediate value from the second operand and sets the flags, leaving the operand unchanged.'
     },
+    cmp2: {
+        longName: 'Compare register against bounds',
+        summary:
+            'Compares a register with a lower and an upper bound and sets the flags, with C set when it is outside them.'
+    },
     cmpm: {
         longName: 'Compare memory',
         summary:
@@ -157,7 +200,7 @@ export const m68kInstructionNames: Readonly<
     dbcc: {
         longName: 'Test condition, decrement and branch',
         summary:
-            'Decrements the first operand by 1 and branches if the condition named by the suffix is false and the first operand is not -1.'
+            'Tests a condition, then decrements the low-word counter and branches only if the condition is false and the counter has not become -1.'
     },
     dbcs: { longName: 'Decrement and branch until carry set' },
     dbeq: { longName: 'Decrement and branch until equal' },
@@ -185,7 +228,17 @@ export const m68kInstructionNames: Readonly<
     dbvc: { longName: 'Decrement and branch until overflow clear' },
     dbvs: { longName: 'Decrement and branch until overflow set' },
     divs: { longName: 'Signed divide' },
+    divsl: {
+        longName: 'Signed divide long, with remainder',
+        summary:
+            'Divides a long by a long, signed, putting the quotient in one data register and the remainder in another.'
+    },
     divu: { longName: 'Unsigned divide' },
+    divul: {
+        longName: 'Unsigned divide long, with remainder',
+        summary:
+            'Divides a long by a long, unsigned, putting the quotient in one data register and the remainder in another.'
+    },
     eor: {
         longName: 'Logical exclusive OR',
         summary:
@@ -211,7 +264,7 @@ export const m68kInstructionNames: Readonly<
     lea: {
         longName: 'Load effective address',
         summary:
-            'Loads the effective address of the first operand into an address register, without reading memory.'
+            'Computes the effective address of the first operand and stores it in an address register.'
     },
     link: {
         longName: 'Link and allocate',
@@ -234,6 +287,7 @@ export const m68kInstructionNames: Readonly<
         longName: 'Move multiple registers',
         summary: 'Moves a list of registers such as d0-d7 and a0-a7 to or from memory.'
     },
+    movec: { longName: 'Move control register' },
     movep: { longName: 'Move peripheral data' },
     moveq: {
         longName: 'Move quick',
@@ -266,10 +320,12 @@ export const m68kInstructionNames: Readonly<
         summary:
             'Performs a logical OR of an immediate value and the second operand, storing the result in the second operand.'
     },
+    pack: { longName: 'Pack BCD' },
     pea: {
         longName: 'Push effective address',
         summary: 'Computes the effective address of the operand and pushes it onto the stack.'
     },
+    moves: { longName: 'Move address space' },
     rod: { longName: 'Rotate' },
     rol: { longName: 'Rotate left' },
     ror: { longName: 'Rotate right' },
@@ -280,6 +336,8 @@ export const m68kInstructionNames: Readonly<
         longName: 'Return and restore condition codes',
         summary: 'Returns by popping ccr and then the program counter from the stack.'
     },
+    rtd: { longName: 'Return and deallocate' },
+    rte: { longName: 'Return from exception' },
     rts: {
         longName: 'Return from subroutine',
         summary:
@@ -384,10 +442,24 @@ export const m68kInstructionNames: Readonly<
         summary: 'Tests a byte to set the condition codes, then sets its top bit.'
     },
     trap: { longName: 'Trap' },
+    trapf: {
+        longName: 'Trap if false',
+        summary: 'Never traps, because the false condition never holds.'
+    },
+    trapt: {
+        longName: 'Trap if true',
+        summary:
+            'Always raises an exception through vector 7, because the true condition always holds.'
+    },
     trapv: { longName: 'Trap on overflow' },
     tst: {
         longName: 'Test',
         summary: 'Sets the condition codes from the operand, as if comparing it with zero.'
+    },
+    unpk: {
+        longName: 'Unpack BCD',
+        summary:
+            'Unpacks a byte of packed decimal into two bytes, one digit in each, and adds an adjustment, such as the one that makes them ASCII digits.'
     },
     unlk: {
         longName: 'Unlink',
@@ -432,6 +504,11 @@ const FAMILIES: Readonly<Record<string, Family>> = {
         name: 'Set according to condition',
         member: 'Set if {}',
         part: (mnemonic) => condition(mnemonic.slice(1))
+    },
+    trapcc: {
+        name: 'Trap on condition',
+        member: 'Trap if {}',
+        part: (mnemonic) => condition(mnemonic.slice(4))
     },
     asd: { name: 'Arithmetic shift', member: 'Arithmetic shift {}', part: direction },
     lsd: { name: 'Logical shift', member: 'Logical shift {}', part: direction },

@@ -7,6 +7,65 @@
         { "query": "dbra", "first": "m68k/instructions/dbra" },
         { "query": "movea", "first": "m68k/instructions/movea" },
         { "query": "dc", "first": "m68k/directives/dc" },
+        { "query": "rte", "first": "m68k/instructions/rte" },
+        {
+            "query": "return from exception",
+            "top": 3,
+            "expect": ["m68k/instructions/rte", "m68k/exceptions/frames"]
+        },
+        {
+            "query": "exception vector table",
+            "top": 3,
+            "expect": "m68k/exceptions/the-vector-table"
+        },
+        { "query": "user mode stack pointer", "top": 3, "expect": "m68k/exceptions/modes" },
+        {
+            "query": "vbr",
+            "top": 3,
+            "expect": ["m68k/addressing-modes/control-registers", "m68k/instructions/movec"]
+        },
+        { "query": "format error", "first": "m68k/exceptions/format-error" },
+        { "query": "master stack pointer", "top": 3, "expect": "m68k/exceptions/master-stack" },
+        { "query": "throwaway frame", "first": "m68k/exceptions/throwaway-frame" },
+        { "query": "68020 exceptions", "top": 3, "expect": "m68k/exceptions/68020" },
+        { "query": "memory indirect", "top": 3, "expect": "m68k/addressing-modes/memory-indirect" },
+        { "query": "scaled index", "first": "m68k/addressing-modes/scaled-index" },
+        { "query": "long branch", "top": 3, "expect": "m68k/addressing-modes/long-branches" },
+        { "query": "68020 addressing modes", "top": 3, "expect": "m68k/addressing-modes/68020" },
+        { "query": "bra.l", "first": "m68k/instructions/bra" },
+        { "query": "bit field", "top": 3, "expect": "m68k/addressing-modes/bit-fields" },
+        { "query": "bfextu", "first": "m68k/instructions/bfextu" },
+        { "query": "trapeq", "first": "m68k/instructions/trapcc" },
+        { "query": "register pair", "top": 3, "expect": "m68k/addressing-modes/register-pairs" },
+        {
+            "query": "cycle counter",
+            "top": 3,
+            "expect": [
+                "m68k/trap-tasks/cycles",
+                "m68k/trap-tasks/task-31",
+                "m68k/exceptions/cycles"
+            ]
+        },
+        {
+            "query": "how many cycles does my loop take",
+            "top": 5,
+            "expect": [
+                "m68k/exceptions/cycles",
+                "m68k/trap-tasks/task-31",
+                "m68k/trap-tasks/cycles"
+            ],
+            "meaning": true
+        },
+        {
+            "query": "interrupt mask",
+            "top": 3,
+            "expect": ["m68k/condition-codes/status-register", "m68k/exceptions/interrupts"]
+        },
+        {
+            "query": "timer interrupt",
+            "top": 3,
+            "expect": ["m68k/trap-tasks/task-32", "m68k/trap-tasks/interrupts"]
+        },
         { "query": "print a number", "top": 1, "expect": "m68k/trap-tasks/task-3" },
         { "query": "how do I print a number", "top": 3, "expect": "m68k/trap-tasks/task-3" },
         { "query": "set the pen color", "top": 1, "expect": "m68k/trap-tasks/task-80" },

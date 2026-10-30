@@ -482,6 +482,59 @@ it('outlines the Arguments in their colour, chunked and named by their parts', (
     }
 })
 
+//the 68000's vector table over a program's own reset vectors, and what it means to the program
+//([m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 31)
+it('outlines a region the machine defines over the program’s, and says what it means', () => {
+    const vector = (name: string, offset: bigint) => ({
+        name,
+        section: 'Exception vectors',
+        address: ADDRESS + offset,
+        fromLibrary: false
+    })
+    const ui = render({
+        memoryRegions: [
+            {
+                id: 'Section 0:0',
+                name: 'Section 0',
+                section: 'Section 0',
+                kind: 'data',
+                start: ADDRESS,
+                end: ADDRESS + 8n
+            },
+            {
+                id: 'machine:vectors',
+                name: 'Exception vectors',
+                section: 'Exception vectors',
+                kind: 'vectors',
+                start: ADDRESS,
+                end: ADDRESS + 8n,
+                reason: 'Each long word is the address of a handler.'
+            }
+        ],
+        dataLabels: [vector('Reset SSP', 0n), vector('Reset PC', 4n)],
+        bytesPerRow: 8,
+        sp: ADDRESS + 8n
+    })
+    const cell = (index: number) => ui.cells()[index].closest('.memory-number')!
+    try {
+        expect(cell(0).getAttribute('style')).toContain(
+            `--region-color: ${memoryRegionColor('vectors')};`
+        )
+        //one chunk per vector: the second starts its own block
+        expect(/--region-edges: ([^;]*);/.exec(cell(4).getAttribute('style')!)![1]).toBe(
+            '1px 0 1px 1px'
+        )
+        expect(cell(5).querySelector('.region-hover')?.textContent).toBe(
+            'Exception vectors · Reset PC+1 · Section 0'
+        )
+        expect(
+            [...cell(5).querySelectorAll('.region-reason')].map((line) => line.textContent)
+        ).toEqual(['Each long word is the address of a handler.'])
+    } finally {
+        ui.close()
+    }
+})
+
 describe("a memory cell's pointer menu", () => {
     it('opens on a right click with the byte, leaving the selection alone', async () => {
         const panel = render({ withMenu: true })

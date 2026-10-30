@@ -17,6 +17,7 @@
         type RenderedRegisterChunk
     } from '#lib/languages/registerFormats.ts'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     /**
      * The rows of one Register file: the grid of names and values the CPU panel has always drawn,
@@ -384,12 +385,20 @@
                     {row.register.toHex()}
                 {/if}
             </div>
+            <!-- what a register the file describes is, on its name: the M68K 68020's ISP -->
             {#if row.integer && onRegisterClick}
-                <button class="register-name" onclick={() => onRegisterClick(row.register)}>
+                <button
+                    class="register-name"
+                    onclick={() => onRegisterClick(row.register)}
+                    {@attach tooltip(file.layout[row.index]?.description)}
+                >
                     {row.register.name.toUpperCase()}
                 </button>
             {:else}
-                <span class="register-name register-name-static">
+                <span
+                    class="register-name register-name-static"
+                    {@attach tooltip(file.layout[row.index]?.description)}
+                >
                     {row.register.name.toUpperCase()}
                 </span>
             {/if}

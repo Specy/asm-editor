@@ -1131,8 +1131,10 @@ describe('a function that does not decompile', () => {
         })
         disposers.push(() => unmount(status))
         flushSync()
-        expect(host.querySelector('h2')?.textContent).toBe('No Pseudocode')
-        expect(host.querySelector('p')?.textContent).toBe(
+        expect(host.querySelector('[role="alert"] [role="heading"]')?.textContent).toBe(
+            'No Pseudocode'
+        )
+        expect(host.querySelector('.description')?.textContent?.trim()).toBe(
             "Couldn't decompile main: main took longer than 30 seconds to decompile."
         )
         //a less busy machine may beat the limit

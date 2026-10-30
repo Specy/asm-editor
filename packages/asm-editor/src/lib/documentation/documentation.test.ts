@@ -189,7 +189,7 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         expect((await instruction('z80', 'add')).tags).toBeUndefined()
     })
 
-    it('lists the M68K forms from s68k, with Privileged only where the 68000 says', async () => {
+    it('lists the M68K forms from s68k, with Privileged only where the 68000 says, and the later processors’ forms', async () => {
         const move = await instruction('m68k', 'move')
         expect(move.category).toBe('data-movement')
         expect(move.tags).toBeUndefined()
@@ -200,18 +200,42 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
                     section.groups.flatMap((group) => group.patterns.map(patternText))
                 ]
             )
-        expect((await sectionsOf('move')).at(-1)).toEqual([['privileged'], ['move <ea>, sr']])
+        expect((await sectionsOf('move')).slice(1)).toEqual([
+            [['privileged'], ['move <ea>, sr', 'move usp, An', 'move An, usp']],
+            [['68010'], ['move ccr, <ea>']]
+        ])
         expect(await sectionsOf('andi')).toEqual([
             [[], ['andi #imm, <ea>', 'andi #imm, ccr']],
             [['privileged'], ['andi #imm, sr']]
         ])
         // a family's forms are its members' own
         expect(await sectionsOf('bcc')).toEqual([[[], ['bcc label']]])
+        //the 68020's shapes of a 68000 instruction are a section of their own
+        expect(await sectionsOf('muls')).toEqual([
+            [[], ['muls <ea>, Dn']],
+            [['68020'], ['muls <ea>, Dn', 'muls <ea>, Dh:Dl']]
+        ])
         const entries = entriesOf(await documentationFor('m68k'))
+        //the 68020's own instructions, and the bit fields, which `opt bit` gives the 68000 too
+        const for68020 = ['extb', 'trapcc', 'chk2', 'cmp2', 'cas', 'cas2', 'pack', 'unpk']
+        const bitFields = ['bftst', 'bfextu', 'bfexts', 'bfffo', 'bfchg', 'bfclr', 'bfset', 'bfins']
         for (const entry of entries.filter((entry) => entry.kind === 'instruction')) {
             const patterns = documentPatterns(viewOf(entry, 'instruction').document)
             expect(patterns.length, entry.id).toBeGreaterThan(0)
-            expect(entry.tags, entry.id).toBeUndefined()
+            //`rte`, `stop` and `reset` are the M68K instructions privileged in every form; `extb`
+            //and the 68020's own instructions are the 68020's in all of theirs, `rtd` and `bkpt`
+            //the 68010's, and `movec` and `moves` the 68010's and privileged
+            if ([...for68020, 'divsl', 'divul'].includes(entry.title))
+                expect(entry.tags, entry.id).toEqual(['68020'])
+            else if (bitFields.includes(entry.title))
+                expect(entry.tags, entry.id).toEqual(['68020', 'opt-bit'])
+            else if (['rtd', 'bkpt'].includes(entry.title))
+                expect(entry.tags, entry.id).toEqual(['68010'])
+            else if (['movec', 'moves'].includes(entry.title))
+                expect(entry.tags, entry.id).toEqual(['privileged', '68010'])
+            else if (['rte', 'stop', 'reset'].includes(entry.title))
+                expect(entry.tags, entry.id).toEqual(['privileged'])
+            else expect(entry.tags, entry.id).toBeUndefined()
         }
     })
 

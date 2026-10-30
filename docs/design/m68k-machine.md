@@ -6,6 +6,10 @@ Status: proposed on 2026-10-21. The owner reviewed it the same day:
 - **Deferred:** the Hardware panel (20–22) and the S-record Executables (33).
 - **Changed:** decision 3 now offers the 68010 and the 68020 as dialects.
 
+On 2026-10-28 the owner confirmed ("ok go") design decision 3's choice of `opt p=` in the source over a per-Program Setting, and the plan's planning decisions 11 (the dialect plumbing ships in batch 1) and 12 (the pause on a write into code is a Preference). Batch 1 is being implemented. The editor ADR numbers moved, since 0055–0064 were taken in the meantime: the IRQs will be ADR 0065. The same day the owner deferred the Build output's format (32), so an M68K Build saves no File for now and the S-record Build output has no ADR.
+
+On 2026-10-30 the owner decided that the Workbench's Documentation panel and completion follow the processor the program chooses (36).
+
 The remaining decisions are recommendations drawn from three fact bases and from a read of the s68k Core and the editor summarised in the [plan](./m68k-machine-plan.md)'s Starting point. The fact bases are:
 
 - [EASy68K's machine behaviour](../research/easy68k-machine-behaviour.md), read from its 5.16.1 source;
@@ -35,7 +39,7 @@ Four things a person can do once this is in, to show where each decision lands.
 - **Build and read the machine code.**
     - Hovering `bra loop` after a Build shows `Machine code 60 F6` and "assembled as `bra.s`". Hovering `add.l #1,d0` shows "assembled as `addq.l #1,d0`" (26).
     - The memory view at `$1000` shows the program's own bytes, which take Pokes. After a Poke, that line is marked as changed, and its hover disassembles what now runs there (27).
-    - The Build output `program.S68` downloads and runs in EASy68K (32).
+    - The Build saves no File: the program is in memory only, and the Explorer shows no Build output until its format is chosen (32).
 - **Overwrite code by mistake.**
     - A `move.l d0,(a0)` with `a0` pointing into the program pauses the Run after it: "The program wrote into its own code at $1008, line 4: `add.w d1,d2`" (4).
     - Run again continues, and the overwritten instruction runs as its new bytes decode.
@@ -82,7 +86,7 @@ Four things a person can do once this is in, to show where each decision lands.
         - A Program picks the 68010 or the 68020 with `opt p=68010` or `opt p=68020`, once, before its first instruction. That is the Devpac spelling vasm also reads, and it extends the `opt` EASy68K users already write.
         - `opt bit` keeps its EASy68K meaning, the 68020's bit-field instructions on a 68000 with 68000 addressing modes, and `p=68020` implies it.
         - The Program carries its processor, as it carries the memory map (15): it travels with the source, a Playground and an exam, and the Build and the language service read it from the assembly.
-        - **(owner)** The alternative is a per-Program Setting, as the RISC-V assembly profile is. The processor decides whether the source assembles at all, so it belongs in the source.
+        - Confirmed by the owner on 2026-10-28. The alternative was a per-Program Setting, as the RISC-V assembly profile is; the processor decides whether the source assembles at all, so it belongs in the source.
     - **One machine with gates.** There is one decoder, encoder, executor and disassembler. Each form and each decoder entry names the first processor that has it. A word outside the dialect is an illegal instruction, or a privilege violation where the manuals say so.
         - These differ per dialect:
             - the reading of an index extension word;
@@ -116,7 +120,7 @@ Four things a person can do once this is in, to show where each decision lands.
         - Moira checks the 68010's loop mode and timing.
         - Musashi's 68040 self-checking programs cover the 68020's new instructions.
         - GNU `as -m68010`/`-m68020` checks the encodings.
-    - **EASy68K.** A non-68000 Program's S-record Build output (32) does not run in EASy68K, except bit fields under `opt bit`, and the Build says so.
+    - **EASy68K.** A non-68000 Program's S-record does not run in EASy68K, except bit fields under `opt bit`. The Log note that says so is written with the S-record Build output and switched off with it (32).
     - **In the editor:**
         - The Program's processor is shown beside the registers.
         - The System Register file (25) gains VBR, SFC and DFC on the 68010, and ISP, MSP, CACR and CAAR on the 68020.
@@ -316,7 +320,7 @@ Four things a person can do once this is in, to show where each decision lands.
 
 28. **Exceptions in the Debug tools.**
     - **History.** An instruction that raised an exception shows it in its row: the vector, and the handler's address and label. An IRQ has a row of its own.
-    - **Call stack.** It shows each exception frame, pushed at entry and popped by `rte`, named for its vector: `TRAP #3 → trap3_handler`, `IRQ 2 → timer`.
+    - **Call stack.** It shows each exception frame, pushed at entry and popped by `rte`, named for its vector: `TRAP #3 → trap3_handler`, `IRQ 2 → timer`. Where two causes share a vector the frame is named after the instruction, `CHK2 → handler`, `TRAPEQ → handler`, and its vector is given at the address it was read from as the exception was taken.
     - **Steps with no source line**, such as a handler reached in data or a changed line, show their disassembly.
 
 29. **Stopped.**
@@ -325,16 +329,17 @@ Four things a person can do once this is in, to show where each decision lands.
     - A Step while stopped takes a pending IRQ if there is one. Otherwise it reports that nothing can run.
     - A Testcase whose program stops with no timer to wake it fails with that reason.
 
-30. **The cycle counter** appears under the registers, with the cost of the last step, in each History row, and in the Log when the program exits. Under the 68020 it is marked as an estimate.
+30. **The cycle counter** appears above the PC, with the cost of the last step, in each History row, and in the Log when the program exits. Under the 68020 it is marked as an estimate.
+    - _Amended 2026-10-29, the owner's call:_ the line moved from under the Register files to above the PC, with its look unchanged, and the last step's cost sits at the line's right end, so that a growing count moves nothing. A Playground shows it only when asked: the `cycles` fence flag, or `showCycles=true` in an embed's link, which the embed builder's Show cycles switch writes.
 
 31. **Memory regions.**
     - `$000`–`$3FF` is the "Exception vectors" region. Its vectors are its data labels, listed by name (Reset SSP, Reset PC, Bus error, …, TRAP #15, Level 7 autovector), so the picker and the hover name them. Under the 68010 and 68020 it starts at VBR.
     - The memory map's ranges are regions of their own: ROM, Read only, Protected and Invalid.
     - One Stack region follows A7. The other stack is not drawn (Deferred).
 
-32. **The Build output is an EASy68K S-record**, `<entry>.S68`, with the memory map's S0 records and the S8 entry address. A 68000 program built here downloads and runs in EASy68K. ADR 0050 says s68k writes no S-records, so it is amended.
+32. **No Build output File for now.** On 2026-10-28 the owner deferred the Build output's format; a later choice is an ELF or a Build output option. An M68K Build saves no File, presents none to the running program and says nothing of one in the Log, and [ADR 0056](../adr/0056-a-build-saves-the-program-it-links-as-a-file.md)'s consequence that only x86 links a program still holds. The Core can already write EASy68K's S-record, `Program.toSRecord()`, with the memory map's S0 records and the S8 entry address, and it stays available. The editor's S-record Build output is kept in code and switched off: `main.S68` for `main.x68`, saved as text through ADR 0056's host, with the Log note on a 68010 or 68020 Program's (decision 3). [`m68kSRecordOutput`](../../packages/asm-editor/src/lib/languages/M68K/M68KEmulator.svelte.ts) is off until the format is chosen, and its tests turn it on. The ADR first written for it was deleted before it was merged, and its number, 0065, goes to the IRQs.
 
-33. **No S-record Executables for now.** The owner deferred loading an S-record as an Executable with a Listing (the plan's former batch 4). The Build output (32) is written, not read back.
+33. **No S-record Executables for now.** The owner deferred loading an S-record as an Executable with a Listing (the plan's former batch 4). The S-record the Core writes (32) is not read back.
 
 ### Verification
 
@@ -350,13 +355,21 @@ Four things a person can do once this is in, to show where each decision lands.
     - An opt-in test compares each encoding with GNU `as -m68000` for m68k, one instruction at a time, and checks the decoder against `objdump`. `objdump` decodes the 68020's index words whatever processor is selected, so that check uses canonical encodings only.
     - Musashi's sixty self-checking 68000 programs (MIT) run as integration tests.
 
+### Documentation and completion
+
+36. **The Documentation panel, completion and hovers follow the program's processor.** The owner's call, 2026-10-30.
+    - In the Workbench they leave out what a later processor brought than the one the program chooses: instructions, the rows of their forms and the privilege only a later processor gives one (`move sr,<ea>`'s "Privileged on the 68010 and 68020"), Chapter sections such as the exceptions page's "On the 68020", addressing modes, the panel's search results, and completion's mnemonics, sizes, modes and control registers. `opt bit` or `opt p=68020` brings the bit fields.
+    - A hover of an instruction the program cannot write in any form, `extb` in a 68000 program, keeps its whole document, which says the processor it needs. Hovers followed the processor from the same day, once the owner saw the 68010's privilege in a 68000 program's hover.
+    - The site's pages show everything, tagged, and so does a host with no live analysis of the program, whose processor is unknown: a Playground, a lecture or an embed.
+    - `opt p=` stays the only choice of processor (3). A "68000 · 68010 · 68020" switch in the panel's header, to look ahead without editing the code, is built and kept off behind a code flag, `m68kProcessorSwitch` in [`m68kDialect.ts`](../../packages/asm-editor/src/lib/languages/M68K/m68kDialect.ts).
+    - s68k's assembly says the processor while the code has an error too (the Core's ADR 0011, amendment of 2026-10-30), and the live analysis carries it to all three.
+
 ## Glossary changes
 
 **Repository CONTEXT.md**
 
 - New terms: **Exception**, **IRQ**, **Vector**, **Processor dialect**.
 - **Interrupt** gains "Distinct from an IRQ".
-- **Build output** gains the M68K S-record.
 - **Memory region** gains the exception vectors and the memory map's ranges.
 - **Status flag** gains the System file's T, S and I2–I0.
 
@@ -375,8 +388,7 @@ Four things a person can do once this is in, to show where each decision lands.
 - **Core 0009:** SIMHALT, and running into memory the program never placed ends it (7).
 - **Core 0010:** the MAME-derived single-step suite is the conformance oracle (34).
 - **Core 0011:** the processor is a dialect the source chooses with `opt p=` (3).
-- **Editor 0055:** M68K devices deliver IRQs (18, 19). Amends 0008.
-- **Editor 0056:** the M68K Build output is an EASy68K S-record (32). Amends 0050.
+- **Editor 0065:** M68K devices deliver IRQs (18, 19). Amends 0008.
 
 ## Deferred
 
@@ -385,6 +397,7 @@ Four things a person can do once this is in, to show where each decision lands.
     - **Memory behaviour:** the devices are plain memory that the program reads and writes, and they are exempt from the memory map. The panel would read its outputs at each refresh, so Undo restores them, and would write switches and buttons as live input.
     - **Its other parts:** seven IRQ buttons, the Reset button (S set, T clear, mask 7, SSP from `$0`, PC from `$4`, as a step of its own), task 32's #0, #1, #2, #3 and #7, and EASy68K's dialog for moving the addresses.
 - **ROM images.** Running a real machine's ROM, for example a boot ROM read through the reset vectors, is beyond this work. The owner would like it later.
+- **The Build output's format** (32), deferred by the owner on 2026-10-28: an ELF, or a Build output option. EASy68K's S-record needs only [`m68kSRecordOutput`](../../packages/asm-editor/src/lib/languages/M68K/M68KEmulator.svelte.ts) turned on.
 - **S-record Executables** (33): a `.S68` File opening in the Hex editor and as a Listing, loaded by a Build, with address Breakpoints. Raw images and m68k ELF go with it, and so does the **Patch** of an M68K Listing line, which the encoder makes possible.
 - **Macros, conditional assembly and EASy68K's structured control** (`if … endi`, `repeat`). These are not part of the machine, but EASy68K's own interrupt and hardware samples (`mouseWindowSize.X68`, `clockDigital.X68`) use them and cannot be built until they exist. They are a natural next design.
 - **Testcases for the new state.** Presetting or checking SR, USP, SSP, the dialects' control registers and cycles needs work, because Testcases know only the CPU file's names. So does scripting IRQs.

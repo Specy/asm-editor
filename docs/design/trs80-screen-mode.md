@@ -167,7 +167,9 @@ set bit `i` OR in row `i`. Each row is a bitmask of eight keys; the table mappin
   ([ADR 0008](../adr/0008-poll-keyboard-and-mouse-input.md)), so Screen focus, the focus ring and
   shortcut suppression all keep working.
 - The editor's minimum hold interval already serves the purpose of upstream's 50 000 t-state key
-  delay: not overwhelming a program's polling loop with transitions.
+  delay: not overwhelming a program's polling loop with transitions. (Superseded by
+  [ADR 0066](../adr/0066-key-state-changes-at-the-event.md): the matrix shows the keys held now,
+  with no hold interval, since no TRS-80 ROM runs here to need one.)
 - Upstream's shift-forcing exists to make _typing a character_ come out right; the held-key model here
   needs only the (row, column) bits, and the shift key is a key like any other.
 - **`onDebugRead` must fall through to RAM for this range.** It defaults to `onMemoryRead`, and the

@@ -1,5 +1,6 @@
 <script lang="ts">
     import {
+        memoryReasons,
         memoryRegionColor,
         memoryHover,
         readOnlyMemoryAt,
@@ -114,7 +115,9 @@
             return {
                 region,
                 chunk: region ? regionChunkStart(region, dataLabels, address) : 0n,
-                hover: memoryHover(memoryRegions, dataLabels, address)
+                hover: memoryHover(memoryRegions, dataLabels, address),
+                //what a region the machine defines means here: a ROM's writes, a vector's handler
+                reasons: memoryReasons(memoryRegions, address)
             }
         })
         return cells.map((cell, index) => {
@@ -621,8 +624,11 @@
                     {#snippet hoverValue()}
                         <div>
                             {#if annotations[i].hover}
-                                <div class="region-hover">
-                                    {annotations[i].hover}
+                                <div class="region-block">
+                                    <div class="region-hover">{annotations[i].hover}</div>
+                                    {#each annotations[i].reasons as reason (reason)}
+                                        <div class="region-reason">{reason}</div>
+                                    {/each}
                                 </div>
                             {/if}
                             {#if unreadableByte}
@@ -716,11 +722,22 @@
         }
     }
 
-    .region-hover {
+    .region-block {
         border-bottom: 1px solid var(--memory-hover-border);
         padding: 0.2rem 0.4rem;
         margin-bottom: 0.2rem;
+    }
+
+    .region-hover {
         overflow-wrap: anywhere;
+    }
+
+    .region-reason {
+        max-width: 16rem;
+        margin-top: 0.15rem;
+        font-size: 0.85em;
+        opacity: 0.85;
+        white-space: normal;
     }
 
     .byte-value {

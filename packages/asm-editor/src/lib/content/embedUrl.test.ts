@@ -17,6 +17,7 @@ const settings: EmbedSettings = {
     showPc: true,
     showRegisters: true,
     showFlags: false,
+    showCycles: false,
     showScreen: true,
     openScreen: false,
     hideUntilBuilt: true,
@@ -54,6 +55,7 @@ describe('the embed URL', () => {
             showPc: false,
             showRegisters: false,
             showFlags: true,
+            showCycles: true,
             showScreen: false,
             openScreen: false,
             hideUntilBuilt: false,
@@ -78,6 +80,7 @@ describe('the embed URL', () => {
             showPc: false,
             showRegisters: true,
             showFlags: false,
+            showCycles: false,
             showScreen: true,
             openScreen: true,
             hideUntilBuilt: false,
@@ -85,5 +88,12 @@ describe('the embed URL', () => {
             registerFile: 'sse'
         })
         expect(readEmbedSettings(new URLSearchParams('language=fortran')).language).toBe('M68K')
+    })
+
+    //the cycle counter is asked for, and a link that does not ask leaves it out
+    it('writes the cycle counter only when it is asked for, after the flags', () => {
+        const query = embedQuery({ ...settings, showCycles: true }, { code: '', testcases: [] })
+        expect(query).toContain('&showFlags=false&showCycles=true&showScreen=true&')
+        expect(embedQuery(settings, { code: '', testcases: [] })).not.toContain('showCycles')
     })
 })

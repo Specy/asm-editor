@@ -5,6 +5,7 @@ import {
     runtimeFunctionsForModel
 } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import {
+    inAssemblyComment,
     instructionSnippet,
     parseAssemblyLine,
     type AssemblyTextOptions
@@ -367,7 +368,10 @@ export function createMarsHover<Form extends MarsForm>(
 ): monaco.languages.HoverProvider {
     return {
         provideHover: (model, position) => {
-            const line = model.getLineContent(position.lineNumber).trim()
+            const fullLine = model.getLineContent(position.lineNumber)
+            const { comment, quotes } = dialect.textOptions
+            if (inAssemblyComment(fullLine, position.column - 1, comment, quotes)) return null
+            const line = fullLine.trim()
             const contents: monaco.IMarkdownString[] = []
             const labels = labelsIn(model.getValue())
 

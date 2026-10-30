@@ -1,5 +1,6 @@
 <script lang="ts">
     import Editor from '#cmp/specific/project/Editor.svelte'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
@@ -35,6 +36,7 @@
     import PixelEditor from './pixels/PixelEditor.svelte'
     import MarkdownPreview from './preview/MarkdownPreview.svelte'
     import { isPreviewKind } from '#lib/fileKinds.ts'
+    import { changedLinesOf, withChangedCode } from '#lib/languages/changedCode.ts'
     import { useWorkbench } from './workbenchContext'
     import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
     import FaUpload from '~icons/fa-solid/upload'
@@ -118,6 +120,13 @@
     const pendingListing = $derived(group.displayedListing ?? group.pseudocodeListing)
     /** A Pseudocode has no Build artifacts or pseudo-instructions of its own. */
     const showsFileLines = $derived(group.displayedView !== 'pseudocode')
+    /**
+     * The program's own code it or a Poke changed at run time, on the File the Build read: what
+     * runs there now goes in the Build hover and on the line's mark (m68k-machine.md, decision 27).
+     */
+    const changedCode = $derived(
+        group.sourceView === 'snapshot' && showsFileLines ? emulator.changedCode : []
+    )
     /**
      * "Patch instruction…" on an instruction of the running Executable's Listing
      * ([binary-import.md](../../../../../docs/design/binary-import.md), decision 13): in the context
@@ -423,8 +432,11 @@
                 sharedModels={session.models}
                 retainedModelKeys={session.retainedModelKeys}
                 buildArtifacts={group.sourceView === 'snapshot' && showsFileLines
-                    ? emulator.buildArtifacts.filter(
-                          (artifact) => artifact.file === group.displayedPath
+                    ? withChangedCode(
+                          emulator.buildArtifacts.filter(
+                              (artifact) => artifact.file === group.displayedPath
+                          ),
+                          changedCode
                       )
                     : []}
                 viewZones={group.sourceView === 'snapshot' &&
@@ -461,6 +473,7 @@
                 navigation={navigable ? navigation : undefined}
                 canBreakAt={breakable}
                 {patchedLines}
+                changedLines={changedLinesOf(changedCode, group.displayedPath)}
                 lineNote={group.runningWithin}
                 lineActions={listingModel
                     ? listingModel.library
@@ -580,11 +593,10 @@
                 <progress max="1" value={progress} aria-label="Listing generated so far"></progress>
             </div>
         {:else if pendingListing?.status === 'failed'}
-            <div class="file-notice">
-                <h2>No Listing</h2>
-                <p>
+            <div class="file-notice missing">
+                <ErrorState compact title="No Listing">
                     The Listing of {pendingListing.name} could not be generated: {pendingListing.error}
-                </p>
+                </ErrorState>
             </div>
         {:else if group.displayedView === 'pseudocode' && group.pseudocodeListing}
             <PseudocodeStatus
@@ -597,9 +609,10 @@
         {:else if group.displayedListing}
             <!-- an Executable shown as its Listing -->
         {:else if !group.displayedFile}
-            <div class="file-notice">
-                <h2>File not found</h2>
-                <p>{group.displayedPath} does not currently name a File.</p>
+            <div class="file-notice missing">
+                <ErrorState compact title="File not found">
+                    {group.displayedPath} does not currently name a File.
+                </ErrorState>
             </div>
         {/if}
         {#if docked}
@@ -721,6 +734,10 @@
     .file-notice p {
         max-width: 30rem;
         opacity: 0.72;
+    }
+    /* a failure's card brings its own spacing */
+    .missing {
+        padding: 0;
     }
     .file-notice progress {
         width: min(16rem, 80%);

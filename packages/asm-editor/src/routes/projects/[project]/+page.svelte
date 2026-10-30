@@ -22,6 +22,7 @@
     import Page from '#cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import { LANGUAGE_THEMES } from '#lib/Config.ts'
     import { blobDownloader, copyText, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import { serializer } from '#lib/json.ts'
@@ -64,21 +65,35 @@
             navigation.cancel()
     })
 
+    /** Why the Project did not open, said in place of the Workbench. */
+    let failure = $state<{
+        title: string
+        description: string
+        /** Given for a failure of the browser's or the site's, which is worth reporting. */
+        error?: unknown
+    } | null>(null)
+    function fail(title: string, description: string, error?: unknown) {
+        failure = { title, description, error }
+        status = 'error'
+    }
+    const SHARE_BROKEN =
+        'The project in the link could not be read: the link was cut short or changed on its way here. Ask for it again.'
+    const EXAM_BROKEN =
+        'The exam in the link could not be read: the link was cut short or changed on its way here. Ask for it again.'
+
     async function loadProject() {
         const id = page.params.project ?? ''
         try {
             if (id === 'exam') {
                 const code = page.url.searchParams.get('project')
                 if (!code) {
-                    toast.error('Invalid legacy exam link', 10000)
-                    status = 'error'
+                    fail('This exam link is broken', EXAM_BROKEN)
                     return
                 }
 
                 const migratedExam = parseLegacyProjectExamPayload(code)
                 if (!migratedExam) {
-                    toast.error('Could not migrate legacy exam link', 10000)
-                    status = 'error'
+                    fail('This exam link is broken', EXAM_BROKEN)
                     return
                 }
 
@@ -89,14 +104,12 @@
             if (id === 'share') {
                 const code = page.url.searchParams.get('project')
                 if (!code) {
-                    toast.error('Invalid shared project link', 10000)
-                    status = 'error'
+                    fail('This shared link is broken', SHARE_BROKEN)
                     return
                 }
                 const parsedCode = lzstring.decompressFromEncodedURIComponent(code)
                 if (!parsedCode) {
-                    toast.error('Invalid shared project link', 10000)
-                    status = 'error'
+                    fail('This shared link is broken', SHARE_BROKEN)
                     return
                 }
 
@@ -106,8 +119,10 @@
             } else {
                 const loadedProject = await ProjectStore.getProject(id)
                 if (!loadedProject) {
-                    toast.error('Project not found', 10000)
-                    status = 'error'
+                    fail(
+                        "This project doesn't exist",
+                        'It may have been deleted. Projects are kept in the browser they were made in, so one made in another browser or on another device is not here.'
+                    )
                     return
                 }
                 project.set(loadedProject)
@@ -117,11 +132,13 @@
             //a link mangled on its way here, or storage the browser blocked: an error screen, never
             //a load that does not end
             console.error(e)
-            toast.error(
-                id === 'share' ? 'Invalid shared project link' : 'Could not load this project',
-                10000
-            )
-            status = 'error'
+            if (id === 'share') fail('This shared link is broken', SHARE_BROKEN)
+            else
+                fail(
+                    "This project didn't open",
+                    "The page could not read it from the browser's storage. Reload the page, or check that the browser allows this site to store data.",
+                    e
+                )
         }
     }
 
@@ -319,14 +336,9 @@
     }}
 />
 
-{#snippet loadingScreen(errored: boolean)}
-    <div class="overlay" class:overlay-hidden={!(status === 'loading' || status === 'error')}>
-        {#if !errored}
-            <h1 class="loading">Loading...</h1>
-        {:else}
-            <h1 class="error">Error loading project!</h1>
-            <ButtonLink href="/projects">Back to your projects</ButtonLink>
-        {/if}
+{#snippet loadingScreen()}
+    <div class="overlay" class:overlay-hidden={status !== 'loading'}>
+        <h1 class="loading">Loading...</h1>
     </div>
 {/snippet}
 <Page fillsScreen>
@@ -356,15 +368,36 @@
                             />
                         {/snippet}
                         {#snippet loading()}
-                            {@render loadingScreen(false)}
+                            {@render loadingScreen()}
+                        {/snippet}
+                        {#snippet failureActions()}
+                            <ButtonLink href={resolve('/projects')} cssVar="tertiary">
+                                Back to projects
+                            </ButtonLink>
                         {/snippet}
                     </Workbench>
                 {/key}
+            {:else if status === 'error' && failure}
+                <ErrorState
+                    title={failure.title}
+                    error={failure.error}
+                    reload={failure.error !== undefined}
+                >
+                    {failure.description}
+                    {#snippet actions()}
+                        <ButtonLink
+                            href={resolve('/projects')}
+                            cssVar={failure?.error !== undefined ? 'tertiary' : 'unset'}
+                        >
+                            Back to projects
+                        </ButtonLink>
+                    {/snippet}
+                </ErrorState>
             {/if}
         </ThemeScope>
     </div>
-    {#if status === 'loading' || status === 'error'}
-        {@render loadingScreen(status === 'error')}
+    {#if status === 'loading'}
+        {@render loadingScreen()}
     {/if}
 </Page>
 
@@ -405,10 +438,5 @@
     .loading {
         font-size: 3.5rem;
         text-align: center;
-    }
-
-    .error {
-        font-size: 2.5rem;
-        color: var(--red);
     }
 </style>

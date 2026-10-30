@@ -1,5 +1,6 @@
 import type { BuildConfiguration, ProjectFile, ProjectFiles } from '#lib/projectFiles.ts'
 import type { LanguageDiagnostic, SourceLocation, SymbolKind } from './sourceModel'
+import type { M68kDialect } from '#lib/languages/M68K/m68kDialect.ts'
 
 export type ProjectAnalysisTarget = 'M68K' | 'MIPS' | 'RISC-V' | 'RISC-V-64' | 'X86' | 'Z80'
 
@@ -32,6 +33,13 @@ export type ProjectAnalysisSnapshot = {
     symbols: LanguageSymbol[]
     occurrences: import('./sourceModel').SymbolOccurrence[]
     fileStatus: Record<string, ProjectFileAnalysisStatus>
+    /**
+     * The M68K program's **Processor dialect**, which s68k says whether or not the code has an error:
+     * the Documentation panel and completion leave out what a later processor brought
+     * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36). Absent for every
+     * other Target, and for sources that could not be checked, whose processor is unknown.
+     */
+    m68kDialect?: M68kDialect
 }
 
 export type ProjectWorkerRequest =

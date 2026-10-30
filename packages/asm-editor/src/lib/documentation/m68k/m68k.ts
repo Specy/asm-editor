@@ -9,7 +9,12 @@ import {
     M68KDirectiveDocumentationList,
     type Size
 } from '#lib/languages/M68K/M68K-documentation.ts'
-import { m68kInstructionForms } from '#lib/languages/M68K/M68K-forms.ts'
+import {
+    m68kDialectHas,
+    m68kDialectKey,
+    type M68kDialect,
+    type M68kNeeds
+} from '#lib/languages/M68K/m68kDialect.ts'
 import {
     M68K_COLORS,
     M68K_KEY_CODE_DOCS,
@@ -35,7 +40,7 @@ import { m68kInstructionCategories } from './categories'
 import { m68kFormTags } from '../instructions/formTags'
 import { withInstructionCategory } from '../instructions/resolve'
 import { documentSignature } from '../instructions/document'
-import { m68kInstructionDocument } from './instructionDocument'
+import { m68kDocumentForms, m68kInstructionDocument } from './instructionDocument'
 import addressingModesMarkdown from './addressing-modes.md?raw'
 import assemblerFeaturesMarkdown from './assembler-features.md?raw'
 import conditionCodesMarkdown from './condition-codes.md?raw'
@@ -43,6 +48,7 @@ import exceptionsMarkdown from './exceptions.md?raw'
 import shiftDirectionsMarkdown from './shift-directions.md?raw'
 import trapsMarkdown from './traps.md?raw'
 import { synthEntries } from '../synth'
+import type { ProgramDocumentation } from '../documentation'
 
 /**
  * The M68K Documentation. Instructions, directives, condition codes and trap tasks come from the
@@ -83,12 +89,19 @@ function prose(
     }))
 }
 
-function instructions(): Chapter {
+/**
+ * The Instructions Chapter; with a `dialect`, as a program written for it reads it: each
+ * instruction with only the forms it can write, and without those it can write in none
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
+ */
+function instructions(dialect?: M68kDialect): Chapter {
     const href = `${BASE}/instruction`
-    const entries = instructionsDocumentationList.map((instruction): DocumentationEntry => {
-        const forms = m68kInstructionForms(instruction)
-        const document = m68kInstructionDocument(instruction.name)!
-        return withInstructionCategory(
+    const entries = instructionsDocumentationList.flatMap((instruction): DocumentationEntry[] => {
+        //the forms of its rows, whose shared tags are the entry's
+        const forms = m68kDocumentForms(instruction.name, dialect)
+        const document = m68kInstructionDocument(instruction.name, dialect)
+        if (!document) return []
+        const entry = withInstructionCategory(
             {
                 id: `m68k/instructions/${instruction.name}`,
                 language: 'm68k',
@@ -112,14 +125,14 @@ function instructions(): Chapter {
             m68kInstructionCategories[instruction.name],
             forms.map(m68kFormTags)
         )
+        return [entry]
     })
     return {
         id: 'instructions',
         language: 'm68k',
         title: 'Instructions',
         href,
-        description:
-            'Every instruction the assembler accepts, with its sizes and the addressing modes of its operands.',
+        description: 'Supported instructions, operand sizes and addressing modes.',
         entries
     }
 }
@@ -130,7 +143,7 @@ function instructions(): Chapter {
  */
 const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
     overview: ['<ea>'],
-    direct: ['Dn', 'An'],
+    direct: ['Dn', 'An', 'Rn'],
     indirect: ['(An)'],
     'address-register-displacement': ['d(An)'],
     'indirect-post-pre-increment': ['(An)+', '-(An)'],
@@ -138,7 +151,20 @@ const ADDRESSING_MODE_SYNTAX: Record<string, string[]> = {
     'effective-address': ['abs', 'Ea/<label>'],
     'address-register-indexed': ['d(An,Xn)'],
     'program-counter-relative': ['d(PC)', 'd(PC,Xn)'],
-    'status-registers': ['sr', 'ccr']
+    'status-registers': ['sr', 'ccr'],
+    'user-stack-pointer': ['usp'],
+    'control-registers': ['Rc', 'vbr', 'sfc', 'dfc', 'msp', 'isp', 'cacr', 'caar'],
+    //the 68020's, under `opt p=68020`
+    68020: ['opt p=68020'],
+    'scaled-index': ['(bd,An,Xn*k)', '(bd,PC,Xn*k)'],
+    'base-displacements': ['(bd.w,An,Xn)', '(bd.l,An,Xn)'],
+    'memory-indirect': ['([bd,An],Xn,od)', '([bd,An,Xn],od)', '([bd,PC],Xn,od)', '([bd,PC,Xn],od)'],
+    'suppressed-registers': ['za0', 'zd0', 'zpc'],
+    //not `bra.l` alone, which an exact search would take from `bra`'s own page
+    'long-branches': ['bra.l label', 'bsr.l label', 'b<cc>.l label'],
+    //the 68020's instructions' operands, as their pages and s68k's diagnostics write them
+    'register-pairs': ['Dh:Dl', 'Dr:Dq', '(Rn1):(Rn2)', 'Dx:Dy', '(Rx):(Ry)'],
+    'bit-fields': ['{offset:width}', 'opt bit']
 }
 
 function addressingModes(): Chapter {
@@ -167,11 +193,11 @@ function conditionCodes(): Chapter {
     const href = `${BASE}/condition-codes`
     const codes = branchConditions.map((code): DocumentationEntry => {
         const description = `${branchConditionsDescriptions.get(code) ?? code}.`
-        //the three instructions that test it, which the explanation names only as families
-        const [branch, loop, set] = [`b${code}`, `db${code}`, `s${code}`].map(
+        //the four instructions that test it, which the explanation names only as families
+        const [branch, loop, set, trap] = [`b${code}`, `db${code}`, `s${code}`, `trap${code}`].map(
             (name) => `[${name}](${BASE}/instruction/${name})`
         )
-        const markdown = `${description}\n\nUsed by ${branch}, ${loop} and ${set}.`
+        const markdown = `${description}\n\nUsed by ${branch}, ${loop}, ${set} and, on the 68020, ${trap}.`
         return {
             id: `m68k/condition-codes/${code}`,
             language: 'm68k',
@@ -193,7 +219,7 @@ function conditionCodes(): Chapter {
         title: 'Condition codes',
         href,
         description:
-            'The flags an instruction leaves in the status register, and the conditions that branches, sets and loops test.',
+            'Status flags and the conditions tested by branches, conditional sets, loops and traps.',
         entries: [...prose('condition-codes', href, conditionCodesMarkdown), ...codes]
     }
 }
@@ -364,7 +390,7 @@ function trapTasks(): Chapter {
         title: 'Trap tasks',
         href,
         description:
-            'The editor’s services use the 68000 `trap` instruction with vector 15. Put the task number in D0.B (the values below are decimal); the task’s other inputs and results use the listed registers. These simulator tasks are distinct from the CPU’s exception and interrupt handling.',
+            'Call an editor service with `trap #15`. Put its decimal task number in D0.B and use the registers listed for its inputs and results. `trap #0` through `trap #14` call handlers installed by the program.',
         entries
     }
 }
@@ -377,7 +403,7 @@ function exceptions(): Chapter {
         title: 'Exceptions',
         href,
         description:
-            'How a real 68000 handles exceptions, interrupts and traps, and what this editor does instead.',
+            'Exception vectors, handler entry and return, stack frames, processor modes, interrupts and cycle counts for the 68000, 68010 and 68020.',
         entries: prose('exceptions', href, exceptionsMarkdown)
     }
 }
@@ -410,7 +436,7 @@ function directives(): Chapter {
         title: 'Directives',
         href,
         description:
-            'What the assembler does before the program runs: data, space, constants, sections and other Files.',
+            'Assembler directives for data, reserved space, constants, sections and included files.',
         entries
     }
 }
@@ -456,4 +482,90 @@ export function chapters(): Chapter[] {
         assemblerFeatures()
     ]
     return cached
+}
+
+const THE_68010: M68kNeeds = { processor: '68010' }
+const THE_68020: M68kNeeds = { processor: '68020' }
+
+/**
+ * The sections of the Chapters only a program for a later processor needs, by Chapter and anchor,
+ * with what each needs. The Workbench's Documentation panel leaves them out for a program written
+ * for an earlier processor ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md),
+ * decision 36); the site's pages show them all. The format error is the 68010's and the 68020's,
+ * the control registers start with the 68010's three, and the bit fields are the 68020's and those
+ * `opt bit` gives an earlier processor.
+ */
+export const M68K_LATER_PROCESSOR_SECTIONS: Readonly<
+    Record<string, Readonly<Record<string, M68kNeeds>>>
+> = {
+    exceptions: {
+        68010: THE_68010,
+        'format-error': THE_68010,
+        68020: THE_68020,
+        'master-stack': THE_68020,
+        'throwaway-frame': THE_68020,
+        '68020-frames': THE_68020,
+        '68020-trace': THE_68020,
+        'odd-addresses': THE_68020,
+        '68020-cycles': THE_68020
+    },
+    'addressing-modes': {
+        'control-registers': THE_68010,
+        68020: THE_68020,
+        'scaled-index': THE_68020,
+        'base-displacements': THE_68020,
+        'memory-indirect': THE_68020,
+        'suppressed-registers': THE_68020,
+        'long-branches': THE_68020,
+        'register-pairs': THE_68020,
+        'bit-fields': { processor: '68020', bitField: true }
+    }
+}
+
+/** Whether a program written for `dialect` reads a section: all but those a later processor needs. */
+function sectionShown(entry: DocumentationEntry, dialect: M68kDialect): boolean {
+    const needs = M68K_LATER_PROCESSOR_SECTIONS[entry.chapter]?.[entry.anchor]
+    return !needs || m68kDialectHas(dialect, needs)
+}
+
+const byDialect = new Map<string, ProgramDocumentation>()
+
+/**
+ * The Chapters as the Workbench's Documentation panel shows them to a program written for
+ * `dialect`, without what a later processor brought: the instructions it can write in no form, the
+ * rows of the forms it cannot write, and the sections only a later processor needs; and the ids of
+ * the entries left out, which its search results leave out too
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36). A 68020 program
+ * has everything.
+ */
+export function chaptersFor(dialect: M68kDialect): ProgramDocumentation {
+    const key = m68kDialectKey(dialect)
+    let made = byDialect.get(key)
+    if (!made) {
+        made = m68kDialectHas(dialect, THE_68020)
+            ? { chapters: chapters(), hidden: new Set() }
+            : leftOut(dialect)
+        byDialect.set(key, made)
+    }
+    return made
+}
+
+/** The Chapters as a program for the 68000 or the 68010 reads them, and what they leave out. */
+function leftOut(dialect: M68kDialect): ProgramDocumentation {
+    const all = chapters()
+    const shown = all.map((chapter) =>
+        chapter.id === 'instructions'
+            ? instructions(dialect)
+            : {
+                  ...chapter,
+                  entries: chapter.entries.filter((entry) => sectionShown(entry, dialect))
+              }
+    )
+    const kept = new Set(shown.flatMap((chapter) => chapter.entries.map((entry) => entry.id)))
+    const hidden = new Set(
+        all
+            .flatMap((chapter) => chapter.entries.map((entry) => entry.id))
+            .filter((id) => !kept.has(id))
+    )
+    return { chapters: shown, hidden }
 }

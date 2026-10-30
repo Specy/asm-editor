@@ -92,14 +92,23 @@ async function open(id: string, search = '') {
     }
 }
 
-/** The page's error screen in place of the Workbench, once a load failed. */
+/** The page's error screen in place of the Workbench, once a load failed: its title and error. */
 async function failedToOpen(id: string, search = '') {
     const { target, dispose } = await mountPage(id, search)
     try {
-        await vi.waitFor(() =>
-            expect(target.querySelector('h1.error')?.textContent).toBe('Error loading project!')
+        const alert = await vi.waitFor(() => {
+            const shown = target.querySelector('[role="alert"]')
+            expect(shown).not.toBeNull()
+            return shown!
+        })
+        expect(target.querySelector('.workbench-host')).toBeNull()
+        expect(alert.querySelector('a[href="/projects"]')?.textContent?.trim()).toBe(
+            'Back to projects'
         )
-        expect(target.querySelector('button')).toBeNull()
+        return {
+            title: alert.querySelector('[role="heading"]')?.textContent,
+            error: alert.querySelector('.error-message')?.textContent
+        }
     } finally {
         await dispose()
     }
@@ -210,22 +219,25 @@ it('stays on the page when the save its Back asked for was not stored', async ()
 })
 
 it('shows the error screen for a share link that does not read as a Project', async () => {
-    const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const mangled = lzstring.compressToEncodedURIComponent('{"files":{"main.s"')
-    await failedToOpen('share', `?project=${mangled}`)
-    expect(error).toHaveBeenCalledWith('Invalid shared project link', 10000)
+    //a link broken on its way here is no failure of the site's, so it has no error to report
+    expect(await failedToOpen('share', `?project=${mangled}`)).toEqual({
+        title: 'This shared link is broken',
+        error: undefined
+    })
 })
 
 it('shows the error screen when the browser does not let it read the stored projects', async () => {
     const stored = await ProjectStore.addProject(makeProject({ name: 'blocked' }))
-    const error = vi.spyOn(toast, 'error').mockImplementation(() => undefined)
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const read = vi.spyOn(db, 'getProjects').mockRejectedValue(new Error('SecurityError'))
     await ProjectStore.load()
     try {
-        await failedToOpen(stored.id)
-        expect(error).toHaveBeenCalledWith('Could not load this project', 10000)
+        expect(await failedToOpen(stored.id)).toEqual({
+            title: "This project didn't open",
+            error: 'The stored projects could not be read'
+        })
     } finally {
         read.mockRestore()
         await ProjectStore.load()

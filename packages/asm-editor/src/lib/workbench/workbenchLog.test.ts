@@ -169,6 +169,36 @@ describe('exitEntry', () => {
         )
         expect(exitEntry({ executionTimeMs: -1 }).text).toBe('Program ended')
     })
+
+    it('says first how many cycles a program that counts them ran, M68K’s', () => {
+        expect(
+            exitEntry({ executionTimeMs: 12, termination: { kind: 'exit' }, cycles: 1234n }).text
+        ).toBe('Ran 1,234 cycles in 12ms')
+        expect(
+            exitEntry({
+                executionTimeMs: 12,
+                termination: { kind: 'end', unwrittenMemory: '$1012' },
+                cycles: 1n
+            }).text
+        ).toBe('Ran 1 cycle in 12ms, reached unwritten memory at $1012')
+        //a Step measured no time, and the cycles still say how far it got
+        expect(
+            exitEntry({
+                executionTimeMs: -1,
+                termination: { kind: 'error', message: 'Bad load' },
+                cycles: 0n
+            }).text
+        ).toBe('Ran 0 cycles, stopped by an error: Bad load')
+        //a 68020 program's count is an estimate, the manual's cache case
+        expect(
+            exitEntry({
+                executionTimeMs: 12,
+                termination: { kind: 'exit' },
+                cycles: 1234n,
+                cyclesEstimate: true
+            }).text
+        ).toBe('Ran about 1,234 cycles in 12ms')
+    })
 })
 
 describe('appendLog', () => {

@@ -1,98 +1,35 @@
+import type { Termination as CoreTermination, MemoryRange, Processor } from '@specy/s68k'
 import { describeInvalidTrapArgument, describeUnsupportedTrapTask } from './M68K-traps'
+import { m68kVectorAddress, m68kVectorLocation, m68kVectorName } from './M68K-vectors'
 
-export function getM68kErrorMessage(error: unknown, lineNumber?: number): string {
+/**
+ * A Core error as the Log says it. `lineNumber` (1-based) is the line of the instruction that
+ * raised it; `address` stands in for it where no line was laid out, as when the program ran into
+ * its data, whose words decode as instructions too. `memoryMap`, the Program's, gives a bus error
+ * the bounds of the range that refused it, and `processor`, the Program's, says what a format
+ * error's frame was to it and which bits of SR trace.
+ */
+export function getM68kErrorMessage(
+    error: unknown,
+    lineNumber?: number,
+    address?: number,
+    memoryMap?: readonly MemoryRange[],
+    processor?: Processor
+): string {
     //"Error at line 3: Division by zero", or the message alone, which a caller's own sentence
     //follows with a space of its own ("Error executing code. Division by zero")
     const at = (message: string) =>
-        lineNumber ? `Error at line ${lineNumber}: ${message}` : message
+        lineNumber
+            ? `Error at line ${lineNumber}: ${message}`
+            : address !== undefined
+              ? `Error at $${hex(address)}: ${message}`
+              : message
     if (!isRecord(error)) {
         return at(`${error}`)
     }
-    switch (error.type) {
-        case 'Raw':
-            if (typeof error.value === 'string') return error.value
-            break
-        case 'Unimplemented':
-            return at('Unimplemented')
-        case 'DivisionByZero':
-            return at('Division by zero')
-        case 'ExecutionLimit':
-            if (typeof error.value === 'number') {
-                return at(
-                    `Execution limit of ${error.value} instructions reached (maybe an infinite loop?), disable in the settings if needed`
-                )
-            }
-            break
-        case 'OutOfBounds':
-            if (typeof error.value === 'string') {
-                return at(`Memory read out of bounds: ${error.value}`)
-            }
-            break
-        case 'IncorrectAddressingMode':
-            if (typeof error.value === 'string') {
-                return at(`Incorrect addressing mode: ${error.value}`)
-            }
-            break
-        case 'AddressError':
-            if (isRecord(error.value)) {
-                return at(
-                    `Address error: Tried to read/write to an odd memory address "${error.value.address}" using non-byte operation with size "${error.value.size}" `
-                )
-            }
-            break
-        case 'InstructionAccess':
-            if (isRecord(error.value) && typeof error.value.address === 'number') {
-                const address = `$${error.value.address.toString(16).toUpperCase()}`
-                return error.value.write
-                    ? at(
-                          `Cannot write to an instruction: address ${address} is not available as it holds assembled instructions`
-                      )
-                    : at(
-                          `Cannot read from an instruction: address ${address} is not available as it holds assembled instructions`
-                      )
-            }
-            break
-        case 'ChkOutOfBounds':
-            if (isRecord(error.value)) {
-                return at(`CHK exception: ${error.value.value} is outside 0..${error.value.bound}`)
-            }
-            break
-        case 'OverflowException':
-            return at('Overflow exception: TRAPV ran while the overflow flag was set')
-        case 'IllegalInstruction':
-            return at('Illegal instruction exception')
-        //a `trap #15` task the Core does not carry out, or one given a value it cannot take: the
-        //Core names the task and the register, the trap table says which task it is and why
-        case 'UnsupportedTrapTask':
-            if (isRecord(error.value) && typeof error.value.task === 'number') {
-                return at(`${describeUnsupportedTrapTask(error.value.task)}`)
-            }
-            break
-        case 'InvalidTrapArgument':
-            if (
-                isRecord(error.value) &&
-                typeof error.value.task === 'number' &&
-                typeof error.value.reason === 'string'
-            ) {
-                return at(`${describeInvalidTrapArgument(error.value.task, error.value.reason)}`)
-            }
-            break
-        //the editor's own mistakes in answering the Core, never the program's
-        case 'NoPendingInterrupt':
-            return at('The editor answered a trap #15 task that was not waiting for an answer')
-        case 'InvalidAnswer':
-            if (isRecord(error.value)) {
-                return at(
-                    `The editor's answer to ${error.value.interrupt} was refused: ${error.value.reason}`
-                )
-            }
-            break
-        case 'InvalidArgument':
-            if (typeof error.value === 'string') {
-                return at(`Invalid argument: ${error.value}`)
-            }
-            break
-    }
+    if (error.type === 'Raw' && typeof error.value === 'string') return error.value
+    const parts = errorParts(error, memoryMap, processor)
+    if (parts) return at(parts.detail ? `${parts.headline}: ${parts.detail}` : parts.headline)
     if (typeof error.message === 'string') {
         if (error.message === 'unreachable') {
             return at('WASM panicked (unreachable)')
@@ -100,6 +37,291 @@ export function getM68kErrorMessage(error: unknown, lineNumber?: number): string
         return at(`${error.message}`)
     }
     return at(`${JSON.stringify(error)}`)
+}
+
+/**
+ * How a program the 68000's exception machinery ended reads in the Log: an exception whose vector
+ * held no handler, "Division by zero at line 12: vector 5 at $000014 holds no handler", or a
+ * double fault, "The CPU halted at line 4: a double fault while handling TRAP #0 (vector 32) …"
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decisions 9 and 10). An
+ * exception with no vector, such as a `trap #15` task s68k does not carry out, reads as any other
+ * error. `lineNumber`, `address` and `memoryMap` are as for `getM68kErrorMessage`; `vbr` is where
+ * the vector table starts, which a 68010 program can move with `movec`, so that the message names
+ * the vector where the processor read it: "vector 5 at $008014"; `processor` is the Program's.
+ */
+export function getM68kTerminationMessage(
+    termination: Extract<CoreTermination, { type: 'Exception' | 'Halted' }>,
+    lineNumber?: number,
+    address?: number,
+    memoryMap?: readonly MemoryRange[],
+    vbr = 0,
+    processor?: Processor
+): string {
+    const where = lineNumber
+        ? ` at line ${lineNumber}`
+        : address !== undefined
+          ? ` at $${hex(address)}`
+          : ''
+    const parts = errorParts(termination.value.cause, memoryMap, processor)
+    if (termination.type === 'Halted') {
+        const { cause, vector } = termination.value
+        const halted = `The CPU halted${where}: a double fault while handling ${m68kVectorName(vector)} (vector ${vector})`
+        //the vector itself, read from a range the memory map makes invalid: the bus error is at
+        //the vector's own address, where the frame's are writes below the stack pointer
+        const refused = cause.type === 'BusError' ? cause.value : undefined
+        if (
+            refused &&
+            refused.access === 'Read' &&
+            refused.address >>> 0 === m68kVectorLocation(vector, vbr)
+        ) {
+            return `${halted}. Reading the vector at ${m68kVectorAddress(vector, vbr)} raised a bus error, ${refusal(refused.range, memoryMap)}`
+        }
+        //a second fault while saving the frame, or fetching a bus/address error's handler
+        const raised = parts
+            ? `${article(parts.headline)} ${parts.headline[0].toLowerCase()}${parts.headline.slice(1)}${parts.detail ? `, ${parts.detail}` : ''}`
+            : getM68kErrorMessage(cause)
+        const action =
+            refused?.access === 'Program'
+                ? 'Fetching the exception handler'
+                : 'Saving the exception frame on the supervisor stack'
+        return `${halted}. ${action} raised ${raised}`
+    }
+    const { cause, vector } = termination.value
+    if (vector === undefined) {
+        return getM68kErrorMessage(cause, lineNumber, address, memoryMap, processor)
+    }
+    const headline = parts?.headline ?? getM68kErrorMessage(cause)
+    const detail = parts?.detail ? ` (${parts.detail})` : ''
+    return `${headline}${where}: vector ${vector} at ${m68kVectorAddress(vector, vbr)} holds no handler${detail}`
+}
+
+/**
+ * An error the Core names, as two parts: what happened, "Address error", and what about it, "reading
+ * a word at the odd address $1", which the Log writes after a colon or, when a vector is named in
+ * between, in parentheses. Undefined for what the Core does not name, a plain `Error` included.
+ */
+function errorParts(
+    error: Record<PropertyKey, unknown>,
+    memoryMap?: readonly MemoryRange[],
+    processor?: Processor
+): { headline: string; detail?: string } | undefined {
+    const value = error.value
+    switch (error.type) {
+        case 'DivisionByZero':
+            return { headline: 'Division by zero' }
+        case 'ExecutionLimit':
+            if (typeof value !== 'number') return undefined
+            return {
+                headline: `Execution limit of ${value} instructions reached (maybe an infinite loop?), disable in the settings if needed`
+            }
+        case 'OutOfBounds':
+            if (typeof value !== 'string') return undefined
+            return { headline: 'Memory read out of bounds', detail: value }
+        case 'IncorrectAddressingMode':
+            if (typeof value !== 'string') return undefined
+            return { headline: 'Incorrect addressing mode', detail: value }
+        case 'AddressError':
+            if (!isRecord(value) || typeof value.address !== 'number') return undefined
+            return { headline: 'Address error', detail: addressErrorDetail(value) }
+        case 'BusError':
+            if (!isRecord(value) || typeof value.address !== 'number') return undefined
+            return { headline: 'Bus error', detail: busErrorDetail(value, memoryMap) }
+        case 'ChkOutOfBounds':
+            if (!isRecord(value)) return undefined
+            return {
+                headline: 'CHK exception',
+                detail: `${value.value} is outside 0..${value.bound}`
+            }
+        case 'OverflowException':
+            return {
+                headline: 'Overflow exception',
+                detail: 'TRAPV ran while the overflow flag was set'
+            }
+        //the 68020's: `trap<cc>` with its condition true, through vector 7 as `trapv`, and `chk2`
+        //with the register outside its bounds, through vector 6 as `chk`
+        case 'ConditionalTrap':
+            return {
+                headline: 'Conditional trap',
+                detail: 'a TRAPcc instruction ran while its condition was true'
+            }
+        case 'Chk2OutOfBounds':
+            if (!isRecord(value)) return undefined
+            return { headline: 'CHK2 exception', detail: chk2Detail(value) }
+        case 'IllegalInstruction':
+            return { headline: 'Illegal instruction' }
+        case 'PrivilegeViolation':
+            return {
+                headline: 'Privilege violation',
+                detail: 'the instruction requires supervisor mode, but the program is in user mode'
+            }
+        //the 68020 has two trace bits: T1, the 68000's T, and T0, which traces a change of flow
+        case 'Trace':
+            return {
+                headline: 'Trace exception',
+                detail:
+                    processor === '68020'
+                        ? 'a trace bit of SR is set: T1 raises an exception after every instruction. T0 raises one after a taken branch, jump, return, write to SR, or ANDI, ORI or EORI to CCR'
+                        : 'the T bit of SR is set, which raises a trace exception after every instruction'
+            }
+        //a word no instruction of the processor starts with, kept by the Core
+        case 'LineA':
+        case 'LineF': {
+            const line = error.type === 'LineA' ? 'A' : 'F'
+            return {
+                headline: `Line ${line} instruction`,
+                detail:
+                    typeof value === 'number'
+                        ? `$${hex(value).padStart(4, '0')}: the processor has no instruction starting with $${line}`
+                        : undefined
+            }
+        }
+        case 'UnhandledTrap':
+            if (!isRecord(value) || typeof value.vector !== 'number') return undefined
+            return { headline: m68kVectorName(value.vector) }
+        //an interrupt request taken through an autovector that holds no handler: "IRQ 2 at line
+        //4: vector 26 at $000068 holds no handler"
+        case 'Irq':
+            if (!isRecord(value) || typeof value.level !== 'number') return undefined
+            return { headline: `IRQ ${value.level}` }
+        //a `trap #15` task the Core does not carry out, or one given a value it cannot take: the
+        //Core names the task and the register, the trap table says which task it is and why
+        case 'UnsupportedTrapTask':
+            if (!isRecord(value) || typeof value.task !== 'number') return undefined
+            return { headline: describeUnsupportedTrapTask(value.task) }
+        case 'InvalidTrapArgument':
+            if (!isRecord(value) || typeof value.task !== 'number') return undefined
+            if (typeof value.reason !== 'string') return undefined
+            return { headline: describeInvalidTrapArgument(value.task, value.reason) }
+        //the editor's own mistakes in answering the Core, never the program's
+        case 'NoPendingInterrupt':
+            return {
+                headline: 'The editor answered a trap #15 task that was not waiting for an answer'
+            }
+        case 'InvalidAnswer':
+            if (!isRecord(value)) return undefined
+            return {
+                headline: `The editor's answer to ${value.interrupt} was refused`,
+                detail: `${value.reason}`
+            }
+        case 'InvalidArgument':
+            if (typeof value !== 'string') return undefined
+            return { headline: 'Invalid argument', detail: value }
+        //the 68010's and the 68020's `rte` reads the format word of the frame it returns from, and
+        //refuses one it never pushes: on a 68010 a format other than $0 and $8, on a 68020 other
+        //than $0, $1, $2, $A and $B, or a bus fault frame of another version
+        case 'FormatError':
+            if (!isRecord(value) || typeof value.format !== 'number') return undefined
+            return {
+                headline: 'Format error',
+                detail: formatErrorDetail(value.format, processor === '68020' ? '68020' : '68010')
+            }
+    }
+    return undefined
+}
+
+/**
+ * Where the register was, against the bounds `chk2` read, each sign-extended as the processor
+ * compared it: "12 is outside 1..5". Bounds whose upper one is below the lower one as signed
+ * numbers are an unsigned range, as `dc.b 16,240` is: "5 is outside 16..-16, read as an unsigned
+ * range since -16 is below 16".
+ */
+function chk2Detail(value: Record<PropertyKey, unknown>): string {
+    const { lower, upper } = value
+    const outside = `${value.value} is outside ${lower}..${upper}`
+    if (typeof lower !== 'number' || typeof upper !== 'number' || lower <= upper) return outside
+    return `${outside}, interpreted as an unsigned range because ${upper} is below ${lower}`
+}
+
+/**
+ * The formats of the frames whose version number `rte` checks, by processor: the 68010's bus fault
+ * frame, $8, and the 68020's long one, $B. Any other format `rte` refuses is one it never makes.
+ */
+const VERSIONED_FORMATS = { '68010': 0x8, '68020': 0xb } as const
+
+/**
+ * Why `rte` refused the frame on the stack: "rte found a frame of format $3, which a 68010 does not
+ * make", "…, which a 68020 does not make", or for the bus fault frame it does make, $8 on a 68010
+ * and $B on a 68020, that its version is not the one it writes. A frame a program pushed by hand,
+ * or one the handler moved the stack pointer off, is the usual cause; on a 68020 also a 68010's
+ * format $8 frame.
+ */
+function formatErrorDetail(format: number, processor: '68010' | '68020'): string {
+    const name = `$${format.toString(16).toUpperCase()}`
+    return format === VERSIONED_FORMATS[processor]
+        ? `RTE found a format ${name} frame with a version number the ${processor} processor does not support`
+        : `RTE found an exception frame with format ${name}, which the ${processor} processor does not support`
+}
+
+/**
+ * What an address error tried, from the Core's access and width: "reading a word at the odd address
+ * $1", "writing a long word at the odd address $4FFD", or, for an instruction's own words and a
+ * jump's target, "fetching code at the odd address $1001".
+ */
+function addressErrorDetail(value: Record<PropertyKey, unknown>): string {
+    return accessText(value, `at the odd address $${hex(value.address as number)}`)
+}
+
+/**
+ * What a bus error tried, and which `memory` line refused it: "writing a word at $8000, where the
+ * program's memory read line makes $8000-$8FFF read only", or, from user mode, "reading a word at
+ * $2000 in user mode, where the program's memory protected line keeps $2000-$2FFF for supervisor
+ * mode" ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 15).
+ */
+function busErrorDetail(
+    value: Record<PropertyKey, unknown>,
+    memoryMap?: readonly MemoryRange[]
+): string {
+    const mode = value.range === 'protected' ? ' in user mode' : ''
+    const what = accessText(value, `at $${hex(value.address as number)}${mode}`)
+    return `${what}, ${refusal(value.range, memoryMap)}`
+}
+
+/**
+ * Why the memory map refused an access to a range of `kind`, with the range's bounds when the
+ * Program's map is at hand, which holds one range of each kind: "where the program's memory invalid
+ * line makes $9000-$9FFF invalid", or without it "which the program's memory invalid line makes
+ * invalid". ROM refuses nothing: a write there is ignored.
+ */
+function refusal(kind: unknown, memoryMap?: readonly MemoryRange[]): string {
+    const range = memoryMap?.find((candidate) => candidate.kind === kind)
+    const span = range ? `$${hex(range.start)}-$${hex(range.end)} ` : ''
+    const which = range ? 'where' : 'which'
+    switch (kind) {
+        case 'read':
+            return `${which} the memory read directive marks ${span}as read-only`
+        case 'protected':
+            return `${which} the memory protected directive restricts ${span}to supervisor mode`
+        default:
+            return `${which} the memory invalid directive marks ${span}as invalid`
+    }
+}
+
+/**
+ * An access as the Core reports it, `where` being its address: "reading a word at $1", "writing a
+ * long word at $4FFD", or, for an instruction's own words and a jump's target, "fetching code at
+ * $1001".
+ */
+function accessText(value: Record<PropertyKey, unknown>, where: string): string {
+    if (value.access === 'Program') return `fetching code ${where}`
+    //serde spells the width by its variant's name, as it does in a mutation, where the types
+    //declare the enum's number, `Size.Long` being 4
+    const width =
+        value.size === 'Long' || value.size === 4
+            ? 'a long word'
+            : value.size === 'Byte' || value.size === 1
+              ? 'a byte'
+              : 'a word'
+    return value.access === 'Write' ? `writing ${width} ${where}` : `reading ${width} ${where}`
+}
+
+/** `a` or `an`, for the name of an error: "an address error", "a bus error". */
+function article(word: string): string {
+    return /^[aeiou]/i.test(word) ? 'an' : 'a'
+}
+
+/** An address as EASy68K writes one, without its `$`: `1012`, all 32 bits of it. */
+function hex(value: number): string {
+    return (value >>> 0).toString(16).toUpperCase()
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {

@@ -25,6 +25,8 @@ export type PlaygroundSettings = {
     showPc: boolean
     showRegisters: boolean
     showFlags: boolean
+    /** Whether the cycle counter shows above the PC, on a Target that counts cycles: `cycles`. */
+    showCycles: boolean
     showScreen: boolean
     /** Whether the Screen panel starts unfolded instead of behind its "Show screen" bar. */
     openScreen: boolean
@@ -40,7 +42,7 @@ export type PlaygroundSettings = {
  * The Register files a fence can open a Playground on, which are the lower-case labels of the tabs
  * the panel shows ([the design record](../../../../../docs/design/register-files.md)).
  */
-export type PlaygroundRegisterFile = 'fpu' | 'cp0' | 'csr' | 'sse' | 'avx' | 'x87'
+export type PlaygroundRegisterFile = 'fpu' | 'cp0' | 'csr' | 'sse' | 'avx' | 'x87' | 'system'
 
 const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = [
     'fpu',
@@ -48,7 +50,8 @@ const REGISTER_FILE_FLAGS: readonly PlaygroundRegisterFile[] = [
     'csr',
     'sse',
     'avx',
-    'x87'
+    'x87',
+    'system'
 ]
 
 export type PlaygroundFence = {
@@ -161,6 +164,7 @@ export function parsePlaygroundFence(info: string): PlaygroundFence | undefined 
             showPc: entries.includes('pc'),
             showRegisters: !entries.includes('no-registers'),
             showFlags: !entries.includes('no-flags'),
+            showCycles: entries.includes('cycles'),
             showScreen,
             openScreen,
             openButton: entries.includes('allow-open'),

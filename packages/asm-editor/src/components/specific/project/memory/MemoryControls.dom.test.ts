@@ -285,3 +285,96 @@ it('lists a demangled label by its name, with the raw one in its tooltip and its
         expect(labelRows().map((row) => row.text)).toEqual(['std::cout@GLIBCXX_3.4'])
     }
 })
+
+it('folds a region’s labels and a section’s runs, the vectors folded at first, and lists every match while filtering', async () => {
+    const ui = render(true, true, {
+        regions: [
+            {
+                id: 'Section 0:0',
+                name: 'Section 0',
+                section: 'Section 0',
+                kind: 'code',
+                start: 0x2000n,
+                end: 0x2010n
+            },
+            {
+                id: 'Section 0:1',
+                name: 'Section 0',
+                section: 'Section 0',
+                kind: 'data',
+                start: 0x2010n,
+                end: 0x2020n
+            },
+            {
+                id: 'machine:vectors',
+                name: 'Exception vectors',
+                section: 'Exception vectors',
+                kind: 'vectors',
+                start: 0n,
+                end: 0x400n
+            },
+            {
+                id: 'device:0:Screen',
+                name: 'Screen',
+                kind: 'device',
+                start: 0xe00000n,
+                end: 0xe00010n
+            }
+        ],
+        labels: [
+            { name: 'first', section: 'Section 0', address: 0x2010n, fromLibrary: false },
+            { name: 'Reset SSP', section: 'Exception vectors', address: 0n, fromLibrary: false },
+            { name: 'Reset PC', section: 'Exception vectors', address: 4n, fromLibrary: false }
+        ]
+    })
+    ui.target.querySelector<HTMLButtonElement>('[aria-label="Memory regions"]')!.click()
+    flushSync()
+    await tick()
+    flushSync()
+    await tick()
+    const options = () => [...ui.target.querySelectorAll<HTMLElement>('[role="option"]')]
+    const row = (text: string) => options().find((row) => row.textContent?.includes(text))!
+    const labelNames = () =>
+        options()
+            .map((row) => row.querySelector('.data-label > span')?.textContent)
+            .filter(Boolean)
+    const filter = (text: string) => {
+        const input = ui.target.querySelector<HTMLInputElement>(
+            '[aria-label="Filter memory regions"]'
+        )!
+        input.value = text
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        flushSync()
+    }
+    expect(labelNames()).toEqual(['buffer', 'first'])
+    expect(row('Exception vectors').textContent).toContain('collapsed')
+    //the chevron unfolds the region without going to it
+    row('Exception vectors').querySelector<HTMLElement>('.disclosure')!.click()
+    flushSync()
+    expect(labelNames()).toEqual(['buffer', 'first', 'Reset SSP', 'Reset PC'])
+    expect(ui.change).not.toHaveBeenCalled()
+    //a section's header folds its runs, and the Devices theirs
+    row('Section 0').click()
+    flushSync()
+    row('Devices').click()
+    flushSync()
+    const titles = options().map(
+        (row) => [...row.querySelectorAll('.destination > span:not([class])')].at(-1)?.textContent
+    )
+    expect(titles).toEqual([
+        '.data · buffer',
+        'buffer',
+        'Section 0',
+        'Exception vectors · Reset SSP',
+        'Reset SSP',
+        'Reset PC',
+        'Devices'
+    ])
+    expect(ui.change).not.toHaveBeenCalled()
+    //a filter finds what a folded group hides, and nothing folds while it is there
+    filter('first')
+    expect(labelNames()).toEqual(['first'])
+    expect(ui.target.querySelector('[role="listbox"] .disclosure')).toBeNull()
+    filter('')
+    expect(labelNames()).toEqual(['buffer', 'Reset SSP', 'Reset PC'])
+})

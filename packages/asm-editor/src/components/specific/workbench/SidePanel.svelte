@@ -11,8 +11,10 @@
      * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
      * decision 18). Search finds text in the Project's Files, Listings and Pseudocode, and can be
      * maximized too ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
-     * decisions 23 to 29).
+     * decisions 23 to 29). The Documentation of an M68K Project follows the processor its program
+     * chooses ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
      */
+    import type { Processor } from '@specy/s68k'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaTimes from '~icons/fa-solid/times'
@@ -31,6 +33,12 @@
     import EditHistoryPanel from './EditHistoryPanel.svelte'
     import SearchPanel from './SearchPanel.svelte'
     import { useWorkbench } from './workbenchContext'
+    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import {
+        M68K_PROCESSORS,
+        m68kLookAhead,
+        m68kProcessorSwitch
+    } from '#lib/languages/M68K/m68kDialect.ts'
 
     interface Props {
         /** A phone's drawer has no room to maximize into. */
@@ -63,6 +71,22 @@
     const title = $derived(
         active ? (programLabel ? `${active.title} · ${programLabel}` : active.title) : undefined
     )
+
+    /**
+     * The M68K program's **Processor dialect**, from the live analysis: what its `opt p=` line
+     * chose, which the Documentation panel follows. None for another Target, or before the first
+     * analysis, when the panel shows everything.
+     */
+    const programDialect = $derived(session.languageAnalysis?.m68kDialect)
+    /** The processor the reader picked with the panel's switch; the program's own until then. */
+    let lookedAt = $state<Processor | undefined>()
+    const documentationDialect = $derived(
+        programDialect && lookedAt ? m68kLookAhead(programDialect, lookedAt) : programDialect
+    )
+    const PROCESSOR_OPTIONS = M68K_PROCESSORS.map((processor) => ({
+        id: processor,
+        label: processor
+    }))
 
     /** Run all, which like Test ends a Debug session first: the Testcases run on its Emulator. */
     function runTestcases() {
@@ -118,6 +142,16 @@
                 style={phone
                     ? 'flex-wrap: wrap; flex-basis: 100%; min-width: 0; order: 1;'
                     : 'margin-right: 0.3rem'}
+            />
+        {/if}
+        {#if active?.id === 'documentation' && m68kProcessorSwitch.enabled && programDialect}
+            <!-- the processor the Documentation shows, to look ahead without editing the code -->
+            <SegmentedControl
+                options={PROCESSOR_OPTIONS}
+                selected={lookedAt ?? programDialect.processor}
+                onSelect={(id) => (lookedAt = id as Processor)}
+                ariaLabel="Processor"
+                style="margin-right: 0.3rem"
             />
         {/if}
         {#if active?.maximizable && allowMaximize}
@@ -252,6 +286,7 @@
                         scope={context.searchScope}
                         disableLinks={!context.documentationLinks}
                         request={ui.documentationRequest}
+                        m68kDialect={documentationDialect}
                     />
                 {:else if entry.id === 'agent'}
                     <AgentPanel />

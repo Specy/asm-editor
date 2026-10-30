@@ -11,6 +11,11 @@
     import { sizeName } from '#lib/languages/sizeNames.ts'
     import { statusFlagsFromBits } from '#lib/languages/statusFlagBits.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import {
+        CYCLE_ESTIMATE_MARK,
+        cycleEstimateReason,
+        formatCycles
+    } from '#lib/languages/cycles.ts'
 
     interface Props {
         step: ExecutionStep
@@ -19,6 +24,11 @@
         flags: string[]
         /** The Target, which names the width a written mutation reports (`sizeNames.ts`). */
         language: AvailableLanguages
+        /**
+         * The processor the program is written for, as the panels name it, which says why its
+         * cycles are an estimate: `68020`, or `68000 with bit fields`.
+         */
+        processor?: string
         /** Contrast with the section surface when shown in a docked History panel. */
         docked?: boolean
         /** "Undo to here" was pressed. */
@@ -31,6 +41,7 @@
         step,
         flags,
         language,
+        processor,
         undoBlocked,
         docked = false,
         onUndo,
@@ -46,6 +57,26 @@
      * register the way the Register file spells it.
      */
     const pokes = $derived(step.kind === 'poke' ? (step.writes ?? []) : [])
+
+    /**
+     * An IRQ is a row of its own too (M68K,
+     * [m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 28): no
+     * instruction ran, so its heading is the request it took and the handler it went to, "IRQ 2 →
+     * timer at $102C", and what follows is what taking it wrote. One whose vector held no handler
+     * pushed nothing, and its title says so.
+     */
+    const irq = $derived(
+        step.kind === 'irq'
+            ? step.mutations.find(
+                  (mutation): mutation is Extract<MutationOperation, { type: 'TakeException' }> =>
+                      mutation.type === 'TakeException'
+              )
+            : undefined
+    )
+    /** What the row lists under its heading: everything but the IRQ the heading names. */
+    const listed = $derived(
+        irq ? step.mutations.filter((mutation) => mutation !== irq) : step.mutations
+    )
 
     function hex(value: bigint): string {
         return value.toString(16).toUpperCase()
@@ -188,6 +219,24 @@
     }
 </script>
 
+<!--
+    what the step took on a Target that counts cycles, an M68K's with its processor's timing, marked
+    "≈ 8" where that is an estimate, the 68020's cache case or a bit field's under `opt bit`, which
+    the hover explains
+-->
+{#snippet cyclesRow(cycles: number)}
+    <div class="row space-between">
+        <span> Cycles </span>
+        {#if step.cyclesEstimate}
+            <span class="cycles" {@attach tooltip(`An estimate. ${cycleEstimateReason(processor)}`)}
+                >{CYCLE_ESTIMATE_MARK} {formatCycles(cycles)}</span
+            >
+        {:else}
+            <span class="cycles">{formatCycles(cycles)}</span>
+        {/if}
+    </div>
+{/snippet}
+
 <div class="column step" class:docked>
     <div class="step-header column">
         <button
@@ -225,6 +274,19 @@
                     </div>
                 {/each}
             </div>
+        {:else if step.kind === 'irq'}
+            <div class="irq-title exception">
+                {#if irq}
+                    {irq.value.name} →
+                    {#if irq.value.label}<code class="handler">{irq.value.label}</code>{:else}the
+                        handler{/if} at ${hex(irq.value.handler)}
+                {:else}
+                    {step.title ?? 'IRQ'}
+                {/if}
+            </div>
+            {#if step.cycles !== undefined}
+                {@render cyclesRow(step.cycles)}
+            {/if}
         {:else}
             <div class="row space-between">
                 <span> PC </span>
@@ -239,6 +301,20 @@
                     </button>
                 </span>
             </div>
+            {#if step.disassembly}
+                <!-- what ran where no source line says: in data, or in code the program changed -->
+                <div class="row space-between">
+                    <span> Ran </span>
+                    <code
+                        class="disassembly"
+                        {@attach tooltip(
+                            step.line < 0
+                                ? 'Instruction decoded from memory. No source line matches this address.'
+                                : 'Instruction decoded from memory. These instruction bytes changed after Build.'
+                        )}>{step.disassembly}</code
+                    >
+                </div>
+            {/if}
             {#if step.undoable === false}
                 <div class="stretch">Undo stops here: effects are not recorded.</div>
             {/if}
@@ -273,12 +349,15 @@
                     </span>
                 </div>
             {/if}
+            {#if step.cycles !== undefined}
+                {@render cyclesRow(step.cycles)}
+            {/if}
         {/if}
     </div>
 
-    {#if step.kind !== 'poke' && !step.stretch && step.mutations.length !== 0}
+    {#if step.kind !== 'poke' && !step.stretch && listed.length !== 0}
         <div class="column mutations">
-            {#each step.mutations as mutation, i (i)}
+            {#each listed as mutation, i (i)}
                 {#if isWrite(mutation) && hasValues(mutation)}
                     <!--
                         a write opens to the values its Core reports, and stays marked while open
@@ -303,6 +382,20 @@
                     <div class="mutation-plain">
                         Pushed call from {hex(mutation.value.from)} to {hex(mutation.value.to)}
                     </div>
+                {:else if mutation.type === 'TakeException'}
+                    <!--
+                        what the instruction raised, the vector the processor went through and the
+                        handler it jumped to: "Divide by zero → vector 5, div_handler at $1040"
+                    -->
+                    <div class="mutation-plain exception">
+                        {mutation.value.name} → vector {mutation.value.vector},
+                        {#if mutation.value.label}<code class="handler">{mutation.value.label}</code
+                            >{:else}the handler{/if} at ${hex(mutation.value.handler)}
+                    </div>
+                {:else if mutation.type === 'ReturnFromException'}
+                    <div class="mutation-plain">
+                        Returned from exception to ${hex(mutation.value.to)}
+                    </div>
                 {:else if mutation.type === 'Other'}
                     <div class="mutation-plain">{mutation.value}</div>
                 {/if}
@@ -312,6 +405,16 @@
 </div>
 
 <style lang="scss">
+    .disassembly {
+        font-family: 'Fira Code', monospace;
+        font-size: 0.8rem;
+        overflow-wrap: anywhere;
+        text-align: right;
+    }
+    .cycles {
+        font-family: 'Fira Code', monospace;
+        font-size: 0.85rem;
+    }
     .stretch {
         font-size: 0.8rem;
         opacity: 0.85;
@@ -432,6 +535,13 @@
         font-family: monospace;
     }
 
+    //an IRQ's heading: the request and its handler, the whole of what the row is about
+    .irq-title {
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.15rem 0.3rem;
+    }
+
     //the value the Poke found, in the colour the panels give a previous value
     .poked-old {
         color: var(--accent);
@@ -447,6 +557,19 @@
 
     .mutation-plain {
         padding: 0.15rem 0.3rem;
+    }
+
+    //an exception taken is what the row is about, so it stands out from the frame it pushed
+    .exception {
+        overflow-wrap: anywhere;
+        border-left: 2px solid var(--accent);
+        border-radius: 0.2rem;
+        background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+
+    .handler {
+        font-family: 'Fira Code', monospace;
+        font-size: 0.85em;
     }
 
     //a write the person can open: tinted with the accent on hover, and more while it stands open

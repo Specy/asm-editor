@@ -5,10 +5,10 @@ it needs help from the environment running it. On the 68000, `trap #n` is a real
 enters an **exception handler**: code that takes over when the instruction runs.
 The processor provides `trap #0` through `trap #15`. It does not define printing tasks.
 
-This editor supplies its own service agreement for `trap #15`. A number in `d0.b` selects a
-**task**, and each task specifies which registers carry its arguments and answer. The editor
-implements only `trap #15`, so its assembler rejects the other trap numbers as unsupported here.
-They are still valid 68000 instructions elsewhere.
+The editor provides services through `trap #15`, using the same task numbers as EASy68K. Put a
+**task** number in `d0.b`; the task specifies which other registers hold its inputs and results.
+The simulator handles this request directly. `trap #0` through `trap #14` call handlers installed
+by the program.
 
 For each request:
 
@@ -142,6 +142,39 @@ Build and Run, then press Enter in the console. The program prints `13`. If a pr
 uses the screen, keyboard or mouse, its later reads take input from the focused screen instead;
 click that panel before typing.
 
+## Timers, interrupts and the cycle counter
+
+Task 32 with `d1.b = 6` configures a timer that sends regular **interrupt requests**. Tasks 62
+and 60 enable requests from keyboard and mouse events in the screen panel. These requests let a
+device call a handler while the program runs. See
+[Interrupts and cycles](/learn/courses/m68k/talking-to-the-outside-world/interrupts-and-cycles)
+for complete examples.
+
+The **cycle counter** records how many clock cycles the selected processor would take to execute
+the program. Task 30 resets it to 0; task 31 reads it into `d1.l`. Both tasks take zero cycles.
+To measure a section of code, reset the counter before it and read the counter afterward. The
+example below uses the default 68000 timings.
+
+```m68k|playground|console|no-flags|cycles
+    moveq #30, d0
+    trap #15            ; the counter starts again at 0
+    add.l d1, d2        ; 8 cycles
+    add.l d1, d2        ; 8 more
+    moveq #31, d0       ; 4 more, as it runs before the read
+    trap #15            ; d1 = the counter
+    move.b #3, d0
+    trap #15            ; print it
+    move.b #9, d0
+    trap #15
+```
+
+```testcase
+{ "expectedOutput": "20" }
+```
+
+The console shows `20`: 8 cycles for each `add.l` between two registers, and 4 for the `moveq`
+that asks for the reading. The Cycles line over the registers counts the same way as you Step.
+
 ## Files and unsupported tasks
 
 Tasks 50 to 59 access the Project's Files. File numbers start at 0, with at most eight open at
@@ -153,9 +186,9 @@ cancelled. Read each task's registers and result codes in the [trap Documentatio
 file changes and positions with the instruction that made them.
 
 The simulator does not provide every device or hardware feature that a program might request.
-Cycle-counter tasks 30 and 31 need a 68000 timing model, so they stop with a reason, as serial and
-network tasks do; the [unsupported task list](/documentation/m68k/traps#unsupported) names each one.
-An invalid argument can stop a supported task too, such as base 37 for task 15.
+The serial port and network tasks, for example, stop the program with a reason; the
+[unsupported task list](/documentation/m68k/traps#unsupported) names each one. An invalid argument
+can stop a supported task too, such as base 37 for task 15.
 
 ## Making sound
 

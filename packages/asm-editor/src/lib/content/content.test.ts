@@ -315,11 +315,20 @@ it('finds the course pages', () => {
  * panel's tabs (`docs/design/register-files.md`). Parsed here rather than in the panel so that the
  * renderer's embed URL and the embed's own reading of it cannot drift apart.
  */
+/** The cycle counter above the PC, which a Playground shows only when its fence asks for it. */
+describe('the cycles fence flag', () => {
+    it('shows the counter for a fence that asks for it, and for no other', () => {
+        expect(parsePlaygroundFence('m68k|playground|cycles')?.settings.showCycles).toBe(true)
+        expect(parsePlaygroundFence('m68k|playground|console')?.settings.showCycles).toBe(false)
+    })
+})
+
 describe('the register file fence flag', () => {
     it('reads the file a fence names', () => {
         expect(parsePlaygroundFence('mips|playground|fpu')?.settings.registerFile).toBe('fpu')
         expect(parsePlaygroundFence('riscv|playground|csr')?.settings.registerFile).toBe('csr')
         expect(parsePlaygroundFence('x86|playground|x87')?.settings.registerFile).toBe('x87')
+        expect(parsePlaygroundFence('m68k|playground|system')?.settings.registerFile).toBe('system')
     })
 
     it('leaves a fence without one on the CPU file', () => {

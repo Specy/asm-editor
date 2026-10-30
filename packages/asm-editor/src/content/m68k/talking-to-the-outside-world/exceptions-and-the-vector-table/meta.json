@@ -1,6 +1,6 @@
 {
     "name": "Exceptions and the vector table",
-    "description": "How the 68000 uses exception vectors, why this editor reports faults instead of running handlers, and how to guard a division before it fails.",
+    "description": "Handle exceptions and traps on the 68000, and see how the processor returns to a program.",
     "order": 2,
     "topic": "interrupts"
 }

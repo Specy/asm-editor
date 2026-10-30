@@ -1,11 +1,14 @@
 import { buildSourcesEqual } from '#lib/projectFiles.ts'
 import {
     buildOutputCollision,
+    buildOutputEncoding,
     buildOutputNote,
     buildOutputPath,
+    type BuildOutputFormat,
     type BuildOutputHost
 } from '#lib/buildOutput.ts'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
+import { sameChangedCode } from './changedCode'
 import { mergeMemoryRegions, readOnlyMemoryAt, withArgumentsArea } from './memoryRegions'
 import {
     BaseEmulator,
@@ -33,6 +36,7 @@ import {
     type ReadOnlyMemory,
     numbersOfSizeToSlice,
     type RegisterFile,
+    type RegisterFileDescriptor,
     type RegisterPoke,
     type RegisterSize,
     resolveRegisterFileLayout,
@@ -216,6 +220,8 @@ export abstract class GenericEmulator<T, R extends string>
     implements BaseEmulatorActions, BaseEmulatorState
 {
     private memoryLayout = $state<MemoryLayout | undefined>()
+    /** What `_getMemoryLayoutKey` read when `memoryLayout` was read. */
+    private memoryLayoutKey: number | bigint | string | undefined
     private heapBounds = $state<HeapBounds | undefined>()
     private stackTop = $state<bigint | undefined>()
     private deviceRegions = $state<DeviceRegion[]>([])
@@ -286,12 +292,14 @@ export abstract class GenericEmulator<T, R extends string>
     /** When `refreshRunningPanels` last read the Core for the panels, see the constant above. */
     private lastPanelRefresh = 0
     /**
-     * The pause the Run button turns into while a program is running. `pauseRequested` is set by
-     * `pause()` and honored by returning from `runSlices` at its next slice boundary, just as for
-     * a breakpoint. Step and Undo can then own the Core, and Run starts a new invocation at its PC.
+     * The pause the Run button turns into while a program is running. `pause()` asks the execution
+     * controller for it, and `runSlices` honors it by returning at its next slice boundary, just as
+     * for a breakpoint. Step and Undo can then own the Core, and Run starts a new invocation at its
+     * PC. Kept in the controller, so that a wait it ends, a stopped M68K's for an IRQ, ends too.
      */
-    private pauseRequested = false
     private runInFlight = false
+    /** Whether the run in flight takes a Pause, which no Testcase's run to `main` does. */
+    private runPausable = false
     /** Turns the Breakpoints the user set into the ones the Core runs with, see `setBreakpointResolver`. */
     private breakpointResolver?: (breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]
     protected fileSystemSession: FileSystemSession | null = null
@@ -400,6 +408,7 @@ export abstract class GenericEmulator<T, R extends string>
             currentFile: this._sources.entry,
             decorations: [],
             buildArtifacts: [],
+            changedCode: [],
             statusRegisters: [],
             compilerDiagnostics: [],
             callStack: [],
@@ -461,6 +470,15 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.decorations = decorations.decorations
         this.state.compiledCode = decorations.code
         this.state.buildArtifacts = this._getBuildArtifacts()
+        this.readMemoryLayout()
+    }
+
+    /**
+     * The Build's layout, with the names compiled code gives its labels, and the reading of what it
+     * depends on that the program can change (`_getMemoryLayoutKey`), which `updateData` compares.
+     */
+    private readMemoryLayout() {
+        this.memoryLayoutKey = this._getMemoryLayoutKey?.()
         const layout = this._getMemoryLayout?.() ?? { sections: [], dataLabels: [] }
         this.memoryLayout = {
             ...layout,
@@ -657,6 +675,18 @@ export abstract class GenericEmulator<T, R extends string>
                 } satisfies RegisterFile
             })
         ]
+    }
+
+    /**
+     * Declares the Register files beyond the CPU one anew, for a Target whose files follow the
+     * program it built: an M68K program for the 68010 has VBR, SFC and DFC in its System file, one
+     * for the 68000 has not. The files are built again as `createRegisterFiles` builds them, zeroed
+     * until the next refresh reads them; descriptors already in force change nothing.
+     */
+    protected redeclareRegisterFiles(descriptors: RegisterFileDescriptor[]): void {
+        if (descriptors === this._registerFiles) return
+        this._registerFiles = descriptors
+        this.state.registerFiles = this.createRegisterFiles()
     }
 
     /**
@@ -933,9 +963,20 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.callStack = this._getCallStack()
         this.heapBounds = this._getHeapBounds?.()
         this.stackTop = this._getStackTop?.()
+        //a layout that moved with the program, as an M68K vector table follows VBR, is read again,
+        //and its Arguments captured again with it
+        if (
+            this.memoryLayout &&
+            this._getMemoryLayoutKey &&
+            this._getMemoryLayoutKey() !== this.memoryLayoutKey
+        )
+            this.readMemoryLayout()
         this.captureArguments()
         this.deviceRegions = this._getDeviceRegions?.() ?? []
         this.state.latestSteps = this.visibleHistory(VISIBLE_HISTORY_STEPS)
+        //kept as it was while nothing changed, so the editor's line marks and hovers stay put
+        const changed = this._getChangedCode?.() ?? []
+        if (!sameChangedCode(changed, this.state.changedCode)) this.state.changedCode = changed
     }
 
     /**
@@ -1321,6 +1362,7 @@ export abstract class GenericEmulator<T, R extends string>
     private forgetBuild(): void {
         this._buildSources = undefined
         this.memoryLayout = undefined
+        this.memoryLayoutKey = undefined
         this.heapBounds = undefined
         this.stackTop = undefined
         this.deviceRegions = []
@@ -1336,7 +1378,7 @@ export abstract class GenericEmulator<T, R extends string>
         this.undoLedger = []
         this.noteList = []
         this.endNoted = false
-        this.pauseRequested = false
+        this.executionController.endPause()
         //a new program is a new speed, and the estimates in the adapters are where it starts again
         this.speedCorrection = 1
         this.resetPeripherals()
@@ -1350,16 +1392,20 @@ export abstract class GenericEmulator<T, R extends string>
             terminated: false,
             termination: undefined,
             compiledCode: undefined,
+            processor: undefined,
             pc: 0n,
             sp: 0n,
             decorations: [],
             buildArtifacts: [],
+            changedCode: [],
             line: -1,
             currentFile: this._sources.entry,
             interrupt: undefined,
             errors: [],
             canUndo: false,
             paused: false,
+            runStatus: undefined,
+            cycles: undefined,
             executionTime: -1,
             canExecute: false,
             latestSteps: [],
@@ -1494,15 +1540,20 @@ export abstract class GenericEmulator<T, R extends string>
             this.state.compilerDiagnostics = result.diagnostics ?? []
             //only now, for the Build still current: a cancelled one says nothing of its program
             this._buildLibraryFiles = result.libraryFiles
+            this.state.processor = result.processor
             for (const note of result.notes ?? []) this.addNote(note)
             const output = await this.placeBuildOutput(
                 sources,
                 result.program,
+                result.programFormat ?? 'executable',
                 stopInUserCode,
                 fileSystem,
                 execution
             )
             this.executionController.ensureCurrent(execution)
+            //said of the File the person now has, which a Testcase's Build never saves
+            if (stopInUserCode && output?.saved)
+                for (const note of result.outputNotes ?? []) this.addNote(note)
             this._initialize(undoSize)
             const megabytes = this._emulatorOptions.fileSystemHistoryBudgetMb
             this.fileSystemSession = fileSystem.beginSession(
@@ -1568,6 +1619,7 @@ export abstract class GenericEmulator<T, R extends string>
             this.updateMemory()
             this.updateData()
             this.updateStatusRegisters()
+            this.state.cycles = this._getCycles?.()
             return execution
         } catch (e) {
             if (!this.executionController.isCurrent(execution)) return execution
@@ -1592,7 +1644,8 @@ export abstract class GenericEmulator<T, R extends string>
 
     /**
      * Where the program a Build linked goes ([ADR 0056](../../../../../docs/adr/0056-a-build-saves-the-program-it-links-as-a-file.md)):
-     * at the path the Command line names, where the run's FileSystem has it for the program. A
+     * at the path the Command line names, or for an M68K S-record that name with `.S68`
+     * (`BuildOutputFormat`), where the run's FileSystem has it for the program. A
      * person's Build (`build`) has its host save it there as the Build output, `saved`, before the
      * Debug session takes the Files, asking first when that replaces something; else, or without
      * a host, it is only presented to the program. A Testcase's program takes the place of a Build
@@ -1602,12 +1655,13 @@ export abstract class GenericEmulator<T, R extends string>
     private async placeBuildOutput(
         sources: BuildSources,
         program: Uint8Array | undefined,
+        format: BuildOutputFormat,
         build: boolean,
         fileSystem: FileSystem,
         execution: ExecutionGeneration
     ): Promise<{ path: string; bytes: Uint8Array; saved: boolean } | undefined> {
         if (!program) return undefined
-        const path = buildOutputPath(sources)
+        const path = buildOutputPath(sources, format)
         const note = (text: string) => {
             if (build) this.addNote({ tone: 'warning', text })
             return undefined
@@ -1628,7 +1682,7 @@ export abstract class GenericEmulator<T, R extends string>
             this.executionController.ensureCurrent(execution)
             if (claim === 'save') {
                 try {
-                    host.save(sources, path, program)
+                    host.save(sources, path, program, format)
                     return { path, bytes: program, saved: true }
                 } catch (error) {
                     //a Project at its limits still runs the program it cannot keep
@@ -1643,7 +1697,7 @@ export abstract class GenericEmulator<T, R extends string>
         const collision = buildOutputCollision(fileSystem.files, path)
         if (!build && collision === 'file' && host?.isBuildOutput(path)) {
             //the Testcase's own FileSystem, which nothing saves
-            fileSystem.writeBytes(path, program, true, 'base64')
+            fileSystem.writeBytes(path, program, true, buildOutputEncoding(format))
             return { path, bytes: program, saved: true }
         }
         if (collision)
@@ -1753,8 +1807,8 @@ export abstract class GenericEmulator<T, R extends string>
      * answered; the GUI disables the button while an input request is pending for that reason.
      */
     pause(): void {
-        if (!this.runInFlight) return
-        this.pauseRequested = true
+        if (!this.runInFlight || !this.runPausable) return
+        this.executionController.requestPause()
     }
 
     /**
@@ -1773,13 +1827,14 @@ export abstract class GenericEmulator<T, R extends string>
         options: SliceLoopOptions = {}
     ): Promise<SliceLoopEnd> {
         this.runInFlight = true
+        this.runPausable = options.pausable !== false
         this.state.paused = false
         try {
             return await this.sliceLoop(haltLimit, execution, options)
         } finally {
             this.runInFlight = false
             //a pause asked for in the slice that ended the run is not inherited by the next one
-            this.pauseRequested = false
+            this.executionController.endPause()
         }
     }
 
@@ -1794,10 +1849,11 @@ export abstract class GenericEmulator<T, R extends string>
         //a breakpoint names it, which is what makes Run continue from a breakpoint instead of
         //stopping on it again for ever (`skipBreakpointAtPc`)
         let firstSlice = options.skipBreakpointAtStart ?? true
+        let startsRun = true
         while (remaining > 0) {
             //the slice boundary is the only place a pause can be taken: a slice is the Core running,
             //and nothing here can interrupt it once it has started
-            if (this.pauseRequested && options.pausable !== false) {
+            if (this.executionController.pauseRequested) {
                 this.state.paused = true
                 return 'paused'
             }
@@ -1819,6 +1875,7 @@ export abstract class GenericEmulator<T, R extends string>
                         ? [...options.breakpoints]
                         : this.runBreakpoints(options.alsoBreakAt),
                     skipBreakpointAtPc: firstSlice,
+                    startsRun,
                     runInstructionLimit: haltLimit,
                     speedCorrection: this.speedCorrection
                 })
@@ -1828,6 +1885,7 @@ export abstract class GenericEmulator<T, R extends string>
                 throw error
             }
             firstSlice = false
+            startsRun = false
             //what the slice started or stopped is heard now, a slice late at most
             this._peripherals.audio.flush()
             this.learnSliceSpeed(
@@ -1917,14 +1975,16 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     /**
-     * The instruction waiting for input, with every panel current before its read suspends. By
-     * default the stop's instruction, which inside library code is the program's call into it.
+     * The instruction waiting for input, with every panel current before its read suspends; or
+     * waiting for an IRQ, as an M68K `stop` does. By default the stop's instruction, which inside
+     * library code is the program's call into it. `force` false is for a wait too short for anyone
+     * to read the panels in, a game's frame: they refresh at the running rate.
      */
-    protected refreshInputState(instruction?: Instruction | null): void {
+    protected refreshInputState(instruction?: Instruction | null, force = true): void {
         if (this._peripherals.terminal.inputSource === 'scripted') return
         if (instruction === undefined) instruction = this.stopInstruction(true)
         this.selectInstruction(instruction)
-        this.refreshRunningPanels(true)
+        this.refreshRunningPanels(force)
     }
 
     /**
@@ -1983,7 +2043,7 @@ export abstract class GenericEmulator<T, R extends string>
             console.error(lookupError)
         }
         const line = instruction?.lineNumber ?? -1
-        const message = this._stringifyError(error, line >= 0 ? line + 1 : undefined)
+        const message = this._stringifyRuntimeError(error, line >= 0 ? line + 1 : undefined)
         this.addError(message)
         this.endWithError(message)
         this._peripherals.terminal.flushOutput()
@@ -2021,6 +2081,8 @@ export abstract class GenericEmulator<T, R extends string>
         this.updateMemory()
         this.updateData()
         this.updateStatusRegisters()
+        this.state.runStatus = this._getRunStatus?.()
+        this.state.cycles = this._getCycles?.()
     }
 
     /**
@@ -2783,6 +2845,16 @@ export abstract class GenericEmulator<T, R extends string>
         return this.state.paused
     }
 
+    /** What the program waits for on its own, see `BaseEmulatorState.runStatus`. */
+    get runStatus() {
+        return this.state.runStatus
+    }
+
+    /** The cycle counter, for a Target that counts cycles, see `BaseEmulatorState.cycles`. */
+    get cycles() {
+        return this.state.cycles
+    }
+
     get compilerDiagnostics() {
         return this.state.compilerDiagnostics
     }
@@ -2822,6 +2894,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get buildArtifacts() {
         return this.state.buildArtifacts
+    }
+
+    get changedCode() {
+        return this.state.changedCode
     }
 
     get errors() {
@@ -2915,5 +2991,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get compiledCode() {
         return this.state.compiledCode
+    }
+
+    /** The later processor the Build's program is written for, see `BaseEmulatorState.processor`. */
+    get processor() {
+        return this.state.processor
     }
 }

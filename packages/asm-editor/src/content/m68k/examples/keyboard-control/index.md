@@ -127,11 +127,10 @@ the keys in a different order—left, right, up, down—so the last held key it 
 are down together. For example, holding left and down sets the direction to down. You can use the
 bit positions as a guide; there is no need to memorize them.
 
-Each poll returns the state the program has _observed so far_. The focused Screen queues key
-presses and releases, and task 19 applies at most one queued change per read, at least 30
-milliseconds apart. A quick tap that reaches the Screen can therefore appear as down on one read
-and up on a later read, even if both events arrived between reads. Keep polling while the program
-runs. Keys pressed while the Screen lacks focus do not enter its queue.
+Each poll reports which keys are down at that moment. The program checks once per frame, at
+intervals a little over 30 milliseconds. A held key is seen on successive polls, but a tap that
+begins and ends between two polls is missed. Click the Screen panel to give it focus before
+pressing a key. Key events outside the focused panel do not reach the program.
 
 ## Direction kept between frames
 

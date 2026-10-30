@@ -38,7 +38,7 @@ function makeDevice() {
     //the bytes of the line the Terminal holds for the character port, which it hands out on request
     let line: number[] = []
     const screen = new Screen({ width: 256, height: 192, cell: SCREEN_CELL_8X8 })
-    const keyboard = new Keyboard({ holdIntervalMs: 0 })
+    const keyboard = new Keyboard()
     const mouse = new Mouse({ screen, keyboard })
     //a stand-in for the memory-mapped display: the port device only ever asks it whether it is on
     //and tells it to switch, so a test can drive both modes without a Core

@@ -7,6 +7,7 @@ import {
     type AssemblyInsightOptions,
     type OperationSpan
 } from './assemblyInsights'
+import { createQuickFixProvider, QUICK_FIX_METADATA } from './quickFixes'
 
 type ProviderSet = {
     completion?: monaco.languages.CompletionItemProvider[]
@@ -21,6 +22,8 @@ type ProviderSet = {
     formatting?: monaco.languages.DocumentFormattingEditProvider[]
     rangeFormatting?: monaco.languages.DocumentRangeFormattingEditProvider[]
     folding?: monaco.languages.FoldingRangeProvider[]
+    /** Quick fixes, registered for the `quickfix` kind alone (`quickFixes.ts`). */
+    codeActions?: monaco.languages.CodeActionProvider[]
 }
 
 export type AssemblyLanguageDescriptor = {
@@ -111,6 +114,13 @@ export function registerAssemblyLanguageDescriptor(
         registerEach(registrations, providers.folding, (provider) =>
             monacoInstance.languages.registerFoldingRangeProvider(descriptor.id, provider)
         )
+        registerEach(registrations, providers.codeActions, (provider) =>
+            monacoInstance.languages.registerCodeActionProvider(
+                descriptor.id,
+                provider,
+                QUICK_FIX_METADATA
+            )
+        )
         return registrations
     } catch (error) {
         for (const disposable of registrations.reverse()) disposable.dispose()
@@ -156,6 +166,9 @@ async function loadM68kDescriptor(monacoInstance: MonacoType): Promise<AssemblyL
                 )
             ],
             signatureHelp: [language.createM68kSignatureHelpProvider(monacoInstance)],
+            //the `opt p=` line a later processor's instruction needs, and the 68000's own way of
+            //writing it, which s68k suggests with the diagnostic
+            codeActions: [createQuickFixProvider(monacoInstance)],
             documentSymbols: [projectLanguage.createM68kDocumentSymbolProvider(monacoInstance)],
             definitions: [projectLanguage.createM68kDefinitionProvider(monacoInstance)],
             links: [projectLanguage.createM68kDocumentLinkProvider(monacoInstance)],

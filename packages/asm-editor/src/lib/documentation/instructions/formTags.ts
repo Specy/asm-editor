@@ -49,7 +49,28 @@ export function z80FormTags(
     return tags
 }
 
-/** Privileged is the 68000's rule; s68k runs every program in supervisor mode all the same. */
-export function m68kFormTags(form: Pick<S68kInstructionForm, 'privileged'>): InstructionTag[] {
-    return form.privileged ? ['privileged'] : []
+/**
+ * Privileged is the 68000's rule, which s68k enforces: in user mode the form raises a privilege
+ * violation. A form a later processor brought is tagged with that processor, the 68010 or the
+ * 68020, which a program chooses with `opt p=`
+ * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 3). A bit field, the
+ * form whose operand takes `{offset:width}`, is tagged `opt-bit` too: EASy68K's `opt bit` gives it
+ * to a program for the 68000 or the 68010.
+ */
+export function m68kFormTags(
+    form: Pick<S68kInstructionForm, 'privileged' | 'processor' | 'operands'>
+): InstructionTag[] {
+    const tags: InstructionTag[] = []
+    if (form.privileged) tags.push('privileged')
+    if (form.processor !== '68000') tags.push(form.processor)
+    if (isM68kBitFieldForm(form)) tags.push('opt-bit')
+    return tags
+}
+
+/** How s68k's table names the bit field an operand position takes. */
+export const M68K_BIT_FIELD_MODE = '{offset:width}'
+
+/** Whether a form is one of the bit fields, which `opt bit` gives an earlier processor. */
+export function isM68kBitFieldForm(form: Pick<S68kInstructionForm, 'operands'>): boolean {
+    return form.operands.some((modes) => modes.includes(M68K_BIT_FIELD_MODE))
 }

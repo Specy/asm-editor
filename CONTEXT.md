@@ -25,8 +25,18 @@ _Avoid_: size alias, operand size, B/W/L
 
 ## Status flag
 
-A named one-bit condition of an **Emulator**, shown as 0 or 1 with its change highlighted. The CPU has a row of them (the M68K CCR bits, the x86 EFLAGS bits, the Z80 F bits; MIPS and RISC-V have none), and a **Register file** may carry a row of its own, such as the MIPS FPU condition flags.
+A named one-bit condition of an **Emulator**, shown as 0 or 1 with its change highlighted. The CPU has a row of them (the M68K CCR bits, the x86 EFLAGS bits, the Z80 F bits; MIPS and RISC-V have none), and a **Register file** may carry a row of its own, such as the MIPS FPU condition flags or the M68K System file's T, S and I2–I0, the system byte of its SR (T1, T0, S, M and I2–I0 in a program for the 68020).
 _Avoid_: status register, status codes, condition codes, CCR (except for the M68K register itself)
+
+## Exception
+
+The processor saving its program counter and status register and going on at the handler a **Vector** names, on M68K: a division by zero, an address error, a privilege violation in user mode, trace, `trap #0` to `#14`, and the rest of the 68000's. The History row of the instruction that raised one names it, its vector and its handler, and the Call stack shows its frame until `rte` returns from it. A vector that holds no handler ends the program, the vector named in the **Log**, as a frame that cannot be pushed halts the CPU. Distinct from an **Interrupt**, which is the Emulator waiting on the person.
+_Avoid_: trap (one kind of exception), fault, interrupt
+
+## Vector
+
+One of the 256 long words of the M68K exception vector table at `$000`–`$3FF`, the address of the handler for one **Exception**: vector 5 at `$000014` is Divide by zero's. One that holds an odd address, as every vector does until the program writes it, holds no handler. The memory view names each as a data label of the Exception vectors **Memory region**.
+_Avoid_: interrupt vector (only some are), slot
 
 ## Diagnostic
 
@@ -38,7 +48,12 @@ Actionable help supplied with a **Diagnostic** so the learner knows how to corre
 
 ## Interrupt
 
-The generic state "the Emulator is paused mid-execution waiting on the user" (e.g. a program requested keyboard input). Owned by this codebase, not by any Core's type system; language-specific interruption details (like s68k interrupt payloads) are mapped _into_ it. While an Interrupt is pending, execution controls are disabled.
+The generic state "the Emulator is paused mid-execution waiting on the user" (e.g. a program requested keyboard input). Owned by this codebase, not by any Core's type system; language-specific interruption details (like s68k interrupt payloads) are mapped _into_ it. While an Interrupt is pending, execution controls are disabled. Distinct from an **IRQ**, which the processor takes on its own.
+
+## IRQ
+
+An interrupt request on M68K, at a level from 1 to 7: a timer the program set with `trap #15` task 32, or a key or mouse event on the **Screen** it asked for with task 62 or 60. It is latched until the processor takes it, between two instructions, as an **Exception** through the level's autovector, `$60` + 4 × level, once it is above the interrupt mask of the status register or is level 7. Taking one is a step of its own in the History, which Undo takes back, making the request pending again. `stop` waits for one without running anything, and the status line says what it waits for. Timers run only during a Run, on **Program time**. See [ADR 0065](./docs/adr/0065-m68k-devices-deliver-irqs.md).
+_Avoid_: interrupt (in code, which means an **Interrupt**), hardware interrupt
 
 ## Pause
 
@@ -99,11 +114,11 @@ The Peripheral representing a program's graphical output through its simulator e
 
 ## Keyboard
 
-The Peripheral representing keyboard input for a program interacting with the **Screen**, observed either as typed characters or as key state. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use.
+The Peripheral representing keyboard input for a program interacting with the **Screen**, observed either as typed characters or as key state. Typed characters wait in a queue that never drops one. The key state is EASy68K's: a key is down or up from the moment it goes down or comes up, the codes of the last key pressed and the last key released are kept, and a read answers the state as it is then, with no queue or pacing. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use. On M68K a key going down or up can also raise an **IRQ** the program asked for, whose handler reads the key that raised it. See [ADR 0008](./docs/adr/0008-poll-keyboard-and-mouse-input.md) and [ADR 0066](./docs/adr/0066-key-state-changes-at-the-event.md).
 
 ## Mouse
 
-The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up. Its coordinates share the drawing origin at the top left and are independent of GUI zoom.
+The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up. Its coordinates share the drawing origin at the top left and are independent of GUI zoom. On M68K a button going down or up, or a move, can also raise an **IRQ** the program asked for.
 
 ## Audio
 
@@ -420,7 +435,7 @@ _Avoid_: hint, title (for the card), popover (which can hold controls), hover (M
 
 ## Memory region
 
-A range of a **Debug session**'s memory with one kind of content, worked out from the **Core**'s layout (or, for a memory-mapped device, reported by its **Peripheral**) and covering what the program occupies now rather than what its environment reserves. The program's own bytes split into a region for each run of one kind (code from instructions, data from `dc`/`.word`/`db`, reserved room from `ds`/`.space`/`.bss`) inside one section, so instructions, a `dc` and more instructions are three regions; a language with only `org` takes each contiguous assembled run as its section. The heap, the stack, the program's **Arguments** and each memory-mapped device are regions of their own: the heap runs from its start to the current break and the stack from the stack pointer to its top, so both move as the program runs, and a region the program has not touched yet is empty at its start address. The Arguments region sits above the stack and holds what the program was started with, as the Core wrote it at the start: the `argv` array and its strings ("Arguments" on MIPS and RISC-V), or on x86 the whole Linux process-start block with the environment and the auxiliary vector ("Arguments and environment"), its parts named like data labels (`argv`, `argv[1]`). A device region can overlap the program's own, as the MARS bitmap display does `.data` by default, and both stay regions. The memory view draws a data or reserved region in chunks, one for each data label in it, so the variables of a section read apart. Distinct from a page, which is the fixed-size window the memory view shows at a time.
+A range of a **Debug session**'s memory with one kind of content, worked out from the **Core**'s layout (or, for a memory-mapped device, reported by its **Peripheral**) and covering what the program occupies now rather than what its environment reserves. The program's own bytes split into a region for each run of one kind (code from instructions, data from `dc`/`.word`/`db`, reserved room from `ds`/`.space`/`.bss`) inside one section, so instructions, a `dc` and more instructions are three regions; a language with only `org` takes each contiguous assembled run as its section. The heap, the stack, the program's **Arguments** and each memory-mapped device are regions of their own: the heap runs from its start to the current break and the stack from the stack pointer to its top, so both move as the program runs, and a region the program has not touched yet is empty at its start address. The Arguments region sits above the stack and holds what the program was started with, as the Core wrote it at the start: the `argv` array and its strings ("Arguments" on MIPS and RISC-V), or on x86 the whole Linux process-start block with the environment and the auxiliary vector ("Arguments and environment"), its parts named like data labels (`argv`, `argv[1]`). A device region can overlap the program's own, as the MARS bitmap display does `.data` by default, and both stay regions. The memory view draws a data or reserved region in chunks, one for each data label in it, so the variables of a section read apart. Memory the machine itself gives a meaning is a region too, whatever the program placed there: the M68K **Exception vectors**, cut into one chunk per **Vector** and named by them, and the ROM, Read only, Protected and Invalid ranges of an M68K program's memory map, each saying in the hover what an access there does. Distinct from a page, which is the fixed-size window the memory view shows at a time.
 _Avoid_: segment (the Z80 Core's name for a contiguous assembled run), area, zone, memory map entry
 
 ## Log
@@ -483,7 +498,7 @@ _Avoid_: template, shape, syntax line, variant
 
 ## Instruction tag
 
-A fact about an **Instruction form** as its assembler or its real processor defines it, from one shared list: Pseudo-instruction, RV64 only, Undocumented, Privileged. Privileged means the processor reserves the form for supervisor mode, even where the **Core** runs every program in that mode, as s68k does. A form can have several or none; a mnemonic shows a tag beside its name only when every one of its forms has it, and otherwise the tag sits on the forms that have it. Unlike an **Instruction category**, a tag says nothing about the kind of work done.
+A fact about an **Instruction form** as its assembler or its real processor defines it, from one shared list: Pseudo-instruction, RV64 only, Undocumented, Privileged, 68010, 68020 and 68000 with opt bit. Privileged means the processor reserves the form for supervisor mode, even where the **Core** runs every program in that mode, as s68k does. 68010 and 68020 name the first M68K processor that has the form, when it is a later one than the 68000, which a program chooses with `opt p=`. 68000 with opt bit marks the 68020's bit fields, which EASy68K's `opt bit` gives a program for the 68000 or the 68010 as well. A form can have several or none; a mnemonic shows a tag beside its name only when every one of its forms has it, and otherwise the tag sits on the forms that have it. Unlike an **Instruction category**, a tag says nothing about the kind of work done.
 _Avoid_: category, flag (a **Status flag** is a CPU bit), badge, attribute
 
 ## Instruction example
