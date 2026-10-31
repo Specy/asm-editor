@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vite-plus/test'
 import { X86Emulator } from '#lib/languages/X86/X86Emulator.svelte.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
@@ -14,8 +13,9 @@ import soundProse from './sound.md?raw'
 /**
  * The x86 device Chapters ([x86 devices](../../../../../../docs/design/x86-devices.md), M10 of
  * [the plan](../../../../../../docs/design/x86-devices-plan.md)): their sections, their tables read
- * from the device table, and their NASM programs and the system-call Lecture's, which build with the
- * include files and run to a clean exit on the real Core.
+ * from the device table, and their NASM programs, which build with the include files and run to a
+ * clean exit on the real Core. The system-call Lecture's device programs are Playgrounds, which
+ * `content.test.ts` runs.
  */
 
 function chapter(id: string): Chapter {
@@ -96,12 +96,10 @@ function programsOf(name: string, markdown: string) {
         .map((code, index) => ({ name: `${name} #${index + 1}`, code }))
 }
 
-const LECTURE = 'src/content/x86/talking-to-the-outside-world/syscall-and-the-linux-abi/index.md'
 const PROGRAMS = [
     ...programsOf('The Screen', screenProse),
     ...programsOf('Keys and the pointer', inputProse),
-    ...programsOf('Sound', soundProse),
-    ...programsOf('the system-call Lecture', readFileSync(LECTURE, 'utf8'))
+    ...programsOf('Sound', soundProse)
 ]
 
 const plain = (content: string) => ({ encoding: 'plain' as const, content })
@@ -129,16 +127,14 @@ const CLEAN_EXIT: Testcase = {
 const emulators: Awaited<ReturnType<typeof X86Emulator>>[] = []
 afterEach(() => emulators.splice(0).forEach((emulator) => emulator.dispose()))
 
-describe('the NASM programs of the device Chapters and the system-call Lecture', () => {
+describe('the NASM programs of the device Chapters', () => {
     it('are all found', () => {
         expect(PROGRAMS.map((program) => program.name)).toEqual([
             'The Screen #1',
             'Keys and the pointer #1',
             'Sound #1',
             'Sound #2',
-            'Sound #3',
-            'the system-call Lecture #1',
-            'the system-call Lecture #2'
+            'Sound #3'
         ])
     })
 

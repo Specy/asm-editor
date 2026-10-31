@@ -15,10 +15,10 @@ import type { AvailableLanguages } from '#lib/Project.svelte.ts'
  *
  * The value of `template` is the order it appears in; the name and description are the Example's
  * own. Each of the eight is spelled the same way in every Course, so the picker offers one list
- * whatever language is selected. x86 has four of the eight: its input, drawing and sound Examples,
- * which read the Terminal and the devices under `/dev` ([x86 devices](../../../../../docs/design/x86-devices.md)),
- * are still to be written, so none of them is flagged yet. M68K has seven, without the tune:
- * EASy68K has no task that plays a note.
+ * whatever language is selected. x86 has six of the eight: its drawing and tune Examples reach the
+ * devices under `/dev` ([x86 devices](../../../../../docs/design/x86-devices.md)), and it has no
+ * sum-of-two-numbers or chiptune Example. M68K has seven, without the tune: EASy68K has no task that
+ * plays a note.
  *
  * Read from disk rather than bundled: the Examples are 492 KB of markdown and only ~30 short
  * programs are wanted, so this runs in the prerender of `/projects/create` and the page ships the

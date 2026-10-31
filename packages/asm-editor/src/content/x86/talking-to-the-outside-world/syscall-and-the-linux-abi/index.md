@@ -209,7 +209,7 @@ it has (`smem_len`) and how many bytes one line of pixels takes (`line_length`),
 This program draws a red line across the Screen, 120 lines down. The `@screen` comment asks for a
 Screen 320 pixels wide and 240 high.
 
-```x86
+```x86|playground|open-screen|no-flags
 ; @screen width=320 height=240
 default rel
 %include "sys/syscall.inc"
@@ -317,7 +317,7 @@ seconds of sound, which would make every sound late. The `SNDCTL_DSP_SETFRAGMENT
 after `open`, asks for a small one. Its value `0x0004000A` asks for 4 **fragments** of 2¹⁰, 1024,
 bytes, a fraction of a second.
 
-```x86
+```x86|playground|no-flags
 default rel
 %include "sys/syscall.inc"
 %include "fcntl.inc"

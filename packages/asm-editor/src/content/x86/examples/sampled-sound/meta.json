@@ -1,0 +1,6 @@
+{
+    "name": "Sampled sound",
+    "description": "Compute a fading square wave, 22,050 16-bit samples a second, for each note of a scale and write it to /dev/dsp, whose buffer, made small with SNDCTL_DSP_SETFRAGMENT, paces the program.",
+    "order": 27,
+    "topic": "sampled-sound"
+}
