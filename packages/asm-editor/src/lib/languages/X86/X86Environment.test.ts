@@ -235,7 +235,8 @@ describe('x86 selected environment and native transport', () => {
             ])
             expect(emulator._getInstructionsExecuted() - before).toBe(40n)
             const history = emulator._getUndoHistory(50)
-            expect(history.filter((row) => row.undoable === false).length).toBeGreaterThanOrEqual(4)
+            //only the dup: descriptors are not journaled, the reads are (ADR 0069)
+            expect(history.filter((row) => row.undoable === false).length).toBe(1)
         } finally {
             emulator.dispose()
         }
