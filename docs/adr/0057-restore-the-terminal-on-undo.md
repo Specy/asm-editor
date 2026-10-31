@@ -26,4 +26,5 @@ The Terminal keeps its own journal. Each adapter tells it which instruction is r
 - A Poke changes nothing in the Terminal and is undone by the Core alone ([ADR 0022](./0022-core-native-poke-records.md)).
 - A Build starts the journal and Stop ends it, with the transcript. Testcases keep no history, so the Terminal journals nothing while they run.
 - x86 still treats an instruction that consumes standard input as an Undo barrier. Undo takes back what x86 printed, but cannot cross a read until the Core journals input.
+  (Update 2026-10-31: [ADR 0069](./0069-x86-journals-the-input-its-reads-take.md) has Blink journal what each read takes, standard input and evdev alike, so an x86 read is no longer a barrier and follows this record: one that waited asks again, and what a read took without waiting goes back.)
 - Output written between instructions, such as the replacement character for a character still incomplete when a MIPS, RISC-V or x86 program ends, belongs to no instruction and stays.

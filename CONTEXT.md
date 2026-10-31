@@ -114,15 +114,15 @@ The Peripheral representing a program's graphical output through its simulator e
 
 ## Keyboard
 
-The Peripheral representing keyboard input for a program interacting with the **Screen**, observed either as typed characters or as key state. Typed characters wait in a queue that never drops one. The key state is EASy68K's: a key is down or up from the moment it goes down or comes up, the codes of the last key pressed and the last key released are kept, and a read answers the state as it is then, with no queue or pacing. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use. On M68K a key going down or up can also raise an **IRQ** the program asked for, whose handler reads the key that raised it. See [ADR 0008](./docs/adr/0008-poll-keyboard-and-mouse-input.md) and [ADR 0066](./docs/adr/0066-key-state-changes-at-the-event.md).
+The Peripheral representing keyboard input for a program interacting with the **Screen**, observed as typed characters, as key state, or, on x86, as key events. Typed characters wait in a queue that never drops one. Key events are the downs, ups and repeats of keys in order, each with its time, which an x86 program reads from evdev, each reader's queue holding thousands of them. Codes are the **Reference environment**'s: EASy68K's on M68K and in the **Port map**, Linux's `KEY_*` on x86. The key state behaves as EASy68K's does: a key is down or up from the moment it goes down or comes up, the codes of the last key pressed and the last key released are kept, and a read answers the state as it is then, with no queue or pacing. Its pending typed input also supplies the **Terminal**'s character, string and numeric reads in graphical use, except on x86, whose Terminal is a serial line apart from the Screen ([ADR 0068](./docs/adr/0068-x86-programs-run-on-a-serial-console.md)). On M68K a key going down or up can also raise an **IRQ** the program asked for, whose handler reads the key that raised it. See [ADR 0008](./docs/adr/0008-poll-keyboard-and-mouse-input.md) and [ADR 0066](./docs/adr/0066-key-state-changes-at-the-event.md).
 
 ## Mouse
 
-The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up. Its coordinates share the drawing origin at the top left and are independent of GUI zoom. On M68K a button going down or up, or a move, can also raise an **IRQ** the program asked for.
+The Peripheral representing pointing input for a program interacting with the **Screen**, including mouse buttons and position in the Screen's logical pixels, observed as the current state or as the snapshots taken at the last button down and up; on x86, as the current state or as pointer events, with QEMU's tablet range of 0 to 32767 in place of pixels. Its coordinates share the drawing origin at the top left and are independent of GUI zoom. On M68K a button going down or up, or a move, can also raise an **IRQ** the program asked for.
 
 ## Audio
 
-The Peripheral that plays a program's **Notes** and **Sounds** through its **Reference environment**'s sound services: MARS's and RARS's MIDI services, EASy68K's sound tasks and the **Port map**'s audio group. What a program can observe of it, such as whether EASy68K's standard player is busy, follows **Program time**; muting it never changes what a program observes, and in a **Testcase** it is silent and nothing is ever playing.
+The Peripheral that plays a program's **Notes** and **Sounds** through its **Reference environment**'s sound services: MARS's and RARS's MIDI services, EASy68K's sound tasks and the **Port map**'s audio group. On x86 it plays what a program writes to Linux's sound devices instead: sampled sound to `/dev/dsp`, MIDI messages to a raw MIDI port, and tones to the PC speaker ([x86 devices](./docs/design/x86-devices.md)). What a program can observe of it, such as whether EASy68K's standard player is busy, follows **Program time**; muting it never changes what a program observes, and in a **Testcase** it is silent and nothing is ever playing.
 _Avoid_: sound player, speaker, sound device
 
 ## Note
@@ -157,7 +157,7 @@ _Avoid_: sample buffer, sample RAM (except when comparing with real chips), DMA 
 
 ## Terminal
 
-The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin. Instruction Undo puts the Terminal back as the instruction found it, its output and echo included, and a read it takes back asks again ([ADR 0057](./docs/adr/0057-restore-the-terminal-on-undo.md)).
+The Peripheral owning program output (stdout) and user input requests. Cores reach it in their own dialect: syscalls for M68K, MIPS, RISC-V and x86, **Console port** reads and writes for the Z80. On x86 it is the program's serial line, `ttyS0`, and never shows on the **Screen**. Input requests go through its current **Input Source**; output accumulates as the text the UI displays. Interactive input is typed in the Terminal itself, after the output, and its **Line discipline** decides what each read receives ([ADR 0036](./docs/adr/0036-programs-read-input-typed-in-the-terminal.md)). Interactive answers are echoed into the output like a tty; scripted answers are not, like piped stdin. Instruction Undo puts the Terminal back as the instruction found it, its output and echo included, and a read it takes back asks again ([ADR 0057](./docs/adr/0057-restore-the-terminal-on-undo.md)).
 
 ## Command line
 
@@ -239,7 +239,7 @@ _Avoid_: Self-contained program (the earlier, library-free boundary of ADR 0027,
 
 ## Runtime library
 
-The editor-owned, versioned C standard library and startup code for a **Target**, with its own headers, whose supported functions are a written list. It reaches the **Terminal** and **FileSystem** through the Target's syscalls.
+The editor-owned, versioned C standard library and startup code for a **Target**, with its own headers, whose supported functions are a written list. On x86 every compile also gets the Linux device interfaces beside it, header-only like `<sim.h>`: kernel-shaped headers such as `<linux/fb.h>` and the POSIX calls that open, control and map a device ([ADR 0070](./docs/adr/0070-the-x86-runtime-library-offers-the-linux-device-interfaces.md)). It reaches the **Terminal** and **FileSystem** through the Target's syscalls.
 _Avoid_: libc (when this specific library is meant), runtime
 
 ## Runtime ABI
@@ -249,7 +249,7 @@ _Avoid_: runtime version (when the interface, not a release, is meant)
 
 ## Reference environment
 
-The real simulator or operating system whose behaviour a **Target**'s services match: EASy68K for M68K, MARS for MIPS, RARS for RISC-V, a Linux process on a tty for x86, and the **Port map** itself for the Z80, which has no real counterpart. A service departs from it only through a documented deviation that helps a learner. See [ADR 0035](./docs/adr/0035-environments-match-their-reference.md).
+The real simulator or operating system whose behaviour a **Target**'s services match: EASy68K for M68K, MARS for MIPS, RARS for RISC-V, a Linux process on a tty for x86, whose devices are those of a pinned x86-64 QEMU guest, its raw MIDI port played by FluidSynth ([ADR 0067](./docs/adr/0067-x86-devices-follow-a-qemu-guest.md)), and the **Port map** itself for the Z80, which has no real counterpart. A service departs from it only through a documented deviation that helps a learner. See [ADR 0035](./docs/adr/0035-environments-match-their-reference.md).
 _Avoid_: real world, upstream (when the behaviour, not the source code, is meant)
 
 ## Environment library
@@ -455,7 +455,7 @@ _Avoid_: settings, global settings, user settings
 
 ## Display configuration
 
-The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Program**: unit size, display size and base address, distinct from **Settings**. The **Entry file**'s `@screen` comment supplies the parameters it names over the Program's chosen display; included Files do not supply display configuration.
+The MARS and RARS bitmap display parameters of a MIPS or RISC-V **Program**: unit size, display size and base address; for an x86 Program, the framebuffer's width and height, which its program reads from `/dev/fb0`. Distinct from **Settings**. The **Entry file**'s `@screen` comment supplies the parameters it names over the Program's chosen display; included Files do not supply display configuration.
 _Avoid_: display settings, screen settings, screen config
 
 ## Exam

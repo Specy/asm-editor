@@ -6,6 +6,8 @@ Decision record for the **Audio** Peripheral that [ADR 0035](../adr/0035-environ
 
 Decided on 2026-10-23.
 
+Update 2026-10-31: x86 now has sound through Linux's device files, `/dev/dsp`, a raw MIDI port, `/dev/mixer` and the PC speaker, decided in [x86-devices.md](./x86-devices.md); the x86 row below is kept as it was decided.
+
 | Target       | Covered                                                                                                                                                                                                            | Not covered                                                                                                                                                                                                                                            |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | MIPS, RISC-V | MARS's and RARS's MIDI services 31 (play and return) and 33 (play and wait), with their ranges and defaults; `<sim.h>` gains their functions through the Environment library's one-function-per-service rule       | —                                                                                                                                                                                                                                                      |
