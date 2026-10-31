@@ -109,9 +109,10 @@ export type MarsDisplayGeometry = {
  * Brings a stored display into the ranges the display takes. `cleanDisplay` in `Project.svelte`
  * already makes the five fields finite integers; this is what keeps a hand-edited project file, or
  * a share link from a future version with larger limits, from producing a Screen of no size or of
- * more words than memory holds. A size off MARS's lists is kept: it is not a mistake any more.
+ * more words than memory holds. A size off MARS's lists is kept: it is not a mistake any more. A
+ * field left out, as x86's two-field display leaves out three, is MARS's default.
  */
-export function normalizeMarsDisplay(display: ProjectDisplay | undefined): ProjectDisplay {
+export function normalizeMarsDisplay(display: Partial<ProjectDisplay> | undefined): ProjectDisplay {
     const source = display ?? DEFAULT_PROJECT_DISPLAY
     const defaults = DEFAULT_PROJECT_DISPLAY
     return {
@@ -124,8 +125,13 @@ export function normalizeMarsDisplay(display: ProjectDisplay | undefined): Proje
 }
 
 /** A whole number within `min` and `max`, the nearest one to `value`; `fallback` for a non-number. */
-export function clampSize(value: number, min: number, max: number, fallback: number): number {
-    if (!Number.isFinite(value)) return fallback
+export function clampSize(
+    value: number | undefined,
+    min: number,
+    max: number,
+    fallback: number
+): number {
+    if (value === undefined || !Number.isFinite(value)) return fallback
     return Math.min(max, Math.max(min, Math.round(value)))
 }
 
@@ -179,8 +185,8 @@ export function formatMarsBaseAddress(address: number): string {
  * resolves to wherever the assembler put that label, which is by construction not on the list. The
  * five choices are the popover's menu, not a whitelist. Anything unusable falls back to the default.
  */
-function nearestBaseAddress(value: number): number {
-    if (!Number.isFinite(value)) return DEFAULT_PROJECT_DISPLAY.baseAddress
+function nearestBaseAddress(value: number | undefined): number {
+    if (value === undefined || !Number.isFinite(value)) return DEFAULT_PROJECT_DISPLAY.baseAddress
     //the Core's memory ranges want word aligned addresses, and a label on a `.byte` is not one
     return (Math.trunc(value) & ~3) >>> 0
 }

@@ -1,7 +1,9 @@
 /**
- * EASy68K's key codes, which every environment uses: the M68K adapter needs no mapping for task 19
- * and the Z80 key ports reuse this one documented table
- * ([ADR 0008](../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md)). The codes come from
+ * EASy68K's key codes, which the M68K and the Z80's Port map use: the M68K adapter needs no mapping
+ * for task 19 and the Z80 key ports reuse this one documented table. Each environment uses its
+ * Reference environment's codes, so x86 has Linux's `KEY_*` instead (`linuxKeyCodes.ts`;
+ * [ADR 0008](../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md) and its update of
+ * 2026-10-31). The codes come from
  * EASy68K's [key code page](https://acorn.huininga.nl/pub/projects/CiscOS/_emulators/EASy68Ksource/EASy68K_Help/keyCodes.htm),
  * which is the Windows virtual-key table EASy68K reads through `GetAsyncKeyState`: letters are the
  * ASCII code of their capital form, top-row digits their ASCII code, and everything else is named

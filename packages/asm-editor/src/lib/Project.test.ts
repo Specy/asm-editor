@@ -526,6 +526,25 @@ describe('Programs', () => {
         expect(() => project.setProgramSettings('notes.txt', {})).toThrow(/Entry of no program/)
     })
 
+    it("keeps an x86 Program's display as a width and a height alone", () => {
+        const project = makeProject({
+            language: 'X86',
+            files: { 'main.asm': { encoding: 'plain', content: 'ret' } },
+            programs: {
+                'main.asm': {
+                    settings: {},
+                    testcases: [],
+                    display: { width: '640', unitWidth: 2 } as never
+                }
+            }
+        })
+        expect(project.program('main.asm')?.display).toEqual({ width: 640, height: 240 })
+        project.setProgramDisplay('main.asm', { width: 800, height: 600 })
+        expect(project.program('main.asm')?.display).toEqual({ width: 800, height: 600 })
+        const reloaded = makeProject(JSON.parse(JSON.stringify(project.toObject())))
+        expect(reloaded.program('main.asm')?.display).toEqual({ width: 800, height: 600 })
+    })
+
     it('refuses a change to which Programs there are during a Debug session, but not to their parts', () => {
         const project = twoPrograms()
         const run = project.fileSystem.beginSession()

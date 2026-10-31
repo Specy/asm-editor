@@ -107,6 +107,10 @@ import { downloadReason } from './x86Downloads'
 import type { Termination } from '#lib/languages/termination.ts'
 import { X86_INSTRUCTIONS } from './generated/x86Instructions'
 import { x86FormSupport } from './x86Support'
+import { DEFAULT_X86_DISPLAY, normalizeX86Display, type X86Display } from './x86Display'
+import { readX86ScreenDirective, type X86DisplayConfiguration } from './x86ScreenDirective'
+import type { MarsDisplayOrigin } from '#lib/languages/mars/marsDisplay.ts'
+import type { ProgramDisplay } from '#lib/languages/programDisplay.ts'
 
 /**
  * Initial instructions/ms for the scheduler's adaptive estimate. Chromium measurements with
@@ -378,6 +382,14 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     /** Zydis, for naming an instruction the Core could not run. */
     private decoder: ListingDecoder | undefined
     /**
+     * The framebuffer's size, the Program's Display configuration or what the last Build's
+     * `@screen` comment asked for ([x86 devices](../../../../../../docs/design/x86-devices.md),
+     * "Screen size and format"). Unset while the base constructor runs.
+     */
+    private display: X86Display = { ...DEFAULT_X86_DISPLAY }
+    /** Whether the last Build read it out of a `@screen` comment instead of the user's choice. */
+    private displayOrigin: MarsDisplayOrigin = 'user'
+    /**
      * Patches of the running Executable's code from its Listing, written as Pokes
      * ([binary-import.md](../../../../../../docs/design/binary-import.md), decision 13), and the
      * Listing lines they changed, read again at every refresh.
@@ -467,7 +479,53 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
         }
         this._undoDepth = () => (this.core === core ? core.getUndoDepth() : 0)
+        this.display = normalizeX86Display(options.display)
+        this.applyDisplayMode()
         if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
+    }
+
+    /**
+     * The Display section's choice, the framebuffer's size for the next program: the Screen takes
+     * it at once, blank. The caller stores the same value in the Program so it comes back with it.
+     */
+    setDisplay(display: ProgramDisplay): void {
+        this.display = normalizeX86Display(display)
+        //a hand edit wins until the next Build reads the directive again
+        this.displayOrigin = 'user'
+        this.applyDisplayMode()
+    }
+
+    /** What the framebuffer's size is, and whether the program's source asked for it. */
+    getDisplay(): X86DisplayConfiguration {
+        return { display: this.display, origin: this.displayOrigin }
+    }
+
+    /**
+     * Build, Stop and dispose reset the Screen to the language default; the framebuffer's size is
+     * the Program's, so it comes straight back, blank, as MARS's display does.
+     *
+     * Guarded: the base constructor clears before this class's fields exist.
+     */
+    clear(): void {
+        super.clear()
+        if (this.display) this.applyDisplayMode()
+    }
+
+    /**
+     * Gives the Screen the framebuffer's size, as a memory-backed image: what a program draws on
+     * `/dev/fb0` is guest memory, which the Core's own history restores, so the Screen journals
+     * nothing.
+     *
+     * Integration seam (x86-devices-plan.md, M6): nothing copies the picture in yet. The Core's
+     * `getFramebuffer().visible()` goes into the Screen with `syncFramebuffer` at the end of every
+     * slice, before every wait, at `framebufferPresent` and after Undo (`_resyncScreenFromMemory`).
+     */
+    private applyDisplayMode(): void {
+        this._peripherals.screen.useFramebuffer(this.display.width, this.display.height)
+        // Integration seam (x86-devices-plan.md, M5 and M6): `@specy/x86` 8.0.0's
+        // `setDisplayMode` makes this the machine's `video=`, the size `/dev/fb0` reports, set
+        // before the program starts. Until the Core has it, nothing tells the Core:
+        // this.core?.setDisplayMode({ width: this.display.width, height: this.display.height })
     }
 
     /** Streaming decoding belongs to the Terminal; native callbacks already exclude tool output. */
@@ -673,11 +731,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         if (!this.core && !this.diagnosticCore) return []
         //what stops the Build stops the check too, and `semanticCheck` reports it the same way
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
+        //what a Build would say of the `@screen` comment, so its squiggle is there while it is typed
+        const screen = readX86ScreenDirective(sources, this.display).diagnostics
         const currentCheck = this.checkCodeQueue.then(async () => {
             await prepareX86Runtime(sources)
             const checker = await this.getDiagnosticCore()
             const errors = await checker.checkProject(x86CoreProject(sources))
-            return errors.map((error) => mapCoreDiagnosticToProject(sources, error))
+            return [...screen, ...errors.map((error) => mapCoreDiagnosticToProject(sources, error))]
         })
         this.checkCodeQueue = currentCheck.catch(() => undefined).then(() => undefined)
         return currentCheck
@@ -730,6 +790,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         //this is the order `_checkCode` takes too, so the live check and the Build agree
         const kind = executableKind(sources.files[sources.entry])
         if (kind !== 'none') {
+            //an Executable has no comments: it runs on the Program's display
+            this.displayOrigin = 'user'
             if (kind !== 'supported')
                 return {
                     ok: false,
@@ -778,15 +840,24 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         //sources that could not be resolved, such as Generated assembly that needs a Runtime
         //library x86 does not have, are reported as GenericEmulator reports any ProjectFormatError
         if (sources.assemblyError) throw new ProjectFormatError(sources.assemblyError)
+        //the size is read before the first instruction, so it and a Testcase alike run on the
+        //display the source asked for
+        const screen = readX86ScreenDirective(sources, this.display)
+        this.display = screen.display
+        this.displayOrigin = screen.origin
+        this.applyDisplayMode()
         const linked = linksX86StartUnit(sources)
         const result = await core.compileProject(x86CoreProject(sources), {
             onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
         })
         // Carried on both outcomes: a build that succeeded with warnings is the
         // case where they are worth reading.
-        const diagnostics = result.diagnostics.map((diagnostic) =>
-            coreDiagnosticToDiagnostic(sources, diagnostic)
-        )
+        const diagnostics = [
+            ...screen.diagnostics,
+            ...result.diagnostics.map((diagnostic) =>
+                coreDiagnosticToDiagnostic(sources, diagnostic)
+            )
+        ]
         if (!('errors' in result)) {
             //the start unit is no File of the Project, so the debugger reads it from here
             const library = sources.runtimeAbi

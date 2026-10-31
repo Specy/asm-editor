@@ -14,6 +14,7 @@
     import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
     import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
     import type { Mouse, MouseButton } from '#lib/languages/peripherals/Mouse.ts'
+    import type { X86Input } from '#lib/languages/peripherals/x86Input.ts'
     import type { ScreenHeader } from './screenHeader'
 
     /**
@@ -25,12 +26,20 @@
      * repainted from an animation frame that compares the Screen's version counter, the upstream
      * TRS-80 pattern that keeps the machine from ever waiting for a frame
      * ([ADR 0006](../../../../../../../docs/adr/0006-screen-double-buffering.md)).
+     *
+     * On x86 the keys and the pointer go to `x86Input` instead, as the Linux input events the
+     * program reads from `/dev/input`: physical keys with the browser's repeats, the pointer
+     * unfloored, and the wheel, which the focused Screen keeps from scrolling the page. They never
+     * reach the program's standard input, whose Terminal is a serial line apart from the Screen
+     * ([ADR 0068](../../../../../../../docs/adr/0068-x86-programs-run-on-a-serial-console.md)).
      */
 
     interface Props {
         screen: Screen
         keyboard: Keyboard
         mouse: Mouse
+        /** x86's input devices, which take the keys and the pointer in place of the Keyboard and Mouse. */
+        x86Input?: X86Input
         /** The environment this Screen belongs to, shown in the header. */
         name?: string
         style?: string
@@ -65,6 +74,7 @@
         screen,
         keyboard,
         mouse,
+        x86Input,
         name = 'Screen',
         style = '',
         configuration,
@@ -75,6 +85,24 @@
     }: Props = $props()
 
     const MOUSE_BUTTONS: Record<number, MouseButton> = { 0: 'left', 1: 'middle', 2: 'right' }
+
+    //x86 reads the keys and the pointer as Linux input events, every other Target as its Keyboard
+    //and Mouse
+    const keys = $derived(x86Input ?? keyboard)
+    const pointer = $derived(x86Input ?? mouse)
+    //where a focused Screen's input goes, which a learner who clicks the Screen and then types at a
+    //`scanf` needs to know on x86 (ADR 0068)
+    const focusHint = $derived(
+        x86Input
+            ? {
+                  label: "click to send keys and the pointer to the program's input devices",
+                  title: "Click to send keys and the pointer to the program's input devices, not to its standard input; Esc to release them"
+              }
+            : {
+                  label: 'click to send keyboard and mouse input to the program',
+                  title: 'Click to send keyboard and mouse input to the program, Esc to release it'
+              }
+    )
 
     let canvas: HTMLCanvasElement | undefined = $state()
     //the stage's content box rather than its clientWidth, which counts padding: the padding is the
@@ -236,12 +264,13 @@
         //a drag that started inside keeps reporting until the button comes back up, wherever the
         //pointer goes (ADR 0008)
         canvas?.setPointerCapture(event.pointerId)
-        mouse.buttonDown(button, x, y)
+        pointer.buttonDown(button, x, y)
     }
 
     function handlePointerMove(event: PointerEvent) {
         const { x, y } = logicalPosition(event)
-        mouse.moveTo(x, y)
+        //x86's tablet takes the position unfloored, finer than a pixel on a zoomed Screen
+        pointer.moveTo(x, y)
     }
 
     function handlePointerUp(event: PointerEvent) {
@@ -250,14 +279,27 @@
         if (canvas?.hasPointerCapture(event.pointerId))
             canvas.releasePointerCapture(event.pointerId)
         if (!button) return
-        mouse.buttonUp(button, x, y)
+        pointer.buttonUp(button, x, y)
     }
 
     function handlePointerCancel(event: PointerEvent) {
         if (canvas?.hasPointerCapture(event.pointerId))
             canvas.releasePointerCapture(event.pointerId)
         //the gesture was taken away mid-drag, so no button release is coming for it
-        mouse.releaseAll()
+        pointer.releaseAll()
+    }
+
+    /**
+     * x86's wheel, a notch at a time to the program's tablet. The focused Screen keeps it from
+     * scrolling the page, which is why the listener is not passive; unfocused, the wheel scrolls the
+     * page as it always does and the program hears nothing of it, as with keys.
+     */
+    function handleWheel(event: WheelEvent) {
+        if (!x86Input || !focused) return
+        event.preventDefault()
+        //`deltaMode` before `deltaY`: Firefox reports pixels to a page that reads `deltaY` first
+        const deltaMode = event.deltaMode
+        x86Input.wheel({ deltaMode, deltaY: event.deltaY })
     }
 
     /**
@@ -287,17 +329,19 @@
             canvas?.blur()
             return
         }
-        keyboard.keyDown(event)
+        keys.keyDown(event)
         routeKey(event, true)
     }
 
     function handleKeyUp(event: KeyboardEvent) {
         if (event.code === 'Escape') return
-        keyboard.keyUp(event)
+        keys.keyUp(event)
         routeKey(event, false)
     }
 
     function handlePaste(event: ClipboardEvent) {
+        //evdev carries keys, not text: a paste has nowhere to go on x86
+        if (x86Input) return
         const text = event.clipboardData?.getData('text')
         if (!text) return
         event.preventDefault()
@@ -309,6 +353,7 @@
         //the release event is delivered to whoever has focus now (ADR 0008)
         keyboard.releaseAll()
         mouse.releaseAll()
+        x86Input?.releaseAll()
     }
 
     function handleBlur() {
@@ -340,6 +385,14 @@
             focused = false
             releaseInput()
         }
+    })
+
+    $effect(() => {
+        //added by hand, because only a listener that is not passive may keep the page from scrolling
+        const target = canvas
+        if (!target || !x86Input) return
+        target.addEventListener('wheel', handleWheel, { passive: false })
+        return () => target.removeEventListener('wheel', handleWheel)
     })
 
     $effect(() => {
@@ -458,8 +511,8 @@
                 height={logicalHeight}
                 style="width: {logicalWidth * zoom}px; height: {logicalHeight * zoom}px;"
                 tabindex="0"
-                aria-label="{name} screen, click to send keyboard and mouse input to the program"
-                title="Click to send keyboard and mouse input to the program, Esc to release it"
+                aria-label="{name} screen, {focusHint.label}"
+                title={focusHint.title}
                 onfocus={() => (focused = true)}
                 onblur={handleBlur}
                 onkeydown={handleKeyDown}

@@ -25,7 +25,14 @@
     import { terminationSummary } from '#lib/languages/termination.ts'
     import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
     import { resolveProjectSettings, undoHistorySize } from '#lib/projectSettings.ts'
-    import { rewriteScreenDirective } from '#lib/languages/mars/screenDirective.ts'
+    import {
+        displayActualSizeZoom,
+        isMarsDisplay,
+        programDisplay,
+        rewriteProgramScreenDirective,
+        screenDirectiveFile,
+        type ProgramDisplay
+    } from '#lib/languages/programDisplay.ts'
     import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE, TESTCASE_INSTRUCTION_LIMIT } from '#lib/Config.ts'
@@ -67,10 +74,7 @@
     } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import ScreenRenderer from '#cmp/specific/project/screen/ScreenRenderer.svelte'
     import ScreenDisplayConfiguration from '#cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
-    import {
-        DEFAULT_PROJECT_DISPLAY,
-        type MarsDisplayOrigin
-    } from '#lib/languages/mars/marsDisplay.ts'
+    import type { MarsDisplayOrigin } from '#lib/languages/mars/marsDisplay.ts'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
     import CollapsibleSection from '#cmp/specific/workbench/CollapsibleSection.svelte'
     import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
@@ -309,13 +313,13 @@
             viewport.deviceClass !== 'phone'
     )
     //A shared editor only shows the Screen when its caller asks for it. Documentation playgrounds
-    //derive that explicit request from their `screen` fence flag; x86 has no graphics device.
+    //derive that explicit request from their `screen` fence flag.
     let showScreen = $derived((showScreenProp ?? false) && languageHasScreen(language) && revealed)
     //no Project here, so a Playground runs on the language's default Settings
     const settings = $derived(resolveProjectSettings(language, undefined))
     //no project to save it in here, so the lecture, exam, embed and chat surfaces get the popover
-    //with the display living for as long as the page does. Only MIPS and RISC-V have one at all
-    let display = $state(DEFAULT_PROJECT_DISPLAY)
+    //with the display living for as long as the page does. Only MIPS, RISC-V and x86 have one
+    let display = $state<ProgramDisplay>(untrack(() => programDisplay(language, undefined)))
     /** Whether the display on screen came from the program's own `@screen` comment, see `syncDisplay`. */
     let displayOrigin: MarsDisplayOrigin = $state('user')
     let displayBaseLabel: string | undefined = $state(undefined)
@@ -478,7 +482,7 @@
 
     /** Sound is unlocked inside the press that starts a Build, Run or Step, as the Workbench does. */
     function wakeSound() {
-        if (language !== 'X86') wakeAudio()
+        wakeAudio()
     }
 
     async function buildCode() {
@@ -795,7 +799,8 @@
         screen={emulator.peripherals.screen}
         keyboard={emulator.peripherals.keyboard}
         mouse={emulator.peripherals.mouse}
-        actualSizeZoom={configurableDisplay ? display.unitWidth : 1}
+        x86Input={language === 'X86' ? emulator.peripherals.x86Input : undefined}
+        actualSizeZoom={configurableDisplay ? displayActualSizeZoom(display) : 1}
         style={`height: ${height}; flex: none;${headerless ? ' border-radius: 0;' : ''}`}
         {headerless}
         onHeader={headerless ? (header) => (screenHeader = header) : undefined}
@@ -809,18 +814,38 @@
                     onChange={(next) => {
                         //the program's own @screen comment, when it has one, is rewritten to say
                         //what was chosen, as on the project page; a program without one keeps the
-                        //choice for as long as the page lives
+                        //choice for as long as the page lives. On x86 a compiled program's comment
+                        //is in its C or C++ source
+                        const path =
+                            session && programEntry !== undefined
+                                ? screenDirectiveFile(
+                                      language,
+                                      session.project.files,
+                                      programEntry,
+                                      session.project.compilations.find(
+                                          (record) => record.outputPath === programEntry
+                                      )?.sourcePath
+                                  )
+                                : undefined
                         const source = session
-                            ? programEntry === undefined
+                            ? path === undefined
                                 ? ''
-                                : (session.project.files[programEntry]?.content ?? '')
+                                : (session.project.files[path]?.content ?? '')
                             : code
-                        const rewritten = rewriteScreenDirective(source, display, next)
-                        const baseChanged = next.baseAddress !== display.baseAddress
+                        const rewritten = rewriteProgramScreenDirective(
+                            language,
+                            path ?? emulator.entry,
+                            source,
+                            display,
+                            next
+                        )
+                        const baseChanged =
+                            isMarsDisplay(next) &&
+                            isMarsDisplay(display) &&
+                            next.baseAddress !== display.baseAddress
                         if (rewritten !== null) {
                             if (!session) code = rewritten
-                            else if (programEntry !== undefined)
-                                session.edit(programEntry, rewritten)
+                            else if (path !== undefined) session.edit(path, rewritten)
                         }
                         display = next
                         displayOrigin = rewritten !== null ? 'directive' : 'user'

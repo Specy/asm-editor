@@ -1,0 +1,148 @@
+/**
+ * The Screen panel's x86 mode ([x86 devices](../../../../../../../docs/design/x86-devices.md), "The
+ * keyboard device" and "The pointer"): keys and the pointer go to x86's input devices as Linux
+ * input events instead of to the Keyboard and Mouse, the focused Screen keeps the wheel from
+ * scrolling the page, focus loss lifts what is held, and the focus hint says where the input goes.
+ * jsdom lays nothing out, so the canvas is given the box it would have at twice its size.
+ */
+import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
+import { flushSync, mount, unmount } from 'svelte'
+import ScreenRenderer from './ScreenRenderer.svelte'
+import { createInjectedPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
+import {
+    ABS_X,
+    EV_ABS,
+    EV_KEY,
+    EV_REL,
+    REL_WHEEL,
+    type X86InputDeviceId,
+    type X86InputEvent
+} from '#lib/languages/peripherals/x86Input.ts'
+import { LINUX_KEY } from '#lib/languages/peripherals/linuxKeyCodes.ts'
+
+beforeEach(() => {
+    //jsdom has no canvas, no pointer capture and no layout
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    HTMLElement.prototype.setPointerCapture ??= function () {}
+    HTMLElement.prototype.releasePointerCapture ??= function () {}
+    HTMLElement.prototype.hasPointerCapture ??= () => false
+    vi.stubGlobal(
+        'ResizeObserver',
+        class {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        }
+    )
+})
+
+const mounted: (() => void)[] = []
+afterEach(() => {
+    mounted.splice(0).forEach((dispose) => dispose())
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    document.body.replaceChildren()
+})
+
+function panel({ x86 = true } = {}) {
+    const peripherals = createInjectedPeripherals(x86 ? 'X86' : 'M68K')
+    const reports: [X86InputDeviceId, X86InputEvent[]][] = []
+    peripherals.x86Input.setSink((device, events) => reports.push([device, events]))
+    const target = document.createElement('div')
+    document.body.append(target)
+    const app = mount(ScreenRenderer, {
+        target,
+        props: {
+            screen: peripherals.screen,
+            keyboard: peripherals.keyboard,
+            mouse: peripherals.mouse,
+            x86Input: x86 ? peripherals.x86Input : undefined
+        }
+    })
+    flushSync()
+    mounted.push(() => unmount(app))
+    const canvas = target.querySelector('canvas')!
+    const { width, height } = peripherals.screen.getSize()
+    canvas.getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: width * 2, height: height * 2 }) as DOMRect
+    return { canvas, peripherals, reports }
+}
+
+function key(type: 'keydown' | 'keyup', code: string, repeat = false) {
+    return new KeyboardEvent(type, { code, key: code, repeat, bubbles: true, cancelable: true })
+}
+
+it('sends keys to the input devices and not to the Keyboard on x86', () => {
+    const { canvas, peripherals, reports } = panel()
+    canvas.focus()
+    canvas.dispatchEvent(key('keydown', 'KeyA'))
+    canvas.dispatchEvent(key('keydown', 'KeyA', true))
+    canvas.dispatchEvent(key('keyup', 'KeyA'))
+    expect(reports).toEqual([
+        ['keyboard', [{ type: EV_KEY, code: LINUX_KEY.A, value: 1 }]],
+        ['keyboard', [{ type: EV_KEY, code: LINUX_KEY.A, value: 2 }]],
+        ['keyboard', [{ type: EV_KEY, code: LINUX_KEY.A, value: 0 }]]
+    ])
+    expect(peripherals.keyboard.hasTypedInput()).toBe(false)
+    expect(peripherals.keyboard.lastKeys()).toEqual({ down: 0, up: 0 })
+})
+
+it('reports the pointer unfloored, scaled over the whole Screen', () => {
+    const { canvas, reports } = panel()
+    //half a Screen pixel to the right of the middle, on a Screen shown at twice its size
+    canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: 321, clientY: 0, bubbles: true }))
+    expect(reports[0]).toEqual([
+        'tablet',
+        [
+            { type: EV_ABS, code: ABS_X, value: Math.floor((160.5 * 32767) / 320) },
+            expect.objectContaining({ value: 0 })
+        ]
+    ])
+})
+
+it('keeps the wheel from scrolling the page only while the Screen is focused', () => {
+    const { canvas, reports } = panel()
+    const unfocused = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true })
+    canvas.dispatchEvent(unfocused)
+    expect(unfocused.defaultPrevented).toBe(false)
+    expect(reports).toEqual([])
+
+    canvas.focus()
+    const focused = new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true })
+    canvas.dispatchEvent(focused)
+    expect(focused.defaultPrevented).toBe(true)
+    expect(reports).toEqual([['tablet', [{ type: EV_REL, code: REL_WHEEL, value: 1 }]]])
+})
+
+it('lifts held keys and buttons when the Screen loses focus', () => {
+    const { canvas, reports } = panel()
+    canvas.focus()
+    canvas.dispatchEvent(key('keydown', 'ShiftRight'))
+    canvas.dispatchEvent(
+        new MouseEvent('pointerdown', { button: 0, bubbles: true, cancelable: true })
+    )
+    reports.length = 0
+    canvas.blur()
+    expect(reports.map(([, events]) => events[0].value)).toEqual([0, 0])
+    expect(reports.map(([device]) => device)).toEqual(['keyboard', 'tablet'])
+})
+
+it('says where a focused Screen sends its input', () => {
+    const { canvas } = panel()
+    expect(canvas.title).toMatch(/input devices, not to its standard input/)
+    const other = panel({ x86: false })
+    expect(other.canvas.title).toBe(
+        'Click to send keyboard and mouse input to the program, Esc to release it'
+    )
+})
+
+it('keeps the Keyboard and Mouse paths for every other Target', () => {
+    const { canvas, peripherals, reports } = panel({ x86: false })
+    canvas.focus()
+    canvas.dispatchEvent(key('keydown', 'KeyA'))
+    const wheel = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true })
+    canvas.dispatchEvent(wheel)
+    expect(peripherals.keyboard.lastKeys().down).toBe(0x41)
+    expect(wheel.defaultPrevented).toBe(false)
+    expect(reports).toEqual([])
+})

@@ -1,5 +1,5 @@
 import { numberToByteSlice } from '#cmp/specific/project/memory/memoryTabUtils.ts'
-import type { MarsDisplayConfiguration, ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
+import type { ProgramDisplay, ProgramDisplayConfiguration } from '#lib/languages/programDisplay.ts'
 import type { InjectedPeripheralOptions } from '#lib/languages/peripherals/peripheralSet.ts'
 import type { Termination } from '#lib/languages/termination.ts'
 import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
@@ -820,11 +820,12 @@ export type EmulatorSettings = {
      */
     peripherals?: InjectedPeripheralOptions
     /**
-     * MIPS and RISC-V only: MARS's and RARS's five bitmap-display parameters, from the project the
-     * Emulator was opened for. Every other language configures its Screen from the program itself,
-     * and an Emulator that is given none starts from MARS's defaults.
+     * MIPS, RISC-V and x86: the Display configuration of the Program the Emulator was opened for,
+     * MARS's and RARS's five bitmap-display parameters or x86's framebuffer size. The M68K and the
+     * Z80 configure their Screen from the program itself, and an Emulator that is given none starts
+     * from its Target's defaults.
      */
-    display?: ProjectDisplay
+    display?: ProgramDisplay
     /**
      * The Screen undo journal's budget in megabytes, a Setting of the Project the Emulator was
      * opened for ([ADR 0014](../../../../../docs/adr/0014-settings-split-by-effect.md)); the language's
@@ -940,11 +941,12 @@ export type BaseEmulatorActions = {
     /** The same for the FileSystem's Undo budget, likewise read by the next Build's session. */
     setFileSystemHistoryBudgetMb: (megabytes: number) => void
     /**
-     * MIPS and RISC-V only: applies MARS's five bitmap-display parameters, re-syncing the Screen
-     * from memory at once as the tool does. Absent on every other Emulator, whose Screen is the
-     * program's to configure.
+     * MIPS, RISC-V and x86: applies a Display configuration at once, MARS's five bitmap-display
+     * parameters with a re-sync from memory as the tool does, or x86's framebuffer size for the next
+     * program. Each Emulator reads the shape of its own Target. Absent on the M68K and the Z80, whose
+     * Screen is the program's to configure.
      */
-    setDisplay?: (display: ProjectDisplay) => void
+    setDisplay?: (display: ProgramDisplay) => void
     /**
      * x86 only: the Annotations the File of the Executable a Debug session runs has now, which
      * its running Listing is made again with ([annotations-and-search.md](../../../../../docs/design/annotations-and-search.md),
@@ -952,9 +954,9 @@ export type BaseEmulatorActions = {
      */
     setExecutableAnnotations?: (path: string, annotations: Annotations | undefined) => void
     /**
-     * MIPS and RISC-V only: the display the Screen is configured with right now, and whether the
+     * MIPS, RISC-V and x86: the display the Screen is configured with right now, and whether the
      * last Build read it out of the program's own `@screen` comment directive rather than from the
      * user. The GUI pulls it after a Build so the popover shows what the source asked for.
      */
-    getDisplay?: () => MarsDisplayConfiguration
+    getDisplay?: () => ProgramDisplayConfiguration
 }

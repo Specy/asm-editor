@@ -61,7 +61,7 @@ describe('undoHistorySize', () => {
 })
 
 describe('projectSettingsFor', () => {
-    it('lists only the Settings that apply: x86 has no Screen, so no Screen budget', () => {
+    it('lists only the Settings that apply: x86 draws in memory, so no Screen budget', () => {
         expect(projectSettingsFor('X86').map((setting) => setting.id)).toEqual([
             'linkRuntimeLibrary',
             'undoEnabled',

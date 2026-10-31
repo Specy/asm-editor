@@ -155,7 +155,9 @@ export const PROJECT_SETTINGS: {
         type: 'number',
         //provisional default, see the measurement rows of docs/manual-verification.md
         defaultFor: () => 64,
-        appliesTo: languageHasScreen,
+        //x86's Screen is memory-backed: what a program draws is guest memory, which the Core's own
+        //history restores, so its Screen journals nothing and the budget would bound nothing
+        appliesTo: (language) => languageHasScreen(language) && language !== 'X86',
         accepts: wholeNumber
     },
     fileSystemHistoryBudgetMb: {
