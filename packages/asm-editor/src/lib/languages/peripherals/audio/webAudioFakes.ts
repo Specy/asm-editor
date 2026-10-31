@@ -1,4 +1,5 @@
-import type { EngineVoice, SynthesizerEngine } from './synthesizerEngine'
+import type { MidiPortSynthesizer } from './midiPort'
+import type { EngineVoice, MidiPorts, SynthesizerEngine } from './synthesizerEngine'
 
 /**
  * Stand-ins for the parts of Web Audio and of the synthesizer that the browser output uses, for its
@@ -10,6 +11,11 @@ export class FakeParam {
     readonly targets: number[] = []
 
     setTargetAtTime(value: number): void {
+        this.targets.push(value)
+        this.value = value
+    }
+
+    setValueAtTime(value: number): void {
         this.targets.push(value)
         this.value = value
     }
@@ -140,5 +146,42 @@ export class FakeEngine implements SynthesizerEngine {
         const voice = new FakeVoice(what)
         this.voices.push(voice)
         return voice
+    }
+}
+
+/** A MIDI port synthesizer that logs what it is sent, with the time it is due. */
+export class FakeMidiPort implements MidiPortSynthesizer {
+    readonly sent: { message: number[]; time: number }[] = []
+    released = false
+    voices = 0
+
+    constructor(readonly ready: Promise<void> | null = null) {}
+
+    whenReady(): Promise<void> | null {
+        return this.ready
+    }
+
+    send(message: Uint8Array, time: number): void {
+        this.sent.push({ message: [...message], time })
+    }
+
+    sounding(): boolean {
+        return this.voices > 0
+    }
+
+    release(): void {
+        this.released = true
+    }
+}
+
+export class FakeMidiPorts implements MidiPorts {
+    readonly lent: FakeMidiPort[] = []
+    /** What the next port lent answers to `whenReady`. */
+    ready: Promise<void> | null = null
+
+    take(): FakeMidiPort {
+        const port = new FakeMidiPort(this.ready)
+        this.lent.push(port)
+        return port
     }
 }

@@ -23,10 +23,11 @@ type Processor = {
 }
 
 let Processor: new () => Processor
+const scope = globalThis as Record<string, unknown>
 
 beforeAll(async () => {
-    const scope = globalThis as Record<string, unknown>
     scope.sampleRate = 48_000
+    scope.currentTime = 0
     scope.AudioWorkletProcessor = class {
         readonly port = new FakePort()
     }
@@ -101,6 +102,27 @@ describe('the chip worklet', () => {
         const broken = { type: 'synthUpload', offset: 0, bytes: null } as unknown as ChipCommand
         post(processor, [broken, SINE(100)])
         expect(peak(render(processor, 4).out)).toBeGreaterThan(0.1)
+    })
+
+    it("plays x86's PC speaker at the time each tone is due, and silences it at a program's end", () => {
+        const processor = new Processor()
+        post(processor, [
+            { type: 'speaker', at: 0.01, hz: 1000 },
+            { type: 'speaker', at: 1, hz: 0 }
+        ])
+        scope.currentTime = 0
+        expect(peak(render(processor).out)).toBe(0)
+        scope.currentTime = 0.02
+        expect(peak(render(processor).out)).toBeGreaterThan(0.2)
+        expect(processor.port.posted).toEqual([{ type: 'audible', audible: true }])
+        post(processor, [{ type: 'speakerCut', after: 0.5 }])
+        scope.currentTime = 1.5
+        //the silence was cut, so the tone plays on until the chips are released
+        expect(peak(render(processor).out)).toBeGreaterThan(0.2)
+        post(processor, [{ type: 'releaseChips' }])
+        expect(peak(render(processor).out)).toBe(0)
+        expect(processor.port.posted.at(-1)).toEqual({ type: 'audible', audible: false })
+        scope.currentTime = 0
     })
 
     it('ends once disposed of', () => {

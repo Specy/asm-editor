@@ -45,10 +45,9 @@
     const injectedPeripherals = untrack(() =>
         createInjectedPeripherals(language, settings?.peripherals)
     )
-    //the page's sound, which an Audio made outside a page never gets; x86 plays nothing
-    if (untrack(() => language) !== 'X86') {
-        injectedPeripherals.audio.setOutput(createBrowserAudioOutput())
-    }
+    //the page's sound, which an Audio made outside a page never gets; it loads nothing until the
+    //program first sounds, so a silent program, on x86 as anywhere, costs no more than this object
+    injectedPeripherals.audio.setOutput(createBrowserAudioOutput())
     //mute and volume are Preferences, which every Emulator on the page shares
     $effect(() => {
         setAudioPreferences({
