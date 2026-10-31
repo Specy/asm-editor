@@ -175,7 +175,7 @@ On a machine with QEMU, outside the repository except for the recorded results:
 ### M7: The editor's input
 
 - `linuxKeyCodes.ts`: `KeyboardEvent.code` to `KEY_*` and the AT keyboard's scan codes for `MSC_SCAN`, left and right modifiers apart, keypad codes fixed; `keyCodes.ts`'s header corrected.
-- `ScreenRenderer`: an x86 mode that reports physical keys with their times and the browser's repeats, unfloored pointer positions mapped as QEMU maps them (⌊x × 32767 ÷ width⌋), and a wheel handler that keeps the page from scrolling; focus and window loss lift keys and buttons.
+- `ScreenRenderer`: an x86 mode that reports physical keys with their times and the browser's repeats, pointer positions mapped as QEMU maps them (⌊x × 32767 ÷ width⌋ of the whole pixel, corrected in M10: first unfloored), and a wheel handler that keeps the page from scrolling; focus and window loss lift keys and buttons.
 - The adapter delivers events to the Core and never in a Testcase.
 - The Terminal's raw mode: keys sent as typed, special keys as escape sequences, echo only under `ECHO`, Ctrl+C and Ctrl+\ as signals under `ISIG`, Ctrl+Shift+C to copy.
 - The Testcase message for a wait only a device could end.

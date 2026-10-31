@@ -17,8 +17,8 @@ import type { MouseButton, MouseScreen } from './Mouse'
  *   it is down is a repeat, the AT keyboard driver's rule, and a key that comes up without having
  *   gone down sends nothing, as the input core drops it;
  * - a pointer move is `EV_ABS` `ABS_X` and `ABS_Y`, for the axes that changed, from 0 to 32767
- *   across the whole Screen as QEMU scales them, ⌊x × 32767 ÷ width⌋ of the unfloored logical
- *   position. Positions are clamped to the Screen, so a drag past an edge pins that axis
+ *   across the whole Screen as QEMU scales them, ⌊x × 32767 ÷ width⌋ of the whole logical pixel
+ *   the pointer is on. Positions are clamped to the Screen, so a drag past an edge pins that axis
  *   ([ADR 0008](../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md));
  * - a button is `EV_KEY` `BTN_LEFT`, `BTN_RIGHT` or `BTN_MIDDLE`, after a move to where it happened;
  * - a wheel notch is `EV_REL` `REL_WHEEL`, +1 away from the user and -1 towards.
@@ -111,14 +111,20 @@ export function wheelNotches(event: X86WheelEventLike): number {
 }
 
 /**
- * One axis of the tablet, as QEMU scales a window position: the position clamped to the Screen,
- * `[0, size)`, so a value never reaches 32767.
+ * One axis of the tablet, as QEMU scales a window position: the pixel the position is on, clamped
+ * to the Screen, `[0, size - 1]`, so a value never reaches 32767.
+ *
+ * QEMU's front-ends hand the tablet whole pixels of the guest's display, and the conversion a
+ * program makes, `(value × size + 32766) ÷ 32767`, gives back exactly that pixel. A position finer
+ * than a pixel, kept on a zoomed Screen, would come back as the next pixel for all but the first
+ * hundredth of each one, so the brush of a paint program would land beside the pointer.
  */
 export function tabletAxis(position: number, size: number): number {
     //QEMU's answer for a window of no size, which a Screen never is
     if (!(size >= 1)) return Math.floor(TABLET_AXIS_MAX / 2)
-    const value = Number.isFinite(position) ? Math.floor((position * TABLET_AXIS_MAX) / size) : 0
-    return Math.min(TABLET_AXIS_MAX - 1, Math.max(0, value))
+    const last = Math.ceil(size) - 1
+    const pixel = Number.isFinite(position) ? Math.min(last, Math.max(0, Math.floor(position))) : 0
+    return Math.floor((pixel * TABLET_AXIS_MAX) / size)
 }
 
 export type X86InputOptions = {
@@ -173,7 +179,7 @@ export class X86Input {
 
     // ------------------------------------------------------------- pointer
 
-    /** The pointer moved, in unfloored logical Screen pixels. A move within one tablet unit is none. */
+    /** The pointer moved, in logical Screen pixels. A move within one pixel is none. */
     moveTo(x: number, y: number): void {
         if (!this.sink) return
         const { width, height } = this.screen.getSize()

@@ -28,8 +28,9 @@
      * ([ADR 0006](../../../../../../../docs/adr/0006-screen-double-buffering.md)).
      *
      * On x86 the keys and the pointer go to `x86Input` instead, as the Linux input events the
-     * program reads from `/dev/input`: physical keys with the browser's repeats, the pointer
-     * unfloored, and the wheel, which the focused Screen keeps from scrolling the page. They never
+     * program reads from `/dev/input`: physical keys with the browser's repeats, the pointer on
+     * whole pixels as QEMU reports it, and the wheel, which the focused Screen keeps from scrolling
+     * the page. They never
      * reach the program's standard input, whose Terminal is a serial line apart from the Screen
      * ([ADR 0068](../../../../../../../docs/adr/0068-x86-programs-run-on-a-serial-console.md)).
      */
@@ -285,7 +286,7 @@
 
     function handlePointerMove(event: PointerEvent) {
         const { x, y } = logicalPosition(event)
-        //x86's tablet takes the position unfloored, finer than a pixel on a zoomed Screen
+        //x86's tablet takes the pixel the position is on, as QEMU does (`tabletAxis`)
         pointer.moveTo(x, y)
     }
 

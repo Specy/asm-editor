@@ -63,26 +63,40 @@ describe('keys', () => {
 })
 
 describe('the pointer', () => {
-    it('scales a position over the whole Screen to 0..32767 as QEMU does, unfloored', () => {
+    it('scales the pixel under the pointer over the whole Screen to 0..32767 as QEMU does', () => {
         expect(tabletAxis(0, 320)).toBe(0)
         expect(tabletAxis(160, 320)).toBe(16383)
-        //a position between two pixels is finer than either
-        expect(tabletAxis(160.5, 320)).toBe(Math.floor((160.5 * 32767) / 320))
-        expect(tabletAxis(319.999, 320)).toBe(32766)
+        //QEMU hands the tablet whole pixels, so anywhere on a zoomed pixel is that pixel
+        expect(tabletAxis(160.5, 320)).toBe(16383)
+        expect(tabletAxis(160.999, 320)).toBe(16383)
+        expect(tabletAxis(319.999, 320)).toBe(Math.floor((319 * 32767) / 320))
+    })
+
+    it("gives back the pointer's pixel through the conversion the documentation teaches", () => {
+        //(value × size + 32766) ÷ 32767, with the division dropping the remainder
+        const pixelOf = (value: number, size: number) => Math.floor((value * size + 32766) / 32767)
+        for (const size of [8, 240, 320, 1024]) {
+            for (let pixel = 0; pixel < size; pixel++) {
+                for (const fraction of [0, 0.01, 0.5, 0.99]) {
+                    expect(pixelOf(tabletAxis(pixel + fraction, size), size)).toBe(pixel)
+                }
+            }
+        }
     })
 
     it('clamps a position past an edge to the edge, so a drag pins that axis', () => {
+        const last = Math.floor((319 * 32767) / 320)
         expect(tabletAxis(-12, 320)).toBe(0)
-        expect(tabletAxis(320, 320)).toBe(32766)
-        expect(tabletAxis(5000, 320)).toBe(32766)
+        expect(tabletAxis(320, 320)).toBe(last)
+        expect(tabletAxis(5000, 320)).toBe(last)
         expect(tabletAxis(Number.NaN, 320)).toBe(0)
     })
 
-    it('reports only the axes that changed, and no report for a move within a unit', () => {
+    it('reports only the axes that changed, and no report for a move within a pixel', () => {
         const { input, reports } = connected()
         input.moveTo(160, 120)
         input.moveTo(160, 60)
-        input.moveTo(160.000001, 60)
+        input.moveTo(160.7, 60.2)
         expect(reports).toEqual([
             [
                 'tablet',

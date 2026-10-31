@@ -172,7 +172,7 @@ The positions are not pixels. They run from 0 at the left or top edge of the Scr
 x = (value × xres + 32766) ÷ 32767
 ```
 
-with `xres` from `FBIOGET_VSCREENINFO`, the same for `y` with `ABS_Y` and `yres`, and a division that drops the remainder. 32766 is the range's `maximum` less 1. A drag that leaves the Screen gives the edge, which this formula turns into `xres`, one pixel past the last column, so keep x below `xres`. A program that uses the value as a pixel draws a hundred times too far, off the Screen. The fields of `struct input_absinfo` a program reads:
+with `xres` from `FBIOGET_VSCREENINFO`, the same for `y` with `ABS_Y` and `yres`, and a division that drops the remainder. 32766 is the range's `maximum` less 1. The tablet reports the pixel the pointer is on, and the formula gives that pixel back, from 0 to `xres - 1`; a drag that leaves the Screen gives the pixel at its edge. A program that uses the value as a pixel draws a hundred times too far, off the Screen. The fields of `struct input_absinfo` a program reads:
 
 {absinfoFields}
 
