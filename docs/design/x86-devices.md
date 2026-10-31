@@ -70,6 +70,13 @@ Blink stores the program's termios and the **Line discipline** follows it.
 - **Ctrl+Z is ignored**, a documented deviation: with no shell to resume it, a program stopped by `SIGTSTP` could never continue.
 - **`IXON` is ignored**, a documented deviation: Ctrl+S never freezes the program's output.
 
+Settled while building the editor's half, on 2026-10-31:
+
+- **The keys are an xterm's in its default modes** (`terminalKeys.ts`): Enter `\r`, Backspace DEL, the arrows `ESC [ A`, Home and End `ESC [ H` and `ESC [ F`, the editing keys and F5 to F12 `ESC [ n ~`, F1 to F4 `ESC O P` to `S`, xterm's modifier parameter for Shift, Alt and Ctrl, Ctrl and a letter its control character. The cursor keys never switch to application mode, a documented deviation. Ctrl+V pastes, Alt with a character sends no `ESC` prefix, and Ctrl+S and Ctrl+Q reach a raw program as their characters, as with `IXON` off.
+- **Echo follows `ECHOCTL`**, on by default: a control character shows as `^C`, `^[` or `^?`, and Enter shows as a new line under `ICRNL` and as `^M` without it. A canonical read with `ECHO` off echoes nothing, its new line included. `VINTR`, `VQUIT` and `VSUSP` are Linux's defaults whatever the program sets, a documented deviation: the Core reports the flags, not the characters.
+- **Escape is the program's in raw mode**, so Shift+Tab gives the keyboard back to the page, as it already did beside Escape. Ctrl+Shift+C copies in every mode, and Ctrl+C keeps copying where it is no signal.
+- **The Terminal draws the serial line's cursor on its last line only**: `\r` overwrites from the start of the line, `\b` steps back a column, and an escape sequence takes none. Every character is one column, a tab and a wide character included, and the caret stays after the end of the transcript, documented deviations. Undo keeps an overwritten line's old text with the instruction that first changed it.
+
 ## Screen size and format
 
 Decided on 2026-10-31; the widths and `FBIOPUT_VSCREENINFO` changed after the review.

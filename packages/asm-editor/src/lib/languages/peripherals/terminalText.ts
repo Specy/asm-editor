@@ -25,18 +25,282 @@ export type TerminalEnter = '\n' | '\r'
 export type TerminalTextConventions = {
     encoding: TerminalEncoding
     enter: TerminalEnter
+    /**
+     * Whether the Terminal is a serial line, x86's `ttyS0`
+     * ([ADR 0068](../../../../../../docs/adr/0068-x86-programs-run-on-a-serial-console.md)), whose
+     * output moves a cursor (`SerialTranscript`). Elsewhere the transcript is the text as written,
+     * `\r` and `\b` included.
+     */
+    serialLine: boolean
 }
 
 /** The conventions of a Target's Reference environment, for the Terminal its Emulator builds. */
 export function terminalTextConventions(language: AvailableLanguages): TerminalTextConventions {
     switch (language) {
         case 'M68K':
-            return { encoding: 'windows-1252', enter: '\r' }
+            return { encoding: 'windows-1252', enter: '\r', serialLine: false }
         case 'Z80':
-            return { encoding: 'latin-1', enter: '\n' }
+            return { encoding: 'latin-1', enter: '\n', serialLine: false }
+        case 'X86':
+            return { encoding: 'utf-8', enter: '\n', serialLine: true }
         default:
-            return { encoding: 'utf-8', enter: '\n' }
+            return { encoding: 'utf-8', enter: '\n', serialLine: false }
     }
+}
+
+const ESCAPE = '\x1b'
+const BELL = '\x07'
+const STRING_TERMINATOR = '\\'
+/** The introducers of the control strings (OSC, DCS, SOS, PM, APC), which end at BEL or `ESC \`. */
+const STRING_INTRODUCERS = new Set([']', 'P', 'X', '^', '_'])
+/** What `escapeSequenceEnd` answers for a sequence the text ends before it is complete. */
+export const INCOMPLETE_SEQUENCE = -1
+
+/**
+ * Where the escape sequence starting at `start` (an ESC) ends, or `INCOMPLETE_SEQUENCE` when the
+ * text ends first: a CSI (`ESC [`), a control string ended by BEL or `ESC \`, or an ESC with its
+ * intermediate and final bytes. A malformed sequence ends where it stops being one, so the
+ * character that broke it is read again as text; an ESC that starts nothing is a sequence of its
+ * own. Shared by the serial line's cursor, for which a sequence takes no column, and by the view
+ * that draws x86's colours.
+ */
+export function escapeSequenceEnd(text: string, start: number): number {
+    const introducer = text[start + 1]
+    if (introducer === undefined) return INCOMPLETE_SEQUENCE
+    if (introducer === '[') {
+        let index = start + 2
+        while (index < text.length && inRange(text, index, 0x30, 0x3f)) index++
+        while (index < text.length && inRange(text, index, 0x20, 0x2f)) index++
+        if (index >= text.length) return INCOMPLETE_SEQUENCE
+        return inRange(text, index, 0x40, 0x7e) ? index + 1 : index
+    }
+    if (STRING_INTRODUCERS.has(introducer)) {
+        for (let index = start + 2; index < text.length; index++) {
+            if (text[index] === BELL) return index + 1
+            if (text[index] !== ESCAPE) continue
+            if (index + 1 >= text.length) return INCOMPLETE_SEQUENCE
+            //an ESC ends the string either way: as its terminator, or by starting what comes next
+            return text[index + 1] === STRING_TERMINATOR ? index + 2 : index
+        }
+        return INCOMPLETE_SEQUENCE
+    }
+    if (inRange(text, start + 1, 0x20, 0x2f)) {
+        let index = start + 1
+        while (index < text.length && inRange(text, index, 0x20, 0x2f)) index++
+        if (index >= text.length) return INCOMPLETE_SEQUENCE
+        return inRange(text, index, 0x30, 0x7e) ? index + 1 : index
+    }
+    if (inRange(text, start + 1, 0x30, 0x7e)) return start + 2
+    return start + 1
+}
+
+function inRange(text: string, index: number, low: number, high: number): boolean {
+    const code = text.charCodeAt(index)
+    return code >= low && code <= high
+}
+
+/** Characters of the output that move the serial line's cursor rather than add to the line. */
+const CURSOR_CONTROLS = /[\r\n\b]/
+
+/**
+ * The screen of a serial terminal kept as a transcript, x86's `ttyS0` (ADR 0068): what a program
+ * writes moves a cursor, and only the last line is ever written into, because nothing moves the
+ * cursor up.
+ *
+ * - `\r` takes the cursor back to the start of its line, and what comes next overwrites what is
+ *   there, one character a column.
+ * - `\b` takes it back a column, never past the start of the line.
+ * - `\n` starts a new line after the whole of the current one: at its first column when the output
+ *   is processed (`OPOST` and `ONLCR`, `\n` going out as `\r\n`), and otherwise below the column
+ *   the cursor was in, the staircase a raw serial line shows.
+ * - An escape sequence takes no column. Written at the end it is kept as written, for the view to
+ *   draw; written inside the line it is kept until it is complete and then put where the cursor is.
+ *   Overwriting steps over the sequences it meets, so a character written over another takes the
+ *   colour that one had.
+ *
+ * Every other character takes one column, a tab and a wide character included, a documented
+ * simplification. Output that only adds to the end, which is nearly all of it, is appended as the
+ * other Targets' is, and the lines before the last are one string never written into again, so
+ * overwriting costs the length of the last line, not of the transcript.
+ */
+export class SerialTranscript {
+    /** Every line before the last, each with its line feed. */
+    private head = ''
+    /** The last line, the one the cursor is on. */
+    private line = ''
+    /** Where in `line` the next character goes. */
+    private at = 0
+    /** An escape sequence arriving while the cursor is inside the line, until it is complete. */
+    private escape = ''
+
+    constructor(text = '') {
+        this.reset(text)
+    }
+
+    /** What the screen shows, line by line. */
+    get text(): string {
+        return this.head + this.line
+    }
+
+    /** Where the last line starts in `text`. */
+    get lineStart(): number {
+        return this.head.length
+    }
+
+    /** The last line, the only one writing can change. */
+    get lastLine(): string {
+        return this.line
+    }
+
+    /** Where in `text` the next character goes. */
+    get cursor(): number {
+        return this.head.length + this.at
+    }
+
+    /** The start of an escape sequence written inside the line and not complete yet. */
+    get pendingEscape(): string {
+        return this.escape
+    }
+
+    /** Whether writing `text` may change what is already written, rather than only add to it. */
+    mayEdit(text: string): boolean {
+        return this.at < this.line.length || this.escape !== '' || /[\r\b]/.test(text)
+    }
+
+    /** Writes `text` at the cursor; `newlineReturns` is whether `\n` also returns (`ONLCR`). */
+    write(text: string, newlineReturns: boolean): void {
+        if (this.at === this.line.length && this.escape === '' && !CURSOR_CONTROLS.test(text)) {
+            this.line += text
+            this.at = this.line.length
+            return
+        }
+        for (const character of text) this.put(character, newlineReturns)
+    }
+
+    /**
+     * Takes back `character` written just before the cursor, as a tty erases an echo: off the end
+     * of the line, or by writing a space over it inside the line, which is the `\b \b` a tty
+     * writes. False when the character is not there to take back.
+     */
+    erase(character: string): boolean {
+        if (this.escape !== '' || !this.line.slice(0, this.at).endsWith(character)) return false
+        if (this.at === this.line.length) {
+            this.line = this.line.slice(0, -character.length)
+            this.at = this.line.length
+            return true
+        }
+        this.at -= character.length
+        this.place(' ')
+        this.at -= 1
+        return true
+    }
+
+    /** Puts something before everything written so far, the cursor staying where it is. */
+    prepend(text: string): void {
+        this.reset(text + this.text, text.length + this.cursor, this.escape)
+    }
+
+    /** Starts again from `text`, with the cursor at `cursor` on its last line, for Undo and clear. */
+    reset(text = '', cursor = text.length, escape = ''): void {
+        const start = text.lastIndexOf('\n') + 1
+        this.head = text.slice(0, start)
+        this.line = text.slice(start)
+        this.at = Math.min(Math.max(cursor - start, 0), this.line.length)
+        this.escape = escape
+    }
+
+    private put(character: string, newlineReturns: boolean): void {
+        if (this.escape !== '') {
+            this.escape += character
+            const end = escapeSequenceEnd(this.escape, 0)
+            if (end === INCOMPLETE_SEQUENCE) return
+            const sequence = this.escape.slice(0, end)
+            const rest = this.escape.slice(end)
+            this.escape = ''
+            this.line = this.line.slice(0, this.at) + sequence + this.line.slice(this.at)
+            this.at += sequence.length
+            //the character that broke a malformed sequence is text
+            for (const next of rest) this.put(next, newlineReturns)
+            return
+        }
+        switch (character) {
+            case '\r':
+                this.at = 0
+                return
+            case '\b':
+                this.at = this.previousColumnStart()
+                return
+            case '\n': {
+                const column = newlineReturns ? 0 : this.columnAt(this.at)
+                this.head += `${this.line}\n`
+                this.line = ' '.repeat(column)
+                this.at = column
+                return
+            }
+            case ESCAPE:
+                if (this.at < this.line.length) {
+                    this.escape = character
+                    return
+                }
+        }
+        this.place(character)
+    }
+
+    /** Writes one character into the column at the cursor, or after the end of the line. */
+    private place(character: string): void {
+        while (this.at < this.line.length && this.line[this.at] === ESCAPE) {
+            const end = escapeSequenceEnd(this.line, this.at)
+            this.at = end === INCOMPLETE_SEQUENCE ? this.line.length : end
+        }
+        if (this.at === this.line.length) {
+            this.line += character
+            this.at = this.line.length
+            return
+        }
+        const replaced = codePointLength(this.line, this.at)
+        this.line = this.line.slice(0, this.at) + character + this.line.slice(this.at + replaced)
+        this.at += character.length
+    }
+
+    /** How many columns the characters of the line before `index` take. */
+    private columnAt(index: number): number {
+        let column = 0
+        for (let at = 0; at < index;) {
+            if (this.line[at] === ESCAPE) {
+                at = this.sequenceEnd(at, index)
+                continue
+            }
+            at += codePointLength(this.line, at)
+            column++
+        }
+        return column
+    }
+
+    /** Where the column before the cursor starts, or the cursor itself at the first column. */
+    private previousColumnStart(): number {
+        let previous = this.at
+        for (let at = 0; at < this.at;) {
+            if (this.line[at] === ESCAPE) {
+                at = this.sequenceEnd(at, this.at)
+                continue
+            }
+            previous = at
+            at += codePointLength(this.line, at)
+        }
+        return previous
+    }
+
+    /** The end of the sequence at `at` in the line, never past `limit`. */
+    private sequenceEnd(at: number, limit: number): number {
+        const end = escapeSequenceEnd(this.line, at)
+        return end === INCOMPLETE_SEQUENCE ? limit : Math.min(end, limit)
+    }
+}
+
+/** 2 for a surrogate pair, a character outside the Basic Multilingual Plane, else 1. */
+function codePointLength(text: string, index: number): number {
+    const code = text.charCodeAt(index)
+    return code >= 0xd800 && code <= 0xdbff && index + 1 < text.length ? 2 : 1
 }
 
 /**

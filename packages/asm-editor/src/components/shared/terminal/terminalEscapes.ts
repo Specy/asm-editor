@@ -21,6 +21,8 @@
  * Plain TypeScript, so it runs under node in the tests.
  */
 
+import { escapeSequenceEnd, INCOMPLETE_SEQUENCE } from '#lib/languages/peripherals/terminalText.ts'
+
 /** One of the sixteen colours: 0–7 as SGR 30–37 name them, 8–15 their bright forms. */
 export type TerminalColor = number
 
@@ -38,11 +40,6 @@ export type TerminalSpan =
 export const PLAIN_STYLE: TerminalStyle = { foreground: null, background: null, bold: false }
 
 const ESCAPE = '\x1b'
-const BELL = '\x07'
-const STRING_TERMINATOR = '\\'
-/** The introducers of the control strings (OSC, DCS, SOS, PM, APC), which end at BEL or `ESC \`. */
-const STRING_INTRODUCERS = new Set([']', 'P', 'X', '^', '_'])
-const INCOMPLETE = -1
 
 /**
  * Reads output as it streams: `feed` takes what was written since, and a sequence split between two
@@ -67,8 +64,8 @@ export class TerminalEscapeParser {
                 return
             }
             if (escape > index) this.appendText(input.slice(index, escape))
-            const end = sequenceEnd(input, escape)
-            if (end === INCOMPLETE) {
+            const end = escapeSequenceEnd(input, escape)
+            if (end === INCOMPLETE_SEQUENCE) {
                 this.pending = input.slice(escape)
                 return
             }
@@ -171,46 +168,6 @@ export function styleClasses(style: TerminalStyle): string {
     if (style.background !== null) classes.push(`bg-${style.background}`)
     if (style.bold) classes.push('bold')
     return classes.join(' ')
-}
-
-/**
- * Where the sequence starting at `start` (an ESC) ends, or INCOMPLETE when the input ends first. A
- * malformed sequence ends where it stops being one, so the character that broke it is read again as
- * text; an ESC that starts nothing is a sequence of its own.
- */
-function sequenceEnd(input: string, start: number): number {
-    const introducer = input[start + 1]
-    if (introducer === undefined) return INCOMPLETE
-    if (introducer === '[') {
-        let index = start + 2
-        while (index < input.length && inRange(input, index, 0x30, 0x3f)) index++
-        while (index < input.length && inRange(input, index, 0x20, 0x2f)) index++
-        if (index >= input.length) return INCOMPLETE
-        return inRange(input, index, 0x40, 0x7e) ? index + 1 : index
-    }
-    if (STRING_INTRODUCERS.has(introducer)) {
-        for (let index = start + 2; index < input.length; index++) {
-            if (input[index] === BELL) return index + 1
-            if (input[index] !== ESCAPE) continue
-            if (index + 1 >= input.length) return INCOMPLETE
-            //an ESC ends the string either way: as its terminator, or by starting what comes next
-            return input[index + 1] === STRING_TERMINATOR ? index + 2 : index
-        }
-        return INCOMPLETE
-    }
-    if (inRange(input, start + 1, 0x20, 0x2f)) {
-        let index = start + 1
-        while (index < input.length && inRange(input, index, 0x20, 0x2f)) index++
-        if (index >= input.length) return INCOMPLETE
-        return inRange(input, index, 0x30, 0x7e) ? index + 1 : index
-    }
-    if (inRange(input, start + 1, 0x30, 0x7e)) return start + 2
-    return start + 1
-}
-
-function inRange(input: string, index: number, low: number, high: number): boolean {
-    const code = input.charCodeAt(index)
-    return code >= low && code <= high
 }
 
 /** A complete CSI sequence without intermediate bytes, the only ones interpreted. */

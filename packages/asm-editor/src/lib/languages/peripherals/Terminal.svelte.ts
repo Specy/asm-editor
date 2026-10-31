@@ -6,11 +6,24 @@ import type {
 import {
     createTextStreamDecoder,
     encodeText,
+    SerialTranscript,
     type TerminalEncoding,
     type TerminalEnter,
     type TextStreamDecoder
 } from './terminalText'
 import { TerminalHistory, type TerminalPosition } from './TerminalHistory'
+import {
+    controlCharacterOf,
+    echoOfControl,
+    echoOfTyped,
+    INTERRUPT_CHARACTER,
+    QUIT_CHARACTER,
+    rawKeySequence,
+    SIGINT,
+    SIGQUIT,
+    SUSPEND_CHARACTER,
+    type TerminalKeyPress
+} from './terminalKeys'
 
 export type TerminalInputSource =
     | {
@@ -59,13 +72,47 @@ export type TerminalOptions = {
     encoding?: TerminalEncoding
     /** What a character read gives for Enter: the Reference environment's code. */
     enter?: TerminalEnter
+    /**
+     * Whether the Terminal is a serial line, x86's `ttyS0`: its output moves a cursor, `\r`
+     * overwriting the line and `\b` stepping back (`SerialTranscript`). Off, the transcript is the
+     * text as written.
+     */
+    serialLine?: boolean
 }
 
 /**
- * What a waiting read asks for: a line, edited until Enter; one keystroke; or a line of standard
- * input (descriptor 0), the one read that End of input answers.
+ * The settings of a Linux program's terminal (its termios) that the Line discipline follows, as
+ * the x86 Core reports them ([x86-devices.md](../../../../../../docs/design/x86-devices.md), The
+ * Terminal's modes): the shape of `@specy/x86`'s `X86TerminalMode`, so the adapter hands it over
+ * as it comes.
  */
-export type TerminalReadKind = 'line' | 'character' | 'standard-input'
+export type TerminalLineMode = {
+    /** `ICANON`: a read takes a line, edited until Enter. Off, every key goes to the key sink. */
+    readonly canonical: boolean
+    /** `ECHO`: what is typed is echoed into the transcript. */
+    readonly echo: boolean
+    /** `ISIG`: Ctrl+C and Ctrl+\ raise SIGINT and SIGQUIT through the signal sink. */
+    readonly signals: boolean
+    /** `ICRNL`: the Core makes Enter's `\r` a `\n`, so its echo is a new line rather than `^M`. */
+    readonly crToNl: boolean
+    /** `OPOST`: the output is processed. */
+    readonly outputProcessing: boolean
+    /** `ONLCR`: a `\n` goes out as `\r\n`. Off, or without `OPOST`, `\n` only moves down a line. */
+    readonly nlToCrNl: boolean
+}
+
+/** Where raw mode hands each key, as the bytes a serial terminal sends for it. */
+export type TerminalKeySink = (bytes: Uint8Array) => void
+
+/** Where `ISIG` raises a signal typed in the Terminal: SIGINT (2) or SIGQUIT (3). */
+export type TerminalSignalSink = (signal: number) => void
+
+/**
+ * What a waiting read asks for: a line, edited until Enter; one keystroke; a line of standard
+ * input (descriptor 0), the one read that End of input answers; or, in raw mode, every key as it
+ * is typed, which stands for as long as raw mode lasts, whether or not the program is reading.
+ */
+export type TerminalReadKind = 'line' | 'character' | 'standard-input' | 'keys'
 
 /**
  * How one read shows what is typed, where the Target's program decides it: EASy68K's task 12 (the
@@ -122,7 +169,9 @@ type PendingRead = {
  * The Terminal as one instruction found it, kept the first time the instruction changes it, which is
  * what an Undo of the instruction puts back
  * ([ADR 0057](../../../../../../docs/adr/0057-restore-the-terminal-on-undo.md)). Within an
- * instruction the transcript only grows, a clear aside, so its length is all there is to keep of it.
+ * instruction the transcript only grows, a clear aside, so its length is all there is to keep of it;
+ * except on a serial line, where `\r` and `\b` let it overwrite its last line, whose text is then
+ * kept too, before the first change to what was there.
  */
 type TerminalRecord = {
     readonly position: TerminalPosition
@@ -131,8 +180,17 @@ type TerminalRecord = {
     readonly held: Uint8Array
     /** The rest of the standard-input line, replaced as it is read and never written into. */
     readonly lineBuffer: Uint8Array
+    /** Where a serial line's cursor was, and the escape sequence it was in the middle of. */
+    readonly cursor: number
+    readonly escape: string
     /** The transcript as the instruction's first clear found it; what came before is its start. */
     cleared?: string
+    /**
+     * A serial line's last line from where it starts to `length`, as the instruction found it, kept
+     * before the instruction first changed it rather than added to it. Nothing before `start` is
+     * ever written into again.
+     */
+    edited?: { start: number; text: string }
     /** The keystrokes a polled device took, oldest first, which Undo puts back in their queues. */
     taken?: { queue: TerminalKeyboard; character: string }[]
 }
@@ -152,6 +210,10 @@ type ActiveRead = {
 const NO_INPUT_LEFT_ERROR = 'Input does not have any values left'
 const INPUT_CANCELLED_ERROR = 'Input cancelled'
 const DIALOG_NOT_AVAILABLE_ERROR = 'Message dialogs are not available while running scripted input'
+/** What raw mode's standing read says it takes, for a label. */
+const RAW_KEYS_QUESTION = 'Keys go to the program as they are typed'
+/** DEL, what Backspace sends on a serial line. */
+const DELETE = '\x7f'
 
 const BACKSPACE = '\b'
 const LINE_FEED = '\n'
@@ -160,6 +222,14 @@ const CARRIAGE_RETURN = '\r'
 const END_OF_TRANSMISSION = '\x04'
 const TAB = '\t'
 const SPACE = ' '
+/**
+ * A key the typed queue holds as a line read takes it, Enter as a line feed and Backspace as `\b`,
+ * as raw mode sends it instead.
+ */
+function rawOfQueued(character: string): string {
+    if (character === LINE_FEED) return CARRIAGE_RETURN
+    return character === BACKSPACE ? DELETE : character
+}
 
 /**
  * The Terminal's own typed-input queue: what is typed in the Terminal, in order, as the console
@@ -223,6 +293,18 @@ class TerminalTypedInput implements TerminalKeyboard {
  * from the Screen's Keyboard in graphical use (ADR 0009). Every read waits for them, whether or not
  * a console is on the page: a host whose console is hidden reveals one when a read starts. Dialogs,
  * which are modal in their reference, stay in the app's Prompt.
+ *
+ * On x86 the Terminal is a serial line, and the Line discipline follows the program's termios as
+ * the adapter reports it (`setLineMode`):
+ *
+ * - in canonical mode, reads of standard input take a line as above, echoed only under `ECHO`;
+ * - in raw mode, every key typed in the console goes to the adapter's key sink at once, as the
+ *   bytes a serial terminal sends (`terminalKeys.ts`), whether or not a read waits: the queue it
+ *   waits in is the Core's, which also decides how many a read takes and how long it waits;
+ * - under `ISIG`, in either mode, Ctrl+C and Ctrl+\ go to the adapter's signal sink as SIGINT and
+ *   SIGQUIT, dropping what was typed and not read, and Ctrl+Z does nothing;
+ * - the output moves a cursor (`SerialTranscript`), `\n` returning to the first column only while
+ *   `OPOST` and `ONLCR` are on.
  */
 export class Terminal {
     private readonly executionController: ExecutionController
@@ -230,6 +312,14 @@ export class Terminal {
     private readonly enter: TerminalEnter
     private readonly decoder: TextStreamDecoder
     private _output = $state('')
+    /** The serial line's screen, which `_output` follows, or null for a Terminal that is none. */
+    private readonly serial: SerialTranscript | null
+    /** The program's termios, null before a program reports one and on the other Targets. */
+    private _lineMode = $state.raw<TerminalLineMode | null>(null)
+    private keySink: TerminalKeySink | null = null
+    private signalSink: TerminalSignalSink | null = null
+    /** Raw mode's standing read as the view sees it, while raw mode takes the keys. */
+    private rawRead: TerminalPendingRead | null = null
     private _pendingRead = $state.raw<TerminalPendingRead | null>(null)
     private _inputSource: TerminalInputSource = { type: 'interactive' }
     /**
@@ -265,6 +355,7 @@ export class Terminal {
         this.encoding = options.encoding ?? 'utf-8'
         this.enter = options.enter ?? LINE_FEED
         this.decoder = createTextStreamDecoder(this.encoding)
+        this.serial = options.serialLine ? new SerialTranscript() : null
     }
 
     // ------------------------------------------------------------------ state
@@ -274,7 +365,10 @@ export class Terminal {
         return this._output
     }
 
-    /** The read the program is waiting on, or null. Scripted reads never wait, so never show. */
+    /**
+     * The read the program is waiting on, or null. Scripted reads never wait, so never show. In raw
+     * mode, while no canonical read waits, it is the standing read of every key (`'keys'`).
+     */
     get pendingRead(): TerminalPendingRead | null {
         return this._pendingRead
     }
@@ -296,13 +390,23 @@ export class Terminal {
         return this._consoleAttached
     }
 
+    /** The program's termios as last set, or null. Reactive. */
+    get lineMode(): TerminalLineMode | null {
+        return this._lineMode
+    }
+
+    /** Whether Ctrl+C and Ctrl+\ typed in the console raise signals now (`ISIG`), for its hints. */
+    get signalsTyped(): boolean {
+        return this._lineMode?.signals === true && this.signalSink !== null
+    }
+
     // ----------------------------------------------------------------- output
 
     /** Text the program wrote, or an echo. Ends a character a byte write left incomplete first. */
     write(text: string): void {
         this.journal()
         this.flushOutput()
-        this._output += text
+        this.append(text)
     }
 
     /**
@@ -312,17 +416,22 @@ export class Terminal {
     writeBytes(bytes: ArrayLike<number>): void {
         this.journal()
         const text = this.decoder.decode(bytes)
-        if (text.length > 0) this._output += text
+        if (text.length > 0) this.append(text)
     }
 
     /** The end of the program's output: a character left incomplete shows as U+FFFD. */
     flushOutput(): void {
         if (this.decoder.held().length === 0) return
         this.journal()
-        this._output += this.decoder.end()
+        this.append(this.decoder.end())
     }
 
     prepend(text: string): void {
+        if (this.serial) {
+            this.serial.prepend(text)
+            this._output = this.serial.text
+            return
+        }
         this._output = text + this._output
     }
 
@@ -334,12 +443,14 @@ export class Terminal {
         const record = this.journal()
         if (record) record.cleared ??= this._output
         this.decoder.reset()
+        this.serial?.reset()
         this._output = ''
     }
 
     /**
      * Everything a program left behind, for Build, Stop and the start of each Testcase, its Undo
-     * journal included: the Build that follows starts its own with `trackHistory`.
+     * journal included: the Build that follows starts its own with `trackHistory`. Raw mode ends
+     * with the program, so the line mode goes too, until the next program reports its own.
      */
     clear(): void {
         this.cancelPendingInput()
@@ -347,7 +458,40 @@ export class Terminal {
         this.clearOutput()
         this.lineBuffer = new Uint8Array(0)
         this.typedInput.clear()
+        this._lineMode = null
+        this.refreshRawRead()
         this.notifyInputChange()
+    }
+
+    /**
+     * Adds to the transcript, already journaled: at its end, or on a serial line where the cursor
+     * is, the last line's text kept first for Undo when the change may overwrite it.
+     */
+    private append(text: string): void {
+        const serial = this.serial
+        if (serial === null) {
+            this._output += text
+            return
+        }
+        if (serial.mayEdit(text)) this.keepEditedLine()
+        const mode = this._lineMode
+        serial.write(text, mode === null || (mode.outputProcessing && mode.nlToCrNl))
+        this._output = serial.text
+    }
+
+    /**
+     * Keeps the serial line's last line, up to where the instruction found the transcript ending, in
+     * the instruction's record before it is overwritten. Only the last line can change, and only
+     * its part that was there before the instruction needs keeping: what the instruction added
+     * itself goes with `length`, and after a clear nothing on screen predates it.
+     */
+    private keepEditedLine(): void {
+        const serial = this.serial
+        const record = this.journal()
+        if (!serial || !record || record.edited || record.cleared !== undefined) return
+        const start = serial.lineStart
+        if (start >= record.length) return
+        record.edited = { start, text: serial.lastLine.slice(0, record.length - start) }
     }
 
     // ------------------------------------------------------------------- undo
@@ -376,7 +520,12 @@ export class Terminal {
             for (let index = taken.length - 1; index >= 0; index--) {
                 taken[index].queue.unreadCharacter(taken[index].character)
             }
-            this._output = (record.cleared ?? this._output).slice(0, record.length)
+            const transcript = record.cleared ?? this._output
+            const { edited } = record
+            this._output = edited
+                ? transcript.slice(0, edited.start) + edited.text
+                : transcript.slice(0, record.length)
+            this.serial?.reset(this._output, record.cursor, record.escape)
             this.decoder.hold(record.held)
             this.lineBuffer = record.lineBuffer
         })
@@ -393,7 +542,9 @@ export class Terminal {
             position,
             length: this._output.length,
             held: this.decoder.held(),
-            lineBuffer: this.lineBuffer
+            lineBuffer: this.lineBuffer,
+            cursor: this.serial?.cursor ?? this._output.length,
+            escape: this.serial?.pendingEscape ?? ''
         }))
     }
 
@@ -402,6 +553,7 @@ export class Terminal {
     useInteractiveInput(): void {
         this._inputSource = { type: 'interactive' }
         this.lineBuffer = new Uint8Array(0)
+        this.refreshRawRead()
         this.notifyInputChange()
     }
 
@@ -409,6 +561,7 @@ export class Terminal {
         this.cancelPendingInput()
         this._inputSource = { type: 'scripted', values: [...values] }
         this.lineBuffer = new Uint8Array(0)
+        this.refreshRawRead()
         this.notifyInputChange()
     }
 
@@ -419,6 +572,7 @@ export class Terminal {
     useKeyboardInput(keyboard: TerminalKeyboard, echo?: TerminalEcho): void {
         this.cancelPendingInput()
         this._keyboardInput = { keyboard, echo }
+        this.refreshRawRead()
         this.notifyInputChange()
     }
 
@@ -427,7 +581,47 @@ export class Terminal {
         this.cancelPendingInput()
         this._keyboardInput = null
         this.terminalEcho = echo
+        this.refreshRawRead()
         this.notifyInputChange()
+    }
+
+    /**
+     * The program's termios, which the Line discipline follows: what the x86 adapter hands over at
+     * the start of each run, after `clear`, and whenever the program changes it. Null is no Linux
+     * program, the canonical line reads every other Target has; `clear` sets it.
+     *
+     * Turning raw mode on hands what was typed ahead and not read yet to the key sink, as Linux
+     * makes a partly typed line readable when `ICANON` goes off. A canonical read still waiting is
+     * the adapter's to end: in raw mode the keys no longer reach it.
+     */
+    setLineMode(mode: TerminalLineMode | null): void {
+        this._lineMode = mode === null ? null : { ...mode }
+        this.refreshRawRead()
+        if (!this.rawInput || !this.typedInput.hasTypedInput()) return
+        let typed = ''
+        while (this.typedInput.hasTypedInput()) {
+            typed += rawOfQueued(this.typedInput.readCharacter() ?? '')
+        }
+        this.notifyInputChange()
+        this.sendKeys(typed)
+    }
+
+    /**
+     * Where raw mode hands each key, as the bytes a serial terminal sends (`terminalKeys.ts`): set
+     * once by the adapter, which gives them to the Core whether or not a read waits. Null takes raw
+     * mode's keys back to the canonical line reads.
+     */
+    setKeySink(sink: TerminalKeySink | null): void {
+        this.keySink = sink
+        this.refreshRawRead()
+    }
+
+    /**
+     * Where `ISIG` raises the signals typed in the console: SIGINT (2) for Ctrl+C, SIGQUIT (3) for
+     * Ctrl+\. Set once by the adapter; null leaves Ctrl+C to copy, as on the other Targets.
+     */
+    setSignalSink(sink: TerminalSignalSink | null): void {
+        this.signalSink = sink
     }
 
     /**
@@ -464,10 +658,12 @@ export class Terminal {
 
     /**
      * Text typed in the Terminal, an IME's committed composition or a paste. Line endings become a
-     * single Enter each, so a pasted block submits one line per line, as a paste into a tty does.
+     * single Enter each, so a pasted block submits one line per line, as a paste into a tty does;
+     * in raw mode that Enter is the `\r` a terminal sends.
      */
     insertText(text: string): void {
-        this.type(text.replace(/\r\n?/g, LINE_FEED))
+        if (this.rawInput) this.sendKeys(text.replace(/\r\n?|\n/g, CARRIAGE_RETURN))
+        else this.type(text.replace(/\r\n?/g, LINE_FEED))
     }
 
     paste(text: string): void {
@@ -475,16 +671,46 @@ export class Terminal {
     }
 
     pressEnter(): void {
-        this.type(LINE_FEED)
+        if (this.rawInput) this.sendKeys(CARRIAGE_RETURN)
+        else this.type(LINE_FEED)
     }
 
     pressBackspace(): void {
-        this.type(BACKSPACE)
+        if (this.rawInput) this.sendKeys(DELETE)
+        else this.type(BACKSPACE)
     }
 
-    /** Ctrl+D or the End of input button: End of input for a read of standard input. */
+    /**
+     * Ctrl+D or the End of input button: End of input for a read of standard input. In raw mode
+     * it is only the character, which the program reads like any other.
+     */
     sendEndOfInput(): void {
-        this.type(END_OF_TRANSMISSION)
+        if (this.rawInput) this.sendKeys(END_OF_TRANSMISSION)
+        else this.type(END_OF_TRANSMISSION)
+    }
+
+    /**
+     * A key pressed in the console during a run, before it types anything: true when the Line
+     * discipline took it, and the console then keeps it from the page and from the browser. Under
+     * `ISIG` that is Ctrl+C, Ctrl+\ and Ctrl+Z, in either mode; in raw mode also every key that is
+     * not text and that a serial terminal sends something for (`rawKeySequence`). False leaves the
+     * key to the console, which delivers text through its input event as before.
+     */
+    pressKey(press: TerminalKeyPress): boolean {
+        if (!this.typesInTerminal()) return false
+        if (this.signalsTyped) {
+            const control = controlCharacterOf(press)
+            if (control === INTERRUPT_CHARACTER) return this.raiseSignal(SIGINT, control)
+            if (control === QUIT_CHARACTER) return this.raiseSignal(SIGQUIT, control)
+            //no shell could resume a stopped program, so SIGTSTP is never sent (a documented
+            //deviation): the key is taken, and does nothing
+            if (control === SUSPEND_CHARACTER) return true
+        }
+        if (!this.rawInput) return false
+        const sequence = rawKeySequence(press)
+        if (sequence === null) return false
+        this.sendKeys(sequence)
+        return true
     }
 
     /**
@@ -512,7 +738,7 @@ export class Terminal {
         //the released read settles a microtask later; the view stops showing it now
         if (pending.length === 0) return
         this.activeRead = null
-        this._pendingRead = null
+        this._pendingRead = this.rawRead
     }
 
     // ------------------------------------------------------------------ reads
@@ -690,6 +916,10 @@ export class Terminal {
 
     // --------------------------------------------------------- line discipline
 
+    /**
+     * A line of standard input, echoed unless the program's termios turned `ECHO` off, as a
+     * password prompt does.
+     */
     private async readStandardInputLine(
         question: string,
         execution: ExecutionGeneration
@@ -699,7 +929,8 @@ export class Terminal {
             const text = source.values.shift()
             return text === undefined ? null : { text, newline: true }
         }
-        return this.readLine('standard-input', question, execution)
+        const echo = this._lineMode?.echo ?? true
+        return this.readLine('standard-input', question, execution, { echo })
     }
 
     /**
@@ -709,7 +940,8 @@ export class Terminal {
      * line of standard input. Any other read ignores an EOT, which is no character.
      *
      * A read that does not echo shows nothing of the line, but the Enter that ends it still starts
-     * a new line, which is what EASy68K does with its echo off.
+     * a new line, which is what EASy68K does with its echo off. A Linux tty with `ECHO` off echoes
+     * nothing at all, its new line included (`ECHONL` is off by default).
      */
     private async readLine(
         kind: 'line' | 'standard-input',
@@ -731,7 +963,7 @@ export class Terminal {
                     continue
                 }
                 if (character === LINE_FEED) {
-                    this.echo(read, LINE_FEED)
+                    if (read.options.echo || this._lineMode === null) this.echo(read, LINE_FEED)
                     return { text: read.line.join(''), newline: true }
                 }
                 if (character === BACKSPACE) {
@@ -800,7 +1032,7 @@ export class Terminal {
     private endRead(read: ActiveRead): void {
         if (this.activeRead !== read) return
         this.activeRead = null
-        this._pendingRead = null
+        this._pendingRead = this.rawRead
     }
 
     /** The pending read as the view sees it, republished whenever its line changes. */
@@ -873,13 +1105,93 @@ export class Terminal {
      */
     private eraseEcho(read: ActiveRead, erased: string): void {
         this.journal()
-        if (this._output.endsWith(erased)) this._output = this._output.slice(0, -erased.length)
+        const serial = this.serial
+        if (serial) {
+            //a serial line's echo may have overwritten the line, where taking it back writes a space
+            this.keepEditedLine()
+            if (serial.erase(erased)) this._output = serial.text
+        } else if (this._output.endsWith(erased)) {
+            this._output = this._output.slice(0, -erased.length)
+        }
         read.echo?.(BACKSPACE)
     }
 
     private type(text: string): void {
         this.typedInput.type(text)
         this.notifyInputChange()
+    }
+
+    /**
+     * Whether keys typed in the console go to the key sink as they are typed: raw mode, with an
+     * adapter to take them, for what is typed in the Terminal itself in an interactive run.
+     */
+    private get rawInput(): boolean {
+        return (
+            this._lineMode?.canonical === false && this.keySink !== null && this.typesInTerminal()
+        )
+    }
+
+    /** Whether what is typed in the console is the program's input now, which only termios shapes. */
+    private typesInTerminal(): boolean {
+        return this._inputSource.type === 'interactive' && this._keyboardInput === null
+    }
+
+    /**
+     * Raw mode's keys, echoed under `ECHO` as a tty echoes them (`echoOfTyped`) and handed to the
+     * key sink in the Target's encoding. The echo is journaled like any output: under the read
+     * that waited for the key, which Undo then asks again, or under no instruction for a key typed
+     * ahead, whose echo stays while the Core puts the key back.
+     */
+    private sendKeys(text: string): void {
+        const mode = this._lineMode
+        const sink = this.keySink
+        if (mode === null || sink === null || text.length === 0) return
+        if (mode.echo) this.write(echoOfTyped(text, mode.crToNl))
+        sink(encodeText(text, this.encoding))
+    }
+
+    /**
+     * Ctrl+C or Ctrl+\ under `ISIG`: what was typed and not read yet is dropped, a line being
+     * edited included, as Linux flushes it without `NOFLSH`; the key is echoed as `^C` under
+     * `ECHO`; and the signal goes to the signal sink. The Core drops what it had queued itself.
+     */
+    private raiseSignal(signal: number, control: number): boolean {
+        const sink = this.signalSink
+        if (sink === null) return false
+        this.typedInput.clear()
+        const read = this.activeRead
+        if (read && read.queue === this.typedInput && read.line.length > 0) {
+            read.line = []
+            this.publish(read)
+        }
+        if (this._lineMode?.echo) this.write(echoOfControl(control))
+        this.notifyInputChange()
+        sink(signal)
+        return true
+    }
+
+    /**
+     * Shows raw mode's standing read while raw mode takes the keys, so that a host reveals and
+     * focuses its console as for any read, and stops showing it when raw mode ends. The same view
+     * stands for as long as raw mode lasts with the same echo, so the console takes the keyboard
+     * when raw mode starts, not each time the program sets its termios again.
+     */
+    private refreshRawRead(): void {
+        const echo = this._lineMode?.echo === true
+        if (!this.rawInput) this.rawRead = null
+        else if (this.rawRead?.echo !== echo) {
+            this.rawRead = {
+                kind: 'keys',
+                question: RAW_KEYS_QUESTION,
+                endOfInput: false,
+                source: 'terminal',
+                enter: CARRIAGE_RETURN,
+                echo,
+                prompt: false,
+                line: ''
+            }
+        }
+        if (this.activeRead === null) this._pendingRead = this.rawRead
     }
 
     /** The queue the reads take from: the Screen keyboard in graphical use, else the Terminal's. */

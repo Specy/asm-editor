@@ -171,7 +171,7 @@ _Avoid_: args, parameters, command-line options
 
 ## Line discipline
 
-The **Terminal**'s rules for turning typed keys into what a program's read receives: a line read edits a line until Enter, a character read returns on a single keystroke with Enter giving the **Reference environment**'s code, and Ctrl+D gives **End of input** to standard input. It also decides the echo. It belongs to the editor, not to a Core or to the component that draws the Terminal.
+The **Terminal**'s rules for turning typed keys into what a program's read receives: a line read edits a line until Enter, a character read returns on a single keystroke with Enter giving the **Reference environment**'s code, and Ctrl+D gives **End of input** to standard input. It also decides the echo. It belongs to the editor, not to a Core or to the component that draws the Terminal. On x86 it follows the termios the program sets: in raw mode it hands each key to the Core as it is typed, as the bytes a serial terminal sends, and under `ISIG` Ctrl+C and Ctrl+\ raise `SIGINT` and `SIGQUIT` ([x86 devices](./docs/design/x86-devices.md)).
 _Avoid_: tty driver, input mode, canonical mode (except when contrasting line reads with character reads in a Linux context)
 
 ## FileSystem

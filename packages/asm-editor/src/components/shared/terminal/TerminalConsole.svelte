@@ -19,6 +19,11 @@
      * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
      * decision 12). A touch keyboard opens only for a focus inside a gesture, so a tap on the
      * console focuses it again.
+     *
+     * On x86 the Line discipline may take keys before they type anything (`Terminal.pressKey`):
+     * under `ISIG`, Ctrl+C and Ctrl+\ are the program's signals, so copying is Ctrl+Shift+C there;
+     * in raw mode every key goes to the program, Escape included, so Shift+Tab is the way out
+     * ([x86-devices.md](../../../../../../docs/design/x86-devices.md), The Terminal's modes).
      */
     import { tick, untrack } from 'svelte'
     import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
@@ -86,6 +91,13 @@
     const spans = $derived(escapes ? reader.spansOf(output) : null)
 
     const label = $derived(typingRead ? `Program input: ${typingRead.question}` : 'Program input')
+    /** What the keys do here, for a screen reader: raw mode keeps Escape for the program. */
+    const keysHelp = $derived(
+        (typingRead?.kind === 'keys'
+            ? 'Every key goes to the program as it is typed, Escape and Ctrl+D included. Shift+Tab gives the keyboard back to the page.'
+            : 'What is typed here goes to the program. Enter sends the line, Ctrl+D ends standard input, Escape gives the keyboard back to the page.') +
+            (terminal.signalsTyped ? ' Ctrl+C interrupts the program; Ctrl+Shift+C copies.' : '')
+    )
     //expressions, because Svelte trims the space a tag's text starts with
     const CLICK_HINT = ' · click to type'
     const TAP_HINT = ' · tap to type'
@@ -145,6 +157,14 @@
     }
 
     function handleKeyDown(event: KeyboardEvent) {
+        //Ctrl+C may be the program's interrupt, so the console copies on Ctrl+Shift+C, which
+        //would otherwise open the browser's element picker
+        if (isCopyKey(event)) {
+            event.preventDefault()
+            event.stopPropagation()
+            copySelection()
+            return
+        }
         //the program owns the keys while the console has focus: a key down stops here, so the
         //page's window-level shortcuts never see it (Shift+C would clear the execution while a
         //program reads it). Ctrl and ⌘ combinations type nothing: they keep their browser default
@@ -154,6 +174,13 @@
         if (!(event.ctrlKey || event.metaKey) || isEndOfInputKey(event)) event.stopPropagation()
         //a key an IME is composing with belongs to the IME
         if (event.isComposing || event.keyCode === 229) return
+        //a signal key under ISIG, and in raw mode every key a terminal sends: the Line
+        //discipline's, Ctrl combinations and Escape included
+        if (interactive && terminal.pressKey(event)) {
+            event.preventDefault()
+            event.stopPropagation()
+            return
+        }
         if (event.key === 'Escape') {
             input?.blur()
             return
@@ -186,6 +213,19 @@
             scroller.scrollTop += event.key === 'PageUp' ? -page : page
         }
         //text is left to the input event, which also carries dead keys, IMEs and phone keyboards
+    }
+
+    /** Ctrl+Shift+C, a terminal's copy, whose letter is found as Ctrl+D's is. */
+    function isCopyKey(event: KeyboardEvent): boolean {
+        if (!event.ctrlKey || !event.shiftKey || event.metaKey || event.altKey) return false
+        const key = event.key.toLowerCase()
+        return /^[a-z]$/.test(key) ? key === 'c' : event.code === 'KeyC'
+    }
+
+    /** What is selected on the page, put on the clipboard; nothing when nothing is selected. */
+    function copySelection() {
+        const text = window.getSelection()?.toString() ?? ''
+        if (text) void navigator.clipboard?.writeText(text).catch(() => {})
     }
 
     /** Ctrl+D, also on a Mac, where Ctrl is not the command key and the shortcut is a terminal's. */
@@ -387,10 +427,7 @@
                 >{screenRead.question} · type on the focused Screen</span
             >{/if}
     </div>
-    <span id="{id}-keys" class="visually-hidden">
-        What is typed here goes to the program. Enter sends the line, Ctrl+D ends standard input,
-        Escape gives the keyboard back to the page.
-    </span>
+    <span id="{id}-keys" class="visually-hidden">{keysHelp}</span>
 </div>
 
 <style lang="scss">

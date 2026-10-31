@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import TerminalConsole from './TerminalConsole.svelte'
-import { Terminal, type TerminalOptions } from '#lib/languages/peripherals/Terminal.svelte.ts'
+import {
+    Terminal,
+    type TerminalLineMode,
+    type TerminalOptions
+} from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 
 /**
@@ -492,5 +496,142 @@ describe('the keyboard', () => {
         expect(document.activeElement).toBe(textarea())
         await type('ok\n')
         expect(await read).toBe('ok')
+    })
+})
+
+describe('an x86 serial line', () => {
+    const COOKED: TerminalLineMode = {
+        canonical: true,
+        echo: true,
+        signals: true,
+        crToNl: true,
+        outputProcessing: true,
+        nlToCrNl: true
+    }
+    const MADE_RAW: TerminalLineMode = {
+        canonical: false,
+        echo: false,
+        signals: false,
+        crToNl: false,
+        outputProcessing: false,
+        nlToCrNl: false
+    }
+
+    /** A console on a Terminal wired as the x86 adapter wires it, recording keys and signals. */
+    function renderSerial(mode: TerminalLineMode) {
+        const rendered = render({ serialLine: true })
+        const keys: string[] = []
+        const signals: number[] = []
+        rendered.terminal.setKeySink((bytes) => keys.push(new TextDecoder().decode(bytes)))
+        rendered.terminal.setSignalSink((signal) => signals.push(signal))
+        rendered.terminal.setLineMode(mode)
+        flushSync()
+        return { ...rendered, keys, signals }
+    }
+
+    /** Records what reaches the page's window-level shortcuts while `run` presses keys. */
+    async function pageSees(run: () => Promise<void>): Promise<string[]> {
+        const seen: string[] = []
+        const listener = (event: KeyboardEvent) => seen.push(event.key)
+        window.addEventListener('keydown', listener)
+        try {
+            await run()
+        } finally {
+            window.removeEventListener('keydown', listener)
+        }
+        return seen
+    }
+
+    it('draws what a carriage return overwrote', () => {
+        const { terminal } = renderSerial(COOKED)
+        terminal.write('loading 10%\r\nloading\rLOAD')
+        flushSync()
+        expect(transcriptText()).toBe('loading 10%\nLOADing')
+    })
+
+    it('takes the keyboard when raw mode starts, and hands every key over as it is typed', async () => {
+        const { terminal, keys } = renderSerial(COOKED)
+        expect(document.activeElement).not.toBe(textarea())
+        terminal.setLineMode(MADE_RAW)
+        flushSync()
+        expect(document.activeElement).toBe(textarea())
+        //no prompt and no ring: the program draws what it wants
+        expect(document.querySelector('.awaiting-input')).toBeNull()
+        expect(document.querySelector('.hint')).toBeNull()
+        const seen = await pageSees(async () => {
+            await type('w')
+            const up = await press('ArrowUp')
+            expect(up.defaultPrevented).toBe(true)
+            await press('Enter')
+            await press('x', { ctrlKey: true })
+            await press('d', { ctrlKey: true })
+        })
+        expect(keys).toEqual(['w', '\x1b[A', '\r', '\x18', '\x04'])
+        expect(seen).toEqual([])
+        expect(transcriptText()).toBe('')
+        expect(endOfInputButton()).toBeNull()
+    })
+
+    it('gives Escape to the program in raw mode, and the keyboard back on Shift+Tab', async () => {
+        const { keys } = renderSerial(MADE_RAW)
+        expect(document.activeElement).toBe(textarea())
+        const escape = await press('Escape')
+        expect(escape.defaultPrevented).toBe(true)
+        expect(document.activeElement).toBe(textarea())
+        expect(keys).toEqual(['\x1b'])
+        //the browser moves the focus back for a Shift+Tab nobody prevented
+        const back = await press('Tab', { shiftKey: true })
+        expect(back.defaultPrevented).toBe(false)
+        expect(keys).toEqual(['\x1b'])
+        expect(
+            document.getElementById(textarea().getAttribute('aria-describedby')!)?.textContent
+        ).toContain('Shift+Tab gives the keyboard back')
+    })
+
+    it('raises SIGINT on Ctrl+C during a run under ISIG, which copying gives up', async () => {
+        const { terminal, signals, execution } = renderSerial(COOKED)
+        void terminal.readStandardInput(100, 'q', execution).catch(() => {})
+        flushSync()
+        const seen = await pageSees(async () => {
+            const interrupt = await press('c', { ctrlKey: true })
+            expect(interrupt.defaultPrevented).toBe(true)
+        })
+        expect(seen).toEqual([])
+        expect(signals).toEqual([2])
+        expect(transcriptText()).toBe('^C')
+        expect(
+            document.getElementById(textarea().getAttribute('aria-describedby')!)?.textContent
+        ).toContain('Ctrl+Shift+C copies')
+        terminal.cancelPendingInput()
+    })
+
+    it('keeps Ctrl+C a copy without ISIG, as on the other Targets', async () => {
+        const { terminal, signals, execution } = renderSerial({ ...COOKED, signals: false })
+        void terminal.readStandardInput(100, 'q', execution).catch(() => {})
+        flushSync()
+        const copy = await press('c', { ctrlKey: true })
+        expect(copy.defaultPrevented).toBe(false)
+        expect(signals).toEqual([])
+        terminal.cancelPendingInput()
+    })
+
+    it('copies the selection on Ctrl+Shift+C', async () => {
+        const writeText = vi.fn(() => Promise.resolve())
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+        try {
+            const { terminal, signals } = renderSerial(COOKED)
+            terminal.write('copy me')
+            flushSync()
+            const range = document.createRange()
+            range.selectNodeContents(document.querySelector('[role="log"]')!)
+            window.getSelection()?.removeAllRanges()
+            window.getSelection()?.addRange(range)
+            const copy = await press('C', { ctrlKey: true, shiftKey: true, code: 'KeyC' })
+            expect(copy.defaultPrevented).toBe(true)
+            expect(writeText).toHaveBeenCalledWith('copy me')
+            expect(signals).toEqual([])
+        } finally {
+            Reflect.deleteProperty(navigator, 'clipboard')
+        }
     })
 })
