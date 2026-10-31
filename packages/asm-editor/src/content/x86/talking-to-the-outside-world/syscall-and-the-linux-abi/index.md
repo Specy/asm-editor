@@ -156,8 +156,8 @@ programs normally inherit these three descriptors from the process that starts t
 Each descriptor names its current connection and may be redirected. Descriptor 1 can name a file,
 and descriptor 2 reaches a console only when standard error is connected there.
 
-In this playground, standard output is connected to the console panel. Interactive input is not
-connected to the x86 program's descriptor 0, so examples here should not wait for a line from it.
+In this playground, standard output is connected to the console panel, and standard input is what
+you type there: a read of descriptor 0 waits for a line ended with Enter.
 The precise system calls implemented by the playground, with their numbers and arguments, are on
 the [x86 syscall reference](/documentation/x86/syscall).
 
