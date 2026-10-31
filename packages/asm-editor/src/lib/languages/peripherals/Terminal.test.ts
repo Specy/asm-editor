@@ -1104,10 +1104,11 @@ describe('dialogs', () => {
     })
 })
 
-/** The termios a Linux program starts with: canonical, echoing, with signals, output processed. */
+/** The termios the guest's serial line starts with: canonical, echoing (control characters as themselves), with signals, output processed. */
 const COOKED: TerminalLineMode = {
     canonical: true,
     echo: true,
+    echoControl: false,
     signals: true,
     crToNl: true,
     outputProcessing: true,
@@ -1117,6 +1118,7 @@ const COOKED: TerminalLineMode = {
 const MADE_RAW: TerminalLineMode = {
     canonical: false,
     echo: false,
+    echoControl: false,
     signals: false,
     crToNl: false,
     outputProcessing: false,
@@ -1231,8 +1233,9 @@ describe('raw mode', () => {
         expect([...bytes[0].subarray(-2)]).toEqual([0xc3, 0xa9])
     })
 
-    it('echoes under ECHO as a tty does: control characters as ^X, Enter as a new line', () => {
-        const { terminal } = makeSerial(NONCANONICAL)
+    it('echoes under ECHO as a tty does: under ECHOCTL control characters as ^X', () => {
+        const echoControl = { ...NONCANONICAL, echoControl: true }
+        const { terminal } = makeSerial(echoControl)
         terminal.insertText('a')
         terminal.pressKey(key('ArrowLeft'))
         terminal.pressEnter()
@@ -1240,9 +1243,25 @@ describe('raw mode', () => {
         terminal.pressBackspace()
         expect(terminal.output).toBe('a^[[D\n^A^?')
         //without ICRNL the tty does not make Enter a new line, and echoes its carriage return
-        terminal.setLineMode({ ...NONCANONICAL, crToNl: false })
+        terminal.setLineMode({ ...echoControl, crToNl: false })
         terminal.pressEnter()
         expect(terminal.output).toBe('a^[[D\n^A^?^M')
+    })
+
+    it('echoes control characters as themselves without ECHOCTL, as the serial line starts', () => {
+        const { terminal } = makeSerial(NONCANONICAL)
+        terminal.insertText('a')
+        terminal.pressKey(ctrl('a'))
+        terminal.pressBackspace()
+        terminal.pressEnter()
+        //what a terminal shows of them: nothing
+        expect(terminal.output).toBe('a\x01\x7f\n')
+        //without ICRNL, Enter's carriage return takes the cursor back to the start of the line
+        terminal.setLineMode({ ...NONCANONICAL, crToNl: false })
+        terminal.insertText('bc')
+        terminal.pressEnter()
+        terminal.insertText('X')
+        expect(terminal.output).toBe('a\x01\x7f\nXc')
     })
 
     it('stands as a read of keys while it lasts, so a host reveals its console', () => {
@@ -1310,7 +1329,12 @@ describe('signals typed under ISIG', () => {
         expect(terminal.pressKey(ctrl('c'))).toBe(true)
         expect(terminal.pressKey(ctrl('\\'))).toBe(true)
         expect(signals).toEqual([2, 3])
-        expect(terminal.output).toBe('^C^\\')
+        //as themselves, without ECHOCTL; as ^C and ^\ with it
+        expect(terminal.output).toBe('\x03\x1c')
+        terminal.setLineMode({ ...COOKED, echoControl: true })
+        terminal.pressKey(ctrl('c'))
+        terminal.pressKey(ctrl('\\'))
+        expect(terminal.output).toBe('\x03\x1c^C^\\')
     })
 
     it('drop the line being typed and what was typed ahead, keeping its echo', async () => {
@@ -1325,7 +1349,7 @@ describe('signals typed under ISIG', () => {
         terminal.pressBackspace()
         terminal.insertText('d\n')
         expect(text(await read)).toBe('d\n')
-        expect(terminal.output).toBe('abc^Cd\n')
+        expect(terminal.output).toBe('abc\x03d\n')
         terminal.insertText('ahead')
         terminal.pressKey(ctrl('c'))
         expect(terminal.hasPendingInput()).toBe(false)

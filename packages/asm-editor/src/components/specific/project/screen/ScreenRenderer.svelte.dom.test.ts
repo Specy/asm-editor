@@ -11,6 +11,8 @@ import ScreenRenderer from './ScreenRenderer.svelte'
 import { createInjectedPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
 import {
     ABS_X,
+    BTN_EXTRA,
+    BTN_SIDE,
     EV_ABS,
     EV_KEY,
     EV_REL,
@@ -113,6 +115,51 @@ it('keeps the wheel from scrolling the page only while the Screen is focused', (
     canvas.dispatchEvent(focused)
     expect(focused.defaultPrevented).toBe(true)
     expect(reports).toEqual([['tablet', [{ type: EV_REL, code: REL_WHEEL, value: 1 }]]])
+})
+
+it("hands the back and forward buttons to the program's tablet and keeps them from navigating", () => {
+    const { canvas, reports } = panel()
+    const pointer = (type: string, button: number) => {
+        const event = new MouseEvent(type, { button, bubbles: true, cancelable: true })
+        canvas.dispatchEvent(event)
+        return event
+    }
+    //the back button focuses the Screen, as any button does
+    pointer('pointerdown', 3)
+    expect(document.activeElement).toBe(canvas)
+    const released = pointer('pointerup', 3)
+    pointer('pointerdown', 4)
+    pointer('pointerup', 4)
+    expect(reports.filter(([, events]) => events[0].type === EV_KEY)).toEqual([
+        ['tablet', [{ type: EV_KEY, code: BTN_SIDE, value: 1 }]],
+        ['tablet', [{ type: EV_KEY, code: BTN_SIDE, value: 0 }]],
+        ['tablet', [{ type: EV_KEY, code: BTN_EXTRA, value: 1 }]],
+        ['tablet', [{ type: EV_KEY, code: BTN_EXTRA, value: 0 }]]
+    ])
+    //the page goes back or forward on the release, which every event of it keeps from doing
+    expect(released.defaultPrevented).toBe(true)
+    expect(pointer('mouseup', 3).defaultPrevented).toBe(true)
+    expect(pointer('auxclick', 4).defaultPrevented).toBe(true)
+    expect(pointer('mousedown', 4).defaultPrevented).toBe(true)
+})
+
+it('keeps the back and forward buttons from navigating only while the Screen is focused', () => {
+    const { canvas, peripherals } = panel({ x86: false })
+    const mouseUp = (button: number) => {
+        const event = new MouseEvent('mouseup', { button, bubbles: true, cancelable: true })
+        canvas.dispatchEvent(event)
+        return event
+    }
+    expect(mouseUp(3).defaultPrevented).toBe(false)
+    canvas.focus()
+    expect(mouseUp(3).defaultPrevented).toBe(true)
+    expect(mouseUp(0).defaultPrevented).toBe(false)
+    //the other Targets' Mouse has three buttons: the history buttons reach no program there
+    const before = peripherals.mouse.lastDown()
+    canvas.dispatchEvent(
+        new MouseEvent('pointerdown', { button: 4, bubbles: true, cancelable: true })
+    )
+    expect(peripherals.mouse.lastDown()).toEqual(before)
 })
 
 it('lifts held keys and buttons when the Screen loses focus', () => {

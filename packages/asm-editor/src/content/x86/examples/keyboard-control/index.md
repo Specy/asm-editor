@@ -28,7 +28,6 @@ y:        dd 110
 page:     dd 1                      ; the page being drawn, the one not shown
 drawn_x:  dd 0, 0                   ; where each page last had the square:
 drawn_y:  dd 0, 0                   ; nowhere yet, and erasing there changes nothing
-display:  dd 0
 left:     db 0                      ; 1 while that arrow is held
 right:    db 0
 up:       db 0
@@ -213,12 +212,7 @@ redraw:
     call fill_rect
 
 present:
-    mov eax, SYS_ioctl              ; wait for the vertical blank
-    mov rdi, r12
-    mov esi, FBIO_WAITFORVSYNC
-    lea rdx, [display]
-    syscall
-    mov eax, [page]                 ; and show the page just drawn
+    mov eax, [page]                 ; show the page just drawn, at the vertical blank
     imul eax, [var + fb_var_screeninfo.yres]
     mov [var + fb_var_screeninfo.yoffset], eax
     mov eax, SYS_ioctl
@@ -273,9 +267,9 @@ or both; times `SPEED`, it is how far the square moves this frame. Past an edge 
 the edge.
 
 The drawing is the [bouncing ball's](/learn/courses/x86/examples/bouncing-ball): each frame erases
-the square on the page that is not shown, where that page last had it, draws it at its new place,
-waits for the vertical blank and pans to that page. A page that already has the square where it is
-now needs nothing drawn, so while no arrow is held a frame is only the wait and the pan.
+the square on the page that is not shown, where that page last had it, draws it at its new place
+and pans to that page, the pan waiting for the vertical blank. A page that already has the square
+where it is now needs nothing drawn, so while no arrow is held a frame is only the pan.
 
 `r15` counts the frames left before the program gives up. Every key event sets it back to 600, ten
 seconds at sixty frames a second, so the program ends only after ten seconds without a key.
@@ -350,10 +344,8 @@ int main(void) {
             drawn_x[page] = x;
             drawn_y[page] = y;
         }
-        uint32_t display = 0;
-        ioctl(fb, FBIO_WAITFORVSYNC, &display);
         var.yoffset = page * var.yres;
-        ioctl(fb, FBIOPAN_DISPLAY, &var);
+        ioctl(fb, FBIOPAN_DISPLAY, &var); /* waits for the vertical blank */
         page = 1 - page;
     }
     return 0;

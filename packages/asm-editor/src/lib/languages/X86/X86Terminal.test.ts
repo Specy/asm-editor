@@ -142,7 +142,7 @@ describe('the x86 Terminal in canonical mode', () => {
         expect(terminal.lineMode).toBeNull()
     })
 
-    it('sends SIGINT for Ctrl+C, echoed as ^C, which ends a program that does not handle it', async () => {
+    it('sends SIGINT for Ctrl+C, echoed as itself, which ends a program that does not handle it', async () => {
         const input = sources(program([...sys(0, 0, 'buf', 64), ...exit]))
         const emulator = await emulatorFor(input)
         await emulator.compile(50, input)
@@ -155,7 +155,8 @@ describe('the x86 Terminal in canonical mode', () => {
         await running
         expect(emulator.errors).toEqual([])
         expect(emulator.termination).toMatchObject({ kind: 'signal', number: 2, name: 'SIGINT' })
-        expect(emulator.stdOut).toBe('ab^C')
+        //the serial line has no ECHOCTL as agetty leaves it, so ^C echoes as the byte itself
+        expect(emulator.stdOut).toBe('ab\x03')
         expect(terminal.pendingRead).toBeNull()
         expect(terminal.lineMode).toBeNull()
     })
@@ -306,8 +307,8 @@ describe('x86 input devices in a Testcase', () => {
             program(
                 [...body, ...exit],
                 [
-                    "keyboard: db '/dev/input/event1', 0",
-                    "tablet: db '/dev/input/event3', 0",
+                    "keyboard: db '/dev/input/event0', 0",
+                    "tablet: db '/dev/input/event2', 0",
                     'fds: dd 0',
                     'dw 1, 0',
                     'dd 0',

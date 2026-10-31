@@ -4,7 +4,7 @@ Keys typed into the Terminal go to standard input only, and keys typed into a fo
 
 ## Opening the keyboard {#keyboard}
 
-Each input device is a file, `/dev/input/event0`, `event1` and so on. The numbers are given in the order the devices were found, and change from one machine to the next, so a program should not guess them. Here `event0` is the power button, and a program that reads it waits forever.
+Each input device is a file, `/dev/input/event0`, `event1` and so on. The numbers are given in the order the devices were found, and change from one machine to the next, so a program should not guess them. Here `event0` is the keyboard, `event1` the mouse's port, which stays silent, `event2` the pointer, `event3` the PC speaker and `event4` the power button, but a machine with a USB keyboard has it elsewhere, and a program that reads a device that never sends anything waits forever.
 
 Linux also makes names that say where a device is connected. The keyboard is:
 
@@ -70,7 +70,7 @@ A key gives an `EV_KEY` event whose code names the key and whose value is 1 when
 
 {eventCodes}
 
-The codes name keys by where they are, not by what they print: `KEY_Q` is the key to the right of Tab, which a French keyboard labels A. Left and right Shift, Ctrl and Alt are different keys. The Caps Lock, Num Lock and Scroll Lock keys also light the keyboard's lights, which arrive as `EV_LED` events in a report of their own.
+The codes name keys by where they are, not by what they print: `KEY_Q` is the key to the right of Tab, which a French keyboard labels A. Left and right Shift, Ctrl and Alt are different keys. The Caps Lock, Num Lock and Scroll Lock keys also light the keyboard's lights, which arrive as `EV_LED` events at the start of the report of the key's release.
 
 This NASM program waits for keys and counts in `r13` the ones that go down. It ends when Escape goes down, or after five seconds without a key.
 
@@ -164,7 +164,7 @@ Each `open` of a device gets its own queue of events, and every reader sees ever
 
 ## The pointer {#pointer}
 
-The pointer is a USB **tablet**: a device that reports where the pointer is, not how far it moved. It sends `EV_ABS` events with the codes `ABS_X` and `ABS_Y`, `EV_KEY` events for `BTN_LEFT`, `BTN_RIGHT` and `BTN_MIDDLE`, and `EV_REL` `REL_WHEEL` events for the wheel, 1 a notch away from you and -1 toward you. Each report ends with `SYN_REPORT`, so a move along both axes is two `EV_ABS` events and one `SYN_REPORT`.
+The pointer is a USB **tablet**: a device that reports where the pointer is, not how far it moved. It sends `EV_ABS` events with the codes `ABS_X` and `ABS_Y`, `EV_KEY` events for its five buttons, `BTN_LEFT`, `BTN_RIGHT`, `BTN_MIDDLE`, and `BTN_SIDE` and `BTN_EXTRA` for a mouse's back and forward buttons, which a focused Screen keeps from moving the page back and forward, and `EV_REL` `REL_WHEEL` events for the wheel, 1 a notch away from you and -1 toward you. Each report ends with `SYN_REPORT`, so a move along both axes is two `EV_ABS` events and one `SYN_REPORT`.
 
 The positions are not pixels. They run from 0 at the left or top edge of the Screen to 32767 at the right or bottom, whatever the Screen's size. The `EVIOCGABS(ABS_X)` ioctl fills a `struct input_absinfo` with the range, and the pixel is:
 
@@ -286,7 +286,7 @@ int main(void) {
 In NASM, `TCGETS` and `TCSETS` from `sys/ioctl.inc` read and change the same `struct termios` of `termios.inc`.
 
 - Without `ICANON`, a read returns as soon as one key is there. Keys typed before the read wait for it.
-- Without `ECHO`, typed keys are not shown.
+- Without `ECHO`, typed keys are not shown. With it, a control key such as Ctrl+A is echoed as its byte, which shows nothing: the Terminal starts without `ECHOCTL`, as the reference machine's serial line does, and a program that turns `ECHOCTL` on sees `^A`.
 - The arrows and the other special keys arrive as **escape sequences**, the bytes an `xterm` sends: the up arrow is `ESC [ A` (27, 91, 65), down `ESC [ B`, right `ESC [ C`, left `ESC [ D`, Home `ESC [ H` and End `ESC [ F`. Enter is 13, which a program reads as 10 unless it turned `ICRNL` off, and Backspace is 127.
 - In this mode Escape goes to the program. Press **Shift+Tab** to give the keyboard back to the page.
 - `cfmakeraw` turns off everything at once, output processing too: a `\n` then moves down without returning to the start of the line, so write `\r\n`.

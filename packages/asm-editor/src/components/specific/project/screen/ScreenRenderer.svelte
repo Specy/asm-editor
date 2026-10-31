@@ -14,7 +14,7 @@
     import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
     import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
     import type { Mouse, MouseButton } from '#lib/languages/peripherals/Mouse.ts'
-    import type { X86Input } from '#lib/languages/peripherals/x86Input.ts'
+    import type { X86Button, X86Input } from '#lib/languages/peripherals/x86Input.ts'
     import type { ScreenHeader } from './screenHeader'
 
     /**
@@ -92,6 +92,10 @@
     }: Props = $props()
 
     const MOUSE_BUTTONS: Record<number, MouseButton> = { 0: 'left', 1: 'middle', 2: 'right' }
+    //x86's tablet has five buttons: the browser's back and forward are BTN_SIDE and BTN_EXTRA
+    const X86_BUTTONS: Record<number, X86Button> = { ...MOUSE_BUTTONS, 3: 'side', 4: 'extra' }
+    /** The browser's back and forward buttons, which navigate the page on their own. */
+    const isHistoryButton = (event: MouseEvent) => event.button === 3 || event.button === 4
 
     //x86 reads the keys and the pointer as Linux input events, every other Target as its Keyboard
     //and Mouse
@@ -269,8 +273,32 @@
         }
     }
 
+    /** The button of a pointer event the program's input takes, if it takes it. */
+    function buttonOf(event: PointerEvent): X86Button | undefined {
+        return x86Input ? X86_BUTTONS[event.button] : MOUSE_BUTTONS[event.button]
+    }
+
+    function press(button: X86Button, down: boolean, x: number, y: number) {
+        if (x86Input) {
+            if (down) x86Input.buttonDown(button, x, y)
+            else x86Input.buttonUp(button, x, y)
+        } else if (button !== 'side' && button !== 'extra') {
+            if (down) mouse.buttonDown(button, x, y)
+            else mouse.buttonUp(button, x, y)
+        }
+    }
+
+    /**
+     * The back and forward buttons navigate the page from their release, which a focused Screen
+     * keeps them from doing on every Target, as it keeps the wheel from scrolling: on x86 they are
+     * the program's, and elsewhere they would take the learner away from a running program.
+     */
+    function keepHistoryButton(event: MouseEvent) {
+        if (focused && isHistoryButton(event)) event.preventDefault()
+    }
+
     function handlePointerDown(event: PointerEvent) {
-        const button = MOUSE_BUTTONS[event.button]
+        const button = buttonOf(event)
         if (!button) return
         //keeps the browser's gestures off the Screen: text selection, the drag image, and the
         //middle-click autoscroll that would otherwise steal the button from the program
@@ -281,7 +309,7 @@
         //a drag that started inside keeps reporting until the button comes back up, wherever the
         //pointer goes (ADR 0008)
         canvas?.setPointerCapture(event.pointerId)
-        pointer.buttonDown(button, x, y)
+        press(button, true, x, y)
     }
 
     function handlePointerMove(event: PointerEvent) {
@@ -291,12 +319,13 @@
     }
 
     function handlePointerUp(event: PointerEvent) {
-        const button = MOUSE_BUTTONS[event.button]
+        keepHistoryButton(event)
+        const button = buttonOf(event)
         const { x, y } = logicalPosition(event)
         if (canvas?.hasPointerCapture(event.pointerId))
             canvas.releasePointerCapture(event.pointerId)
         if (!button) return
-        pointer.buttonUp(button, x, y)
+        press(button, false, x, y)
     }
 
     function handlePointerCancel(event: PointerEvent) {
@@ -551,6 +580,8 @@
                 onpointercancel={handlePointerCancel}
                 oncontextmenu={(e) => e.preventDefault()}
                 onauxclick={(e) => e.preventDefault()}
+                onmousedown={keepHistoryButton}
+                onmouseup={keepHistoryButton}
             ></canvas>
         </div>
     </div>

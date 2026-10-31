@@ -28,7 +28,6 @@ step_y:    dd 2
 page:      dd 1                     ; the page being drawn, the one not shown
 drawn_x:   dd 40, 40                ; where each page last had the ball
 drawn_y:   dd 30, 30
-display:   dd 0                     ; FBIO_WAITFORVSYNC's argument: the first display
 
 section .bss
 var:       resb fb_var_screeninfo_size
@@ -171,12 +170,7 @@ ball_row:
     cmp r14d, BALL
     jb ball_row
 
-    mov eax, SYS_ioctl              ; wait for the vertical blank
-    mov rdi, r12
-    mov esi, FBIO_WAITFORVSYNC
-    lea rdx, [display]
-    syscall
-    mov eax, [page]                 ; and show the page just drawn
+    mov eax, [page]                 ; show the page just drawn, at the vertical blank
     imul eax, [var + fb_var_screeninfo.yres]
     mov [var + fb_var_screeninfo.yoffset], eax
     mov eax, SYS_ioctl
@@ -229,11 +223,12 @@ calls of `fill_rect`, not 256 pixel tests.
 
 ## One frame per vertical blank
 
-`FBIO_WAITFORVSYNC` waits for the **vertical blank**, the moment between two pictures on the
-monitor, which comes sixty times a second. Waiting for it and then panning is the frame loop of
-real hardware: the new page is shown between two pictures, never in the middle of one, and the
-animation runs at sixty frames a second however fast the program draws. Its argument points to a
-32-bit 0, the first display.
+The pan waits for the **vertical blank**, the moment between two pictures on the monitor, which
+comes sixty times a second, and shows the new page then: never in the middle of a picture. So the
+frame loop is only **draw, then pan**, and the animation runs at sixty frames a second however fast
+the program draws. `FBIO_WAITFORVSYNC` waits for the vertical blank without panning; called before
+the pan it would cost a second blank each frame, and the ball would move at thirty frames a
+second.
 
 After `FRAMES` frames the program ends, and the Screen keeps the last frame. Change `FRAMES` to
 6000 to watch it for 100 seconds.

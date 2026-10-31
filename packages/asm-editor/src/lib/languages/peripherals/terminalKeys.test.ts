@@ -138,6 +138,13 @@ describe('the echo of raw keys', () => {
         expect(echoOfControl(0x1c)).toBe('^\\')
     })
 
+    it('shows control characters as themselves without ECHOCTL', () => {
+        expect(echoOfTyped('a\x03b\x1b[A\x7f\t', true, false)).toBe('a\x03b\x1b[A\x7f\t')
+        expect(echoOfTyped('\r', true, false)).toBe('\n')
+        expect(echoOfTyped('\r', false, false)).toBe('\r')
+        expect(echoOfControl(0x03, false)).toBe('\x03')
+    })
+
     it('echoes Enter as a new line under ICRNL, and as ^M without it', () => {
         expect(echoOfTyped('ok\r', true)).toBe('ok\n')
         expect(echoOfTyped('ok\r', false)).toBe('ok^M')

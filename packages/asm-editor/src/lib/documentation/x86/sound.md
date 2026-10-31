@@ -357,7 +357,7 @@ The card has only two channels with an effect: `VOLUME`, which starts at 73, and
 
 ## What is different from a real Linux machine {#differences}
 
-The devices behave as they do on a QEMU virtual machine running Linux, the reference this emulator follows, with FluidSynth playing the MIDI port. These are the places where they do not:
+The devices behave as they do on a QEMU virtual machine running Linux, the reference this emulator follows, with FluidSynth playing the MIDI port on a sound card of its own, so `/dev/dsp` and the MIDI port sound together there too. These are the places where they do not:
 
 - **The instruments sound different.** The synthesizer plays the same sound bank as the MIPS and RISC-V Notes, not FluidSynth's.
 - **The MIDI port sends at MIDI's speed.** The reference's port is a virtual one with no cable, which sends at once; here each byte takes the 320 µs it takes on a MIDI cable.
@@ -367,7 +367,8 @@ The devices behave as they do on a QEMU virtual machine running Linux, the refer
 
 ## Not covered {#not-covered}
 
-- **ALSA's own sound devices**, `/dev/snd/pcmC0D0p`, `controlC0` and `seq`: made for the libasound library, whose setup cannot sensibly be written by hand. Use `/dev/dsp`, `/dev/mixer` and the MIDI port, which reach the same card. Opening one fails with `ENODEV`, and the **Log** names what to use instead.
+- **ALSA's own sound devices**, `/dev/snd/pcmC0D0p`, `controlC0`, `seq` and the rest: made for the libasound library, whose setup cannot sensibly be written by hand. Use `/dev/dsp`, `/dev/mixer` and the MIDI port, which reach the same card. Opening one fails with `ENODEV`, and the **Log** names what to use instead.
+- **The second sound card's devices**, `/dev/dsp2`, `/dev/audio2` and `/dev/mixer2`: the reference machine's FluidSynth plays on that card. Use `/dev/dsp`.
 - **`/dev/audio`**, μ-law samples: use `/dev/dsp`.
 - **Recording**, reading `/dev/dsp`: a microphone would ask for permission in the middle of a run.
 - **`mmap` of `/dev/dsp`**, and turning playback off with `SNDCTL_DSP_SETTRIGGER`, which goes with it: write the samples instead. `SNDCTL_DSP_GETCAPS` leaves out `DSP_CAP_MMAP`, so a careful program sees this.

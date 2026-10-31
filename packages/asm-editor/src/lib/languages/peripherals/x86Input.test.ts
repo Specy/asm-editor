@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vite-plus/test'
 import {
     ABS_X,
     ABS_Y,
+    BTN_EXTRA,
     BTN_LEFT,
     BTN_MIDDLE,
     BTN_RIGHT,
+    BTN_SIDE,
     EV_ABS,
     EV_KEY,
     EV_REL,
@@ -132,6 +134,22 @@ describe('the pointer', () => {
             ['tablet', [key(BTN_LEFT, 0)]]
         ])
         expect(BTN_MIDDLE).toBe(0x112)
+    })
+
+    it("reports the browser's back and forward buttons as the tablet's BTN_SIDE and BTN_EXTRA", () => {
+        const { input, reports } = connected()
+        input.moveTo(0, 0)
+        reports.length = 0
+        input.buttonDown('side')
+        input.buttonDown('extra')
+        input.releaseAll()
+        expect(reports).toEqual([
+            ['tablet', [key(BTN_SIDE, 1)]],
+            ['tablet', [key(BTN_EXTRA, 1)]],
+            ['tablet', [key(BTN_SIDE, 0)]],
+            ['tablet', [key(BTN_EXTRA, 0)]]
+        ])
+        expect([BTN_SIDE, BTN_EXTRA]).toEqual([0x113, 0x114])
     })
 })
 

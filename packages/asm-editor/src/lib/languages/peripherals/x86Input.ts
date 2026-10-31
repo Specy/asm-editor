@@ -2,6 +2,12 @@ import { linuxKeyCode } from './linuxKeyCodes'
 import type { MouseButton, MouseScreen } from './Mouse'
 
 /**
+ * A button of the tablet: the Mouse's three, and the browser's back and forward buttons, which QEMU
+ * 10.2's tablet reports as `BTN_SIDE` and `BTN_EXTRA`, as its own windows do.
+ */
+export type X86Button = MouseButton | 'side' | 'extra'
+
+/**
  * The Screen's keys and pointer as an x86 program receives them: the input events of the guest's
  * keyboard and of QEMU's USB tablet, read from `/dev/input`
  * ([x86 devices](../../../../../../docs/design/x86-devices.md), "The keyboard device" and "The
@@ -20,7 +26,9 @@ import type { MouseButton, MouseScreen } from './Mouse'
  *   across the whole Screen as QEMU scales them, ⌊x × 32767 ÷ width⌋ of the whole logical pixel
  *   the pointer is on. Positions are clamped to the Screen, so a drag past an edge pins that axis
  *   ([ADR 0008](../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md));
- * - a button is `EV_KEY` `BTN_LEFT`, `BTN_RIGHT` or `BTN_MIDDLE`, after a move to where it happened;
+ * - a button is `EV_KEY` `BTN_LEFT`, `BTN_RIGHT`, `BTN_MIDDLE`, or, for the browser's back and
+ *   forward buttons, `BTN_SIDE` and `BTN_EXTRA`, as QEMU 10.2's five-button tablet has them, after a
+ *   move to where it happened;
  * - a wheel notch is `EV_REL` `REL_WHEEL`, +1 away from the user and -1 towards.
  *
  * What the guest's drivers add (`MSC_SCAN` before keys and buttons, `REL_WHEEL_HI_RES` beside the
@@ -64,6 +72,8 @@ export const REL_WHEEL = 0x08
 export const BTN_LEFT = 0x110
 export const BTN_RIGHT = 0x111
 export const BTN_MIDDLE = 0x112
+export const BTN_SIDE = 0x113
+export const BTN_EXTRA = 0x114
 
 /** An `EV_KEY` event's value: the key came up, went down, or repeats while held. */
 export const KEY_UP = 0
@@ -73,10 +83,12 @@ export const KEY_REPEAT = 2
 /** The tablet's range on both axes, `EVIOCGABS`'s maximum: QEMU's `INPUT_EVENT_ABS_MAX`. */
 export const TABLET_AXIS_MAX = 0x7fff
 
-const BUTTON_CODES: Readonly<Record<MouseButton, number>> = {
+const BUTTON_CODES: Readonly<Record<X86Button, number>> = {
     left: BTN_LEFT,
     right: BTN_RIGHT,
-    middle: BTN_MIDDLE
+    middle: BTN_MIDDLE,
+    side: BTN_SIDE,
+    extra: BTN_EXTRA
 }
 
 /** `WheelEvent.deltaMode`'s values. */
@@ -194,7 +206,7 @@ export class X86Input {
     }
 
     /** A button went down, at the given position or where the pointer already is. */
-    buttonDown(button: MouseButton, x?: number, y?: number): void {
+    buttonDown(button: X86Button, x?: number, y?: number): void {
         if (!this.sink) return
         if (x !== undefined && y !== undefined) this.moveTo(x, y)
         const code = BUTTON_CODES[button]
@@ -204,7 +216,7 @@ export class X86Input {
     }
 
     /** A button came up, at the given position or where the pointer already is. */
-    buttonUp(button: MouseButton, x?: number, y?: number): void {
+    buttonUp(button: X86Button, x?: number, y?: number): void {
         if (!this.sink) return
         if (x !== undefined && y !== undefined) this.moveTo(x, y)
         const code = BUTTON_CODES[button]

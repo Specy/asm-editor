@@ -163,28 +163,32 @@ function functionKeySequence(number: number, modifier: number): string {
 }
 
 /**
- * How a Linux tty echoes what is typed in raw mode under `ECHO`, with `ECHOCTL` on as it is by
- * default: a control character shows as `^` and the character 64 above it (`^C`, `^[` for Escape,
- * `^?` for DEL), except a tab, which is echoed as it is. Enter is `\r`: with `ICRNL` the tty has
- * made it a new line before echoing it, and without it shows `^M`. Everything else is echoed as
- * typed.
+ * How a Linux tty echoes what is typed in raw mode under `ECHO`. With `ECHOCTL` a control character
+ * shows as `^` and the character 64 above it (`^C`, `^[` for Escape, `^?` for DEL), except a tab,
+ * which is echoed as it is; without it, as on the guest's serial line as agetty leaves it, a control
+ * character is echoed as itself, which shows nothing but what a terminal does with it (a carriage
+ * return, a backspace). Enter is `\r`: with `ICRNL` the tty has made it a new line before echoing
+ * it, and without it shows `^M`, or returns the cursor. Everything else is echoed as typed.
  */
-export function echoOfTyped(text: string, crToNl: boolean): string {
+export function echoOfTyped(text: string, crToNl: boolean, echoControl = true): string {
     let echo = ''
     for (const character of text) {
         if (character === '\r' && crToNl) echo += '\n'
-        else echo += echoOfCharacter(character.codePointAt(0) ?? 0, character)
+        else echo += echoOfCharacter(character.codePointAt(0) ?? 0, character, echoControl)
     }
     return echo
 }
 
-/** One control character as `ECHOCTL` echoes it, `^C` for `0x03`; others as they are. */
-export function echoOfControl(code: number): string {
-    return echoOfCharacter(code, String.fromCharCode(code))
+/**
+ * One control character as the tty echoes it: under `ECHOCTL` `^C` for `0x03`, without it the
+ * character itself; others as they are.
+ */
+export function echoOfControl(code: number, echoControl = true): string {
+    return echoOfCharacter(code, String.fromCharCode(code), echoControl)
 }
 
-function echoOfCharacter(code: number, character: string): string {
-    if ((code < 0x20 && character !== '\t') || code === DELETE) {
+function echoOfCharacter(code: number, character: string, echoControl: boolean): string {
+    if (echoControl && ((code < 0x20 && character !== '\t') || code === DELETE)) {
         return `^${String.fromCharCode(code ^ 0x40)}`
     }
     return character

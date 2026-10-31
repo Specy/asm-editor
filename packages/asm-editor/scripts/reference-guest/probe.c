@@ -7,7 +7,7 @@
  *
  *     probe [--qemu=VERSION] [--machine=TYPE] SECTION
  *
- * SECTION is system, nodes, input, events, fb, dsp-busy, dsp, mixer, midi,
+ * SECTION is system, nodes, input, events, fb, dsp-midi, dsp, mixer, midi,
  * speaker or console. Each prints one fact a line, key=value, in an order
  * that does not change between runs, so two runs diff line by line; text a
  * file holds verbatim is printed a line at a time as key[NN]=line. A call
@@ -577,8 +577,9 @@ static int WantDev(const char *name) {
 
 static void SectionNodes(void) {
   static const char *kNamed[] = {
-      "/dev/fb0", "/dev/fb1", "/dev/tty0", "/dev/dsp", "/dev/dsp1", "/dev/adsp",
-      "/dev/mixer", "/dev/mixer1", "/dev/audio", "/dev/audio1", "/dev/midi",
+      "/dev/fb0", "/dev/fb1", "/dev/tty0", "/dev/dsp", "/dev/dsp1", "/dev/dsp2",
+      "/dev/adsp", "/dev/mixer", "/dev/mixer1", "/dev/mixer2", "/dev/audio",
+      "/dev/audio1", "/dev/audio2", "/dev/midi",
       "/dev/midi00", "/dev/midi01", "/dev/midi1", "/dev/amidi", "/dev/amidi1",
       "/dev/dmmidi", "/dev/dmmidi1", "/dev/admmidi", "/dev/admmidi1",
       "/dev/sequencer", "/dev/sequencer2", "/dev/music", "/dev/sndstat",
@@ -767,6 +768,16 @@ static void DescribeEventDevice(int number) {
       }
     }
     out("%s.keymap.count=%d", key, count);
+    // EVIOCGKEYCODE by scan code: a key's, a tablet button's, and none
+    {
+      static const unsigned kScancodes[] = {0x1e, 0x90004, 0x90006};
+      for (i = 0; i < 3; ++i) {
+        unsigned int sk[2] = {kScancodes[i], 0xffff};
+        errno = 0;
+        rc = ioctl(fd, EVIOCGKEYCODE, sk);
+        out("%s.getkeycode_0x%x=%s %u", key, kScancodes[i], rc_text(rc, errno), sk[1]);
+      }
+    }
   }
   // EVIOCSREP and what reads back, at once and once the driver had time
   if (TestBit(evbits, EV_REP)) {
@@ -1337,18 +1348,53 @@ static size_t MakeTone(void *buf, int rate, int channels, int format, double hz,
   return frames * channels * (format == AFMT_S16_LE ? 2 : 1);
 }
 
-static void SectionDspBusy(void) {
-  int fd = open("/dev/dsp", O_WRONLY);
-  out("dsp_busy.open_wronly=%s", fd < 0 ? rc_text(-1, errno) : "0");
+/* /dev/dsp while FluidSynth plays: it holds the USB card's playback (card
+ * 2), so the HDA card's, /dev/dsp's, is free. Then a tone on /dev/dsp at
+ * 1250 Hz with an organ's C5 from the MIDI port under it, which the
+ * recording should hold together. */
+static void SectionDspMidi(void) {
+  static int16_t tone[44100 * 2 * 3 / 2];
+  int fd, midi, v;
+  size_t size;
+  fd = open("/dev/dsp", O_WRONLY);
+  out("dsp_midi.open_wronly=%s", fd < 0 ? rc_text(-1, errno) : "0");
   if (fd >= 0) close(fd);
   fd = open("/dev/dsp", O_WRONLY | O_NONBLOCK);
-  out("dsp_busy.open_wronly_nonblock=%s", fd < 0 ? rc_text(-1, errno) : "0");
+  out("dsp_midi.open_wronly_nonblock=%s", fd < 0 ? rc_text(-1, errno) : "0");
   if (fd >= 0) close(fd);
   fd = open("/dev/mixer", O_RDWR);
-  out("dsp_busy.open_mixer=%s", fd < 0 ? rc_text(-1, errno) : "0");
+  out("dsp_midi.open_mixer=%s", fd < 0 ? rc_text(-1, errno) : "0");
   if (fd >= 0) close(fd);
-  dump_file("dsp_busy.proc_status", "/proc/asound/card0/pcm0p/sub0/status");
-  DumpHwParams("dsp_busy");
+  dump_file("dsp_midi.card0_status", "/proc/asound/card0/pcm0p/sub0/status");
+  dump_file("dsp_midi.card2_status", "/proc/asound/card2/pcm0p/sub0/status");
+  dump_file("dsp_midi.card2_hw_params", "/proc/asound/card2/pcm0p/sub0/hw_params");
+  if ((midi = open("/dev/snd/midiC1D0", O_WRONLY)) < 0) {
+    out("dsp_midi.midi_open=-1 %s", en(errno));
+    return;
+  }
+  if ((fd = DspOpen("dsp_midi.together", O_WRONLY)) < 0) {
+    close(midi);
+    return;
+  }
+  SetInt("dsp_midi.together", "setfmt", fd, SNDCTL_DSP_SETFMT, AFMT_S16_LE);
+  SetInt("dsp_midi.together", "channels", fd, SNDCTL_DSP_CHANNELS, 2);
+  SetInt("dsp_midi.together", "speed", fd, SNDCTL_DSP_SPEED, 44100);
+  size = MakeTone(tone, 44100, 2, AFMT_S16_LE, 1250, 1.5);
+  {
+    // Church Organ on channel 1, C5, which holds as long as the key does
+    unsigned char on[] = {0xc0, 19, 0x90, 72, 110};
+    out("dsp_midi.together.note_on=%s", RC(write(midi, on, sizeof(on))));
+  }
+  out("dsp_midi.together.write=%s", TIMED(write(fd, tone, size)));
+  v = 0;
+  out("dsp_midi.together.sync=%s", TIMED(ioctl(fd, SNDCTL_DSP_SYNC, &v)));
+  {
+    unsigned char off[] = {0x80, 72, 0, 0xc0, 0};
+    out("dsp_midi.together.note_off=%s", RC(write(midi, off, sizeof(off))));
+  }
+  close(fd);
+  close(midi);
+  msleep(500);
 }
 
 static void SectionDsp(void) {
@@ -1790,7 +1836,7 @@ static void SectionMidi(void) {
     close(fd);
   }
   // a note on the first port and one on OSS's /dev/midi1, which FluidSynth
-  // plays on the HDA card (C5 then E5, piano)
+  // plays on the USB card (C5 then E5, piano)
   if ((fd = open("/dev/snd/midiC1D0", O_WRONLY)) >= 0) {
     unsigned char on[] = {0xc0, 0x00, 0x90, 72, 100}, off[] = {0x80, 72, 0};
     out("midi.note.on=%s", TIMED(write(fd, on, sizeof(on))));
@@ -1931,12 +1977,18 @@ static void SectionSpeaker(void) {
     out("speaker.tty0.open=-1 %s", en(errno));
   } else {
     struct termios t;
+    char cc[256];
+    int i, n = 0;
     out("speaker.tty0.open=0");
     out("speaker.tty0.isatty=%d", isatty(tty));
     errno = 0;
     rc = tcgetattr(tty, &t);
     out("speaker.tty0.tcgetattr=%s iflag 0%o oflag 0%o cflag 0%o lflag 0%o", rc_text(rc, errno),
         rc ? 0 : t.c_iflag, rc ? 0 : t.c_oflag, rc ? 0 : t.c_cflag, rc ? 0 : t.c_lflag);
+    if (!rc) {
+      for (i = 0; i < 19; ++i) n += sprintf(cc + n, "%s%d", i ? " " : "", t.c_cc[i]);
+      out("speaker.tty0.cc=%s", cc);
+    }
     {
       int mode = -1;
       errno = 0;
@@ -1955,9 +2007,27 @@ static void SectionSpeaker(void) {
       out("speaker.tty0.kdgkbled=%s %d", rc_text(rc, errno), leds);
       struct vt_stat vs;
       memset(&vs, 0, sizeof(vs));
+      vs.v_signal = 0x5a5a;
       errno = 0;
       rc = ioctl(tty, VT_GETSTATE, &vs);
       out("speaker.tty0.vt_getstate=%s active %u", rc_text(rc, errno), vs.v_active);
+      out("speaker.tty0.vt_getstate.signal_state=0x%x 0x%x", vs.v_signal, vs.v_state);
+      // the console's modes set and read back, then put back
+      out("speaker.tty0.kdsetmode_graphics=%s", RC(ioctl(tty, KDSETMODE, KD_GRAPHICS)));
+      mode = -1;
+      ioctl(tty, KDGETMODE, &mode);
+      out("speaker.tty0.kdgetmode_after=%d", mode);
+      out("speaker.tty0.kdsetmode_5=%s", RC(ioctl(tty, KDSETMODE, 5)));
+      out("speaker.tty0.kdsetmode_text1=%s", RC(ioctl(tty, KDSETMODE, KD_TEXT1)));
+      mode = -1;
+      ioctl(tty, KDGETMODE, &mode);
+      out("speaker.tty0.kdgetmode_after_text1=%d", mode);
+      out("speaker.tty0.kdskbmode_xlate=%s", RC(ioctl(tty, KDSKBMODE, K_XLATE)));
+      kb = -1;
+      ioctl(tty, KDGKBMODE, &kb);
+      out("speaker.tty0.kdgkbmode_after=%d", kb);
+      out("speaker.tty0.kdskbmode_9=%s", RC(ioctl(tty, KDSKBMODE, 9)));
+      out("speaker.tty0.kdskbmode_unicode=%s", RC(ioctl(tty, KDSKBMODE, K_UNICODE)));
     }
     Mark("kiocsound_880");
     out("speaker.tty0.kiocsound_880=%s", RC(ioctl(tty, KIOCSOUND, 1193182 / 880)));
@@ -2086,8 +2156,8 @@ int main(int argc, char **argv) {
     SectionEvents();
   } else if (!strcmp(section, "fb")) {
     SectionFb();
-  } else if (!strcmp(section, "dsp-busy")) {
-    SectionDspBusy();
+  } else if (!strcmp(section, "dsp-midi")) {
+    SectionDspMidi();
   } else if (!strcmp(section, "dsp")) {
     SectionDsp();
   } else if (!strcmp(section, "mixer")) {

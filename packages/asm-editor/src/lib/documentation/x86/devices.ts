@@ -169,7 +169,7 @@ function screen(): Chapter {
         title: 'The Screen',
         href,
         description:
-            'Draw on the Screen through /dev/fb0: read its size, map its pixels, show the other page for smooth animation, wait for the vertical blank, and choose its size with @screen.',
+            'Draw on the Screen through /dev/fb0: read its size, map its pixels, draw the next frame on the hidden page and pan to it at the vertical blank, and choose its size with @screen.',
         entries: proseEntries({
             language: 'x86',
             chapter: 'screen',
@@ -210,6 +210,8 @@ function input(): Chapter {
             ['BTN_LEFT', "The pointer's left button"],
             ['BTN_RIGHT', 'Its right button'],
             ['BTN_MIDDLE', 'Its middle button, the wheel pressed'],
+            ['BTN_SIDE', "Its back button, the browser's back"],
+            ['BTN_EXTRA', 'Its forward button'],
             ['ABS_X', "The pointer's position across, 0 to 32767"],
             ['ABS_Y', 'Its position down, 0 to 32767'],
             ['REL_WHEEL', 'A wheel notch: 1 away from you, -1 toward you']

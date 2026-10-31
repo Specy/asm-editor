@@ -91,6 +91,12 @@ export type TerminalLineMode = {
     readonly canonical: boolean
     /** `ECHO`: what is typed is echoed into the transcript. */
     readonly echo: boolean
+    /**
+     * `ECHOCTL`: under `ECHO`, a control character typed is echoed as `^` and a letter; off, as
+     * itself, which shows nothing but what a terminal does with it. The guest's serial line starts
+     * with it off.
+     */
+    readonly echoControl: boolean
     /** `ISIG`: Ctrl+C and Ctrl+\ raise SIGINT and SIGQUIT through the signal sink. */
     readonly signals: boolean
     /** `ICRNL`: the Core makes Enter's `\r` a `\n`, so its echo is a new line rather than `^M`. */
@@ -1146,14 +1152,15 @@ export class Terminal {
         const mode = this._lineMode
         const sink = this.keySink
         if (mode === null || sink === null || text.length === 0) return
-        if (mode.echo) this.write(echoOfTyped(text, mode.crToNl))
+        if (mode.echo) this.write(echoOfTyped(text, mode.crToNl, mode.echoControl))
         sink(encodeText(text, this.encoding))
     }
 
     /**
      * Ctrl+C or Ctrl+\ under `ISIG`: what was typed and not read yet is dropped, a line being
      * edited included, as Linux flushes it without `NOFLSH`; the key is echoed as `^C` under
-     * `ECHO`; and the signal goes to the signal sink. The Core drops what it had queued itself.
+     * `ECHO`, or as itself without `ECHOCTL`; and the signal goes to the signal sink. The Core
+     * drops what it had queued itself.
      */
     private raiseSignal(signal: number, control: number): boolean {
         const sink = this.signalSink
@@ -1164,7 +1171,7 @@ export class Terminal {
             read.line = []
             this.publish(read)
         }
-        if (this._lineMode?.echo) this.write(echoOfControl(control))
+        if (this._lineMode?.echo) this.write(echoOfControl(control, this._lineMode.echoControl))
         this.notifyInputChange()
         sink(signal)
         return true

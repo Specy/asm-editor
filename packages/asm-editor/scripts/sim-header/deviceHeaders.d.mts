@@ -15,7 +15,7 @@ export type DeviceProbeEntry = {
     linux: boolean
     /** False for what only the kernel's or the C library's headers have, such as `SYS_read`. */
     c: boolean
-    /** Why the guest's Linux 6.12 has this value where a later kernel's headers differ. */
+    /** Why the guest's Linux 7.2 has this value where a later kernel's headers differ. */
     guest?: string
     /** A POSIX call's type, compared with the C library's declaration. */
     function?: true

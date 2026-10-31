@@ -4,7 +4,7 @@
  * `deviceHeaders.mjs` writes the C headers and the NASM include files from it, and the layout
  * test compares what it promises with the kernel's UAPI headers and glibc's.
  *
- * Values are Linux x86-64's, as the pinned guest's Linux 6.12 has them
+ * Values are Linux x86-64's, as the pinned guest's Linux 7.2 has them
  * ([x86-devices.md](../../../../docs/design/x86-devices.md)). A value is a number, or a C expression
  * over other names of the table, which both languages read; an ioctl request is its direction,
  * type, number and argument type, as `_IOR('E', 0x02, struct input_id)` spells it. The comments
@@ -1146,7 +1146,9 @@ export const DEVICE_HEADERS = [
             define('SYN_CNT', 'SYN_MAX + 1'),
             note("EV_KEY's codes for keys."),
             ...keyCodes.map(([name, value]) => define(name, value)),
-            note("EV_KEY's codes for buttons. The tablet has BTN_LEFT, BTN_RIGHT and BTN_MIDDLE."),
+            note(
+                "EV_KEY's codes for buttons. The tablet has BTN_LEFT, BTN_RIGHT, BTN_MIDDLE, BTN_SIDE and BTN_EXTRA, the browser's back and forward buttons."
+            ),
             ...defines(
                 [
                     ['BTN_MISC', 0x100],
@@ -1887,15 +1889,12 @@ export const DEVICE_HEADERS = [
                 ['major', 'minor', 'subminor'],
                 '(((major) << 16) | ((minor) << 8) | (subminor))',
                 'A version number from its three parts.',
-                { samples: [['2', '0', '4']] }
+                { samples: [['2', '0', '5']] }
             ),
             define(
                 'SNDRV_RAWMIDI_VERSION',
-                'SNDRV_PROTOCOL_VERSION(2, 0, 4)',
-                'What SNDRV_RAWMIDI_IOCTL_PVERSION answers on Linux 6.12',
-                {
-                    guest: 'Linux 6.14 made it 2.0.5'
-                }
+                'SNDRV_PROTOCOL_VERSION(2, 0, 5)',
+                "What SNDRV_RAWMIDI_IOCTL_PVERSION answers on the guest's Linux 7.2"
             ),
             note('The two directions of a port.'),
             define('SNDRV_RAWMIDI_STREAM_OUTPUT', 0, 'From the program to the synthesizer'),
@@ -1925,10 +1924,8 @@ export const DEVICE_HEADERS = [
                     field('unsigned char', 'subname', undefined, { count: 32 }),
                     field('unsigned int', 'subdevices_count'),
                     field('unsigned int', 'subdevices_avail'),
-                    field('unsigned char', 'reserved', undefined, {
-                        count: 64,
-                        guest: 'Linux 6.14 took its first 4 bytes for tied_device'
-                    })
+                    field('int', 'tied_device', 'The device tied to this one, 0 here'),
+                    field('unsigned char', 'reserved', undefined, { count: 60 })
                 ]
             ),
             note("snd_rawmidi_params's mode, for input only."),

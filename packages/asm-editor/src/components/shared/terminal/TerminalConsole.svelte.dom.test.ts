@@ -503,6 +503,7 @@ describe('an x86 serial line', () => {
     const COOKED: TerminalLineMode = {
         canonical: true,
         echo: true,
+        echoControl: false,
         signals: true,
         crToNl: true,
         outputProcessing: true,
@@ -511,6 +512,7 @@ describe('an x86 serial line', () => {
     const MADE_RAW: TerminalLineMode = {
         canonical: false,
         echo: false,
+        echoControl: false,
         signals: false,
         crToNl: false,
         outputProcessing: false,
@@ -598,7 +600,8 @@ describe('an x86 serial line', () => {
         })
         expect(seen).toEqual([])
         expect(signals).toEqual([2])
-        expect(transcriptText()).toBe('^C')
+        //echoed as itself, as the serial line's termios has no ECHOCTL: nothing to see
+        expect(transcriptText()).toBe('\x03')
         expect(
             document.getElementById(textarea().getAttribute('aria-describedby')!)?.textContent
         ).toContain('Ctrl+Shift+C copies')

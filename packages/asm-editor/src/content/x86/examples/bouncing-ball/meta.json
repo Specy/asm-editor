@@ -1,6 +1,6 @@
 {
     "name": "A bouncing ball",
-    "description": "A ball that turns round at the Screen's edges, drawn on the page that is not shown and presented with FBIOPAN_DISPLAY after FBIO_WAITFORVSYNC, sixty frames a second.",
+    "description": "A ball that turns round at the Screen's edges, drawn on the page that is not shown and presented with FBIOPAN_DISPLAY, which waits for the vertical blank, sixty frames a second.",
     "order": 21,
     "topic": "bouncing-ball"
 }

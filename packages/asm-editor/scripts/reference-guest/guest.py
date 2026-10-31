@@ -57,11 +57,13 @@ ROOT_PASSWORD = "reference"  # given to systemd-firstboot as a credential
 
 # The kernel command line the pinned guest boots with (GRUB_CMDLINE_LINUX).
 # video= takes a CVT mode (M): the GTF mode a bare 320x240 asks for has its
-# sync inside the picture at 60 Hz, and Linux 7.2 refuses it.
+# sync inside the picture at 60 Hz, and Linux 7.2 refuses it. The cards are
+# the HDA card (0, /dev/dsp, the program's), the virtual MIDI card (1) and the
+# USB audio card FluidSynth plays on (2), so the two never share a card.
 CMDLINE = (
     "console=ttyS0 fbcon=map:1 video=320x240M "
     "drm_kms_helper.drm_fbdev_overalloc=200 "
-    "snd_hda_intel.index=0 snd_virmidi.index=1"
+    "snd_hda_intel.index=0 snd_virmidi.index=1 snd_usb_audio.index=2"
 )
 
 
@@ -103,6 +105,8 @@ def qemu_argv(daemonize=False, wav=WAV, kernel=None, append=None, firstboot=Fals
         "-device", "virtio-net-pci,netdev=net0,addr=0x2",
         "-device", "qemu-xhci,id=xhci,addr=0x4",
         "-device", "usb-tablet,bus=xhci.0",
+        # FluidSynth's own card, so that /dev/dsp on the HDA card stays free
+        "-device", "usb-audio,bus=xhci.0,port=2,audiodev=snd0",
         "-audiodev", f"wav,id=snd0,path={wav}",
         "-device", "intel-hda,id=hda,addr=0x5",
         "-device", "hda-duplex,audiodev=snd0",
@@ -397,17 +401,42 @@ def download():
         raise SystemExit(f"{BASE}: SHA-512 {digest}, expected {IMAGE_SHA512}")
 
 
+# ALSA's minors are dynamic and go to devices in the order they register, and
+# the USB card raced the HDA card for them (two boots in three it won). Its
+# driver is kept from loading by itself and loaded once the HDA card's
+# control device exists, so the numbers are the same at every boot: the HDA
+# card's first, as without the USB card, then the USB card's.
+USB_AUDIO_UNIT = """\
+[Unit]
+Description=The USB audio card, after the HDA card
+After=systemd-modules-load.service systemd-udevd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 600); do [ -e /dev/snd/controlC0 ] && exit 0; sleep 0.1; done; exit 1'
+ExecStart=/usr/sbin/modprobe snd-usb-audio
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+# FluidSynth plays on the USB audio card (card 2), which takes 48 kHz only,
+# and holds it: the HDA card's one playback substream stays /dev/dsp's.
 FLUIDSYNTH_UNIT = """\
 [Unit]
-Description=FluidSynth on the HDA card, played by snd-virmidi's ports
-After=sound.target systemd-modules-load.service
+Description=FluidSynth on the USB audio card, played by snd-virmidi's ports
+Requires=reference-usb-audio.service
+After=sound.target systemd-modules-load.service reference-usb-audio.service
 
 [Service]
 ExecStart=/usr/bin/fluidsynth --no-shell --server --audio-driver=alsa \\
-  -o audio.alsa.device=plughw:0,0 --midi-driver=alsa_seq \\
+  -o audio.alsa.device=plughw:2,0 --sample-rate=48000 --midi-driver=alsa_seq \\
   -o midi.alsa_seq.id=fluidsynth --gain=1.0 \\
   /usr/share/sounds/sf2/FluidR3_GM.sf2
 ExecStartPost=/usr/local/sbin/reference-aconnect
+Restart=on-failure
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
@@ -497,7 +526,9 @@ def setup(args):
         write_guest_file(serial, "/etc/modules-load.d/reference-guest.conf",
                          "snd-pcm-oss\nsnd-mixer-oss\nsnd-virmidi\npcspkr\n")
         write_guest_file(serial, "/etc/modprobe.d/reference-guest.conf",
-                         "blacklist snd-pcsp\n")
+                         "blacklist snd-pcsp\nblacklist snd-usb-audio\n")
+        write_guest_file(serial, "/etc/systemd/system/reference-usb-audio.service",
+                         USB_AUDIO_UNIT)
         write_guest_file(serial, "/etc/systemd/system/reference-fluidsynth.service",
                          FLUIDSYNTH_UNIT)
         write_guest_file(serial, "/usr/local/sbin/reference-aconnect", ACONNECT, "755")
@@ -512,7 +543,10 @@ def setup(args):
         # one FluidSynth, the system's: the package's user unit would start
         # another in root's session, holding the card too
         sh("systemctl --global disable fluidsynth.service; systemctl --global mask fluidsynth.service")
-        sh("systemctl enable reference-fluidsynth.service")
+        sh("systemctl enable reference-usb-audio.service reference-fluidsynth.service")
+        # the initramfs has no sound drivers to load early (recorded)
+        sh("lsinitramfs /boot/initrd.img-$(ls /boot | sed -n 's/^vmlinuz-//p' | sort -V | tail -1) "
+           "| grep -c 'sound/' || true", timeout=600)
         sh("update-grub 2>&1 | tail -5", timeout=1800)
         sh("dpkg -l | awk '/^ii/ {print $2, $3}' > /root/packages.txt; "
            f"curl -fsS -T /root/packages.txt http://10.0.2.2:{HTTP_PORT}/packages.txt")
@@ -661,21 +695,23 @@ def probe(args):
         serial.mark = len(serial.buf)
         (UPLOADS / "injected.txt").write_text("".join(f"inject[{i:02d}]={s}\n" for i, s in enumerate(steps)))
         run("fb")
-        # FluidSynth holds the card's one playback substream: what /dev/dsp
-        # answers with it running, then without it for the dsp's own probe
-        run("dsp-busy")
-        serial.sh("systemctl stop reference-fluidsynth.service")
+        # FluidSynth plays on its own card, so /dev/dsp opens while it plays,
+        # and both sound at once in the recording
+        serial.sh("systemctl is-active reference-fluidsynth.service; aconnect -l")
+        run("dsp-midi", timeout=300)
         run("dsp", timeout=900)
         run("mixer")
-        serial.sh("systemctl start reference-fluidsynth.service; sleep 2; aconnect -l")
         run("midi", timeout=900)
         run("speaker", timeout=900)
         run("console", extra="< /dev/ttyS0")
         # the configuration as booted, for the research record
         serial.sh("{ cat /proc/cmdline; uname -a; lsmod; aconnect -l; amixer -c 0 contents; "
+                  "amixer -c 2 contents; "
                   "cat /proc/asound/cards /proc/asound/devices /proc/asound/oss/sndstat; "
+                  "cat /proc/asound/card2/stream0 /proc/asound/card2/pcm0p/sub0/hw_params; "
                   "lspci -nn; lsusb -t; systemctl status reference-fluidsynth --no-pager -n 0; "
                   "ls -l /dev/input /dev/input/by-path /dev/input/by-id /dev/snd /dev/dri; "
+                  "ls -l /dev/snd/by-path /dev/snd/by-id; "
                   "ls /sys/module/drm_kms_helper/parameters /sys/module/drm/parameters; "
                   "grep . /sys/module/drm_kms_helper/parameters/* /sys/class/graphics/fb0/{name,modes,virtual_size,bits_per_pixel,stride} "
                   "/sys/class/vtconsole/*/name /sys/class/drm/card*-*/modes; "
@@ -691,7 +727,7 @@ def probe(args):
     collect(args)
 
 
-SECTIONS = ("system", "nodes", "input", "events", "fb", "dsp-busy", "dsp",
+SECTIONS = ("system", "nodes", "input", "events", "fb", "dsp-midi", "dsp",
             "mixer", "midi", "speaker", "console")
 
 
@@ -756,21 +792,33 @@ def analyse_wav(path, window=0.05):
     notes = {"C5": 523.25, "E5": 659.26}
     step = int(rate * 0.1)
     found = {}
+    together = []
     for start in range(0, frames - step, step):
         block = samples[start * channels:(start + step) * channels:channels]
         if max(block) - min(block) < 400:
             continue
         rms = math.sqrt(sum(v * v for v in block) / step)
-        for name, f in notes.items():
+
+        def level(f):
             k = 2 * math.cos(2 * math.pi * f / rate)
             s1 = s2 = 0.0
             for v in block:
                 s1, s2 = v + k * s1 - s2, s1
-            level = math.sqrt(max(0.0, s1 * s1 + s2 * s2 - k * s1 * s2)) / step
-            if level > 0.2 * rms:
+            return math.sqrt(max(0.0, s1 * s1 + s2 * s2 - k * s1 * s2)) / step
+
+        for name, f in notes.items():
+            if level(f) > 0.2 * rms:
                 found.setdefault(name, []).append(start / rate)
+        # dsp-midi's /dev/dsp tone at 1250 Hz over FluidSynth's organ C5
+        dsp, organ = level(1250), level(notes["C5"])
+        if dsp > 0.2 * rms and organ > 0.02 * rms:
+            together.append((start / rate, organ / dsp))
     for name, times in found.items():
         lines.append(f"wav.note.{name}=from {times[0]:.1f} s, {len(times)} windows of 0.1 s")
+    if together:
+        ratios = sorted(r for _, r in together)
+        lines.append(f"wav.together=from {together[0][0]:.1f} s, {len(together)} windows of 0.1 s "
+                     f"with the 1250 Hz tone and C5, C5 at {ratios[len(ratios) // 2]:.2f} of the tone")
     i = 0
     for run in runs:
         if not run["f"] or run["end"] - run["start"] < 0.1:
@@ -798,11 +846,44 @@ def load_facts(path):
     return facts
 
 
+# What the probe prints that is not the devices x86 covers: the machine as
+# booted (its kernel, modules, /proc and sysfs, which the Core does not
+# have), tools only the guest has, the recording, and the run itself.
+NOT_COMPARED = re.compile(
+    r"^(host|uname|os_release|proc\.(?!bus\.input\.devices)|sys|param|lsmod|config)\b"
+    r"|^(section|section\.end|core\.stop|inject|wav)\b"
+    r"|took_ms|_ms=|\.mark\.|hw_params|sw_params|\.amixer|_status\b|_status\[|\.proc\.")
+
+# Where the Core answers otherwise by design, as x86-devices.md documents:
+# (the keys, the reason). A key matching one is listed under its reason.
+DEVIATIONS = [
+    (r"^node\.", "owners: Blink's file system has one owner, root, and no "
+     "groups; only a node's owner differs (the program runs as root)"),
+    (r"^fb\.(getcmap|putcmap|get_con2fbmap)$", "FBIOGETCMAP, FBIOPUTCMAP and FBIOGET_CON2FBMAP "
+     "are not covered (ENOTTY)"),
+    (r"^fb\.(mmap_past_end|mmap_at_end)$", "a mapping past the buffer's last page answers EINVAL, "
+     "where the guest's deferred-I/O mapping would fault once touched"),
+    (r"^fb\.private\.", "MAP_PRIVATE of /dev/fb0 is a copy made at mmap(), not copy-on-write"),
+    (r"^dsp\.[a-z]+\.getcaps$", "DSP_CAP_MMAP is left out: mmap of /dev/dsp is not covered"),
+    (r"^dsp\.ask\.settrigger", "SETTRIGGER is not covered: the trigger stays on"),
+    (r"^dsp\.[a-z_]+\.after_write\.", "the buffer's level a moment after a write: how much "
+     "played meanwhile is the run's own timing"),
+    (r"^midi\.pacing\.|^midi\.note\.after_on\.", "the raw MIDI port's documented model: 31,250 "
+     "baud on Program time, where the guest's virtual port drains as fast as FluidSynth reads"),
+    (r"^input\.event0\.setrep_", "EVIOCGREP right after EVIOCSREP races atkbd's event work on "
+     "the guest (the values asked for in one run, rounded in another); the Core has always "
+     "rounded"),
+    (r"^event\[[0-9]+\]=event1 |^events\.count=", "relative motion, which QMP sends the PS/2 "
+     "mouse and the editor never does: it has the tablet only"),
+]
+
+
 def compare(guest_path, core_path, prefixes=("",)):
-    """The keys whose values differ, the Core's event numbers renamed to the
-    guest's by device name, so devices are compared whatever their order.
-    Times and the input devices' /proc text, which `input.*` covers, are
-    left out."""
+    """facts.txt against core-run.mjs's output: the keys the same, the
+    documented deviations under their reasons, and anything else that
+    differs or that only one side has. Event lines are compared without
+    their times, in order; nodes without their owners; the Core's event
+    numbers are renamed to the guest's by device name (they agree now)."""
     guest, core = load_facts(guest_path), load_facts(core_path)
 
     def names(facts):
@@ -816,20 +897,45 @@ def compare(guest_path, core_path, prefixes=("",)):
         return re.sub(r"^(input|sys)\.event(\d+)",
                       lambda m: f"{m.group(1)}.event{rename.get(m.group(2), m.group(2))}", key)
 
+    def normal(key, value):
+        if key.startswith("event["):
+            value = re.sub(r" \+[0-9.]+ ", " ", value)
+        return re.sub(r" owner=\S+", "", value)
+
     core = {renamed(k): v for k, v in core.items()}
-    skip = re.compile(r"took_ms|_ms=|\.mark\.|^proc\.bus\.input\.devices|hw_params|sw_params")
-    lines = []
+    same, deviations, lines = 0, {}, []
+
+    def deviation(key, value):
+        for pattern, reason in DEVIATIONS:
+            if re.search(pattern, key) or re.search(pattern, f"{key}={value}"):
+                return reason
+        return None
+
     for key, value in guest.items():
-        if not key.startswith(prefixes) or skip.search(key + "=" + value):
+        if not key.startswith(prefixes) or NOT_COMPARED.search(key + "=" + value):
             continue
-        if key not in core:
+        if key in core and normal(key, core[key]) == normal(key, value):
+            same += 1
+            if core[key] != value and (reason := deviation(key, value)):
+                deviations.setdefault(reason, []).append(key)
+            continue
+        if reason := deviation(key, value):
+            deviations.setdefault(reason, []).append(key)
+        elif key not in core:
             lines.append(f"guest only: {key}={value}")
-        elif core[key] != value:
+        else:
             lines.append(f"differs: {key}\n  guest: {value}\n  core:  {core[key]}")
     for key, value in core.items():
-        if key.startswith(prefixes) and key not in guest and not skip.search(key):
+        if key.startswith(prefixes) and key not in guest \
+                and not NOT_COMPARED.search(key + "=" + value) and not deviation(key, value):
             lines.append(f"core only: {key}={value}")
-    return "".join(line + "\n" for line in lines)
+    out = [f"same: {same} keys"]
+    for reason, keys in deviations.items():
+        out.append(f"documented deviation ({len(keys)} keys): {reason}")
+        out += [f"  {key}" for key in keys[:8]] + ([f"  … {len(keys) - 8} more"] if len(keys) > 8 else [])
+    out.append(f"not documented: {len(lines)}")
+    out += lines
+    return "".join(line + "\n" for line in out)
 
 
 # ------------------------------------------------------------ the commands

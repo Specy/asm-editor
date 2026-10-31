@@ -210,8 +210,8 @@ const hostLinux = (() => {
     )
     return match ? Number(match[1]) : 0
 })()
-/** Linux 6.12, the guest's, as `LINUX_VERSION_CODE` counts. */
-const LINUX_6_12 = (6 << 16) + (12 << 8)
+/** Linux 7.2, the guest's, as `LINUX_VERSION_CODE` counts. */
+const LINUX_7_2 = (7 << 16) + (2 << 8)
 
 /**
  * The values of C expressions as GCC compiles them for x86-64: one table of `long long`, read back
@@ -295,7 +295,7 @@ describe.skipIf(!gcc || !uapi)('the layouts, against the kernel and the C librar
         const wrong = linux.flatMap((entry: DeviceProbeEntry, index) => {
             if (values[index] === entry.value) return []
             //a later kernel than the guest's changed it, which the table records
-            if (entry.guest && hostLinux > LINUX_6_12 + 255) return []
+            if (entry.guest && hostLinux > LINUX_7_2 + 255) return []
             return [`${entry.expression}: Linux ${values[index]}, ours ${entry.value}`]
         })
         expect(wrong).toEqual([])

@@ -73,7 +73,7 @@ function program(body: string[], data: string[] = []) {
         'section .data',
         "fb: db '/dev/fb0', 0",
         "kbd: db '/dev/input/by-path/platform-i8042-serio-0-event-kbd', 0",
-        "tablet: db '/dev/input/event3', 0",
+        "tablet: db '/dev/input/event2', 0",
         "spkr: db '/dev/input/by-path/platform-pcspkr-event-spkr', 0",
         "dsp: db '/dev/dsp', 0",
         "midi: db '/dev/snd/midiC1D0', 0",

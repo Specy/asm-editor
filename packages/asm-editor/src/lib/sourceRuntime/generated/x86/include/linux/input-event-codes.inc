@@ -298,7 +298,8 @@
 %define KEY_RFKILL           247
 %define KEY_MICMUTE          248
 
-; EV_KEY's codes for buttons. The tablet has BTN_LEFT, BTN_RIGHT and BTN_MIDDLE.
+; EV_KEY's codes for buttons. The tablet has BTN_LEFT, BTN_RIGHT, BTN_MIDDLE, BTN_SIDE and
+; BTN_EXTRA, the browser's back and forward buttons.
 %define BTN_MISC           0x100
 %define BTN_0              0x100
 %define BTN_1              0x101

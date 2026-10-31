@@ -152,6 +152,18 @@ const MOUSE_PACKETS = {
     instead:
         "Read the pointer from the tablet's event device instead; find it with EVIOCGBIT or in `/proc/bus/input/devices`."
 }
+const ALSA_CONTROLS = {
+    device: "ALSA's mixer controls",
+    instead: 'Set the volume through `/dev/mixer` instead.'
+}
+const SECOND_CARD = {
+    device: 'the sound card the reference machine plays MIDI on',
+    instead: 'Play sound through `/dev/dsp` instead.'
+}
+const VIRTUAL_CONSOLE = {
+    device: 'a virtual console',
+    instead: "The program's terminal is the Terminal, standard input and output."
+}
 
 /**
  * The nodes the QEMU guest has and x86 does not cover, what each is and what a program uses
@@ -168,9 +180,17 @@ const UNSUPPORTED_DEVICES: Record<string, { device: string; instead: string }> =
         device: "ALSA's sound input",
         instead: "This emulator can't record sound."
     },
-    '/dev/snd/controlC0': {
-        device: "ALSA's mixer controls",
-        instead: 'Set the volume through `/dev/mixer` instead.'
+    '/dev/snd/controlC0': ALSA_CONTROLS,
+    '/dev/snd/controlC1': ALSA_CONTROLS,
+    '/dev/snd/controlC2': ALSA_CONTROLS,
+    '/dev/snd/hwC0D0': {
+        device: "the sound card's codec",
+        instead: 'Play sound through `/dev/dsp` instead.'
+    },
+    '/dev/snd/pcmC2D0p': SECOND_CARD,
+    '/dev/snd/timer': {
+        device: "ALSA's timer",
+        instead: 'Time a program with `clock_gettime` and wait with `poll` or `nanosleep` instead.'
     },
     '/dev/snd/seq': {
         device: "ALSA's sequencer",
@@ -179,7 +199,26 @@ const UNSUPPORTED_DEVICES: Record<string, { device: string; instead: string }> =
     '/dev/input/mice': MOUSE_PACKETS,
     '/dev/input/mouse0': MOUSE_PACKETS,
     '/dev/input/mouse1': MOUSE_PACKETS,
-    '/dev/audio': { device: 'μ-law sound', instead: 'Play sound through `/dev/dsp` instead.' }
+    '/dev/input/js0': {
+        device: "the tablet's joystick interface",
+        instead:
+            "Read the pointer from the tablet's event device instead; find it with EVIOCGBIT or in `/proc/bus/input/devices`."
+    },
+    '/dev/uinput': {
+        device: 'input devices made by a program',
+        instead: "Read the keyboard's and the tablet's event devices instead."
+    },
+    '/dev/audio': { device: 'μ-law sound', instead: 'Play sound through `/dev/dsp` instead.' },
+    '/dev/audio2': SECOND_CARD,
+    '/dev/dsp2': SECOND_CARD,
+    '/dev/mixer1': {
+        device: "the MIDI card's mixer, which has no controls",
+        instead: 'Set the volume through `/dev/mixer` instead.'
+    },
+    '/dev/mixer2': SECOND_CARD,
+    ...Object.fromEntries(
+        Array.from({ length: 62 }, (_, index) => [`/dev/tty${index + 2}`, VIRTUAL_CONSOLE])
+    )
 }
 
 /**

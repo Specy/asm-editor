@@ -261,7 +261,9 @@ _start:
 
 The pixel at column x of line y is `y × line_length + x × 4` bytes past the address `mmap`
 returned. The framebuffer has room for a second page below the first, so a program can draw a frame
-where it cannot be seen and then show it all at once: the [Screen chapter](/documentation/x86/screen)
+where it cannot be seen and then show it all at once with the `FBIOPAN_DISPLAY` ioctl. The pan
+waits for the next **vertical blank**, between two pictures on the monitor, so an animation's loop
+is only draw, then pan, sixty frames a second: the [Screen chapter](/documentation/x86/screen)
 explains this double buffering, the `@screen` comment and every request.
 
 ## Reading keys and the pointer

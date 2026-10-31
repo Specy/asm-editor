@@ -140,7 +140,7 @@ A program that draws on the page the Screen shows can be seen half way through a
 
 The framebuffer has room for two pages. `yres_virtual` is twice `yres`: the first page is lines 0 to `yres - 1` and the second is lines `yres` to `2 × yres - 1`, right below it in memory. `yoffset` says which line the Screen shows at its top. To show the second page, set `yoffset` to `yres` in the `fb_var_screeninfo` the program read and pass it to `FBIOPAN_DISPLAY`; to show the first again, set it to 0. A program draws on the page it does not show, pans to it, and then draws the next frame on the other page.
 
-`FBIO_WAITFORVSYNC` waits for the next **vertical blank**, the moment between two pictures on the monitor, sixty times a second. Waiting for it, then panning, is the frame loop of real hardware, and it paces an animation at 60 frames a second at most. Its argument points to a 32-bit 0, the first display.
+The frame loop is **draw, then pan**. The pan waits for the next **vertical blank**, the moment between two pictures on the monitor, sixty times a second, and shows the new page then, so the loop runs at 60 frames a second at most with no other wait. Setting a new `yoffset` with `FBIOPUT_VSCREENINFO` waits too, for two blanks. `FBIO_WAITFORVSYNC` waits for the next blank without panning, for a program that draws on the page it shows and wants to change it between two pictures; its argument points to a 32-bit 0, the first display. Waiting for it and then panning costs two blanks a frame, 30 frames a second.
 
 This C program moves a white square across the Screen, one pixel a frame. Each frame it redraws only the band of lines the square moves along.
 
@@ -171,10 +171,8 @@ int main(void) {
             for (unsigned x = 0; x < var.xres; x++)
                 line[x] = x >= left && x < left + 20 ? 0x00ffffff : 0x00000000;
         }
-        uint32_t display = 0;
-        ioctl(fb, FBIO_WAITFORVSYNC, &display);
         var.yoffset = page * var.yres;
-        ioctl(fb, FBIOPAN_DISPLAY, &var); /* show the page just drawn */
+        ioctl(fb, FBIOPAN_DISPLAY, &var); /* show the page just drawn, at the next blank */
         page = 1 - page;
     }
     return 0;
@@ -229,8 +227,7 @@ A focused Screen hands **Escape** to the program, as `KEY_ESC`, since games ofte
 The devices behave as they do on a QEMU virtual machine running Linux, the reference this emulator follows. These are the places where they do not:
 
 - **The Screen shows changes sooner.** It shows the framebuffer while the program runs, whenever it waits, at every pan and at `fsync` on `/dev/fb0`. On the reference machine, a store can take a few hundredths of a second to reach the monitor, unless the program calls `fsync`.
-- **`FBIO_WAITFORVSYNC` always waits** for the next sixtieth of a second of the program's time. On the reference machine's older kernels it returns at once, because that display had no vertical blank to wait for.
-- **A mapping larger than `smem_len` fails** with `EINVAL`. Linux maps it and stops the program with `SIGBUS` at the first store past the end.
+- **A mapping past the framebuffer's last page fails** with `EINVAL`. Linux maps it and stops the program with `SIGBUS` at the first store past the end.
 - **A `MAP_PRIVATE` mapping is a copy made at the `mmap`.** On Linux, a page the program has not written yet still shows later changes to the framebuffer.
 - The color-map requests (`FBIOGETCMAP`, `FBIOPUTCMAP`) answer `ENOTTY`. A true-color framebuffer does not need them.
 

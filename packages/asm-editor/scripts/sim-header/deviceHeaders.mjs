@@ -764,7 +764,7 @@ export function deviceFunctions() {
  * table computes it, for every constant, value macro (at its samples), structure (size, alignment
  * and each field's offset), typedef (size) and POSIX call (its type matches the C library's).
  * `linux` is false for what Linux's headers do not have; `guest` explains a value that follows
- * the guest's Linux 6.12 where later kernels differ.
+ * the guest's Linux 7.2 where later kernels differ.
  */
 export function deviceProbe(syscalls) {
     const entries = []

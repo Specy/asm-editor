@@ -23,8 +23,8 @@
 /** A version number from its three parts. */
 #define SNDRV_PROTOCOL_VERSION(major, minor, subminor) (((major) << 16) | ((minor) << 8) | (subminor))
 
-/* What SNDRV_RAWMIDI_IOCTL_PVERSION answers on Linux 6.12. */
-#define SNDRV_RAWMIDI_VERSION SNDRV_PROTOCOL_VERSION(2, 0, 4)
+/* What SNDRV_RAWMIDI_IOCTL_PVERSION answers on the guest's Linux 7.2. */
+#define SNDRV_RAWMIDI_VERSION SNDRV_PROTOCOL_VERSION(2, 0, 5)
 
 /* The two directions of a port. */
 #define SNDRV_RAWMIDI_STREAM_OUTPUT 0 /* From the program to the synthesizer. */
@@ -49,7 +49,8 @@ struct snd_rawmidi_info {
     unsigned char subname[32];
     unsigned int subdevices_count;
     unsigned int subdevices_avail;
-    unsigned char reserved[64];
+    int tied_device;    /* The device tied to this one, 0 here. */
+    unsigned char reserved[60];
 };
 
 /* snd_rawmidi_params's mode, for input only. */

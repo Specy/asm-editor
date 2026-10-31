@@ -16,7 +16,7 @@ python3 guest.py setup    # once: download and check the image, then provision a
 python3 guest.py probe    # boot it, run every section, write facts.txt (about 15 minutes)
 ```
 
-`setup` downloads Debian's `nocloud` image of build 20261026-2643, checks its SHA-512, and boots a copy-on-write disk over it: systemd-firstboot takes root's password and the timezone from SMBIOS credentials, then the setup installs the backports kernel, ALSA's tools, FluidSynth and its General MIDI sound font, sets the kernel command line, the modules and FluidSynth's service, and powers off. `setup --fresh` starts again from a new disk.
+`setup` downloads Debian's `nocloud` image of build 20261026-2643, checks its SHA-512, and boots a copy-on-write disk over it: systemd-firstboot takes root's password and the timezone from SMBIOS credentials, then the setup installs the backports kernel, ALSA's tools, FluidSynth and its General MIDI sound font, sets the kernel command line, the modules and the services, and powers off. FluidSynth plays on a card of its own, QEMU's `usb-audio` (card 2), whose driver a service loads once the HDA card (card 0) is up, so ALSA's dynamic device numbers are the same at every boot; `/dev/dsp`, on the HDA card, stays free for programs. Run on a disk already provisioned, `setup` installs nothing new and applies the configuration again, in a few minutes. `setup --fresh` starts again from a new disk.
 
 `probe` builds `probe.c` with `gcc -static -O2`, boots the guest, logs in on the serial console (root logs in by itself there), fetches the probe and runs each section, sending what it prints back over HTTP. During the `events` section it injects keys, tablet moves, buttons and wheel notches through QMP's `input-send-event`. The guest's sound goes to `.cache/qemu-guest/out.wav`, which `probe` analyses for the tones it played. It appends the injected input and the recording's tones to `facts.txt`.
 
@@ -34,12 +34,12 @@ python3 guest.py stop
 ## Against the Core
 
 ```sh
-node core-run.mjs ../../../../.cache/qemu-guest/www/probe core.txt    # every section but events
-python3 guest.py compare core.txt                                       # what differs, and what only one side has
+node core-run.mjs ../../../../.cache/qemu-guest/www/probe core.txt    # every section, input injected
+python3 guest.py compare core.txt                                       # the same, the documented deviations, the rest
 python3 guest.py compare core.txt --prefix fb. --prefix dsp.            # one area
 ```
 
-`core-run.mjs` takes the probe `guest.py probe` built (or any build of `probe.c`) and runs each section in a fresh emulator at the 320×240 display mode, waits included; the `events` section is left out, since nothing injects input there. `compare` renames the Core's event devices to the guest's numbers by name, so devices compare whatever their order, and leaves out durations and `/proc/bus/input/devices`, whose text the `input.*` keys cover.
+`core-run.mjs` takes the probe `guest.py probe` built (or any build of `probe.c`) and runs each section in a fresh emulator at the 320×240 display mode, waits included. For the `events` section it injects what `guest.py` injects through QMP, at the same pace, with `sendInputReport()`, as the editor's Screen would; QMP's relative move of the PS/2 mouse has no counterpart, the editor having only the tablet. `compare` leaves out what is not a device (the kernel, modules, `/proc` and sysfs, durations, the guest's tools), compares event lines without their times and nodes without their owners, lists each deviation x86-devices.md documents under its reason, and then whatever else differs or only one side has, which should be nothing.
 
 ## The probe alone
 
@@ -48,4 +48,4 @@ gcc -static -O2 -o probe probe.c -lm
 ./probe --qemu="$(qemu-system-x86_64 --version | head -1)" --machine=pc-q35-10.2 input
 ```
 
-The sections are `system`, `nodes`, `input`, `events`, `fb`, `dsp-busy`, `dsp`, `mixer`, `midi`, `speaker` and `console`; run them as root. `dsp` needs the HDA card free, so FluidSynth (`reference-fluidsynth.service`) is stopped around it, and `dsp-busy` records what `/dev/dsp` answers while FluidSynth holds the card. `events` reads every event device until a line arrives on standard input, and says `probe: events ready` on standard error when it is listening. The `fb`, `dsp`, `mixer` and `speaker` sections change the screen mode, play sound and write the mixer, and put the mixer and the mode back when they finish.
+The sections are `system`, `nodes`, `input`, `events`, `fb`, `dsp-midi`, `dsp`, `mixer`, `midi`, `speaker` and `console`; run them as root. `dsp-midi` opens `/dev/dsp` while FluidSynth (`reference-fluidsynth.service`) plays on its own card, and plays a 1250 Hz tone on it over an organ note from the MIDI port, which the recording should hold together (`wav.together`). `events` reads every event device until a line arrives on standard input, and says `probe: events ready` on standard error when it is listening. The `fb`, `dsp`, `mixer` and `speaker` sections change the screen mode, play sound and write the mixer, and put the mixer and the mode back when they finish.
