@@ -1503,6 +1503,65 @@ describe('M68K breakpoints', () => {
         expect(registerOf(emulator, 'D2')).toBe(12n)
     })
 
+    //forty frames of a tenth of a second each, so the Run is still going when the test changes
+    //its Breakpoints; ORG is line 0
+    const FRAMES = [
+        '    move.w #39,d6',
+        'frame:',
+        '    move.b #23,d0',
+        '    move.l #1,d1',
+        '    trap #15',
+        '    dbra d6,frame',
+        '    move.b #9,d0',
+        '    trap #15'
+    ].join('\n')
+
+    //with the Preference off a slice without Breakpoints runs without the Core's Breakpoint list,
+    //and the first one set has to reach it all the same
+    for (const pauseOnCodeWrite of [true, false]) {
+        const setting = `pausing on code writes ${pauseOnCodeWrite ? 'on' : 'off'}`
+        const withSetting = async (test: () => Promise<void>) => {
+            const preference = preferencesStore.values.pauseOnCodeWrite
+            preference.value = pauseOnCodeWrite
+            try {
+                await test()
+            } finally {
+                preference.value = true
+            }
+        }
+
+        it(`stops on a Breakpoint set while the program runs, ${setting}`, () =>
+            withSetting(async () => {
+                const code = ORG + FRAMES
+                const emulator = M68KEmulator(code)
+                await emulator.compile(0, code)
+                const running = emulator.run(INSTRUCTION_LIMIT)
+                await new Promise((resolve) => setTimeout(resolve, 50))
+                //`dbra d6,frame`
+                emulator.toggleBreakpoint(6)
+                await running
+                expect(emulator.errors).toEqual([])
+                expect(emulator.terminated).toBe(false)
+                expect(emulator.line).toBe(6)
+                expect(registerOf(emulator, 'D6') & 0xffffn).toBeGreaterThan(0n)
+            }))
+
+        it(`runs past a Breakpoint removed while the program runs, ${setting}`, () =>
+            withSetting(async () => {
+                const code = ORG + FRAMES
+                const emulator = M68KEmulator(code)
+                await emulator.compile(0, code)
+                //the `move.b #9,d0` after the loop
+                emulator.toggleBreakpoint(7)
+                const running = emulator.run(INSTRUCTION_LIMIT)
+                await new Promise((resolve) => setTimeout(resolve, 50))
+                emulator.toggleBreakpoint(7)
+                await running
+                expect(emulator.errors).toEqual([])
+                expect(emulator.terminated).toBe(true)
+            }))
+    }
+
     it('stops again on the same breakpoint when the program comes back round to it', async () => {
         //the skip is for the instruction the Run starts on, not for the address: a loop that closes
         //on its breakpoint stops every time it reaches it
@@ -1550,6 +1609,124 @@ describe('M68K program time tasks', () => {
         expect(emulator.terminated).toBe(true)
         //five hundredths of a second, on the host clock an interactive run uses
         expect(Date.now() - started).toBeGreaterThanOrEqual(40)
+    })
+
+    it('ends the slice at a Delay, which teaches the scheduler nothing about the Core', async () => {
+        //a Delay waited out inside its slice made the slice look like a fast Core's: the speed
+        //correction reached its maximum, and the next stretch without a trap went to the Core as
+        //one call of millions of instructions, the page frozen meanwhile
+        const code =
+            ORG +
+            [
+                '    move.w #9,d6',
+                'frame:',
+                '    move.b #23,d0',
+                '    move.l #1,d1',
+                '    trap #15',
+                '    dbra d6,frame',
+                '    move.l #20000,d7',
+                'spin:',
+                '    subq.l #1,d7',
+                '    bne spin'
+            ].join('\n') +
+            '\n' +
+            trap(9)
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        const slices = vi.spyOn(emulator, '_runSlice')
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        const reasons: string[] = (
+            await Promise.all(slices.mock.results.map((result) => result.value))
+        ).map((slice) => slice.reason)
+        expect(reasons.filter((reason) => reason === 'wait')).toHaveLength(10)
+        //the slice after the last Delay is the first to run the loop, as fast as the first slice
+        //was told the Core runs
+        const afterDelays = reasons.lastIndexOf('wait') + 1
+        expect(slices.mock.calls[afterDelays][0].speedCorrection).toBe(1)
+    })
+
+    it('stops at the instruction limit when a Delay is the last instruction it allows', async () => {
+        //the slice ends on the Delay's wait, and the program would run on after it
+        const code = ORG + 'start:\n' + trap(23, ['    move.l #0,d1']) + '    bra start\n'
+        const emulator = M68KEmulator(code, {
+            peripherals: { clock: new ProgramClock({ mode: 'virtual' }) }
+        })
+        await emulator.compile(0, code)
+        await emulator.run(3)
+        expect(emulator.errors.join('\n')).toContain('Execution limit of 3')
+    })
+
+    it('reads the panels between slices, not in the middle of one', async () => {
+        //read part way through a slice, the panels' update landed in the middle of a game's frame
+        const code =
+            ORG +
+            [
+                '    move.w #39,d6',
+                'frame:',
+                '    move.l #$ff,d1',
+                '    move.b #80,d0',
+                '    trap #15',
+                '    move.b #23,d0',
+                '    move.l #1,d1',
+                '    trap #15',
+                '    dbra d6,frame'
+            ].join('\n') +
+            '\n' +
+            trap(9)
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        const events: string[] = []
+        const runSlice = emulator._runSlice.bind(emulator)
+        vi.spyOn(emulator, '_runSlice').mockImplementation(async (request) => {
+            events.push('slice')
+            const slice = await runSlice(request)
+            events.push('end')
+            return slice
+        })
+        //private: the read of every panel a refresh makes
+        const target = emulator as unknown as { refreshCoreViews(): void }
+        const refresh = target.refreshCoreViews.bind(emulator)
+        vi.spyOn(target, 'refreshCoreViews').mockImplementation(() => {
+            events.push('refresh')
+            refresh()
+        })
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(events).toContain('refresh')
+        let inSlice = false
+        for (const event of events) {
+            if (event === 'refresh') expect(inSlice).toBe(false)
+            inSlice = event === 'slice' ? true : event === 'end' ? false : inSlice
+        }
+    })
+
+    it('leaves the current line where the Run started while the program draws and waits', async () => {
+        //a game answers thousands of traps a second, and following each one kept the editor
+        //redrawing and scrolling; a Run shows its line where it stops or asks for input
+        const code =
+            ORG +
+            trap(80, ['    move.l #$ff,d1']) +
+            trap(82, ['    move.w #1,d1', '    move.w #1,d2']) +
+            trap(23, ['    move.l #20,d1']) +
+            trap(5) +
+            trap(9)
+        const emulator = M68KEmulator(code)
+        await emulator.compile(0, code)
+        const started = emulator.line
+        const running = emulator.run(INSTRUCTION_LIMIT)
+        //inside the Delay of two tenths of a second, after the drawing traps
+        await new Promise((resolve) => setTimeout(resolve, 60))
+        expect(emulator.peripherals.screen.version).toBeGreaterThan(0)
+        expect(emulator.line).toBe(started)
+        expect(emulator.interrupt).toBeUndefined()
+        //the read waits for the person, so it is shown where it waits
+        await vi.waitFor(() => expect(emulator.interrupt).toBeDefined(), { timeout: 2000 })
+        expect(emulator.line).toBe(code.split('\n').indexOf('    move.b #5,d0') + 1)
+        emulator.peripherals.keyboard.typeText('k')
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
     })
 })
 

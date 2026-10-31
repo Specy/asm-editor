@@ -5,6 +5,7 @@ import {
     memoryRegionColor,
     mergeMemoryRegions,
     memoryHover,
+    memoryPageRegions,
     memoryReasons,
     readOnlyMemoryAt,
     regionChunkStart,
@@ -64,6 +65,51 @@ describe('memory regions', () => {
         )
         expect(regions.find((region) => region.kind === 'stack')?.destination).toBe(0x7fffffffed00n)
         expect(regionsAt(regions, 0x404000n)).toEqual([])
+    })
+    it('reads a page as asking for each of its bytes would', () => {
+        //overlapping kinds, chunks cut by labels, a device and a region the machine defines
+        const layout = memoryLayoutFromItems(
+            [
+                { start: 0x1000n, length: 16n, kind: 'data', section: '0' },
+                { start: 0x1010n, length: 8n, kind: 'reserved', section: '0' },
+                { start: 0x1020n, length: 8n, kind: 'code', section: '0' }
+            ],
+            [
+                { name: 'first', address: 0x1000n, fromLibrary: false },
+                { name: 'second', address: 0x1006n, displayName: 'Second', fromLibrary: true },
+                { name: 'space', address: 0x1014n, fromLibrary: false }
+            ]
+        )
+        const regions = [
+            ...mergeMemoryRegions(layout, { start: 0x1030n, end: 0x1038n }, undefined, [
+                { name: 'Synth', start: 0x1004n, end: 0x1008n }
+            ]),
+            {
+                id: 'machine:rom',
+                kind: 'rom' as const,
+                name: 'ROM',
+                start: 0x1018n,
+                end: 0x1024n,
+                destination: 0x1018n,
+                reason: 'Writes are ignored.'
+            }
+        ]
+        const start = 0xff8n
+        const page = memoryPageRegions(regions, layout.dataLabels, start, 0x48)
+        page.forEach((byte, index) => {
+            const address = start + BigInt(index)
+            const region = regionsAt(regions, address)[0]
+            expect(byte).toEqual({
+                region,
+                chunk: region ? regionChunkStart(region, layout.dataLabels, address) : 0n,
+                hover: memoryHover(regions, layout.dataLabels, address),
+                reasons: memoryReasons(regions, address)
+            })
+        })
+        //and the page really did hold every case
+        expect(new Set(page.map((byte) => byte.region?.kind))).toEqual(
+            new Set([undefined, 'device', 'data', 'reserved', 'rom', 'code', 'heap'])
+        )
     })
     it('resolves labels, decimal and hex offsets, and reports missing Builds and names', () => {
         const lookup = (name: string) => (name === 'buffer' ? 0x1000n : undefined)

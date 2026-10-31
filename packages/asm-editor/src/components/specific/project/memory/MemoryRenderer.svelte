@@ -1,11 +1,8 @@
 <script lang="ts">
     import {
-        memoryReasons,
+        memoryPageRegions,
         memoryRegionColor,
-        memoryHover,
-        readOnlyMemoryAt,
-        regionChunkStart,
-        regionsAt
+        readOnlyMemoryAt
     } from '#lib/languages/memoryRegions.ts'
     import type {
         MemoryRegion,
@@ -109,17 +106,9 @@
         markedAddress
     }: Props = $props()
     const annotations = $derived.by(() => {
-        const cells = Array.from({ length: pageSize }, (_, index) => {
-            const address = currentAddress + BigInt(index)
-            const region = regionsAt(memoryRegions, address)[0]
-            return {
-                region,
-                chunk: region ? regionChunkStart(region, dataLabels, address) : 0n,
-                hover: memoryHover(memoryRegions, dataLabels, address),
-                //what a region the machine defines means here: a ROM's writes, a vector's handler
-                reasons: memoryReasons(memoryRegions, address)
-            }
-        })
+        //with each byte's hover, and what a region the machine defines means there: a ROM's
+        //writes, a vector's handler
+        const cells = memoryPageRegions(memoryRegions, dataLabels, currentAddress, pageSize)
         return cells.map((cell, index) => {
             const region = cell.region
             if (!region) return { ...cell, outline: '' }
