@@ -50,6 +50,72 @@ Confirmed by the owner on 2026-10-31, with the review's changes.
 18. **`@specy/x86` 8.0.0.** The wait request, the environment and the history format change shape; a major release.
 19. **Examples stay inside the content tests.** Drawing Examples stop after a fixed number of frames when no key is pressed, input Examples poll with a timeout rather than block, and sound Examples generate at 22 kHz or less (44.1 kHz stereo at about 20 instructions a sample takes about 90% of Blink's speed).
 
+## The Core's contract
+
+What `@specy/x86` 8.0.0 offers the editor, fixed before the work splits so that the Core and the editor are built against one shape. Names may change in review; meanings may not without changing this section. Until M5, the Core only adds: today's fields and calls (`acceptsInput` among them) keep working, so the editor stays green while both sides are built.
+
+```ts
+/** The machine's `video=`: set before a program starts, and kept until it is set again. */
+type X86DisplayMode = { width: number; height: number } // width a multiple of 8, both 8..1024
+setDisplayMode(mode: X86DisplayMode): void
+
+/** What can end a wait besides its deadline (replaces `acceptsInput` in 8.0.0). */
+type X86WakeSources = { terminal: boolean; inputDevices: X86InputDeviceId[] }
+type X86WaitRequest = {
+    clock: number
+    deadlineNanoseconds: bigint | null
+    remainingMilliseconds: number | null
+    wakeSources: X86WakeSources
+    instructionSerial: string
+}
+
+/** The devices the host delivers events to; the others never receive any. */
+type X86InputDeviceId = 'keyboard' | 'tablet'
+/** One input event as Linux's `struct input_event` has it, without its time. */
+type X86InputEvent = { type: number; code: number; value: number }
+/**
+ * One report: the events of one host event (a key down, a move, a button, a wheel notch). The Core
+ * adds what the guest's drivers add (`MSC_SCAN` before keys and buttons, `REL_WHEEL_HI_RES` beside
+ * `REL_WHEEL`, `EV_LED` from the lock keys), closes it with `SYN_REPORT`, stamps it with Program
+ * time and queues it for every reader of the device. Never called in a Testcase.
+ */
+sendInputReport(device: X86InputDeviceId, events: X86InputEvent[]): void
+
+/** The termios the program set on its terminal, reported at start and at every change. */
+type X86TerminalMode = {
+    canonical: boolean // ICANON
+    echo: boolean // ECHO
+    signals: boolean // ISIG
+    crToNl: boolean // ICRNL
+    outputProcessing: boolean // OPOST
+    nlToCrNl: boolean // ONLCR
+}
+getTerminalMode(): X86TerminalMode
+// event 'terminalMode': X86TerminalMode
+// provideInput(): also accepted while no read waits (type-ahead), and in raw mode one key at a time
+sendSignal(signal: number): void // SIGINT 2 and SIGQUIT 3, typed in the Terminal under ISIG
+
+/** The framebuffer, once the program has opened /dev/fb0; black until then. */
+type X86Framebuffer = {
+    width: number
+    height: number
+    lineLength: number // bytes
+    yoffset: number // the visible page's first line
+    visible(): Uint8Array // the visible page, `height × lineLength` bytes of 0x00RRGGBB words, a view
+}
+getFramebuffer(): X86Framebuffer | null
+// event 'framebufferPresent': { yoffset } — a pan or an fsync: the editor catches up now
+
+/** Sound, as a timeline on Program time's monotonic clock, in nanoseconds. */
+// event 'pcm': { start: bigint; rate: number; frames: Float32Array } — stereo, interleaved, at the device's rate
+// event 'midi': { at: bigint; message: Uint8Array } — one complete message, at the time its last byte leaves the port
+// event 'tone': { at: bigint; hz: number } — the PC speaker; 0 is silence; the timer's quantisation applied
+// event 'mixer': { volume: [number, number]; pcm: [number, number] } — 0..100, at start and at every change
+// event 'soundCut': { after: bigint } — drop everything scheduled after this time (Undo, RESET, Stop)
+// After Undo the Core also emits what puts the output back: the tone, the mixer, and the MIDI
+// messages that restore each channel's program, controllers and pitch bend.
+```
+
 ## Milestones
 
 M0 gates the identities in M3 and M4 but not their mechanisms. M1 gates M2 to M4. M5 needs M1 to M4. M6 to M8 need M5; M9 is independent of M1 to M8 except for the `-I` field of M5. M10 needs everything; M11 closes.
