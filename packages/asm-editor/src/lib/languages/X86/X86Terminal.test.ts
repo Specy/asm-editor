@@ -349,7 +349,7 @@ describe('x86 devices the machine does not cover', () => {
             ],
             [
                 'warning',
-                "This emulator doesn't support `/dev/input/mice` (PS/2 mouse packets), so opening it returned ENODEV. Read the pointer from the tablet's events, `/dev/input/event3`, instead."
+                "This emulator doesn't support `/dev/input/mice` (PS/2 mouse packets), so opening it returned ENODEV. Read the pointer from the tablet's event device instead; find it with EVIOCGBIT or in `/proc/bus/input/devices`."
             ]
         ])
     })

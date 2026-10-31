@@ -149,7 +149,8 @@ const STARTED_STATES: ReadonlySet<BlinkState> = new Set([
 /** mousedev's nodes: relative PS/2 packets, where the tablet reports where the pointer is. */
 const MOUSE_PACKETS = {
     device: 'PS/2 mouse packets',
-    instead: "Read the pointer from the tablet's events, `/dev/input/event3`, instead."
+    instead:
+        "Read the pointer from the tablet's event device instead; find it with EVIOCGBIT or in `/proc/bus/input/devices`."
 }
 
 /**
@@ -171,7 +172,10 @@ const UNSUPPORTED_DEVICES: Record<string, { device: string; instead: string }> =
         device: "ALSA's mixer controls",
         instead: 'Set the volume through `/dev/mixer` instead.'
     },
-    '/dev/snd/seq': { device: "ALSA's sequencer", instead: 'Send MIDI to `/dev/midi1` instead.' },
+    '/dev/snd/seq': {
+        device: "ALSA's sequencer",
+        instead: 'Send MIDI bytes to `/dev/snd/midiC1D0` instead.'
+    },
     '/dev/input/mice': MOUSE_PACKETS,
     '/dev/input/mouse0': MOUSE_PACKETS,
     '/dev/input/mouse1': MOUSE_PACKETS,
