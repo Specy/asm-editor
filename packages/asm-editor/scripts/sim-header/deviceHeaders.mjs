@@ -797,12 +797,19 @@ export function deviceFunctions() {
     )
 }
 
+/** A kernel version, `'6.14'`, as `LINUX_VERSION_CODE` counts it. */
+function kernelVersion(version) {
+    const [major, minor] = version.split('.').map(Number)
+    return (major << 16) + (minor << 8)
+}
+
 /**
  * What the layout test compares: a C expression, the header that gives it, and its value as this
  * table computes it, for every constant, value macro (at its samples), structure (size, alignment
  * and each field's offset), typedef (size) and POSIX call (its type matches the C library's).
  * `linux` is false for what Linux's headers do not have; `guest` explains a value that follows
- * the guest's Linux 7.2 where later kernels differ.
+ * the guest's Linux 7.2 where later kernels differ; `since` is the kernel, as `LINUX_VERSION_CODE`
+ * counts it, whose headers first have the value, so older ones are not compared.
  */
 export function deviceProbe(syscalls) {
     const entries = []
@@ -812,7 +819,8 @@ export function deviceProbe(syscalls) {
         for (const item of header.items) {
             const extra = {
                 ...(item.linux === false ? { linux: false } : {}),
-                ...(item.guest ? { guest: item.guest } : {})
+                ...(item.guest ? { guest: item.guest } : {}),
+                ...(item.since ? { since: kernelVersion(item.since) } : {})
             }
             if (item.kind === 'define')
                 add(header.path, item.probe ?? item.name, valueOf(item.name), extra)
@@ -837,7 +845,8 @@ export function deviceProbe(syscalls) {
                     if (!field.bits)
                         add(header.path, `offsetof(${name}, ${field.name})`, field.offset, {
                             ...extra,
-                            ...(field.guest ? { guest: field.guest } : {})
+                            ...(field.guest ? { guest: field.guest } : {}),
+                            ...(field.since ? { since: kernelVersion(field.since) } : {})
                         })
             } else if (item.kind === 'check')
                 add(header.path, item.expression, evaluate(String(item.value)), extra)

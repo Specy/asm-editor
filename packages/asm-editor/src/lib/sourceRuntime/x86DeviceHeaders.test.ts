@@ -267,7 +267,10 @@ describe.skipIf(!gcc || !uapi)('the layouts, against the kernel and the C librar
     })
 
     it("are Linux's, as its UAPI headers and glibc's give them", () => {
-        const linux = entries.filter((entry) => entry.linux)
+        //what the host's kernel headers are too old to have (CI's are older than the guest's)
+        const linux = entries.filter(
+            (entry) => entry.linux && (entry.since === undefined || hostLinux >= entry.since)
+        )
         const values = probe(
             [
                 'dirent.h',

@@ -2670,7 +2670,8 @@ export const DEVICE_HEADERS = [
             define(
                 'SNDRV_RAWMIDI_VERSION',
                 'SNDRV_PROTOCOL_VERSION(2, 0, 5)',
-                "What SNDRV_RAWMIDI_IOCTL_PVERSION answers on the guest's Linux 7.2"
+                "What SNDRV_RAWMIDI_IOCTL_PVERSION answers on the guest's Linux 7.2",
+                { since: '6.14' }
             ),
             note('The two directions of a port.'),
             define('SNDRV_RAWMIDI_STREAM_OUTPUT', 0, 'From the program to the synthesizer'),
@@ -2700,8 +2701,10 @@ export const DEVICE_HEADERS = [
                     field('unsigned char', 'subname', undefined, { count: 32 }),
                     field('unsigned int', 'subdevices_count'),
                     field('unsigned int', 'subdevices_avail'),
-                    field('int', 'tied_device', 'The device tied to this one, 0 here'),
-                    field('unsigned char', 'reserved', undefined, { count: 60 })
+                    field('int', 'tied_device', 'The device tied to this one, 0 here', {
+                        since: '6.14'
+                    }),
+                    field('unsigned char', 'reserved', undefined, { count: 60, since: '6.14' })
                 ]
             ),
             note("snd_rawmidi_params's mode, for input only."),

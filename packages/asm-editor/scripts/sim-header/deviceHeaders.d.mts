@@ -17,6 +17,8 @@ export type DeviceProbeEntry = {
     c: boolean
     /** Why the guest's Linux 7.2 has this value where a later kernel's headers differ. */
     guest?: string
+    /** The first kernel whose headers have it, as `LINUX_VERSION_CODE` counts. */
+    since?: number
     /** A POSIX call's type, compared with the C library's declaration. */
     function?: true
 }
