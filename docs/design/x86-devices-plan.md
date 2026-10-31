@@ -94,6 +94,9 @@ getTerminalMode(): X86TerminalMode
 // event 'terminalMode': X86TerminalMode
 // provideInput(): also accepted while no read waits (type-ahead), and in raw mode one key at a time
 sendSignal(signal: number): void // SIGINT 2 and SIGQUIT 3, typed in the Terminal under ISIG
+/** ICRNL on input and OPOST/ONLCR on output apply only when the host asks: interactive runs do, Testcases (pipe-like) do not. */
+setTerminalProcessing(processing: { input?: boolean; output?: boolean }): void
+// event 'unsupportedDevice': { path } — the program opened a node the guest has but this design does not cover
 
 /** The framebuffer, once the program has opened /dev/fb0; black until then. */
 type X86Framebuffer = {
@@ -111,7 +114,7 @@ getFramebuffer(): X86Framebuffer | null
 // event 'midi': { at: bigint; message: Uint8Array } — one complete message, at the time its last byte leaves the port
 // event 'tone': { at: bigint; hz: number } — the PC speaker; 0 is silence; the timer's quantisation applied
 // event 'mixer': { volume: [number, number]; pcm: [number, number] } — 0..100, at start and at every change
-// event 'soundCut': { after: bigint } — drop everything scheduled after this time (Undo, RESET, Stop)
+// event 'soundCut': { after: bigint; device?: 'dsp' | 'midi' | 'speaker' } — drop what is scheduled after this time, on one device or all (Undo, RESET, Stop)
 // After Undo the Core also emits what puts the output back: the tone, the mixer, and the MIDI
 // messages that restore each channel's program, controllers and pitch bend.
 ```
@@ -219,4 +222,27 @@ On a machine with QEMU, outside the repository except for the recorded results:
 
 ## Implementation record
 
-Not started.
+### First wave (2026-10-31)
+
+Five Opus agents in parallel, in the worktree `.cache/wt/x86-devices` (branch `feat/x86-devices`, from `main` at 7792c5e3) and the Core's branch `feat/devices`. Committed after the full editor suite (350 files, 6,964 tests), `svelte-check`, Oxlint and ESLint passed.
+
+- **M1, the Core's groundwork** (Core d9cd6f7, editor pointer 5d1cd113). One device table (`devices.c`) with the nodes, udev links, `/proc/bus/input/devices` and uncovered nodes; `FdCb.ioctl`; per-open state on the open file description; wake sources, lazy device time and partial progress; termios kept, raw reads, type-ahead, `sendSignal`; history packet version 3 with a generic journal (`DebugHistoryJournal(kind, …)`: terminal 1-3, input 16-31, framebuffer 32-35, sound 36-63); `rep` splitting into one packet. Core suite 3,322 → 3,361 passed; wasm `fe8d9d18…`, reproducible.
+- **M9, headers** (638a3127). One device table (`scripts/sim-header/deviceTable.mjs`) generating 20 C headers and 18 NASM include files under `src/lib/sourceRuntime/generated/x86/include/`, uploaded with x86 compiles only (`-isystem sysroot/x86_64/include`); a native layout test compares 1,226 sizes, offsets, values and signatures with the kernel's UAPI headers; every `.inc` assembles with the Core's NASM. `errno.h` gained Linux's device codes, which needs the Runtime library rebuilt through Compiler Explorer (`build.mjs --update-abi`).
+- **M7, the Terminal** (23e21d20). A line mode the adapter sets; raw keys as xterm's bytes; `ISIG` signals; Ctrl+Shift+C copies; `SerialTranscript` for x86 output (`\r`, `\b`, staircase) with Undo of the rewritten line.
+- **M8, sound** (2672b0d5). `X86Sound` entry points (`audio.x86.pcm/midi/tone/mixer/soundCut`), a PCM worklet on a Program-time timeline (100 ms behind, drift followed at 1 ms a second, jumps past 50 ms), a pooled General MIDI synthesizer with drums, the PC speaker in the chips' worklet. Checked in headless Chrome.
+- **M6/M7, Screen, Display and input UI** (8b05cc5c). `languageHasScreen` true for x86; `ProgramDisplay` is MARS's five fields or x86's `{ width, height }`; the x86 `@screen` reader; `linuxKeyCodes.ts`; the `X86Input` module and `ScreenRenderer`'s x86 mode.
+
+Decisions taken while implementing:
+
+1. **ICRNL and OPOST/ONLCR apply only when the host asks** (`setTerminalProcessing`): interactive runs turn them on, Testcases leave them off, so a Testcase's transcript is a pipe's.
+2. **Undo of a read that waited puts back only what it found queued before the wait**, and drops what arrived during the wait and is still queued, the state before the instruction ([ADR 0057](../adr/0057-restore-the-terminal-on-undo.md)).
+3. **`sendSignal` discards input no read took unless `NOFLSH` is set**, as Linux's `isig()` does, and is an Undo barrier like any signal from outside.
+4. **`soundCut` names its device** when one device is cut (a dsp `RESET` must not drop MIDI).
+5. **In raw mode Escape goes to the program and Shift+Tab leaves the Terminal**; on the Screen Escape still releases it on every Target, x86 included, so an x86 program cannot read `KEY_ESC` from the Screen yet. To settle with the owner.
+6. **Unknown ioctls answer `ENOTTY` only where no driver claims the request type**: evdev and OSS answer `EINVAL` for unknown requests of their own type, as on Linux (M3, M4).
+7. **The MIDI port's buffer belongs to the substream**, shared by every open (M4 moves M1's test vehicle there).
+8. The mixer's gain is linear (VOLUME/100 × PCM/100 a side), not checked against the guest's dB curve.
+
+### Second wave
+
+Started 2026-10-31: M2, M3 and M4 in three worktrees of the Core (`.cache/wt/x86-core-fb`, `-input`, `-sound`, branches `feat/devices-fb`, `-input`, `-sound` from d9cd6f7), merged into `feat/devices` when done; the adapter wiring of M1's terminal and wait API in the editor worktree.
