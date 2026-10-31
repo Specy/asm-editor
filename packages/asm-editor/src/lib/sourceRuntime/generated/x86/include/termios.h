@@ -97,17 +97,19 @@ struct termios {
 #define OFDEL  0200
 
 /* c_cflag: the serial line's settings. */
-#define CSIZE  060 /* The bits that hold the character size. */
-#define CS5    0
-#define CS6    020
-#define CS7    040
-#define CS8    060 /* 8-bit characters. */
-#define CSTOPB 0100
-#define CREAD  0200
-#define PARENB 0400
-#define PARODD 01000
-#define HUPCL  02000
-#define CLOCAL 04000
+#define CSIZE   060    /* The bits that hold the character size. */
+#define CS5     0
+#define CS6     020
+#define CS7     040
+#define CS8     060    /* 8-bit characters. */
+#define CSTOPB  0100
+#define CREAD   0200
+#define PARENB  0400
+#define PARODD  01000
+#define HUPCL   02000
+#define CLOCAL  04000
+#define CBAUD   010017 /* The bits that hold the line's speed: B9600 on the serial line here. */
+#define CBAUDEX 010000 /* The bit of CBAUD that marks the faster speeds. */
 
 /* c_lflag: line editing, echo and signals. */
 #define ISIG    01  /* Ctrl+C and Ctrl+\ send signals. */
@@ -131,9 +133,15 @@ struct termios {
 #define TCSADRAIN 1 /* Once the output has been sent. */
 #define TCSAFLUSH 2 /* Once the output has been sent, discarding the input not read yet. */
 
+/* What tcflush discards. */
+#define TCIFLUSH  0 /* The input not read yet. */
+#define TCOFLUSH  1 /* The output not sent yet. */
+#define TCIOFLUSH 2 /* Both. */
+
 /**
  * Reads the modes of the terminal fd into *termios, through the TCGETS ioctl. Returns 0, or -1 with
- * errno set (ENOTTY when fd is not a terminal).
+ * errno set (ENOTTY when fd is not a terminal). As in the C library, c_cc past the kernel's 19
+ * characters is 0, and c_ispeed and c_ospeed are c_cflag's speed bits.
  */
 static inline int tcgetattr(int fd, struct termios *termios) {
     register long rax __asm__("rax") = 16; /* ioctl */
@@ -141,6 +149,11 @@ static inline int tcgetattr(int fd, struct termios *termios) {
     register long rsi __asm__("rsi") = 0x5401 /* TCGETS */;
     register long rdx __asm__("rdx") = (long)termios;
     __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx) : "rcx", "r11", "memory");
+    if (rax == 0) {
+        unsigned __i;
+        for (__i = 19; __i < NCCS; __i++) termios->c_cc[__i] = 0;
+        termios->c_ispeed = termios->c_ospeed = termios->c_cflag & (CBAUD | CBAUDEX);
+    }
     return (int)__aed_syscall_return(rax);
 }
 
@@ -149,14 +162,39 @@ static inline int tcgetattr(int fd, struct termios *termios) {
  * TCSAFLUSH), through the TCSETS ioctls. Returns 0, or -1 with errno set.
  */
 static inline int tcsetattr(int fd, int action, const struct termios *termios) {
-    if (action < TCSANOW || action > TCSAFLUSH) {
-        errno = EINVAL;
-        return -1;
-    }
+    if (action < TCSANOW || action > TCSAFLUSH)
+        return (int)__aed_syscall_return(-22); /* EINVAL */
     register long rax __asm__("rax") = 16; /* ioctl */
     register long rdi __asm__("rdi") = fd;
     register long rsi __asm__("rsi") = 0x5402 /* TCSETS */ + action;
     register long rdx __asm__("rdx") = (long)termios;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx) : "rcx", "r11", "memory");
+    return (int)__aed_syscall_return(rax);
+}
+
+/**
+ * Discards what the terminal fd holds: the input not read yet (TCIFLUSH), the output not sent
+ * (TCOFLUSH) or both (TCIOFLUSH), through the TCFLSH ioctl. A game calls it to drop the keys typed
+ * while it was busy. Returns 0, or -1 with errno set.
+ */
+static inline int tcflush(int fd, int queue) {
+    register long rax __asm__("rax") = 16; /* ioctl */
+    register long rdi __asm__("rdi") = fd;
+    register long rsi __asm__("rsi") = 0x540b /* TCFLSH */;
+    register long rdx __asm__("rdx") = queue;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx) : "rcx", "r11", "memory");
+    return (int)__aed_syscall_return(rax);
+}
+
+/**
+ * Waits until everything written to the terminal fd has been sent, through the TCSBRK ioctl, which
+ * here is at once. Returns 0, or -1 with errno set.
+ */
+static inline int tcdrain(int fd) {
+    register long rax __asm__("rax") = 16; /* ioctl */
+    register long rdi __asm__("rdi") = fd;
+    register long rsi __asm__("rsi") = 0x5409 /* TCSBRK */;
+    register long rdx __asm__("rdx") = 1;
     __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx) : "rcx", "r11", "memory");
     return (int)__aed_syscall_return(rax);
 }

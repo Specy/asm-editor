@@ -11,7 +11,6 @@
 %ifndef SOUND_ASOUND_INC
 %define SOUND_ASOUND_INC
 
-%include "linux/ioctl.inc"
 %include "time.inc"
 
 ; A version number from its three parts.

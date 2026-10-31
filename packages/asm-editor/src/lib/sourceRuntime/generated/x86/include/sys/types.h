@@ -25,5 +25,10 @@ typedef unsigned int useconds_t; /* A number of microseconds. */
 typedef long suseconds_t;        /* A number of microseconds, signed. */
 typedef long long time_t;        /* Seconds since 1970-01-01 UTC, as <time.h> has it. */
 typedef int clockid_t;           /* Which clock: CLOCK_REALTIME, CLOCK_MONOTONIC, ... */
+typedef unsigned long dev_t;     /* A device's number, its major and minor together. */
+typedef unsigned long ino_t;     /* A file's number in its file system. */
+typedef unsigned long nlink_t;   /* How many names a file has. */
+typedef long blksize_t;          /* A block size in bytes. */
+typedef long blkcnt_t;           /* A number of 512-byte blocks. */
 
 #endif

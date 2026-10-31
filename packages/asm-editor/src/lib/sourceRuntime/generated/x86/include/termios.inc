@@ -77,17 +77,19 @@ endstruc
 %define OFDEL  0o200
 
 ; c_cflag: the serial line's settings.
-%define CSIZE  0o60 ; The bits that hold the character size.
-%define CS5    0
-%define CS6    0o20
-%define CS7    0o40
-%define CS8    0o60 ; 8-bit characters.
-%define CSTOPB 0o100
-%define CREAD  0o200
-%define PARENB 0o400
-%define PARODD 0o1000
-%define HUPCL  0o2000
-%define CLOCAL 0o4000
+%define CSIZE   0o60    ; The bits that hold the character size.
+%define CS5     0
+%define CS6     0o20
+%define CS7     0o40
+%define CS8     0o60    ; 8-bit characters.
+%define CSTOPB  0o100
+%define CREAD   0o200
+%define PARENB  0o400
+%define PARODD  0o1000
+%define HUPCL   0o2000
+%define CLOCAL  0o4000
+%define CBAUD   0o10017 ; The bits that hold the line's speed: B9600 on the serial line here.
+%define CBAUDEX 0o10000 ; The bit of CBAUD that marks the faster speeds.
 
 ; c_lflag: line editing, echo and signals.
 %define ISIG    0o1  ; Ctrl+C and Ctrl+\ send signals.
@@ -110,5 +112,10 @@ endstruc
 %define TCSANOW   0 ; At once.
 %define TCSADRAIN 1 ; Once the output has been sent.
 %define TCSAFLUSH 2 ; Once the output has been sent, discarding the input not read yet.
+
+; What tcflush discards.
+%define TCIFLUSH  0 ; The input not read yet.
+%define TCOFLUSH  1 ; The output not sent yet.
+%define TCIOFLUSH 2 ; Both.
 
 %endif

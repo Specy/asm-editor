@@ -34,12 +34,14 @@ const SCALARS = {
 }
 
 const headers = DEVICE_HEADERS
+/** `struct` or `union`: a structure item of the table is a union when it says so. */
+const tagOf = (item) => (item.union ? 'union' : 'struct')
 const byName = new Map()
 for (const header of headers)
     for (const item of header.items) {
         const keys =
             item.kind === 'struct'
-                ? [item.name && `struct ${item.name}`, item.typedef].filter(Boolean)
+                ? [item.name && `${tagOf(item)} ${item.name}`, item.typedef].filter(Boolean)
                 : [item.name].filter(Boolean)
         for (const key of keys) {
             //a typedef may be repeated, as C11 allows: <time.h> and <sys/types.h> both give clockid_t
@@ -76,14 +78,16 @@ const align = (offset, to) => Math.ceil(offset / to) * to
 /**
  * A structure's layout, as GCC's: each field at the next multiple of its alignment, the size a
  * multiple of the largest. A bit-field holds the whole unit of its type, the only kind the table has.
+ * A union's fields all start at 0, and its size is its largest field's, rounded the same way.
  */
 export function structLayout(item) {
     let offset = 0
+    let end = 0
     let largest = 1
     const fields = item.fields.map((field) => {
         const element = typeLayout(field.type)
         const count = field.count === undefined ? 1 : Number(evaluate(String(field.count)))
-        offset = align(offset, element.align)
+        offset = item.union ? 0 : align(offset, element.align)
         largest = Math.max(largest, element.align)
         const placed = {
             ...field,
@@ -94,18 +98,19 @@ export function structLayout(item) {
             count
         }
         offset += placed.size
+        end = Math.max(end, offset)
         return placed
     })
-    return { size: align(offset, largest), align: largest, fields }
+    return { size: align(end, largest), align: largest, union: !!item.union, fields }
 }
 
 /** The C spelling of a structure or typedef for sizeof: `struct input_id`, `fd_set`. */
-const typeName = (item) => (item.name ? `struct ${item.name}` : item.typedef)
+const typeName = (item) => (item.name ? `${tagOf(item)} ${item.name}` : item.typedef)
 
 // --- Evaluating the table's C expressions ---------------------------------------------------
 
 const TOKEN =
-    /\s*(?:('(?:\\.|[^'\\])')|(0[xX][0-9a-fA-F]+|\d+)[uUlL]*|([A-Za-z_]\w*)|(<<|>>|[-+*/%|&^~(),[\]]))/y
+    /\s*(?:('(?:\\.|[^'\\])')|(0[xX][0-9a-fA-F]+|\d+)[uUlL]*|([A-Za-z_]\w*)|(<<|>>|==|!=|[-+*/%|&^~(),[\]]))/y
 
 function tokenize(text) {
     const tokens = []
@@ -244,13 +249,15 @@ export function evaluate(text) {
         '|': 1,
         '^': 2,
         '&': 3,
-        '<<': 4,
-        '>>': 4,
-        '+': 5,
-        '-': 5,
-        '*': 6,
-        '/': 6,
-        '%': 6
+        '==': 4,
+        '!=': 4,
+        '<<': 5,
+        '>>': 5,
+        '+': 6,
+        '-': 6,
+        '*': 7,
+        '/': 7,
+        '%': 7
     }
     const binary = (minimum) => {
         let left = primary()
@@ -264,6 +271,8 @@ export function evaluate(text) {
                 '|': () => left | right,
                 '^': () => left ^ right,
                 '&': () => left & right,
+                '==': () => (left === right ? 1n : 0n),
+                '!=': () => (left === right ? 0n : 1n),
                 '<<': () => left << right,
                 '>>': () => left >> right,
                 '+': () => left + right,
@@ -424,12 +433,15 @@ function cDefines(group) {
 function cStruct(item) {
     const layout = structLayout(item)
     const rows = layout.fields.map((field) => ({
-        text: `    ${field.type} ${field.name}${field.countText === undefined ? '' : `[${field.countText}]`}${field.bits ? ` : ${field.bits}` : ''};`,
+        text: field.decl
+            ? `    ${field.decl};`
+            : `    ${field.type}${field.type.endsWith('*') ? '' : ' '}${field.name}${field.countText === undefined ? '' : `[${field.countText}]`}${field.bits ? ` : ${field.bits}` : ''};`,
         doc: field.doc
     }))
+    const tag = tagOf(item)
     const head = item.typedef
-        ? `typedef struct${item.name ? ` ${item.name}` : ''} {`
-        : `struct ${item.name} {`
+        ? `typedef ${tag}${item.name ? ` ${item.name}` : ''} {`
+        : `${tag} ${item.name} {`
     const tail = item.typedef ? `} ${item.typedef};` : '};'
     return [
         ...(item.doc ? docComment(item.doc) : []),
@@ -437,6 +449,18 @@ function cStruct(item) {
         ...aligned(rows, cComment, columnOf(rows, cComment)),
         tail
     ]
+}
+
+/**
+ * A line of C with each `__NR_name` replaced by the number of the system call `name`, as the x86
+ * syscall table has it: the code of the functions that make more than one call names them so.
+ */
+function withNumbers(line, syscalls) {
+    return line.replace(/\b__NR_(\w+)\b/g, (_, name) => {
+        const call = syscalls.find((entry) => entry.name === name)
+        if (!call) throw new Error(`${name} is not a system call the x86 Core implements`)
+        return `${call.number} /* ${name} */`
+    })
 }
 
 function parameterName(parameter) {
@@ -447,7 +471,7 @@ function cFunction(item, syscalls) {
     const parameters = item.params.join(', ')
     const signature = `static inline ${item.returns}${item.returns.endsWith('*') ? '' : ' '}${item.name}(${parameters})`
     const body = []
-    if (item.body) body.push(...item.body)
+    if (item.body) body.push(...item.body.map((line) => withNumbers(line, syscalls)))
     else {
         const call = syscalls.find((entry) => entry.name === item.syscall)
         if (!call)
@@ -466,13 +490,14 @@ function cFunction(item, syscalls) {
             throw new Error(`${item.name} has too many arguments`)
         const registers = SYSCALL_REGISTERS.slice(0, args.length)
         body.push(
-            ...(item.before ?? []),
+            ...(item.before ?? []).map((line) => withNumbers(line, syscalls)),
             `register long rax __asm__("rax") = ${call.number}; /* ${call.name} */`,
             ...args.map(
                 (arg, index) =>
                     `register long ${registers[index]} __asm__("${registers[index]}") = ${arg};`
             ),
-            `__asm__ volatile("syscall" : "+r"(rax) : ${registers.map((register) => `"r"(${register})`).join(', ')} : "rcx", "r11", "memory");`
+            `__asm__ volatile("syscall" : "+r"(rax) :${registers.map((register) => ` "r"(${register})`).join(',')} : "rcx", "r11", "memory");`,
+            ...(item.after ?? []).map((line) => withNumbers(line, syscalls))
         )
         const result = item.result ?? '__aed_syscall_return(rax)'
         const cast =
@@ -499,6 +524,8 @@ const GENERATED =
 /** One C header of the table. */
 function cHeader(header, syscalls) {
     const functions = header.items.some((item) => item.kind === 'function')
+    //C linkage for what C++ would otherwise mangle: the functions, and the code that asks for it
+    const externC = functions || header.externC
     const preamble = [
         `<${header.path}>: ${header.summary}`,
         '',
@@ -514,7 +541,8 @@ function cHeader(header, syscalls) {
     ]
     const body = []
     let previous
-    for (const group of runs(header.items)) {
+    //a check is for the layout test alone
+    for (const group of runs(header.items.filter((item) => item.kind !== 'check'))) {
         const [item] = group
         //a comment introduces what follows it, and a macro without one belongs with the one before
         if (
@@ -527,7 +555,7 @@ function cHeader(header, syscalls) {
         else if (item.kind === 'comment') body.push(...cComment(item.text))
         else if (item.kind === 'typedef') {
             const rows = group.map((entry) => ({
-                text: `typedef ${entry.type} ${entry.name};`,
+                text: entry.c ?? `typedef ${entry.type} ${entry.name};`,
                 doc: entry.doc
             }))
             body.push(...aligned(rows, cComment, columnOf(rows, cComment)))
@@ -535,7 +563,8 @@ function cHeader(header, syscalls) {
         else if (item.kind === 'macro') body.push(...cMacro(item))
         else if (item.kind === 'function') body.push(...cFunction(item, syscalls))
         else if (item.kind === 'include') body.push(`#include <${item.path}>`)
-        else if (item.kind === 'code') body.push(...docComment(item.doc), ...item.c)
+        else if (item.kind === 'code')
+            body.push(...docComment(item.doc), ...item.c.map((line) => withNumbers(line, syscalls)))
     }
     const guard = guardOf(header)
     return [
@@ -551,9 +580,9 @@ function cHeader(header, syscalls) {
         ...(header.includeNext || header.includes?.length ? [''] : []),
         ...(header.includeNext ? [`#include_next <${header.includeNext}>`] : []),
         ...(header.includes ?? []).map((path) => `#include <${path}>`),
-        ...(functions ? ['', '#ifdef __cplusplus', 'extern "C" {', '#endif'] : []),
+        ...(externC ? ['', '#ifdef __cplusplus', 'extern "C" {', '#endif'] : []),
         ...body,
-        ...(functions ? ['', '#ifdef __cplusplus', '}', '#endif'] : []),
+        ...(externC ? ['', '#ifdef __cplusplus', '}', '#endif'] : []),
         '',
         '#endif',
         ''
@@ -572,7 +601,8 @@ function nasmFields(layout, prefix, base) {
         const at = base + field.offset
         if (at > offset) lines.push({ text: `    resb ${at - offset}`, doc: 'padding' })
         const label = `${prefix}.${field.name}`
-        const nested = field.element.fields && field.count === 1
+        //a union's fields overlap, which a struc cannot say: it is reserved whole
+        const nested = field.element.fields && field.count === 1 && !field.element.union
         if (nested) {
             lines.push({ text: `    ${label}:`, doc: field.doc })
             const inner = nasmFields(field.element, label, at)
@@ -645,9 +675,17 @@ function hasNasm(header) {
     return header.items.some(
         (item) =>
             (item.kind === 'define' && item.nasm !== false) ||
-            item.kind === 'struct' ||
+            nasmStructure(item) ||
             (item.kind === 'macro' && (item.samples || item.nasm))
     )
+}
+
+/**
+ * Whether NASM gets a struc for the item: a structure, but not a union, whose fields overlap, nor
+ * one marked C's own, such as the C library's struct sigaction, which no system call takes.
+ */
+function nasmStructure(item) {
+    return item.kind === 'struct' && !item.union && item.nasm !== false
 }
 
 const nasmPath = (path) => path.replace(/\.h$/, '.inc')
@@ -668,7 +706,7 @@ function nasmFile(header) {
         let lines = []
         if (item.kind === 'define') lines = nasmDefines(group)
         else if (item.kind === 'comment') lines = nasmComment(item.text)
-        else if (item.kind === 'struct') lines = nasmStruct(item)
+        else if (nasmStructure(item)) lines = nasmStruct(item)
         else if (item.kind === 'macro' && (item.samples || item.nasm)) lines = nasmMacro(item)
         if (!lines.length) continue
         if (
@@ -787,21 +825,23 @@ export function deviceProbe(syscalls) {
                         extra
                     )
             else if (item.kind === 'typedef')
-                add(header.path, `sizeof(${item.name})`, typeLayout(item.name).size)
+                add(header.path, `sizeof(${item.name})`, typeLayout(item.name).size, extra)
             else if (item.kind === 'struct') {
                 const name = typeName(item)
                 const layout = structLayout(item)
-                add(header.path, `sizeof(${name})`, layout.size)
-                add(header.path, `_Alignof(${name})`, layout.align)
-                for (const field of layout.fields)
+                add(header.path, `sizeof(${name})`, layout.size, extra)
+                add(header.path, `_Alignof(${name})`, layout.align, extra)
+                //a field a macro of the header renames, as si_pid is, is checked through the
+                //structure that names it: the table's checks
+                for (const field of item.offsets === false ? [] : layout.fields)
                     if (!field.bits)
-                        add(
-                            header.path,
-                            `offsetof(${name}, ${field.name})`,
-                            field.offset,
-                            field.guest ? { guest: field.guest } : {}
-                        )
-            } else if (item.kind === 'function') {
+                        add(header.path, `offsetof(${name}, ${field.name})`, field.offset, {
+                            ...extra,
+                            ...(field.guest ? { guest: field.guest } : {})
+                        })
+            } else if (item.kind === 'check')
+                add(header.path, item.expression, evaluate(String(item.value)), extra)
+            else if (item.kind === 'function') {
                 const params = item.params.join(', ') || 'void'
                 add(
                     header.path,
@@ -844,7 +884,7 @@ export function deviceNasmProbe(syscalls) {
                     })
                     add(file, `${item.name}(${args.join(', ')})`, evaluate(expand(item, sample)))
                 }
-            else if (item.kind === 'struct') {
+            else if (nasmStructure(item)) {
                 const name = item.name ?? item.typedef
                 const layout = structLayout(item)
                 add(file, `${name}_size`, layout.size)

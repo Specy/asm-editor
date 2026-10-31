@@ -11,6 +11,7 @@ char *strerror(int e)
 	case 0: s = "Success"; break;
 	case EPERM: s = "Operation not permitted"; break;
 	case ENOENT: s = "No such file or directory"; break;
+	case ESRCH: s = "No such process"; break;
 	case EINTR: s = "Interrupted system call"; break;
 	case EIO: s = "Input/output error"; break;
 	case ENXIO: s = "No such device or address"; break;
@@ -27,6 +28,7 @@ char *strerror(int e)
 	case EINVAL: s = "Invalid argument"; break;
 	case EMFILE: s = "Too many open files"; break;
 	case ENOTTY: s = "Inappropriate ioctl for device"; break;
+	case EFBIG: s = "File too large"; break;
 	case ENOSPC: s = "No space left on device"; break;
 	case ESPIPE: s = "Illegal seek"; break;
 	case EPIPE: s = "Broken pipe"; break;

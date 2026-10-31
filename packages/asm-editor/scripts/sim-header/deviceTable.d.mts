@@ -10,6 +10,8 @@ export type DeviceHeader = {
     guard?: string
     /** False for `errno.h`, which the Runtime library declares for C. */
     c?: false
+    /** C linkage for a header with no functions but code that needs it, `bits/syscall.h`. */
+    externC?: true
     items: unknown[]
 }
 

@@ -1,6 +1,7 @@
 /*
- * <bits/syscall.h>: how the functions of the x86 headers turn a system call's result into the C
- * library's. It is included by the headers that need it; a program never includes it itself.
+ * <bits/syscall.h>: how the functions of the x86 headers make a system call and turn its result
+ * into the C library's. It is included by the headers that need it; a program never includes it
+ * itself.
  *
  * Part of the x86 Runtime library, written for the editor in the shape of Linux's own header: the
  * same names, values and layouts, with only what the editor's devices use.
@@ -15,20 +16,44 @@
 #error "This <bits/syscall.h> is the x86 one, included in a compilation for another Target"
 #endif
 
-#include <errno.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * The C library's answer for a system call's result. The kernel reports a failure as a negative
  * error number from -4095 to -1, in rax; a C function returns -1 instead and leaves the error
  * number in errno, which <errno.h> names (EBADF, ENOTTY, EAGAIN, ...). Any other result is the
- * call's answer, returned as it is.
+ * call's answer, returned as it is. errno is declared inside the function alone, so a program that
+ * reads it includes <errno.h>, as on Linux.
  */
 static inline long __aed_syscall_return(long result) {
     if ((unsigned long)result > -4096UL) {
+        extern int errno;
         errno = (int)-result;
         return -1;
     }
     return result;
 }
+
+/**
+ * A system call for the functions that make more than one: the call's number in rax, its arguments
+ * in rdi, rsi, rdx, r10, r8 and r9, and the kernel's answer back in rax.
+ */
+static inline long __aed_syscall(long number, long a1, long a2, long a3, long a4, long a5, long a6) {
+    register long rax __asm__("rax") = number;
+    register long rdi __asm__("rdi") = a1;
+    register long rsi __asm__("rsi") = a2;
+    register long rdx __asm__("rdx") = a3;
+    register long r10 __asm__("r10") = a4;
+    register long r8 __asm__("r8") = a5;
+    register long r9 __asm__("r9") = a6;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");
+    return rax;
+}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -67,9 +67,17 @@ static inline int close(int fd) {
     return (int)__aed_syscall_return(rax);
 }
 
+/** The program's process id, which kill takes. It never fails. */
+static inline pid_t getpid(void) {
+    register long rax __asm__("rax") = 39; /* getpid */
+    __asm__ volatile("syscall" : "+r"(rax) : : "rcx", "r11", "memory");
+    return (pid_t)__aed_syscall_return(rax);
+}
+
 /**
  * Moves fd's position to offset from the start (SEEK_SET), the current position (SEEK_CUR) or the
- * end (SEEK_END). Returns the new position, or -1 with errno set (ESPIPE for the Terminal).
+ * end (SEEK_END). Returns the new position, or -1 with errno set (ESPIPE for the Terminal and for
+ * every device but /dev/fb0, which have no position).
  */
 static inline off_t lseek(int fd, off_t offset, int whence) {
     register long rax __asm__("rax") = 8; /* lseek */
@@ -78,6 +86,21 @@ static inline off_t lseek(int fd, off_t offset, int whence) {
     register long rdx __asm__("rdx") = whence;
     __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx) : "rcx", "r11", "memory");
     return __aed_syscall_return(rax);
+}
+
+/**
+ * Whether fd is a terminal: 1 for the Terminal and the console, or 0 with errno set (ENOTTY for a
+ * file or any other device, EBADF for a descriptor that is not open). It asks with the TCGETS
+ * ioctl, as the C library does.
+ */
+static inline int isatty(int fd) {
+    unsigned char modes[36];
+    register long rax __asm__("rax") = 16; /* ioctl */
+    register long rdi __asm__("rdi") = fd;
+    register long rsi __asm__("rsi") = 0x5401 /* TCGETS */;
+    register long rdx __asm__("rdx") = (long)modes;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx) : "rcx", "r11", "memory");
+    return __aed_syscall_return(rax) == 0;
 }
 
 /**

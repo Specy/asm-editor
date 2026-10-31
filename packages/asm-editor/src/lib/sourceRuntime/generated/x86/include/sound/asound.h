@@ -17,7 +17,7 @@
 #endif
 
 #include <linux/types.h>
-#include <linux/ioctl.h>
+#include <stdlib.h>
 #include <time.h>
 
 /** A version number from its three parts. */

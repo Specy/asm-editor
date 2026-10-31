@@ -42,6 +42,8 @@ export function typeLayout(type: string): { size: number; align: number }
 export function structLayout(item: unknown): {
     size: number
     align: number
+    /** Whether its fields all start at 0. */
+    union: boolean
     fields: { name: string; type: string; doc?: string; offset: number; size: number }[]
 }
 export function evaluate(text: string): bigint

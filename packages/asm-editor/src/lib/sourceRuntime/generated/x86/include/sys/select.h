@@ -19,7 +19,8 @@
 #error "This <sys/select.h> is the x86 one, included in a compilation for another Target"
 #endif
 
-#include <sys/time.h>
+#include <sys/types.h>
+#include <bits/types/struct_timeval.h>
 #include <bits/syscall.h>
 
 #ifdef __cplusplus

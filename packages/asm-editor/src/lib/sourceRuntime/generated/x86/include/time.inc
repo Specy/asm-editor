@@ -10,12 +10,7 @@
 %ifndef TIME_INC
 %define TIME_INC
 
-; A time in seconds and nanoseconds.
-; timespec_size is 16.
-struc timespec
-    .tv_sec:  resq 1 ; Whole seconds.
-    .tv_nsec: resq 1 ; Nanoseconds, 0 to 999999999.
-endstruc
+%include "bits/types/struct_timespec.inc"
 
 ; The clocks. Every one runs on the program's own time, which a Testcase makes virtual.
 %define CLOCK_REALTIME           0 ; The date and time, which can jump.

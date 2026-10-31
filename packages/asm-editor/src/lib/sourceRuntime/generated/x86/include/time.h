@@ -19,6 +19,7 @@
 #endif
 
 #include_next <time.h>
+#include <bits/types/struct_timespec.h>
 #include <bits/syscall.h>
 
 #ifdef __cplusplus
@@ -26,12 +27,6 @@ extern "C" {
 #endif
 
 typedef int clockid_t; /* Which clock: CLOCK_REALTIME, CLOCK_MONOTONIC, ... */
-
-/** A time in seconds and nanoseconds. */
-struct timespec {
-    time_t tv_sec; /* Whole seconds. */
-    long tv_nsec;  /* Nanoseconds, 0 to 999999999. */
-};
 
 /* The clocks. Every one runs on the program's own time, which a Testcase makes virtual. */
 #define CLOCK_REALTIME           0 /* The date and time, which can jump. */

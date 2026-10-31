@@ -270,15 +270,18 @@ describe.skipIf(!gcc || !uapi)('the layouts, against the kernel and the C librar
         const linux = entries.filter((entry) => entry.linux)
         const values = probe(
             [
+                'dirent.h',
                 'errno.h',
                 'fcntl.h',
                 'poll.h',
+                'signal.h',
                 'termios.h',
                 'time.h',
                 'unistd.h',
                 'sys/ioctl.h',
                 'sys/mman.h',
                 'sys/select.h',
+                'sys/stat.h',
                 'sys/syscall.h',
                 'sys/time.h',
                 'sys/types.h',
@@ -321,6 +324,62 @@ describe.skipIf(!gcc || !uapi)('the layouts, against the kernel and the C librar
             ],
             { stdio: ['ignore', 'pipe', 'pipe'] }
         )
+    })
+})
+
+/**
+ * What a header gives a program that includes it alone, as Linux's own headers do: a program that
+ * builds here builds on Linux, and one that would not build there fails here too.
+ */
+const SNIPPETS: readonly [name: string, source: string][] = [
+    ['errno after <unistd.h> alone', '#include <unistd.h>\nint f(void) { return errno; }'],
+    [
+        'EAGAIN after <linux/input.h> alone',
+        '#include <linux/input.h>\nint f(void) { return EAGAIN; }'
+    ],
+    [
+        'ioctl after <linux/fb.h> alone',
+        '#include <linux/fb.h>\nint f(int fd) { return ioctl(fd, FBIOBLANK, 0); }'
+    ],
+    [
+        'ioctl and select after <linux/input.h> alone',
+        '#include <linux/input.h>\nint f(int fd) { fd_set s; FD_ZERO(&s); select(0, &s, 0, 0, 0); return ioctl(fd, EVIOCGVERSION, 0); }'
+    ],
+    [
+        'a raw MIDI request after <sound/asound.h> alone',
+        '#include <sound/asound.h>\nunsigned long f(void) { return SNDRV_RAWMIDI_IOCTL_PVERSION; }'
+    ],
+    [
+        'malloc after <sound/asound.h> alone',
+        '#include <sound/asound.h>\nvoid *f(void) { return malloc(1); }'
+    ],
+    [
+        'gettimeofday after <sys/select.h> alone',
+        '#include <sys/select.h>\nint f(struct timeval *t) { return gettimeofday(t, 0); }'
+    ],
+    [
+        'clock_gettime after <sys/stat.h> alone',
+        '#include <sys/stat.h>\nint f(struct timespec *t) { return clock_gettime(0, t); }'
+    ],
+    [
+        'struct timespec after <sys/stat.h> alone',
+        '#include <sys/stat.h>\nlong f(struct stat *s) { struct timespec t = s->st_mtim; return t.tv_nsec; }'
+    ],
+    [
+        'the console ioctls after <linux/kd.h> alone',
+        '#include <linux/kd.h>\nint f(int fd) { return ioctl(fd, KIOCSOUND, 0); }'
+    ]
+]
+
+describe.skipIf(!gcc || !uapi)('a header included alone', () => {
+    it.each(SNIPPETS)('builds %s here exactly when it does on Linux', (_name, source) => {
+        const directory = temporary()
+        writeFileSync(join(directory, 'snippet.c'), `${source}\n`)
+        const builds = (flags: readonly string[]) =>
+            spawnSync('gcc', ['-fsyntax-only', '-std=gnu17', ...flags, 'snippet.c'], {
+                cwd: directory
+            }).status === 0
+        expect(builds(OURS)).toBe(builds([]))
     })
 })
 
@@ -399,10 +458,14 @@ async function hostCompiler(_url: unknown, init?: RequestInit) {
     )
 }
 
-const CALLS = `#include <errno.h>
+const CALLS = `#include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -419,6 +482,12 @@ const CALLS = `#include <errno.h>
 static void report(const char *name, long result, int expected) {
     int matches = errno == expected;
     printf("%s %ld %d\\n", name, result, matches);
+}
+
+static volatile sig_atomic_t caught;
+
+static void on_signal(int sig) {
+    caught = sig;
 }
 
 int main(void) {
@@ -450,6 +519,38 @@ int main(void) {
     printf("select %d\\n", select(0, NULL, NULL, NULL, &wait));
     printf("write %ld\\n", (long)write(1, "written\\n", 8));
     printf("sizes %d %d %d\\n", (int)sizeof(struct input_event), (int)sizeof(struct fb_var_screeninfo), SNDCTL_DSP_SPEED == 0xC0045002);
+    int tty = isatty(0), file = isatty(99);
+    printf("isatty %d %d %d\\n", tty, file, errno == EBADF);
+    struct termios full;
+    memset(&full, 0x55, sizeof full);
+    tcgetattr(0, &full);
+    printf("termios tail %d %d %d\\n", full.c_cc[19] == 0 && full.c_cc[NCCS - 1] == 0, full.c_ispeed == (full.c_cflag & (CBAUD | CBAUDEX)), full.c_ospeed == full.c_ispeed);
+    printf("tcflush %d tcdrain %d\\n", tcflush(0, TCIFLUSH), tcdrain(1));
+    struct stat st;
+    got = stat("/dev/fb0", &st);
+    printf("stat %d %d %lu\\n", got, S_ISCHR(st.st_mode), (unsigned long)st.st_rdev);
+    got = fstat(0, &st);
+    printf("fstat %d %d %lu\\n", got, S_ISCHR(st.st_mode), (unsigned long)st.st_rdev);
+    DIR *dir = opendir("/dev/input");
+    int events = 0;
+    struct dirent *entry;
+    while ((entry = readdir(dir)))
+        if (strncmp(entry->d_name, "event", 5) == 0 && entry->d_type == DT_CHR) events++;
+    rewinddir(dir);
+    int again = 0;
+    while (readdir(dir)) again++;
+    printf("readdir %d %d %d\\n", events, again > events, closedir(dir));
+    report("opendir", opendir("/no/such") == NULL ? -1 : 0, ENOENT);
+    printf("signal %d\\n", signal(SIGUSR1, on_signal) == SIG_DFL);
+    printf("raise %d", raise(SIGUSR1));
+    printf(" %d\\n", caught);
+    caught = 0;
+    printf("kill %d", kill(getpid(), SIGUSR1));
+    printf(" %d\\n", caught);
+    struct sigaction old;
+    sigaction(SIGUSR1, NULL, &old);
+    printf("sigaction %d %d\\n", old.sa_handler == on_signal, (old.sa_flags & SA_RESTART) != 0);
+    report("sigaction", sigaction(SIGKILL, &old, NULL), EINVAL);
     return 0;
 }
 `
@@ -473,6 +574,18 @@ const CALLS_OUTPUT = [
     'written',
     'write 8',
     'sizes 24 160 1',
+    'isatty 1 0 1',
+    'termios tail 1 1 1',
+    'tcflush 0 tcdrain 0',
+    'stat 0 1 7424',
+    'fstat 0 1 1088',
+    'readdir 5 1 0',
+    'opendir -1 1',
+    'signal 1',
+    'raise 0 10',
+    'kill 0 10',
+    'sigaction 1 1',
+    'sigaction -1 1',
     ''
 ].join('\n')
 

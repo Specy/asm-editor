@@ -20,17 +20,12 @@
 #endif
 
 #include <sys/types.h>
+#include <bits/types/struct_timeval.h>
 #include <bits/syscall.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** A time in seconds and microseconds. */
-struct timeval {
-    time_t tv_sec;       /* Whole seconds. */
-    suseconds_t tv_usec; /* Microseconds, 0 to 999999. */
-};
 
 /** What gettimeofday once reported about the time zone; pass NULL instead. */
 struct timezone {

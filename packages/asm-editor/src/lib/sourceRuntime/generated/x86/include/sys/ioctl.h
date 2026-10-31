@@ -31,6 +31,8 @@ extern "C" {
 #define TCSETS     0x5402 /* Change it now. */
 #define TCSETSW    0x5403 /* Change it once the output has been sent. */
 #define TCSETSF    0x5404 /* Same, and discard the input not read yet. */
+#define TCSBRK     0x5409 /* With an argument other than 0, wait until the output has been sent. */
+#define TCFLSH     0x540b /* Discard the input not read yet (TCIFLUSH, TCIOFLUSH of <termios.h>) */
 #define TIOCGWINSZ 0x5413 /* Read the terminal's size into a struct winsize. */
 #define TIOCSWINSZ 0x5414 /* Set the size a struct winsize gives. */
 #define FIONREAD   0x541b /* How many bytes a read would get now, into an int. */

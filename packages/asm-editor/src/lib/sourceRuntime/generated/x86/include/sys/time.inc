@@ -11,14 +11,8 @@
 %ifndef SYS_TIME_INC
 %define SYS_TIME_INC
 
+%include "bits/types/struct_timeval.inc"
 %include "sys/select.inc"
-
-; A time in seconds and microseconds.
-; timeval_size is 16.
-struc timeval
-    .tv_sec:  resq 1 ; Whole seconds.
-    .tv_usec: resq 1 ; Microseconds, 0 to 999999.
-endstruc
 
 ; What gettimeofday once reported about the time zone; pass NULL instead.
 ; timezone_size is 8.

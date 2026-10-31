@@ -230,7 +230,7 @@ Also every `PRI*` and `SCN*` macro for the exact, least, fast, `MAX` and `PTR` t
 
 | Name | Implementation | Notes |
 | --- | --- | --- |
-| `errno` | own | `extern int errno;`, a plain global. Constants: `EPERM`, `ENOENT`, `EINTR`, `EIO`, `ENXIO`, `EBADF`, `EAGAIN` (also `EWOULDBLOCK`), `ENOMEM`, `EACCES`, `EFAULT`, `EBUSY`, `EEXIST`, `ENODEV`, `ENOTDIR`, `EISDIR`, `EINVAL`, `EMFILE`, `ENOTTY`, `ENOSPC`, `ESPIPE`, `EPIPE`, `EDOM`, `ERANGE`, `ENOSYS`, `EOVERFLOW`, `EILSEQ`, `EOPNOTSUPP` (also `ENOTSUP`), with Linux's values: the library sets only some of them, and x86's device calls return the rest. |
+| `errno` | own | `extern int errno;`, a plain global. Constants: `EPERM`, `ENOENT`, `ESRCH`, `EINTR`, `EIO`, `ENXIO`, `EBADF`, `EAGAIN` (also `EWOULDBLOCK`), `ENOMEM`, `EACCES`, `EFAULT`, `EBUSY`, `EEXIST`, `ENODEV`, `ENOTDIR`, `EISDIR`, `EINVAL`, `EMFILE`, `ENOTTY`, `EFBIG`, `ENOSPC`, `ESPIPE`, `EPIPE`, `EDOM`, `ERANGE`, `ENOSYS`, `EOVERFLOW`, `EILSEQ`, `EOPNOTSUPP` (also `ENOTSUP`), with Linux's values: the library sets only some of them, and x86's device calls return the rest. |
 | `assert` | musl `exit/assert.c` (`__assert_fail`) | Honours `NDEBUG` at each inclusion. A failure prints `Assertion failed: expr (file: function: line)` on stderr and aborts (status 134). Also `static_assert`. |
 
 ## Freestanding headers

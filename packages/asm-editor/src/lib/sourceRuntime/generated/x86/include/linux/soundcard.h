@@ -73,8 +73,9 @@
 #define AFMT_S16_NE    AFMT_S16_LE
 
 /*
- * Formats Linux's own header leaves out, from OSS 4, which Linux's OSS emulation takes all the
- * same.
+ * OSS 4's names for formats Linux's own <linux/soundcard.h> leaves out: a program that names them
+ * builds here and not against Linux's header, where it defines them itself. Linux's OSS emulation
+ * takes the values all the same.
  */
 #define AFMT_S32_LE     0x1000  /* Signed 32-bit, little-endian. */
 #define AFMT_S32_BE     0x2000

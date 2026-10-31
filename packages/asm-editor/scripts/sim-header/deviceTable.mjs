@@ -62,7 +62,24 @@ const struct = (name, doc, fields, options = {}) => ({
     fields,
     ...options
 })
-const typedef = (name, type, doc) => ({ kind: 'typedef', name, type, doc })
+/** A typedef; `options.c` is its C declaration where C cannot spell it `typedef type name`. */
+const typedef = (name, type, doc, options = {}) => ({
+    kind: 'typedef',
+    name,
+    type,
+    doc,
+    ...options
+})
+/**
+ * A value the layout test compares and nothing else: a C expression, such as the offset of a field
+ * a macro names, and the value the table gives it.
+ */
+const check = (expression, value, options = {}) => ({
+    kind: 'check',
+    expression,
+    value,
+    ...options
+})
 const include = (path) => ({ kind: 'include', path })
 /**
  * A POSIX call: a `static inline` function that makes the system call `syscall` with `args` (C
@@ -86,6 +103,7 @@ export const IOC_DIRECTIONS = { '': 0, W: 1, R: 2, WR: 3 }
 const errnoCodes = [
     ['EPERM', 1, 'Operation not permitted'],
     ['ENOENT', 2, 'No such file or directory'],
+    ['ESRCH', 3, 'No such process: kill found no process with that id'],
     ['EINTR', 4, 'Interrupted system call: a signal arrived while it waited'],
     ['EIO', 5, 'Input/output error'],
     ['ENXIO', 6, 'No such device or address'],
@@ -102,6 +120,7 @@ const errnoCodes = [
     ['EINVAL', 22, 'Invalid argument'],
     ['EMFILE', 24, 'Too many open files'],
     ['ENOTTY', 25, 'Inappropriate ioctl for device: the device does not know this request'],
+    ['EFBIG', 27, 'File too large: a write starting past the end of /dev/fb0'],
     ['ENOSPC', 28, 'No space left on device'],
     ['ESPIPE', 29, 'Illegal seek'],
     ['EPIPE', 32, 'Broken pipe'],
@@ -197,19 +216,37 @@ export const DEVICE_HEADERS = [
     {
         path: 'bits/syscall.h',
         summary:
-            "how the functions of the x86 headers turn a system call's result into the C library's. It is included by the headers that need it; a program never includes it itself.",
-        includes: ['errno.h'],
+            "how the functions of the x86 headers make a system call and turn its result into the C library's. It is included by the headers that need it; a program never includes it itself.",
+        externC: true,
         items: [
             {
                 kind: 'code',
-                doc: "The C library's answer for a system call's result. The kernel reports a failure as a negative error number from -4095 to -1, in rax; a C function returns -1 instead and leaves the error number in errno, which <errno.h> names (EBADF, ENOTTY, EAGAIN, ...). Any other result is the call's answer, returned as it is.",
+                doc: "The C library's answer for a system call's result. The kernel reports a failure as a negative error number from -4095 to -1, in rax; a C function returns -1 instead and leaves the error number in errno, which <errno.h> names (EBADF, ENOTTY, EAGAIN, ...). Any other result is the call's answer, returned as it is. errno is declared inside the function alone, so a program that reads it includes <errno.h>, as on Linux.",
                 c: [
                     'static inline long __aed_syscall_return(long result) {',
                     '    if ((unsigned long)result > -4096UL) {',
+                    '        extern int errno;',
                     '        errno = (int)-result;',
                     '        return -1;',
                     '    }',
                     '    return result;',
+                    '}'
+                ]
+            },
+            {
+                kind: 'code',
+                doc: "A system call for the functions that make more than one: the call's number in rax, its arguments in rdi, rsi, rdx, r10, r8 and r9, and the kernel's answer back in rax.",
+                c: [
+                    'static inline long __aed_syscall(long number, long a1, long a2, long a3, long a4, long a5, long a6) {',
+                    '    register long rax __asm__("rax") = number;',
+                    '    register long rdi __asm__("rdi") = a1;',
+                    '    register long rsi __asm__("rsi") = a2;',
+                    '    register long rdx __asm__("rdx") = a3;',
+                    '    register long r10 __asm__("r10") = a4;',
+                    '    register long r8 __asm__("r8") = a5;',
+                    '    register long r9 __asm__("r9") = a6;',
+                    '    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx), "r"(r10), "r"(r8), "r"(r9) : "rcx", "r11", "memory");',
+                    '    return rax;',
                     '}'
                 ]
             }
@@ -326,7 +363,39 @@ export const DEVICE_HEADERS = [
             typedef('useconds_t', 'unsigned int', 'A number of microseconds'),
             typedef('suseconds_t', 'long', 'A number of microseconds, signed'),
             typedef('time_t', 'long long', 'Seconds since 1970-01-01 UTC, as <time.h> has it'),
-            typedef('clockid_t', 'int', 'Which clock: CLOCK_REALTIME, CLOCK_MONOTONIC, ...')
+            typedef('clockid_t', 'int', 'Which clock: CLOCK_REALTIME, CLOCK_MONOTONIC, ...'),
+            typedef('dev_t', 'unsigned long', "A device's number, its major and minor together"),
+            typedef('ino_t', 'unsigned long', "A file's number in its file system"),
+            typedef('nlink_t', 'unsigned long', 'How many names a file has'),
+            typedef('blksize_t', 'long', 'A block size in bytes'),
+            typedef('blkcnt_t', 'long', 'A number of 512-byte blocks')
+        ]
+    },
+    {
+        path: 'bits/types/struct_timeval.h',
+        nasmSummary: 'struct timeval, a time in seconds and microseconds.',
+        summary:
+            "struct timeval, which <sys/time.h> and <sys/select.h> both give, as the C library's own headers do. A program includes one of them, not this file.",
+        items: [
+            typedef('time_t', 'long long', 'Seconds since 1970-01-01 UTC'),
+            typedef('suseconds_t', 'long', 'A number of microseconds, signed'),
+            struct('timeval', 'A time in seconds and microseconds.', [
+                field('time_t', 'tv_sec', 'Whole seconds'),
+                field('suseconds_t', 'tv_usec', 'Microseconds, 0 to 999999')
+            ])
+        ]
+    },
+    {
+        path: 'bits/types/struct_timespec.h',
+        nasmSummary: 'struct timespec, a time in seconds and nanoseconds.',
+        summary:
+            "struct timespec, which <time.h> and <sys/stat.h> both give, as the C library's own headers do. A program includes one of them, not this file.",
+        items: [
+            typedef('time_t', 'long long', 'Seconds since 1970-01-01 UTC'),
+            struct('timespec', 'A time in seconds and nanoseconds.', [
+                field('time_t', 'tv_sec', 'Whole seconds'),
+                field('long', 'tv_nsec', 'Nanoseconds, 0 to 999999999')
+            ])
         ]
     },
     {
@@ -335,12 +404,8 @@ export const DEVICE_HEADERS = [
             "struct timeval, a time in seconds and microseconds: the time stamp of every input event, and select's timeout.",
         summary:
             "struct timeval, a time in seconds and microseconds: the time stamp of every input event, select's timeout and gettimeofday's answer. It also gives select, from <sys/select.h>, as the C library's does.",
-        includes: ['sys/types.h', 'bits/syscall.h'],
+        includes: ['sys/types.h', 'bits/types/struct_timeval.h', 'bits/syscall.h'],
         items: [
-            struct('timeval', 'A time in seconds and microseconds.', [
-                field('time_t', 'tv_sec', 'Whole seconds'),
-                field('suseconds_t', 'tv_usec', 'Microseconds, 0 to 999999')
-            ]),
             struct(
                 'timezone',
                 'What gettimeofday once reported about the time zone; pass NULL instead.',
@@ -362,7 +427,7 @@ export const DEVICE_HEADERS = [
             "select's descriptor sets: an fd_set has one bit per descriptor, descriptor n being bit n % 64 of the qword n / 64.",
         summary:
             'select, the older way to wait on several descriptors at once; <poll.h> does the same with a list instead of bit sets. Descriptors are numbered bits of an fd_set, which FD_ZERO, FD_SET, FD_CLR and FD_ISSET read and change.',
-        includes: ['sys/time.h', 'bits/syscall.h'],
+        includes: ['sys/types.h', 'bits/types/struct_timeval.h', 'bits/syscall.h'],
         items: [
             define('FD_SETSIZE', 1024, 'One more than the highest descriptor an fd_set can hold'),
             struct(
@@ -417,14 +482,10 @@ export const DEVICE_HEADERS = [
         summary:
             "x86's additions to the Runtime library's <time.h>, which it includes first: struct timespec, the clocks, clock_gettime and nanosleep, as Linux's C library has them.",
         includeNext: 'time.h',
-        includes: ['bits/syscall.h'],
+        includes: ['bits/types/struct_timespec.h', 'bits/syscall.h'],
         guard: '_AED_X86_TIME_H',
         items: [
             typedef('clockid_t', 'int', 'Which clock: CLOCK_REALTIME, CLOCK_MONOTONIC, ...'),
-            struct('timespec', 'A time in seconds and nanoseconds.', [
-                field('time_t', 'tv_sec', 'Whole seconds'),
-                field('long', 'tv_nsec', 'Nanoseconds, 0 to 999999999')
-            ]),
             note(
                 "The clocks. Every one runs on the program's own time, which a Testcase makes virtual."
             ),
@@ -483,11 +544,31 @@ export const DEVICE_HEADERS = [
                 syscall: 'close'
             }),
             posix(
+                'getpid',
+                'pid_t',
+                ['void'],
+                "The program's process id, which kill takes. It never fails.",
+                { syscall: 'getpid', args: [] }
+            ),
+            posix(
                 'lseek',
                 'off_t',
                 ['int fd', 'off_t offset', 'int whence'],
-                "Moves fd's position to offset from the start (SEEK_SET), the current position (SEEK_CUR) or the end (SEEK_END). Returns the new position, or -1 with errno set (ESPIPE for the Terminal).",
+                "Moves fd's position to offset from the start (SEEK_SET), the current position (SEEK_CUR) or the end (SEEK_END). Returns the new position, or -1 with errno set (ESPIPE for the Terminal and for every device but /dev/fb0, which have no position).",
                 { syscall: 'lseek' }
+            ),
+            posix(
+                'isatty',
+                'int',
+                ['int fd'],
+                'Whether fd is a terminal: 1 for the Terminal and the console, or 0 with errno set (ENOTTY for a file or any other device, EBADF for a descriptor that is not open). It asks with the TCGETS ioctl, as the C library does.',
+                {
+                    syscall: 'ioctl',
+                    //the kernel's struct termios, which TCGETS fills: 36 bytes
+                    before: ['unsigned char modes[36];'],
+                    args: ['fd', '0x5401 /* TCGETS */', '(long)modes'],
+                    result: '__aed_syscall_return(rax) == 0'
+                }
             ),
             posix(
                 'fsync',
@@ -624,6 +705,22 @@ export const DEVICE_HEADERS = [
             define('TCSETS', 0x5402, 'Change it now', { radix: 16 }),
             define('TCSETSW', 0x5403, 'Change it once the output has been sent', { radix: 16 }),
             define('TCSETSF', 0x5404, 'Same, and discard the input not read yet', { radix: 16 }),
+            define(
+                'TCSBRK',
+                0x5409,
+                'With an argument other than 0, wait until the output has been sent',
+                {
+                    radix: 16
+                }
+            ),
+            define(
+                'TCFLSH',
+                0x540b,
+                'Discard the input not read yet (TCIFLUSH, TCIOFLUSH of <termios.h>)',
+                {
+                    radix: 16
+                }
+            ),
             define('TIOCGWINSZ', 0x5413, "Read the terminal's size into a struct winsize", {
                 radix: 16
             }),
@@ -857,7 +954,13 @@ export const DEVICE_HEADERS = [
                     ['PARENB', 0o400],
                     ['PARODD', 0o1000],
                     ['HUPCL', 0o2000],
-                    ['CLOCAL', 0o4000]
+                    ['CLOCAL', 0o4000],
+                    [
+                        'CBAUD',
+                        0o10017,
+                        "The bits that hold the line's speed: B9600 on the serial line here"
+                    ],
+                    ['CBAUDEX', 0o10000, 'The bit of CBAUD that marks the faster speeds']
                 ],
                 8
             ),
@@ -894,12 +997,27 @@ export const DEVICE_HEADERS = [
                 2,
                 'Once the output has been sent, discarding the input not read yet'
             ),
+            note('What tcflush discards.'),
+            define('TCIFLUSH', 0, 'The input not read yet'),
+            define('TCOFLUSH', 1, 'The output not sent yet'),
+            define('TCIOFLUSH', 2, 'Both'),
             posix(
                 'tcgetattr',
                 'int',
                 ['int fd', 'struct termios *termios'],
-                'Reads the modes of the terminal fd into *termios, through the TCGETS ioctl. Returns 0, or -1 with errno set (ENOTTY when fd is not a terminal).',
-                { syscall: 'ioctl', args: ['fd', '0x5401 /* TCGETS */', '(long)termios'] }
+                "Reads the modes of the terminal fd into *termios, through the TCGETS ioctl. Returns 0, or -1 with errno set (ENOTTY when fd is not a terminal). As in the C library, c_cc past the kernel's 19 characters is 0, and c_ispeed and c_ospeed are c_cflag's speed bits.",
+                {
+                    syscall: 'ioctl',
+                    args: ['fd', '0x5401 /* TCGETS */', '(long)termios'],
+                    //the kernel fills the fields up to c_cc[18], 36 bytes
+                    after: [
+                        'if (rax == 0) {',
+                        '    unsigned __i;',
+                        '    for (__i = 19; __i < NCCS; __i++) termios->c_cc[__i] = 0;',
+                        '    termios->c_ispeed = termios->c_ospeed = termios->c_cflag & (CBAUD | CBAUDEX);',
+                        '}'
+                    ]
+                }
             ),
             posix(
                 'tcsetattr',
@@ -909,13 +1027,25 @@ export const DEVICE_HEADERS = [
                 {
                     syscall: 'ioctl',
                     before: [
-                        'if (action < TCSANOW || action > TCSAFLUSH) {',
-                        '    errno = EINVAL;',
-                        '    return -1;',
-                        '}'
+                        'if (action < TCSANOW || action > TCSAFLUSH)',
+                        '    return (int)__aed_syscall_return(-22); /* EINVAL */'
                     ],
                     args: ['fd', '0x5402 /* TCSETS */ + action', '(long)termios']
                 }
+            ),
+            posix(
+                'tcflush',
+                'int',
+                ['int fd', 'int queue'],
+                'Discards what the terminal fd holds: the input not read yet (TCIFLUSH), the output not sent (TCOFLUSH) or both (TCIOFLUSH), through the TCFLSH ioctl. A game calls it to drop the keys typed while it was busy. Returns 0, or -1 with errno set.',
+                { syscall: 'ioctl', args: ['fd', '0x540b /* TCFLSH */', 'queue'] }
+            ),
+            posix(
+                'tcdrain',
+                'int',
+                ['int fd'],
+                'Waits until everything written to the terminal fd has been sent, through the TCSBRK ioctl, which here is at once. Returns 0, or -1 with errno set.',
+                { syscall: 'ioctl', args: ['fd', '0x5409 /* TCSBRK */', '1'] }
             ),
             posix(
                 'cfmakeraw',
@@ -938,10 +1068,636 @@ export const DEVICE_HEADERS = [
         ]
     },
     {
+        path: 'sys/stat.h',
+        nasmSummary:
+            'struct stat, which the stat, fstat and lstat system calls fill in, and the type and permission bits of its st_mode: S_IFCHR for a device such as /dev/fb0.',
+        summary:
+            'stat, fstat and lstat, which describe a file: its type, size and permissions and, for a device, which one it is. S_ISCHR(st.st_mode) tells a device such as /dev/fb0 or /dev/input/event0 from a file.',
+        includes: ['sys/types.h', 'bits/types/struct_timespec.h', 'bits/syscall.h'],
+        items: [
+            struct('stat', 'What stat, fstat and lstat fill in, as Linux lays it out on x86-64.', [
+                field('dev_t', 'st_dev', 'The device the file is on'),
+                field('ino_t', 'st_ino', "The file's number"),
+                field('nlink_t', 'st_nlink', 'How many names it has'),
+                field('mode_t', 'st_mode', 'Its type (S_IFMT) and permission bits'),
+                field('uid_t', 'st_uid', 'Its owner'),
+                field('gid_t', 'st_gid', 'Its group'),
+                field('int', '__pad0'),
+                field(
+                    'dev_t',
+                    'st_rdev',
+                    'For a device, which one: (major << 8) | minor here, 0x1d00 for /dev/fb0'
+                ),
+                field('off_t', 'st_size', 'Its size in bytes'),
+                field('blksize_t', 'st_blksize'),
+                field('blkcnt_t', 'st_blocks'),
+                field('struct timespec', 'st_atim', 'When it was last read'),
+                field('struct timespec', 'st_mtim', 'When it was last written'),
+                field('struct timespec', 'st_ctim', 'When its details last changed'),
+                field('long', '__glibc_reserved', undefined, { count: 3 })
+            ]),
+            macro('st_atime', [], 'st_atim.tv_sec', 'The older names of the times, in seconds'),
+            macro('st_mtime', [], 'st_mtim.tv_sec'),
+            macro('st_ctime', [], 'st_ctim.tv_sec'),
+            note(
+                "st_mode's file types: compare st_mode & S_IFMT with one, or use S_ISCHR and the rest."
+            ),
+            ...defines(
+                [
+                    ['S_IFMT', 0o170000, 'The bits that hold the type'],
+                    ['S_IFSOCK', 0o140000],
+                    ['S_IFLNK', 0o120000, 'A symbolic link, which lstat sees and stat follows'],
+                    ['S_IFREG', 0o100000, 'A file'],
+                    ['S_IFBLK', 0o060000],
+                    ['S_IFDIR', 0o040000, 'A directory'],
+                    ['S_IFCHR', 0o020000, 'A character device: every device here'],
+                    ['S_IFIFO', 0o010000]
+                ],
+                8
+            ),
+            ...[
+                ['S_ISREG', 'S_IFREG', "Whether st_mode is a file's: 1 or 0"],
+                ['S_ISDIR', 'S_IFDIR', 'A directory'],
+                ['S_ISCHR', 'S_IFCHR', 'A character device'],
+                ['S_ISBLK', 'S_IFBLK'],
+                ['S_ISFIFO', 'S_IFIFO'],
+                ['S_ISLNK', 'S_IFLNK'],
+                ['S_ISSOCK', 'S_IFSOCK']
+            ].map(([name, type, doc]) =>
+                macro(name, ['mode'], `(((mode) & S_IFMT) == ${type})`, doc, {
+                    samples: [[type], ['S_IFREG | 0644']]
+                })
+            ),
+            note('The permission bits: read, write and run, for the owner, the group and others.'),
+            ...defines(
+                [
+                    ['S_ISUID', 0o4000],
+                    ['S_ISGID', 0o2000],
+                    ['S_ISVTX', 0o1000],
+                    ['S_IRWXU', 0o700],
+                    ['S_IRUSR', 0o400],
+                    ['S_IWUSR', 0o200],
+                    ['S_IXUSR', 0o100],
+                    ['S_IRWXG', 0o070],
+                    ['S_IRGRP', 0o040],
+                    ['S_IWGRP', 0o020],
+                    ['S_IXGRP', 0o010],
+                    ['S_IRWXO', 0o007],
+                    ['S_IROTH', 0o004],
+                    ['S_IWOTH', 0o002],
+                    ['S_IXOTH', 0o001]
+                ],
+                8
+            ),
+            posix(
+                'stat',
+                'int',
+                ['const char *path', 'struct stat *buffer'],
+                'Describes the file at path in *buffer, following a symbolic link to what it names. Returns 0, or -1 with errno set (ENOENT when there is no such file).',
+                { syscall: 'stat' }
+            ),
+            posix(
+                'fstat',
+                'int',
+                ['int fd', 'struct stat *buffer'],
+                'Describes the file or device open on fd in *buffer. Returns 0, or -1 with errno set.',
+                { syscall: 'fstat' }
+            ),
+            posix(
+                'lstat',
+                'int',
+                ['const char *path', 'struct stat *buffer'],
+                'As stat, but describes a symbolic link itself rather than what it names. Returns 0, or -1 with errno set.',
+                { syscall: 'lstat' }
+            )
+        ]
+    },
+    {
+        path: 'dirent.h',
+        nasmSummary:
+            'struct dirent, one entry of what the getdents64 system call reads from a directory, and the types of its d_type.',
+        summary:
+            "opendir, readdir and closedir, which list a directory: a program finds the input devices by reading /dev/input. readdir gives one struct dirent at a time, the entry's name in d_name and, in d_type, whether it is a device (DT_CHR), a directory (DT_DIR) or a file (DT_REG). They are header-only like the rest, over the getdents64 system call: opendir maps 32 KiB of memory for the DIR it returns, which closedir gives back.",
+        includes: ['sys/types.h', 'bits/syscall.h'],
+        items: [
+            struct('dirent', 'One entry of a directory, as readdir gives it.', [
+                field('ino_t', 'd_ino', "The entry's file number"),
+                field('off_t', 'd_off'),
+                field(
+                    'unsigned short',
+                    'd_reclen',
+                    "The entry's own size in the directory's buffer"
+                ),
+                field('unsigned char', 'd_type', 'What it is: DT_CHR, DT_DIR, DT_REG, ...'),
+                field('char', 'd_name', 'Its name, ending with a NUL', { count: 256 })
+            ]),
+            note('d_type: what an entry is.'),
+            ...defines([
+                ['DT_UNKNOWN', 0],
+                ['DT_FIFO', 1],
+                ['DT_CHR', 2, 'A character device, such as /dev/fb0 or an input device'],
+                ['DT_DIR', 4, 'A directory'],
+                ['DT_BLK', 6],
+                ['DT_REG', 8, 'A file'],
+                ['DT_LNK', 10, 'A symbolic link, such as those under /dev/input/by-id'],
+                ['DT_SOCK', 12]
+            ]),
+            {
+                kind: 'code',
+                doc: 'A directory being read, which opendir returns and the other functions take: its descriptor, and the entries the last getdents64 read. Use it only through the functions; as in the C library, its fields are not part of the interface.',
+                c: [
+                    'typedef struct __dirstream {',
+                    '    int __fd;',
+                    '    int __position;',
+                    '    int __size;',
+                    '    int __reserved;',
+                    '    char __buffer[32768 - 16];',
+                    '} DIR;'
+                ]
+            },
+            posix(
+                'opendir',
+                'DIR *',
+                ['const char *path'],
+                'Opens the directory at path for readdir, such as "/dev/input". Returns it, or NULL with errno set (ENOENT when there is no such directory, ENOTDIR for a file).',
+                {
+                    documentation: 'getdents64',
+                    body: [
+                        '/* O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC, as the C library opens it */',
+                        'long fd = __aed_syscall(__NR_open, (long)path, 02204000, 0, 0, 0, 0);',
+                        'long memory;',
+                        'DIR *dir;',
+                        'if (__aed_syscall_return(fd) < 0) return 0;',
+                        '/* PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS */',
+                        'memory = __aed_syscall(__NR_mmap, 0, sizeof(DIR), 3, 0x22, -1, 0);',
+                        'if (__aed_syscall_return(memory) < 0) {',
+                        '    __aed_syscall(__NR_close, fd, 0, 0, 0, 0, 0);',
+                        '    return 0;',
+                        '}',
+                        'dir = (DIR *)memory;',
+                        'dir->__fd = (int)fd;',
+                        'dir->__position = 0;',
+                        'dir->__size = 0;',
+                        'return dir;'
+                    ]
+                }
+            ),
+            posix(
+                'readdir',
+                'struct dirent *',
+                ['DIR *dir'],
+                'The next entry of dir, ".", ".." and the names in it in no set order, or NULL after the last one (errno unchanged) or for a failure (errno set). The entry lasts until the next readdir or closedir of dir.',
+                {
+                    documentation: 'getdents64',
+                    body: [
+                        'struct dirent *entry;',
+                        'if (dir->__position >= dir->__size) {',
+                        '    long size = __aed_syscall(__NR_getdents64, dir->__fd, (long)dir->__buffer, sizeof dir->__buffer, 0, 0, 0);',
+                        '    if (size <= 0) {',
+                        '        __aed_syscall_return(size);',
+                        '        return 0;',
+                        '    }',
+                        '    dir->__size = (int)size;',
+                        '    dir->__position = 0;',
+                        '}',
+                        'entry = (struct dirent *)(void *)(dir->__buffer + dir->__position);',
+                        'dir->__position += entry->d_reclen;',
+                        'return entry;'
+                    ]
+                }
+            ),
+            posix(
+                'rewinddir',
+                'void',
+                ['DIR *dir'],
+                'Starts dir over, so that readdir gives its first entry again.',
+                {
+                    documentation: 'lseek',
+                    body: [
+                        '__aed_syscall(__NR_lseek, dir->__fd, 0, 0 /* SEEK_SET */, 0, 0, 0);',
+                        'dir->__position = 0;',
+                        'dir->__size = 0;'
+                    ]
+                }
+            ),
+            posix(
+                'dirfd',
+                'int',
+                ['DIR *dir'],
+                'The descriptor dir reads, for fstat or openat; closedir closes it.',
+                { documentation: 'getdents64', body: ['return dir->__fd;'] }
+            ),
+            posix(
+                'closedir',
+                'int',
+                ['DIR *dir'],
+                'Closes dir and gives back its memory: dir and the entries readdir gave are gone. Returns 0, or -1 with errno set.',
+                {
+                    documentation: 'close',
+                    body: [
+                        'long fd = dir->__fd;',
+                        '__aed_syscall(__NR_munmap, (long)dir, sizeof(DIR), 0, 0, 0, 0);',
+                        'return (int)__aed_syscall_return(__aed_syscall(__NR_close, fd, 0, 0, 0, 0, 0));'
+                    ]
+                }
+            )
+        ]
+    },
+    {
+        path: 'signal.h',
+        nasmSummary:
+            "the signals' numbers, rt_sigaction's flags and struct kernel_sigaction, what the rt_sigaction system call takes: a handler needs SA_RESTORER and an sa_restorer that makes rt_sigreturn (mov eax, 15 then syscall), which the handler's ret returns to.",
+        summary:
+            'signals. Ctrl+C in the Terminal sends SIGINT, which ends the program unless it handles it: signal(SIGINT, handler) or sigaction runs handler instead, and kill and raise send a signal. As in the C library, sigaction gives the kernel a restorer, the code a handler returns to, which makes the rt_sigreturn system call.',
+        includes: ['sys/types.h', 'bits/syscall.h'],
+        items: [
+            note('The signals. Those with a comment are the ones a program here meets.'),
+            ...defines([
+                ['SIGHUP', 1],
+                ['SIGINT', 2, 'Ctrl+C in the Terminal'],
+                ['SIGQUIT', 3, 'Ctrl+\\ in the Terminal'],
+                ['SIGILL', 4, 'An instruction the processor does not have'],
+                ['SIGTRAP', 5],
+                ['SIGABRT', 6, 'abort()'],
+                ['SIGIOT', 6],
+                ['SIGBUS', 7],
+                ['SIGFPE', 8, 'A division by zero'],
+                ['SIGKILL', 9, 'Ends the program; it cannot be handled'],
+                ['SIGUSR1', 10, "The program's own"],
+                ['SIGSEGV', 11, 'Memory the program may not touch'],
+                ['SIGUSR2', 12, "The program's own"],
+                ['SIGPIPE', 13],
+                ['SIGALRM', 14, "alarm's and setitimer's timer"],
+                ['SIGTERM', 15],
+                ['SIGSTKFLT', 16],
+                ['SIGCHLD', 17],
+                ['SIGCONT', 18],
+                ['SIGSTOP', 19],
+                ['SIGTSTP', 20],
+                ['SIGTTIN', 21],
+                ['SIGTTOU', 22],
+                ['SIGURG', 23],
+                ['SIGXCPU', 24],
+                ['SIGXFSZ', 25],
+                ['SIGVTALRM', 26],
+                ['SIGPROF', 27],
+                ['SIGWINCH', 28],
+                ['SIGIO', 29],
+                ['SIGPOLL', 29],
+                ['SIGPWR', 30],
+                ['SIGSYS', 31]
+            ]),
+            define('NSIG', 65, 'One more than the highest signal number'),
+            typedef('sig_atomic_t', 'int', 'An integer a handler can set and the program read'),
+            typedef(
+                'sighandler_t',
+                'void *',
+                "A handler: a function that takes the signal's number",
+                {
+                    c: 'typedef void (*sighandler_t)(int);'
+                }
+            ),
+            define('SIG_DFL', 0, "The signal's default action: SIGINT ends the program", {
+                c: '((sighandler_t)0)',
+                probe: '(long long)(long)SIG_DFL'
+            }),
+            define('SIG_IGN', 1, 'Ignore the signal', {
+                c: '((sighandler_t)1)',
+                probe: '(long long)(long)SIG_IGN'
+            }),
+            define('SIG_ERR', -1, 'What signal returns when it fails', {
+                c: '((sighandler_t)-1)',
+                probe: '(long long)(long)SIG_ERR'
+            }),
+            note("sigprocmask's how."),
+            define('SIG_BLOCK', 0, 'Block the signals of the set too'),
+            define('SIG_UNBLOCK', 1, 'Stop blocking them'),
+            define('SIG_SETMASK', 2, 'Block exactly them'),
+            note('sa_flags: how a handler runs.'),
+            ...defines(
+                [
+                    ['SA_NOCLDSTOP', 0x00000001],
+                    ['SA_NOCLDWAIT', 0x00000002],
+                    [
+                        'SA_SIGINFO',
+                        0x00000004,
+                        'The handler is sa_sigaction, which also gets a siginfo_t'
+                    ],
+                    ['SA_ONSTACK', 0x08000000],
+                    [
+                        'SA_RESTART',
+                        0x10000000,
+                        'A read or wait the signal interrupts starts over instead of failing with EINTR'
+                    ],
+                    ['SA_NODEFER', 0x40000000, 'Do not block the signal while its handler runs'],
+                    ['SA_RESETHAND', 0x80000000, 'Handle the signal once, then go back to SIG_DFL']
+                ],
+                16
+            ),
+            define(
+                'SA_RESTORER',
+                0x04000000,
+                "The kernel's, not in the C library's header: sa_restorer holds what a handler returns to. rt_sigaction refuses a handler without it, and sigaction sets it for you",
+                { radix: 16, linux: false }
+            ),
+            struct(
+                null,
+                'A set of signals, one bit each: signal n is bit (n - 1) % 64 of __val[(n - 1) / 64]. Change it with sigemptyset, sigaddset and the rest.',
+                [field('unsigned long', '__val', undefined, { count: 16 })],
+                { typedef: 'sigset_t', nasm: false }
+            ),
+            struct(
+                'sigval',
+                'A value sent along with a signal.',
+                [field('int', 'sival_int'), field('void *', 'sival_ptr')],
+                { union: true }
+            ),
+            struct(
+                '__aed_siginfo_kill',
+                undefined,
+                [field('pid_t', 'si_pid'), field('uid_t', 'si_uid')],
+                { linux: false, nasm: false, offsets: false }
+            ),
+            struct(
+                '__aed_siginfo_rt',
+                undefined,
+                [
+                    field('pid_t', 'si_pid'),
+                    field('uid_t', 'si_uid'),
+                    field('union sigval', 'si_sigval')
+                ],
+                { linux: false, nasm: false, offsets: false }
+            ),
+            struct('__aed_siginfo_fault', undefined, [field('void *', 'si_addr')], {
+                linux: false,
+                nasm: false,
+                offsets: false
+            }),
+            struct(
+                '__aed_siginfo_fields',
+                undefined,
+                [
+                    field('int', '_pad', undefined, { count: 28 }),
+                    field('struct __aed_siginfo_kill', '_kill'),
+                    field('struct __aed_siginfo_rt', '_rt'),
+                    field('struct __aed_siginfo_fault', '_sigfault')
+                ],
+                { union: true, linux: false }
+            ),
+            struct(
+                null,
+                'What a handler with SA_SIGINFO gets about the signal: its number, why it came (si_code) and from whom, si_pid, or for SIGSEGV the address, si_addr.',
+                [
+                    field('int', 'si_signo', "The signal's number"),
+                    field('int', 'si_errno'),
+                    field('int', 'si_code', 'Why it came'),
+                    field('int', '__pad0'),
+                    field('union __aed_siginfo_fields', '_sifields', 'The rest, by si_code')
+                ],
+                { typedef: 'siginfo_t' }
+            ),
+            macro('si_pid', [], '_sifields._kill.si_pid', 'Who sent it, for kill and raise'),
+            macro('si_uid', [], '_sifields._kill.si_uid'),
+            macro('si_value', [], '_sifields._rt.si_sigval'),
+            macro('si_int', [], '_sifields._rt.si_sigval.sival_int'),
+            macro('si_ptr', [], '_sifields._rt.si_sigval.sival_ptr'),
+            macro('si_addr', [], '_sifields._sigfault.si_addr', 'For SIGSEGV, the address touched'),
+            check('offsetof(siginfo_t, si_pid)', 16),
+            check('offsetof(siginfo_t, si_uid)', 20),
+            check('offsetof(siginfo_t, si_value)', 24),
+            check('offsetof(siginfo_t, si_int)', 24),
+            check('offsetof(siginfo_t, si_ptr)', 24),
+            check('offsetof(siginfo_t, si_addr)', 16),
+            struct(
+                '__aed_sigaction_handler',
+                undefined,
+                [
+                    field('sighandler_t', 'sa_handler'),
+                    field('void *', 'sa_sigaction', undefined, {
+                        decl: 'void (*sa_sigaction)(int, siginfo_t *, void *)'
+                    })
+                ],
+                { union: true, linux: false, offsets: false }
+            ),
+            struct(
+                'sigaction',
+                "What sigaction takes and gives back: the handler, the signals blocked while it runs, and how it runs. The C library's layout; sigaction makes the kernel's from it.",
+                [
+                    field(
+                        'union __aed_sigaction_handler',
+                        '__sigaction_handler',
+                        'sa_handler, or sa_sigaction'
+                    ),
+                    field(
+                        'sigset_t',
+                        'sa_mask',
+                        'The signals blocked while the handler runs, besides its own'
+                    ),
+                    field('int', 'sa_flags', 'SA_RESTART, SA_SIGINFO, ...'),
+                    field('void *', 'sa_restorer', 'Set by sigaction', {
+                        decl: 'void (*sa_restorer)(void)'
+                    })
+                ],
+                { nasm: false }
+            ),
+            macro(
+                'sa_handler',
+                [],
+                '__sigaction_handler.sa_handler',
+                "The handler, which takes the signal's number"
+            ),
+            macro(
+                'sa_sigaction',
+                [],
+                '__sigaction_handler.sa_sigaction',
+                'With SA_SIGINFO, the handler that also gets a siginfo_t and the context'
+            ),
+            check('offsetof(struct sigaction, sa_handler)', 0),
+            check('offsetof(struct sigaction, sa_sigaction)', 0),
+            struct(
+                'kernel_sigaction',
+                "What the rt_sigaction system call takes, which sigaction makes from a struct sigaction. In assembly: k_sa_handler the handler, sa_flags with SA_RESTORER, sa_restorer the code the handler returns to, and 8, the size of sa_mask, as rt_sigaction's fourth argument.",
+                [
+                    field('void *', 'k_sa_handler', 'The handler, or SIG_DFL or SIG_IGN'),
+                    field('unsigned long', 'sa_flags', 'SA_RESTORER and the others'),
+                    field('void *', 'sa_restorer', 'Code that makes rt_sigreturn'),
+                    field('unsigned long', 'sa_mask', 'The signals blocked while the handler runs')
+                ],
+                { linux: false }
+            ),
+            {
+                kind: 'code',
+                doc: "What a handler returns to: the rt_sigreturn system call, which puts back what the program was doing when the signal came. sigaction registers it, as the C library registers its own. It has no prologue, since it runs on the signal's frame.",
+                c: [
+                    '#pragma GCC diagnostic push',
+                    '#pragma GCC diagnostic ignored "-Wattributes"',
+                    '__attribute__((naked)) static inline void __aed_restore_rt(void) {',
+                    '    __asm__("mov eax, 15\\n\\tsyscall"); /* rt_sigreturn */',
+                    '}',
+                    '#pragma GCC diagnostic pop'
+                ]
+            },
+            posix('sigemptyset', 'int', ['sigset_t *set'], 'Empties *set. Returns 0.', {
+                documentation: 'rt_sigprocmask',
+                body: [
+                    'unsigned __i;',
+                    'if (!set) return (int)__aed_syscall_return(-22); /* EINVAL */',
+                    'for (__i = 0; __i < 16; __i++) set->__val[__i] = 0;',
+                    'return 0;'
+                ]
+            }),
+            posix(
+                'sigfillset',
+                'int',
+                ['sigset_t *set'],
+                'Puts every signal in *set, but 32 and 33, which the C library keeps for itself. Returns 0.',
+                {
+                    documentation: 'rt_sigprocmask',
+                    body: [
+                        'unsigned __i;',
+                        'if (!set) return (int)__aed_syscall_return(-22); /* EINVAL */',
+                        'for (__i = 0; __i < 16; __i++) set->__val[__i] = ~0UL;',
+                        'set->__val[0] &= ~(3UL << 31);',
+                        'return 0;'
+                    ]
+                }
+            ),
+            posix(
+                'sigaddset',
+                'int',
+                ['sigset_t *set', 'int sig'],
+                'Adds the signal sig to *set. Returns 0, or -1 with errno set (EINVAL for a number that is no signal).',
+                {
+                    documentation: 'rt_sigprocmask',
+                    body: [
+                        'if (!set || sig <= 0 || sig >= NSIG || sig == 32 || sig == 33)',
+                        '    return (int)__aed_syscall_return(-22); /* EINVAL */',
+                        'set->__val[(sig - 1) / 64] |= 1UL << ((sig - 1) % 64);',
+                        'return 0;'
+                    ]
+                }
+            ),
+            posix(
+                'sigdelset',
+                'int',
+                ['sigset_t *set', 'int sig'],
+                'Removes the signal sig from *set. Returns 0, or -1 with errno set (EINVAL for a number that is no signal).',
+                {
+                    documentation: 'rt_sigprocmask',
+                    body: [
+                        'if (!set || sig <= 0 || sig >= NSIG || sig == 32 || sig == 33)',
+                        '    return (int)__aed_syscall_return(-22); /* EINVAL */',
+                        'set->__val[(sig - 1) / 64] &= ~(1UL << ((sig - 1) % 64));',
+                        'return 0;'
+                    ]
+                }
+            ),
+            posix(
+                'sigismember',
+                'int',
+                ['const sigset_t *set', 'int sig'],
+                'Whether the signal sig is in *set: 1 or 0, or -1 with errno set (EINVAL for a number that is no signal).',
+                {
+                    documentation: 'rt_sigprocmask',
+                    body: [
+                        'if (!set || sig <= 0 || sig >= NSIG)',
+                        '    return (int)__aed_syscall_return(-22); /* EINVAL */',
+                        'return (int)((set->__val[(sig - 1) / 64] >> ((sig - 1) % 64)) & 1);'
+                    ]
+                }
+            ),
+            posix(
+                'sigprocmask',
+                'int',
+                ['int how', 'const sigset_t *set', 'sigset_t *old'],
+                'Changes which signals are blocked, as how says (SIG_BLOCK, SIG_UNBLOCK or SIG_SETMASK) with *set, and stores the ones blocked before in *old unless it is NULL. A blocked signal waits until it is unblocked. Returns 0, or -1 with errno set.',
+                {
+                    syscall: 'rt_sigprocmask',
+                    //the C library keeps 32 and 33 for itself, out of any set it is given
+                    before: ['unsigned long mask = set ? set->__val[0] & ~(3UL << 31) : 0;'],
+                    args: ['how', 'set ? (long)&mask : 0', '(long)old', '8']
+                }
+            ),
+            posix(
+                'sigaction',
+                'int',
+                ['int sig', 'const struct sigaction *action', 'struct sigaction *old'],
+                'Sets what the signal sig does from *action, unless it is NULL, and stores what it did in *old, unless it is NULL: struct sigaction action = { 0 }; action.sa_handler = handler; sigaction(SIGINT, &action, NULL). Returns 0, or -1 with errno set (EINVAL for SIGKILL and SIGSTOP).',
+                {
+                    syscall: 'rt_sigaction',
+                    before: [
+                        'struct kernel_sigaction set, was;',
+                        'if (sig <= 0 || sig >= NSIG || sig == 32 || sig == 33)',
+                        '    return (int)__aed_syscall_return(-22); /* EINVAL */',
+                        'if (action) {',
+                        '    set.k_sa_handler = (void *)action->sa_handler;',
+                        '    set.sa_flags = action->sa_flags | SA_RESTORER;',
+                        '    set.sa_restorer = (void *)__aed_restore_rt;',
+                        '    set.sa_mask = action->sa_mask.__val[0];',
+                        '}'
+                    ],
+                    args: ['sig', 'action ? (long)&set : 0', 'old ? (long)&was : 0', '8'],
+                    after: [
+                        'if (rax == 0 && old) {',
+                        '    old->sa_handler = (sighandler_t)was.k_sa_handler;',
+                        '    old->sa_mask.__val[0] = was.sa_mask;',
+                        '    old->sa_flags = (int)was.sa_flags;',
+                        '    old->sa_restorer = (void (*)(void))was.sa_restorer;',
+                        '}'
+                    ]
+                }
+            ),
+            posix(
+                'signal',
+                'sighandler_t',
+                ['int sig', 'sighandler_t handler'],
+                "Runs handler for the signal sig from now on, or SIG_DFL or SIG_IGN: signal(SIGINT, on_ctrl_c). The handler takes the signal's number; a read it interrupts starts over (SA_RESTART). Returns the handler before, or SIG_ERR with errno set.",
+                {
+                    documentation: 'rt_sigaction',
+                    body: [
+                        'struct sigaction action, old;',
+                        'if (handler == SIG_ERR || sig < 1 || sig >= NSIG) {',
+                        '    __aed_syscall_return(-22); /* EINVAL */',
+                        '    return SIG_ERR;',
+                        '}',
+                        'action.sa_handler = handler;',
+                        'sigemptyset(&action.sa_mask);',
+                        'action.sa_mask.__val[0] = 1UL << (sig - 1);',
+                        'action.sa_flags = SA_RESTART;',
+                        'action.sa_restorer = 0;',
+                        'if (sigaction(sig, &action, &old) < 0) return SIG_ERR;',
+                        'return old.sa_handler;'
+                    ]
+                }
+            ),
+            posix(
+                'kill',
+                'int',
+                ['pid_t pid', 'int sig'],
+                'Sends the signal sig to the process pid; the program itself is getpid(), from <unistd.h>. Returns 0, or -1 with errno set (ESRCH when there is no such process).',
+                { syscall: 'kill' }
+            ),
+            posix(
+                'raise',
+                'int',
+                ['int sig'],
+                'Sends the signal sig to the program itself, through tgkill: its handler runs before raise returns. Returns 0, or -1 with errno set.',
+                {
+                    documentation: 'tgkill',
+                    body: [
+                        'long pid = __aed_syscall(__NR_getpid, 0, 0, 0, 0, 0, 0);',
+                        'long tid = __aed_syscall(__NR_gettid, 0, 0, 0, 0, 0, 0);',
+                        'return (int)__aed_syscall_return(__aed_syscall(__NR_tgkill, pid, tid, sig, 0, 0, 0));'
+                    ]
+                }
+            )
+        ]
+    },
+    {
         path: 'linux/fb.h',
         summary:
-            'the framebuffer, /dev/fb0: the Screen as memory. FBIOGET_VSCREENINFO and FBIOGET_FSCREENINFO say how big it is and how a pixel is laid out (32 bits, 0x00RRGGBB), mmap maps its memory, and FBIOPAN_DISPLAY shows the other page of a double-buffered program.',
-        includes: ['linux/types.h', 'linux/ioctl.h'],
+            'the framebuffer, /dev/fb0: the Screen as memory. FBIOGET_VSCREENINFO and FBIOGET_FSCREENINFO say how big it is and how a pixel is laid out (32 bits, 0x00RRGGBB), mmap maps its memory, and FBIOPAN_DISPLAY shows the other page of a double-buffered program. As on Linux, ioctl itself comes from <sys/ioctl.h>.',
+        includes: ['linux/types.h'],
         items: [
             define('FB_MAX', 32, 'How many framebuffers Linux numbers'),
             note('The requests.'),
@@ -957,6 +1713,14 @@ export const DEVICE_HEADERS = [
             define('FBIOPAN_DISPLAY', 0x4606, "Show the page at the fb_var_screeninfo's yoffset", {
                 radix: 16
             }),
+            define(
+                'FBIOBLANK',
+                0x4611,
+                'Blank the Screen or show it again: the argument is an FB_BLANK_*',
+                {
+                    radix: 16
+                }
+            ),
             ioctl(
                 'FBIO_WAITFORVSYNC',
                 'W',
@@ -965,6 +1729,16 @@ export const DEVICE_HEADERS = [
                 '__u32',
                 'Wait for the next vertical blank, 1/60 s; the argument points to a __u32 0'
             ),
+            note(
+                "FBIOBLANK's argument, a number rather than a pointer: every level but FB_BLANK_UNBLANK leaves the Screen black."
+            ),
+            ...defines([
+                ['FB_BLANK_UNBLANK', 0, 'Show the Screen'],
+                ['FB_BLANK_NORMAL', 1, 'Blank it'],
+                ['FB_BLANK_VSYNC_SUSPEND', 2],
+                ['FB_BLANK_HSYNC_SUSPEND', 3],
+                ['FB_BLANK_POWERDOWN', 4, 'Blank it, the display powered down']
+            ]),
             note("fb_fix_screeninfo's type and visual."),
             ...defines([
                 ['FB_TYPE_PACKED_PIXELS', 0, "Each pixel's bits together, pixel after pixel"],
@@ -1685,7 +2459,7 @@ export const DEVICE_HEADERS = [
             ),
             define('AFMT_S16_NE', 'AFMT_S16_LE'),
             note(
-                "Formats Linux's own header leaves out, from OSS 4, which Linux's OSS emulation takes all the same."
+                "OSS 4's names for formats Linux's own <linux/soundcard.h> leaves out: a program that names them builds here and not against Linux's header, where it defines them itself. Linux's OSS emulation takes the values all the same."
             ),
             ...[
                 ['AFMT_S32_LE', 0x00001000, 'Signed 32-bit, little-endian'],
@@ -1882,7 +2656,9 @@ export const DEVICE_HEADERS = [
         path: 'sound/asound.h',
         summary:
             "ALSA's raw MIDI part, /dev/snd/midiC1D0: MIDI bytes written to the port play on the General MIDI synthesizer, at MIDI's 31,250 baud. These requests ask about the port and its buffer.",
-        includes: ['linux/types.h', 'linux/ioctl.h', 'time.h'],
+        //as Linux's on Linux: the types, <stdlib.h> and <time.h>, but no ioctl, nor _IOR for the
+        //requests: a program includes <sys/ioctl.h> for both
+        includes: ['linux/types.h', 'stdlib.h', 'time.h'],
         items: [
             macro(
                 'SNDRV_PROTOCOL_VERSION',

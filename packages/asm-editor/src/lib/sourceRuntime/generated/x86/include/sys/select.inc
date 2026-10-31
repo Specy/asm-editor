@@ -11,7 +11,7 @@
 %ifndef SYS_SELECT_INC
 %define SYS_SELECT_INC
 
-%include "sys/time.inc"
+%include "bits/types/struct_timeval.inc"
 
 %define FD_SETSIZE 1024 ; One more than the highest descriptor an fd_set can hold.
 

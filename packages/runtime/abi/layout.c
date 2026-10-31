@@ -88,6 +88,8 @@ const long __aed_layout[] = {
 	LAYOUT(EPIPE),
 	LAYOUT(EOPNOTSUPP),
 	LAYOUT(ENOTSUP),
+	LAYOUT(ESRCH),
+	LAYOUT(EFBIG),
     LAYOUT(EILSEQ),
     LAYOUT(_Alignof(fpos_t)),
     LAYOUT(sizeof(intptr_t)),

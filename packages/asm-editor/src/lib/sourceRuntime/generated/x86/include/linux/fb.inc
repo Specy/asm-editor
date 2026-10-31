@@ -1,7 +1,8 @@
 ; linux/fb.inc: the constants and structures of <linux/fb.h> for NASM, under the same names: the
 ; framebuffer, /dev/fb0: the Screen as memory. FBIOGET_VSCREENINFO and FBIOGET_FSCREENINFO say how
 ; big it is and how a pixel is laid out (32 bits, 0x00RRGGBB), mmap maps its memory, and
-; FBIOPAN_DISPLAY shows the other page of a double-buffered program.
+; FBIOPAN_DISPLAY shows the other page of a double-buffered program. As on Linux, ioctl itself comes
+; from <sys/ioctl.h>.
 ;
 ; A structure is a struc: name.field is a field's offset, name.outer.inner one of a structure inside
 ; it, and name_size its size. Use it as [rdi + input_event.code], or reserve one with resb
@@ -12,8 +13,6 @@
 %ifndef LINUX_FB_INC
 %define LINUX_FB_INC
 
-%include "linux/ioctl.inc"
-
 %define FB_MAX 32 ; How many framebuffers Linux numbers.
 
 ; The requests.
@@ -21,9 +20,19 @@
 %define FBIOPUT_VSCREENINFO 0x4601 ; Ask for another struct fb_var_screeninfo.
 %define FBIOGET_FSCREENINFO 0x4602 ; Read the struct fb_fix_screeninfo.
 %define FBIOPAN_DISPLAY     0x4606 ; Show the page at the fb_var_screeninfo's yoffset.
+; Blank the Screen or show it again: the argument is an FB_BLANK_*.
+%define FBIOBLANK           0x4611
 ; _IOW('F', 0x20, __u32): wait for the next vertical blank, 1/60 s; the argument points to a __u32
 ; 0.
 %define FBIO_WAITFORVSYNC   0x40044620
+
+; FBIOBLANK's argument, a number rather than a pointer: every level but FB_BLANK_UNBLANK leaves the
+; Screen black.
+%define FB_BLANK_UNBLANK       0 ; Show the Screen.
+%define FB_BLANK_NORMAL        1 ; Blank it.
+%define FB_BLANK_VSYNC_SUSPEND 2
+%define FB_BLANK_HSYNC_SUSPEND 3
+%define FB_BLANK_POWERDOWN     4 ; Blank it, the display powered down.
 
 ; fb_fix_screeninfo's type and visual.
 %define FB_TYPE_PACKED_PIXELS        0 ; Each pixel's bits together, pixel after pixel.

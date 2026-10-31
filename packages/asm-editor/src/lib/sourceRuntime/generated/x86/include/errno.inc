@@ -13,6 +13,7 @@
 
 %define EPERM       1          ; Operation not permitted.
 %define ENOENT      2          ; No such file or directory.
+%define ESRCH       3          ; No such process: kill found no process with that id.
 %define EINTR       4          ; Interrupted system call: a signal arrived while it waited.
 %define EIO         5          ; Input/output error.
 %define ENXIO       6          ; No such device or address.
@@ -31,6 +32,7 @@
 %define EMFILE      24         ; Too many open files.
 ; Inappropriate ioctl for device: the device does not know this request.
 %define ENOTTY      25
+%define EFBIG       27         ; File too large: a write starting past the end of /dev/fb0.
 %define ENOSPC      28         ; No space left on device.
 %define ESPIPE      29         ; Illegal seek.
 %define EPIPE       32         ; Broken pipe.
