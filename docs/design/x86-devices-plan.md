@@ -216,7 +216,7 @@ On a machine with QEMU, outside the repository except for the recorded results:
 - **Splitting `rep` instructions** must stay invisible: one Step, one row, one count, and the Testcase instruction limit unchanged.
 - **History packet version 3** must stay small: an evdev read of many events, a dsp `RESET` dropping seconds of samples or a large SysEx must not hold megabytes per step.
 - **Raw-mode type-ahead and the signals** change when and how the Terminal takes keys; canonical reads and copying must behave exactly as today.
-- **Blink's speed** (about 2,000 instructions a millisecond with history) keeps per-pixel drawing and PCM generation slow; decision 19 keeps the Examples inside it.
+- **Blink's speed** (about 2,000 instructions a millisecond with history) keeps per-pixel drawing and PCM generation slow; decision 19 keeps the Examples inside it. (2026-10-31: about 6,000 now, [x86-run-speed-2026-10-31.md](../research/x86-run-speed-2026-10-31.md).)
 - **Audio drift** between Program time and the output's clock over minutes of PCM.
 - **Firefox and Safari** were not checked for the earlier audio work either.
 

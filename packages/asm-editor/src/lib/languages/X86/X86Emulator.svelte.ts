@@ -120,20 +120,25 @@ import type { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { X86_INPUT_INTERRUPT } from '#lib/languages/peripherals/x86Input.ts'
 
 /**
- * Initial instructions/ms for the scheduler's adaptive estimate. Chromium measurements with
- * @specy/x86 4.0.0 and the default Undo history found roughly 1,800–2,400 instructions/ms
- * ([the results](../../../../../../docs/research/code-cleanup-2026-10-05/followup-results.md)).
+ * Initial instructions/ms for the scheduler's adaptive estimate. Chromium measurements of
+ * @specy/x86 8.0.0 with the default Undo history found roughly 5,900–9,500 instructions/ms, the
+ * slowest on SSE ([the results](../../../../../../docs/research/x86-run-speed-2026-10-31.md); 4.0.0
+ * ran 1,800–2,400).
  */
-const X86_INSTRUCTIONS_PER_MS = 2_000
+const X86_INSTRUCTIONS_PER_MS = 6_000
 
 /**
- * A slice returns to GenericEmulator before the Core starts another native batch, so Pause is
- * honored there and the app owns the host yield. Undo recording is slower: its smaller cap keeps
- * Stop and Pause under 100 ms in the measured 4× CPU slowdown. Without history, one full native
- * batch still fits that target. The time estimate can reduce either cap on slower programs.
+ * A slice returns to GenericEmulator before the Core starts another native batch, of 200,000
+ * instructions, so Pause is honored there and the app owns the host yield. Undo recording is
+ * slower, and Stop then also waits for the Core to free the history, 30–55 ms of the 100 ms that
+ * Stop and Pause have in the measured 4× CPU slowdown: its smaller cap keeps an SSE loop's Stop
+ * just under it ([the measurements](../../../../../../docs/research/x86-run-speed-2026-10-31.md)). Without history, one full native batch still fits that target. At full speed
+ * these take 3–5 and 5–8 ms; the caps of 20,000 and 50,000 sized for @specy/x86 7 took half that
+ * on 8.0.0 and left 12–18% of a Run to the yields between slices. The time estimate can reduce
+ * either cap on slower programs.
  */
-const X86_MAX_SLICE_INSTRUCTIONS_WITH_UNDO = 20_000
-const X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO = 50_000
+const X86_MAX_SLICE_INSTRUCTIONS_WITH_UNDO = 30_000
+const X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO = 200_000
 
 /** What a read of standard input asks for, in words. */
 const STANDARD_INPUT_QUESTION = 'Program input'
@@ -1817,8 +1822,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /** Completed guest-instruction deltas exclude tool execution and work with history disabled. */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
+        //paused Undo recording (startup code) only hides entries: the Core records them all the
+        //same, at the same cost, so only a Build without history takes the longer slice
         const budget = Math.min(
-            this.undoSize > 0 && this.undoRecording
+            this.undoSize > 0
                 ? X86_MAX_SLICE_INSTRUCTIONS_WITH_UNDO
                 : X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO,
             sliceInstructionBudget(request, X86_INSTRUCTIONS_PER_MS)
