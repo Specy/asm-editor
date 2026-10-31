@@ -46,7 +46,7 @@ function markdownOf(entry: DocumentationEntry): string {
 }
 
 describe('the x86 Documentation', () => {
-    it('has its nine Chapters at their pages', () => {
+    it('has its twelve Chapters at their pages', () => {
         expect(chapters().map((chapter) => [chapter.id, chapter.href])).toEqual([
             ['instructions', '/documentation/x86/instruction'],
             ['extensions', '/documentation/x86/extensions'],
@@ -54,6 +54,9 @@ describe('the x86 Documentation', () => {
             ['registers-and-flags', '/documentation/x86/registers'],
             ['vector-instructions', '/documentation/x86/vector-instructions'],
             ['syscalls', '/documentation/x86/syscall'],
+            ['screen', '/documentation/x86/screen'],
+            ['input', '/documentation/x86/input'],
+            ['sound', '/documentation/x86/sound'],
             ['using-c', '/documentation/x86/using-c'],
             ['runtime-library', '/documentation/x86/runtime-library'],
             ['executables', '/documentation/x86/executables']

@@ -202,6 +202,12 @@ Testcase still reads the CPU file only (`docs/design/register-files.md`).
   `languageHasScreen` is false for x86, because blink emulates a Linux process and a Linux process has
   no framebuffer. The "Ports, devices and the kernel in between" lecture says so.
 
+Update 2026-10-31: both reasons are gone. x86 programs read the Terminal, and draw, read keys and the
+pointer and make sound through Linux's device files ([x86-devices.md](../design/x86-devices.md));
+the "syscall and the Linux ABI" lecture gained four sections on them ("Devices are files", "Drawing
+on the Screen", "Reading keys and the pointer", "Making sound"), and the missing rungs are M10's
+Examples ([x86-devices-plan.md](../design/x86-devices-plan.md)).
+
 The Examples keep the ladder's `order`, so the numbering runs 0 to 17 and then 19, with the gap where
 `sum-of-two-numbers` would be. Four of them carry `template` keys (1 `moving-values`,
 2 `counting-loop`, 3 `subroutine-with-register-arguments`, 4 `hello-world`), which replaced

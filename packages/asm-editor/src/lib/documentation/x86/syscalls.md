@@ -12,6 +12,8 @@ Every call the emulator implements is listed here. A call missing from this page
 
 The simulated environment has one process and one thread. Signals target that process only. `fork`, socket networking, and external processes are unavailable; job-control stop signals end the program because there is no stopped job to resume. Pipes connect descriptors within this process. See [`wait4`](#syscall-wait4) for waiting on children.
 
+Devices are files under `/dev`, as on Linux: [the Screen](/documentation/x86/screen) is `/dev/fb0`, [the keyboard and the pointer](/documentation/x86/input) are under `/dev/input`, and [sound](/documentation/x86/sound) goes through `/dev/dsp`, a MIDI port and the PC speaker.
+
 Calendar, elapsed-time and instruction-based CPU clocks are available; [`clock_gettime`](#syscall-clock_gettime) describes each clock's time source. [`getitimer`](#syscall-getitimer) and [`setitimer`](#syscall-setitimer) describe the supported interval timer. Testcases use scripted input and seeded randomness. A scripted wait with no possible input or timer wake fails.
 
 Wait requests retain nanosecond precision. At very large elapsed times, a requested wait smaller than the clock's next representable increment fails with a precision error.
@@ -20,9 +22,9 @@ The working directory `/project` exposes the Project's Files. A program starts w
 
 Vector I/O has specific partial-effect rules: see [`readv`](#syscall-readv), [`writev`](#syscall-writev) and [`pwritev`](#syscall-pwritev) before retrying a failed operation.
 
-Standard streams are a terminal with line-based input and UTF-8 bytes. Enter submits a line. Ctrl+D on an empty line submits one end-of-input token. Duplicated descriptors and `readv` share the same input queue. Programs cannot switch the Terminal to raw mode. SGR color changes and clear-screen sequences are displayed, but full cursor positioning and a fixed character grid are unavailable. When a timer signal interrupts a read, the handler preserves queued bytes and a partially typed line. The call follows Linux's `EINTR` rule (return an interrupted-call error) and `SA_RESTART` option (automatically resume selected calls).
+Standard streams are a terminal with UTF-8 bytes, and line-based input until the program asks otherwise. Enter submits a line. Ctrl+D on an empty line submits one end-of-input token. Duplicated descriptors and `readv` share the same input queue. A program that turns line input off with `tcsetattr` reads each key as it is typed: see [The Terminal's keys](/documentation/x86/input#terminal). SGR color changes and clear-screen sequences are displayed, but full cursor positioning and a fixed character grid are unavailable. When a timer signal interrupts a read, the handler preserves queued bytes and a partially typed line. The call follows Linux's `EINTR` rule (return an interrupted-call error) and `SA_RESTART` option (automatically resume selected calls).
 
-Undo restores CPU state and the Random source position for reversible instructions. Printing is reversible: Undo takes the printed text back out of the Terminal. Consuming standard input or changing Files, descriptors, pipes, memory mappings, credentials, resource limits, signal actions, or timers is an Undo barrier. The instruction appears in History, but Undo stops before it and leaves both CPU and peripheral state as they were. This also applies when a barrier occurs inside a grouped library call.
+Undo restores CPU state and the Random source position for reversible instructions. Printing is reversible: Undo takes the printed text back out of the Terminal. Reading standard input is reversible too: Undo of a read that waited for typed input asks for it again, and input typed before the read goes back to be read again. Changing Files, descriptors, pipes, memory mappings, credentials, resource limits, signal actions, or timers is an Undo barrier. The instruction appears in History, but Undo stops before it and leaves both CPU and peripheral state as they were. This also applies when a barrier occurs inside a grouped library call.
 
 ## Program arguments {#arguments}
 

@@ -60,6 +60,9 @@ export const DOCUMENTATION_SITES: Record<DocumentationLanguage, DocumentationSit
         ['registers-and-flags', 'Registers & flags', 'registers'],
         ['vector-instructions', 'Vector instructions', 'vector-instructions'],
         ['syscalls', 'Syscalls', 'syscall'],
+        ['screen', 'The Screen', 'screen'],
+        ['input', 'Keys and the pointer', 'input'],
+        ['sound', 'Sound', 'sound'],
         ['using-c', 'Using C and C++', 'using-c'],
         ['runtime-library', 'Runtime library', 'runtime-library'],
         ['executables', 'Executables', 'executables']

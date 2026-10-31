@@ -54,7 +54,7 @@ export function startingPalette(format: PictureFormat): readonly number[] | unde
  * The layout a new picture starts on: the one the Target's Screen draws with, so a program loads
  * a pixel without converting it. MIPS and RISC-V read a 32-bit pixel as `0x00RRGGBB`, the Screen's
  * own word; the Z80's colours are 3-3-2 bytes; the M68K shifts a 32-bit pixel into EASy68K's
- * `$00BBGGRR`; x86 has no Screen and takes the same as the others.
+ * `$00BBGGRR`; x86's framebuffer, `/dev/fb0`, takes the same `0x00RRGGBB` word as MIPS and RISC-V.
  */
 export function newPictureFormat(language: AvailableLanguages): PictureFormat {
     return language === 'Z80' ? 'indexed8' : 'rgb32'

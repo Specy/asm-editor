@@ -74,6 +74,8 @@ Decided on 2026-10-23.
 - **Mute and volume are Preferences**: per person, across every Project, never a Setting. The Settings panel's Preferences section gets Sound, on or off, and a volume slider, on and at about half by default, because MARS's default volume of 100 out of 127 plays loud.
 - **A speaker button in the execution dock** (`ExecutionDock`, so every surface that runs a program has it) mutes and unmutes. It appears the first time a program makes a sound in the session and stays until the page is left, crossed out while muted and briefly lit while something plays, so a person can tell where a sound comes from. It never appears for x86 or for a program that stays silent.
 
+    Update 2026-10-31: x86 programs make sound through `/dev/dsp`, the MIDI port and the PC speaker ([x86-devices.md](./x86-devices.md)), so the button appears for an x86 program too, at its first sound, by the same rule.
+
 Rejected: a button shown for every Target but x86 from the start (more discoverable, but it crowds the dock of every program that never makes a sound, which is nearly all of them; silence before a noisy run is what the Preference is for), the Screen panel's header (MARS Notes play from programs that draw nothing, and the panel can be hidden until Build), Preferences alone (too slow to reach while a loop is playing).
 
 ## At most 64 at once
@@ -133,6 +135,9 @@ Decided on 2026-10-23.
 
 - **Reference documentation.** The services join the tables every surface already reads: `mipsSyscalls.ts` and `riscvSyscalls.ts` for MIPS and RISC-V, `M68K-traps.ts` for the M68K and `Z80-model.ts` for the Z80 ports, which feed the Documentation, the hovers, completion, the coding agent's prompt and `<sim.h>`'s functions for 31 and 33. Each language's Documentation lists its deviations: the cap of 64, silence in a Testcase, loops stopping when the program ends, EASy68K's MIDI Files sounding unlike Windows', the stop-all fix. The sentences saying the services are unavailable go (`syscalls.md` for MIPS and RISC-V, the M68K trap lecture).
 - **Lectures.** No new Lecture: [ADR 0012](../adr/0012-language-courses-mirror-the-general-course.md) keeps a language's peculiarities inside the mirrored Lectures. A short section on making sound goes into each language's system-call Lecture: M68K's trap #15 and its tasks, MIPS's syscall, RISC-V's ecall, the Z80's ports in and out. x86 gets none.
+
+    Update 2026-10-31: x86's system-call Lecture, `x86/talking-to-the-outside-world/syscall-and-the-linux-abi`, now has a "Making sound" section on `/dev/dsp`, beside its sections on devices as files, drawing and input, and the x86 Documentation a Sound chapter ([x86-devices-plan.md](./x86-devices-plan.md), M10).
+
 - **Examples.** A "Play a tune" Example in MIPS, RISC-V and Z80 with the same melody, so the Examples link across languages. For the M68K, an Example playing a WAV and a MIDI File, and the sound half of `graphics-tour.x68`, the runnable port of `graphicSound.X68`, all on audio Files authored here, so EASy68K's sample WAVs never raise a licence question.
 
 ## What the Cores need

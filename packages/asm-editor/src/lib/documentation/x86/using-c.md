@@ -79,6 +79,8 @@ int main(void) {
 }
 ```
 
+The POSIX calls a device program makes are there too, with Linux's own headers: `open`, `read`, `write`, `close`, `ioctl`, `mmap`, `poll`, `select`, `tcgetattr`, `tcsetattr`, `usleep`, `nanosleep` and `clock_gettime` from `<fcntl.h>`, `<unistd.h>`, `<sys/ioctl.h>`, `<sys/mman.h>`, `<poll.h>`, `<sys/select.h>`, `<termios.h>` and `<time.h>`, and the devices' constants and structures from `<linux/fb.h>`, `<linux/input.h>`, `<sys/soundcard.h>`, `<sound/asound.h>` and `<linux/kd.h>`. Each call returns -1 and sets `errno` when it fails, as on Linux. [The Screen](/documentation/x86/screen), [Keys and the pointer](/documentation/x86/input) and [Sound](/documentation/x86/sound) show them in use.
+
 Include `<sim.h>` to make the simulator's Linux-style system calls directly. Find the simulator functions' signatures and results under **From C** in [Syscalls](/documentation/x86/syscall), also available in the editor's Documentation panel. `sim_write(1, text, length)` writes `length` bytes to descriptor `1`, the Terminal. Each function returns its system call's result, with failures reported as negative error numbers. Standard input functions can keep characters they read ahead, so avoid mixing `sim_read` and functions such as `scanf` on one line.
 
 For Terminal input, `sim_read(0, buffer, size)` reads bytes into a character array and returns how many it read. Type your input and press **Enter**. On an empty input line, press **Ctrl+D** or **End of input** to finish standard input; `sim_read` then returns `0`. It does not add a string terminator. A failed simulator call returns a negative error number; check the result before using it.

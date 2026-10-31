@@ -1800,7 +1800,7 @@ export const DEVICE_HEADERS = [
             define('SOUND_PCM_GETOSPACE', 'SNDCTL_DSP_GETOSPACE'),
             define('SOUND_PCM_GETCAPS', 'SNDCTL_DSP_GETCAPS'),
             note(
-                "The mixer's channels, on /dev/mixer and on /dev/dsp. A level is left in the low byte and right in the next, each 0 to 100: 75 | 75 << 8. VOLUME and PCM set the gain of /dev/dsp's sound; the other channels keep what is written to them."
+                "The mixer's channels, on /dev/mixer and on /dev/dsp. A level is left in the low byte and right in the next, each 0 to 100: 75 | 75 << 8. VOLUME sets the gain of /dev/dsp's sound; the other channels, PCM among them, keep what is written to them and change nothing on this card."
             ),
             define('SOUND_MIXER_NRDEVICES', 25, 'How many channels'),
             ...mixerChannels.map((name, index) => define(`SOUND_MIXER_${name}`, index)),

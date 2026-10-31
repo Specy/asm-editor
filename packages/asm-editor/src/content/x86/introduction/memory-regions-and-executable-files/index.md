@@ -105,7 +105,8 @@ waiting character, so a second read could produce a different result. Reading or
 such as `score`, leaves its value in place.
 
 The operating system controls access to device ranges. This x86 playground runs a Linux user
-program without a keyboard or display MMIO range.
+program, which has no device range until it asks the kernel for one: the system-call lesson shows
+how a program maps the Screen's pixels into its memory.
 
 ## Build turns source into an executable
 

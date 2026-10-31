@@ -48,12 +48,12 @@ Decided on 2026-10-25.
 
 The Explorer offers **New picture…** beside New file, and **New picture in this folder** in a folder's menu. A small form asks for the name (`sprite.bmp` by default), the width and height, each from 1 to 1024 as the Screen's are, and the layout; the picture starts black and opens in the Pixel editor. The layout is any of those decision 3 edits (32-bit, 24-bit, or 8-, 4- or 1-bit through a palette), with an uncompressed 40-byte `BITMAPINFOHEADER`, and it starts on the one the **Project**'s **Target** draws with, so that a program loads a pixel without converting it:
 
-| Target       | New picture's layout           | Why                                                                                                                                  |
-| ------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| MIPS, RISC-V | 32-bit, top-down, no alpha     | pixel (x, y) is the word at `pixels + 4·(y·width + x)`, and that little-endian word is `0x00RRGGBB`, the Screen's own colour         |
-| Z80          | 8-bit, top-down, 3-3-2 palette | each pixel byte is the colour byte an `out` gives the Z80's Screen ([ADR 0011](../adr/0011-z80-peripherals-through-the-port-map.md)) |
-| M68K         | 32-bit, top-down, no alpha     | the big-endian long read from a pixel, shifted right by 8, is EASy68K's `$00BBGGRR` pen colour                                       |
-| x86          | 32-bit, top-down, no alpha     | x86 has no Screen; the same layout as the others                                                                                     |
+| Target       | New picture's layout           | Why                                                                                                                                          |
+| ------------ | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| MIPS, RISC-V | 32-bit, top-down, no alpha     | pixel (x, y) is the word at `pixels + 4·(y·width + x)`, and that little-endian word is `0x00RRGGBB`, the Screen's own colour                 |
+| Z80          | 8-bit, top-down, 3-3-2 palette | each pixel byte is the colour byte an `out` gives the Z80's Screen ([ADR 0011](../adr/0011-z80-peripherals-through-the-port-map.md))         |
+| M68K         | 32-bit, top-down, no alpha     | the big-endian long read from a pixel, shifted right by 8, is EASy68K's `$00BBGGRR` pen colour                                               |
+| x86          | 32-bit, top-down, no alpha     | x86 has no Screen; the same layout as the others (update 2026-10-31: x86 now draws on `/dev/fb0`, whose pixel is the same `0x00RRGGBB` word) |
 
 Why: the editor exists to make pictures a program reads, and the cheapest one to read is already in the Screen's format: no row padding, no rows stored last-first, no byte triplets to reassemble. Black is the Screen's clear colour and the transparent colour of the Pac-Man example's sprites. A picture is not made from an empty File named `.bmp`, since a byte File's kind comes from its bytes, never its name ([file-views.md](./file-views.md), decision 14). Top-down pictures, a negative height, are read by browsers and by the Pac-Man example's `decode_bmp`; only some old Windows tools mishandle them.
 

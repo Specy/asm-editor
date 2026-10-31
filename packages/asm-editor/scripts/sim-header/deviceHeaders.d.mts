@@ -38,5 +38,11 @@ export function deviceFunctions(): DeviceFunction[]
 export function deviceProbe(syscalls: readonly DeviceSyscall[]): DeviceProbeEntry[]
 export function deviceNasmProbe(syscalls: readonly DeviceSyscall[]): DeviceNasmProbeEntry[]
 export function typeLayout(type: string): { size: number; align: number }
+/** A structure of the table laid out as GCC lays it out: each field with its offset and size. */
+export function structLayout(item: unknown): {
+    size: number
+    align: number
+    fields: { name: string; type: string; doc?: string; offset: number; size: number }[]
+}
 export function evaluate(text: string): bigint
 export function valueOf(name: string): bigint
