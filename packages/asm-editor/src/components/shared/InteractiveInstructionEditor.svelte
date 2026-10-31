@@ -634,6 +634,7 @@
                 diagnostics={shownDiagnostics}
                 language={editorLanguage}
                 highlightedLine={selectedLine}
+                running={running && emulator.interrupt === undefined}
                 disabled={building ||
                     compiling ||
                     (emulator.canExecute && !emulator.terminated) ||
