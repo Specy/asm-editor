@@ -77,8 +77,10 @@ import {
     type X86CompilationDiagnostic,
     type X86Emulator as CoreX86Emulator,
     type X86FpuState,
+    type X86InputDeviceId,
     type X86LoadedObject,
     type X86Progress,
+    type X86TerminalMode,
     type X86WaitRequest,
     type X86RegisterName
 } from '@specy/x86'
@@ -130,6 +132,56 @@ const X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO = 50_000
 
 /** What a read of standard input asks for, in words. */
 const STANDARD_INPUT_QUESTION = 'Program input'
+
+/**
+ * The system calls that read the terminal and can wait doing so: `read`, `readv` and `preadv2` at
+ * the current position. `pread64` and `preadv` answer ESPIPE on a terminal at once.
+ */
+const TERMINAL_READ_SYSCALLS = new Set([0, 19, 327])
+
+/** mousedev's nodes: relative PS/2 packets, where the tablet reports where the pointer is. */
+const MOUSE_PACKETS = {
+    device: 'PS/2 mouse packets',
+    instead: "Read the pointer from the tablet's events, `/dev/input/event3`, instead."
+}
+
+/**
+ * The nodes the QEMU guest has and x86 does not cover, what each is and what a program uses
+ * instead ([x86 devices](../../../../../../docs/design/x86-devices.md), "Scope"): opening one
+ * fails with ENODEV, as a documented deviation, and the Log says so.
+ */
+const UNSUPPORTED_DEVICES: Record<string, { device: string; instead: string }> = {
+    '/dev/dri/card0': { device: 'DRM', instead: 'Draw on `/dev/fb0` instead.' },
+    '/dev/snd/pcmC0D0p': {
+        device: "ALSA's sound output",
+        instead: 'Play sound through `/dev/dsp` instead.'
+    },
+    '/dev/snd/pcmC0D0c': {
+        device: "ALSA's sound input",
+        instead: "This emulator can't record sound."
+    },
+    '/dev/snd/controlC0': {
+        device: "ALSA's mixer controls",
+        instead: 'Set the volume through `/dev/mixer` instead.'
+    },
+    '/dev/snd/seq': { device: "ALSA's sequencer", instead: 'Send MIDI to `/dev/midi1` instead.' },
+    '/dev/input/mice': MOUSE_PACKETS,
+    '/dev/input/mouse0': MOUSE_PACKETS,
+    '/dev/input/mouse1': MOUSE_PACKETS,
+    '/dev/audio': { device: 'μ-law sound', instead: 'Play sound through `/dev/dsp` instead.' }
+}
+
+/**
+ * Why a Testcase stopped on a wait only an input device could end
+ * ([x86 devices](../../../../../../docs/design/x86-devices.md), "Input devices in a Testcase"):
+ * "The program waited for a key, and a Testcase has no keyboard or pointer."
+ */
+function inputDeviceWaitMessage(devices: readonly X86InputDeviceId[]): string {
+    const key = devices.includes('keyboard')
+    const pointer = devices.includes('tablet')
+    const what = key && pointer ? 'a key or the pointer' : key ? 'a key' : 'the pointer'
+    return `The program waited for ${what}, and a Testcase has no keyboard or pointer.`
+}
 
 /**
  * The Register files x86 holds beside the general registers
@@ -316,7 +368,9 @@ export async function X86Emulator(source: BuildInput, options: EmulatorSettings 
             callbacks: {
                 stdout: (bytes) => wrapper?.appendOutput(bytes),
                 stderr: (bytes) => wrapper?.appendOutput(bytes),
-                unimplementedSyscall: (event) => wrapper?.noteUnimplementedSyscall(event)
+                unimplementedSyscall: (event) => wrapper?.noteUnimplementedSyscall(event),
+                terminalMode: (mode) => wrapper?.followTerminalMode(mode),
+                unsupportedDevice: (event) => wrapper?.noteUnsupportedDevice(event)
             }
         }),
         //the Core has loaded the same Zydis module already; without it, an instruction the Core
@@ -379,6 +433,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private undoRecording = true
     /** The system calls this program's run has already been told in the Log are missing. */
     private notedSyscalls = new Set<number>()
+    /** The device nodes this program's run has already been told in the Log are not covered. */
+    private notedDevices = new Set<string>()
     /** Zydis, for naming an instruction the Core could not run. */
     private decoder: ListingDecoder | undefined
     /**
@@ -479,6 +535,15 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             }
         }
         this._undoDepth = () => (this.core === core ? core.getUndoDepth() : 0)
+        //raw mode's keys and the signals typed under ISIG go to the program as they are typed,
+        //whether or not it reads: the Core queues them (x86-devices.md, "The Terminal's modes")
+        const terminal = this._peripherals.terminal
+        terminal.setKeySink((bytes) => {
+            if (this.core === core) core.provideInput(bytes)
+        })
+        terminal.setSignalSink((signal) => {
+            if (this.core === core) core.sendSignal(signal)
+        })
         this.display = normalizeX86Display(options.display)
         this.applyDisplayMode()
         if (this._emulatorOptions.automaticChecking) void this.semanticCheck()
@@ -545,6 +610,31 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             tone: 'warning',
             text: `\`${name}\` (syscall ${number}) is not implemented; the call returned ENOSYS`
         })
+    }
+
+    /**
+     * The first time this run opens each device node the guest has and x86 does not cover, named
+     * in the Log with what to use instead. The program sees ENODEV and goes on.
+     */
+    noteUnsupportedDevice({ path }: { path: string }): void {
+        if (this.notedDevices.has(path)) return
+        this.notedDevices.add(path)
+        const known = UNSUPPORTED_DEVICES[path]
+        const device = known ? `\`${path}\` (${known.device})` : `\`${path}\``
+        const opened = `This emulator doesn't support ${device}, so opening it returned ENODEV.`
+        this.addNote({ tone: 'warning', text: known ? `${opened} ${known.instead}` : opened })
+    }
+
+    /**
+     * The program's termios, which the Terminal's Line discipline follows: what the Core reports
+     * at every start of the program and at every change, an Undo's included. A Testcase's input
+     * is scripted, as through a pipe, so its Terminal keeps none and shows the output as written.
+     * Raw mode takes the keys away from a line read still waiting, which is let go of.
+     */
+    followTerminalMode(mode: X86TerminalMode | null): void {
+        const terminal = this._peripherals.terminal
+        terminal.setLineMode(terminal.inputSource === 'scripted' ? null : mode)
+        if (this.typesKeys()) this.releaseInputRead()
     }
 
     /**
@@ -651,6 +741,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     _clearExecution(): void {
         //also called by the base class's constructor, before this class's fields exist
         this.notedSyscalls?.clear()
+        this.notedDevices?.clear()
         this.inputRead = null
         this.waitError = undefined
         this.randomPositions?.clear()
@@ -890,13 +981,36 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         core.initialize(this.undoSize)
         this.recordingRandom = true
         this.undoRecording = true
+        //an interactive run's terminal is the serial line, whose line discipline reads Enter's
+        //`\r` as `\n` under ICRNL and writes `\n` as `\r\n` under ONLCR; a Testcase's input and
+        //output go through as written, as through a pipe, so its transcript compares as before
+        const interactive = this._peripherals.terminal.inputSource === 'interactive'
+        core.setTerminalProcessing({ input: interactive, output: interactive })
         //what an instruction prints is journaled under its serial while the Core records it, so
         //Undo takes the output back with the instruction (ADR 0057); start-up code is no history
         this._peripherals.terminal.trackHistory(() => {
             if (!this.undoRecording || this.core !== core) return null
             const serial = core.getCurrentInstructionSerial()
-            return serial === null ? null : BigInt(serial)
+            return serial === null || !this.changesBelongToInstruction(core) ? null : BigInt(serial)
         }, this.undoSize)
+    }
+
+    /**
+     * Whether what changes the Terminal now belongs to the instruction running. It always does,
+     * except while the program waits, when the change is the echo of a key typed: it belongs to a
+     * read of the terminal, which takes the key and asks again on Undo, so the echo goes with it;
+     * during any other wait (`poll`, `select`, a sleep) the key is type-ahead, which the Core puts
+     * back on Undo of the read that takes it later, so its echo belongs to no instruction and stays
+     * with it ([ADR 0069](../../../../../../docs/adr/0069-x86-journals-the-input-its-reads-take.md)).
+     */
+    private changesBelongToInstruction(core: CoreX86Emulator): boolean {
+        if (core.getStatus() !== CoreEmulatorStatus.Waiting) return true
+        //a raw read with a VTIME deadline waits as `Waiting`, at its system call with `rax` its
+        //number, since the Core starts the instruction over when the wait ends
+        return (
+            core.getWaitRequest()?.wakeSources.terminal === true &&
+            TERMINAL_READ_SYSCALLS.has(Number(core.getRegisterValue('rax')))
+        )
     }
 
     _dispose(): void {
@@ -1649,6 +1763,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         if (step) this.randomPositions.delete(step.serial)
         //serials only grow, so a Poke's is past every instruction it could take output back from
         if (step) this._peripherals.terminal.undoAfter(BigInt(step.serial) - 1n)
+        //Undo of a `tcsetattr` puts the program's termios back, and Undo of its exit the program
+        this.followTerminalMode(core.hasTerminated() ? null : core.getTerminalMode())
     }
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
@@ -1682,7 +1798,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 status !== CoreEmulatorStatus.WaitingForInput &&
                 status !== CoreEmulatorStatus.Waiting
             ) {
-                if (core.hasTerminated()) this.cancelInputRead()
+                if (core.hasTerminated()) this.programEnded()
                 return status
             }
             await this.finishBlockedInstruction(execution)
@@ -1690,8 +1806,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
-    /** Keep one canonical read across EINTR and signal handlers, including its unsubmitted draft.
-     * Give Core the whole released line; Core owns byte splitting, EOF tokens and dup/readv queues.
+    /**
+     * Waits out the instruction the Core halted on. A read of the terminal, or a wait the terminal
+     * can end, asks the Terminal for a line: one canonical read, kept across EINTR and signal
+     * handlers with its unsubmitted draft, whose whole released line goes to the Core, which owns
+     * byte splitting, EOF tokens and dup/readv queues. In raw mode the keys reach the Core through
+     * the key sink as they are typed, so only the Core ends the wait. Scripted input comes a line
+     * at a time in any mode.
      */
     private async finishBlockedInstruction(execution: ExecutionGeneration): Promise<void> {
         const core = this.requireCore()
@@ -1700,14 +1821,18 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             core.getStatus() === CoreEmulatorStatus.Waiting
         ) {
             const status = core.getStatus()
-            const acceptsInput =
-                status === CoreEmulatorStatus.WaitingForInput || core.getWaitRequest()?.acceptsInput
+            const request = core.getWaitRequest()
+            const takesInput =
+                status === CoreEmulatorStatus.WaitingForInput || request?.wakeSources.terminal
+            //raw mode came on while a line read waited, in a signal handler: the keys go past it
+            const raw = this.typesKeys()
+            if (raw) this.releaseInputRead()
             let off = () => {}
             const changed = new Promise<'changed'>((resolve) => {
                 off = core.on('stateChange', () => resolve('changed'))
             })
             try {
-                if (acceptsInput) {
+                if (takesInput && !raw) {
                     this.refreshInputState()
                     this.state.interrupt = {
                         type: 'StandardInput',
@@ -1723,13 +1848,38 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                     }
                     const read = this.inputRead
                     const result = await this.executionController.waitFor(execution, () =>
-                        Promise.race([changed, read.promise.then((bytes) => ({ bytes }))])
+                        Promise.race([
+                            changed,
+                            read.promise.then(
+                                (bytes) => ({ bytes }),
+                                (error: unknown) => {
+                                    //let go of for raw mode: the keys end the wait without it
+                                    if (this.inputRead === null && this.typesKeys()) return changed
+                                    throw error
+                                }
+                            )
+                        ])
                     )
                     if (result !== 'changed' && this.inputRead === read) {
                         this.inputRead = null
                         core.provideInput(result.bytes.length === 0 ? END_OF_INPUT : result.bytes)
                     }
-                } else await this.executionController.waitFor(execution, () => changed)
+                } else {
+                    //a raw read with nothing to time it out shows the program waiting for input,
+                    //as a line read does
+                    if (
+                        takesInput &&
+                        (status === CoreEmulatorStatus.WaitingForInput ||
+                            request?.deadlineNanoseconds === null)
+                    ) {
+                        this.refreshInputState()
+                        this.state.interrupt = {
+                            type: 'StandardInput',
+                            message: STANDARD_INPUT_QUESTION
+                        }
+                    }
+                    await this.executionController.waitFor(execution, () => changed)
+                }
                 this.executionController.ensureCurrent(execution)
                 if (this.waitError !== undefined) {
                     const error = this.waitError
@@ -1741,12 +1891,32 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 this.state.interrupt = undefined
             }
         }
-        if (core.hasTerminated()) this.cancelInputRead()
+        if (core.hasTerminated()) this.programEnded()
     }
 
-    private cancelInputRead(): void {
+    /** Whether keys typed in the Terminal go to the Core as they are typed: raw mode, interactive. */
+    private typesKeys(): boolean {
+        const terminal = this._peripherals.terminal
+        return terminal.lineMode?.canonical === false && terminal.inputSource === 'interactive'
+    }
+
+    /**
+     * Lets go of the line read waiting on the Terminal, its rejection unheard: raw mode took the
+     * keys from it, and the program's read, started over, takes them from the Core.
+     */
+    private releaseInputRead(): void {
+        const read = this.inputRead
+        if (!read) return
+        this.inputRead = null
+        read.promise.catch(() => {})
+        this._peripherals.terminal.cancelPendingInput()
+    }
+
+    /** The program ended: its line read is let go of, and raw mode ends with it. */
+    private programEnded(): void {
         this.inputRead = null
         this._peripherals.terminal.cancelPendingInput()
+        this._peripherals.terminal.setLineMode(null)
         this.state.interrupt = undefined
     }
 
@@ -1756,14 +1926,22 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * (`clock_nanosleep` on CLOCK_REALTIME) and a `FUTEX_CLOCK_REALTIME` wait, elapsed time for
      * `nanosleep`. Waiting moves both of them by the same amount, and CPU time not at all
      * (ADR 0040), so a deadline on a CPU clock is one no wait reaches: only input or a signal ends
-     * it, as for a wait with no deadline.
+     * it, as for a wait with no deadline. A Testcase has scripted input and nothing else, so such a
+     * wait the terminal cannot end stops it, saying so when an input device was the program's hope
+     * ([x86 devices](../../../../../../docs/design/x86-devices.md), "Input devices in a Testcase").
      */
     private async waitForClock(request: X86WaitRequest, signal: AbortSignal): Promise<void> {
         const clock = this._peripherals.clock
         const milliseconds = CPU_CLOCKS.has(request.clock) ? null : request.remainingMilliseconds
         if (milliseconds === null) {
-            if (clock.isVirtual && !request.acceptsInput)
-                throw new Error('An indefinite x86 wait has no external wake source in a Testcase')
+            if (clock.isVirtual && !request.wakeSources.terminal) {
+                const devices = request.wakeSources.inputDevices
+                throw new Error(
+                    devices.length > 0
+                        ? inputDeviceWaitMessage(devices)
+                        : 'An indefinite x86 wait has no external wake source in a Testcase'
+                )
+            }
             await new Promise<void>((_resolve, reject) => {
                 const abort = () => reject(signal.reason ?? new Error('Wait aborted'))
                 if (signal.aborted) abort()
