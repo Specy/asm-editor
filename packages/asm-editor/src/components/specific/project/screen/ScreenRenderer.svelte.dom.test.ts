@@ -127,9 +127,50 @@ it('lifts held keys and buttons when the Screen loses focus', () => {
     expect(reports.map(([device]) => device)).toEqual(['keyboard', 'tablet'])
 })
 
+it('hands Escape to an x86 program and leaves Shift+Tab to release the Screen', () => {
+    const { canvas, reports } = panel()
+    const outside = vi.fn()
+    window.addEventListener('keydown', outside)
+    try {
+        canvas.focus()
+        const escape = key('keydown', 'Escape')
+        canvas.dispatchEvent(escape)
+        canvas.dispatchEvent(key('keyup', 'Escape'))
+        expect(reports).toEqual([
+            ['keyboard', [{ type: EV_KEY, code: LINUX_KEY.ESC, value: 1 }]],
+            ['keyboard', [{ type: EV_KEY, code: LINUX_KEY.ESC, value: 0 }]]
+        ])
+        expect(document.activeElement).toBe(canvas)
+        //neither the page's shortcuts nor the floating window's Escape see it
+        expect(outside).not.toHaveBeenCalled()
+
+        reports.length = 0
+        const back = new KeyboardEvent('keydown', {
+            code: 'Tab',
+            key: 'Tab',
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true
+        })
+        canvas.dispatchEvent(back)
+        expect(back.defaultPrevented).toBe(false)
+        expect(reports).toEqual([])
+    } finally {
+        window.removeEventListener('keydown', outside)
+    }
+})
+
+it('still releases the Screen on Escape for every other Target', () => {
+    const { canvas, peripherals } = panel({ x86: false })
+    canvas.focus()
+    canvas.dispatchEvent(key('keydown', 'Escape'))
+    expect(document.activeElement).not.toBe(canvas)
+    expect(peripherals.keyboard.lastKeys().down).toBe(0)
+})
+
 it('says where a focused Screen sends its input', () => {
     const { canvas } = panel()
-    expect(canvas.title).toMatch(/input devices, not to its standard input/)
+    expect(canvas.title).toMatch(/input devices, not to its standard input; Shift\+Tab to release/)
     const other = panel({ x86: false })
     expect(other.canvas.title).toBe(
         'Click to send keyboard and mouse input to the program, Esc to release it'

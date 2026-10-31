@@ -91,12 +91,13 @@
     const keys = $derived(x86Input ?? keyboard)
     const pointer = $derived(x86Input ?? mouse)
     //where a focused Screen's input goes, which a learner who clicks the Screen and then types at a
-    //`scanf` needs to know on x86 (ADR 0068)
+    //`scanf` needs to know on x86 (ADR 0068), and how to get it back: an x86 program reads Escape
+    //like any key, so Shift+Tab releases it there, as in the Terminal's raw mode
     const focusHint = $derived(
         x86Input
             ? {
                   label: "click to send keys and the pointer to the program's input devices",
-                  title: "Click to send keys and the pointer to the program's input devices, not to its standard input; Esc to release them"
+                  title: "Click to send keys and the pointer to the program's input devices, not to its standard input; Shift+Tab to release them"
               }
             : {
                   label: 'click to send keyboard and mouse input to the program',
@@ -319,12 +320,20 @@
         if (!event.ctrlKey && !event.metaKey) event.preventDefault()
     }
 
+    /** The key that gives the keyboard back to the page: Shift+Tab on x86, Escape elsewhere. */
+    function isReleaseKey(event: KeyboardEvent) {
+        return x86Input ? event.code === 'Tab' && event.shiftKey : event.code === 'Escape'
+    }
+
     function handleKeyDown(event: KeyboardEvent) {
-        //every other key belongs to the program while this panel has focus, so Escape is the one
-        //way back out for someone working without a mouse. It is the panel's own gesture and the
-        //page must not see it either: a user who binds an action to Escape would otherwise trigger
-        //it from a focused Screen, which ADR 0008 forbids
-        if (event.code === 'Escape') {
+        //every other key belongs to the program while this panel has focus, so the release key is
+        //the one way back out for someone working without a mouse. Escape is the panel's own
+        //gesture on the Targets whose programs never asked for it, and the page must not see it
+        //either: a user who binds an action to Escape would otherwise trigger it from a focused
+        //Screen, which ADR 0008 forbids. An x86 program reads Escape as KEY_ESC, so there Shift+Tab
+        //is left to the browser, which moves the focus back and so releases the Screen
+        if (isReleaseKey(event)) {
+            if (x86Input) return
             event.stopPropagation()
             canvas?.blur()
             return
@@ -334,7 +343,7 @@
     }
 
     function handleKeyUp(event: KeyboardEvent) {
-        if (event.code === 'Escape') return
+        if (!x86Input && event.code === 'Escape') return
         keys.keyUp(event)
         routeKey(event, false)
     }
@@ -407,7 +416,8 @@
         if (!expanded) return
         //Escape closes the floating window, but only once the Screen no longer holds the keyboard:
         //the canvas stops its own Escape from propagating, so the first press releases the input
-        //(ADR 0008's way out of a focused Screen) and the next one reaches this listener
+        //(ADR 0008's way out of a focused Screen) and the next one reaches this listener. On x86 the
+        //focused canvas hands Escape to the program, stopped the same way, and Shift+Tab releases it
         function closeOnEscape(event: KeyboardEvent) {
             if (event.code !== 'Escape') return
             expanded = false

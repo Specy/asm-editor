@@ -238,7 +238,7 @@ Decisions taken while implementing:
 2. **Undo of a read that waited puts back only what it found queued before the wait**, and drops what arrived during the wait and is still queued, the state before the instruction ([ADR 0057](../adr/0057-restore-the-terminal-on-undo.md)).
 3. **`sendSignal` discards input no read took unless `NOFLSH` is set**, as Linux's `isig()` does, and is an Undo barrier like any signal from outside.
 4. **`soundCut` names its device** when one device is cut (a dsp `RESET` must not drop MIDI).
-5. **In raw mode Escape goes to the program and Shift+Tab leaves the Terminal**; on the Screen Escape still releases it on every Target, x86 included, so an x86 program cannot read `KEY_ESC` from the Screen yet. To settle with the owner.
+5. **In raw mode Escape goes to the program and Shift+Tab leaves the Terminal**; on the Screen Escape still releases it on every Target, x86 included, so an x86 program could not read `KEY_ESC` from the Screen. The owner settled it the same day: on x86 the Screen hands Escape to the program and Shift+Tab releases it, as in the Terminal; the other Targets keep Escape.
 6. **Unknown ioctls answer `ENOTTY` only where no driver claims the request type**: evdev and OSS answer `EINVAL` for unknown requests of their own type, as on Linux (M3, M4).
 7. **The MIDI port's buffer belongs to the substream**, shared by every open (M4 moves M1's test vehicle there).
 8. The mixer's gain is linear (VOLUME/100 × PCM/100 a side), not checked against the guest's dB curve.
