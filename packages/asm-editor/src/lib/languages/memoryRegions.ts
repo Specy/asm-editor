@@ -208,9 +208,15 @@ function overlapRank(kind: MemoryRegion['kind']): number {
 }
 
 export function regionsAt(regions: readonly MemoryRegion[], address: bigint): MemoryRegion[] {
-    return regions
-        .filter((region) => address >= region.start && address < region.end)
-        .sort((a, b) => overlapRank(a.kind) - overlapRank(b.kind))
+    return regions.filter((region) => holds(region, address)).sort(byOverlapRank)
+}
+
+function byOverlapRank(a: MemoryRegion, b: MemoryRegion): number {
+    return overlapRank(a.kind) - overlapRank(b.kind)
+}
+
+function holds(region: MemoryRegion, address: bigint): boolean {
+    return address >= region.start && address < region.end
 }
 
 export function regionLabels(region: MemoryRegion, labels: readonly DataLabel[]): DataLabel[] {
@@ -234,6 +240,15 @@ export function regionChunkStart(
     labels: readonly DataLabel[],
     address: bigint
 ): bigint {
+    return chunkStart(region, () => regionLabels(region, labels), address)
+}
+
+/** `regionChunkStart`, with the region's own labels, asked for only when it has chunks. */
+function chunkStart(
+    region: MemoryRegion,
+    labelsOfRegion: () => readonly DataLabel[],
+    address: bigint
+): bigint {
     if (
         region.kind !== 'data' &&
         region.kind !== 'reserved' &&
@@ -242,7 +257,7 @@ export function regionChunkStart(
     )
         return region.start
     let start = region.start
-    for (const label of regionLabels(region, labels))
+    for (const label of labelsOfRegion())
         if (label.address <= address && label.address > start) start = label.address
     return start
 }
@@ -252,12 +267,21 @@ export function memoryHover(
     labels: readonly DataLabel[],
     address: bigint
 ): string {
-    return regionsAt(regions, address)
+    return hoverOf(regionsAt(regions, address), (region) => regionLabels(region, labels), address)
+}
+
+/** `memoryHover` of the regions at `address`, in their overlap order, with each one's labels. */
+function hoverOf(
+    here: readonly MemoryRegion[],
+    labelsOf: (region: MemoryRegion) => readonly DataLabel[],
+    address: bigint
+): string {
+    return here
         .map((region) => {
             const label =
                 region.kind === 'device'
                     ? undefined
-                    : regionLabels(region, labels)
+                    : labelsOf(region)
                           .filter((label) => label.address <= address)
                           .at(-1)
             if (!label) return region.name
@@ -273,7 +297,57 @@ export function memoryHover(
  * each: why a ROM ignores the program's writes, what a vector holds. Empty elsewhere.
  */
 export function memoryReasons(regions: readonly MemoryRegion[], address: bigint): string[] {
-    return regionsAt(regions, address).flatMap((region) => (region.reason ? [region.reason] : []))
+    return reasonsOf(regionsAt(regions, address))
+}
+
+function reasonsOf(here: readonly MemoryRegion[]): string[] {
+    return here.flatMap((region) => (region.reason ? [region.reason] : []))
+}
+
+/** What a memory view shows of one byte's regions. */
+export type MemoryByteRegions = {
+    /** The region whose outline the byte draws, the first by overlap order. */
+    region: MemoryRegion | undefined
+    /** Where the chunk of `region` holding the byte starts; 0 outside every region. */
+    chunk: bigint
+    hover: string
+    reasons: string[]
+}
+
+/**
+ * `regionsAt`, `regionChunkStart`, `memoryHover` and `memoryReasons` for each byte of the page
+ * of `length` bytes from `start`, with the regions on the page ranked and each one's labels found
+ * once for the page rather than again for every byte of it: a page is hundreds of bytes and a
+ * program can have thousands of labels, and the memory views read a page on every refresh.
+ */
+export function memoryPageRegions(
+    regions: readonly MemoryRegion[],
+    labels: readonly DataLabel[],
+    start: bigint,
+    length: number
+): MemoryByteRegions[] {
+    const end = start + BigInt(length)
+    //a stable sort, so regions of one rank keep the order `regionsAt` leaves them in
+    const onPage = regions
+        .filter((region) => region.start < end && region.end > start)
+        .sort(byOverlapRank)
+    const found = new Map<MemoryRegion, DataLabel[]>()
+    const labelsOf = (region: MemoryRegion) => {
+        let own = found.get(region)
+        if (!own) found.set(region, (own = regionLabels(region, labels)))
+        return own
+    }
+    return Array.from({ length }, (_, index) => {
+        const address = start + BigInt(index)
+        const here = onPage.filter((region) => holds(region, address))
+        const region = here[0]
+        return {
+            region,
+            chunk: region ? chunkStart(region, () => labelsOf(region), address) : 0n,
+            hover: hoverOf(here, labelsOf, address),
+            reasons: reasonsOf(here)
+        }
+    })
 }
 
 const regionColors = {

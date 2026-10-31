@@ -368,6 +368,17 @@ const INTERRUPT_INPUT_QUESTIONS: Partial<Record<Interrupt['type'], string>> = {
 }
 
 /**
+ * How a trap was answered: at once (undefined); at once, with program time to pass before the
+ * program goes on (`delay`, a Delay, which a Run's scheduler awaits between slices); or once
+ * something outside the program answers it (`answered`: a read, the File dialog, a sound to
+ * decode), which holds the slice. Most traps are answered at once, and answering those without a
+ * promise keeps a drawing trap from costing a chain of them. The Delay is a field, not the result:
+ * an async function's result promise is unwrapped, which is how a Delay used to be waited out
+ * inside its slice, where the scheduler never saw it.
+ */
+type TrapAnswer = { delay: Promise<void> } | { answered: Promise<void> } | undefined
+
+/**
  * EASy68K's file numbers, which the FileSystem session hands out: the lowest free one from 0, and
  * at most eight open at once (`MAXFILES`, `SIMOPS2.CPP`), so a ninth open is answered with null.
  */
@@ -1319,14 +1330,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         }
         interpreter.step()
         if (interpreter.getStatus() === CoreInterpreterStatus.Interrupt) {
-            const wait = await this.handleInterrupt(
+            const answer = this.handleInterrupt(
                 interpreter.getCurrentInterrupt(),
                 interpreter,
                 execution
             )
-            //a step has no scheduler to hand the wait to, so it is awaited here; a testcase's
-            //virtual clock makes that immediate (ADR 0010)
-            if (wait) await this.executionController.waitFor(execution, () => wait)
+            await this.settleTrap(answer, execution)
             this.forgetChangedCode()
         }
         this.takeSynthWrites(interpreter)
@@ -1436,6 +1445,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const deadline = sliceDeadline(request)
         const first = interpreter.getExecutedInstructions()
         const ran = () => interpreter.getExecutedInstructions() - first
+        //the run's last instruction was spent and the program would run on: past the run's own
+        //limit, which a slice ending on a wait has to say itself, as the scheduler only counts
+        const pastTheLimit = () => {
+            if (isLastSlice && ran() >= budget)
+                throw { type: 'ExecutionLimit', value: request.runInstructionLimit }
+        }
         //every call below the first resumes the program with the program counter on an instruction
         //that has not run, so only the first may be told to skip a breakpoint on it: the Core's
         //`runWithBreakpoints` skips the instruction it starts on, and re-entering after a trap with
@@ -1449,6 +1464,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         this.runTimers(interpreter, request.startsRun === true)
         //an IRQ ready as the Run starts is its first step, past the Breakpoint it starts on
         const irqFirst = startsTheRun && hasBreakpoints && this.irqReady(interpreter)
+        //the Core keeps them for every call of the slice, which resumes after each trap: looking
+        //their lines up in the program on every call was most of what a trap cost with any set
+        if (hasBreakpoints || stopOnCodeWrite) interpreter.setBreakpoints(parsedBreakpoints)
         const startPc = interpreter.getPc()
         while (!interpreter.hasTerminated()) {
             const remaining = budget - ran()
@@ -1465,7 +1483,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
             try {
                 if (hasBreakpoints || stopOnCodeWrite) {
-                    const status = interpreter.runWithBreakpoints(parsedBreakpoints, remaining, {
+                    const status = interpreter.runWithBreakpoints(remaining, {
                         skipBreakpointAtPc: startsTheRun,
                         stopOnCodeWrite
                     })
@@ -1498,6 +1516,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
             //`stop`: the processor waits for an IRQ, and the Run with it, without running anything
             if (interpreter.getStatus() === CoreInterpreterStatus.Stopped) {
+                pastTheLimit()
                 return {
                     reason: 'wait',
                     instructions: ran(),
@@ -1505,10 +1524,15 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 }
             }
             const stopped = interpreter.getStatus()
-            const wait = await this.handleInterpreterInterruption(interpreter, execution)
+            const answer = this.handleInterpreterInterruption(interpreter, execution)
+            //a read, the File dialog or a sound still decoding holds the slice until it is answered
+            if (answer && 'answered' in answer) await answer.answered
             //a Delay is program time, not execution: the scheduler awaits it between slices, so the
             //GUI keeps repainting and Stop still answers while it runs (ADR 0007, ADR 0010)
-            if (wait) return { reason: 'wait', instructions: ran(), wait }
+            else if (answer) {
+                pastTheLimit()
+                return { reason: 'wait', instructions: ran(), wait: answer.delay }
+            }
             //a trap's answer writes for the program, a line read into its own code included; and
             //a store into the Synth's block stops the Core as a watched write before it says that
             //the same instruction wrote into code, which the next call would forget
@@ -1754,8 +1778,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
             //a testcase runs unsliced, so a wait is awaited here; its clock is the virtual one, on
             //which waits complete at once (ADR 0010)
-            const wait = await this.handleInterpreterInterruption(interpreter, execution)
-            if (wait) await this.executionController.waitFor(execution, () => wait)
+            await this.settleTrap(
+                this.handleInterpreterInterruption(interpreter, execution),
+                execution
+            )
         }
     }
 
@@ -1803,15 +1829,31 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * the Core too, and answering a trap can write there, so the Synth is handed its writes after
      * either.
      */
-    private async handleInterpreterInterruption(
+    private handleInterpreterInterruption(
         interpreter: Interpreter,
         execution: ExecutionGeneration
-    ): Promise<Promise<void> | undefined> {
-        const wait = await this.answerInterruption(interpreter, execution)
-        //an answer writes for the instruction that asked, under that instruction's step id
+    ): TrapAnswer {
+        const answer = this.answerInterruption(interpreter, execution)
+        if (answer && 'answered' in answer)
+            return { answered: answer.answered.then(() => this.afterAnswer(interpreter)) }
+        this.afterAnswer(interpreter)
+        return answer
+    }
+
+    /** An answer writes for the instruction that asked, under that instruction's step id. */
+    private afterAnswer(interpreter: Interpreter): void {
         this.forgetChangedCode()
         this.takeSynthWrites(interpreter)
-        return wait
+    }
+
+    /**
+     * Waits for what a trap's answer left to wait for, for a caller with no scheduler to hand a
+     * Delay to: a Step, and a Testcase, whose virtual clock makes the Delay immediate (ADR 0010).
+     */
+    private async settleTrap(answer: TrapAnswer, execution: ExecutionGeneration): Promise<void> {
+        if (!answer) return
+        if ('answered' in answer) await answer.answered
+        else await this.executionController.waitFor(execution, () => answer.delay)
     }
 
     /** Hands the Synth the stores the Core watched in its block, in the order they were made. */
@@ -1824,10 +1866,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         }
     }
 
-    private async answerInterruption(
+    private answerInterruption(
         interpreter: Interpreter,
         execution: ExecutionGeneration
-    ): Promise<Promise<void> | undefined> {
+    ): TrapAnswer {
         switch (interpreter.getStatus()) {
             case CoreInterpreterStatus.Terminated: {
                 //not marked terminated here: the run that ends says so once it is over, with how
@@ -1839,17 +1881,22 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             }
             case CoreInterpreterStatus.Interrupt: {
                 if (this.state.terminated || !this.state.canExecute) break
-                const ins = interpreter.getLastInstruction()
-                this.state.line = ins?.location.line ?? -1
-                if (ins) this.state.currentFile = ins.location.file
                 const interrupt = interpreter.getCurrentInterrupt()
+                const asks =
+                    interrupt !== null && INTERRUPT_INPUT_QUESTIONS[interrupt.type] !== undefined
                 //a trap is not a display frame: a graphical program reaches this a few hundred
                 //times a second and the panels can only be seen sixty times a second. The traps
-                //that stop and ask the user something are refreshed whatever the rate limit says
-                this.refreshRunningPanels(
-                    interrupt !== null && INTERRUPT_INPUT_QUESTIONS[interrupt.type] !== undefined
-                )
-                return await this.handleInterrupt(interrupt, interpreter, execution)
+                //that stop and ask the user something show where they wait and are refreshed
+                //whatever the rate limit says. The rest leave the line where the Run started, as
+                //every other Target's Run does: following each trap made the editor redraw its
+                //decorations and scroll on every one, and a game a thousand times a second
+                if (asks) {
+                    const ins = interpreter.getLastInstruction()
+                    this.state.line = ins?.location.line ?? -1
+                    if (ins) this.state.currentFile = ins.location.file
+                }
+                this.refreshRunningPanels(asks)
+                return this.handleInterrupt(interrupt, interpreter, execution)
             }
             //nothing to answer: the caller hands the Synth a watched write, a run that pauses at a
             //`simhalt` or stops at a breakpoint ends before asking, and one that raises an
@@ -1874,18 +1921,20 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * writes EASy68K's results itself ([ADR 0035](../../../../../../docs/adr/0035-environments-match-their-reference.md)).
      * Answering is what resumes the Core, so every branch ends in `answerInterrupt`, with the answer
      * of the interrupt's own type; the Delay branch answers first and returns its wait, because the
-     * program is not blocked on the trap any more, only on time passing.
+     * program is not blocked on the trap any more, only on time passing. A task that waits for an
+     * answer from outside the program answers in the promise it returns as `answered`, and the
+     * rest answer before this returns, without one.
      *
      * The whole task is associated with this trap's execution ID, including tasks like 18 that
      * print a prompt and then echo every character the user types. The compound journal makes
      * eviction of those effects atomic (ADR 0005), and a file task's changes are one FileSystem
      * frame under the same ID (ADR 0015).
      */
-    private async handleInterrupt(
+    private handleInterrupt(
         interrupt: Interrupt | null,
         interpreter: Interpreter,
         execution: ExecutionGeneration
-    ): Promise<Promise<void> | undefined> {
+    ): TrapAnswer {
         if (!interrupt) throw new Error('Expected interrupt')
         this.executionController.ensureCurrent(execution)
         const terminal = this._peripherals.terminal
@@ -1894,7 +1943,27 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const penOnlyBefore = this.penOnly
         const { type } = interrupt
         const question = INTERRUPT_INPUT_QUESTIONS[type]
-        this.state.interrupt = question ? { type, message: question } : { type }
+        //only a trap that waits says so, which keeps Step, Undo and Pokes off the Core until it
+        //is answered: a question here, a sound still decoding in `openSound`. The rest answer at
+        //once, and announcing them anyway made every drawing trap a change the Workbench re-read
+        if (question) this.state.interrupt = { type, message: question }
+        const end = () => {
+            screen.endCompoundOperation()
+            if (this.executionController.isCurrent(execution)) {
+                this.screenInstructions?.record(
+                    interpreter.getLastStepId(),
+                    before,
+                    this.penOnly === penOnlyBefore
+                        ? undefined
+                        : () => {
+                              this.penOnly = penOnlyBefore
+                          }
+                )
+            }
+            this.state.interrupt = undefined
+        }
+        //the task's answer, for one that waits for it: the trap ends once it is given
+        let answered: Promise<void> | undefined
         screen.beginCompoundOperation()
         try {
             switch (type) {
@@ -1922,27 +1991,33 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 case 'ReadNumber':
                 case 'ReadKeyboardString': {
                     if (type === 'DisplayStringAndReadNumber') this.print(interrupt.value)
-                    const line = await this.requestInput(
-                        type === 'ReadKeyboardString' ? READ_STRING_QUESTION : READ_NUMBER_QUESTION,
-                        execution,
-                        this.readOptions(interpreter)
-                    )
-                    this.executionController.ensureCurrent(execution)
-                    interpreter.answerInterrupt({ type, value: line })
+                    answered = (async () => {
+                        const line = await this.requestInput(
+                            type === 'ReadKeyboardString'
+                                ? READ_STRING_QUESTION
+                                : READ_NUMBER_QUESTION,
+                            execution,
+                            this.readOptions(interpreter)
+                        )
+                        this.executionController.ensureCurrent(execution)
+                        interpreter.answerInterrupt({ type, value: line })
+                    })()
                     break
                 }
                 case 'ReadChar': {
                     //one keystroke, from the Terminal or, once the Screen's Keyboard is the source,
                     //from the Screen (ADR 0009); Enter is EASy68K's $0D, the Terminal's Enter code
                     //for this Target (ADR 0036), which the Core also takes as a line feed
-                    const char = await this.requestCharacter(
-                        READ_CHAR_QUESTION,
-                        execution,
-                        this.readOptions(interpreter)
-                    )
-                    if (!char) throw new Error(`Expected a character, got "${char}"`)
-                    this.executionController.ensureCurrent(execution)
-                    interpreter.answerInterrupt({ type, value: char })
+                    answered = (async () => {
+                        const char = await this.requestCharacter(
+                            READ_CHAR_QUESTION,
+                            execution,
+                            this.readOptions(interpreter)
+                        )
+                        if (!char) throw new Error(`Expected a character, got "${char}"`)
+                        this.executionController.ensureCurrent(execution)
+                        interpreter.answerInterrupt({ type, value: char })
+                    })()
                     break
                 }
                 case 'Terminate': {
@@ -2038,14 +2113,16 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     const { mode, title, filter, path } = interrupt.value
                     //what the program played is heard while the dialog waits
                     this._peripherals.audio.flush()
-                    const answer = await this._peripherals.terminal.inputDialog(
-                        fileDialogQuestion(mode, title, filter),
-                        execution,
-                        path
-                    )
-                    this.executionController.ensureCurrent(execution)
-                    //an empty answer cancels, as the dialog's Cancel does
-                    interpreter.answerInterrupt({ type, value: answer || null })
+                    answered = (async () => {
+                        const answer = await this._peripherals.terminal.inputDialog(
+                            fileDialogQuestion(mode, title, filter),
+                            execution,
+                            path
+                        )
+                        this.executionController.ensureCurrent(execution)
+                        //an empty answer cancels, as the dialog's Cancel does
+                        interpreter.answerInterrupt({ type, value: answer || null })
+                    })()
                     break
                 }
 
@@ -2055,23 +2132,25 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 //([audio.md](../../../../../../docs/design/audio.md#easy68ks-files-and-answers))
                 case 'PlaySound':
                 case 'PlaySoundDirectX': {
-                    const sound = await this.openSound(interrupt.value, execution)
-                    const player = type === 'PlaySound' ? 'standard' : 'directx'
-                    const value = this._peripherals.audio.playFile(player, sound)
-                    interpreter.answerInterrupt({ type, value })
+                    const path = interrupt.value
+                    answered = (async () => {
+                        const sound = await this.openSound(type, path, execution)
+                        const player = type === 'PlaySound' ? 'standard' : 'directx'
+                        const value = this._peripherals.audio.playFile(player, sound)
+                        interpreter.answerInterrupt({ type, value })
+                    })()
                     break
                 }
                 case 'LoadSound':
                 case 'LoadSoundDirectX': {
-                    const sound = await this.openSound(interrupt.value.path, execution)
-                    const player = type === 'LoadSound' ? 'standard' : 'directx'
-                    const value = this._peripherals.audio.loadSlot(
-                        player,
-                        interrupt.value.index,
-                        sound
-                    )
-                    if (type === 'LoadSound') interpreter.answerInterrupt({ type })
-                    else interpreter.answerInterrupt({ type, value })
+                    const { path, index } = interrupt.value
+                    answered = (async () => {
+                        const sound = await this.openSound(type, path, execution)
+                        const player = type === 'LoadSound' ? 'standard' : 'directx'
+                        const value = this._peripherals.audio.loadSlot(player, index, sound)
+                        if (type === 'LoadSound') interpreter.answerInterrupt({ type })
+                        else interpreter.answerInterrupt({ type, value })
+                    })()
                     break
                 }
                 case 'PlayLoadedSound':
@@ -2321,35 +2400,25 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                     //answered before the wait: the program is no longer stopped on the trap, only on
                     //time passing, which the scheduler awaits between slices
                     interpreter.answerInterrupt({ type })
-                    return this._peripherals.clock.waitHundredths(interrupt.value)
+                    return { delay: this._peripherals.clock.waitHundredths(interrupt.value) }
                 }
                 default:
                     return unknownInterrupt(type)
             }
         } finally {
-            screen.endCompoundOperation()
-            if (this.executionController.isCurrent(execution)) {
-                this.screenInstructions?.record(
-                    interpreter.getLastStepId(),
-                    before,
-                    this.penOnly === penOnlyBefore
-                        ? undefined
-                        : () => {
-                              this.penOnly = penOnlyBefore
-                          }
-                )
-            }
-            this.state.interrupt = undefined
+            if (!answered) end()
         }
-        return undefined
+        return answered && { answered: answered.finally(end) }
     }
 
     /**
      * Reads a Sound File the program named, through the Build's FileSystem as the file tasks do, and
      * holds the program while its sound decodes or the sound bank loads. Undefined, and a note in
-     * the Log as EASy68K's Message window had it, when no File has the path.
+     * the Log as EASy68K's Message window had it, when no File has the path. The trap of `type`
+     * says it is waiting while it holds the program, as a read does.
      */
     private async openSound(
+        type: Interrupt['type'],
         path: string,
         execution: ExecutionGeneration
     ): Promise<OpenedSound | undefined> {
@@ -2361,7 +2430,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         }
         const sound = audio.open({ path, bytes })
         const loading = sound && audio.prepare(sound)
-        if (loading) await this.executionController.waitFor(execution, () => loading)
+        if (loading) {
+            this.state.interrupt = { type }
+            await this.executionController.waitFor(execution, () => loading)
+        }
         this.executionController.ensureCurrent(execution)
         return sound
     }

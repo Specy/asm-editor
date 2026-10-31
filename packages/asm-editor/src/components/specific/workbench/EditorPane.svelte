@@ -491,6 +491,7 @@
                 diagnostics={group.displayedDiagnostics}
                 language={group.displayedLanguage}
                 highlightedLine={group.highlightedLine}
+                running={session.running}
                 lineColoring={group.lineColoring}
                 activeLineColors={group.activeLineColors}
                 onLinesSelect={(lines) => session.selectMappedLines(group, lines)}

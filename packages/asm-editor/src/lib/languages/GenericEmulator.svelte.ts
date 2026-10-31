@@ -33,6 +33,7 @@ import {
     type MemoryLayout,
     type HeapBounds,
     type DeviceRegion,
+    type MemoryRegion,
     type ReadOnlyMemory,
     numbersOfSizeToSlice,
     type RegisterFile,
@@ -184,6 +185,19 @@ function programStartLimitMessage(name: string, limit: number): string {
     return `The program did not reach ${name} within ${limit.toLocaleString('en-US')} instructions`
 }
 
+/** Whether two readings of the device regions name the same ranges, in the same order. */
+function sameDeviceRegions(a: readonly DeviceRegion[], b: readonly DeviceRegion[]): boolean {
+    return (
+        a.length === b.length &&
+        a.every(
+            (region, index) =>
+                region.name === b[index].name &&
+                region.start === b[index].start &&
+                region.end === b[index].end
+        )
+    )
+}
+
 /** The Arguments problem a failed Build reports, or undefined for any other failure. */
 function argumentsProblem(error: CompilationFailedError): string | undefined {
     const [diagnostic] = error.diagnostics
@@ -219,12 +233,20 @@ export abstract class GenericEmulator<T, R extends string>
     extends BaseEmulator<R>
     implements BaseEmulatorActions, BaseEmulatorState
 {
-    private memoryLayout = $state<MemoryLayout | undefined>()
+    //replaced whole, never changed in place, so none of them needs the proxies deep state puts
+    //on every label: the memory views read all of them for every byte of a page
+    private memoryLayout = $state.raw<MemoryLayout | undefined>()
     /** What `_getMemoryLayoutKey` read when `memoryLayout` was read. */
     private memoryLayoutKey: number | bigint | string | undefined
-    private heapBounds = $state<HeapBounds | undefined>()
+    private heapBounds = $state.raw<HeapBounds | undefined>()
     private stackTop = $state<bigint | undefined>()
-    private deviceRegions = $state<DeviceRegion[]>([])
+    private deviceRegions = $state.raw<DeviceRegion[]>([])
+    /**
+     * `memoryRegions` as last merged, with what it was merged from: every memory view reads them on
+     * each refresh, and a list made again for each read was a change to all of them, which then
+     * worked out every byte's region again whether anything had moved or not.
+     */
+    private mergedRegions?: { from: readonly unknown[]; regions: MemoryRegion[] }
 
     get dataLabels() {
         return this.memoryLayout?.dataLabels ?? []
@@ -232,17 +254,22 @@ export abstract class GenericEmulator<T, R extends string>
     get readOnlyMemory(): readonly ReadOnlyMemory[] {
         return this.memoryLayout?.readOnly ?? []
     }
-    get memoryRegions() {
-        return this.memoryLayout
-            ? mergeMemoryRegions(
-                  this.memoryLayout,
-                  this.heapBounds,
-                  this.stackTop === undefined
-                      ? undefined
-                      : { start: this.state.sp, end: this.stackTop },
-                  this.deviceRegions
-              )
-            : []
+    get memoryRegions(): MemoryRegion[] {
+        const layout = this.memoryLayout
+        if (!layout) return []
+        const sp = this.state.sp
+        const from = [layout, this.heapBounds, this.stackTop, sp, this.deviceRegions]
+        const merged = this.mergedRegions
+        if (merged && from.every((input, index) => input === merged.from[index]))
+            return merged.regions
+        const regions = mergeMemoryRegions(
+            layout,
+            this.heapBounds,
+            this.stackTop === undefined ? undefined : { start: sp, end: this.stackTop },
+            this.deviceRegions
+        )
+        this.mergedRegions = { from, regions }
+        return regions
     }
     resolveMemoryLabel(name: string): bigint | undefined {
         if (!this._buildSources) return undefined
@@ -291,6 +318,8 @@ export abstract class GenericEmulator<T, R extends string>
     private screenActiveUntil = 0
     /** When `refreshRunningPanels` last read the Core for the panels, see the constant above. */
     private lastPanelRefresh = 0
+    /** A refresh a trap asked for in the slice now running, which `sliceLoop` takes at its end. */
+    private panelsDue = false
     /**
      * The pause the Run button turns into while a program is running. `pause()` asks the execution
      * controller for it, and `runSlices` honors it by returning at its next slice boundary, just as
@@ -961,7 +990,11 @@ export abstract class GenericEmulator<T, R extends string>
         this.readTermination()
         this.state.pc = this._getPc()
         this.state.callStack = this._getCallStack()
-        this.heapBounds = this._getHeapBounds?.()
+        //kept as they were while nothing changed, as `changedCode` is below: a new object is a
+        //change to every memory view
+        const heap = this._getHeapBounds?.()
+        if (heap?.start !== this.heapBounds?.start || heap?.end !== this.heapBounds?.end)
+            this.heapBounds = heap
         this.stackTop = this._getStackTop?.()
         //a layout that moved with the program, as an M68K vector table follows VBR, is read again,
         //and its Arguments captured again with it
@@ -972,7 +1005,8 @@ export abstract class GenericEmulator<T, R extends string>
         )
             this.readMemoryLayout()
         this.captureArguments()
-        this.deviceRegions = this._getDeviceRegions?.() ?? []
+        const devices = this._getDeviceRegions?.() ?? []
+        if (!sameDeviceRegions(devices, this.deviceRegions)) this.deviceRegions = devices
         this.state.latestSteps = this.visibleHistory(VISIBLE_HISTORY_STEPS)
         //kept as it was while nothing changed, so the editor's line marks and hovers stay put
         const changed = this._getChangedCode?.() ?? []
@@ -1829,10 +1863,13 @@ export abstract class GenericEmulator<T, R extends string>
         this.runInFlight = true
         this.runPausable = options.pausable !== false
         this.state.paused = false
+        this.panelsDue = false
         try {
             return await this.sliceLoop(haltLimit, execution, options)
         } finally {
             this.runInFlight = false
+            //the end of the run reads every panel anyway
+            this.panelsDue = false
             //a pause asked for in the slice that ended the run is not inherited by the next one
             this.executionController.endPause()
         }
@@ -1898,6 +1935,13 @@ export abstract class GenericEmulator<T, R extends string>
             const progress = Math.max(0, slice.instructions)
             this.recordHistory(progress)
             remaining -= progress
+            //what the slice's traps asked the panels to show, read now that it is over: in a game
+            //that is while the program waits for its next frame, where read in the middle of the
+            //slice the update landed part way through drawing one and pushed it past the slice
+            if (this.panelsDue && (slice.reason === 'wait' || slice.reason === 'budget')) {
+                this.panelsDue = false
+                this.refreshPanelsAtRate(false)
+            }
             if (slice.reason === 'wait') {
                 //a wait is not execution: it costs no instructions and the run continues after it.
                 //`clear()` resets the clock, which resolves pending waits, and the generation check
@@ -1993,7 +2037,9 @@ export abstract class GenericEmulator<T, R extends string>
      * tab, the call stack and the undo history is not free, and none of it can be seen more than
      * once a display frame, so it is rate limited to `RUNNING_PANEL_REFRESH_MS` rather than done
      * per interrupt, and to `ANIMATING_PANEL_REFRESH_MS` while a Screen is being drawn on, where
-     * the frames are what the user is watching and the refresh is competing for the thread.
+     * the frames are what the user is watching and the refresh is competing for the thread. During
+     * a Run it is taken when the slice ends rather than at the interrupt that asked: the update the
+     * panels then make lands while a game waits for its next frame, not part way through drawing it.
      *
      * `force` is for the interrupts that suspend the program for the user: an input prompt is read
      * beside the panels, and the user has all the time in the world to notice that they are one
@@ -2001,6 +2047,14 @@ export abstract class GenericEmulator<T, R extends string>
      * never rate limited, so what a stopped program leaves on screen is always current.
      */
     protected refreshRunningPanels(force: boolean): void {
+        if (!force && this.runInFlight) {
+            this.panelsDue = true
+            return
+        }
+        this.refreshPanelsAtRate(force)
+    }
+
+    private refreshPanelsAtRate(force: boolean): void {
         const now = performance.now()
         const interval = this.screenIsAnimating()
             ? ANIMATING_PANEL_REFRESH_MS

@@ -73,6 +73,11 @@
         /** A Workbench session owns models shared by its editor groups. */
         sharedModels?: EditorModels
         highlightedLine?: number
+        /**
+         * A Run is in flight: `highlightedLine` is drawn but not scrolled to, the host reveals
+         * where the program stops or waits for input instead.
+         */
+        running?: boolean
         /** Matching source/assembly section backgrounds. */
         lineColoring?: EditorLineColoring
         /** Palette indices emphasized by the active source/assembly connections; others dim. */
@@ -154,6 +159,7 @@
         retainedModelKeys,
         sharedModels,
         highlightedLine = -1,
+        running = false,
         lineColoring,
         activeLineColors,
         hasError = false,
@@ -745,11 +751,32 @@
         return () => listener?.dispose()
     })
 
+    /**
+     * The program's current line, apart from every other decoration: it moves far more often than
+     * anything else changes, and moving it must not rebuild the source-map sections and the
+     * Breakpoints along with it.
+     */
+    let lineDecorations: monaco.editor.IEditorDecorationsCollection | undefined = $state.raw()
+    /**
+     * The current line when a Breakpoint is on it, whose glyph is then drawn to stand out of the
+     * line's color, else -1: the line moving between lines without Breakpoints changes nothing.
+     */
+    const breakpointOnHighlightedLine = $derived(
+        breakpoints.includes(highlightedLine) || mappedBreakpoints.includes(highlightedLine)
+            ? highlightedLine
+            : -1
+    )
+
     $effect(() => {
         if (!activeModelKey) return
         const collection = editor?.createDecorationsCollection()
+        const lineCollection = editor?.createDecorationsCollection()
         decorations = collection
-        return () => collection?.clear()
+        lineDecorations = lineCollection
+        return () => {
+            collection?.clear()
+            lineCollection?.clear()
+        }
     })
 
     $effect(() => {
@@ -937,28 +964,6 @@
                           })
                       })
                     : []),
-                ...(highlightedLine >= 0
-                    ? [
-                          {
-                              range: new currentMonaco.Range(
-                                  zeroBasedLineToMonaco(highlightedLine),
-                                  1,
-                                  zeroBasedLineToMonaco(highlightedLine),
-                                  1
-                              ),
-                              options: {
-                                  className: hasError ? 'error-line' : 'selected-line',
-                                  marginClassName: hasError ? 'error-line' : 'selected-line',
-                                  lineNumberClassName: hasError
-                                      ? 'error-line-number'
-                                      : 'selected-line-number',
-                                  inlineClassName: 'selected-line-text',
-                                  isWholeLine: true,
-                                  zIndex: 2
-                              }
-                          }
-                      ]
-                    : []),
                 ...lineNoteDecorations(currentEditor, currentMonaco),
                 ...patchedLines.map((line) => ({
                     range: new currentMonaco.Range(line + 1, 1, line + 1, 1),
@@ -983,7 +988,7 @@
                     range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
                     options: {
                         glyphMarginClassName:
-                            e === highlightedLine
+                            e === breakpointOnHighlightedLine
                                 ? 'breakpoint-glyph selected-line-glyph'
                                 : 'breakpoint-glyph'
                     }
@@ -992,7 +997,7 @@
                     range: new currentMonaco.Range(e + 1, 1, e + 1, 1),
                     options: {
                         glyphMarginClassName:
-                            e === highlightedLine
+                            e === breakpointOnHighlightedLine
                                 ? 'mapped-breakpoint-glyph selected-line-glyph'
                                 : 'mapped-breakpoint-glyph',
                         glyphMarginHoverMessage: {
@@ -1017,10 +1022,40 @@
         }
     })
 
-    /** The program's current line, revealed at once in a model just shown and smoothly after. */
+    $effect(() => {
+        const currentMonaco = monacoInstance
+        if (!activeModelKey || !lineDecorations || !currentMonaco) return
+        const line = zeroBasedLineToMonaco(highlightedLine)
+        lineDecorations.set(
+            highlightedLine >= 0
+                ? [
+                      {
+                          range: new currentMonaco.Range(line, 1, line, 1),
+                          options: {
+                              className: hasError ? 'error-line' : 'selected-line',
+                              marginClassName: hasError ? 'error-line' : 'selected-line',
+                              lineNumberClassName: hasError
+                                  ? 'error-line-number'
+                                  : 'selected-line-number',
+                              inlineClassName: 'selected-line-text',
+                              isWholeLine: true,
+                              zIndex: 2
+                          }
+                      }
+                  ]
+                : []
+        )
+    })
+
+    /**
+     * The program's current line, revealed at once in a model just shown and smoothly after; not
+     * while a Run is in flight, whose host reveals where it stops or waits for input. A line
+     * scrolled to as it moved kept a running program's editor scrolling the whole time.
+     */
     const currentLine = new CurrentLineReveal()
     $effect(() => {
         const scroll = monacoInstance?.editor.ScrollType
+        if (running) return
         if (activeModelKey && editor && scroll && highlightedLine >= 0)
             currentLine.reveal(
                 editor,

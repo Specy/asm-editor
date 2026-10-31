@@ -42,6 +42,26 @@
         { key: 'Z80', value: 'Z80' }
     ]
 
+    /** The simulator each Instruction set follows, for a course that teaches with that tool. */
+    const COMPATIBLE_WITH: Partial<Record<AvailableLanguages, string>> = {
+        M68K: 'EASy68K',
+        MIPS: 'MARS',
+        'RISC-V': 'RARS',
+        'RISC-V-64': 'RARS'
+    }
+
+    /** What an Instruction set can do that some others cannot, shown beside it in the picker. */
+    function languageTags(language: AvailableLanguages): string[] {
+        const tags: string[] = []
+        const compatible = COMPATIBLE_WITH[language]
+        if (compatible) tags.push(compatible)
+        //only an x86 Project runs Linux executables, so only it disassembles and decompiles them
+        if (language === 'X86') tags.push('Disassemble', 'Decompile')
+        //last, so the C/C++ tags line up at the right edge of the list
+        if (isCompilationTarget(language)) tags.push('C/C++')
+        return tags
+    }
+
     const LANGUAGE_STORAGE_KEY = 'asm-editor_new-project-isa'
     onMount(() => {
         try {
@@ -153,10 +173,15 @@
                 onChange={rememberLanguage}
             >
                 {#snippet item(option)}
+                    {@const tags = languageTags(option.value)}
                     <span class="language-option">
                         <span>{option.key}</span>
-                        {#if isCompilationTarget(option.value)}
-                            <span class="language-badge">C/C++ available</span>
+                        {#if tags.length}
+                            <span class="language-badges">
+                                {#each tags as tag (tag)}
+                                    <span class="language-badge">{tag}</span>
+                                {/each}
+                            </span>
                         {/if}
                     </span>
                 {/snippet}
@@ -225,8 +250,14 @@
         gap: 0.75rem;
     }
 
+    .language-badges {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.3rem;
+    }
+
     .language-badge {
-        flex-shrink: 0;
         padding: 0.15rem 0.45rem;
         border-radius: 0.3rem;
         background: color-mix(in srgb, var(--accent) 12%, transparent);
