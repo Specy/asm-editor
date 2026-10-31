@@ -52,8 +52,8 @@ export function resolveMappingPair<T extends MappingPane>(
             fileFingerprint(assembly.displayedFile) !== map.outputFingerprint
         )
             continue
-        //`<sim.h>` is the editor's, uploaded with the compilation and never a record's input, and
-        //what is shown of it is the text this session uploaded
+        //`<sim.h>` and the device headers are the editor's, uploaded with the compilation and never
+        //a record's input, and what is shown of them is the text this session uploaded
         if (isEnvironmentHeaderPath(source.displayedPath)) {
             if (source.displayedFile) return { source, assembly, map }
             continue

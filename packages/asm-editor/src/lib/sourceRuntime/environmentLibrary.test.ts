@@ -501,7 +501,10 @@ describe('loading <sim.h>', () => {
     })
 
     it('is a read-only source under @runtime/ with no Runtime ABI', () => {
-        expect(parseRuntimeSourcePath(ENVIRONMENT_HEADER_PATH)).toEqual({ kind: 'environment' })
+        expect(parseRuntimeSourcePath(ENVIRONMENT_HEADER_PATH)).toEqual({
+            kind: 'environment',
+            name: 'sim.h'
+        })
         expect(parseRuntimeSourcePath('@runtime/v1/src/stdio/puts.c')).toEqual({
             kind: 'library',
             abi: 'v1',

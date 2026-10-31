@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import { ProjectLanguageSession } from '#lib/languages/service/ProjectLanguageSession.ts'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
-import { compilerCapabilities } from '#lib/sourceCompilation/capabilities.ts'
+import { compilerCapabilities, X86_DEVICE_HEADERS } from '#lib/sourceCompilation/capabilities.ts'
 import { helpLanguage, resolveSourceHelpContext, setSourceHelpLanguage } from './context'
 
 vi.mock('#lib/languages/service/LanguageWorkerManager.ts', () => ({
@@ -123,7 +123,16 @@ describe('source help context', () => {
         expect(resolveSourceHelpContext(model('missing.c').value)).toBeUndefined()
     })
     it('gives x86 the hosted headers and declines library help on unsupported Targets', () => {
-        expect(compilerCapabilities('X86')?.headers).toEqual(compilerCapabilities('MIPS')?.headers)
+        //and its device headers besides, which no other Target has (ADR 0070)
+        const x86 = compilerCapabilities('X86')!.headers
+        const mips = compilerCapabilities('MIPS')!.headers
+        for (const language of ['c', 'cpp'] as const) {
+            expect(
+                x86[language].filter((header) => !X86_DEVICE_HEADERS.includes(header as never))
+            ).toEqual(mips[language])
+            expect(x86[language]).toEqual(expect.arrayContaining([...X86_DEVICE_HEADERS]))
+            expect(mips[language]).not.toContain('linux/fb.h')
+        }
         expect(compilerCapabilities('X86')?.headers.cpp).toContain('cstdio')
         expect(compilerCapabilities('M68K')).toBeUndefined()
         expect(compilerCapabilities('Z80')).toBeUndefined()
