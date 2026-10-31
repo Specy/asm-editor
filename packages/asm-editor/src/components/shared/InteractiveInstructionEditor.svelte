@@ -76,6 +76,7 @@
     import ScreenDisplayConfiguration from '#cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
     import type { MarsDisplayOrigin } from '#lib/languages/mars/marsDisplay.ts'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
+    import { X86_INPUT_INTERRUPT } from '#lib/languages/peripherals/x86Input.ts'
     import CollapsibleSection from '#cmp/specific/workbench/CollapsibleSection.svelte'
     import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
     import '#cmp/specific/workbench/workbench.css'
@@ -800,6 +801,9 @@
         keyboard={emulator.peripherals.keyboard}
         mouse={emulator.peripherals.mouse}
         x86Input={language === 'X86' ? emulator.peripherals.x86Input : undefined}
+        waitingFor={emulator.interrupt?.type === X86_INPUT_INTERRUPT
+            ? emulator.interrupt.message
+            : undefined}
         actualSizeZoom={configurableDisplay ? displayActualSizeZoom(display) : 1}
         style={`height: ${height}; flex: none;${headerless ? ' border-radius: 0;' : ''}`}
         {headerless}

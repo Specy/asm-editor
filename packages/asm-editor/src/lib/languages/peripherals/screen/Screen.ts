@@ -37,6 +37,17 @@ export type ScreenSize = {
     height: number
 }
 
+/**
+ * A page of an XRGB8888 framebuffer, x86's `/dev/fb0`: one little-endian `0x00RRGGBB` word a
+ * pixel, `lineLength` bytes from one line to the next.
+ */
+export type FramebufferPage = {
+    bytes: Uint8Array
+    width: number
+    height: number
+    lineLength: number
+}
+
 /** The shape of a cell-mapped display: how many character cells the mirrored memory holds. */
 export type ScreenCellGrid = {
     columns: number
@@ -263,8 +274,8 @@ export class Screen {
      * Registers a renderer and answers with the function that unregisters it. The scheduler asks for
      * the short slice budget only for a watched Screen
      * ([ADR 0007](../../../../../../../docs/adr/0007-generic-emulator-run-scheduling.md)): a Screen nobody
-     * paints — x86's, which has no panel, or any surface whose Screen toggle is closed — stays dirty
-     * for the whole run and would otherwise hold every program at the animation budget.
+     * paints, on any surface whose Screen toggle is closed, stays dirty for the whole run and would
+     * otherwise hold every program at the animation budget.
      */
     watch(): () => void {
         this.watchers++
@@ -686,6 +697,62 @@ export class Screen {
             image[index] = packColor(words[index])
         }
         this.markDrawn()
+    }
+
+    /**
+     * Shows a whole framebuffer page, or black for null: x86's catch-up, which re-reads the page
+     * the scanout shows because nothing marks what changed
+     * ([x86 devices](../../../../../../../docs/design/x86-devices.md), "Double buffering and the
+     * vsync wait"). What falls outside the image is cut off and what the page does not reach is
+     * black. Only a pixel that changed counts as drawing, so a page read again unchanged at every
+     * slice does not look like an animation to the scheduler.
+     */
+    syncFramebufferPage(page: FramebufferPage | null): void {
+        const image = imageWords(this.drawing)
+        const width = this._width
+        const height = this._height
+        let words: Uint32Array | null = null
+        let stride = 0
+        let columns = 0
+        let rows = 0
+        if (page && page.lineLength >= BYTES_PER_PIXEL) {
+            words = framebufferWords(page.bytes)
+            stride = Math.floor(page.lineLength / BYTES_PER_PIXEL)
+            columns = Math.max(0, Math.min(width, page.width, stride))
+            rows = Math.max(0, Math.min(height, page.height, Math.floor(words.length / stride)))
+        }
+        const black = packColor(BLACK)
+        let changed = false
+        for (let y = 0; y < height; y++) {
+            let target = y * width
+            const end = target + width
+            if (words && y < rows) {
+                let source = y * stride
+                const last = target + columns
+                for (; target < last; target++, source++) {
+                    const word = words[source]
+                    //packColor's little-endian branch, inlined: this runs for every pixel
+                    const pixel = LITTLE_ENDIAN
+                        ? (0xff000000 |
+                              ((word & 0xff) << 16) |
+                              (word & 0xff00) |
+                              ((word >>> 16) & 0xff)) >>>
+                          0
+                        : packColor(word)
+                    if (image[target] !== pixel) {
+                        image[target] = pixel
+                        changed = true
+                    }
+                }
+            }
+            for (; target < end; target++) {
+                if (image[target] !== black) {
+                    image[target] = black
+                    changed = true
+                }
+            }
+        }
+        if (changed) this.markDrawn()
     }
 
     // ----------------------------------------------------------------- undo
@@ -1361,6 +1428,21 @@ export class Screen {
  */
 function imageWords(image: Uint8ClampedArray): Uint32Array {
     return new Uint32Array(image.buffer, image.byteOffset, image.length / BYTES_PER_PIXEL)
+}
+
+/**
+ * A framebuffer's little-endian words as numbers: a view of the bytes where the host reads them in
+ * that order and they are aligned, which is every page a wasm heap holds on every host this runs
+ * on, and a copy otherwise.
+ */
+function framebufferWords(bytes: Uint8Array): Uint32Array {
+    const count = Math.floor(bytes.length / BYTES_PER_PIXEL)
+    if (LITTLE_ENDIAN && bytes.byteOffset % BYTES_PER_PIXEL === 0)
+        return new Uint32Array(bytes.buffer, bytes.byteOffset, count)
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    return Uint32Array.from({ length: count }, (_, index) =>
+        view.getUint32(index * BYTES_PER_PIXEL, true)
+    )
 }
 
 /** One opaque pixel of a color as the word `imageWords` stores, red first in memory order. */

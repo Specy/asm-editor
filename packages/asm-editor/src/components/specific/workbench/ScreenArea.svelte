@@ -9,6 +9,7 @@
     import ScreenDisplayConfiguration from '#cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
     import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
     import { displayActualSizeZoom } from '#lib/languages/programDisplay.ts'
+    import { X86_INPUT_INTERRUPT } from '#lib/languages/peripherals/x86Input.ts'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -36,6 +37,10 @@
     const x86Input = $derived(
         session.project.language === 'X86' ? emulator.peripherals.x86Input : undefined
     )
+    //an x86 program waiting for nothing but a key or the pointer
+    const waitingFor = $derived(
+        emulator.interrupt?.type === X86_INPUT_INTERRUPT ? emulator.interrupt.message : undefined
+    )
 </script>
 
 <ScreenRenderer
@@ -44,6 +49,7 @@
     keyboard={emulator.peripherals.keyboard}
     mouse={emulator.peripherals.mouse}
     {x86Input}
+    {waitingFor}
     actualSizeZoom={session.configurableDisplay ? displayActualSizeZoom(session.currentDisplay) : 1}
     {style}
     {headerless}

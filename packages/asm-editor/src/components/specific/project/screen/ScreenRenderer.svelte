@@ -40,6 +40,11 @@
         mouse: Mouse
         /** x86's input devices, which take the keys and the pointer in place of the Keyboard and Mouse. */
         x86Input?: X86Input
+        /**
+         * What the program waits for that only this Screen can give it, "Waiting for a key", while
+         * it waits for nothing else: the unfocused Screen asks to be clicked.
+         */
+        waitingFor?: string
         /** The environment this Screen belongs to, shown in the header. */
         name?: string
         style?: string
@@ -75,6 +80,7 @@
         keyboard,
         mouse,
         x86Input,
+        waitingFor,
         name = 'Screen',
         style = '',
         configuration,
@@ -92,9 +98,10 @@
     const pointer = $derived(x86Input ?? mouse)
     //where a focused Screen's input goes, which a learner who clicks the Screen and then types at a
     //`scanf` needs to know on x86 (ADR 0068), and how to get it back: an x86 program reads Escape
-    //like any key, so Shift+Tab releases it there, as in the Terminal's raw mode
-    const focusHint = $derived(
-        x86Input
+    //like any key, so Shift+Tab releases it there, as in the Terminal's raw mode. A program waiting
+    //for the Screen's input says so first
+    const focusHint = $derived.by(() => {
+        const hint = x86Input
             ? {
                   label: "click to send keys and the pointer to the program's input devices",
                   title: "Click to send keys and the pointer to the program's input devices, not to its standard input; Shift+Tab to release them"
@@ -103,7 +110,12 @@
                   label: 'click to send keyboard and mouse input to the program',
                   title: 'Click to send keyboard and mouse input to the program, Esc to release it'
               }
-    )
+        if (waitingFor === undefined) return hint
+        return {
+            label: `${waitingFor.toLowerCase()}, ${hint.label}`,
+            title: `${waitingFor}. ${hint.title}`
+        }
+    })
 
     let canvas: HTMLCanvasElement | undefined = $state()
     //the stage's content box rather than its clientWidth, which counts padding: the padding is the
@@ -120,6 +132,9 @@
     //whether the panel offers the drawing buffer at all
     let doubleBuffering = $state(untrack(() => screen.doubleBuffering))
     let focused = $state(false)
+    //a program waiting for what only this Screen can give it, while the Screen does not have the
+    //keyboard: the ring the focus would draw, dashed, asks for the click
+    const waiting = $derived(waitingFor !== undefined && !focused)
     //the floating window is another container for the same canvas, never a second panel: the
     //component that calls `screen.watch()` has to stay mounted exactly once, or the scheduler
     //counts two painters (ADR 0007)
@@ -517,6 +532,7 @@
             <canvas
                 bind:this={canvas}
                 class:focused
+                class:waiting
                 width={logicalWidth}
                 height={logicalHeight}
                 style="width: {logicalWidth * zoom}px; height: {logicalHeight * zoom}px;"
@@ -714,5 +730,11 @@
        focusing it moves nothing. */
     canvas.focused {
         outline: var(--focus-ring) solid var(--accent);
+    }
+
+    /* the same room, dashed: the program waits for a key or the pointer, and the Screen does not
+       have them yet */
+    canvas.waiting {
+        outline: var(--focus-ring) dashed var(--accent);
     }
 </style>

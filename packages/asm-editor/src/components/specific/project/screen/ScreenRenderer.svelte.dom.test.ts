@@ -44,7 +44,7 @@ afterEach(() => {
     document.body.replaceChildren()
 })
 
-function panel({ x86 = true } = {}) {
+function panel({ x86 = true, waitingFor }: { x86?: boolean; waitingFor?: string } = {}) {
     const peripherals = createInjectedPeripherals(x86 ? 'X86' : 'M68K')
     const reports: [X86InputDeviceId, X86InputEvent[]][] = []
     peripherals.x86Input.setSink((device, events) => reports.push([device, events]))
@@ -56,7 +56,8 @@ function panel({ x86 = true } = {}) {
             screen: peripherals.screen,
             keyboard: peripherals.keyboard,
             mouse: peripherals.mouse,
-            x86Input: x86 ? peripherals.x86Input : undefined
+            x86Input: x86 ? peripherals.x86Input : undefined,
+            waitingFor
         }
     })
     flushSync()
@@ -175,6 +176,17 @@ it('says where a focused Screen sends its input', () => {
     expect(other.canvas.title).toBe(
         'Click to send keyboard and mouse input to the program, Esc to release it'
     )
+})
+
+it('asks to be clicked while the program waits for a key, until it has the keyboard', () => {
+    const { canvas } = panel({ waitingFor: 'Waiting for a key' })
+    expect(canvas.title).toMatch(/^Waiting for a key\. Click to send keys and the pointer/)
+    expect(canvas.getAttribute('aria-label')).toMatch(/^Screen screen, waiting for a key, click/)
+    expect(canvas.classList.contains('waiting')).toBe(true)
+    canvas.focus()
+    flushSync()
+    expect(canvas.classList.contains('waiting')).toBe(false)
+    expect(canvas.classList.contains('focused')).toBe(true)
 })
 
 it('keeps the Keyboard and Mouse paths for every other Target', () => {

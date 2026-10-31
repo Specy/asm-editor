@@ -36,6 +36,13 @@ import type { MouseButton, MouseScreen } from './Mouse'
 /** The devices the host delivers events to; the guest's other input devices never receive any. */
 export type X86InputDeviceId = 'keyboard' | 'tablet'
 
+/**
+ * The type of the interrupt an x86 run shows while its program waits for nothing but the Screen's
+ * keys or pointer, as a read of standard input shows "Program input"; its message says what for,
+ * "Waiting for a key", and the Screen asks to be clicked.
+ */
+export const X86_INPUT_INTERRUPT = 'InputDevice'
+
 /** One input event as Linux's `struct input_event` has it, without its time. */
 export type X86InputEvent = { type: number; code: number; value: number }
 
@@ -137,9 +144,9 @@ export class X86Input {
      * Where reports go from now on, or nowhere with null. A new sink has seen nothing, so what was
      * held and where the pointer was are forgotten.
      *
-     * Integration seam (x86-devices-plan.md, M7): nothing sets a sink yet. The x86 adapter's will
-     * call the Core's `sendInputReport(device, events)`, and never during a Testcase, and the
-     * adapter calls `reset()` on its clear path, where the Keyboard and Mouse are reset.
+     * The x86 adapter's calls the Core's `sendInputReport(device, events)` once the program has
+     * started, and never during a Testcase; the clear path calls `reset()` with the Keyboard's and
+     * the Mouse's.
      */
     setSink(sink: X86InputSink | null): void {
         this.sink = sink
