@@ -88,14 +88,14 @@ it('sends keys to the input devices and not to the Keyboard on x86', () => {
     expect(peripherals.keyboard.lastKeys()).toEqual({ down: 0, up: 0 })
 })
 
-it('reports the pointer unfloored, scaled over the whole Screen', () => {
+it("reports the whole pixel under the pointer, scaled over the whole Screen as QEMU's tablet is", () => {
     const { canvas, reports } = panel()
-    //half a Screen pixel to the right of the middle, on a Screen shown at twice its size
+    //half a Screen pixel to the right of the middle, on a Screen shown at twice its size: pixel 160
     canvas.dispatchEvent(new MouseEvent('pointermove', { clientX: 321, clientY: 0, bubbles: true }))
     expect(reports[0]).toEqual([
         'tablet',
         [
-            { type: EV_ABS, code: ABS_X, value: Math.floor((160.5 * 32767) / 320) },
+            { type: EV_ABS, code: ABS_X, value: Math.floor((160 * 32767) / 320) },
             expect.objectContaining({ value: 0 })
         ]
     ])
