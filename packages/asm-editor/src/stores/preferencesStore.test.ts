@@ -61,6 +61,15 @@ describe('readStoredPreferences', () => {
         expect(values.debugTools.value).toBe('floating')
     })
 
+    it('keeps a hidden memory panel, which is 0 bytes', () => {
+        expect(
+            readStoredPreferences(JSON.stringify({ memoryPanelSize: 0 })).memoryPanelSize.value
+        ).toBe(0)
+        expect(
+            readStoredPreferences(JSON.stringify({ memoryPanelSize: 32 })).memoryPanelSize.value
+        ).toBe(128)
+    })
+
     it('starts the layout Preferences on cards and floating windows', () => {
         const values = defaultPreferences()
         expect(values.panelStyle).toMatchObject({

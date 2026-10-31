@@ -137,7 +137,7 @@ import { languageDiagnosticToDiagnostic } from '#lib/languages/service/diagnosti
 import { registerProjectNavigation } from '#lib/languages/service/navigation.ts'
 import { zeroBasedLineToMonaco } from '#lib/languages/service/monacoConversions.ts'
 import { navigationButtonStep, navigationKeyStep } from '#lib/monaco/editorLineActions.ts'
-import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import { DEFAULT_MEMORY_PANEL_SIZE, preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import {
     modShortcutKey,
     ShortcutAction,
@@ -575,6 +575,11 @@ export class WorkbenchSession {
 
     running = $state(false)
     building = $state(false)
+    /**
+     * Restart's Stop and Build are under way: the Debug session's column stays where it is, since
+     * the same Program comes back to it, rather than going away and coming back with the Build.
+     */
+    restarting = $state(false)
     compiling = $state(false)
     compilingGroupId = $state<string | undefined>()
     sourceDiagnostics = $state.raw<Diagnostic[]>([])
@@ -940,7 +945,10 @@ export class WorkbenchSession {
             this.pseudocode.dispose()
         })
         $effect(() => {
-            const pageSize = preferencesStore.values.memoryPanelSize.value
+            //a hidden panel keeps the default page, so Show in memory, and the strip that brings
+            //the panel back, find it in place
+            const pageSize =
+                preferencesStore.values.memoryPanelSize.value || DEFAULT_MEMORY_PANEL_SIZE
             untrack(() => this.emulator.setGlobalMemorySize(pageSize, pageSize / 16))
         })
 
@@ -4366,6 +4374,24 @@ export class WorkbenchSession {
         else this.clearExecution()
         this.running = false
         this.testcasesResult = []
+    }
+
+    /**
+     * Restart, in Run's place once the program has ended: Stop, then a Build of the Debug session's
+     * Program, so it waits at its start as after any Build, with its Breakpoints and Command line.
+     * The Files are read-only during the session, so the Build reads what the ended one read.
+     */
+    async restart() {
+        const entry = this.emulator.buildSources?.entry
+        if (entry === undefined || this.host.readonly) return
+        if (this.building || this.running || this.compiling) return
+        this.restarting = true
+        try {
+            this.stop()
+            await this.build(entry)
+        } finally {
+            this.restarting = false
+        }
     }
 
     /**

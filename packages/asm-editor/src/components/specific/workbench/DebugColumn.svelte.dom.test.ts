@@ -12,6 +12,7 @@ import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts
 import type { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
 import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
 import { createInjectedPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
+import { DEFAULT_MEMORY_PANEL_SIZE, preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 
 //the column reaches the projects store, which opens its IndexedDB because this project resolves
@@ -46,6 +47,7 @@ const disposers: (() => void)[] = []
 afterEach(() => {
     disposers.splice(0).forEach((dispose) => dispose())
     workbenchLayout.setDebugCollapsed(false)
+    preferencesStore.setValue('memoryPanelSize', DEFAULT_MEMORY_PANEL_SIZE)
     SECTIONS.forEach((id) => workbenchLayout.setCollapsed(id, id === 'debug:screen'))
     document.body.replaceChildren()
 })
@@ -115,7 +117,10 @@ function column({ language = 'X86', floating = true } = {}) {
     return {
         aside: () => target.querySelector<HTMLElement>('aside[aria-label="Debugger"]')!,
         collapse: () => target.querySelector<HTMLButtonElement>('button[aria-label="Collapse"]')!,
-        strip: () => target.querySelector<HTMLButtonElement>('button.strip-button')
+        strip: () => target.querySelector<HTMLButtonElement>('button.strip-button'),
+        memoryGrid: () => target.querySelector('.memory-grid'),
+        showMemory: () =>
+            target.querySelector<HTMLButtonElement>('button[aria-label="Show memory"]')
     }
 }
 
@@ -163,4 +168,35 @@ it('names the Screen and the Debug tools on the strip where it hides them too', 
     expect(debug.strip()!.textContent!.trim()).toBe(
         'Registers · Memory · Screen · Stack pointer · History · Call stack'
     )
+})
+
+it("stands a strip in memory's place while the Preferences hide it, which brings it back", () => {
+    preferencesStore.setValue('memoryPanelSize', 0)
+    const debug = column()
+    expect(debug.memoryGrid()).toBe(null)
+    const show = debug.showMemory()!
+    expect(show.textContent!.trim()).toBe('Memory')
+
+    show.click()
+    flushSync()
+    expect(preferencesStore.values.memoryPanelSize.value).toBe(DEFAULT_MEMORY_PANEL_SIZE)
+    expect(debug.showMemory()).toBe(null)
+    expect(debug.memoryGrid()).not.toBe(null)
+})
+
+it("keeps the column's Collapse on the strip, and leaves memory off what it then hides", async () => {
+    preferencesStore.setValue('memoryPanelSize', 0)
+    const debug = column()
+    debug.collapse().click()
+    flushSync()
+    await tick()
+    expect(workbenchLayout.values.debugCollapsed).toBe(true)
+    //memory hidden: the strip names what the column holds, the x86 Screen included
+    expect(debug.strip()!.textContent!.trim()).toBe('Registers · Screen')
+    expect(document.activeElement).toBe(debug.strip())
+
+    debug.strip()!.click()
+    flushSync()
+    await tick()
+    expect(document.activeElement).toBe(debug.collapse())
 })

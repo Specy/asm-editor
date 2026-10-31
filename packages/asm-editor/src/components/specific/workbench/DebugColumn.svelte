@@ -18,6 +18,9 @@
      * from the button at the end of memory's controls or by dragging its splitter, and the strip
      * opens it again at the width it had. Collapsed, the column is only hidden, so nothing in it
      * is built anew, and its width, the registers' included, takes no room.
+     *
+     * With the memory panel set to 0 bytes in the Preferences, a `MemoryStrip` stands in its place
+     * beside the registers, which take the width memory leaves, and holds the column's Collapse.
      */
     import { tick } from 'svelte'
     import Splitter from '#cmp/shared/layout/Splitter.svelte'
@@ -32,7 +35,9 @@
     import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
     import { LAYOUT_LIMITS, workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
+    import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import RegistersArea from './RegistersArea.svelte'
+    import MemoryStrip from './MemoryStrip.svelte'
     import ScreenArea from './ScreenArea.svelte'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
@@ -58,12 +63,13 @@
     const sectionsMode = $derived(!ui.floatingDebugTools)
     const hasLower = $derived(hasScreen || sectionsMode)
     const tools = $derived(debugTools(emulator.memory.tabs))
+    const memoryHidden = $derived(preferencesStore.values.memoryPanelSize.value === 0)
     //what the strip names: everything collapsing hides, which is the Screen in a Target that has
     //one and the Debug tools while they are sections here rather than windows of their own
     const stripLabel = $derived(
         [
             'Registers',
-            'Memory',
+            ...(memoryHidden ? [] : ['Memory']),
             ...(hasScreen ? ['Screen'] : []),
             ...(sectionsMode ? tools.map((tool) => tool.title) : [])
         ].join(' · ')
@@ -73,8 +79,13 @@
     //the register column is as wide as the CPU file asks at that grouping, so the memory beside it
     //does not slide sideways as tabs are picked; a single file has no tabs and asks for its content
     const registersWidth = $derived(registerColumnWidth(emulator.registerFiles, registersSize))
+    //with no memory beside them they fill the width the strip leaves, never less than that
     const registersStyle = $derived(
-        registersWidth ? `width: ${registersWidth}; min-width: ${registersWidth};` : ''
+        !registersWidth
+            ? ''
+            : memoryHidden
+              ? `min-width: ${registersWidth};`
+              : `width: ${registersWidth}; min-width: ${registersWidth};`
     )
     //the Screen's size and controls, which its section shows in its own header while it is open:
     //folded, the Screen is still built but has no size to fit and nothing to show
@@ -130,59 +141,74 @@
     aria-label="Debugger"
 >
     <div class="debug-content" class:tall={sectionsMode}>
-        <div class="debug-top" style={topStyle} bind:clientHeight={topHeight}>
+        <div
+            class="debug-top"
+            class:memory-hidden={memoryHidden}
+            style={topStyle}
+            bind:clientHeight={topHeight}
+        >
             <div class="card registers" style={registersStyle}>
                 <RegistersArea style="flex: 1;" bind:size={registersSize} />
             </div>
-            <div class="card memory">
-                <div class="memory-controls">
-                    <MemoryControls
-                        {emulator}
-                        buttonVar="secondary"
-                        systemSize={emulator.systemSize}
-                        bytesPerPage={emulator.memory.global.pageSize}
-                        memorySize={MEMORY_SIZE[language]}
-                        inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
-                        currentAddress={emulator.memory.global.address}
-                        onAddressChange={(address) => moveMemoryView(session, ui, address)}
-                        hideLabel={emulator.memory.global.rowSize < 16}
-                    />
-                    <button
-                        class="collapse-button"
-                        aria-expanded="true"
-                        aria-controls={columnId}
-                        aria-label="Collapse"
-                        {@attach tooltip('Collapse the registers and memory')}
-                        bind:this={collapseButton}
-                        onclick={() => setCollapsed(true)}
-                    >
-                        <FaAngleDoubleRight />
-                    </button>
-                </div>
-                <div class="memory-grid">
-                    <MemoryVisualiser
-                        memoryRegions={emulator?.memoryRegions}
-                        dataLabels={emulator?.dataLabels}
-                        readOnlyMemory={emulator?.readOnlyMemory}
-                        style="flex: 1 0 auto; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
-                        systemSize={emulator.systemSize}
-                        endianess={emulator.memory.global.endianess}
-                        memorySize={MEMORY_SIZE[language]}
-                        dense
-                        defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-                        bytesPerRow={emulator.memory.global.rowSize}
-                        pageSize={emulator.memory.global.pageSize}
-                        memory={emulator.memory.global.data}
-                        currentAddress={emulator.memory.global.address}
-                        sp={emulator.sp}
-                        callStackAddresses={makeColorizedLabels(emulator.callStack)}
-                        pokeable={session.pokeable}
-                        onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
-                        cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
-                        markedAddress={markedMemoryAddress(session, ui)}
+            {#if memoryHidden}
+                <div class="card memory">
+                    <MemoryStrip
+                        {columnId}
+                        onCollapse={() => setCollapsed(true)}
+                        bind:collapseButton
                     />
                 </div>
-            </div>
+            {:else}
+                <div class="card memory">
+                    <div class="memory-controls">
+                        <MemoryControls
+                            {emulator}
+                            buttonVar="secondary"
+                            systemSize={emulator.systemSize}
+                            bytesPerPage={emulator.memory.global.pageSize}
+                            memorySize={MEMORY_SIZE[language]}
+                            inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
+                            currentAddress={emulator.memory.global.address}
+                            onAddressChange={(address) => moveMemoryView(session, ui, address)}
+                            hideLabel={emulator.memory.global.rowSize < 16}
+                        />
+                        <button
+                            class="collapse-button"
+                            aria-expanded="true"
+                            aria-controls={columnId}
+                            aria-label="Collapse"
+                            {@attach tooltip('Collapse the registers and memory')}
+                            bind:this={collapseButton}
+                            onclick={() => setCollapsed(true)}
+                        >
+                            <FaAngleDoubleRight />
+                        </button>
+                    </div>
+                    <div class="memory-grid">
+                        <MemoryVisualiser
+                            memoryRegions={emulator?.memoryRegions}
+                            dataLabels={emulator?.dataLabels}
+                            readOnlyMemory={emulator?.readOnlyMemory}
+                            style="flex: 1 0 auto; border-bottom-left-radius: min(var(--panel-radius, 0.5rem), 0.2rem); border-bottom-right-radius: min(var(--panel-radius, 0.5rem), 0.2rem);"
+                            systemSize={emulator.systemSize}
+                            endianess={emulator.memory.global.endianess}
+                            memorySize={MEMORY_SIZE[language]}
+                            dense
+                            defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
+                            bytesPerRow={emulator.memory.global.rowSize}
+                            pageSize={emulator.memory.global.pageSize}
+                            memory={emulator.memory.global.data}
+                            currentAddress={emulator.memory.global.address}
+                            sp={emulator.sp}
+                            callStackAddresses={makeColorizedLabels(emulator.callStack)}
+                            pokeable={session.pokeable}
+                            onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
+                            cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
+                            markedAddress={markedMemoryAddress(session, ui)}
+                        />
+                    </div>
+                </div>
+            {/if}
         </div>
         {#if hasLower}
             <Splitter
@@ -367,6 +393,11 @@
         grid-template-columns: auto minmax(0, 1fr);
         column-gap: var(--wb-gap);
         min-height: 0;
+
+        /* memory's strip only as wide as itself, the registers taking the rest */
+        &.memory-hidden {
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
     }
 
     .card {

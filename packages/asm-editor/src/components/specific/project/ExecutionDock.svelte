@@ -88,7 +88,8 @@
     /**
      * The execution dock: Build, and once built Stop, Run, Undo and Step, with Test and the caller's
      * own actions at the far end, and after them, in either case, the view switch of a pane that
-     * shows a File in more than one way. Run turns into Pause while the program runs. It only draws the
+     * shows a File in more than one way. Run turns into Pause while the program runs, and into
+     * Restart once it has ended, when the host offers one. It only draws the
      * controls and says which was pressed; what a press does, and when the program counts as built,
      * is the host's: the Workbench's `ExecutionControls` and the documentation's Playground. It is a
      * bar with nothing of its own to draw, laid over the bottom of an editor or stuck under it,
@@ -104,6 +105,7 @@
     import FaStepForward from '~icons/fa-solid/step-forward'
     import FaRegClock from '~icons/fa-regular/clock'
     import FaStop from '~icons/fa-solid/stop'
+    import FaFastBackward from '~icons/fa-solid/fast-backward'
     import FaUndo from '~icons/fa-solid/undo'
     import FaFlask from '~icons/fa-solid/flask'
     import FaCode from '~icons/fa-solid/code'
@@ -120,6 +122,8 @@
         buildDisabled: boolean
         /** The program cannot go on: it ended, or waits on input. */
         executionDisabled: boolean
+        /** The program has ended: Restart takes Run's place, when there is `onRestart`. */
+        ended?: boolean
         undoDisabled?: boolean
         canUndo: boolean
         hasTests?: boolean
@@ -150,6 +154,8 @@
         onBuild: () => void
         onStop: () => void
         onRun: () => void
+        /** Back to the program's start, as a new Build of it would leave it. */
+        onRestart?: () => void
         onPause: () => void
         onUndo: () => void
         onStep: () => void
@@ -162,6 +168,7 @@
         running,
         buildDisabled,
         executionDisabled,
+        ended = false,
         undoDisabled = false,
         canUndo,
         hasTests = false,
@@ -180,6 +187,7 @@
         onBuild,
         onStop,
         onRun,
+        onRestart,
         onPause,
         onUndo,
         onStep,
@@ -195,11 +203,25 @@
     const switchOnly = $derived(!!views && !beforeViews && !hasEnd)
     const progress = $derived(building ? buildProgress : undefined)
 
+    /** The program has ended and the host offers Restart, which takes Run's place. */
+    const restartable = $derived(ended && !running && !!onRestart)
+    /**
+     * What the button in Run's place is for now. It holds each of its faces, the ones not shown
+     * keeping their room, so it is as wide as the widest and Undo and Step do not move as it turns
+     * from Run to Pause to Restart.
+     */
+    const runFace = $derived(restartable ? 'Restart' : running ? 'Pause' : 'Run')
+    const runFaces = $derived([
+        { word: 'Run', icon: FaPlay },
+        { word: 'Pause', icon: FaPause },
+        ...(onRestart ? [{ word: 'Restart', icon: FaFastBackward }] : [])
+    ])
+
     /**
      * Hides labels while the dock is too narrow for them and only then, after the widths below have
      * taken away what they foresee: the caller's actions' first, whose words no width can know in
-     * advance, then the rest of the far end's, then every one. A button without its label is still named by
-     * its tooltip and to a screen reader. It measures on every change of the dock's size and of what
+     * advance, then the rest of the far end's, then the room Run keeps for its other faces, then
+     * every one. A button without its label is still named by its tooltip and to a screen reader. It measures on every change of the dock's size and of what
      * it holds, all at once, so a cut label is never drawn and then put right. The step is an
      * attribute rather than a class, which Svelte would write over with the class directives.
      */
@@ -208,7 +230,7 @@
         if (typeof ResizeObserver === 'undefined') return
         const fit = () => {
             delete dock.dataset.squeeze
-            for (const step of ['actions', 'end', 'all']) {
+            for (const step of ['actions', 'end', 'run', 'all']) {
                 if (dock.scrollWidth <= dock.clientWidth) return
                 dock.dataset.squeeze = step
             }
@@ -358,24 +380,35 @@
                 </Icon>
                 <span class="label">Stop</span>
             </button>
+            <!-- Restart is plain, not the accent: once the program has ended it is one choice
+                 beside Undo -->
             <button
                 type="button"
-                class="tool primary"
-                onclick={() => (running ? onPause() : onRun())}
-                disabled={executionDisabled || building}
+                class="tool run"
+                class:primary={!restartable}
+                onclick={() => (restartable ? onRestart?.() : running ? onPause() : onRun())}
+                disabled={restartable ? buildDisabled || building : executionDisabled || building}
                 {@attach tooltip(
-                    running ? 'Pause the program' : 'Run to the end or the next breakpoint'
+                    restartable
+                        ? 'Go back to the start'
+                        : running
+                          ? 'Pause the program'
+                          : 'Run to the end or the next breakpoint'
                 )}
-                aria-label={running ? 'Pause' : 'Run'}
+                aria-label={runFace}
             >
-                <Icon size={0.8}>
-                    {#if running}
-                        <FaPause />
-                    {:else}
-                        <FaPlay />
-                    {/if}
-                </Icon>
-                <span class="label">{running ? 'Pause' : 'Run'}</span>
+                {#each runFaces as face (face.word)}
+                    <span
+                        class="run-face"
+                        class:reserved={face.word !== runFace}
+                        aria-hidden={face.word !== runFace}
+                    >
+                        <Icon size={0.8}>
+                            <face.icon />
+                        </Icon>
+                        <span class="label">{face.word}</span>
+                    </span>
+                {/each}
             </button>
             <span class="divider" aria-hidden="true"></span>
             <button
@@ -591,11 +624,30 @@
         margin-left: 0.45rem;
     }
 
-    /* the labels `fitLabels` takes away, as the dock is measured too narrow for them */
+    /* the labels `fitLabels` takes away, as the dock is measured too narrow for them, and before
+       the last of them the room Run keeps for its other faces */
     .execution-controls:global([data-squeeze='actions']) .action .label,
     .execution-controls:global([data-squeeze='end']) .end .label,
+    .execution-controls:global([data-squeeze='run']) .end .label,
+    .execution-controls:global([data-squeeze='run']) .run-face.reserved,
     .execution-controls:global([data-squeeze='all']) .label {
         display: none;
+    }
+
+    /* Run, Pause and Restart in one place, the face shown centred in the room of the widest */
+    .run {
+        display: grid;
+        place-items: center;
+    }
+
+    .run-face {
+        grid-area: 1 / 1;
+        display: flex;
+        align-items: center;
+
+        &.reserved {
+            visibility: hidden;
+        }
     }
 
     /* Build while it says what it waits for: busy rather than unavailable, so its words stay

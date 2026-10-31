@@ -292,9 +292,11 @@
             : undefined
     )
     const built = $derived(hasBuiltProgram(emulator))
+    /** Restart's Stop and Build are under way, which keep the panels where they are. */
+    let restarting = $state(false)
     //with `hideUntilBuilt` the machine's panels have nothing to say before a Build, so they leave
     //the room to the code until there is a program in them, and leave again on Stop
-    const revealed = $derived(!hideUntilBuilt || built)
+    const revealed = $derived(!hideUntilBuilt || built || restarting)
     let showMemory = $derived((showMemoryProp ?? true) && revealed)
     let showFlags = $derived((showFlagsProp ?? true) && revealed)
     let showRegisters = $derived((showRegistersProp ?? true) && revealed)
@@ -559,6 +561,18 @@
         }
     }
 
+    /** Restart, in Run's place once the program has ended: Stop, then Build, as the two buttons do. */
+    async function restartProgram() {
+        if (building || running || compiling) return
+        restarting = true
+        try {
+            stopProgram()
+            await buildCode()
+        } finally {
+            restarting = false
+        }
+    }
+
     //an embedded playground carrying testcases is a lecture's Exercise, and the reader checks it
     //by pressing Test, so there the button stays next to the Testcases panel
     const offersTest = $derived(
@@ -658,6 +672,7 @@
                 {compilation}
                 compileOnly={selectedIsSource}
                 executionDisabled={emulator.terminated || emulator.interrupt !== undefined}
+                ended={emulator.terminated}
                 canUndo={emulator.canUndo}
                 sound={sound.value}
                 hasTests={offersTest}
@@ -665,6 +680,7 @@
                 onBuild={buildCode}
                 onStop={stopProgram}
                 onRun={startRun}
+                onRestart={restartProgram}
                 onPause={() => emulator.pause()}
                 onUndo={undoStep}
                 onStep={stepCode}
@@ -904,7 +920,7 @@
                         {#if showRegsColumn}
                             {@render regsColumn(true)}
                         {/if}
-                        {#if showMemory && (!children || running || built)}
+                        {#if showMemory && (!children || running || built || restarting)}
                             {@render memoryPanel(true)}
                         {:else if !running && children}
                             <Card

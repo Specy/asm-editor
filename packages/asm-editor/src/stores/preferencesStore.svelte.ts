@@ -33,7 +33,10 @@ export type PanelStyle = 'cards' | 'lines'
 /** The Debug tools as draggable windows, or as sections of the debug column. */
 export type DebugToolsPlacement = 'floating' | 'sections'
 
-export type MemoryPanelSize = 256 | 128 | 64
+/** The bytes the memory panel shows in a page; 0 hides it behind a strip beside the registers. */
+export type MemoryPanelSize = 256 | 128 | 64 | 0
+/** The memory panel's size left to itself, which its strip brings it back at. */
+export const DEFAULT_MEMORY_PANEL_SIZE: MemoryPanelSize = 128
 
 export type PreferenceValues = {
     useDecimalAsDefault: PreferenceValue<boolean>
@@ -131,11 +134,12 @@ export function defaultPreferences(): PreferenceValues {
         ),
         memoryPanelSize: createChoice<MemoryPanelSize>(
             'Memory panel size',
-            128,
+            DEFAULT_MEMORY_PANEL_SIZE,
             [
                 { value: 256, label: '256 bytes' },
                 { value: 128, label: '128 bytes (default)' },
-                { value: 64, label: '64 bytes' }
+                { value: 64, label: '64 bytes' },
+                { value: 0, label: '0 bytes (hidden)' }
             ],
             'layout'
         )

@@ -1,8 +1,9 @@
 <script lang="ts">
     /**
      * The Workbench's execution dock: Build, and once built Stop, Run, Undo and Step, with Test at
-     * the far end in both. The Workbench has no mode switch, the Build becoming Stop in its place is
-     * what says a Debug session is on ([the design record](../../../../../../docs/design/workbench.md)).
+     * the far end in both. Once the program has ended, Restart takes Run's place. The Workbench has
+     * no mode switch, the Build becoming Stop in its place is what says a Debug session is on
+     * ([the design record](../../../../../../docs/design/workbench.md)).
      * Build and Test act on the Program whose Entry file the pane shows, and select it; a pane
      * showing any other File, a C or C++ one included, has neither, only the session's controls
      * once one is on ([programs.md](../../../../../../docs/design/programs.md), decision 5). The
@@ -210,6 +211,7 @@
     running={session.running}
     buildDisabled={session.buildDisabledFor(program)}
     executionDisabled={session.executionDisabled}
+    ended={emulator.terminated}
     undoDisabled={session.undoDisabled}
     canUndo={emulator.canUndo}
     sound={sound.value}
@@ -217,6 +219,7 @@
     onBuild={() => session.build(program, pane)}
     onStop={() => session.stop()}
     onRun={() => session.run()}
+    onRestart={() => void session.restart()}
     onPause={() => session.pause()}
     onUndo={() => session.undo()}
     onStep={() => session.step()}

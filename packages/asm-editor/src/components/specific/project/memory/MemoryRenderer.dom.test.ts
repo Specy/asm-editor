@@ -301,6 +301,24 @@ describe('memory that takes no Pokes', () => {
     })
 })
 
+describe("a byte's cell", () => {
+    it('writes a byte in hex as two digits', () => {
+        const panel = render()
+        //`01` and not `1`, so that `11 01` reads as the word `1101`
+        expect(panel.cells().map((cell) => cell.textContent?.trim())).toEqual([
+            '11',
+            '01',
+            '02',
+            '33',
+            '44',
+            '55',
+            '66',
+            '77'
+        ])
+        panel.close()
+    })
+})
+
 describe('bytes the Core could not read', () => {
     it('draws them without a value and says why under the page', () => {
         const panel = render({ unreadable: [0, 0, 0, 0, 0, 0, 1, 1] })
