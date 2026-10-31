@@ -135,9 +135,11 @@ with no sleep anywhere.
 
 Unless asked, the buffer holds several seconds of sound, and every note would be heard seconds
 after it was written. `SNDCTL_DSP_SETFRAGMENT`, made right after `open`, asks for a small one.
-Its value is `0xMMMMSSSS`: `0x0004000B` asks for 4 **fragments** of 2¹¹, 2,048, bytes, about 0.2
-seconds here. Samples reach the speakers a whole fragment at a time, so at the end
-`SNDCTL_DSP_SYNC` sends the last, unfinished fragment and waits until everything has played.
+Its value is `0xMMMMSSSS`: `0x0004000B` asks for 4 **fragments** of 2¹¹, 2,048, bytes. The device
+chooses the size in the end, from the format and the rate set after it: here it gives 4 fragments
+of 4,096 bytes, about 0.37 seconds of sound, as `SNDCTL_DSP_GETBLKSIZE` would report. Samples reach
+the speakers a whole fragment at a time, so at the end `SNDCTL_DSP_SYNC` sends the last, unfinished
+fragment and waits until everything has played.
 
 ## Computing the wave
 

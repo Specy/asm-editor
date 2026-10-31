@@ -111,7 +111,8 @@ here separate the three phrases.
 Each note's frequency is the one a piano's key has, rounded to whole Hz: 440 Hz is the A above
 middle C, and each semitone up multiplies the frequency by about 1.06. The speaker cannot play every
 frequency exactly: it counts 1,193,182 ticks a second and flips the wave every so many ticks, so it
-plays 1193182 ÷ ⌊1193182 ÷ f⌋, 659.2 Hz for 659. Only 20 to 32,767 Hz sound at all.
+plays 1193182 ÷ ⌊1193182 ÷ f⌋, 659.2 Hz for 659. Only frequencies above 20 Hz and below 32,767 Hz
+sound at all.
 
 When the program ends the speaker goes silent, even if the program forgot to stop it. Undo puts the
 tone back as it was before the undone instruction, starting it again if it was sounding.

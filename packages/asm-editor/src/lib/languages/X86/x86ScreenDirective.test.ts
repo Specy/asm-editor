@@ -30,9 +30,10 @@ describe('the x86 Display configuration', () => {
         expect(X86_DISPLAY_SIZE_CHOICES).toContainEqual(DEFAULT_X86_DISPLAY)
     })
 
-    it('rounds a width to the nearest multiple of 8, as GTF does, within 8 to 1024', () => {
+    it('rounds a width down to a multiple of 8, as CVT does, within 8 to 1024', () => {
         expect(snapX86DisplayWidth(322, 0)).toBe(320)
-        expect(snapX86DisplayWidth(324, 0)).toBe(328)
+        expect(snapX86DisplayWidth(324, 0)).toBe(320)
+        expect(snapX86DisplayWidth(327.9, 0)).toBe(320)
         expect(snapX86DisplayWidth(3, 0)).toBe(8)
         expect(snapX86DisplayWidth(5000, 0)).toBe(1024)
         expect(snapX86DisplayWidth(Number.NaN, 64)).toBe(64)

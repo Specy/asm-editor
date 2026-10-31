@@ -74,8 +74,8 @@ export type TerminalOptions = {
     enter?: TerminalEnter
     /**
      * Whether the Terminal is a serial line, x86's `ttyS0`: its output moves a cursor, `\r`
-     * overwriting the line and `\b` stepping back (`SerialTranscript`). Off, the transcript is the
-     * text as written.
+     * overwriting the line and `\b` stepping back (`SerialTranscript`), unless the run's output
+     * goes through as written (`setSerialOutput`). Off, the transcript is the text as written.
      */
     serialLine?: boolean
 }
@@ -320,6 +320,8 @@ export class Terminal {
     private _output = $state('')
     /** The serial line's screen, which `_output` follows, or null for a Terminal that is none. */
     private readonly serial: SerialTranscript | null
+    /** Whether this run's output goes through as written, as a pipe's does (`setSerialOutput`). */
+    private pipeOutput = false
     /** The program's termios, null before a program reports one and on the other Targets. */
     private _lineMode = $state.raw<TerminalLineMode | null>(null)
     private keySink: TerminalKeySink | null = null
@@ -433,9 +435,10 @@ export class Terminal {
     }
 
     prepend(text: string): void {
-        if (this.serial) {
-            this.serial.prepend(text)
-            this._output = this.serial.text
+        const serial = this.serialLine
+        if (serial) {
+            serial.prepend(text)
+            this._output = serial.text
             return
         }
         this._output = text + this._output
@@ -461,6 +464,7 @@ export class Terminal {
     clear(): void {
         this.cancelPendingInput()
         this.history.clear()
+        this.pipeOutput = false
         this.clearOutput()
         this.lineBuffer = new Uint8Array(0)
         this.typedInput.clear()
@@ -474,7 +478,7 @@ export class Terminal {
      * is, the last line's text kept first for Undo when the change may overwrite it.
      */
     private append(text: string): void {
-        const serial = this.serial
+        const serial = this.serialLine
         if (serial === null) {
             this._output += text
             return
@@ -492,7 +496,7 @@ export class Terminal {
      * itself goes with `length`, and after a clear nothing on screen predates it.
      */
     private keepEditedLine(): void {
-        const serial = this.serial
+        const serial = this.serialLine
         const record = this.journal()
         if (!serial || !record || record.edited || record.cleared !== undefined) return
         const start = serial.lineStart
@@ -549,8 +553,8 @@ export class Terminal {
             length: this._output.length,
             held: this.decoder.held(),
             lineBuffer: this.lineBuffer,
-            cursor: this.serial?.cursor ?? this._output.length,
-            escape: this.serial?.pendingEscape ?? ''
+            cursor: this.serialLine?.cursor ?? this._output.length,
+            escape: this.serialLine?.pendingEscape ?? ''
         }))
     }
 
@@ -592,18 +596,55 @@ export class Terminal {
     }
 
     /**
+     * Whether the run's output moves the serial line's cursor, as in an interactive run, or goes
+     * through as written, `\r` and `\b` included, as a Testcase's does, whose output compares as
+     * the program wrote it ([x86-devices.md](../../../../../../docs/design/x86-devices.md), "The
+     * Terminal's modes"). The x86 adapter sets it at the start of each run, with the Core's own
+     * processing of the output; `clear` turns the serial line back on. Nothing on a Terminal that
+     * is no serial line.
+     */
+    setSerialOutput(serial: boolean): void {
+        if (this.pipeOutput === !serial) return
+        this.pipeOutput = !serial
+        //what was written as a pipe writes it is where the serial line takes up
+        if (serial) this.serial?.reset(this._output)
+    }
+
+    /**
      * The program's termios, which the Line discipline follows: what the x86 adapter hands over at
      * the start of each run, after `clear`, and whenever the program changes it. Null is no Linux
      * program, the canonical line reads every other Target has; `clear` sets it.
      *
-     * Turning raw mode on hands what was typed ahead and not read yet to the key sink, as Linux
-     * makes a partly typed line readable when `ICANON` goes off. A canonical read still waiting is
-     * the adapter's to end: in raw mode the keys no longer reach it.
+     * Once raw mode is on, the keys typed in the console go to the key sink, and what was typed for
+     * the line reads before it waits for `handOverTypedInput`. A canonical read still waiting is the
+     * adapter's to end: in raw mode the keys no longer reach it.
      */
     setLineMode(mode: TerminalLineMode | null): void {
         this._lineMode = mode === null ? null : { ...mode }
         this.refreshRawRead()
-        if (!this.rawInput || !this.typedInput.hasTypedInput()) return
+    }
+
+    /**
+     * Hands what was typed for the line reads and not read yet to the key sink, now that raw mode
+     * takes the keys, as Linux makes a partly typed line readable when `ICANON` goes off: first the
+     * line a read is editing, which was echoed as it was typed, then what was typed ahead, echoed now
+     * as raw mode echoes it. Nothing outside raw mode.
+     *
+     * The adapter calls it once raw mode has come on and no call into its Core is running, so the
+     * keys reach the Core's queue, and their echo the transcript, between instructions rather than
+     * inside the system call or the Undo that changed the termios; then it lets go of the line read.
+     */
+    handOverTypedInput(): void {
+        const sink = this.keySink
+        if (!this.rawInput || sink === null) return
+        const read = this.activeRead
+        if (read && read.queue === this.typedInput && read.line.length > 0) {
+            const line = read.line.join('')
+            read.line = []
+            this.publish(read)
+            sink(encodeText(line, this.encoding))
+        }
+        if (!this.typedInput.hasTypedInput()) return
         let typed = ''
         while (this.typedInput.hasTypedInput()) {
             typed += rawOfQueued(this.typedInput.readCharacter() ?? '')
@@ -1111,7 +1152,7 @@ export class Terminal {
      */
     private eraseEcho(read: ActiveRead, erased: string): void {
         this.journal()
-        const serial = this.serial
+        const serial = this.serialLine
         if (serial) {
             //a serial line's echo may have overwritten the line, where taking it back writes a space
             this.keepEditedLine()
@@ -1199,6 +1240,11 @@ export class Terminal {
             }
         }
         if (this.activeRead === null) this._pendingRead = this.rawRead
+    }
+
+    /** The serial line's screen while it shows the output, null while it goes through as written. */
+    private get serialLine(): SerialTranscript | null {
+        return this.pipeOutput ? null : this.serial
     }
 
     /** The queue the reads take from: the Screen keyboard in graphical use, else the Terminal's. */

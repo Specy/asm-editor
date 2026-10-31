@@ -6,8 +6,8 @@
  * fbdev has no unit size, since scaling up is the Screen's zoom, which a program cannot see, and
  * `mmap` decides where the pixels live, so there is no base address either.
  *
- * The guest builds `video=` as a GTF mode, which rounds the width to the nearest multiple of 8, so
- * widths here are multiples of 8, as the menu's sizes and its Custom field's are. Stored in the
+ * The guest builds `video=` as a CVT mode (`video=320x240M`), which rounds the width down to a
+ * multiple of 8, so widths here are multiples of 8, as the menu's sizes and its Custom field's are. Stored in the
  * Program's `display` beside MARS's five fields (`marsDisplay.ts`), the user's choice unless the
  * Entry file's `@screen` comment names a size (`x86ScreenDirective.ts`).
  *
@@ -19,12 +19,9 @@ export type X86Display = { width: number; height: number }
 /** The size the guest boots with, small enough that a learner's first animation runs smoothly. */
 export const DEFAULT_X86_DISPLAY: Readonly<X86Display> = { width: 320, height: 240 }
 
-/** GTF's character cell: every width is a multiple of it. */
+/** CVT's character cell: every width is a multiple of it. */
 export const X86_DISPLAY_WIDTH_STEP = 8
-/**
- * The sizes the Display takes, in pixels. The smallest is the design's placeholder until the pinned
- * guest's boot gives the smallest `video=` it accepts.
- */
+/** The sizes the Display takes, in pixels: the pinned guest boots at sizes down to 8×8. */
 export const X86_DISPLAY_SIZE_MIN = 8
 export const X86_DISPLAY_SIZE_MAX = 1024
 
@@ -46,12 +43,12 @@ export const X86_DISPLAY_SIZE_CHOICES: readonly Readonly<X86Display>[] = [
 ]
 
 /**
- * A width the Display takes, the nearest one to `value` as GTF rounds a width, within the range;
- * `fallback` for a non-number.
+ * A width the Display takes: `value` rounded down to a multiple of 8, as CVT rounds a width, within
+ * the range; `fallback` for a non-number.
  */
 export function snapX86DisplayWidth(value: number | undefined, fallback: number): number {
     if (value === undefined || !Number.isFinite(value)) return fallback
-    const snapped = Math.round(value / X86_DISPLAY_WIDTH_STEP) * X86_DISPLAY_WIDTH_STEP
+    const snapped = Math.floor(value / X86_DISPLAY_WIDTH_STEP) * X86_DISPLAY_WIDTH_STEP
     return Math.min(X86_DISPLAY_SIZE_MAX, Math.max(X86_DISPLAY_SIZE_MIN, snapped))
 }
 

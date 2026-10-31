@@ -49,7 +49,10 @@ afterEach(() => {
 function panel({ x86 = true, waitingFor }: { x86?: boolean; waitingFor?: string } = {}) {
     const peripherals = createInjectedPeripherals(x86 ? 'X86' : 'M68K')
     const reports: [X86InputDeviceId, X86InputEvent[]][] = []
-    peripherals.x86Input.setSink((device, events) => reports.push([device, events]))
+    peripherals.x86Input.setSink((device, events) => {
+        reports.push([device, events])
+        return true
+    })
     const target = document.createElement('div')
     document.body.append(target)
     const app = mount(ScreenRenderer, {

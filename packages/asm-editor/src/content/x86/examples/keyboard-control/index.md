@@ -26,6 +26,7 @@ section .data
 x:        dd 150                    ; the square's top-left corner
 y:        dd 110
 page:     dd 1                      ; the page being drawn, the one not shown
+flip:     dd 1                      ; 1 to change pages each frame, 0 with only one
 drawn_x:  dd 0, 0                   ; where each page last had the square:
 drawn_y:  dd 0, 0                   ; nowhere yet, and erasing there changes nothing
 left:     db 0                      ; 1 while that arrow is held
@@ -78,6 +79,13 @@ _start:
     mov esi, FBIOGET_VSCREENINFO
     lea rdx, [var]
     syscall
+    mov eax, [var + fb_var_screeninfo.yres]   ; is there room for a second page?
+    add eax, eax
+    cmp [var + fb_var_screeninfo.yres_virtual], eax
+    jae two_pages
+    mov dword [page], 0             ; no: draw every frame on the page shown
+    mov dword [flip], 0
+two_pages:
     mov eax, SYS_ioctl
     mov rdi, r12
     mov esi, FBIOGET_FSCREENINFO
@@ -95,7 +103,7 @@ _start:
     jae fail
     mov [pixels], rax
     mov r13d, [fix + fb_fix_screeninfo.line_length]
-    mov rbx, rax                    ; paint both pages
+    mov rbx, rax                    ; paint every page
     xor edi, edi
     xor esi, esi
     mov edx, [var + fb_var_screeninfo.xres]
@@ -220,7 +228,8 @@ present:
     mov esi, FBIOPAN_DISPLAY
     lea rdx, [var]
     syscall
-    xor dword [page], 1
+    mov eax, [flip]                 ; the next frame goes on the other page
+    xor [page], eax
 
     dec r15d
     jnz frame
@@ -268,7 +277,8 @@ the edge.
 
 The drawing is the [bouncing ball's](/learn/courses/x86/examples/bouncing-ball): each frame erases
 the square on the page that is not shown, where that page last had it, draws it at its new place
-and pans to that page, the pan waiting for the vertical blank. A page that already has the square
+and pans to that page, the pan waiting for the vertical blank. As there, the program checks that the
+framebuffer has room for two pages, and draws on the page shown when it has one. A page that already has the square
 where it is now needs nothing drawn, so while no arrow is held a frame is only the pan.
 
 `r15` counts the frames left before the program gives up. Every key event sets it back to 600, ten
@@ -311,12 +321,13 @@ int main(void) {
     uint8_t *pixels = mmap(NULL, fix.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb, 0);
     if (pixels == MAP_FAILED) return 1;
     line_length = fix.line_length;
-    fill_rect(pixels, 0, 0, var.xres, var.yres_virtual, BACKGROUND); /* both pages */
+    fill_rect(pixels, 0, 0, var.xres, var.yres_virtual, BACKGROUND); /* every page */
+    unsigned pages = var.yres_virtual >= 2 * var.yres ? 2 : 1;
 
     int x = 150, y = 110;
     int drawn_x[2] = { 0, 0 }, drawn_y[2] = { 0, 0 }; /* nowhere yet: erasing there changes nothing */
     int left = 0, right = 0, up = 0, down = 0; /* 1 while that arrow is held */
-    unsigned page = 1;
+    unsigned page = pages - 1; /* the page that is not shown, when there are two */
     for (int idle = IDLE; idle > 0; idle--) {
         struct input_event event;
         while (read(keyboard, &event, sizeof event) == sizeof event) {
@@ -346,7 +357,7 @@ int main(void) {
         }
         var.yoffset = page * var.yres;
         ioctl(fb, FBIOPAN_DISPLAY, &var); /* waits for the vertical blank */
-        page = 1 - page;
+        page = (page + 1) % pages;
     }
     return 0;
 }
@@ -354,8 +365,10 @@ int main(void) {
 
 `read` returns the number of bytes it read, or -1 with `errno` set to `EAGAIN` when there is no
 event, which ends the inner loop. The headers are the ones a C program includes on Linux, so this
-program builds unchanged there too, and runs on a PC whose keyboard has that name, for a user
-allowed to read it.
+program builds unchanged there too. It runs as it does here on a machine set up like this one, a
+Linux virtual machine whose console is a serial line, for a user allowed to read the keyboard. On a
+PC's own screen the text console or the desktop draws on the framebuffer too, and a desktop also
+takes the keyboard.
 
 ## Try it
 

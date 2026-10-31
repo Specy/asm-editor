@@ -159,7 +159,7 @@
         x86Fields.width?.select()
     }
 
-    /** A typed size, brought to one the framebuffer takes: a width to the nearest multiple of 8. */
+    /** A typed size, brought to one the framebuffer takes: a width down to a multiple of 8. */
     function commitX86(field: X86Field, input: HTMLInputElement) {
         x86CustomPicked = true
         const typed = input.value.trim() === '' ? Number.NaN : Number(input.value)

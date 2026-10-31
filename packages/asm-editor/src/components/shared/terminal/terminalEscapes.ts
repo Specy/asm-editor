@@ -42,6 +42,21 @@ export const PLAIN_STYLE: TerminalStyle = { foreground: null, background: null, 
 const ESCAPE = '\x1b'
 
 /**
+ * A parser's state, which `restore` takes it back to. Kept cheaply: what is on screen only grows at
+ * its end, its last span replaced as text is added to it, or starts again from nothing at a clear,
+ * so the spans up to the mark are the array as it was, cut back to its length with its last span
+ * put back.
+ */
+export type TerminalParserMark = {
+    readonly committed: TerminalSpan[]
+    readonly length: number
+    readonly last: TerminalSpan | undefined
+    readonly style: TerminalStyle
+    readonly pending: string
+    readonly homed: boolean
+}
+
+/**
  * Reads output as it streams: `feed` takes what was written since, and a sequence split between two
  * writes is held back until it is complete. `spans` are what is on screen since the last clear.
  */
@@ -72,6 +87,30 @@ export class TerminalEscapeParser {
             this.apply(input.slice(escape, end))
             index = end
         }
+    }
+
+    /** The parser as it is now, for `restore`. */
+    mark(): TerminalParserMark {
+        const committed = this.committed
+        return {
+            committed,
+            length: committed.length,
+            last: committed[committed.length - 1],
+            style: this.style,
+            pending: this.pending,
+            homed: this.homed
+        }
+    }
+
+    /** Back to a `mark` of this parser; any of its marks, as often as needed. */
+    restore(mark: TerminalParserMark): void {
+        const committed = mark.committed
+        committed.length = mark.length
+        if (mark.last !== undefined) committed[mark.length - 1] = mark.last
+        this.committed = committed
+        this.style = mark.style
+        this.pending = mark.pending
+        this.homed = mark.homed
     }
 
     /** What is on screen, a sequence still being written shown escaped at the end. */
@@ -141,23 +180,45 @@ export function parseTerminalEscapes(text: string): TerminalSpan[] {
 /**
  * Follows a transcript that is handed over whole each time it changes: what was added since the
  * last call is all that is parsed while the transcript only grows, as it does while a program
- * writes, and anything else (Backspace taking back an echo, a cleared or prefixed transcript)
- * starts over from the beginning.
+ * writes. A change within the last line, a serial line's `\r` or `\b` overwriting it or Backspace
+ * taking back an echo, is read again from where that line starts, so a progress counter costs a
+ * line each time and not the whole transcript; anything else (a cleared or prefixed transcript, an
+ * Undo of earlier lines) starts over from the beginning.
  */
 export class TerminalTranscriptReader {
     private parser = new TerminalEscapeParser()
     private read = ''
+    /** Where the last line read starts, and the parser as it was there. */
+    private lineStart: { offset: number; mark: TerminalParserMark } | null = null
 
     spansOf(transcript: string): TerminalSpan[] {
-        if (!transcript.startsWith(this.read)) {
-            this.parser = new TerminalEscapeParser()
-            this.read = ''
-        }
+        if (!transcript.startsWith(this.read)) this.rewind(transcript)
         if (transcript.length > this.read.length) {
-            this.parser.feed(transcript.slice(this.read.length))
+            const added = transcript.slice(this.read.length)
+            const newline = added.lastIndexOf('\n')
+            if (newline === -1) this.parser.feed(added)
+            else {
+                this.parser.feed(added.slice(0, newline + 1))
+                const offset = this.read.length + newline + 1
+                this.lineStart = { offset, mark: this.parser.mark() }
+                this.parser.feed(added.slice(newline + 1))
+            }
             this.read = transcript
         }
         return this.parser.spans
+    }
+
+    /** Back to the start of the last line when the transcript still has every line before it. */
+    private rewind(transcript: string): void {
+        const start = this.lineStart
+        if (start && transcript.startsWith(this.read.slice(0, start.offset))) {
+            this.parser.restore(start.mark)
+            this.read = this.read.slice(0, start.offset)
+            return
+        }
+        this.parser = new TerminalEscapeParser()
+        this.read = ''
+        this.lineStart = null
     }
 }
 

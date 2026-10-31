@@ -281,6 +281,31 @@ describe('x86 output processing', () => {
     })
 })
 
+describe('x86 output with carriage returns and backspaces', () => {
+    const input = sources(
+        program(
+            [...sys(1, 1, 'progress', 21), ...exit],
+            ["progress: db 'Hello', 13, 10, '50%', 13, '100%', 10, 'ab', 8, 'c', 10"]
+        )
+    )
+
+    it('overwrites the line on the serial line of an interactive run', async () => {
+        const emulator = await emulatorFor(input)
+        await emulator.compile(50, input)
+        await emulator.run(1000)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('Hello\n100%\nac\n')
+    })
+
+    it('compares a Testcase output as the program wrote it, \\r and \\b included', async () => {
+        const emulator = await emulatorFor(input)
+        const expected = 'Hello\r\n50%\r100%\nab\bc\n'
+        const [result] = await emulator.test(input, [testcase([], expected)], 1000)
+        expect(result.errors).toEqual([])
+        expect(result.passed).toBe(true)
+    })
+})
+
 describe('x86 input devices in a Testcase', () => {
     const open = (path: string) => [...sys(2, path, 0, 0), 'mov r14, rax']
 
@@ -491,6 +516,75 @@ describe('x86 raw mode under Undo', () => {
         terminal.insertText('y')
         await again
         expect(emulator.stdOut).toBe('yy')
+    })
+
+    it('hands keys typed ahead to the Core after tcsetattr, so Undo keeps their echo with them', async () => {
+        const input = sources(
+            program([
+                ...setTermios({ lflag: ICANON }),
+                'nop ; raw',
+                ...sys(0, 0, 'buf', 2),
+                'mov r12, rax',
+                'movzx r13, word [buf]',
+                ...exit
+            ])
+        )
+        const emulator = await emulatorFor(input)
+        await emulator.compile(100, input)
+        const terminal = emulator.peripherals.terminal
+        emulator.toggleBreakpoint(lineOf(input, 'nop ; raw'))
+        expect(terminal.lineMode?.canonical).toBe(true)
+        //typed while no read waits, in canonical mode: the Terminal keeps it for a line
+        terminal.insertText('ab')
+        await emulator.run(1000)
+        expect(terminal.lineMode?.canonical).toBe(false)
+        //raw mode took it, after the system call: echoed under no instruction, as type-ahead
+        expect(emulator.stdOut).toBe('ab')
+        expect(emulator.undo(1)).toBe(1)
+        expect(terminal.lineMode?.canonical).toBe(true)
+        expect(emulator.stdOut).toBe('ab')
+        //the Core kept the keys, and the read takes them without waiting
+        emulator.toggleBreakpoint(lineOf(input, 'nop ; raw'))
+        await promptly(emulator.run(1000))
+        expect(emulator.errors).toEqual([])
+        expect([cpu(emulator, 'r12'), cpu(emulator, 'r13')]).toEqual([2n, 0x6261n])
+        expect(emulator.stdOut).toBe('ab')
+    })
+
+    it('hands a line partly typed to the Core when a signal handler turns raw mode on', async () => {
+        let now = 0
+        const clock = new ProgramClock({ now: () => now })
+        const input = sources(
+            program(
+                [
+                    ...sys(13, 14, 'act', 0, 8),
+                    ...sys(38, 0, 'timer', 0),
+                    ...sys(0, 0, 'buf', 1),
+                    'mov r12, rax',
+                    'movzx r13, byte [buf]',
+                    ...exit,
+                    'handler:',
+                    ...setTermios({ lflag: ICANON | ECHO | ISIG }),
+                    'ret',
+                    'restorer:',
+                    ...sys(15)
+                ],
+                ['act: dq handler, 0x14000000, restorer, 0', 'timer: dq 0, 0, 0, 20000']
+            )
+        )
+        const emulator = await emulatorFor(input, clock)
+        await emulator.compile(100, input)
+        const terminal = emulator.peripherals.terminal
+        const running = emulator.run(1000)
+        await pauseUntil(() => terminal.pendingRead?.kind === 'standard-input')
+        terminal.insertText('xy')
+        now = 20
+        //the read started over in raw mode finds the line's first key without waiting
+        await promptly(running)
+        expect(emulator.errors).toEqual([])
+        expect([cpu(emulator, 'r12'), cpu(emulator, 'r13')]).toEqual([1n, 0x78n])
+        //echoed once, as it was typed
+        expect(emulator.stdOut).toBe('xy')
     })
 
     it('lets go of a line read when a signal handler turns raw mode on, and reads a key', async () => {

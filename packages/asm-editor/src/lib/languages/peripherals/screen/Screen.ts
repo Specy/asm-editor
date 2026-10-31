@@ -123,6 +123,8 @@ export class Screen {
     private cellGlyphs: Uint8Array | null = null
 
     private _version = 0
+    /** The `version` at which `syncFramebufferPage` last left the image black, see there. */
+    private blackAtVersion = -1
     private _dirty = true
     /** How many renderers are painting this Screen; see `watch`. */
     private watchers = 0
@@ -708,6 +710,9 @@ export class Screen {
      * slice does not look like an animation to the scheduler.
      */
     syncFramebufferPage(page: FramebufferPage | null): void {
+        //black again with nothing drawn since, which every slice of a program that never opens
+        //the device would otherwise check pixel by pixel
+        if (page === null && this._version === this.blackAtVersion && !this._doubleBuffering) return
         const image = imageWords(this.drawing)
         const width = this._width
         const height = this._height
@@ -753,6 +758,7 @@ export class Screen {
             }
         }
         if (changed) this.markDrawn()
+        if (page === null) this.blackAtVersion = this._version
     }
 
     // ----------------------------------------------------------------- undo

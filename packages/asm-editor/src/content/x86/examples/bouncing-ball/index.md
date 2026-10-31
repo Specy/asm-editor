@@ -26,6 +26,7 @@ y:         dd 30
 step_x:    dd 3                     ; pixels a frame, + right or down, - left or up
 step_y:    dd 2
 page:      dd 1                     ; the page being drawn, the one not shown
+flip:      dd 1                     ; 1 to change pages each frame, 0 with only one
 drawn_x:   dd 40, 40                ; where each page last had the ball
 drawn_y:   dd 30, 30
 
@@ -73,6 +74,13 @@ _start:
     mov esi, FBIOGET_VSCREENINFO
     lea rdx, [var]
     syscall
+    mov eax, [var + fb_var_screeninfo.yres]   ; is there room for a second page?
+    add eax, eax
+    cmp [var + fb_var_screeninfo.yres_virtual], eax
+    jae two_pages
+    mov dword [page], 0             ; no: draw every frame on the page shown
+    mov dword [flip], 0
+two_pages:
     mov eax, SYS_ioctl
     mov rdi, r12
     mov esi, FBIOGET_FSCREENINFO
@@ -80,7 +88,7 @@ _start:
     syscall
     mov eax, SYS_mmap
     xor edi, edi
-    mov esi, [fix + fb_fix_screeninfo.smem_len]   ; both pages
+    mov esi, [fix + fb_fix_screeninfo.smem_len]   ; every page
     mov edx, PROT_READ | PROT_WRITE
     mov r10d, MAP_SHARED
     mov r8, r12
@@ -91,7 +99,7 @@ _start:
     mov [pixels], rax
     mov r13d, [fix + fb_fix_screeninfo.line_length]
 
-    mov rbx, rax                    ; paint both pages, yres_virtual lines
+    mov rbx, rax                    ; paint every page, yres_virtual lines
     xor edi, edi
     xor esi, esi
     mov edx, [var + fb_var_screeninfo.xres]
@@ -179,7 +187,8 @@ ball_row:
     lea rdx, [var]
     syscall
 
-    xor dword [page], 1             ; the next frame goes on the other page
+    mov eax, [flip]                 ; the next frame goes on the other page
+    xor [page], eax
     dec r15d
     jnz frame
 
@@ -194,15 +203,19 @@ fail:
 
 ## Two pages
 
-The framebuffer has room for two pictures: `yres_virtual` is twice `yres`, and the second page's
-lines follow the first's in memory. `yoffset` in `var` says which line the Screen shows at its top,
-0 for the first page and `yres` for the second. The `FBIOPAN_DISPLAY` ioctl shows the line `yoffset`
-names: it **pans** the Screen to the other page.
+Here the framebuffer has room for two pictures: `yres_virtual` is twice `yres`, and the second
+page's lines follow the first's in memory. `yoffset` in `var` says which line the Screen shows at its
+top, 0 for the first page and `yres` for the second. The `FBIOPAN_DISPLAY` ioctl shows the line
+`yoffset` names: it **pans** the Screen to the other page.
+
+Two pages are this machine's setting: a stock Linux kernel gives the framebuffer one page, where
+the second page is not there to draw on. So the program checks `yres_virtual` first, and with one
+page it sets `page` and `flip` to 0 and draws every frame on the page that is shown.
 
 Each frame draws on the page that is not shown, the one `page` names, and only then pans to it.
 Nobody sees the ball erased and drawn again, only finished frames. This is **double buffering**.
-At the end of the frame `xor dword [page], 1` turns 1 into 0 and 0 into 1, so the next frame is drawn
-on the page that was shown until then.
+At the end of the frame `xor [page], eax`, with `eax` the 1 in `flip`, turns 1 into 0 and 0 into 1,
+so the next frame is drawn on the page that was shown until then.
 
 `rbx` is where `fill_rect` draws, so pointing it at the page's first pixel, `page × yres` lines
 after the first page's, is all it takes to draw on one page or the other.

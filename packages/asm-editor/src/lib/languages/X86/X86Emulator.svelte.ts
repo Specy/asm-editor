@@ -138,6 +138,16 @@ const X86_MAX_SLICE_INSTRUCTIONS_WITHOUT_UNDO = 50_000
 /** What a read of standard input asks for, in words. */
 const STANDARD_INPUT_QUESTION = 'Program input'
 
+/**
+ * A line read of standard input waiting on the Terminal, and the line it gave once Enter ended it,
+ * until the Core has it.
+ */
+type StandardInputRead = {
+    execution: ExecutionGeneration
+    promise: Promise<Uint8Array>
+    line?: Uint8Array
+}
+
 /** The Core's states from the program's first instruction to its end, when it takes input reports. */
 const STARTED_STATES: ReadonlySet<BlinkState> = new Set([
     BlinkState.ProgramRunning,
@@ -425,8 +435,9 @@ export async function X86Emulator(source: BuildInput, options: EmulatorSettings 
                 unimplementedSyscall: (event) => wrapper?.noteUnimplementedSyscall(event),
                 terminalMode: (mode) => wrapper?.followTerminalMode(mode),
                 unsupportedDevice: (event) => wrapper?.noteUnsupportedDevice(event),
-                //a pan, an fsync, a blank or an Undo moving the scanout: the Screen shows it now
-                framebufferPresent: () => wrapper?.showFramebuffer(),
+                //a pan, an fsync, a blank or an Undo moving the scanout, from inside a system
+                //call: the Screen shows it at the next catch-up, before anything can paint it
+                framebufferPresent: () => wrapper?.presentFramebuffer(),
                 //the sound devices' timeline, for the Audio of the run in hand: a Testcase's is
                 //silent, so it is read at every event
                 pcm: (event) => wrapper?.peripherals.audio.x86.pcm(event),
@@ -462,8 +473,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private clearAfterCompile = false
     private disposeAfterCompile = false
     private randomPositions = new Map<string, number>()
-    private inputRead: { execution: ExecutionGeneration; promise: Promise<Uint8Array> } | null =
-        null
+    /** The line read of standard input waiting on the Terminal, kept across a wait's turns. */
+    private inputRead: StandardInputRead | null = null
+    /** Whether raw mode's hand-over waits for the call into the Core to return (`followTerminalMode`). */
+    private handOverQueued = false
     private waitError: unknown
     /**
      * The Executable this Debug session runs and its Listing, which every address inside it maps
@@ -508,6 +521,13 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private display: X86Display = { ...DEFAULT_X86_DISPLAY }
     /** Whether the last Build read it out of a `@screen` comment instead of the user's choice. */
     private displayOrigin: MarsDisplayOrigin = 'user'
+    /**
+     * Whether the Screen may be behind `/dev/fb0` without an instruction having run: a pan, an
+     * fsync or a blank presented a page, or a Build, an Undo or a Poke changed the machine.
+     */
+    private framebufferPresented = true
+    /** The Core's instruction count when the Screen last caught up, null before it ever has. */
+    private framebufferShownAt: bigint | null = null
     /**
      * The Audio whose raw MIDI port this run has readied, at its first message: a Testcase's
      * silent one or the interactive one, which a Build or a Stop resets.
@@ -615,10 +635,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         //the Screen's keys and pointer, as the guest's keyboard and tablet report them
         //(x86-devices.md, "The keyboard device" and "The pointer"): to a program that has started,
         //since the Core drops what comes before, and never to a Testcase, which has no keyboard
-        //or pointer
+        //or pointer; X86Input counts only what the program received
         this._peripherals.x86Input.setSink((device, events) => {
-            if (this.core !== core || !this.takesInputReports(core)) return
+            if (this.core !== core || !this.takesInputReports(core)) return false
             core.sendInputReport(device, events)
+            return true
         })
         this.display = normalizeX86Display(options.display)
         this.applyDisplayMode()
@@ -649,6 +670,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     clear(): void {
         super.clear()
+        this.framebufferPresented = true
         if (this.display) this.applyDisplayMode()
     }
 
@@ -662,15 +684,33 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const { width, height } = this.display
         this._peripherals.screen.useFramebuffer(width, height)
         this.core?.setDisplayMode({ width, height })
+        this.framebufferPresented = true
     }
 
     /**
-     * The Screen catches up with `/dev/fb0` (decision 5 of the plan): the page the scanout shows,
-     * read whole and converted in one pass, black while the program has blanked the display and
-     * before it has opened the device. At the end of every slice and Step, before every wait, at
-     * every pan or fsync (`framebufferPresent`), and after an Undo or a Poke.
+     * A pan, an fsync or a blank (`framebufferPresent`), from inside the system call: noted, and
+     * shown at the next catch-up. The Core runs on the page's thread, so nothing can paint the
+     * Screen before the slice ends or the program waits, and a program that calls fsync after
+     * every pixel costs one catch-up a slice rather than one a pixel.
+     */
+    presentFramebuffer(): void {
+        this.framebufferPresented = true
+    }
+
+    /**
+     * The Screen catches up with `/dev/fb0` (decision 5 of the plan): the page the scanout shows
+     * now, read whole and converted in one pass, black while the program has blanked the display
+     * and before it has opened the device. At the end of every slice and Step, before every wait,
+     * and after an Undo or a Poke: whenever the Screen can be seen next. Pixels written through the
+     * mapping leave no mark, so it reads the page again whenever an instruction has run since it
+     * last did, or a page was presented; and not at all when neither happened, as when a wait
+     * comes round again.
      */
     showFramebuffer(): void {
+        const executed = this.core?.getInstructionsExecuted() ?? null
+        if (!this.framebufferPresented && executed === this.framebufferShownAt) return
+        this.framebufferPresented = false
+        this.framebufferShownAt = executed
         const framebuffer = this.core?.getFramebuffer() ?? null
         this._peripherals.screen.syncFramebufferPage(
             framebuffer && !framebuffer.blanked
@@ -686,6 +726,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /** Framebuffer mode journals nothing: Undo and a Poke show the page the Core put back. */
     _resyncScreenFromMemory(): void {
+        this.framebufferPresented = true
         this.showFramebuffer()
     }
 
@@ -752,12 +793,42 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * The program's termios, which the Terminal's Line discipline follows: what the Core reports
      * at every start of the program and at every change, an Undo's included. A Testcase's input
      * is scripted, as through a pipe, so its Terminal keeps none and shows the output as written.
-     * Raw mode takes the keys away from a line read still waiting, which is let go of.
+     *
+     * Raw mode takes the keys away from a line read still waiting, which hands what was typed for
+     * it to the Core and is let go of (`handOverToRawMode`). The Core reports the termios from
+     * inside the system call or the Undo that changed it, so the hand-over waits until that has
+     * returned: from inside, the keys would enter the Core's queue under no instruction while their
+     * echo went into the transcript under the `tcsetattr`, and could land between the steps of an
+     * Undo of several.
      */
     followTerminalMode(mode: X86TerminalMode | null): void {
         const terminal = this._peripherals.terminal
         terminal.setLineMode(terminal.inputSource === 'scripted' ? null : mode)
-        if (this.typesKeys()) this.releaseInputRead()
+        if (!this.typesKeys() || this.handOverQueued) return
+        this.handOverQueued = true
+        queueMicrotask(() => {
+            this.handOverQueued = false
+            this.handOverToRawMode()
+        })
+    }
+
+    /**
+     * Raw mode has come on: what was typed for the line read goes to the Core, a line Enter ended
+     * that the Core has not had yet first, then the line still being edited and what was typed
+     * ahead (`Terminal.handOverTypedInput`), as Linux makes them readable when `ICANON` goes off;
+     * and the line read is let go of. Nothing once raw mode has gone off again, when the line read
+     * keeps what was typed.
+     */
+    private handOverToRawMode(): void {
+        if (!this.typesKeys()) return
+        const read = this.inputRead
+        const core = this.core
+        if (read?.line?.length && core && this.executionController.isCurrent(read.execution)) {
+            this.inputRead = null
+            core.provideInput(read.line)
+        }
+        this._peripherals.terminal.handOverTypedInput()
+        this.releaseInputRead()
     }
 
     /**
@@ -1107,10 +1178,12 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.recordingRandom = true
         this.undoRecording = true
         //an interactive run's terminal is the serial line, whose line discipline reads Enter's
-        //`\r` as `\n` under ICRNL and writes `\n` as `\r\n` under ONLCR; a Testcase's input and
-        //output go through as written, as through a pipe, so its transcript compares as before
+        //`\r` as `\n` under ICRNL and writes `\n` as `\r\n` under ONLCR, and whose `\r` and `\b`
+        //move the cursor; a Testcase's input and output go through as written, as through a pipe,
+        //so its transcript compares as the program wrote it
         const interactive = this._peripherals.terminal.inputSource === 'interactive'
         core.setTerminalProcessing({ input: interactive, output: interactive })
+        this._peripherals.terminal.setSerialOutput(interactive)
         //what an instruction prints is journaled under its serial while the Core records it, so
         //Undo takes the output back with the instruction (ADR 0057); start-up code is no history
         this._peripherals.terminal.trackHistory(() => {
@@ -1964,7 +2037,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 status === CoreEmulatorStatus.WaitingForInput || request?.wakeSources.terminal
             //raw mode came on while a line read waited, in a signal handler: the keys go past it
             const raw = this.typesKeys()
-            if (raw) this.releaseInputRead()
+            if (raw) this.handOverToRawMode()
             //what the program drew and played before it waits is seen and heard while it waits: a
             //frame before its vsync wait, a board before the key that answers it, a beep before
             //the prompt
@@ -1989,13 +2062,21 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                         type: 'StandardInput',
                         message: STANDARD_INPUT_QUESTION
                     }
-                    this.inputRead ??= {
-                        execution,
-                        promise: this._peripherals.terminal.readStandardInput(
-                            Number.MAX_SAFE_INTEGER,
-                            STANDARD_INPUT_QUESTION,
-                            execution
+                    if (!this.inputRead) {
+                        const started: StandardInputRead = {
+                            execution,
+                            promise: this._peripherals.terminal.readStandardInput(
+                                Number.MAX_SAFE_INTEGER,
+                                STANDARD_INPUT_QUESTION,
+                                execution
+                            )
+                        }
+                        //kept for raw mode coming on before the Core has had the line
+                        started.promise.then(
+                            (line) => (started.line = line),
+                            () => {}
                         )
+                        this.inputRead = started
                     }
                     const read = this.inputRead
                     const result = await this.executionController.waitFor(execution, () =>

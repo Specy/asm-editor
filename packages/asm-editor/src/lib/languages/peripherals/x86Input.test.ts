@@ -23,7 +23,10 @@ function connected(width = 320, height = 240) {
     const size = { width, height }
     const input = new X86Input({ screen: { getSize: () => size } })
     const reports: [X86InputDeviceId, X86InputEvent[]][] = []
-    input.setSink((device, events) => reports.push([device, events]))
+    input.setSink((device, events) => {
+        reports.push([device, events])
+        return true
+    })
     return { input, reports, size }
 }
 
@@ -202,9 +205,42 @@ describe('focus loss and the sink', () => {
         input.wheel({ deltaY: 100, deltaMode: 0 })
         input.releaseAll()
         const reports: X86InputEvent[][] = []
-        input.setSink((_, events) => reports.push(events))
+        input.setSink((_, events) => {
+            reports.push(events)
+            return true
+        })
         input.keyDown({ code: 'KeyD' })
         expect(reports).toEqual([[key(LINUX_KEY.D, 1)]])
+    })
+
+    it('counts only what the program received, so its first move after starting has both axes', () => {
+        const input = new X86Input({ screen: { getSize: () => ({ width: 320, height: 240 }) } })
+        const reports: X86InputEvent[][] = []
+        let started = false
+        input.setSink((_, events) => {
+            if (started) reports.push(events)
+            return started
+        })
+        //before the program starts: the adapter drops every report
+        input.moveTo(100, 50)
+        input.keyDown({ code: 'KeyD' })
+        input.buttonDown('left')
+        started = true
+        //a move along one axis still tells the program where the other is
+        input.moveTo(120, 50)
+        //the key held since before is down for the program at its next repeat
+        input.keyDown({ code: 'KeyD' })
+        //and the button, still held, goes down at its next press
+        input.buttonUp('left')
+        input.buttonDown('left')
+        expect(reports).toEqual([
+            [
+                { type: EV_ABS, code: ABS_X, value: tabletAxis(120, 320) },
+                { type: EV_ABS, code: ABS_Y, value: tabletAxis(50, 240) }
+            ],
+            [key(LINUX_KEY.D, 1)],
+            [key(BTN_LEFT, 1)]
+        ])
     })
 
     it('forgets what was held and where the pointer was at a reset, sending nothing', () => {

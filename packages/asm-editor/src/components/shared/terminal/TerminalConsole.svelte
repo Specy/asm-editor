@@ -26,7 +26,10 @@
      * ([x86-devices.md](../../../../../../docs/design/x86-devices.md), The Terminal's modes).
      */
     import { tick, untrack } from 'svelte'
-    import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
+    import type {
+        Terminal,
+        TerminalPendingRead
+    } from '#lib/languages/peripherals/Terminal.svelte.ts'
     import { TerminalTranscriptReader, styleClasses } from './terminalEscapes'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
@@ -119,14 +122,14 @@
     $effect(() => {
         const read = typingRead
         if (!read || !visible || !interactive) return
-        untrack(takeFocus)
+        untrack(() => takeFocus(read))
         if (untrack(() => document.activeElement === input)) return
         //A host can reveal an ancestor in the same update that starts this read. The
         //textarea may still be inside that hidden ancestor when the first focus runs.
         //Retry once after the DOM settles, unless this read/view has already changed.
         let current = true
         void tick().then(() => {
-            if (current && terminal.pendingRead === read && visible && interactive) takeFocus()
+            if (current && terminal.pendingRead === read && visible && interactive) takeFocus(read)
         })
         return () => {
             current = false
@@ -146,13 +149,17 @@
         })
     })
 
-    function takeFocus() {
+    function takeFocus(read: TerminalPendingRead) {
         if (!input || input.disabled) return
         const active = document.activeElement
         if (active === input) return
         //someone typing in a field of the page keeps it, and so does a dialog; the code editor is
         //read only while a program runs, so it gives the keyboard up
         if (active instanceof HTMLElement && (isTextEntry(active) || inOtherDialog(active))) return
+        //raw mode's read stands for as long as the program runs, and a focused x86 Screen hands
+        //its keys to the program's input devices: someone playing there keeps the keyboard. A read
+        //of a line still takes it, since what is typed on the Screen never reaches standard input
+        if (read.kind === 'keys' && active instanceof HTMLElement && isProgramScreen(active)) return
         input.focus()
     }
 
@@ -329,6 +336,11 @@
         if (element instanceof HTMLInputElement)
             return !NON_TEXT_INPUTS.has(element.type) && !element.readOnly && !element.disabled
         return element.isContentEditable
+    }
+
+    /** A Screen that takes keys for the program (`ScreenRenderer`'s canvas). */
+    function isProgramScreen(element: HTMLElement): boolean {
+        return element.closest('[data-program-screen]') !== null
     }
 
     /** Whether an element is in a dialog, other than one the console is in itself. */

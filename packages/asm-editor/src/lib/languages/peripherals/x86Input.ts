@@ -35,8 +35,10 @@ export type X86Button = MouseButton | 'side' | 'extra'
  * wheel, `EV_LED` from the lock keys), the closing `SYN_REPORT` and the time are the Core's, which
  * queues the report for every reader of the device (the plan's "The Core's contract").
  *
- * Reports go to the sink the adapter sets, and nowhere while there is none: nothing is tracked
- * then either, so a key already held when a sink arrives goes down for it at its next repeat.
+ * Reports go to the sink the adapter sets, and nowhere while there is none. What is held and where
+ * the pointer is are tracked as the program saw them: only a report the sink delivered counts, so a
+ * key already held when a program starts goes down for it at its next repeat, and the first move
+ * it receives carries both axes, wherever the pointer went before.
  *
  * Plain TypeScript with no Svelte runes and no DOM types, like the Keyboard and the Mouse.
  */
@@ -54,8 +56,12 @@ export const X86_INPUT_INTERRUPT = 'InputDevice'
 /** One input event as Linux's `struct input_event` has it, without its time. */
 export type X86InputEvent = { type: number; code: number; value: number }
 
-/** Where each report goes: the adapter's, which hands it to the Core. */
-export type X86InputSink = (device: X86InputDeviceId, events: X86InputEvent[]) => void
+/**
+ * Where each report goes: the adapter's, which hands it to the Core. True when a program received
+ * it; false when it was dropped, before the program has started, after it has ended or in a
+ * Testcase.
+ */
+export type X86InputSink = (device: X86InputDeviceId, events: X86InputEvent[]) => boolean
 
 /** The part of a DOM `KeyboardEvent` this reads: the physical key alone. */
 export type X86KeyEventLike = { code: string }
@@ -147,10 +153,10 @@ export type X86InputOptions = {
 export class X86Input {
     private readonly screen: MouseScreen
     private sink: X86InputSink | null = null
-    /** The Linux codes of the keys the sink has seen go down and not come up. */
+    /** The Linux codes of the keys the program has received going down and not coming up. */
     private readonly keys = new Set<number>()
     private readonly buttons = new Set<number>()
-    /** The axes as last reported, null until the first move: a new reader of reports has none. */
+    /** The axes as the program last received them, null until then: the first move sends both. */
     private x: number | null = null
     private y: number | null = null
 
@@ -163,8 +169,8 @@ export class X86Input {
      * held and where the pointer was are forgotten.
      *
      * The x86 adapter's calls the Core's `sendInputReport(device, events)` once the program has
-     * started, and never during a Testcase; the clear path calls `reset()` with the Keyboard's and
-     * the Mouse's.
+     * started, and never during a Testcase, and says whether it did; the clear path calls `reset()`
+     * with the Keyboard's and the Mouse's.
      */
     setSink(sink: X86InputSink | null): void {
         this.sink = sink
@@ -178,8 +184,7 @@ export class X86Input {
         const code = linuxKeyCode(event.code)
         if (code === undefined || !this.sink) return
         const value = this.keys.has(code) ? KEY_REPEAT : KEY_DOWN
-        this.keys.add(code)
-        this.send('keyboard', [{ type: EV_KEY, code, value }])
+        if (this.send('keyboard', [{ type: EV_KEY, code, value }])) this.keys.add(code)
     }
 
     /** A key came up; one the sink never saw go down sends nothing. */
@@ -191,7 +196,10 @@ export class X86Input {
 
     // ------------------------------------------------------------- pointer
 
-    /** The pointer moved, in logical Screen pixels. A move within one pixel is none. */
+    /**
+     * The pointer moved, in logical Screen pixels. A move within one pixel is none, and a move
+     * reports the axes that changed since the program last received them.
+     */
     moveTo(x: number, y: number): void {
         if (!this.sink) return
         const { width, height } = this.screen.getSize()
@@ -200,9 +208,9 @@ export class X86Input {
         const events: X86InputEvent[] = []
         if (nextX !== this.x) events.push({ type: EV_ABS, code: ABS_X, value: nextX })
         if (nextY !== this.y) events.push({ type: EV_ABS, code: ABS_Y, value: nextY })
+        if (events.length === 0 || !this.send('tablet', events)) return
         this.x = nextX
         this.y = nextY
-        if (events.length > 0) this.send('tablet', events)
     }
 
     /** A button went down, at the given position or where the pointer already is. */
@@ -211,8 +219,7 @@ export class X86Input {
         if (x !== undefined && y !== undefined) this.moveTo(x, y)
         const code = BUTTON_CODES[button]
         if (this.buttons.has(code)) return
-        this.buttons.add(code)
-        this.send('tablet', [{ type: EV_KEY, code, value: KEY_DOWN }])
+        if (this.send('tablet', [{ type: EV_KEY, code, value: KEY_DOWN }])) this.buttons.add(code)
     }
 
     /** A button came up, at the given position or where the pointer already is. */
@@ -259,7 +266,8 @@ export class X86Input {
         this.y = null
     }
 
-    private send(device: X86InputDeviceId, events: X86InputEvent[]): void {
-        this.sink?.(device, events)
+    /** Hands a report to the sink: true when the program received it. */
+    private send(device: X86InputDeviceId, events: X86InputEvent[]): boolean {
+        return this.sink?.(device, events) ?? false
     }
 }

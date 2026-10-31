@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import {
     PLAIN_STYLE,
     TerminalEscapeParser,
@@ -167,6 +167,48 @@ describe('streamed output', () => {
         expect(render(reader.spansOf(`${ESC}[32mok, mor`))).toBe('[fg-2]ok, mor')
         expect(render(reader.spansOf(`header\n${ESC}[32mok`))).toBe('header\n[fg-2]ok')
         expect(reader.spansOf('')).toEqual([])
+    })
+
+    it('reads a rewritten last line again from where it starts, and only that line', () => {
+        const reader = new TerminalTranscriptReader()
+        const fed: string[] = []
+        const feed = TerminalEscapeParser.prototype.feed
+        const spy = vi.spyOn(TerminalEscapeParser.prototype, 'feed')
+        spy.mockImplementation(function (this: TerminalEscapeParser, text: string) {
+            fed.push(text)
+            feed.call(this, text)
+        })
+        try {
+            const head = `${ESC}[1mtitle${ESC}[0m\n${'line\n'.repeat(1000)}`
+            const counter = [20, 30, 100].map((percent) => `${head}${ESC}[32m${percent}%`)
+            const expected = counter.map((transcript) => render(parseTerminalEscapes(transcript)))
+            const ended = `${head}${ESC}[32m100%${ESC}[0m\nDONE`
+            const expectedEnded = render(parseTerminalEscapes(ended))
+            reader.spansOf(`${head}${ESC}[32m10%`)
+            fed.length = 0
+            expect(counter.map((transcript) => render(reader.spansOf(transcript)))).toEqual(
+                expected
+            )
+            expect(fed).toEqual([`${ESC}[32m20%`, `${ESC}[32m30%`, `${ESC}[32m100%`])
+            //a line ends and the next is rewritten: read from the new line's start
+            reader.spansOf(`${head}${ESC}[32m100%${ESC}[0m\ndone`)
+            fed.length = 0
+            expect(render(reader.spansOf(ended))).toBe(expectedEnded)
+            expect(fed).toEqual(['DONE'])
+            //an earlier line changed: read again from the start
+            fed.length = 0
+            expect(render(reader.spansOf('other\n'))).toBe('other\n')
+            expect(fed.join('')).toBe('other\n')
+        } finally {
+            spy.mockRestore()
+        }
+    })
+
+    it('comes back to a line that was cleared and rewritten, as it was before the clear', () => {
+        const reader = new TerminalTranscriptReader()
+        reader.spansOf(`a\n${ESC}[31mred`)
+        expect(render(reader.spansOf(`a\n${ESC}[31mred${ESC}[2Jgone`))).toBe('[fg-1]gone')
+        expect(render(reader.spansOf(`a\n${ESC}[31mrod`))).toBe('a\n[fg-1]rod')
     })
 
     it('reads the same whether the output came in one write or one character at a time', () => {

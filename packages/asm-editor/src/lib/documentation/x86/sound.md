@@ -8,7 +8,7 @@ Once a program has made a sound, a **Sound** button in the execution dock turns 
 
 ## The PC speaker {#speaker}
 
-The speaker is an input device, `/dev/input/by-path/platform-pcspkr-event-spkr`, that the program writes to. Writing an `EV_SND` event with the code `SND_TONE` and a frequency in Hz as its value starts a tone; writing it again with 0 stops it. The tone sounds only from 20 to 32767 Hz. `SND_BELL` with any value but 0 sounds 1000 Hz until a 0 stops it.
+The speaker is an input device, `/dev/input/by-path/platform-pcspkr-event-spkr`, that the program writes to. Writing an `EV_SND` event with the code `SND_TONE` and a frequency in Hz as its value starts a tone; writing it again with 0 stops it. The tone sounds only above 20 Hz and below 32767 Hz. `SND_BELL` with any value but 0 sounds 1000 Hz until a 0 stops it.
 
 ```c
 #include <fcntl.h>
@@ -242,7 +242,7 @@ int main(void) {
 }
 ```
 
-The same idea in NASM, at the device's own 8000 samples a second, unsigned 8-bit, mono: 500 Hz is 16 samples a cycle, 8 high and 8 low.
+The same idea in NASM, at the device's own 8000 samples a second, unsigned 8-bit, mono: 500 Hz is 16 samples a cycle, 8 high and 8 low. The buffer it writes again and again is 1024 samples, 64 whole cycles, so each write ends where the next begins, on a cycle's edge, and the tone has no click between them.
 
 ```x86
 default rel
@@ -257,7 +257,7 @@ section .data
 fragments: dd 0x0004000a                ; ask for 4 fragments of 1024 bytes
 
 section .bss
-wave:      resb 1000                    ; 1/8 s at 8000 samples a second
+wave:      resb 1024                    ; 64 cycles, 0.128 s at 8000 samples a second
 
 section .text
 global _start
@@ -285,15 +285,15 @@ fill:
 store:
     mov [rdi + rcx], al
     inc ecx
-    cmp ecx, 1000
+    cmp ecx, 1024
     jb fill
 
-    mov r13d, 4                         ; four times 1/8 s
+    mov r13d, 4                         ; four times, about half a second
 play:
     mov eax, SYS_write
     mov rdi, r12
     lea rsi, [wave]
-    mov edx, 1000
+    mov edx, 1024
     syscall                             ; waits while the buffer is full
     dec r13d
     jnz play
@@ -316,6 +316,8 @@ The sample formats a program uses most:
 
 {dspFormats}
 
+`AFMT_S32_LE` is a name from OSS 4, the later version of the interface. Linux's `/dev/dsp` takes it, but Linux's own `<sys/soundcard.h>` does not define it, so a C program built on Linux defines it itself, as `0x00001000`.
+
 ## Fragments and latency {#fragments}
 
 The device's buffer is made of **fragments**, and the samples reach the speakers a whole fragment at a time. Two things follow.
@@ -323,7 +325,7 @@ The device's buffer is made of **fragments**, and the samples reach the speakers
 - **A big buffer means a late sound.** A write returns as soon as its samples are in the buffer, so a program that keeps the buffer full is always a whole buffer ahead of what is heard. Unless asked otherwise, the buffer holds 32 fragments, about 8 seconds of sound at the default format and several seconds at CD quality: a game that plays a sound when a key goes down would be heard seconds later.
 - **A short sound can stay silent.** A write shorter than a fragment waits in the buffer until the fragment fills. A beep that is shorter than one fragment is heard only once the program calls `SNDCTL_DSP_SYNC`, which waits until everything written has played, or closes the device.
 
-`SNDCTL_DSP_SETFRAGMENT` asks for a smaller buffer. Its `int` is `0xMMMMSSSS`: MMMM fragments of 2 to the power SSSS bytes, so `0x0004000A` asks for 4 fragments of 1024 bytes. The device may choose a size near the one asked for, because it converts the samples to the card's own format first; `SNDCTL_DSP_GETBLKSIZE` reads the fragment size it chose. Either way the buffer then holds a fraction of a second instead of seconds. Call it right after `open`, before the first write: it works only once, and fails with `EINVAL` after that.
+`SNDCTL_DSP_SETFRAGMENT` asks for a smaller buffer. Its `int` is `0xMMMMSSSS`: MMMM fragments of 2 to the power SSSS bytes, so `0x0004000A` asks for 4 fragments of 1024 bytes. The device chooses the size in the end, from what was asked and from the format and rate, and `SNDCTL_DSP_GETBLKSIZE` reads back the fragment size it chose: here `0x0004000A` gives 4 fragments of 512 bytes at the first format, and 4 of 2,048 bytes once the C program above has set 16-bit samples at 22,050 a second. Either way the buffer then holds a fraction of a second instead of seconds. Call it right after `open`, before the first write: it works only once, and fails with `EINVAL` after that.
 
 A program can also ask how far ahead it is. `SNDCTL_DSP_GETOSPACE` fills an `audio_buf_info` with the free fragments and bytes, so a program can write only what fits and never wait, and `SNDCTL_DSP_GETODELAY` gives the bytes written but not heard yet. Opened with `O_NONBLOCK`, a write gives what fits and fails with `EAGAIN` when nothing does, and `poll` reports `POLLOUT` once a fragment is free.
 
@@ -357,18 +359,18 @@ The card has only two channels with an effect: `VOLUME`, which starts at 73, and
 
 ## What is different from a real Linux machine {#differences}
 
-The devices behave as they do on a QEMU virtual machine running Linux, the reference this emulator follows, with FluidSynth playing the MIDI port on a sound card of its own, so `/dev/dsp` and the MIDI port sound together there too. These are the places where they do not:
+The devices behave as they do on a QEMU virtual machine running Linux, the reference this emulator follows. These are the places where they do not:
 
-- **The instruments sound different.** The synthesizer plays the same sound bank as the MIPS and RISC-V Notes, not FluidSynth's.
+- **The instruments sound different.** The synthesizer plays the same sound bank as the MIPS and RISC-V Notes, not the reference machine's.
 - **The MIDI port sends at MIDI's speed.** The reference's port is a virtual one with no cable, which sends at once; here each byte takes the 320 µs it takes on a MIDI cable.
 - **Every open of the MIDI port shares one buffer.** On Linux each open gets one of its own, unless it uses `O_APPEND`.
-- **Notes still on when the program ends are released**, and the synthesizer starts every **Build** and **Run** from General MIDI's defaults. FluidSynth would ring on and remember the last program's instruments.
+- **Notes still on when the program ends are released**, and the synthesizer starts every **Build** and **Run** from General MIDI's defaults. The reference machine's synthesizer would ring on and remember the last program's instruments.
 - **At the end of the program the editor reports its end at once**, while the rest of `/dev/dsp`'s buffer plays out. On Linux the exit waits for the buffer.
 
 ## Not covered {#not-covered}
 
 - **ALSA's own sound devices**, `/dev/snd/pcmC0D0p`, `controlC0`, `seq` and the rest: made for the libasound library, whose setup cannot sensibly be written by hand. Use `/dev/dsp`, `/dev/mixer` and the MIDI port, which reach the same card. Opening one fails with `ENODEV`, and the **Log** names what to use instead.
-- **The second sound card's devices**, `/dev/dsp2`, `/dev/audio2` and `/dev/mixer2`: the reference machine's FluidSynth plays on that card. Use `/dev/dsp`.
+- **The second sound card's devices**, `/dev/dsp2`, `/dev/audio2` and `/dev/mixer2`: the reference machine's synthesizer plays on that card. Use `/dev/dsp`.
 - **`/dev/audio`**, μ-law samples: use `/dev/dsp`.
 - **Recording**, reading `/dev/dsp`: a microphone would ask for permission in the middle of a run.
 - **`mmap` of `/dev/dsp`**, and turning playback off with `SNDCTL_DSP_SETTRIGGER`, which goes with it: write the samples instead. `SNDCTL_DSP_GETCAPS` leaves out `DSP_CAP_MMAP`, so a careful program sees this.

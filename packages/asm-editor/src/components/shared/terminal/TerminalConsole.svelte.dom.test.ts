@@ -574,6 +574,24 @@ describe('an x86 serial line', () => {
         expect(endOfInputButton()).toBeNull()
     })
 
+    it('leaves the keyboard to a focused Screen when raw mode starts, not to a line read', () => {
+        const { terminal, execution } = renderSerial(COOKED)
+        const screen = document.createElement('canvas')
+        screen.tabIndex = 0
+        screen.setAttribute('data-program-screen', '')
+        document.body.append(screen)
+        screen.focus()
+        terminal.setLineMode(MADE_RAW)
+        flushSync()
+        expect(document.activeElement).toBe(screen)
+        //what is typed on the Screen never reaches standard input, so a line read takes the keys
+        terminal.setLineMode(COOKED)
+        void terminal.readStandardInput(10, 'q', execution).catch(() => {})
+        flushSync()
+        expect(document.activeElement).toBe(textarea())
+        terminal.cancelPendingInput()
+    })
+
     it('gives Escape to the program in raw mode, and the keyboard back on Shift+Tab', async () => {
         const { keys } = renderSerial(MADE_RAW)
         expect(document.activeElement).toBe(textarea())

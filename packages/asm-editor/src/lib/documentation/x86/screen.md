@@ -138,11 +138,13 @@ Drawing every pixel of the Screen one at a time takes a noticeable fraction of a
 
 A program that draws on the page the Screen shows can be seen half way through a frame: the old picture partly erased, the new one partly drawn. The cure is **double buffering**: draw the next frame where it cannot be seen, then show it all at once.
 
-The framebuffer has room for two pages. `yres_virtual` is twice `yres`: the first page is lines 0 to `yres - 1` and the second is lines `yres` to `2 × yres - 1`, right below it in memory. `yoffset` says which line the Screen shows at its top. To show the second page, set `yoffset` to `yres` in the `fb_var_screeninfo` the program read and pass it to `FBIOPAN_DISPLAY`; to show the first again, set it to 0. A program draws on the page it does not show, pans to it, and then draws the next frame on the other page.
+Here the framebuffer has room for two pages: `yres_virtual` is twice `yres`. The first page is lines 0 to `yres - 1` and the second is lines `yres` to `2 × yres - 1`, right below it in memory. `yoffset` says which line the Screen shows at its top. To show the second page, set `yoffset` to `yres` in the `fb_var_screeninfo` the program read and pass it to `FBIOPAN_DISPLAY`; to show the first again, set it to 0. A program draws on the page it does not show, pans to it, and then draws the next frame on the other page.
+
+Two pages are a setting of this machine, not of every Linux machine. A stock Linux kernel gives the framebuffer one page, `yres_virtual` equal to `yres`, and there a store into the second page falls outside the mapping and a pan to it fails. So check `yres_virtual >= 2 × yres` before using the second page, and otherwise draw every frame on the page that is shown, as the program below does.
 
 The frame loop is **draw, then pan**. The pan waits for the next **vertical blank**, the moment between two pictures on the monitor, sixty times a second, and shows the new page then, so the loop runs at 60 frames a second at most with no other wait. Setting a new `yoffset` with `FBIOPUT_VSCREENINFO` waits too, for two blanks. `FBIO_WAITFORVSYNC` waits for the next blank without panning, for a program that draws on the page it shows and wants to change it between two pictures; its argument points to a 32-bit 0, the first display. Waiting for it and then panning costs two blanks a frame, 30 frames a second.
 
-This C program moves a white square across the Screen, one pixel a frame. Each frame it redraws only the band of lines the square moves along.
+This C program moves a white square across the Screen, one pixel a frame. Each frame it redraws only the band of lines the square moves along. With one page, `pages` is 1 and it draws on the page it shows.
 
 ```c
 // @screen width=320 height=240
@@ -163,7 +165,8 @@ int main(void) {
     uint8_t *pixels = mmap(NULL, fix.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb, 0);
     if (pixels == MAP_FAILED) return 1;
 
-    unsigned page = 1; /* the page that is not shown */
+    unsigned pages = var.yres_virtual >= 2 * var.yres ? 2 : 1;
+    unsigned page = pages - 1; /* the page that is not shown, when there are two */
     for (unsigned left = 0; left + 20 <= var.xres; left++) {
         uint8_t *top = pixels + page * var.yres * fix.line_length;
         for (unsigned y = 100; y < 120; y++) {
@@ -173,15 +176,19 @@ int main(void) {
         }
         var.yoffset = page * var.yres;
         ioctl(fb, FBIOPAN_DISPLAY, &var); /* show the page just drawn, at the next blank */
-        page = 1 - page;
+        page = (page + 1) % pages;
     }
     return 0;
 }
 ```
 
-In NASM the pan is three instructions and an ioctl, with `var` and `r12` as in the first program:
+In NASM the check and the pan are a few instructions and an ioctl, with `var` and `r12` as in the first program:
 
 ```x86
+    mov eax, [var + fb_var_screeninfo.yres]
+    add eax, eax
+    cmp [var + fb_var_screeninfo.yres_virtual], eax
+    jb one_page                                 ; no room for a second page
     mov eax, [var + fb_var_screeninfo.yres]
     mov [var + fb_var_screeninfo.yoffset], eax  ; the second page's first line
     mov eax, SYS_ioctl
@@ -195,7 +202,7 @@ Undo puts the page that was shown back, with the pixels.
 
 ## The Screen's size {#display}
 
-The size of the framebuffer is the machine's, not the program's: the program reads it with `FBIOGET_VSCREENINFO` and cannot change it. It starts at {defaultSize}. To choose another, use the **Display** button of the Screen panel: it offers {sizes}, and **Custom…** takes any width that is a multiple of {widthStep} and any height, from {sizeMin} to {sizeMax} pixels. The size is saved with the Program, applies from the next run, and Testcases run with it too. A width that is not a multiple of {widthStep} is rounded to the nearest one, as Linux rounds the width of a mode it makes up.
+The size of the framebuffer is the machine's, not the program's: the program reads it with `FBIOGET_VSCREENINFO` and cannot change it. It starts at {defaultSize}. To choose another, use the **Display** button of the Screen panel: it offers {sizes}, and **Custom…** takes any width that is a multiple of {widthStep} and any height, from {sizeMin} to {sizeMax} pixels. The size is saved with the Program, applies from the next run, and Testcases run with it too. A width that is not a multiple of {widthStep} is rounded down to one.
 
 A program can name the size it wants in a comment, so that opening it and pressing **Build** is all it takes:
 
@@ -214,7 +221,7 @@ In NASM the comment starts with `;`. In a C or C++ program it is a `//` or `/* *
 - A setting that is not `width` or `height`, or a value that is not a number, is a _warning_ on the comment's line, never an error. A size outside {sizeMin} to {sizeMax} is replaced by the nearest one inside.
 - A change in the Display menu afterwards rewrites the comment to match, so the next Build reads it back.
 
-`FBIOPUT_VSCREENINFO` answers as Linux does: a smaller size is accepted and read back, while the Screen keeps showing the whole mode; a larger size or another pixel format fails with `EINVAL`. Write programs that read `xres` and `yres` and draw at that size.
+`FBIOPUT_VSCREENINFO` answers as Linux does: a size that fits in the virtual size, `xres_virtual` by `yres_virtual`, is accepted and read back, while the Screen keeps showing the whole mode; a size larger than the virtual size or another pixel format fails with `EINVAL`. Write programs that read `xres` and `yres` and draw at that size.
 
 ## The Screen's keys {#screen-keys}
 
@@ -226,7 +233,7 @@ A focused Screen hands **Escape** to the program, as `KEY_ESC`, since games ofte
 
 The devices behave as they do on a QEMU virtual machine running Linux, the reference this emulator follows. These are the places where they do not:
 
-- **The Screen shows changes sooner.** It shows the framebuffer while the program runs, whenever it waits, at every pan and at `fsync` on `/dev/fb0`. On the reference machine, a store can take a few hundredths of a second to reach the monitor, unless the program calls `fsync`.
+- **The Screen shows changes sooner.** It shows the framebuffer many times a second while the program runs, and whenever the program waits or pauses, whether or not it called `fsync`. On the reference machine, a store can take a few hundredths of a second to reach the monitor, unless the program calls `fsync`.
 - **A mapping past the framebuffer's last page fails** with `EINVAL`. Linux maps it and stops the program with `SIGBUS` at the first store past the end.
 - **A `MAP_PRIVATE` mapping is a copy made at the `mmap`.** On Linux, a page the program has not written yet still shows later changes to the framebuffer.
 - The color-map requests (`FBIOGETCMAP`, `FBIOPUTCMAP`) answer `ENOTTY`. A true-color framebuffer does not need them.

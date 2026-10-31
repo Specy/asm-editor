@@ -214,7 +214,8 @@ function input(): Chapter {
             ['BTN_EXTRA', 'Its forward button'],
             ['ABS_X', "The pointer's position across, 0 to 32767"],
             ['ABS_Y', 'Its position down, 0 to 32767'],
-            ['REL_WHEEL', 'A wheel notch: 1 away from you, -1 toward you']
+            ['REL_WHEEL', 'A wheel notch: 1 away from you, -1 toward you'],
+            ['REL_WHEEL_HI_RES', 'The same notch in 120ths, in the same report: 120 or -120']
         ]),
         absinfoFields: fields('input_absinfo', ['value', 'minimum', 'maximum']),
         stateRequests: requests([

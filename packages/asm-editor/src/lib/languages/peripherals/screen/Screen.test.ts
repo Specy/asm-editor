@@ -726,6 +726,23 @@ describe('Screen framebuffer mode', () => {
         expect(screen.version).toBe(version + 1)
     })
 
+    it('reads no pixel of an image a black page left black, and blacks out what was drawn since', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(2, 1)
+        screen.syncFramebufferPage(page(2, 1, 8, [0xff0000, 0]))
+        screen.syncFramebufferPage(null)
+        expect(visibleColors(screen)).toEqual([BLACK, BLACK])
+        //a byte changed behind the Screen's back, which none of its operations does: not looked at
+        screen.visiblePixels[0] = 0xff
+        screen.syncFramebufferPage(null)
+        expect(screen.visiblePixels[0]).toBe(0xff)
+        //anything the Screen drew counts
+        screen.setPenColor(BLUE)
+        screen.drawPixel(1, 0)
+        screen.syncFramebufferPage(null)
+        expect(visibleColors(screen)).toEqual([BLACK, BLACK])
+    })
+
     it('goes back to journaling when drawing mode is restored', () => {
         const screen = makeScreen()
         screen.useFramebuffer(4, 2)

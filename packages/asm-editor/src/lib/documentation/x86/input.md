@@ -14,7 +14,7 @@ Linux also makes names that say where a device is connected. The keyboard is:
 
 This name is right on laptops and on PCs whose keyboard is plugged into a PS/2 port, as here. A USB keyboard has another name, so a program meant for any machine looks for its devices instead, as the next section shows.
 
-A program usually opens the keyboard with `O_NONBLOCK`, so that a read with nothing to give returns at once with `EAGAIN` instead of waiting:
+A program usually opens the keyboard with `O_NONBLOCK`, so that a read with nothing to give returns at once instead of waiting: in C, `read` returns -1 and sets `errno` to `EAGAIN`; in NASM, the system call returns `-EAGAIN`, -11, in `rax`.
 
 ```c
 int keyboard = open("/dev/input/by-path/platform-i8042-serio-0-event-kbd", O_RDONLY | O_NONBLOCK);
@@ -22,7 +22,7 @@ int keyboard = open("/dev/input/by-path/platform-i8042-serio-0-event-kbd", O_RDO
 
 ## Finding a device {#finding-devices}
 
-To find a device on any machine, open `event0`, `event1` and the rest in turn and ask each what it has. The `EVIOCGBIT` ioctl fills a set of bits, one per code: `EVIOCGBIT(0, size)` gives the event types the device sends, and `EVIOCGBIT(EV_KEY, size)` the keys it has. A device with `KEY_A` is a keyboard, one with `EV_ABS` reports a position, the pointer here, and one with `EV_SND` makes sounds. `EVIOCGNAME` gives the device's name. Bit n of a set is bit `n % 8` of byte `n / 8`.
+To find a device on any machine, open `event0`, `event1` and the rest in turn and ask each what it has. The `EVIOCGBIT` ioctl fills a set of bits, one per code: `EVIOCGBIT(0, size)` gives the event types the device sends, and `EVIOCGBIT(EV_KEY, size)` the keys it has. A device with `KEY_A` is a keyboard, one with `EV_ABS` reports a position, the pointer here, and one with `EV_SND` makes sounds. Do not look for the pointer by `EV_REL` or `BTN_LEFT`: the PS/2 mouse, `event1`, has both, comes first, and never reports anything here. `EVIOCGNAME` gives the device's name. Bit n of a set is bit `n % 8` of byte `n / 8`.
 
 ```c
 #include <fcntl.h>
@@ -164,7 +164,7 @@ Each `open` of a device gets its own queue of events, and every reader sees ever
 
 ## The pointer {#pointer}
 
-The pointer is a USB **tablet**: a device that reports where the pointer is, not how far it moved. It sends `EV_ABS` events with the codes `ABS_X` and `ABS_Y`, `EV_KEY` events for its five buttons, `BTN_LEFT`, `BTN_RIGHT`, `BTN_MIDDLE`, and `BTN_SIDE` and `BTN_EXTRA` for a mouse's back and forward buttons, which a focused Screen keeps from moving the page back and forward, and `EV_REL` `REL_WHEEL` events for the wheel, 1 a notch away from you and -1 toward you. Each report ends with `SYN_REPORT`, so a move along both axes is two `EV_ABS` events and one `SYN_REPORT`.
+The pointer is a USB **tablet**: a device that reports where the pointer is, not how far it moved. It sends `EV_ABS` events with the codes `ABS_X` and `ABS_Y`, `EV_KEY` events for its five buttons, `BTN_LEFT`, `BTN_RIGHT`, `BTN_MIDDLE`, and `BTN_SIDE` and `BTN_EXTRA` for a mouse's back and forward buttons, which a focused Screen keeps from moving the page back and forward, and `EV_REL` events for the wheel: `REL_WHEEL`, 1 a notch away from you and -1 toward you, and beside it in the same report `REL_WHEEL_HI_RES`, the same turn in 120ths of a notch, 120 or -120. Check the code: a program that counts every `EV_REL` event as a notch counts 121 for each. Each report ends with `SYN_REPORT`, so a move along both axes is two `EV_ABS` events and one `SYN_REPORT`.
 
 The positions are not pixels. They run from 0 at the left or top edge of the Screen to 32767 at the right or bottom, whatever the Screen's size. The `EVIOCGABS(ABS_X)` ioctl fills a `struct input_absinfo` with the range, and the pixel is:
 
@@ -176,7 +176,7 @@ with `xres` from `FBIOGET_VSCREENINFO`, the same for `y` with `ABS_Y` and `yres`
 
 {absinfoFields}
 
-The tablet has no name a program can count on, so find it as [Finding a device](#finding-devices) shows: it is the device with `EV_ABS`. This C program prints where each left click lands, for ten seconds:
+The tablet has no name a program can count on, so find it as [Finding a device](#finding-devices) shows: it is the device with `EV_ABS`, not the silent PS/2 mouse with `EV_REL`. This C program prints where each left click lands, for ten seconds:
 
 ```c
 #include <fcntl.h>
@@ -236,7 +236,7 @@ There is no double-click event and no event for a modifier held during a click: 
 
 ## What is held now {#state}
 
-A game often wants to know which keys are held at this moment rather than every key that went down. `EVIOCGKEY(size)` fills a set of bits, one per key code, with the keys and buttons held now; size `KEY_MAX / 8 + 1`, 96 bytes, holds them all. It also throws away the key events still waiting for that reader, so use one or the other. `EVIOCGABS` gives the pointer's position now in the `value` of its `input_absinfo`.
+A game often wants to know which keys are held at this moment rather than every key that went down. `EVIOCGKEY(size)` fills a set of bits, one per key code, with the keys and buttons held now; size `KEY_MAX / 8 + 1`, 96 bytes, holds them all. It also throws away the key events still waiting for that reader, so a program uses one or the other on a descriptor: either it reads events, or it asks what is held. `EVIOCGABS` gives the pointer's position now in the `value` of its `input_absinfo`.
 
 ```c
 unsigned char held[KEY_MAX / 8 + 1];
@@ -251,7 +251,7 @@ The requests of this chapter, with the number each one is at the sizes used here
 
 ## Waiting for input {#waiting}
 
-A read of a device opened without `O_NONBLOCK` waits until an event comes. With `O_NONBLOCK` it returns `-EAGAIN` at once when nothing is waiting, which lets a game draw its next frame instead.
+A read of a device opened without `O_NONBLOCK` waits until an event comes. With `O_NONBLOCK` it returns at once when nothing is waiting, which lets a game draw its next frame instead: the system call returns `-EAGAIN`, and C's `read` returns -1 with `errno` set to `EAGAIN`.
 
 To wait for several things at once, use `poll` or `select`. `poll` takes an array of `struct pollfd`, each with a descriptor and `POLLIN` in its `events`, and a timeout in milliseconds: it returns as soon as one of them can be read, or 0 when the time is up. A game loop waits on the keyboard and the pointer with a timeout of one frame, then draws. `poll` also waits on standard input, so a program can take typed lines and keys at once.
 

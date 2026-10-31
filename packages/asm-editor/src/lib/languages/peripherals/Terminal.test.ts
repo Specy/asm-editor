@@ -1195,6 +1195,22 @@ describe("a serial line's output", () => {
         expect(terminal.output).toBe('X')
     })
 
+    it("goes through as written in a Testcase's run, as a pipe's output does", () => {
+        const { terminal } = makeTerminal({ serialLine: true })
+        terminal.setSerialOutput(false)
+        terminal.writeBytes(new TextEncoder().encode('Hello\r\n50%\r100%\nab\bc\n'))
+        expect(terminal.output).toBe('Hello\r\n50%\r100%\nab\bc\n')
+        //back on the serial line, it takes up where that transcript ends
+        terminal.setSerialOutput(true)
+        terminal.write('x\ry')
+        expect(terminal.output).toBe('Hello\r\n50%\r100%\nab\bc\ny')
+        //and the next run starts on the serial line
+        terminal.setSerialOutput(false)
+        terminal.clear()
+        terminal.write('a\rb')
+        expect(terminal.output).toBe('b')
+    })
+
     it('is not what the other Targets have: their \\r and \\b stay as written', () => {
         const { terminal } = makeTerminal()
         terminal.setLineMode(MADE_RAW)
@@ -1293,13 +1309,37 @@ describe('raw mode', () => {
         expect(terminal.hasPendingInput()).toBe(true)
     })
 
-    it('hands over what was typed ahead for a line when it starts, as Linux does', () => {
+    it('hands over what was typed ahead for a line once it has started, as Linux does', () => {
         const { terminal, keys } = makeSerial(COOKED)
         terminal.insertText('ab\n')
         terminal.pressBackspace()
         terminal.setLineMode(MADE_RAW)
+        //the adapter's to ask for, once the system call that changed the termios has returned
+        expect(keys).toEqual([])
+        terminal.handOverTypedInput()
         expect(keys).toEqual(['ab\r\x7f'])
         expect(terminal.hasPendingInput()).toBe(false)
+    })
+
+    it('hands over the line a read is editing, already echoed, before what was typed ahead', async () => {
+        const { terminal, keys, execution } = makeSerial(COOKED)
+        const read = terminal.readStandardInput(10, 'q', execution).catch(() => null)
+        terminal.insertText('xy')
+        await settle()
+        expect(terminal.output).toBe('xy')
+        terminal.setLineMode(NONCANONICAL)
+        terminal.handOverTypedInput()
+        expect(keys).toEqual(['xy'])
+        expect(terminal.pendingRead?.line).toBe('')
+        //echoed once, as it was typed
+        expect(terminal.output).toBe('xy')
+        terminal.cancelPendingInput()
+        expect(await read).toBeNull()
+        //and nothing outside raw mode
+        terminal.setLineMode(COOKED)
+        terminal.insertText('z')
+        terminal.handOverTypedInput()
+        expect(keys).toEqual(['xy'])
     })
 
     it('leaves the line reads in place with no adapter to take the keys', async () => {

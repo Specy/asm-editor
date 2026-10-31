@@ -567,6 +567,7 @@
                 height={logicalHeight}
                 style="width: {logicalWidth * zoom}px; height: {logicalHeight * zoom}px;"
                 tabindex="0"
+                data-program-screen
                 aria-label="{name} screen, {focusHint.label}"
                 title={focusHint.title}
                 onfocus={() => (focused = true)}

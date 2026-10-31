@@ -227,14 +227,8 @@ describe('the x86 Screen', () => {
         emulator.toggleBreakpoint(lineOf(input, 'nop ; panned'))
         await emulator.run(1000)
         expect(pixel(emulator, 0, 0)).toBe(0xff0000)
-        //the Screen shows the pan as it happens, not only at the slice's end
-        const presented: number[] = []
-        native(emulator).on('framebufferPresent', () => {
-            presented.push(pixel(emulator, 0, 0))
-        })
         await emulator.run(1000)
         expect(emulator.errors).toEqual([])
-        expect(presented).toEqual([0x0000ff])
         expect(pixel(emulator, 0, 0)).toBe(0x0000ff)
         //the ioctl and the four moves that set it up: back on the first page
         expect(emulator.undo(6)).toBe(6)
@@ -244,26 +238,43 @@ describe('the x86 Screen', () => {
         expect(pixel(emulator, 0, 0)).toBe(0)
     })
 
-    it('shows a page at fsync, during the slice', async () => {
+    it('reads the page once when the run stops, however many times the program called fsync', async () => {
         const input = sources(
             program([
                 ...mapFramebuffer,
-                'mov dword [rbx + 4], 0xffff00',
+                'xor r13, r13',
+                'plot:',
+                'mov dword [rbx + r13*4], 0xffff00',
                 ...sys(74, 'r12'),
+                'inc r13',
+                'cmp r13, 64',
+                'jb plot',
+                'nop ; synced',
                 'mov dword [rbx + 4], 0x00ffff',
                 ...exit
             ])
         )
         const emulator = await emulatorFor(input)
         await emulator.compile(100, input)
-        const presented: number[] = []
-        native(emulator).on('framebufferPresent', () => {
-            presented.push(pixel(emulator, 1, 0))
-        })
+        emulator.toggleBreakpoint(lineOf(input, 'nop ; synced'))
+        const screen = emulator.peripherals.screen
+        let reads = 0
+        const sync = screen.syncFramebufferPage.bind(screen)
+        screen.syncFramebufferPage = (page) => {
+            reads++
+            sync(page)
+        }
         await emulator.run(1000)
         expect(emulator.errors).toEqual([])
-        expect(presented).toEqual([0xffff00])
+        //each fsync only marks the page presented, since nothing can paint the Screen mid-slice
+        expect(reads).toBe(1)
+        expect(pixel(emulator, 63, 0)).toBe(0xffff00)
+        //a catch-up with no instruction run since reads nothing
+        emulator.showFramebuffer()
+        expect(reads).toBe(1)
+        await emulator.run(1000)
         expect(pixel(emulator, 1, 0)).toBe(0x00ffff)
+        expect(reads).toBe(2)
     })
 
     it('shows a Poke into the framebuffer at once', async () => {
@@ -333,6 +344,30 @@ describe('the x86 input devices', () => {
         expect(emulator.errors).toEqual([])
         expect(eventsIn(emulator, 3)).toEqual([
             { type: EV_ABS, code: 0, value: Math.floor((16 * 32767) / 64) },
+            { type: EV_ABS, code: 1, value: Math.floor((36 * 32767) / 48) },
+            { type: EV_SYN, code: 0, value: 0 }
+        ])
+    })
+
+    it('tells the program both axes at its first move, wherever the pointer went before', async () => {
+        const input = sources(program(readEvents('tablet')))
+        const emulator = await emulatorFor(input)
+        await emulator.compile(100, input)
+        emulator.toggleBreakpoint(lineOf(input, 'nop ; read'))
+        const x86Input = emulator.peripherals.x86Input
+        //a move the adapter drops, as it drops those during the Build and in a Testcase
+        const terminal = emulator.peripherals.terminal
+        terminal.useScriptedInput([])
+        x86Input.moveTo(16, 36)
+        terminal.useInteractiveInput()
+        const running = emulator.run(1000)
+        await pauseUntil(() => emulator.interrupt !== undefined)
+        //a move along one axis: the program has not been told the other yet
+        x86Input.moveTo(20, 36)
+        await running
+        expect(emulator.errors).toEqual([])
+        expect(eventsIn(emulator, 3)).toEqual([
+            { type: EV_ABS, code: 0, value: Math.floor((20 * 32767) / 64) },
             { type: EV_ABS, code: 1, value: Math.floor((36 * 32767) / 48) },
             { type: EV_SYN, code: 0, value: 0 }
         ])
