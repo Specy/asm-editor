@@ -346,16 +346,8 @@ describe('the NASM include files', () => {
             '    syscall',
             ''
         ].join('\n')
-        //staged beside the Entry until the Core searches an include path (decision 16)
-        const sources = {
-            entry: 'main.asm',
-            files: {
-                'main.asm': plain(program),
-                ...Object.fromEntries(
-                    Object.entries(includes).map(([path, text]) => [path, plain(text)])
-                )
-            }
-        }
+        //found through the include path the Build gives NASM (decision 16)
+        const sources = { entry: 'main.asm', files: { 'main.asm': plain(program) } }
         const emulator = await X86Emulator(sources, { automaticChecking: false })
         try {
             await emulator.compile(20, sources)

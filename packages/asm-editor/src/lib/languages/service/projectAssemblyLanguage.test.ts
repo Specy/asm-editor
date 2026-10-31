@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
+import { x86SystemIncludes } from '#lib/languages/X86/x86Project.ts'
 import { registerLanguageSession } from './sessionRegistry'
 import { projectSourceUri } from './uri'
 import {
@@ -136,6 +137,67 @@ describe('common Project language features', () => {
             expect(links?.links[0]?.range).toEqual(
                 expect.objectContaining({ startColumn: 15, endColumn: 19 })
             )
+        } finally {
+            unregisterX86()
+        }
+    })
+
+    it('links and completes an include file of the include path, which the editor shows read-only', async () => {
+        const content = '%include "linux/fb.inc"\n%include "missing.inc"'
+        const x86Sources = normalizeBuildInput({
+            entry: 'main.asm',
+            files: { 'main.asm': { encoding: 'plain', content } }
+        })
+        const x86SessionId = 'x86-include-path-test'
+        const unregisterX86 = registerLanguageSession({
+            sessionId: x86SessionId,
+            sources: x86Sources,
+            snapshot: undefined,
+            sourcesFor: () => x86Sources
+        })
+        const x86Options = {
+            comment: ';' as const,
+            dialect: 'x86' as const,
+            systemIncludes: x86SystemIncludes
+        }
+        const lines = content.split('\n')
+        const x86Model = (prefix?: string) => ({
+            uri: projectSourceUri(monaco, {
+                sessionId: x86SessionId,
+                sourceKind: 'live',
+                path: 'main.asm'
+            }),
+            getLineCount: () => lines.length,
+            getLineContent: (line: number) => lines[line - 1] ?? '',
+            getValueInRange: () => prefix ?? '',
+            getWordUntilPosition: () => ({ word: '', startColumn: 1, endColumn: 1 })
+        })
+        try {
+            const links = await createProjectDocumentLinkProvider(monaco, x86Options).provideLinks(
+                x86Model() as never,
+                {} as never
+            )
+            expect(links?.links).toEqual([
+                expect.objectContaining({
+                    url: expect.objectContaining({ path: '/live/@runtime/include/linux/fb.inc' }),
+                    tooltip: 'Open @runtime/include/linux/fb.inc'
+                })
+            ])
+
+            const complete = (prefix: string) =>
+                createProjectSymbolCompletionProvider(monaco, x86Options).provideCompletionItems(
+                    x86Model(prefix) as never,
+                    { lineNumber: 1, column: prefix.length + 1 } as never,
+                    {} as never,
+                    {} as never
+                )
+            const suggestions = (await complete('%include "linux/f'))?.suggestions ?? []
+            expect(suggestions).toContainEqual(
+                expect.objectContaining({ label: 'linux/fb.inc', insertText: 'linux/fb.inc' })
+            )
+            expect(suggestions.every((item) => String(item.label).startsWith('linux/f'))).toBe(true)
+            //an incbin's bytes are no include file
+            expect((await complete('incbin "linux/f'))?.suggestions).toEqual([])
         } finally {
             unregisterX86()
         }

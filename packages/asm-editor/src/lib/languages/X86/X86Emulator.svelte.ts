@@ -107,6 +107,7 @@ import {
     x86CoreProject,
     X86_START_UNIT_FILES
 } from './x86StartUnit'
+import { x86IncludeText } from './x86Project'
 import { downloadReason } from './x86Downloads'
 import type { Termination } from '#lib/languages/termination.ts'
 import { X86_INSTRUCTIONS } from './generated/x86Instructions'
@@ -144,12 +145,6 @@ const STARTED_STATES: ReadonlySet<BlinkState> = new Set([
     BlinkState.ProgramReadlinePause,
     BlinkState.ProgramWaitPause
 ])
-
-/**
- * The system calls that read the terminal and can wait doing so: `read`, `readv` and `preadv2` at
- * the current position. `pread64` and `preadv` answer ESPIPE on a terminal at once.
- */
-const TERMINAL_READ_SYSCALLS = new Set([0, 19, 327])
 
 /** mousedev's nodes: relative PS/2 packets, where the tablet reports where the pointer is. */
 const MOUSE_PACKETS = {
@@ -922,9 +917,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /**
      * Loads the Runtime library a Build links, or the list of library functions that explains an
-     * undefined `printf` in a Build that does not link it. For an Executable with C++ names, loads
-     * the demangler before the Core loads the program, for the debug tools and the memory view to
-     * show its names and its libraries' demangled; if it does not load, they show them raw.
+     * undefined `printf` in a Build that does not link it, and the include files NASM finds through
+     * the include path. For an Executable with C++ names, loads the demangler before the Core loads
+     * the program, for the debug tools and the memory view to show its names and its libraries'
+     * demangled; if it does not load, they show them raw.
      */
     async _prepareBuild(sources: BuildSources): Promise<void> {
         const entry = sources.files[sources.entry]
@@ -934,8 +930,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             return
         }
         if (kind !== 'none') return
+        await prepareX86Runtime(sources)
         if (sources.runtimeAbi === undefined) await loadRuntimeFunctions(CURRENT_RUNTIME_ABI)
-        else await prepareX86Runtime(sources)
     }
 
     async _compile(sources: BuildSources): Promise<CompileResult> {
@@ -1091,12 +1087,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      */
     private changesBelongToInstruction(core: CoreX86Emulator): boolean {
         if (core.getStatus() !== CoreEmulatorStatus.Waiting) return true
-        //a raw read with a VTIME deadline waits as `Waiting`, at its system call with `rax` its
-        //number, since the Core starts the instruction over when the wait ends
-        return (
-            core.getWaitRequest()?.wakeSources.terminal === true &&
-            TERMINAL_READ_SYSCALLS.has(Number(core.getRegisterValue('rax')))
-        )
+        //a raw read with a VTIME deadline waits as `Waiting`, as a poll of the terminal does
+        return core.getWaitRequest()?.terminalRead === true
     }
 
     _dispose(): void {
@@ -2366,7 +2358,12 @@ function coreDiagnosticToDiagnostic(
         path: diagnostic.file || sources.entry,
         line: Math.max(0, diagnostic.line - 1)
     }
-    const line = sourceLineText(sources, source.path, source.line)
+    //a mistake in an include file of the include path is shown on it, read-only
+    const included = x86IncludeText(source.path)
+    const line =
+        included === undefined
+            ? sourceLineText(sources, source.path, source.line)
+            : (included.split(/\r?\n/)[source.line] ?? '')
     const hint =
         x86DiagnosticHint(diagnostic.warningClass) ?? x86LinkHint(diagnostic.error, sources)
     const span = locateDiagnosticSpan(diagnostic.error, line, diagnostic.warningClass)

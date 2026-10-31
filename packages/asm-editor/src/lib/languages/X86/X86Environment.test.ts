@@ -381,7 +381,8 @@ describe('x86 selected environment and native transport', () => {
                         clock: number
                         deadlineNanoseconds: bigint
                         remainingMilliseconds: number
-                        acceptsInput: boolean
+                        wakeSources: { terminal: boolean; inputDevices: never[] }
+                        terminalRead: boolean
                     },
                     signal: AbortSignal
                 ) => Promise<void>
@@ -392,7 +393,8 @@ describe('x86 selected environment and native transport', () => {
                         clock: 1,
                         deadlineNanoseconds: 1000000000000000001n,
                         remainingMilliseconds: 0.000001,
-                        acceptsInput: false
+                        wakeSources: { terminal: false, inputDevices: [] },
+                        terminalRead: false
                     },
                     new AbortController().signal
                 )

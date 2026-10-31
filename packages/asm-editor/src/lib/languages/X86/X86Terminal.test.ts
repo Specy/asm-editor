@@ -457,6 +457,41 @@ describe('x86 raw mode under Undo', () => {
         expect(emulator.stdOut).toBe('xx')
     })
 
+    it('takes back the echo of a key a VTIME read waited for, with the read', async () => {
+        const input = sources(
+            program([
+                ...setTermios({ lflag: ICANON, vmin: 0, vtime: 100 }),
+                ...sys(0, 0, 'buf', 1),
+                'mov r13, rax',
+                ...sys(1, 1, 'buf', 1),
+                'nop ; end',
+                ...exit
+            ])
+        )
+        const emulator = await emulatorFor(input)
+        await emulator.compile(100, input)
+        emulator.toggleBreakpoint(lineOf(input, 'nop ; end'))
+        const terminal = emulator.peripherals.terminal
+        const read = () => native(emulator).getWaitRequest()?.terminalRead === true
+        const running = emulator.run(1000)
+        //a read VTIME times waits as a poll does, with a deadline, and the Core says it is a read
+        await pauseUntil(read)
+        terminal.insertText('x')
+        await running
+        expect(cpu(emulator, 'r13')).toBe(1n)
+        expect(emulator.stdOut).toBe('xx')
+        //the write, then the read: the read asks again, so the echo of what it took goes too
+        expect(emulator.undo(6)).toBe(6)
+        expect(emulator.stdOut).toBe('x')
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.stdOut).toBe('')
+        const again = emulator.run(1000)
+        await pauseUntil(read)
+        terminal.insertText('y')
+        await again
+        expect(emulator.stdOut).toBe('yy')
+    })
+
     it('lets go of a line read when a signal handler turns raw mode on, and reads a key', async () => {
         let now = 0
         const clock = new ProgramClock({ now: () => now })

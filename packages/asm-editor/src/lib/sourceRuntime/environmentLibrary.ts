@@ -84,6 +84,13 @@ export async function loadEnvironmentFiles(
     return files
 }
 
+/** The Target's files besides `<sim.h>` once something has loaded them, for synchronous readers. */
+export function loadedEnvironmentFiles(
+    target: AvailableLanguages
+): Readonly<Record<string, string>> | undefined {
+    return loadedFiles.get(target)
+}
+
 /** The C headers among a Target's files, which a C or C++ compilation uploads. */
 export function environmentHeaders(
     files: Readonly<Record<string, string>>

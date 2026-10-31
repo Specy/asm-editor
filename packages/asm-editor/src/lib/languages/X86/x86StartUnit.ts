@@ -4,7 +4,7 @@ import { ProjectFormatError } from '#lib/projectFiles.ts'
 import { loadRuntimeLibrary, loadedRuntimeLibrary } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import { x86RuntimeUnits } from '@asm-editor/runtime/x86'
 import type { X86Project } from '@specy/x86'
-import { toX86Project } from './x86Project'
+import { loadX86Includes, toX86Project, withX86Includes } from './x86Project'
 import START_UNIT from './start.asm?raw'
 import SUPPORT_UNIT from './support.asm?raw'
 
@@ -50,10 +50,11 @@ export function linksX86StartUnit(sources: BuildSources): boolean {
 
 /**
  * The compiled Entry receives an always-linked start object. Support units follow user
- * archive members so secondary user definitions take precedence.
+ * archive members so secondary user definitions take precedence. NASM's include files are staged
+ * under the include path when a File could read one (`withX86Includes`).
  */
 export function x86CoreProject(sources: BuildSources): X86Project {
-    const project = toX86Project(sources)
+    const project = withX86Includes(toX86Project(sources), sources)
     if (sources.runtimeAbi) {
         const runtime = loadedRuntimeLibrary(sources.runtimeAbi, 'X86')
         if (!runtime)
@@ -70,8 +71,12 @@ export function x86CoreProject(sources: BuildSources): X86Project {
     }
 }
 
-/** Loads and validates the library a Build links, for execution and live analysis alike. */
+/**
+ * Loads and validates the library a Build links, and the include files it may stage, for execution
+ * and live analysis alike.
+ */
 export async function prepareX86Runtime(sources: BuildSources): Promise<void> {
+    await loadX86Includes()
     if (!sources.runtimeAbi) return
     const problem = unsupportedRuntimeAbi(sources.runtimeAbi, sources.entrySymbol !== undefined)
     if (problem) throw new ProjectFormatError(problem)
