@@ -605,7 +605,7 @@ describe('an x86 serial line', () => {
         expect(keys).toEqual(['\x1b'])
         expect(
             document.getElementById(textarea().getAttribute('aria-describedby')!)?.textContent
-        ).toContain('Shift+Tab gives the keyboard back')
+        ).toContain('Press Shift+Tab to return keyboard focus to the page')
     })
 
     it('raises SIGINT on Ctrl+C during a run under ISIG, which copying gives up', async () => {
@@ -622,7 +622,7 @@ describe('an x86 serial line', () => {
         expect(transcriptText()).toBe('\x03')
         expect(
             document.getElementById(textarea().getAttribute('aria-describedby')!)?.textContent
-        ).toContain('Ctrl+Shift+C copies')
+        ).toContain('Ctrl+Shift+C to copy selected text')
         terminal.cancelPendingInput()
     })
 

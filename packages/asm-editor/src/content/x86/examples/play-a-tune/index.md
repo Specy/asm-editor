@@ -1,6 +1,38 @@
 This program plays the first phrase of Beethoven's "Ode to Joy" on a piano, with a drum under every
-note. It writes **MIDI** messages, a few bytes each, to the MIDI port `/dev/snd/midiC1D0`, and a
-General MIDI synthesizer plays them. Choose **Build**, then **Run**, with your sound on.
+note. **MIDI** messages are instructions to play instruments, rather than recorded sound. The
+program writes these messages to `/dev/snd/midiC1D0`, a **port** that receives MIDI bytes. A
+**synthesizer** reads the instructions and produces the sound. This one follows General MIDI,
+which assigns standard numbers to instruments and drums.
+
+Choose **Build**, then **Run**, with your sound on.
+
+## MIDI messages
+
+Each message starts with a **status byte** that selects an action and one of 16 channels.
+One or two data bytes follow, each from 0 to 127. Channels let the synthesizer play different
+instruments at the same time. This program uses channel 1 for piano and channel 10 for drums.
+
+The channel value in a status byte starts at **0**, so channel 1 uses 0 and channel 10 uses 9.
+That makes a drum note-on status `0x90 + 9 = 0x99`.
+
+| Message        | Bytes                            | Example                                     |
+| -------------- | -------------------------------- | ------------------------------------------- |
+| Program change | `0xC0 + channel`, instrument     | `0xC0, 0`: select piano on channel 1        |
+| Note on        | `0x90 + channel`, note, velocity | `0x90, 64, 100`: start note 64 on channel 1 |
+| Note off       | `0x80 + channel`, note, 0        | `0x80, 64, 0`: release that note            |
+
+For the piano, the note number chooses the pitch: a larger number gives a higher sound. Note 60
+is called middle C. Each increase of 1 is one **semitone**, the step from one piano key to the
+next, including the black keys. Notes 64, 65 and 67 are E, F and G. **Velocity** describes how
+hard the key is struck; larger values generally sound louder. The example uses 100 for piano
+and 80 for drums.
+
+## The program
+
+The `piano` message selects the instrument once. Each group of three dwords in `tune` then gives
+a piano note number, its duration in milliseconds, and a drum number. The loop starts the piano
+and drum, sleeps for the duration, then releases the piano note. Adding 12 to `rbx` advances past
+those three dwords. A pitch of 0 ends the tune.
 
 ```x86|playground|no-registers|no-flags|allow-open
 default rel
@@ -97,43 +129,39 @@ fail:
     syscall
 ```
 
-## MIDI messages
+`send` takes the three message bytes in `dil`, `sil` and `dl`. It stores them in consecutive bytes
+of `message`, then gives `write` that buffer's address and a length of 3. The program writes the
+two-byte program-change message separately.
 
-A MIDI message is a **status** byte, which says what to do and on which of the 16 channels, then
-one or two data bytes from 0 to 127. The program uses three kinds:
-
-| Message        | Bytes                            | Here                                         |
-| -------------- | -------------------------------- | -------------------------------------------- |
-| Program change | `0xC0 + channel`, instrument     | `0xC0, 0`: channel 1 plays the piano         |
-| Note on        | `0x90 + channel`, note, velocity | `0x90, 64, 100`: the E above middle C starts |
-| Note off       | `0x80 + channel`, note, 0        | `0x80, 64, 0`: it ends                       |
-
-Channels are numbered 0 to 15 in the status byte and 1 to 16 by musicians, so `0x90` is channel 1.
-Note 60 is middle C and each note up is a semitone higher, so 64 is E, 65 F and 67 G. A note sounds
-from its note on until its note off; between the two, `nanosleep` holds it for its duration.
-
-`send` writes one three-byte message. It keeps the bytes in `message` and passes their address to
-`write`, as any write passes its bytes.
+The sleep works like the PC-speaker example: multiply milliseconds by 1,000,000 to get
+nanoseconds, then fill a `timespec`. These durations are all under one second, so `tv_sec` is 0.
+The durations add up to 6.4 seconds. In a testcase nothing is heard, and each
+`nanosleep` advances the testcase's clock immediately.
 
 ## Drums on channel 10
 
-On a General MIDI synthesizer channel 10, `0x99` in the status byte, is the drum kit. There the note
-number chooses the drum: 36 the bass drum, 38 the snare and 42 the closed hi-hat. A drum fades by
-itself, so it needs no note off. The third column of the table gives each note its drum, bass drum
-and snare on the first and third beats of each bar and the hi-hat between them.
+On channel 10, the note number selects a drum rather than a piano pitch: 36 is a bass drum,
+38 a snare and 42 a closed hi-hat. The third number in each group in `tune` selects the drum to
+start alongside that piano note. Listen for the bass drum, hi-hat, snare, hi-hat pattern.
 
-## The port
+The synthesizer's drum sounds used here decay after being triggered, so this example sends them
+no note-off messages. The piano notes do receive note-offs after their durations.
 
-The port sends the bytes at MIDI's speed, 31,250 bits a second, about three bytes a millisecond,
-behind a buffer of 4,096 bytes. A write returns once its bytes are in the buffer, so they are heard
-a moment later. `close` waits until the buffer is empty: without it the program could end with its
-last note off still waiting.
+## Finishing playback
 
-The phrase takes 6.4 seconds, the sum of the durations. In a testcase nothing is heard, and each
-`nanosleep` moves the testcase's clock on at once.
+Writing to the port queues MIDI messages. A write can return before those messages reach the
+synthesizer. `close` waits for the queued bytes to leave the port. This lets the
+final piano note-off reach the synthesizer before the program exits.
 
 ## Try it
 
 1. Change the instrument, the second byte of `piano`: 73 is a flute, 40 a violin, 56 a trumpet.
-2. Play a chord: send note ons for 60, 64 and 67 together, wait, then send their three note offs.
-3. Replace the hi-hat, 42, with an open hi-hat, 46, or a ride cymbal, 51.
+2. Make every entry play a C-major chord, three notes sounding together. Inside `next_note`,
+   replace the two note-on sequences, from `mov edi, 0x90` through the drum's `call send`, with
+   three calls to `send`. Before **each** call, set `edi` to `0x90`, `edx` to 100, and `esi` to
+   one of 60, 64 and 67. Keep the sleep block: each chord uses the current entry's duration.
+   Replace the piano note-off sequence after the sleep with three calls too: before each,
+   set `edi` to `0x80`, `edx` to 0, and `esi` to one of those same three note numbers. Keep
+   `add rbx, 12` and the loop jump. The table still controls the durations and when to stop,
+   but this version ignores its pitches and drums and plays no percussion.
+3. Replace 42, the third number in some groups, with 46 for an open hi-hat or 51 for a ride cymbal.

@@ -39,8 +39,8 @@ typedef int clockid_t; /* Which clock: CLOCK_REALTIME, CLOCK_MONOTONIC, ... */
 #define CLOCK_BOOTTIME           7 /* Like CLOCK_MONOTONIC, counting suspended time too. */
 
 /**
- * Stores the time of the clock clockid in *tp. Returns 0, or -1 with errno set (EINVAL for an
- * unknown clock).
+ * Reads the time from clockid into *tp as seconds and nanoseconds. Returns 0, or -1 with errno set
+ * (EINVAL for an unknown clock).
  */
 static inline int clock_gettime(clockid_t clockid, struct timespec *tp) {
     register long rax __asm__("rax") = 228; /* clock_gettime */
@@ -51,8 +51,9 @@ static inline int clock_gettime(clockid_t clockid, struct timespec *tp) {
 }
 
 /**
- * Waits for the time in *request. Returns 0, or -1 with errno set: EINTR when a signal ended the
- * wait early, with the time left in *remaining unless it is NULL.
+ * Waits for the duration in *request. Returns 0 on completion, or -1 with errno set. If a signal
+ * interrupts the wait, errno is EINTR and *remaining receives the time left, unless remaining is
+ * NULL.
  */
 static inline int nanosleep(const struct timespec *request, struct timespec *remaining) {
     register long rax __asm__("rax") = 35; /* nanosleep */

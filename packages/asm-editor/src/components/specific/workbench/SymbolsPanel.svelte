@@ -14,6 +14,13 @@
      * the Menu key, or on a touch screen its button) and on F2
      * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
      * decision 18), in a prompt over the panel.
+     *
+     * During a Debug session of a program the editor built, in every Target, it lists the labels
+     * and the strings of that program instead
+     * ([workbench.md](../../../../../../docs/design/workbench.md), Symbols in every Target), as
+     * the Build loaded it: a row reveals the line that defines it, or shows it in memory when the
+     * source does not say, and its menu shows it in memory or copies its address. The label the
+     * cursor of a pane is under is marked.
      */
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
@@ -34,6 +41,15 @@
     } from '#lib/listing/listingSymbols.ts'
     import type { AnnotationPrompt } from '#lib/workbench/annotationPrompt.svelte.ts'
     import { renameTarget } from '#lib/workbench/annotationTargets.ts'
+    import type { LabelDefinition, ProgramSymbols } from '#lib/languages/programSymbols.ts'
+    import {
+        filterLabels,
+        filterProgramStrings,
+        labelAtLine,
+        labelTooltip,
+        programStringTooltip
+    } from '#lib/workbench/programSymbolRows.ts'
+    import { formatHex, hexPrefix } from '#lib/testcases.ts'
     import {
         buildSource,
         isSameProjectSourceSelection,
@@ -41,12 +57,15 @@
         type ProjectSourceSelection
     } from '#lib/monaco/projectSourceSelection.ts'
     import FaCommentAlt from '~icons/fa-solid/comment-alt'
+    import FaCopy from '~icons/fa-solid/copy'
+    import FaMemory from '~icons/fa-solid/memory'
     import FaEllipsisH from '~icons/fa-solid/ellipsis-h'
     import FaFilter from '~icons/fa-solid/filter'
     import FaPen from '~icons/fa-solid/pen'
     import FaTimes from '~icons/fa-solid/times'
     import FaUndo from '~icons/fa-solid/undo'
     import AnnotationPromptView from './AnnotationPrompt.svelte'
+    import { copyToClipboard, showInMemory } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -61,54 +80,68 @@
     const { session, ui } = useWorkbench()
     const project = session.project
 
-    type Kind = 'functions' | 'strings'
-    const KINDS = [
-        { id: 'functions', label: 'Functions' },
-        { id: 'strings', label: 'Strings' }
-    ]
+    /** The names, an Executable's functions or a built program's labels, or the strings. */
+    type Kind = 'names' | 'strings'
     /** How much of a string a row holds; its tooltip has the whole of it. */
     const SHOWN_STRING = 160
 
-    let kind = $state<Kind>('functions')
+    let kind = $state<Kind>('names')
     let filter = $state('')
     let filterInput = $state<HTMLInputElement>()
     let list = $state<HTMLElement>()
 
+    type Source =
+        | { mode: 'executable'; selection: ProjectSourceSelection; entry: boolean }
+        | { mode: 'program'; path: string; symbols: ProgramSymbols }
+
     /**
-     * The File the panel lists, in the version shown: the focused pane's Executable, else the
-     * Selected program's Entry when it is one, in the Debug session's version while it has it.
+     * What the panel lists: the focused pane's Executable, else the Selected program's Entry when
+     * it is one, in the Debug session's version while it has it; else the program of a Debug
+     * session the editor built.
      */
-    const source = $derived.by<{ selection: ProjectSourceSelection; entry: boolean } | undefined>(
-        () => {
-            const focused = session.focusedGroup
-            if (focused.displayedKind === 'executable')
-                return { selection: { ...focused.sourceSelection }, entry: false }
-            const entry = project.selectedProgram
-            if (entry === undefined || session.kindAt(entry) !== 'executable') return undefined
+    const source = $derived.by<Source | undefined>(() => {
+        const focused = session.focusedGroup
+        if (focused.displayedKind === 'executable')
+            return { mode: 'executable', selection: { ...focused.sourceSelection }, entry: false }
+        const entry = project.selectedProgram
+        if (entry !== undefined && session.kindAt(entry) === 'executable') {
             const built = session.debugSession && !!session.emulator.buildSources?.files[entry]
             return {
+                mode: 'executable',
                 selection: built ? buildSource(entry, session.buildGeneration) : liveSource(entry),
                 entry: true
             }
         }
-    )
+        const symbols = session.debugSession ? session.emulator.programSymbols : undefined
+        const path = session.emulator.buildSources?.entry
+        return symbols && path ? { mode: 'program', path, symbols } : undefined
+    })
+    const executable = $derived(source?.mode === 'executable' ? source : undefined)
+    const program = $derived(source?.mode === 'program' ? source : undefined)
+    const prefix = $derived(hexPrefix(project.language))
+    const kinds = $derived([
+        { id: 'names', label: program ? 'Labels' : 'Functions' },
+        { id: 'strings', label: 'Strings' }
+    ])
 
     //kept while the panel is hidden, so showing it again finds its rows as they were, and while
     //the same File's Listing is made again, after a rename or a comment, so its rows stay
     let kept: ListingDocument | undefined
     let keptSelection: ProjectSourceSelection | undefined
     //asked for apart: a derived does not depend on the state of a document it made
-    const requested = $derived(source && shown ? session.listingFor(source.selection) : undefined)
+    const requested = $derived(
+        executable && shown ? session.listingFor(executable.selection) : undefined
+    )
     const listingDocument = $derived.by(() => {
-        if (!source) return (kept = undefined)
+        if (!executable) return (kept = undefined)
         if (!shown) return kept
         if (
             requested?.status === 'generating' &&
             kept?.status === 'ready' &&
-            isSameProjectSourceSelection(keptSelection, source.selection)
+            isSameProjectSourceSelection(keptSelection, executable.selection)
         )
             return kept
-        keptSelection = source.selection
+        keptSelection = executable.selection
         return (kept = requested)
     })
     const listing = $derived(listingDocument?.listing)
@@ -116,31 +149,50 @@
     const strings = $derived(
         listing && listingDocument ? listingStrings(listing, listingDocument.bytes) : []
     )
+    const labels = $derived(program?.symbols.labels ?? [])
+    const programStrings = $derived(program?.symbols.strings ?? [])
     const query = $derived(symbolQuery(filter))
     const shownFunctions = $derived(filterFunctions(functions, query))
     const shownStrings = $derived(filterStrings(strings, query))
-    const total = $derived(kind === 'functions' ? functions.length : strings.length)
-    const count = $derived(kind === 'functions' ? shownFunctions.length : shownStrings.length)
-    const noun = $derived(
-        `${kind === 'functions' ? 'function' : 'string'}${total === 1 ? '' : 's'}`
+    const shownLabels = $derived(filterLabels(labels, query))
+    const shownProgramStrings = $derived(filterProgramStrings(programStrings, query))
+    const total = $derived(
+        program
+            ? kind === 'names'
+                ? labels.length
+                : programStrings.length
+            : kind === 'names'
+              ? functions.length
+              : strings.length
     )
+    const count = $derived(
+        program
+            ? kind === 'names'
+                ? shownLabels.length
+                : shownProgramStrings.length
+            : kind === 'names'
+              ? shownFunctions.length
+              : shownStrings.length
+    )
+    const name = $derived(kind === 'strings' ? 'string' : program ? 'label' : 'function')
+    const noun = $derived(`${name}${total === 1 ? '' : 's'}`)
 
     /**
      * The line of the Listing's cursor, in a pane showing the listed version, the focused one
      * first; else the label of the function a focused Pseudocode shows.
      */
     const cursorLine = $derived.by(() => {
-        if (!source) return -1
+        if (!executable) return -1
         const focused = session.focusedGroup
         const panes = [focused, ...session.groups.filter((group) => group !== focused)]
         const pane = panes.find(
             (group) =>
                 group.displayedView === 'listing' &&
-                isSameProjectSourceSelection(group.sourceSelection, source.selection)
+                isSameProjectSourceSelection(group.sourceSelection, executable.selection)
         )
         if (pane) return pane.cursorLine
         return focused.displayedView === 'pseudocode' &&
-            isSameProjectSourceSelection(focused.sourceSelection, source.selection)
+            isSameProjectSourceSelection(focused.sourceSelection, executable.selection)
             ? (focused.pseudocodeFunction?.line ?? -1)
             : -1
     })
@@ -153,32 +205,65 @@
         const fn = functionAtLine(listing, line)
         return fn && fn.address + listing.base
     })
+    /**
+     * The built program's label the cursor is under, in the focused pane when it shows a File as
+     * text, else in another that does.
+     */
+    const currentLabel = $derived.by(() => {
+        if (!program) return undefined
+        const focused = session.focusedGroup
+        for (const pane of [focused, ...session.groups.filter((group) => group !== focused)]) {
+            if (pane.displayedView !== 'text' || pane.cursorLine < 0) continue
+            const label = labelAtLine(labels, pane.displayedPath, pane.cursorLine)
+            if (label) return label
+        }
+        return undefined
+    })
     /** The widest address and size, which every row's columns are as wide as, so they line up. */
     const widest = (texts: string[]) => texts.reduce((most, text) => Math.max(most, text.length), 0)
-    const addressWidth = $derived(
-        kind === 'functions'
+    const addressWidth = $derived.by(() => {
+        if (program)
+            return kind === 'names'
+                ? widest(labels.map((label) => symbolAddress(label.address, prefix)))
+                : widest(programStrings.map((string) => symbolAddress(string.address, prefix)))
+        return kind === 'names'
             ? widest(functions.map((fn) => symbolAddress(fn.address)))
             : widest(strings.map((string) => symbolAddress(string.address)))
+    })
+    const sizeWidth = $derived(
+        program
+            ? widest(labels.map((label) => `${label.size} B`))
+            : widest(functions.map((fn) => `${fn.size} B`))
     )
-    const sizeWidth = $derived(widest(functions.map((fn) => `${fn.size} B`)))
 
     function reveal(line: number) {
-        if (!source) return
-        void session.revealListingLine(source.selection, line)
+        if (!executable) return
+        void session.revealListingLine(executable.selection, line)
+        onReveal?.()
+    }
+
+    /** A built program's label or string: the line that defines it, else its bytes in memory. */
+    function revealProgram(address: bigint, definition: LabelDefinition | undefined) {
+        if (definition) void session.revealBuildLine(definition.file, definition.line)
+        else showInMemory(session, ui, address)
         onReveal?.()
     }
 
     /** The Project's File the rows rename and comment on, when the listed version takes them. */
-    const annotatable = $derived(source ? session.annotatableFile(source.selection) : undefined)
-    let menu = $state<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null)
-    /** The function whose menu is open, whose row is marked meanwhile. */
-    let menuFunction = $state<number | undefined>()
+    const annotatable = $derived(
+        executable ? session.annotatableFile(executable.selection) : undefined
+    )
+    let menu = $state<{ x: number; y: number; items: ContextMenuEntry[]; label: string } | null>(
+        null
+    )
+    /** The row whose menu is open, which is marked meanwhile. */
+    let menuRow = $state<string | undefined>()
     let prompt = $state.raw<AnnotationPrompt | undefined>()
     /** The row the prompt was opened from, which takes the keyboard back when it closes. */
     let promptRow: HTMLElement | undefined
     /** The prompt, while the panel lists the File it annotates. */
     const openPrompt = $derived(
-        prompt && prompt.spec.path === source?.selection.path ? prompt : undefined
+        prompt && prompt.spec.path === executable?.selection.path ? prompt : undefined
     )
 
     /** A function row's label and Listing function, in the Listing listed. */
@@ -247,25 +332,61 @@
         ]
     }
 
+    /** A built program's row: Show in memory, and Copy address in the Target's hex. */
+    function programItems(address: bigint): ContextMenuEntry[] {
+        return [
+            {
+                label: 'Show in memory',
+                icon: FaMemory,
+                onSelect: () => {
+                    showInMemory(session, ui, address)
+                    onReveal?.()
+                }
+            },
+            {
+                label: 'Copy address',
+                icon: FaCopy,
+                onSelect: () => copyToClipboard(formatHex(address, { prefix }))
+            }
+        ]
+    }
+
     /**
-     * A function row's menu, at the pointer, or under the row when the keyboard opened it (Shift+F10,
-     * the Menu key) or its button did.
+     * A row's menu, at the pointer, or under the row when the keyboard opened it (Shift+F10, the
+     * Menu key) or its button did. `key` names the row, which is marked while it is open.
      */
-    function openMenu(event: MouseEvent, symbol: FunctionSymbol, row: HTMLElement) {
+    function openMenu(
+        event: MouseEvent,
+        row: HTMLElement,
+        key: string,
+        items: ContextMenuEntry[],
+        label: string
+    ) {
         event.preventDefault()
         event.stopPropagation()
         const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0)
         const at = keyboard || event.type === 'click' ? row.getBoundingClientRect() : undefined
-        menuFunction = symbol.address
+        menuRow = key
         menu = {
             x: at ? at.left + 16 : event.clientX,
             y: at ? at.bottom : event.clientY,
-            items: functionItems(symbol, row)
+            items,
+            label
         }
     }
 
+    function openFunctionMenu(event: MouseEvent, symbol: FunctionSymbol, row: HTMLElement) {
+        const items = functionItems(symbol, row)
+        openMenu(event, row, `function ${symbol.address}`, items, 'Function actions')
+    }
+
     function revealFirst() {
-        const first = kind === 'functions' ? shownFunctions[0] : shownStrings[0]
+        if (program) {
+            const first = kind === 'names' ? shownLabels[0] : shownProgramStrings[0]
+            if (first) revealProgram(first.address, first.definition)
+            return
+        }
+        const first = kind === 'names' ? shownFunctions[0] : shownStrings[0]
         if (first) reveal(first.line)
     }
 
@@ -313,24 +434,28 @@
 <section class="symbols" aria-label="Symbols">
     {#if !source}
         <p class="note">
-            Open an Executable, or select a Program that runs one, to see its functions and strings.
+            {project.language === 'X86'
+                ? 'Build the program to see its labels and strings, or open an Executable to see its functions and strings.'
+                : 'Build the program to see its labels and strings.'}
         </p>
     {:else}
+        {@const path = program ? program.path : executable!.selection.path}
+        {@const entry = program !== undefined || executable!.entry}
         <div
             class="symbols-file"
-            title={source.entry
-                ? `${source.selection.path}, the Selected program's Entry file`
-                : `${source.selection.path}, shown in the editor`}
+            title={entry
+                ? `${path}, the Selected program's Entry file`
+                : `${path}, shown in the editor`}
         >
-            <strong class="ellipsis">{source.selection.path}</strong>
-            {#if source.entry}
+            <strong class="ellipsis">{path}</strong>
+            {#if entry}
                 <span class="entry-mark">ENTRY</span>
             {/if}
         </div>
         <div class="symbols-controls">
             <SegmentedControl
                 ariaLabel="Symbols to list"
-                options={KINDS}
+                options={kinds}
                 selected={kind}
                 onSelect={(id) => (kind = id as Kind)}
                 fill
@@ -343,10 +468,8 @@
                     type="search"
                     spellcheck="false"
                     autocomplete="off"
-                    aria-label={kind === 'functions'
-                        ? 'Filter the functions'
-                        : 'Filter the strings'}
-                    placeholder={kind === 'functions'
+                    aria-label={`Filter the ${name}s`}
+                    placeholder={kind === 'names'
                         ? 'Filter by name or address'
                         : 'Filter by text or address'}
                     onkeydown={onFilterKeydown}
@@ -367,7 +490,7 @@
                 {/if}
             </div>
         </div>
-        {#if !listingDocument || listingDocument.status === 'generating'}
+        {#if executable && (!listingDocument || listingDocument.status === 'generating')}
             {@const progress = listingDocument?.progress}
             <div class="note" role="status">
                 <p>
@@ -377,14 +500,12 @@
                 </p>
                 <progress max="1" value={progress} aria-label="Listing generated so far"></progress>
             </div>
-        {:else if listingDocument.status === 'failed'}
+        {:else if executable && listingDocument?.status === 'failed'}
             <ErrorState compact title="No Listing">
                 The Listing could not be generated: {listingDocument.error}
             </ErrorState>
         {:else if total === 0}
-            <p class="note">
-                {kind === 'functions' ? 'No functions found.' : 'No strings found.'}
-            </p>
+            <p class="note">No {name}s found.</p>
         {:else}
             <p class="count" role="status">
                 {count === total ? `${total} ${noun}` : `${count} of ${total} ${noun}`}
@@ -394,24 +515,127 @@
             {/if}
             <ul
                 class="symbol-list"
-                aria-label={kind === 'functions' ? 'Functions' : 'Strings'}
+                aria-label={kinds.find((each) => each.id === kind)?.label}
                 bind:this={list}
                 style:--address-width="{addressWidth}ch"
                 style:--size-width="{sizeWidth}ch"
             >
-                {#if kind === 'functions'}
+                {#if program && kind === 'names'}
+                    {#each shownLabels as label (`${label.name} ${label.address}`)}
+                        {@const key = `label ${label.name} ${label.address}`}
+                        <li class="function-item">
+                            <button
+                                type="button"
+                                class="symbol-row label"
+                                class:current={label === currentLabel}
+                                class:menu-open={menu !== null && menuRow === key}
+                                title={labelTooltip(label, prefix)}
+                                onclick={() => revealProgram(label.address, label.definition)}
+                                onkeydown={(event) => onRowKeydown(event)}
+                                oncontextmenu={(event) =>
+                                    openMenu(
+                                        event,
+                                        event.currentTarget as HTMLElement,
+                                        key,
+                                        programItems(label.address),
+                                        'Label actions'
+                                    )}
+                            >
+                                <span class="symbol-name">{label.display}</span>
+                                <span class="symbol-kind">{label.kind}</span>
+                                <span class="symbol-address"
+                                    >{symbolAddress(label.address, prefix)}</span
+                                >
+                                <span class="symbol-size">{label.size} B</span>
+                            </button>
+                            {#if !ui.viewport.canHover}
+                                <button
+                                    type="button"
+                                    class="row-menu"
+                                    title={`Show ${label.display} in memory or copy its address`}
+                                    aria-label={`Show ${label.display} in memory or copy its address`}
+                                    tabindex="-1"
+                                    onclick={(event) =>
+                                        openMenu(
+                                            event,
+                                            event.currentTarget
+                                                .previousElementSibling as HTMLElement,
+                                            key,
+                                            programItems(label.address),
+                                            'Label actions'
+                                        )}
+                                >
+                                    <FaEllipsisH />
+                                </button>
+                            {/if}
+                        </li>
+                    {/each}
+                {:else if program}
+                    {#each shownProgramStrings as string (string.address)}
+                        {@const key = `string ${string.address}`}
+                        <li class="function-item">
+                            <button
+                                type="button"
+                                class="symbol-row string"
+                                class:current={string.address === currentLabel?.address}
+                                class:menu-open={menu !== null && menuRow === key}
+                                title={programStringTooltip(string, prefix)}
+                                onclick={() => revealProgram(string.address, string.definition)}
+                                onkeydown={(event) => onRowKeydown(event)}
+                                oncontextmenu={(event) =>
+                                    openMenu(
+                                        event,
+                                        event.currentTarget as HTMLElement,
+                                        key,
+                                        programItems(string.address),
+                                        'String actions'
+                                    )}
+                            >
+                                <span class="symbol-name"
+                                    >"{string.escaped.length > SHOWN_STRING
+                                        ? `${string.escaped.slice(0, SHOWN_STRING)}…`
+                                        : string.escaped}"</span
+                                >
+                                <span class="symbol-address"
+                                    >{symbolAddress(string.address, prefix)}</span
+                                >
+                            </button>
+                            {#if !ui.viewport.canHover}
+                                <button
+                                    type="button"
+                                    class="row-menu"
+                                    title={`Show ${string.label} in memory or copy its address`}
+                                    aria-label={`Show ${string.label} in memory or copy its address`}
+                                    tabindex="-1"
+                                    onclick={(event) =>
+                                        openMenu(
+                                            event,
+                                            event.currentTarget
+                                                .previousElementSibling as HTMLElement,
+                                            key,
+                                            programItems(string.address),
+                                            'String actions'
+                                        )}
+                                >
+                                    <FaEllipsisH />
+                                </button>
+                            {/if}
+                        </li>
+                    {/each}
+                {:else if kind === 'names'}
                     {#each shownFunctions as fn (fn.address)}
                         <li class="function-item">
                             <button
                                 type="button"
                                 class="symbol-row function"
                                 class:current={fn.address === current}
-                                class:menu-open={menu !== null && menuFunction === fn.address}
+                                class:menu-open={menu !== null &&
+                                    menuRow === `function ${fn.address}`}
                                 title={functionTooltip(fn)}
                                 onclick={() => reveal(fn.line)}
                                 onkeydown={(event) => onRowKeydown(event, fn)}
                                 oncontextmenu={(event) =>
-                                    openMenu(event, fn, event.currentTarget as HTMLElement)}
+                                    openFunctionMenu(event, fn, event.currentTarget as HTMLElement)}
                             >
                                 <span class="symbol-name">{fn.display}</span>
                                 <span class="symbol-address">{symbolAddress(fn.address)}</span>
@@ -428,7 +652,7 @@
                                     onclick={(event) => {
                                         const row = event.currentTarget
                                             .previousElementSibling as HTMLElement
-                                        openMenu(event, fn, row)
+                                        openFunctionMenu(event, fn, row)
                                     }}
                                 >
                                     <FaEllipsisH />
@@ -476,10 +700,10 @@
             y={menu.y}
             items={menu.items}
             arrow
-            label="Function actions"
+            label={menu.label}
             onClose={() => {
                 menu = null
-                menuFunction = undefined
+                menuRow = undefined
             }}
         />
     {/if}
@@ -707,6 +931,13 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    /* a built program's label: code or data, quieter than its address */
+    .symbol-kind {
+        flex: none;
+        width: 4ch;
+        opacity: 0.45;
     }
 
     .symbol-address,

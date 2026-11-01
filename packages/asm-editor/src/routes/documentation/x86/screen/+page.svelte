@@ -9,5 +9,5 @@
     {chapter}
     heading="x86-64 Screen"
     title="x86-64 Screen and /dev/fb0"
-    description="Draw on the x86 Screen through /dev/fb0: read its size with the framebuffer ioctls, map its pixels with mmap, double buffer with FBIOPAN_DISPLAY and FBIO_WAITFORVSYNC, and set its size with an @screen comment."
+    description="Draw pixels and switch framebuffer pages through /dev/fb0. Configure the x86 Screen size with Display or @screen."
 />

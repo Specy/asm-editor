@@ -1,4 +1,4 @@
-An x86 program makes sound the way a Linux program does, through device files. There are three, from the simplest to the most flexible:
+An x86 program plays sound through Linux device interfaces. Choose the interface for the sound you want to produce:
 
 - **The PC speaker** plays one square-wave tone at a time: one write starts it and another stops it.
 - **The MIDI port**, `/dev/snd/midiC1D0`, plays notes on a General MIDI synthesizer, with 128 instruments and a drum kit.
@@ -82,7 +82,7 @@ fail:
     syscall
 ```
 
-The speaker's tone comes from a timer that counts 1,193,182 ticks a second, so the frequency it plays is the nearest it can make, 1193182 ÷ ⌊1193182 ÷ f⌋: 440 Hz plays as 440.1 Hz, and 10000 Hz as 10026.7 Hz.
+The speaker uses a timer running at 1,193,182 ticks a second. For a requested frequency `f`, it truncates the divider to `⌊1193182 ÷ f⌋` ticks per cycle. The resulting frequency is `1193182 ÷ ⌊1193182 ÷ f⌋`: 440 Hz becomes about 440.1 Hz, and 10000 Hz about 10026.7 Hz. Truncating the divider can make the tone slightly higher than requested.
 
 Older programs sound the same speaker through the console, `/dev/tty0`. Its `KIOCSOUND` ioctl takes the timer's count for one cycle, 1193182 divided by the frequency, and 0 for silence. `KDMKTONE` takes that count in its low 16 bits and a time in milliseconds in the high 16, after which the speaker falls silent by itself.
 
@@ -102,7 +102,7 @@ int main(void) {
 }
 ```
 
-The speaker's event codes and the console's requests:
+The speaker's event codes and the console's ioctl requests are listed below. `KIOCSOUND` and `KDMKTONE` take immediate integers as their third argument. In a raw `ioctl` syscall, pass the integer itself in `rdx`.
 
 {speakerRequests}
 
@@ -209,9 +209,9 @@ A sound is a wave: the air pressure going up and down hundreds or thousands of t
 
 `/dev/dsp` opens at 8000 samples a second, unsigned 8-bit, mono: each sample is one byte, 128 is silence, and 0 and 255 are the lowest and highest. A program that wants anything else asks with three ioctls, in this order: `SNDCTL_DSP_SETFMT`, `SNDCTL_DSP_CHANNELS` and `SNDCTL_DSP_SPEED`. Each takes a pointer to an `int` and **writes back** what it set, which can differ from what was asked: a rate is kept between 1000 and 192000, and a format the device does not take becomes `AFMT_U8`. Check the value after the call.
 
-Then the program writes samples. A write copies them into the device's buffer and **waits while the buffer is full**; the buffer empties at the rate, so a program that keeps writing is paced by its own sound.
+Then write the samples to the descriptor. A blocking write copies them into the device's buffer and **waits while the buffer is full**. Playback frees space at the selected rate, pacing a program that keeps writing. Check the returned byte count: a successful write can be short, particularly with `O_NONBLOCK` or when a signal interrupts it. Submit the remaining bytes in a later write.
 
-This C program plays one second of A, 440 Hz, as a square wave at 22,050 samples a second, 16 bits, mono:
+This C program plays roughly one second of a square wave near 440 Hz, using 22,050 samples a second, signed 16-bit samples and one channel:
 
 ```c
 #include <fcntl.h>
@@ -242,7 +242,9 @@ int main(void) {
 }
 ```
 
-The same idea in NASM, at the device's own 8000 samples a second, unsigned 8-bit, mono: 500 Hz is 16 samples a cycle, 8 high and 8 low. The buffer it writes again and again is 1024 samples, 64 whole cycles, so each write ends where the next begins, on a cycle's edge, and the tone has no click between them.
+At the requested rate, integer division makes the period 50 samples, so the actual pitch is 441 Hz. The loop writes 87 complete blocks of 256 samples, about 1.01 seconds of sound. Both the pitch and duration are approximate.
+
+The NASM version below uses the default 8000 samples a second, unsigned 8-bit, mono. A 500 Hz wave has 16 samples per cycle: 8 high and 8 low. Its 1024-sample buffer holds 64 whole cycles, so repeated writes join at cycle boundaries. Four writes play 4096 samples, or 0.512 seconds.
 
 ```x86
 default rel
@@ -320,16 +322,26 @@ The sample formats a program uses most:
 
 ## Fragments and latency {#fragments}
 
-The device's buffer is made of **fragments**, and the samples reach the speakers a whole fragment at a time. Two things follow.
+The playback buffer is divided into **fragments**. A write stages samples until a complete fragment can be submitted for playback. This affects both playback delay and short sounds:
 
-- **A big buffer means a late sound.** A write returns as soon as its samples are in the buffer, so a program that keeps the buffer full is always a whole buffer ahead of what is heard. Unless asked otherwise, the buffer holds 32 fragments, about 8 seconds of sound at the default format and several seconds at CD quality: a game that plays a sound when a key goes down would be heard seconds later.
-- **A short sound can stay silent.** A write shorter than a fragment waits in the buffer until the fragment fills. A beep that is shorter than one fragment is heard only once the program calls `SNDCTL_DSP_SYNC`, which waits until everything written has played, or closes the device.
+- **Queued samples delay new sounds.** A write can return while its samples are still waiting to be heard. If the program keeps the buffer full, a newly appended sound waits behind that queued audio. The default buffer has 32 fragments: about 8 seconds at the default format and several seconds at CD quality. Reducing the buffer reduces this queued playback delay, though writes may then wait for free space more often.
+- **An incomplete fragment may stay silent.** A write shorter than one fragment is staged until more samples fill it. Call `SNDCTL_DSP_SYNC`, or close the device, to submit the final partial fragment and wait for playback to finish.
 
-`SNDCTL_DSP_SETFRAGMENT` asks for a smaller buffer. Its `int` is `0xMMMMSSSS`: MMMM fragments of 2 to the power SSSS bytes, so `0x0004000A` asks for 4 fragments of 1024 bytes. The device chooses the size in the end, from what was asked and from the format and rate, and `SNDCTL_DSP_GETBLKSIZE` reads back the fragment size it chose: here `0x0004000A` gives 4 fragments of 512 bytes at the first format, and 4 of 2,048 bytes once the C program above has set 16-bit samples at 22,050 a second. Either way the buffer then holds a fraction of a second instead of seconds. Call it right after `open`, before the first write: it works only once, and fails with `EINVAL` after that.
+`SNDCTL_DSP_SETFRAGMENT` requests a buffer configuration through a pointer to an `int`. Its value is `0xMMMMSSSS`: a requested count of MMMM fragments, each `2^SSSS` bytes. For example, `0x0004000A` requests four fragments of 1024 bytes.
 
-A program can also ask how far ahead it is. `SNDCTL_DSP_GETOSPACE` fills an `audio_buf_info` with the free fragments and bytes, so a program can write only what fits and never wait, and `SNDCTL_DSP_GETODELAY` gives the bytes written but not heard yet. Opened with `O_NONBLOCK`, a write gives what fits and fails with `EAGAIN` when nothing does, and `poll` reports `POLLOUT` once a fragment is free.
+Call it immediately after `open`, before writing samples. Only one `SETFRAGMENT` request can succeed per playback open; a second fails with `EINVAL`, even if no samples have been written. Close and reopen the device to choose another configuration. This request is also incompatible with a previously selected `SNDCTL_DSP_SUBDIVIDE` configuration.
 
-The requests of `/dev/dsp`, with the number each one is:
+The actual fragment size depends on the request, format and rate. Read it back with `SNDCTL_DSP_GETBLKSIZE` after setting the format, channels and rate. Here the request `0x0004000A` gives four fragments of 512 bytes at the default format, or four of 2048 bytes after the C example sets signed 16-bit mono at 22,050 samples a second. Either configuration holds a fraction of a second of sound.
+
+`SNDCTL_DSP_GETOSPACE` fills an `audio_buf_info` with the available space. Total capacity in bytes is `fragstotal × fragsize`; `fragments` and `bytes` describe free space. Use a positive free-byte count to limit a write, and treat a count of zero or less as no available space. `SNDCTL_DSP_GETODELAY` returns the bytes submitted for playback but not yet heard; it does not include an incomplete fragment still being staged.
+
+With `O_NONBLOCK`, writes accept what fits and fail with `EAGAIN` when nothing can be accepted. `poll` reports `POLLOUT` when at least one fragment is free. These calls let a program wait for space while also handling input or drawing.
+
+The buffer-space structure has the following layout. In NASM, include `linux/soundcard.inc`, reserve `audio_buf_info_size` bytes, and access a field as `[address + audio_buf_info.bytes]`, for example.
+
+{bufferFields}
+
+For a raw `ioctl` syscall, put the request number in `rsi` and the third argument in `rdx`. A pointer argument names storage in the program; an immediate argument is the value itself. `/dev/dsp` uses these requests:
 
 {dspRequests}
 
@@ -369,10 +381,10 @@ The devices behave as they do on a QEMU virtual machine running Linux, the refer
 
 ## Not covered {#not-covered}
 
-- **ALSA's own sound devices**, `/dev/snd/pcmC0D0p`, `controlC0`, `seq` and the rest: made for the libasound library, whose setup cannot sensibly be written by hand. Use `/dev/dsp`, `/dev/mixer` and the MIDI port, which reach the same card. Opening one fails with `ENODEV`, and the **Log** names what to use instead.
+- **ALSA PCM, control and sequencer devices**, including `/dev/snd/pcmC0D0p`, `/dev/snd/controlC0` and `/dev/snd/seq`, are unavailable. Opening one fails with `ENODEV`, and the **Log** names the supported alternative. Use `/dev/dsp` for samples, `/dev/mixer` for volume or `/dev/snd/midiC1D0` for MIDI messages.
 - **The second sound card's devices**, `/dev/dsp2`, `/dev/audio2` and `/dev/mixer2`: the reference machine's synthesizer plays on that card. Use `/dev/dsp`.
 - **`/dev/audio`**, μ-law samples: use `/dev/dsp`.
-- **Recording**, reading `/dev/dsp`: a microphone would ask for permission in the middle of a run.
+- **Recording** is unavailable. Reading `/dev/dsp` fails with `EINVAL` on a descriptor opened for reading.
 - **`mmap` of `/dev/dsp`**, and turning playback off with `SNDCTL_DSP_SETTRIGGER`, which goes with it: write the samples instead. `SNDCTL_DSP_GETCAPS` leaves out `DSP_CAP_MMAP`, so a careful program sees this.
 - **`/dev/sequencer` and `/dev/music`** do not exist, as on the reference machine: use the MIDI port.
 - **`epoll`** answers `ENOSYS`: use `poll` or `select`.

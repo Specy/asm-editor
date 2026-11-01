@@ -2767,6 +2767,18 @@ export class WorkbenchSession {
     }
 
     /**
+     * Shows the line that defines a label of the Debug session's program, from a row of the
+     * Symbols panel ([workbench.md](../../../../../docs/design/workbench.md), Symbols in every
+     * Target): in the Build's version of its File, in the pane a reveal of the program shows that
+     * File in, which keeps where it was in its navigation history, as Show in Listing's does.
+     */
+    async revealBuildLine(file: string, line: number) {
+        const pane = this.buildFilePane(file)
+        if (pane) this.recordJump(pane)
+        await this.revealSourceLocation(file, line)
+    }
+
+    /**
      * The mapped pair's source pane follows the current instruction to the File it was compiled
      * from, as a debugger shows an inlined function's source: into `<sim.h>` for the instructions an
      * inlined `sim_` function contributed, or into x86's `<unistd.h>` for an inlined `read`, and

@@ -1048,6 +1048,20 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             { name: 'Synth', start: BigInt(SYNTH_BASE), end: BigInt(SYNTH_BASE + SYNTH_BLOCK_SIZE) }
         ]
     }
+    /** Its labels, each where s68k read it, a local one under its global, `start:loop`. */
+    _getProgramLabels() {
+        const program = this.program
+        if (!program) return undefined
+        return Object.values(program.getSymbols())
+            .filter((symbol) => symbol.kind === 'label')
+            .map((symbol) => ({
+                name: symbol.name,
+                address: BigInt(symbol.value),
+                file: symbol.location.file,
+                line: symbol.location.line,
+                fromLibrary: false
+            }))
+    }
     _resolveMemoryLabel(name: string) {
         const symbol = this.program?.getSymbols()[name]
         return symbol?.kind === 'label' ? BigInt(symbol.value) : undefined

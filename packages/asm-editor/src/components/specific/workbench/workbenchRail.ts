@@ -19,8 +19,6 @@ import type { RailEntry } from './workbenchContext'
 export type WorkbenchRailOptions = {
     /** Whether the host has a built-in panel on, read only or off; on when it says nothing. */
     access: Partial<Record<BuiltinPanelId, PanelAccess>>
-    /** Whether the Project has an Executable, for which the Symbols panel is offered. */
-    symbolsOffered: boolean
     /** Whether the Project has a File stored as bytes or a File with Edit steps, for which the Edit history is offered. */
     historyOffered?: boolean
     /** The Testcases icon's dot, for the last run's result. */
@@ -35,9 +33,9 @@ export type WorkbenchRailOptions = {
  * ([the design record](../../../../../../docs/design/workbench.md), Rail): on top Explorer, Search
  * in every Target
  * ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md), decision
- * 23), Testcases, Documentation, the host's panels and, in a Project that has an Executable,
- * Symbols ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
- * decision 18), then in one that has a File stored as bytes or with Edit steps, the Edit history
+ * 23), Testcases, Documentation, the host's panels and Symbols, in every Target since
+ * [workbench.md](../../../../../../docs/design/workbench.md)'s Symbols in every Target, then in a
+ * Project that has a File stored as bytes or with Edit steps, the Edit history
  * ([pixel-editor.md](../../../../../../docs/design/pixel-editor.md), decision 12); at the bottom the AI assistant, Share, the host's links and panels, and Settings.
  * A built-in panel the host switched off is left out.
  */
@@ -80,12 +78,11 @@ export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
     })
     builtin('documentation', 'Documentation', FaBook, 'top', { maximizable: true })
     host('top')
-    //last of the group, since it comes and goes with the Project's Executables: appearing, it
-    //moves no other icon
-    if (options.symbolsOffered)
-        builtin('symbols', 'Symbols', FaTags, 'top', {
-            tooltip: 'Symbols: the functions and strings of the program'
-        })
+    //last of the group, where it came and went with the Project's Executables before every
+    //Target had it
+    builtin('symbols', 'Symbols', FaTags, 'top', {
+        tooltip: 'Symbols: the labels and strings of the program'
+    })
     if (options.historyOffered)
         builtin('history', 'Edit history', FaHistory, 'top', {
             tooltip: 'View and restore edits made in the pixel and hex editors'

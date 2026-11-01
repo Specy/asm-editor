@@ -111,8 +111,8 @@ describe('parseX86ScreenDirective', () => {
         const parsed = parseX86ScreenDirective('; @screen width=322 height=2000', 'nasm')
         expect(parsed.directive).toMatchObject({ width: 320, height: 1024 })
         expect(parsed.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
-            "width=322 is not a multiple of 8, which a framebuffer's width always is here; using 320.",
-            'height=2000 is not between 8 and 1024, the sizes in pixels the screen takes; using 1024.'
+            'The screen width must be a multiple of 8 pixels. Using 320 instead of 322.',
+            'height must be between 8 and 1024 pixels. Using 1024 instead of 2000.'
         ])
         expect(parsed.diagnostics.every((diagnostic) => diagnostic.severity === 'warning')).toBe(
             true
@@ -122,15 +122,15 @@ describe('parseX86ScreenDirective', () => {
 
     it('warns about a setting x86 does not have, and about anything that is not one', () => {
         expect(messages('; @screen unit=2 base=display depth=16', 'nasm')).toEqual([
-            "x86's screen has no unit: a framebuffer pixel is one Screen pixel, and the Screen's zoom scales it up. The settings are width and height.",
-            "x86's screen has no base: the program maps /dev/fb0 wherever mmap puts it. The settings are width and height.",
-            '"depth" is not a screen setting. The settings are width and height.'
+            '"unit" is not an x86 screen setting. Use the Screen\'s zoom to enlarge pixels. The settings are width and height.',
+            '"base" is not an x86 screen setting. Use mmap to map /dev/fb0 into the program. The settings are width and height.',
+            '"depth" is not an x86 screen setting. Use width or height.'
         ])
         expect(messages('// @screen 640x480', 'c')).toEqual([
-            '"640x480" is not a name=value setting. Write the directive as // @screen width=320 height=240.'
+            '"640x480" must be written as name=value. For example: // @screen width=320 height=240.'
         ])
         expect(messages('// @screen width=wide', 'c')).toEqual([
-            '"wide" is not a number, so width is left as it was.'
+            '"wide" is not a valid number for width. The previous value is kept.'
         ])
     })
 
@@ -138,7 +138,7 @@ describe('parseX86ScreenDirective', () => {
         const parsed = parseX86ScreenDirective('// @screen width=640\n/* @screen width=800 */', 'c')
         expect(parsed.directive).toMatchObject({ width: 640 })
         expect(parsed.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
-            'A program has one @screen directive; this one is ignored, the one on line 1 is used.'
+            'Only the first @screen directive is used (line 1). This directive is ignored.'
         ])
     })
 })

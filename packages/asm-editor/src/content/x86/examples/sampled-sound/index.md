@@ -1,7 +1,18 @@
-`/dev/dsp` plays **samples**: the height of a sound wave measured many times a second, computed by
-the program. This program computes a plucked-sounding note for each step of a C major scale, 22,050
-samples a second, and writes them to `/dev/dsp`. Choose **Build**, then **Run**, with your sound
-on.
+Sound changes over time. A **sample** is a number describing one point in that changing signal.
+The sound device reads a sequence of samples at a steady rate and turns it into sound.
+With signed samples, positive and negative numbers describe opposite directions from the resting
+position. A sequence of zeros means silence; larger distances from zero give a stronger signal.
+For example, `12000, 12000, -12000, -12000, 12000, 12000, ...` alternates between two levels.
+The time between samples determines how quickly that pattern repeats.
+
+This program writes signed 16-bit samples to `/dev/dsp`. Each sample occupies two bytes and can
+range from -32768 to 32767. It uses **mono**: one sequence of samples, rather than separate left
+and right sequences. `RATE` requests 22,050 samples per second; the device can choose a nearby
+rate instead.
+
+The program generates eight fading notes: C, D, E, F, G, A, B, C, a **C major scale**.
+The last C has twice the frequency of the first. Each note has `NOTE` samples, or 0.3 seconds
+when the chosen rate equals `RATE`. Choose **Build**, then **Run**, with your sound on.
 
 ```x86|playground|no-registers|no-flags|allow-open
 default rel
@@ -117,43 +128,75 @@ fail:
 
 ## Setting up the device
 
-`/dev/dsp` opens at 8,000 samples a second, one unsigned byte each, mono. The program asks for
-something better with three ioctls, in the order OSS wants: `SNDCTL_DSP_SETFMT` for the format,
-`SNDCTL_DSP_CHANNELS` for mono or stereo, `SNDCTL_DSP_SPEED` for the rate. Each takes the address
-of an `int` and **writes back** what it set, which can differ from what was asked, so the program
-checks the format and the channels, and computes its notes from the rate it got.
+The program opens `/dev/dsp`, requests a small playback buffer, then requests the sample format,
+channel count and sample rate with `ioctl`. `SNDCTL_DSP_SETFMT` selects the representation:
+`AFMT_S16_LE` means signed 16-bit samples with the low byte first. `SNDCTL_DSP_CHANNELS` requests
+one channel, and `SNDCTL_DSP_SPEED` requests the rate.
 
-`AFMT_S16_LE` is a signed 16-bit sample, its low byte first: 0 is silence, and the wave swings
-between -32768 and 32767. Here it starts at 12,000, loud enough without being harsh.
+Each of these three configuration calls receives the address of a 32-bit integer. On success,
+it writes the chosen value there. The program checks that the format and channel count match
+its buffer layout, then uses the returned `rate` to calculate pitches.
 
-## A buffer that paces the program
-
-A `write` copies samples into the device's buffer and **waits while it is full**, and the buffer
-empties at the rate, 22,050 samples a second. So the loop computes a note, writes it, and waits
-until there is room before computing the next one: the program runs at the speed of its own sound,
-with no sleep anywhere.
-
-Unless asked, the buffer holds several seconds of sound, and every note would be heard seconds
-after it was written. `SNDCTL_DSP_SETFRAGMENT`, made right after `open`, asks for a small one.
-Its value is `0xMMMMSSSS`: `0x0004000B` asks for 4 **fragments** of 2¹¹, 2,048, bytes. The device
-chooses the size in the end, from the format and the rate set after it: here it gives 4 fragments
-of 4,096 bytes, about 0.37 seconds of sound, as `SNDCTL_DSP_GETBLKSIZE` would report. Samples reach
-the speakers a whole fragment at a time, so at the end `SNDCTL_DSP_SYNC` sends the last, unfinished
-fragment and waits until everything has played.
+These calls can also fail with a negative result in `rax`. This example does not check their
+return values: a failed call can leave the requested value in memory, so the comparisons alone
+do not prove that configuration succeeded. The calculation also assumes `rate` is nonzero;
+zero would cause division by zero. A program that handles device failures must check each
+configuration call before using its result.
 
 ## Computing the wave
 
-A square wave is high for half of each cycle and low for the other half. `r15` says how far the
-wave is through its cycle, with 65,536 for a whole cycle, so bit 15 is set in the second half. Each
-sample it goes on by `r14`, the frequency × 65,536 ÷ the rate: 440 Hz gives 1,307, so a cycle takes
-65,536 ÷ 1,307, about 50 samples, and repeats about 440 times a second. `r15` wraps round from 2³²
-back to 0 by itself, which is a whole number of cycles, so the wave never jumps.
+A **square wave** alternates between a positive level and a negative level. One complete visit
+to both levels is a cycle. At 440 Hz, the pattern repeats 440 times per second.
 
-A struck string is loudest at first and fades. `r13`, the height, loses 1/4096 of itself each
-sample, so it falls to about a fifth of its first height by the end of the note: `shr eax, 12`
-divides it by 4,096 without a `div`. It keeps the height times 65,536, and `shr eax, 16` takes the
-height back out for each sample. In whole numbers 1/4096 of a height below 4,096 is 0, so a plain
-height would stop fading a third of the way down; times 65,536, it fades on to almost nothing.
+`r15d` tracks the position in that cycle, called its **phase**. Only its low 16 bits matter:
+positions 0 through 32767 select the positive half, and 32768 through 65535 select the negative
+half. Bit 15 has value 32768 (`0x8000`), so `test r15d, 0x8000` distinguishes the two halves.
+
+Each sample advances the phase by `frequency * 65536 / rate`, rounded down by integer division.
+At 440 Hz and a chosen rate of 22,050, the step is 1307. Starting at zero, the phase positions
+are 0, 1307, 2614, and so on. After 25 steps the position is 32675, still positive; after 26
+it is 33982, negative. After 51 steps the low 16 bits are 1121, back in the positive half of
+the next cycle. Thus about 50 samples make a cycle. Higher bits accumulate in `r15d`, but do
+not affect bit 15; even its eventual 32-bit overflow preserves this repeating pattern.
+
+`r13d` stores the current positive level multiplied by 65,536. This is **fixed-point** arithmetic:
+the low 16 bits hold fractions of one sample unit, and the high 16 bits hold the whole-number
+part. For a level of 12000, the stored value is `12000 * 65536 = 786432000`.
+`shr eax, 16` discards the fractional bits to produce the sample level, 12000. The phase test
+then chooses whether to store that level or its negative.
+
+After storing a sample, the program subtracts `r13d >> 12`, approximately 1/4096 of the stored
+level. On the first iteration, it subtracts 192000, leaving 786240000. Shifting that new value
+right by 16 gives 11997 for the next sample. The opening samples are therefore 12000, 11997,
+11994, ...; later the phase selects negative values whose distance from zero also decreases.
+The repeated reduction makes the note fade.
+
+Keeping fractional bits lets the fade continue when the level is below 4096. If the program
+stored only a whole-number level, dividing such a level by 4096 would give zero, and subtracting
+zero would leave it unchanged. At the original settings, the level falls to about a fifth of
+its starting value over one note.
+
+## A buffer that paces the program
+
+A `write` puts samples into the playback buffer. While the buffer is full, the blocking call
+waits for space as the device plays earlier samples. Playback consumes samples at the **chosen**
+rate. This waiting paces the note loop without a sleep call; writing a note does not mean that
+the listener has already heard it.
+
+`SNDCTL_DSP_SETFRAGMENT` requests a small buffer before the other configuration calls. Its
+argument packs two numbers: `0x0004000b` requests four chunks, called **fragments**, of 2¹¹
+(2048) bytes each. This is a request, not a size the program can rely on. The device chooses
+the final buffer arrangement, and this example does not query it.
+
+The last write may leave a partly filled fragment: imagine a 2048-byte chunk with only its
+first 940 bytes filled. `SNDCTL_DSP_SYNC` lets the device finish playing the queued data,
+including that partial chunk, and waits for playback to finish before the program exits.
+
+`NOTE` is computed from the requested `RATE`, while the phase step uses the returned `rate`.
+If the device chooses a different rate, each note still contains `NOTE` samples, so its duration
+is `NOTE / chosen rate` seconds. The phase calculation adjusts the pitch to the chosen rate,
+subject to integer rounding. The fade also happens once per sample, so its speed in seconds
+depends on that rate.
 
 Undo takes back the samples the undone `write` put in the buffer that have not been heard yet.
 **Stop** silences the device at once.
@@ -161,6 +204,11 @@ Undo takes back the samples the undone `write` put in the buffer that have not b
 ## Try it
 
 1. Make the scale softer or louder: change `LOUD` to 4000, then to 24000.
-2. Change `shr eax, 12` to `shr eax, 10`: the notes fade four times as fast, like a xylophone.
-3. Change `RATE` to 11025. The program asks for that rate and computes its steps from it, so the
-   scale has the same pitches, a little duller, with half the samples to compute.
+2. Change `shr eax, 12` to `shr eax, 10`: each sample now removes about 1/1024 of the level,
+   so the notes fade about four times as fast.
+3. Change `RATE` to 11025. This roughly halves `NOTE` as well as requesting half the original sample
+   rate. If the device accepts it, note duration stays approximately 0.3 seconds and each cycle uses about
+   half as many samples. The phase step still targets the same pitches, with integer rounding.
+   The repeating pitch is only part of the sound: the pattern within each cycle also matters.
+   With fewer samples to describe that pattern, the sound can change. Listen to both versions
+   and compare. If the device chooses another rate, use `NOTE / chosen rate` to work out the duration.

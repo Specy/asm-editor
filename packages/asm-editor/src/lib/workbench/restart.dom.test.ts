@@ -71,7 +71,7 @@ describe('Restart', () => {
         const restart = button('Restart')!
         expect(restart.disabled).toBe(false)
         expect(restart.classList.contains('primary')).toBe(false)
-        expect(tooltipText(restart)).toBe('Go back to the start')
+        expect(tooltipText(restart)).toBe('Reset the program to the start')
 
         press('Restart')
         //Stop's clear, and the Build of the same Program, with the column kept meanwhile

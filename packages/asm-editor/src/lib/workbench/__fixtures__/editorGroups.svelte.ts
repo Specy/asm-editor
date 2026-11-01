@@ -9,6 +9,7 @@ import {
     type SourceBreakpoint
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
+import type { ProgramSymbols } from '#lib/languages/programSymbols.ts'
 import type { BuildOutputHost } from '#lib/buildOutput.ts'
 import { WorkbenchSession, type WorkbenchSessionHost } from '../WorkbenchSession.svelte'
 
@@ -46,6 +47,8 @@ export function editorGroupsFixture(
         errors: [] as string[],
         breakpoints: [] as SourceBreakpoint[],
         listings: undefined as ListingDocuments | undefined,
+        /** The labels and strings of a Debug session's program, as a Build reads them. */
+        programSymbols: undefined as ProgramSymbols | undefined,
         notes: [] as EmulatorNote[],
         /** What the Build in progress says it waits for, as an adapter that reports one sets it. */
         buildPhase: undefined as string | undefined,

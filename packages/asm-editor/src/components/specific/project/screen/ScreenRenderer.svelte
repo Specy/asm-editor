@@ -108,8 +108,8 @@
     const focusHint = $derived.by(() => {
         const hint = x86Input
             ? {
-                  label: "click to send keys and the pointer to the program's input devices",
-                  title: "Click to send keys and the pointer to the program's input devices, not to its standard input; Shift+Tab to release them"
+                  label: 'click to send keyboard and mouse input to the program',
+                  title: 'Click to send keyboard and mouse input to the program through /dev/input. Type in the Terminal for standard input. Press Shift+Tab to return keyboard focus to the page.'
               }
             : {
                   label: 'click to send keyboard and mouse input to the program',

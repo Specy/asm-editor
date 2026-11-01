@@ -43,9 +43,9 @@ extern "C" {
 #define MAP_FAILED    ((void *)-1) /* What mmap returns when it fails. */
 
 /**
- * Maps length bytes of fd from offset into the program, where it chooses when address is NULL. For
- * the Screen: mmap(NULL, fix.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0). Returns the
- * mapped memory, or MAP_FAILED with errno set.
+ * Maps length bytes of fd starting at offset into the program's address space. If address is NULL,
+ * the system chooses the address. For the Screen, use mmap(NULL, fix.smem_len, PROT_READ |
+ * PROT_WRITE, MAP_SHARED, fd, 0). Returns the mapped address, or MAP_FAILED with errno set.
  */
 static inline void *mmap(void *address, size_t length, int prot, int flags, int fd, off_t offset) {
     register long rax __asm__("rax") = 9; /* mmap */

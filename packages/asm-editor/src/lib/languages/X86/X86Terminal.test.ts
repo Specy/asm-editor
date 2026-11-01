@@ -313,7 +313,8 @@ describe('x86 input devices in a Testcase', () => {
         {
             what: 'a blocking read of the keyboard',
             body: [...open('keyboard'), ...sys(0, 'r14', 'buf', 24)],
-            message: 'The program waited for a key, and a Testcase has no keyboard or pointer.'
+            message:
+                'The program is waiting for a key. Testcases cannot provide keyboard or pointer input.'
         },
         {
             what: 'a poll without a timeout of the keyboard and the tablet',
@@ -325,7 +326,7 @@ describe('x86 input devices in a Testcase', () => {
                 ...sys(7, 'fds', 2, -1)
             ],
             message:
-                'The program waited for a key or the pointer, and a Testcase has no keyboard or pointer.'
+                'The program is waiting for a key or the pointer. Testcases cannot provide keyboard or pointer input.'
         }
     ])('stops $what with a clear error', async ({ body, message }) => {
         const input = sources(
@@ -371,11 +372,11 @@ describe('x86 devices the machine does not cover', () => {
         expect(emulator.notes.map((note) => [note.tone, note.text])).toEqual([
             [
                 'warning',
-                "This emulator doesn't support `/dev/dri/card0` (DRM), so opening it returned ENODEV. Draw on `/dev/fb0` instead."
+                'This emulator does not support `/dev/dri/card0` (DRM). Opening it returned ENODEV. Draw on `/dev/fb0` instead.'
             ],
             [
                 'warning',
-                "This emulator doesn't support `/dev/input/mice` (PS/2 mouse packets), so opening it returned ENODEV. Read the pointer from the tablet's event device instead; find it with EVIOCGBIT or in `/proc/bus/input/devices`."
+                'This emulator does not support `/dev/input/mice` (PS/2 mouse packets). Opening it returned ENODEV. Read pointer events from the tablet instead. Find its event device with EVIOCGBIT or in `/proc/bus/input/devices`.'
             ]
         ])
     })

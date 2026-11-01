@@ -1,6 +1,6 @@
 {
     "name": "Beep a tune on the PC speaker",
-    "description": "The opening of Für Elise on the PC speaker: one 24-byte input event starts each square-wave tone and nanosleep holds it, from a table of frequencies and durations.",
+    "description": "Play a tune on the PC speaker using input events, a table of frequencies and durations, and nanosleep.",
     "order": 24,
     "topic": "pc-speaker"
 }

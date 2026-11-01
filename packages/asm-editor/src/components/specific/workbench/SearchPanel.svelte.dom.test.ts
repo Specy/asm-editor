@@ -372,29 +372,20 @@ function searchPanel(
 
 describe('the rail and the shortcut', () => {
     const options = {
-        symbolsOffered: false,
         hostPanels: [],
         hostLinks: []
     }
-    const ids = (access: Partial<Record<BuiltinPanelId, PanelAccess>> = {}, symbols = false) =>
-        workbenchRail({ ...options, access, symbolsOffered: symbols }).map((entry) => entry.id)
+    const ids = (access: Partial<Record<BuiltinPanelId, PanelAccess>> = {}) =>
+        workbenchRail({ ...options, access }).map((entry) => entry.id)
 
     it('offers Search after the Explorer and before Testcases, in every Target, maximizable', () => {
-        //Symbols closes the top group, so that its coming and going moves no other icon
-        expect(ids({}, true)).toEqual([
-            'explorer',
-            'search',
-            'testcases',
-            'documentation',
-            'symbols',
-            'agent',
-            'settings'
-        ])
+        //Symbols closes the top group, where it came and went before every Target had it
         expect(ids()).toEqual([
             'explorer',
             'search',
             'testcases',
             'documentation',
+            'symbols',
             'agent',
             'settings'
         ])
@@ -411,6 +402,8 @@ describe('the rail and the shortcut', () => {
         expect(EXAM_PANEL_ACCESS.search).toBe('off')
         expect(EXAM_PANEL_ACCESS.explorer).toBe('off')
         expect(ids(EXAM_PANEL_ACCESS)).not.toContain('search')
+        //nor Symbols, which the old editor an Exam keeps to never had
+        expect(ids(EXAM_PANEL_ACCESS)).not.toContain('symbols')
     })
 
     it('opens on Ctrl+Shift+F with the query focused and filled with the selection', async () => {

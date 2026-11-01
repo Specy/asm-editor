@@ -97,9 +97,11 @@
     /** What the keys do here, for a screen reader: raw mode keeps Escape for the program. */
     const keysHelp = $derived(
         (typingRead?.kind === 'keys'
-            ? 'Every key goes to the program as it is typed, Escape and Ctrl+D included. Shift+Tab gives the keyboard back to the page.'
-            : 'What is typed here goes to the program. Enter sends the line, Ctrl+D ends standard input, Escape gives the keyboard back to the page.') +
-            (terminal.signalsTyped ? ' Ctrl+C interrupts the program; Ctrl+Shift+C copies.' : '')
+            ? 'Keys are sent to the program immediately, including Escape and Ctrl+D. Press Shift+Tab to return keyboard focus to the page.'
+            : 'Type input for the program. Press Enter to send the line, Ctrl+D to signal end of input, or Escape to return keyboard focus to the page.') +
+            (terminal.signalsTyped
+                ? ' Press Ctrl+C to interrupt the program or Ctrl+Shift+C to copy selected text.'
+                : '')
     )
     //expressions, because Svelte trims the space a tag's text starts with
     const CLICK_HINT = ' · click to type'

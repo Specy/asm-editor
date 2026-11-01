@@ -203,7 +203,9 @@ static inline int sigemptyset(sigset_t *set) {
     return 0;
 }
 
-/** Puts every signal in *set, but 32 and 33, which the C library keeps for itself. Returns 0. */
+/**
+ * Fills *set with every signal except 32 and 33, which are reserved by the C library. Returns 0.
+ */
 static inline int sigfillset(sigset_t *set) {
     unsigned __i;
     if (!set) return (int)__aed_syscall_return(-22); /* EINVAL */
@@ -212,10 +214,7 @@ static inline int sigfillset(sigset_t *set) {
     return 0;
 }
 
-/**
- * Adds the signal sig to *set. Returns 0, or -1 with errno set (EINVAL for a number that is no
- * signal).
- */
+/** Adds sig to *set. Returns 0, or -1 with errno set to EINVAL for an invalid signal number. */
 static inline int sigaddset(sigset_t *set, int sig) {
     if (!set || sig <= 0 || sig >= NSIG || sig == 32 || sig == 33)
         return (int)__aed_syscall_return(-22); /* EINVAL */
@@ -224,8 +223,7 @@ static inline int sigaddset(sigset_t *set, int sig) {
 }
 
 /**
- * Removes the signal sig from *set. Returns 0, or -1 with errno set (EINVAL for a number that is no
- * signal).
+ * Removes sig from *set. Returns 0, or -1 with errno set to EINVAL for an invalid signal number.
  */
 static inline int sigdelset(sigset_t *set, int sig) {
     if (!set || sig <= 0 || sig >= NSIG || sig == 32 || sig == 33)
@@ -235,8 +233,8 @@ static inline int sigdelset(sigset_t *set, int sig) {
 }
 
 /**
- * Whether the signal sig is in *set: 1 or 0, or -1 with errno set (EINVAL for a number that is no
- * signal).
+ * Returns 1 if sig belongs to *set, or 0 otherwise. Returns -1 with errno set to EINVAL for an
+ * invalid signal number.
  */
 static inline int sigismember(const sigset_t *set, int sig) {
     if (!set || sig <= 0 || sig >= NSIG)
@@ -245,9 +243,10 @@ static inline int sigismember(const sigset_t *set, int sig) {
 }
 
 /**
- * Changes which signals are blocked, as how says (SIG_BLOCK, SIG_UNBLOCK or SIG_SETMASK) with *set,
- * and stores the ones blocked before in *old unless it is NULL. A blocked signal waits until it is
- * unblocked. Returns 0, or -1 with errno set.
+ * Changes the blocked signal set: SIG_BLOCK adds *set, SIG_UNBLOCK removes *set, and SIG_SETMASK
+ * replaces the blocked set with *set. A NULL set leaves it unchanged. If old is not NULL, stores
+ * the previous blocked set in *old. A blocked signal remains pending until unblocked. Returns 0, or
+ * -1 with errno set.
  */
 static inline int sigprocmask(int how, const sigset_t *set, sigset_t *old) {
     unsigned long mask = set ? set->__val[0] & ~(3UL << 31) : 0;
@@ -261,10 +260,10 @@ static inline int sigprocmask(int how, const sigset_t *set, sigset_t *old) {
 }
 
 /**
- * Sets what the signal sig does from *action, unless it is NULL, and stores what it did in *old,
- * unless it is NULL: struct sigaction action = { 0 }; action.sa_handler = handler;
- * sigaction(SIGINT, &action, NULL). Returns 0, or -1 with errno set (EINVAL for SIGKILL and
- * SIGSTOP).
+ * Installs *action for sig; a NULL action leaves it unchanged. If old is not NULL, stores the
+ * previous action in *old. For example: struct sigaction action = { 0 }; action.sa_handler =
+ * handler; sigaction(SIGINT, &action, NULL). Returns 0, or -1 with errno set. SIGKILL and SIGSTOP
+ * cannot have their actions changed (EINVAL).
  */
 static inline int sigaction(int sig, const struct sigaction *action, struct sigaction *old) {
     struct kernel_sigaction set, was;
@@ -292,9 +291,10 @@ static inline int sigaction(int sig, const struct sigaction *action, struct siga
 }
 
 /**
- * Runs handler for the signal sig from now on, or SIG_DFL or SIG_IGN: signal(SIGINT, on_ctrl_c).
- * The handler takes the signal's number; a read it interrupts starts over (SA_RESTART). Returns the
- * handler before, or SIG_ERR with errno set.
+ * Installs handler for sig. Pass a function taking the signal number, SIG_DFL to restore the
+ * default action, or SIG_IGN to ignore the signal. For example: signal(SIGINT, on_ctrl_c). Uses
+ * SA_RESTART so eligible interrupted calls restart automatically; see the syscall reference for
+ * restart rules. Returns the previous handler or action, or SIG_ERR with errno set.
  */
 static inline sighandler_t signal(int sig, sighandler_t handler) {
     struct sigaction action, old;
@@ -312,8 +312,8 @@ static inline sighandler_t signal(int sig, sighandler_t handler) {
 }
 
 /**
- * Sends the signal sig to the process pid; the program itself is getpid(), from <unistd.h>. Returns
- * 0, or -1 with errno set (ESRCH when there is no such process).
+ * Sends sig to process pid. Use getpid() from <unistd.h> to identify this program. Returns 0, or -1
+ * with errno set (ESRCH if no such process exists).
  */
 static inline int kill(pid_t pid, int sig) {
     register long rax __asm__("rax") = 62; /* kill */
@@ -324,8 +324,9 @@ static inline int kill(pid_t pid, int sig) {
 }
 
 /**
- * Sends the signal sig to the program itself, through tgkill: its handler runs before raise
- * returns. Returns 0, or -1 with errno set.
+ * Sends sig to this program. An unblocked signal with a handler runs that handler before raise
+ * returns. A blocked signal remains pending until unblocked. SIG_IGN discards the signal; SIG_DFL
+ * applies its default action, which may end the program. Returns 0, or -1 with errno set.
  */
 static inline int raise(int sig) {
     long pid = __aed_syscall(39 /* getpid */, 0, 0, 0, 0, 0, 0);

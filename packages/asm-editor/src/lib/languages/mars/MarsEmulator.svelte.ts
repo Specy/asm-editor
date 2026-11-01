@@ -137,6 +137,7 @@ type MarsEmulatorCore<S> = MarsCore &
         getSectionNames(): string[]
         getSymbolNames(): string[]
         getSymbolFiles(): string[]
+        /** Tuples of address, data flag, library flag and 0-based definition line (-1 unknown). */
         getSymbolValues(): ArrayLike<number>
         getTextSegments(): ArrayLike<number>
         getHeapStart(): number
@@ -612,12 +613,12 @@ export abstract class MarsEmulator<
         const symbols = core.getSymbolValues()
         const files = core.getSymbolFiles()
         const labels = core.getSymbolNames().flatMap((name, i) =>
-            symbols[i * 3 + 1]
+            symbols[i * 4 + 1]
                 ? [
                       {
                           name,
-                          address: BigInt(symbols[i * 3] >>> 0),
-                          fromLibrary: !!symbols[i * 3 + 2],
+                          address: BigInt(symbols[i * 4] >>> 0),
+                          fromLibrary: !!symbols[i * 4 + 2],
                           file: files[i]
                       }
                   ]
@@ -643,6 +644,24 @@ export abstract class MarsEmulator<
     }
     _getDeviceRegions() {
         return this.devices.regions()
+    }
+    _labelSyntax = { comment: '#' as const }
+    /** Its labels and its library's, each at the line the Core read it, an included File's own. */
+    _getProgramLabels() {
+        const core = this.core
+        if (!core) return undefined
+        const symbols = core.getSymbolValues()
+        const files = core.getSymbolFiles()
+        return core.getSymbolNames().map((name, i) => {
+            const line = symbols[i * 4 + 3]
+            return {
+                name,
+                address: BigInt(symbols[i * 4] >>> 0),
+                fromLibrary: !!symbols[i * 4 + 2],
+                ...(files[i] ? { file: files[i] } : {}),
+                ...(files[i] && line >= 0 ? { line } : {})
+            }
+        })
     }
     _resolveMemoryLabel(name: string) {
         const address = this.core?.getAddressOfLabel(name)

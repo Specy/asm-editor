@@ -61,8 +61,9 @@ typedef struct __dirstream {
 } DIR;
 
 /**
- * Opens the directory at path for readdir, such as "/dev/input". Returns it, or NULL with errno set
- * (ENOENT when there is no such directory, ENOTDIR for a file).
+ * Opens a directory stream for path, such as "/dev/input", for use with readdir. Returns a DIR
+ * pointer, or NULL with errno set (ENOENT if the path does not exist, ENOTDIR if it is not a
+ * directory).
  */
 static inline DIR *opendir(const char *path) {
     /* O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC, as the C library opens it */
@@ -84,9 +85,10 @@ static inline DIR *opendir(const char *path) {
 }
 
 /**
- * The next entry of dir, ".", ".." and the names in it in no set order, or NULL after the last one
- * (errno unchanged) or for a failure (errno set). The entry lasts until the next readdir or
- * closedir of dir.
+ * Returns the next entry in dir, including "." and "..", in no guaranteed order. Returns NULL at
+ * end of directory without changing errno, or on error with errno set. To distinguish the two, set
+ * errno to 0 before the call and inspect it after a NULL result. The returned entry is valid until
+ * the next readdir or closedir on this stream.
  */
 static inline struct dirent *readdir(DIR *dir) {
     struct dirent *entry;
@@ -104,21 +106,24 @@ static inline struct dirent *readdir(DIR *dir) {
     return entry;
 }
 
-/** Starts dir over, so that readdir gives its first entry again. */
+/** Resets dir to the beginning so the next readdir returns its first entry again. */
 static inline void rewinddir(DIR *dir) {
     __aed_syscall(8 /* lseek */, dir->__fd, 0, 0 /* SEEK_SET */, 0, 0, 0);
     dir->__position = 0;
     dir->__size = 0;
 }
 
-/** The descriptor dir reads, for fstat or openat; closedir closes it. */
+/**
+ * Returns the file descriptor used by dir, for calls such as fstat or openat. closedir closes that
+ * descriptor.
+ */
 static inline int dirfd(DIR *dir) {
     return dir->__fd;
 }
 
 /**
- * Closes dir and gives back its memory: dir and the entries readdir gave are gone. Returns 0, or -1
- * with errno set.
+ * Closes the directory stream and frees its memory. The DIR pointer and entries returned by readdir
+ * are no longer valid. Returns 0, or -1 with errno set.
  */
 static inline int closedir(DIR *dir) {
     long fd = dir->__fd;

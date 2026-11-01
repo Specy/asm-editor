@@ -38,7 +38,7 @@
     <button
         class="show-button"
         aria-label="Show memory"
-        {@attach tooltip(`Show memory, ${DEFAULT_MEMORY_PANEL_SIZE} bytes at a time`, {
+        {@attach tooltip(`Show the memory panel (${DEFAULT_MEMORY_PANEL_SIZE} bytes per page)`, {
             placement: 'left'
         })}
         onclick={() => preferencesStore.setValue('memoryPanelSize', DEFAULT_MEMORY_PANEL_SIZE)}

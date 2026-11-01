@@ -45,9 +45,10 @@ struct pollfd {
 #define POLLWRBAND 0x200
 
 /**
- * Waits until one of the nfds descriptors of fds has what its events ask for, or timeout
- * milliseconds pass (-1 waits for ever, 0 only checks). Fills in every revents and returns how many
- * are not 0, 0 when the time ran out, or -1 with errno set.
+ * Checks the first nfds elements of fds. Each events field requests readiness, such as POLLIN for
+ * reading or POLLOUT for writing; revents receives the resulting flags. Waits up to timeout
+ * milliseconds (-1 waits indefinitely, 0 only checks). Returns the number of array elements with
+ * nonzero revents, 0 on timeout, or -1 with errno set.
  */
 static inline int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
     register long rax __asm__("rax") = 7; /* poll */

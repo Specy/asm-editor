@@ -706,6 +706,12 @@ export type BaseEmulatorDerivedState = {
     readonly compilerErrors: Diagnostic[]
     readonly memoryRegions: readonly MemoryRegion[]
     readonly dataLabels: readonly DataLabel[]
+    /**
+     * The labels and strings of the Debug session's program, as the Build loaded it; undefined
+     * outside a Debug session and for a loaded Executable, which the Symbols panel reads from its
+     * Listing instead.
+     */
+    readonly programSymbols?: import('./programSymbols').ProgramSymbols
     readonly readOnlyMemory: readonly ReadOnlyMemory[]
     /** Immutable Files and Entry used by the current executable, retained until Stop. */
     readonly buildSources?: BuildSources

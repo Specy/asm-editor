@@ -12,7 +12,6 @@
     import { workbenchRail } from './workbenchRail'
     import { documentationLanguageOf, languageScope } from '#lib/search/scope.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
-    import { hasExecutable } from '#lib/executables.ts'
     import { registerDocumentationLinks } from '#lib/languages/service/navigation.ts'
     import { carriesComputerFiles } from '#lib/fileDrops.ts'
     import './workbench.css'
@@ -145,13 +144,6 @@
     })
 
     /**
-     * The Symbols panel is offered only in a Project that has an Executable
-     * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
-     * decision 18).
-     */
-    const symbolsOffered = $derived(project.language === 'X86' && hasExecutable(project.files))
-
-    /**
      * The Edit history is offered in a Project with a File stored as bytes, which the Hex and Pixel
      * editors change, and in any whose Files have Edit steps, as typing over a text File in Hex
      * makes.
@@ -164,7 +156,6 @@
     const rail = $derived(
         workbenchRail({
             access,
-            symbolsOffered,
             historyOffered,
             testcasesDot,
             hostPanels,
@@ -173,14 +164,9 @@
         })
     )
 
-    //the open Symbols panel goes with the Project's last Executable, the Edit history with its last
-    //byte File
+    //the open Edit history goes with the Project's last byte File
     $effect(() => {
-        if (
-            (activePanel === 'symbols' || activePanel === 'history') &&
-            !rail.some((entry) => entry.id === activePanel)
-        )
-            ui.close()
+        if (activePanel === 'history' && !rail.some((entry) => entry.id === activePanel)) ui.close()
     })
 
     /**

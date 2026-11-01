@@ -55,10 +55,10 @@ extern "C" {
 #define FD_CLOEXEC      1 /* The descriptor flag F_GETFD and F_SETFD read and set. */
 
 /**
- * Opens the file or device at path, such as "/dev/fb0" or "/dev/input/event1", with flags such as
- * O_RDWR or O_RDONLY | O_NONBLOCK. With O_CREAT, a third argument gives the new file's mode, such
- * as 0644. Returns the new descriptor, or -1 with errno set (ENOENT when there is no such file,
- * ENODEV for a device the editor does not have).
+ * Opens the file or device at path, such as "/dev/fb0", using flags such as O_RDWR or O_RDONLY |
+ * O_NONBLOCK. With O_CREAT, supply a third argument for the new file mode, such as 0644. Returns a
+ * file descriptor, or -1 with errno set. ENOENT means the path does not exist; ENODEV means the
+ * device is unavailable here.
  */
 static inline int open(const char *path, int flags, ...) {
     mode_t mode = 0;
@@ -77,9 +77,9 @@ static inline int open(const char *path, int flags, ...) {
 }
 
 /**
- * Runs the command cmd on fd, with a third argument for the commands that take one: fcntl(fd,
- * F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) makes fd non-blocking. Returns what the command
- * answers, or -1 with errno set.
+ * Applies cmd to fd. Commands that need a value take a third argument. For example, fcntl(fd,
+ * F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) enables nonblocking I/O. Returns the command's result,
+ * or -1 with errno set.
  */
 static inline int fcntl(int fd, int cmd, ...) {
     __builtin_va_list arguments;

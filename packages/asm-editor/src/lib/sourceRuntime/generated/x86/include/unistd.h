@@ -33,9 +33,9 @@ extern "C" {
 #define SEEK_END      2 /* lseek from the end. */
 
 /**
- * Reads up to count bytes from fd into buffer. Returns how many it read, which can be fewer, 0 at
- * the end of input, or -1 with errno set (EAGAIN when fd is non-blocking and nothing is ready,
- * EINVAL for an input device and a buffer smaller than one event).
+ * Reads up to count bytes from fd into buffer. Returns the byte count, which may be less than
+ * count, 0 at end of input, or -1 with errno set. EAGAIN means a nonblocking descriptor has no
+ * input ready. For an input device, a buffer smaller than one input_event fails with EINVAL.
  */
 static inline ssize_t read(int fd, void *buffer, size_t count) {
     register long rax __asm__("rax") = 0; /* read */
@@ -47,8 +47,9 @@ static inline ssize_t read(int fd, void *buffer, size_t count) {
 }
 
 /**
- * Writes count bytes from buffer to fd. Returns how many it wrote, or -1 with errno set (EAGAIN
- * when fd is non-blocking and the device has no room).
+ * Writes up to count bytes from buffer to fd. Returns the byte count, or -1 with errno set. After a
+ * short successful write, submit the remaining bytes in another call. EAGAIN means a nonblocking
+ * descriptor cannot accept any bytes now.
  */
 static inline ssize_t write(int fd, const void *buffer, size_t count) {
     register long rax __asm__("rax") = 1; /* write */
@@ -67,7 +68,7 @@ static inline int close(int fd) {
     return (int)__aed_syscall_return(rax);
 }
 
-/** The program's process id, which kill takes. It never fails. */
+/** Returns the program's process ID, which can be passed to kill. This call does not fail. */
 static inline pid_t getpid(void) {
     register long rax __asm__("rax") = 39; /* getpid */
     __asm__ volatile("syscall" : "+r"(rax) : : "rcx", "r11", "memory");
@@ -75,9 +76,9 @@ static inline pid_t getpid(void) {
 }
 
 /**
- * Moves fd's position to offset from the start (SEEK_SET), the current position (SEEK_CUR) or the
- * end (SEEK_END). Returns the new position, or -1 with errno set (ESPIPE for the Terminal and for
- * every device but /dev/fb0, which have no position).
+ * Sets the byte position of fd to offset relative to the start (SEEK_SET), current position
+ * (SEEK_CUR) or end (SEEK_END). Returns the new position, or -1 with errno set. The Terminal and
+ * devices other than /dev/fb0 have no seek position and fail with ESPIPE.
  */
 static inline off_t lseek(int fd, off_t offset, int whence) {
     register long rax __asm__("rax") = 8; /* lseek */
@@ -89,9 +90,8 @@ static inline off_t lseek(int fd, off_t offset, int whence) {
 }
 
 /**
- * Whether fd is a terminal: 1 for the Terminal and the console, or 0 with errno set (ENOTTY for a
- * file or any other device, EBADF for a descriptor that is not open). It asks with the TCGETS
- * ioctl, as the C library does.
+ * Returns 1 if fd refers to the Terminal or console. Otherwise returns 0 with errno set: ENOTTY for
+ * a file or another device, EBADF for a descriptor that is not open.
  */
 static inline int isatty(int fd) {
     unsigned char modes[36];
@@ -104,8 +104,8 @@ static inline int isatty(int fd) {
 }
 
 /**
- * Finishes every write to fd; on /dev/fb0 it shows what was drawn on the Screen at once. Returns 0,
- * or -1 with errno set.
+ * Synchronizes pending file changes for fd. On /dev/fb0, requests an immediate update of the Screen
+ * from the framebuffer. Returns 0, or -1 with errno set.
  */
 static inline int fsync(int fd) {
     register long rax __asm__("rax") = 74; /* fsync */
@@ -115,7 +115,8 @@ static inline int fsync(int fd) {
 }
 
 /**
- * Waits for the given number of microseconds, through nanosleep. Returns 0, or -1 with errno set.
+ * Waits for the requested number of microseconds. Returns 0 on completion, or -1 with errno set;
+ * EINTR means a signal interrupted the wait.
  */
 static inline int usleep(useconds_t microseconds) {
     struct { long tv_sec; long tv_nsec; } request = { (long)(microseconds / 1000000), (long)(microseconds % 1000000) * 1000 };
@@ -127,8 +128,8 @@ static inline int usleep(useconds_t microseconds) {
 }
 
 /**
- * Waits for the given number of seconds, through nanosleep. Returns 0, or the whole seconds left
- * when a signal ended the wait early.
+ * Waits for the requested number of seconds. Returns 0 on completion, or the whole seconds
+ * remaining if a signal interrupts the wait.
  */
 static inline unsigned int sleep(unsigned int seconds) {
     struct { long tv_sec; long tv_nsec; } request = { (long)seconds, 0 }, remaining = { 0, 0 };

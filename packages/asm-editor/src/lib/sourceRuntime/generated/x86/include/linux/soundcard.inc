@@ -23,22 +23,26 @@
 %define SNDCTL_DSP_RESET       0x5000
 ; _SIO('P', 1): wait until every sample written has played.
 %define SNDCTL_DSP_SYNC        0x5001
-; _SIOWR('P', 2, int): the rate in samples a second, 1000 to 192000; it opens at 8000.
+; _SIOWR('P', 2, int): set the sample rate and write back the selected value, from 1000 to 192000
+; samples per second; initially 8000.
 %define SNDCTL_DSP_SPEED       0xc0045002
 ; _SIOWR('P', 3, int): 0 mono, 1 stereo: the old way of SNDCTL_DSP_CHANNELS.
 %define SNDCTL_DSP_STEREO      0xc0045003
-%define SNDCTL_DSP_GETBLKSIZE  0xc0045004 ; _SIOWR('P', 4, int): the fragment size in bytes.
-; _SIOWR('P', 5, int): the sample format, one AFMT_*; it opens at AFMT_U8.
+; _SIOWR('P', 4, int): read the selected fragment size in bytes.
+%define SNDCTL_DSP_GETBLKSIZE  0xc0045004
+; _SIOWR('P', 5, int): set an AFMT_* sample format and write back the selected value; initially
+; AFMT_U8.
 %define SNDCTL_DSP_SETFMT      0xc0045005
 %define SNDCTL_DSP_SAMPLESIZE  SNDCTL_DSP_SETFMT
-; _SIOWR('P', 6, int): how many channels, 1 to 128: 1 mono, 2 stereo.
+; _SIOWR('P', 6, int): set the channel count, 1 to 128, and write back the selected value: 1 is
+; mono, 2 stereo.
 %define SNDCTL_DSP_CHANNELS    0xc0045006
 ; _SIO('P', 8): start playing what has been written, even an unfinished fragment.
 %define SNDCTL_DSP_POST        0x5008
 %define SNDCTL_DSP_SUBDIVIDE   0xc0045009 ; _SIOWR('P', 9, int)
-; _SIOWR('P', 10, int): the buffer's size, before the first write: 0xMMMMSSSS asks for MMMM
-; fragments of 2 to the power SSSS bytes. 0x0004000A is four fragments of 1024 bytes: a smaller
-; buffer answers sooner.
+; _SIOWR('P', 10, int): request the buffer configuration through an int pointer: 0xMMMMSSSS requests
+; MMMM fragments of 2^SSSS bytes. Call immediately after open; only one request can succeed per
+; playback open. A smaller buffer reduces queued playback delay.
 %define SNDCTL_DSP_SETFRAGMENT 0xc004500a
 ; _SIOR('P', 11, int): the formats the device takes, AFMT_* bits.
 %define SNDCTL_DSP_GETFMTS     0x8004500b
@@ -68,17 +72,17 @@
 %define AFMT_S24_BE     0x10000
 %define AFMT_S24_PACKED 0x40000 ; Signed 24-bit in 3 bytes, little-endian.
 
-; What SNDCTL_DSP_GETOSPACE reads: the room in the device's buffer.
+; Playback buffer capacity and free space returned by SNDCTL_DSP_GETOSPACE. Total capacity in bytes
+; is fragstotal * fragsize.
 ; audio_buf_info_size is 16.
 struc audio_buf_info
-    ; Whole fragments free: a write of fragments * fragsize bytes would not wait.
-    .fragments:  resd 1
-    .fragstotal: resd 1 ; Fragments in the buffer.
-    .fragsize:   resd 1 ; Bytes in a fragment.
-    .bytes:      resd 1 ; Bytes free.
+    .fragments:  resd 1 ; Whole free fragments; may be negative while a partial fragment is staged.
+    .fragstotal: resd 1 ; Total fragment count; capacity is fragstotal times fragsize bytes.
+    .fragsize:   resd 1 ; Fragment size in bytes, also returned by SNDCTL_DSP_GETBLKSIZE.
+    .bytes:      resd 1 ; Free bytes; can be negative while a partial fragment is staged.
 endstruc
 
-; _SIOR('P', 12, audio_buf_info): the room for writing, into an audio_buf_info.
+; _SIOR('P', 12, audio_buf_info): read playback buffer capacity and free space into audio_buf_info.
 %define SNDCTL_DSP_GETOSPACE  0x8010500c
 %define SNDCTL_DSP_GETISPACE  0x8010500d ; _SIOR('P', 13, audio_buf_info)
 %define SNDCTL_DSP_NONBLOCK   0x500e     ; _SIO('P', 14): turn O_NONBLOCK on.
@@ -110,7 +114,8 @@ endstruc
 %define SNDCTL_DSP_GETOPTR   0x800c5012 ; _SIOR('P', 18, count_info)
 %define SNDCTL_DSP_SETSYNCRO 0x5015     ; _SIO('P', 21)
 %define SNDCTL_DSP_SETDUPLEX 0x5016     ; _SIO('P', 22)
-; _SIOR('P', 23, int): bytes written and not played yet, into an int.
+; _SIOR('P', 23, int): read bytes submitted for playback but not yet heard, excluding an incomplete
+; staged fragment.
 %define SNDCTL_DSP_GETODELAY 0x80045017
 
 ; The older names of the same requests.

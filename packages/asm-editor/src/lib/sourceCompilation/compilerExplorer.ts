@@ -687,7 +687,7 @@ export async function compileSource(
     const body = await response.text()
     if (body.length > ASSEMBLY_BYTE_LIMIT)
         throw new SourceCompilationError(
-            `The compiler output is ${(body.length / 1024 / 1024).toFixed(1)} MiB, more than the 16 MiB the editor takes. ${TOO_LARGE_ADVICE}`
+            `Compiler output is ${(body.length / 1024 / 1024).toFixed(1)} MiB. The editor supports up to 16 MiB. ${TOO_LARGE_ADVICE}`
         )
     let result: Record<string, unknown>
     try {
@@ -713,7 +713,7 @@ export async function compileSource(
     }
     if (Array.isArray(result.asm) && result.asm.length > ASSEMBLY_LINE_LIMIT)
         throw new SourceCompilationError(
-            `The compiler output has ${result.asm.length.toLocaleString('en-US')} lines of assembly, more than the ${ASSEMBLY_LINE_LIMIT.toLocaleString('en-US')} the editor takes. ${TOO_LARGE_ADVICE}`
+            `Compiler output has ${result.asm.length.toLocaleString('en-US')} lines of assembly. The editor supports up to ${ASSEMBLY_LINE_LIMIT.toLocaleString('en-US')} lines. ${TOO_LARGE_ADVICE}`
         )
     if (
         !Array.isArray(result.asm) ||

@@ -612,6 +612,27 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
     _getDeviceRegions() {
         return this.trs80?.regions() ?? []
     }
+    /** Its labels, not its constants, each at the line of its first definition. */
+    _getProgramLabels() {
+        const asm = this.assembly?.asm
+        if (!asm) return undefined
+        return asm.symbols
+            .filter((symbol) => symbol.type !== 1)
+            .map((symbol) => {
+                const defined = symbol.definitions[0]?.assembledLine
+                return {
+                    name: symbol.originalSpelling,
+                    address: BigInt(symbol.value),
+                    fromLibrary: false,
+                    ...(defined?.lineNumber !== undefined
+                        ? {
+                              file: normalizedCorePath(defined.fileInfo.pathname),
+                              line: defined.lineNumber
+                          }
+                        : {})
+                }
+            })
+    }
     _resolveMemoryLabel(name: string) {
         const symbol = this.assembly?.asm.symbols.find(
             (symbol) => symbol.name === name.toLowerCase() && symbol.type !== 1

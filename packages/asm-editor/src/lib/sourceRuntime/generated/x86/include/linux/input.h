@@ -51,13 +51,14 @@ struct input_id {
 };
 
 /**
- * What EVIOCGABS reads for one axis: its value now and its range. Convert the tablet's x to a pixel
- * with (value * xres + 32766) / 32767.
+ * The current value and range of an absolute axis, read by EVIOCGABS. For this tablet, clamp (value
+ * * xres + 32766) / 32767 to 0 through xres - 1 to obtain a horizontal pixel coordinate; minimum is
+ * 0 and maximum is 32767.
  */
 struct input_absinfo {
-    __s32 value; /* The position now. */
-    __s32 minimum;
-    __s32 maximum;
+    __s32 value;   /* The position now. */
+    __s32 minimum; /* Lowest axis value: 0 for the Screen tablet. */
+    __s32 maximum; /* Highest axis value: 32767 for the Screen tablet. */
     __s32 fuzz;
     __s32 flat;
     __s32 resolution;
@@ -76,7 +77,7 @@ struct input_absinfo {
 #define EVIOCGKEYCODE _IOR('E', 0x04, unsigned int[2])
 #define EVIOCSKEYCODE _IOW('E', 0x04, unsigned int[2])
 
-/** The device's name, such as "AT Translated Set 2 keyboard". */
+/** Read the device name into a buffer of len bytes, such as "AT Translated Set 2 keyboard". */
 #define EVIOCGNAME(len) _IOC(_IOC_READ, 'E', 0x06, len)
 
 /** Where the device is connected, such as "isa0060/serio0/input0". */
@@ -89,8 +90,8 @@ struct input_absinfo {
 #define EVIOCGPROP(len) _IOC(_IOC_READ, 'E', 0x09, len)
 
 /**
- * The keys and buttons held now, one bit per code; it also discards the key events still queued for
- * this reader.
+ * Read held keys and buttons into a bit set of len bytes, one bit per code. Also discard queued
+ * EV_KEY events for this reader.
  */
 #define EVIOCGKEY(len) _IOC(_IOC_READ, 'E', 0x18, len)
 
@@ -102,18 +103,21 @@ struct input_absinfo {
 #define EVIOCGSW(len) _IOC(_IOC_READ, 'E', 0x1b, len)
 
 /**
- * Which codes of the type ev the device has, one bit per code; with ev 0, which types it has, one
- * bit per EV_* type.
+ * Read supported codes for event type ev into a bit set of len bytes. With ev equal to 0, read
+ * supported event types instead.
  */
 #define EVIOCGBIT(ev, len) _IOC(_IOC_READ, 'E', 0x20 + (ev), len)
 
-/** The value and range of the axis abs, into a struct input_absinfo. */
+/**
+ * Read the current value and range for axis code abs, such as ABS_X, into struct input_absinfo.
+ * Queued events remain unchanged.
+ */
 #define EVIOCGABS(abs) _IOR('E', 0x40 + (abs), struct input_absinfo)
 
 /** Change the axis abs's struct input_absinfo. */
 #define EVIOCSABS(abs) _IOW('E', 0xc0 + (abs), struct input_absinfo)
 
-/* With 1, this reader alone gets the device's events; with 0, it lets go. */
+/* An immediate integer 1 gives this reader exclusive events; 0 releases the device. */
 #define EVIOCGRAB     _IOW('E', 0x90, int)
 #define EVIOCREVOKE   _IOW('E', 0x91, int)
 /* The clock of the event times: CLOCK_REALTIME, CLOCK_MONOTONIC or CLOCK_BOOTTIME. */

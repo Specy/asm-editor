@@ -48,10 +48,10 @@ struct winsize {
 };
 
 /**
- * Asks the device behind fd to carry out request, with a third argument when the request takes one:
- * usually a pointer to the structure it reads or fills, sometimes a number. Returns 0 or a number
- * the request defines, or -1 with errno set (ENOTTY for a request the device does not know, EINVAL
- * for an argument it refuses).
+ * Applies request to the device open on fd. The request defines whether the third argument is a
+ * pointer, an immediate integer or unused; check its device reference. Returns the request's
+ * result, usually 0, or -1 with errno set. ENOTTY means the device does not support the request;
+ * EINVAL means an invalid argument.
  */
 static inline int ioctl(int fd, unsigned long request, ...) {
     __builtin_va_list arguments;

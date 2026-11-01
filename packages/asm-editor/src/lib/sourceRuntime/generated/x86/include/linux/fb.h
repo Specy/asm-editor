@@ -22,13 +22,20 @@
 #define FB_MAX 32 /* How many framebuffers Linux numbers. */
 
 /* The requests. */
-#define FBIOGET_VSCREENINFO 0x4600 /* Read the struct fb_var_screeninfo. */
-#define FBIOPUT_VSCREENINFO 0x4601 /* Ask for another struct fb_var_screeninfo. */
-#define FBIOGET_FSCREENINFO 0x4602 /* Read the struct fb_fix_screeninfo. */
-#define FBIOPAN_DISPLAY     0x4606 /* Show the page at the fb_var_screeninfo's yoffset. */
+/* Read the current dimensions, pan offsets and pixel layout into struct fb_var_screeninfo. */
+#define FBIOGET_VSCREENINFO 0x4600
+/*
+ * Apply reported dimensions and pan offsets; the configured Screen size and allocation remain
+ * fixed.
+ */
+#define FBIOPUT_VSCREENINFO 0x4601
+/* Read the framebuffer allocation and row stride into struct fb_fix_screeninfo. */
+#define FBIOGET_FSCREENINFO 0x4602
+/* Display the page at fb_var_screeninfo.yoffset at the next vertical blank. */
+#define FBIOPAN_DISPLAY     0x4606
 /* Blank the Screen or show it again: the argument is an FB_BLANK_*. */
 #define FBIOBLANK           0x4611
-/* Wait for the next vertical blank, 1/60 s; the argument points to a __u32 0. */
+/* Wait for the next vertical blank; the display refreshes at 60 Hz. */
 #define FBIO_WAITFORVSYNC   _IOW('F', 0x20, __u32)
 
 /*
@@ -119,12 +126,13 @@ struct fb_bitfield {
  * the memory behind it, which part of it is shown, and how a pixel's bits are laid out.
  */
 struct fb_var_screeninfo {
-    __u32 xres;             /* The visible width, in pixels. */
-    __u32 yres;             /* The visible height. */
+    __u32 xres;             /* Reported width in pixels; initially the configured Screen width. */
+    __u32 yres;             /* Reported height in pixels; initially the configured Screen height. */
     __u32 xres_virtual;     /* The width of the memory, in pixels. */
-    __u32 yres_virtual;     /* Its height: twice yres here, two pages. */
+    __u32 yres_virtual;     /* Allocated height: twice the configured Screen height. */
     __u32 xoffset;          /* The first visible column. */
-    __u32 yoffset;          /* The first visible line: 0 shows the first page, yres the second. */
+    /* First displayed row: 0 for the first page, the configured Screen height for the second. */
+    __u32 yoffset;
     __u32 bits_per_pixel;   /* 32 here. */
     __u32 grayscale;
     struct fb_bitfield red; /* Where each component is in a pixel. */
