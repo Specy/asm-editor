@@ -370,3 +370,13 @@ At the owner's request, the Symbols panel x86 Executables had (`reverse-engineer
     - A library member whose far branches the GNU assembler relaxes stays a library's. The relaxation pass made each unit again without its library flag: on RISC-V only the units it relaxed lost it (`vfprintf.s` of the Runtime library, 457 labels, in any C program that prints), on MIPS every unit as soon as any branch needed relaxing.
     - So the editor no longer filters these itself, and it searches the source only for x86.
 - **Follow-up**: a C function's row reveals its line in the Generated assembly, beside the C File, rather than in the C File.
+
+## Phone fixes, 2026-11-01
+
+From the owner's phone and tablet screenshots:
+
+- **The rule between registers and memory runs from edge to edge** of the Registers & memory section in the compact layouts, in either style: across the section once memory has wrapped under the registers, from the section's header to its foot while memory sits beside them. The registers and memory are as far from the rule as from the section's edges (0.3rem), Lines included, where memory's address field had touched it. The row's room around them is padding the rule runs through, and the row knows memory has wrapped by memory being as wide as it.
+- **A phone's rail closes its drawer** when the panel tapped is the one shown, so the rail toggles the drawer as a desktop's toggles a panel. The drawer opens on that panel again.
+- **The compact layouts' bottom panel is a desktop's**, on tablets too: 96px by default, the layout's `bottomHeight`, resized with a handle in the gap above it (the rule in Lines) and grown back for the program's input the same way. It never takes the 14rem the editor keeps, so before a Build the column still fits without scrolling. This supersedes their fixed 12rem in "Program input comes forward" above.
+- **A splitter is easier to take hold of with a finger:** on a coarse pointer it reaches 0.5rem past each side, rather than 0.2rem.
+- **The Documentation panel's search field lines up with the list under it**, at the same inset and with the same room kept for a scrollbar, where it had stood 2.4px further in on the left and 1.6px further out on the right.

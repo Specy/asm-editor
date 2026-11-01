@@ -548,12 +548,15 @@
         height: 100%;
         color: inherit;
     }
+    /* in line with the list under it: the same inset, and the same room kept for a scrollbar */
     .search {
         display: flex;
         align-items: center;
         gap: 0.4rem;
         flex: none;
-        padding: 0.5rem;
+        padding: 0.5rem var(--documentation-spacing);
+        overflow: hidden;
+        scrollbar-gutter: stable;
     }
     .field {
         flex: 1;

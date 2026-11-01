@@ -90,8 +90,7 @@
         wasDebugging = debugging
     })
 
-    //the bottom panel grows back to its default height for the program's input; a compact
-    //layout's is tall already
+    //the bottom panel grows back to its default height for the program's input
     const terminal = session.emulator.peripherals.terminal
     const programIo = growForProgramIo({
         get debugging() {

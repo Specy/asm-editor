@@ -12,6 +12,7 @@
     import { untrack } from 'svelte'
     import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
     import { prefersReducedMotion } from 'svelte/motion'
+    import Splitter from '#cmp/shared/layout/Splitter.svelte'
     import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
     import { DEFAULT_MEMORY_VALUE, MEMORY_SIZE } from '#lib/Config.ts'
@@ -21,8 +22,9 @@
     } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
-    import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
+    import { LAYOUT_LIMITS, workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+    import { growForProgramIo } from '#lib/workbench/programIoGrowth.svelte.ts'
     import TopBar from './TopBar.svelte'
     import IconRail from './IconRail.svelte'
     import SidePanel from './SidePanel.svelte'
@@ -52,6 +54,31 @@
     const phone = $derived(ui.deviceClass === 'phone')
     const hasScreen = $derived(languageHasScreen(language))
     const tools = $derived(debugTools(emulator.memory.tabs))
+    const layout = workbenchLayout.values
+    //the bottom panel is a desktop's, as tall and resized the same way, up to the room that leaves
+    //the editor its least, which the CSS below works out; until that is measured it keeps its height
+    let bottomRoom = $state(0)
+    const bottomMax = $derived(Math.max(LAYOUT_LIMITS.bottomHeight.min, bottomRoom))
+    const bottomHeight = $derived(
+        bottomRoom ? Math.min(layout.bottomHeight, bottomMax) : layout.bottomHeight
+    )
+    //and it grows back to its default height for the program's input, as a desktop's does
+    const terminal = session.emulator.peripherals.terminal
+    const programIo = growForProgramIo({
+        get debugging() {
+            return session.debugSession && !session.testing
+        },
+        get reading() {
+            return terminal.pendingRead?.source === 'terminal'
+        },
+        get height() {
+            return bottomHeight
+        },
+        get room() {
+            return bottomMax
+        },
+        grow: (height) => workbenchLayout.setBottomHeight(height)
+    })
     //the registers are as wide as the CPU file asks at the grouping picked, as in the desktop's
     //column, and never give up any of it; a single file has no tabs and asks for its content
     let registersSize = $state(RegisterSize.Word)
@@ -62,6 +89,13 @@
     //set to 0 bytes in the Preferences: a strip beside the registers, which are then as tall as
     //their list, stands in for memory
     const memoryHidden = $derived(preferencesStore.values.memoryPanelSize.value === 0)
+    //memory has wrapped under the registers when it is as wide as their row, which turns the rule
+    //between them from down the row to across it
+    let rowBox: readonly ResizeObserverSize[] | undefined = $state()
+    const memoryWrapped = $derived(
+        !memoryHidden &&
+            (memoryBox?.[0]?.inlineSize ?? 0) >= (rowBox?.[0]?.inlineSize ?? Infinity) - 1
+    )
     const firstPanel = $derived(context.rail.find((entry) => !entry.action)?.id)
     const panelShown = $derived(phone ? ui.drawerOpen : !!ui.activePanel)
     let restoring = $state(false)
@@ -101,6 +135,11 @@
         if (phone) ui.drawerOpen = false
         else ui.close()
     }
+
+    function resizeBottom(size: number) {
+        programIo.resized()
+        workbenchLayout.setBottomHeight(size)
+    }
 </script>
 
 <div class="compact" class:phone class:no-controls-bar={!executionBar}>
@@ -113,7 +152,7 @@
                  Back and Save are in the rail as on a desktop too -->
             <div class="rail-slot" class:joined={panelShown}><IconRail withBack withSave /></div>
         {/if}
-        <div class="scroll">
+        <div class="scroll" style:--compact-bottom-height="{bottomHeight}px">
             <!-- a phone's controls are inside the editor, along its bottom edge -->
             <EditorArea
                 controls={phone}
@@ -130,17 +169,32 @@
                     />
                 </div>
             {/if}
-            <!-- Lines rules it off from the editor and the controls above it, where Cards has the gap -->
-            <BottomPanel
-                style="height: var(--compact-bottom-height); flex: none; border-top: var(--wb-section-rule, none);"
+            <div class="bottom-room" aria-hidden="true" bind:clientHeight={bottomRoom}></div>
+            <!-- the gap above the bottom panel, which the handle's margins take back from the
+                 column; in Lines it is the rule from the editor and the controls -->
+            <Splitter
+                orientation="horizontal"
+                size={bottomHeight}
+                direction={-1}
+                min={LAYOUT_LIMITS.bottomHeight.min}
+                max={bottomMax}
+                label="Resize the terminal"
+                style="margin: calc(-1 * var(--wb-gap)) 0;"
+                onResize={resizeBottom}
             />
+            <BottomPanel style="height: var(--compact-bottom-height); flex: none;" />
             {#if debugSectionsBuilt}
                 <div
                     class="debug-sections"
                     class:hidden={!session.debugSession && !session.restarting}
                 >
                     <CollapsibleSection id="compact:registers" title="Registers & memory">
-                        <div class="registers-memory" class:memory-hidden={memoryHidden}>
+                        <div
+                            class="registers-memory"
+                            class:memory-hidden={memoryHidden}
+                            class:memory-wrapped={memoryWrapped}
+                            bind:contentBoxSize={rowBox}
+                        >
                             <div
                                 class="card registers"
                                 style:width={(!memoryHidden && registersWidth) || undefined}
@@ -287,18 +341,22 @@
         }
     }
 
-    /* Before a Build the editor, the controls bar and the open bottom panel fill the column exactly,
-       so nothing scrolls while writing; the editor keeps that height after a Build, the Debug
-       session's sections going below it. The column is a size container so the height comes from
-       the room actually left under whatever bars sit above the Workbench, not from guessing them. */
+    /* Before a Build the editor, the controls bar, the handle and the open bottom panel fill the
+       column exactly, so nothing scrolls while writing; the editor keeps that height after a Build,
+       the Debug session's sections going below it. The column is a size container so the height
+       comes from the room actually left under whatever bars sit above the Workbench, not from
+       guessing them. */
     .scroll {
-        --compact-bottom-height: 12rem;
         --compact-controls-height: calc(var(--wb-control-height) + 0.4rem);
+        /* the controls bar and the gap under it */
+        --compact-controls-room: calc(var(--compact-controls-height) + var(--wb-gap));
+        --compact-editor-min: 14rem;
         --compact-editor-height: max(
-            14rem,
+            var(--compact-editor-min),
             calc(
-                100cqh - 2 *
-                    var(--wb-gap) - var(--compact-controls-height) - var(--compact-bottom-height)
+                100cqh - var(--compact-controls-room) - var(--splitter-size) - var(
+                        --compact-bottom-height
+                    )
             )
         );
         container-type: size;
@@ -318,7 +376,19 @@
     /* a phone's controls are inside the editor, so the column has no bar to leave room for */
     .phone .scroll,
     .no-controls-bar .scroll {
-        --compact-controls-height: 0px;
+        --compact-controls-room: 0px;
+    }
+
+    /* the most the bottom panel may take, which leaves the editor its least, as a length the
+       script reads */
+    .bottom-room {
+        position: absolute;
+        width: 0;
+        height: calc(
+            100cqh - var(--compact-controls-room) - var(--splitter-size) - var(--compact-editor-min)
+        );
+        visibility: hidden;
+        pointer-events: none;
     }
 
     /* the execution controls, stuck in reach as the column scrolls: no card of their own, only the
@@ -350,13 +420,15 @@
     /* registers beside memory when both fit, memory under them when not. Beside it the registers
        fill the height of its page and scroll inside; above it they are as tall as their list, up
        to a page. Beside each other memory takes the width left, and alone on its line each fills
-       it; the row scrolls sideways only when one of them is wider than the screen. A margin rather
-       than padding, so the row clips at the edges of what it holds: memory's rules, below */
+       it; the row scrolls sideways only when one of them is wider than the screen. Each is as far
+       from the rule between them, below, as from the section's edges: padding rather than a margin,
+       so that the rule runs on through it to those edges */
     .registers-memory {
+        --row-inset: 0.3rem;
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem var(--wb-gap);
-        margin: 0.3rem;
+        gap: calc(2 * var(--row-inset));
+        padding: var(--row-inset);
         overflow-x: auto;
 
         /* memory's strip stays beside the registers, never under them */
@@ -383,30 +455,28 @@
         flex: 1000 1 auto;
         align-self: flex-start;
 
-        /* the rule from the registers, in either style: memory draws one in the gap on its left
-           and one in the gap above it, and the row clips whichever falls outside it, the left one
-           when memory has wrapped under the registers and the top one when it sits beside them */
-        &::before,
-        &::after {
+        /* the rule from the registers, in either style and from edge to edge of the section: down
+           the gap on memory's left while it sits beside them, across the gap above it once it has
+           wrapped under them, running on through the row's padding either way */
+        &::before {
             content: '';
             position: absolute;
+            top: calc(-1 * var(--row-inset));
+            bottom: calc(-1 * var(--row-inset));
+            left: calc(-1 * var(--row-inset) - 0.5px);
+            width: 1px;
             background-color: var(--wb-line);
             pointer-events: none;
         }
+    }
 
-        &::before {
-            top: 0;
-            bottom: 0;
-            left: calc(-1px - var(--wb-gap) / 2);
-            width: 1px;
-        }
-
-        &::after {
-            top: calc(-0.25rem - 0.5px);
-            left: 0;
-            right: 0;
-            height: 1px;
-        }
+    .memory-wrapped .memory::before {
+        top: calc(-1 * var(--row-inset) - 0.5px);
+        bottom: auto;
+        left: calc(-1 * var(--row-inset));
+        right: calc(-1 * var(--row-inset));
+        width: auto;
+        height: 1px;
     }
 
     /* memory's strip, as tall as the registers beside it */

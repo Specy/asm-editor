@@ -233,4 +233,15 @@
                 5px 0 0 currentColor;
         }
     }
+
+    /* a finger needs more to take hold of than a mouse pointer */
+    @media (pointer: coarse) {
+        .vertical::before {
+            inset: 0 -0.5rem;
+        }
+
+        .horizontal::before {
+            inset: -0.5rem 0;
+        }
+    }
 </style>

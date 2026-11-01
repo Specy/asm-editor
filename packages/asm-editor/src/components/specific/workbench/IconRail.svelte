@@ -28,11 +28,13 @@
     const bottom = $derived(context.rail.filter((entry) => entry.group === 'bottom'))
 
     //in a phone's drawer a tap picks the panel to show beside the rail, there being no editor
-    //behind it to close back to; everywhere else the open panel's icon closes it
+    //behind it to close back to, and the shown panel's icon closes the drawer, which opens on that
+    //panel again; everywhere else the open panel's icon closes it
     function press(entry: RailEntry) {
         if (entry.action) entry.action()
-        else if (ui.deviceClass === 'phone') ui.open(entry.id)
-        else ui.toggle(entry.id)
+        else if (ui.deviceClass !== 'phone') ui.toggle(entry.id)
+        else if (ui.activePanel === entry.id) ui.drawerOpen = false
+        else ui.open(entry.id)
     }
 </script>
 
