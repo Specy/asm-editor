@@ -283,21 +283,43 @@
                 become assembly.
             </div>
         </MainPageSection>
-        <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp">
+        <MainPageSection id="reverseEngineering" imageUrl="/images/ASM-ReverseEngineering.webp">
+            {#snippet title()}
+                Reverse engineering & CTFs
+            {/snippet}
+            <div class="description" class:textShadow={textShadowPrimary}>
+                Import an x86-64 Linux ELF executable, to disassemble it, decompile it to C-like
+                pseudocode with the Ghidra decompiler and edit its bytes in the hex editor. Rename
+                functions, add comments, browse its strings and debug it with breakpoints, stepping
+                and undo. Made for capture the flag challenges, cybersecurity courses and learning
+                how compiled programs work.
+                <a
+                    href={resolve('/documentation/x86/executables')}
+                    title="Read about Executables"
+                    class="external-link"
+                >
+                    Read about Executables
+                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
+                        <GoLinkExternal />
+                    </div>
+                </a>
+            </div>
+        </MainPageSection>
+        <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp" reverse>
             {#snippet title()}
                 Peripherals
             {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
+            <div class="description" class:textShadow={textShadowSecondary}>
                 Programs can draw on a screen and interact with the user through mouse and keyboard
                 or use the terminal for stdout and stdin. Available for M68K, MIPS, RISC-V and Z80.
                 This can also be used to write simple interactive games and programs.
             </div>
         </MainPageSection>
-        <MainPageSection id="exam" reverse>
+        <MainPageSection id="exam">
             {#snippet title()}
                 Exam
             {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
+            <div class="description" class:textShadow={textShadowPrimary}>
                 Create exams for students with the <a
                     href={resolve('/exam')}
                     title="Exam tool"
@@ -311,11 +333,11 @@
                 where the editor is locked down.
             </div>
         </MainPageSection>
-        <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp">
+        <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp" reverse>
             {#snippet title()}
                 AI Chat
             {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
+            <div class="description" class:textShadow={textShadowSecondary}>
                 Chat with an AI assistant that can write, run and debug assembly code directly in
                 the browser. Use the <a
                     href={resolve('/chat')}
@@ -330,11 +352,11 @@
                 to get help with M68K, MIPS, RISC-V, x86-64 and Z80 assembly.
             </div>
         </MainPageSection>
-        <MainPageSection id="embed" reverse>
+        <MainPageSection id="embed">
             {#snippet title()}
                 Embed
             {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
+            <div class="description" class:textShadow={textShadowPrimary}>
                 Embed the editor in your website to show and teach how assembly works using the <a
                     href={resolve('/embed')}
                     title="Embedder tool"
