@@ -54,4 +54,4 @@ The program's working directory is the Project, so what Notepad, Paint and the T
 
 `os/main.c` is compiled with **-O1**. Its Generated assembly, `os/main.c.asm`, comes with the Project and is up to date, so Build works without compiling. After changing a C File, select `os/main.c` and press **Compile** again.
 
-At -O2 and -O3 the compiler output is close to the 4 MiB Compiler Explorer may send back, and can exceed it; -O1 is about as fast here and well under it.
+-O1 runs about as fast here as -O2, since the pixel loops are in assembly anyway, and it makes a smaller Generated assembly; at -O2 the answer from Compiler Explorer is 5.2 MB.

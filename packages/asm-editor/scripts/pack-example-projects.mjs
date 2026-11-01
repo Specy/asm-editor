@@ -93,8 +93,8 @@ const EXAMPLES = [
             'os/main.c.asm': { display: { width: 640, height: 480 } }
         },
         selectedProgram: 'os/main.c.asm',
-        //as the editor's Compile wrote it for -O1: at -O2 the compiler's answer comes close to the
-        //4 MiB Compiler Explorer may send back
+        //as the editor's Compile wrote it for -O1, which runs about as fast as -O2 since the pixel
+        //loops are assembly, and makes less assembly
         compilations: [
             {
                 runtimeAbi: 'v1',

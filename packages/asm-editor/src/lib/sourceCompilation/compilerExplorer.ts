@@ -39,7 +39,19 @@ import type {
 
 const API_ROOT = 'https://godbolt.org/api'
 export const COMPILE_BYTE_LIMIT = 1024 * 1024
-const ASSEMBLY_BYTE_LIMIT = 4 * 1024 * 1024
+/**
+ * The most Compiler Explorer's answer and the lines of assembly in it may be. The service sets no
+ * limit on its output; these keep out an answer nothing here could hold. The answer is JSON of
+ * about 70 bytes a line of assembly and more for a line with a source location, so a C program of
+ * 4,000 lines is about 4 MiB at -O2. 16 MiB is what one Project File may hold; the Generated
+ * assembly made from an answer is a fraction of its size.
+ */
+const ASSEMBLY_BYTE_LIMIT = 16 * 1024 * 1024
+const ASSEMBLY_LINE_LIMIT = 400_000
+/** What to do about an answer over either limit. */
+const TOO_LARGE_ADVICE =
+    'Compile at a lower optimization level, or split the program into several source Files, each compiled on its own.'
+
 /** Where the Runtime library's headers are uploaded; the program sees them as its system headers. */
 export const SYSROOT_INCLUDE = 'sysroot/include'
 /**
@@ -674,7 +686,9 @@ export async function compileSource(
         )
     const body = await response.text()
     if (body.length > ASSEMBLY_BYTE_LIMIT)
-        throw new SourceCompilationError('Compiler output exceeds the supported size.')
+        throw new SourceCompilationError(
+            `The compiler output is ${(body.length / 1024 / 1024).toFixed(1)} MiB, more than the 16 MiB the editor takes. ${TOO_LARGE_ADVICE}`
+        )
     let result: Record<string, unknown>
     try {
         result = JSON.parse(body)
@@ -697,9 +711,12 @@ export async function compileSource(
             diagnostics
         )
     }
+    if (Array.isArray(result.asm) && result.asm.length > ASSEMBLY_LINE_LIMIT)
+        throw new SourceCompilationError(
+            `The compiler output has ${result.asm.length.toLocaleString('en-US')} lines of assembly, more than the ${ASSEMBLY_LINE_LIMIT.toLocaleString('en-US')} the editor takes. ${TOO_LARGE_ADVICE}`
+        )
     if (
         !Array.isArray(result.asm) ||
-        result.asm.length > 100_000 ||
         result.asm.some(
             (line) =>
                 !line ||

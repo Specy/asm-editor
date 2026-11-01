@@ -238,6 +238,10 @@
         context ??= canvas.getContext('2d')
         if (!context) return
         const source = drawingView ? screen.drawingPixels : screen.visiblePixels
+        //what changed since the frame this canvas shows, when the Screen knows it: x86's catch-up
+        //names the rows and columns it changed, and a pointer moving over a large Screen is then a
+        //few hundred pixels to copy rather than the whole image
+        let region = drawingView ? null : screen.changedRegion(paintedVersion)
         //ImageData wraps the Screen's own array instead of copying it, so it is only rebuilt when
         //that array is replaced: a Build, a resize, a double-buffering change or a switch between
         //the two images
@@ -251,8 +255,11 @@
             //the DOM's ImageDataArray asks for
             const pixels = source as Uint8ClampedArray<ArrayBuffer>
             image = new ImageData(pixels, screen.width, screen.height)
+            region = null
         }
-        context.putImageData(image, 0, 0)
+        if (!region) context.putImageData(image, 0, 0)
+        else if (region.width > 0 && region.height > 0)
+            context.putImageData(image, 0, 0, region.x, region.y, region.width, region.height)
         //the drawing view leaves it at -1 so that going back to the visible image paints it once,
         //however long the program has been sitting on the same frame
         paintedVersion = drawingView ? -1 : screen.version

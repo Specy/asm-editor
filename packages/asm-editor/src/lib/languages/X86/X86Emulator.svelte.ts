@@ -704,8 +704,9 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
 
     /**
      * The Screen catches up with `/dev/fb0` (decision 5 of the plan): the page the scanout shows
-     * now, read whole and converted in one pass, black while the program has blanked the display
-     * and before it has opened the device. At the end of every slice and Step, before every wait,
+     * now, compared with the one it last read and converted where it differs (`syncFramebufferPage`),
+     * black while the program has blanked the display and before it has opened the device. At the
+     * end of every slice and Step, before every wait,
      * and after an Undo or a Poke: whenever the Screen can be seen next. Pixels written through the
      * mapping leave no mark, so it reads the page again whenever an instruction has run since it
      * last did, or a page was presented; and not at all when neither happened, as when a wait

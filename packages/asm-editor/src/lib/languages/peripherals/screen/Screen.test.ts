@@ -726,6 +726,43 @@ describe('Screen framebuffer mode', () => {
         expect(screen.version).toBe(version + 1)
     })
 
+    it('converts only what changed since the page it last read, and names that rectangle', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(8, 4)
+        const shown = page(8, 4, 32, new Array(32).fill(0x008080))
+        screen.syncFramebufferPage(shown)
+        screen.markPainted()
+        const painted = screen.version
+        //a pixel in each of two rows: the rectangle holds both, widened to whole pairs of words
+        const view = new DataView(shown.bytes.buffer)
+        view.setUint32((1 * 8 + 3) * 4, 0xff0000, true)
+        view.setUint32((2 * 8 + 4) * 4, 0x0000ff, true)
+        screen.syncFramebufferPage(shown)
+        expect(screen.changedRegion(painted)).toEqual({ x: 2, y: 1, width: 4, height: 2 })
+        const colors = visibleColors(screen)
+        expect([colors[1 * 8 + 3], colors[2 * 8 + 4]]).toEqual([RED, BLUE])
+        expect(colors.filter((color) => color === 0x008080)).toHaveLength(30)
+        //a renderer that painted some other version repaints everything
+        expect(screen.changedRegion(painted - 1)).toBe(null)
+        screen.markPainted()
+        expect(screen.changedRegion(screen.version)).toEqual({ x: 0, y: 0, width: 0, height: 0 })
+        //and so does one after a change that named no rectangle
+        const before = screen.version
+        screen.clear()
+        expect(screen.changedRegion(before)).toBe(null)
+    })
+
+    it('reads the whole page again once the Screen has drawn on its image itself', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(2, 1)
+        const shown = page(2, 1, 8, [0xff0000, 0x00ff00])
+        screen.syncFramebufferPage(shown)
+        //the page is the same, but the image no longer shows it
+        screen.clear()
+        screen.syncFramebufferPage(shown)
+        expect(visibleColors(screen)).toEqual([RED, GREEN])
+    })
+
     it('reads no pixel of an image a black page left black, and blacks out what was drawn since', () => {
         const screen = makeScreen()
         screen.useFramebuffer(2, 1)

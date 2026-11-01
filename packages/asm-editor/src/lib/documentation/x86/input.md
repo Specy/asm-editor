@@ -306,6 +306,7 @@ The devices behave as they do on a QEMU virtual machine running Linux, the refer
 - **Ctrl+C and Ctrl+\\ always send the signals**, even when a program names other keys for them in `c_cc`.
 - **The Terminal has no grid of rows and columns.** Every character takes one column, a tab and a wide character included. `\r` goes back to the start of the last line and `\b` back one column, but an escape sequence that moves the cursor elsewhere is not followed.
 - **A drag that leaves the Screen stays at its edge**, and losing the focus lifts every key and button, as a QEMU window does.
+- **Some keys never reach the program.** The browser and the operating system keep their shortcuts for themselves: Ctrl+N, Ctrl+T and Ctrl+W, Alt+Tab and Alt+F4, and on Windows the Windows key and Ctrl+Esc. Give anything such a key would do another key or a button too.
 
 ## Not covered {#not-covered}
 

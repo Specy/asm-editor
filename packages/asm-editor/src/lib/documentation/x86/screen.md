@@ -130,7 +130,7 @@ One pixel is one little-endian 32-bit word, `0x00RRGGBB`: blue in the low byte, 
 
 The pixel at column x and line y is at `address + y × line_length + x × 4`. Use `line_length` rather than `xres × 4` to step from one line to the next: here the two are equal, but on other hardware a line can have unused bytes at its end, and a program that uses `line_length` draws right on both.
 
-Drawing every pixel of the Screen one at a time takes a noticeable fraction of a second at this emulator's speed, more for a large Screen. Draw only what changes, and fill whole lines with `rep stosd`, which stores `eax` `rcx` times.
+Drawing every pixel of the Screen one at a time takes a noticeable fraction of a second at this emulator's speed, more for a large Screen. Draw only what changes, and fill whole lines with `rep stosd`, which stores `eax` `rcx` times: filling a 640 × 480 Screen a line at a time with it takes about a tenth of the time a loop storing one pixel at a time takes, in C or in assembly. A C program can call such a routine written in a `.asm` File of the Project, as [Linking project Files](/documentation/x86/using-c#linking-project-files) shows.
 
 **Undo** walks the picture back with the code: a pixel is memory, and Undo restores memory. A `rep stosd` that fills a whole page is one step that Undo takes back at once.
 
