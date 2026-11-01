@@ -138,13 +138,13 @@
         {
             field: 'width',
             title: 'Width in pixels',
-            text: `Width, a multiple of ${X86_DISPLAY_WIDTH_STEP} from ${X86_DISPLAY_SIZE_MIN} to ${X86_DISPLAY_SIZE_MAX}`,
+            text: `Width (${X86_DISPLAY_SIZE_MIN}–${X86_DISPLAY_SIZE_MAX} pixels, multiples of ${X86_DISPLAY_WIDTH_STEP})`,
             step: X86_DISPLAY_WIDTH_STEP
         },
         {
             field: 'height',
             title: 'Height in pixels',
-            text: `Height, any size from ${X86_DISPLAY_SIZE_MIN} to ${X86_DISPLAY_SIZE_MAX}`,
+            text: `Height (${X86_DISPLAY_SIZE_MIN}–${X86_DISPLAY_SIZE_MAX} pixels)`,
             step: 1
         }
     ] as const
@@ -237,8 +237,8 @@
             {/each}
         {/if}
         <p class="hint">
-            {formatX86Display(x86Current)} pixels, which the program reads from
-            <code>/dev/fb0</code>, each a 32-bit 0x00RRGGBB word.
+            {formatX86Display(x86Current)} pixels. The program accesses pixels through
+            <code>/dev/fb0</code> as 32-bit 0x00RRGGBB values.
         </p>
     {:else}
         {@render marsForm()}

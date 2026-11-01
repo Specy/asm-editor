@@ -47,10 +47,12 @@ typedef struct {
 #define FD_ISSET(fd, set) (((set)->fds_bits[(fd) / 64] & (1UL << ((fd) % 64))) != 0)
 
 /**
- * Waits until a descriptor below nfds in readfds can be read, one in writefds written, or the
- * timeout passes (NULL waits for ever, a zero timeout only checks). Removes the descriptors that
- * are not ready from the sets and returns how many are left, 0 when the time ran out, or -1 with
- * errno set. On Linux *timeout is left holding the time not waited.
+ * Waits for readiness: readfds for reading, writefds for writing, and exceptfds for exceptional
+ * conditions (POLLPRI). Set nfds to one more than the highest descriptor in any set. Pass NULL for
+ * an unused set or an unlimited timeout; a zero timeout only checks. On success, the sets contain
+ * only ready descriptors. Returns the total number of ready bits across all sets, 0 on timeout, or
+ * -1 with errno set. One descriptor can count in more than one set. The sets and *timeout are
+ * modified; prepare them again before another wait. *timeout holds the remaining time.
  */
 static inline int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout) {
     register long rax __asm__("rax") = 23; /* select */

@@ -1,9 +1,92 @@
-A Linux program draws by opening the framebuffer, `/dev/fb0`, and mapping its memory into the
-program with `mmap`. After that, each 32-bit word of that memory is one pixel of the Screen, its
-colour written `0x00RRGGBB`, and a store changes the pixel. This program draws a house, a sun and
-the sky with one subroutine, `fill_rect`, which fills a rectangle.
+Draw a house, a sun, sky and grass by filling rectangles in pixel memory. A rectangle one
+row high is enough to build the sloping roof and the round sun too.
 
-Press **Build**, then **Run**. The picture stays on the Screen after the program ends.
+## Pixels and rows
+
+The **framebuffer** is memory that holds the Screen's pixels. In this editor, each pixel occupies
+four bytes and has the colour value `0x00RRGGBB`: red, green and blue each use one byte. For
+example, `0x00ff0000` is red. Little-endian memory stores its bytes as `00 00 ff 00`.
+This example uses the Screen's 32-bit pixel layout; other Linux framebuffers can use other layouts.
+
+Columns increase to the right and rows increase downward, starting at `(0, 0)` in the top-left
+corner. At a width of 320 pixels, a row occupies 1,280 bytes:
+
+```text
+row 0:  [pixel 0][pixel 1] ... [pixel 319]
+row 1:  [pixel 0][pixel 1] ... [pixel 319]
+         4 bytes per pixel
+```
+
+Once `rbx` holds the address of the top-left pixel, a pixel's address is:
+
+```text
+rbx + y × line_length + x × 4
+```
+
+For column 10, row 3, the byte offset is `3 × 1280 + 10 × 4 = 3880`. The program reads
+`line_length`, the number of bytes between row starts, from the device. Using that value also
+allows for a framebuffer that has unused bytes at the end of each row.
+
+The program's `fill_rect` subroutine takes a column, a row, a width, a height and a colour.
+For example, this call draws the wall, covering columns 90 through 209 and rows 110 through 189:
+
+```x86
+    mov edi, 90                     ; left column
+    mov esi, 110                    ; top row
+    mov edx, 120                    ; width in pixels
+    mov ecx, 80                     ; height in rows
+    mov r8d, WALL                   ; colour
+    call fill_rect
+```
+
+These are the first five integer argument registers of the System V convention you used for
+subroutines. `fill_rect` also reads `rbx` and `r13`, which the setup code supplies. It preserves
+`rbx` and `r12` through `r15`, so the drawing loops can keep their counters there.
+
+## Getting access to pixel memory
+
+Before drawing, the program opens `/dev/fb0`, the framebuffer's device file, with `O_RDWR`
+for reading and writing. It keeps the returned descriptor in `r12`. Two `ioctl` system calls
+then ask the device for information. An **ioctl request** selects a device-specific operation:
+`rdi` holds the descriptor, `rsi` the request number, and `rdx` the address where these requests
+will write their results.
+
+The program reserves two blocks of bytes in `.bss` for those results:
+
+- `var` receives the visible width (`xres`) and height (`yres`), along with other display settings,
+  when the request is `FBIOGET_VSCREENINFO`.
+- `fix` receives the framebuffer's byte count (`smem_len`) and bytes per row (`line_length`),
+  along with other device information, when the request is `FBIOGET_FSCREENINFO`.
+
+Each block has a fixed layout: every named value occupies bytes at an agreed offset. Linux calls
+such a block a _structure_. You do not need C to read it: `[fix + fb_fix_screeninfo.line_length]`
+reads the value at the `line_length` offset within `fix`. The include file `linux/fb.inc` supplies
+these offsets and the total block sizes used by `resb`, so each request has enough space for its
+whole result. The other include files supply syscall numbers and flag constants.
+
+Finally, `mmap` makes the framebuffer's bytes accessible at an address in the program. Its six
+arguments use the syscall convention:
+
+| Register | Value                     | Meaning                             |
+| -------- | ------------------------- | ----------------------------------- |
+| `rdi`    | 0                         | Let the kernel choose the address.  |
+| `rsi`    | `smem_len`                | Map this many bytes.                |
+| `rdx`    | `PROT_READ \| PROT_WRITE` | Allow reads and stores.             |
+| `r10`    | `MAP_SHARED`              | Make stores update the framebuffer. |
+| `r8`     | descriptor in `r12`       | Select the opened framebuffer.      |
+| `r9`     | 0                         | Start at byte zero of the device.   |
+
+On success, `mmap` returns the address in `rax`; the program keeps it in `rbx`. Results from
+-4095 through -1 are errors, which the unsigned comparison with -4095 detects.
+
+The example checks `open` and `mmap`. It assumes the two supported information requests succeed
+on the editor's Screen and leaves their error checks out. Code that must handle other devices
+should check each `ioctl` result before using the information it was meant to fill.
+
+## Draw the picture
+
+Press **Build**, then **Run**. The `@screen` comment requests a 320 by 240 Screen, and the picture
+stays visible after the program ends.
 
 ```x86|playground|open-screen|no-registers|no-flags|allow-open
 ; @screen width=320 height=240
@@ -36,9 +119,9 @@ fix:    resb fb_fix_screeninfo_size
 section .text
 global _start
 
-; fill_rect: a rectangle of colour r8d, edx pixels wide and ecx lines high, whose
-; top-left corner is at column edi of line esi. Nothing is drawn for a width or a
-; height of 0. The rectangle must fit on the Screen.
+; fill_rect: fill edx columns and ecx rows with the colour in r8d.
+; edi and esi give the top-left column and row. Non-positive width or height
+; draws nothing. The rectangle must fit on the Screen.
 ; Reads rbx (the top-left pixel) and r13 (bytes a line); changes rax, rcx, rsi,
 ; rdi, r9 and r10.
 fill_rect:
@@ -123,9 +206,9 @@ sun_fit:
     cmp eax, SUN_R * SUN_R
     jge sun_fit                     ; outside the circle: narrower still
     mov edi, SUN_X
-    sub edi, r15d                   ; from the centre less the half width
+    sub edi, r15d                   ; left edge: centre minus half width
     lea esi, [r14 + SUN_Y]
-    lea edx, [r15*2 + 1]            ; to the centre plus the half width
+    lea edx, [r15*2 + 1]            ; width: both halves and the centre pixel
     mov ecx, 1
     mov r8d, SUN
     call fill_rect
@@ -140,7 +223,7 @@ sun_fit:
     mov r8d, WALL
     call fill_rect
 
-; the roof: 30 lines, each 2 pixels shorter at both ends than the one below
+; the roof: 30 rows; each end moves inward 2 pixels on the next row
     xor r14d, r14d                  ; r14: the roof's line, 0 at the bottom
 roof_line:
     lea edi, [r14*2 + 80]           ; starts 2 pixels further right a line
@@ -184,57 +267,36 @@ fail:
     syscall
 ```
 
-## Opening and mapping the framebuffer
+## How the rectangles become shapes
 
-The program takes four system calls before it draws:
+`fill_rect` calculates its top-left pixel address in `r10`. It copies that address into `rdi`,
+puts the colour in `eax`, and uses `rep stosd` to store one row of `edx` pixels. After each row,
+it adds `line_length` to `r10`. That reaches the same column on the next row, regardless of how
+far `rep stosd` advanced `rdi`. The subroutine returns without drawing if width or height is
+non-positive. It does not clip: every rectangle you pass must fit on the Screen.
 
-1. `open` of `/dev/fb0` gives a descriptor, kept in `r12`.
-2. The `FBIOGET_VSCREENINFO` ioctl fills `var`, a `struct fb_var_screeninfo`, whose `xres` and
-   `yres` are the Screen's size in pixels: 320 by 240, as the `@screen` comment on the first line
-   asks.
-3. The `FBIOGET_FSCREENINFO` ioctl fills `fix`, a `struct fb_fix_screeninfo`: `smem_len` is how
-   many bytes the framebuffer has, and `line_length` how many bytes one line of pixels takes.
-4. `mmap` maps `smem_len` bytes of it and returns their address, which `rbx` keeps. `MAP_SHARED`
-   makes the stores reach the Screen, rather than a private copy.
+The sky and grass span the Screen's width. The wall, door and windows each need one rectangle.
+Later drawing covers earlier drawing, so the door and windows appear over the wall.
 
-The names come from the `%include` files at the top, which hold the numbers Linux's own C headers
-give them. A structure's fields are offsets, so `[fix + fb_fix_screeninfo.line_length]` reads the
-`line_length` field of the structure at `fix`. `mmap` reports an error as a result from -4095 to -1,
-which is why the program compares with -4095 rather than testing the sign.
+The roof loop draws from bottom to top. Its first row starts at `(80, 109)` and is 140 pixels
+wide. The next starts at `(82, 108)` and is 136 pixels wide: each end moves inward by two pixels,
+reducing the total width by four. Repeating this for 30 rows makes the sloping sides.
 
-## Filling a rectangle with `rep stosd`
+The sun loop draws horizontal rows inside a circle. `r14d` holds `dy`, the row's offset from
+the centre, from -23 through 23 for radius 24. For each row, `r15d` starts at 24 and is decremented
+_before_ the first test, so the first candidate half width `w` is 23. The loop keeps narrowing
+until `w² + dy² < 24²`. The strict comparison leaves points exactly on the circle's boundary out.
 
-The pixel at column x of line y is `y × line_length + x × 4` bytes after the top-left pixel. The
-pixels of one line follow each other, four bytes apart, so a whole line of one colour is a job for
-`rep stosd`: it stores `eax` at `rdi`, moves `rdi` on four bytes, and does it `rcx` times.
+On the first row, `dy = -23`. A half width of 7 gives `49 + 529 = 578`, which is too large;
+6 gives `36 + 529 = 565`, which fits. The row therefore covers columns 254 through 266 at
+row 27. Its width is `2 × 6 + 1 = 13`: six pixels left of the centre, the centre pixel, and six
+right of it. At the middle row, `dy = 0`, the first candidate 23 already fits, giving 47 pixels.
 
-`fill_rect` works out the address of the rectangle's top-left corner once, in `r10`. For each line it
-copies that address into `rdi`, fills `edx` pixels, then adds `line_length` to `r10` to step one line
-down. Use `line_length` rather than `xres × 4` to step down: here they are equal, but on other
-hardware a line can end with unused bytes.
+## Optional: the same picture in C
 
-Its arguments come in the registers a C function takes its first five in, `edi`, `esi`, `edx`, `ecx`
-and `r8d`. It changes only registers a C function may change, so `rbx`, `r12` to `r15` survive a
-call, and the two loops in `_start` keep their counters there.
-
-## Building the picture from calls
-
-The sky and the grass are two rectangles as wide as the Screen. The wall, the door and the windows
-are one call each.
-
-The roof is 30 rectangles one line high. Each line, `r14` goes up by one: the line starts 2 pixels
-further right, is 4 pixels shorter, and is one line higher, which makes a triangle. `lea` does the
-small sums, `r14 × 2 + 80` and `r14 × 4`, without changing the flags.
-
-The sun is a disc, and a disc is a stack of lines too. For each line `dy` from the centre, the
-program starts from the radius and makes the half width `w` smaller until `w² + dy² < r²`, the
-inside of the circle, then fills from `SUN_X - w` to `SUN_X + w`.
-
-## The same picture in C
-
-C reaches the framebuffer with the same calls, under the names of Linux's headers. Press
-**Compile** to translate `drawing.c` for x86, then **Build** and **Run**. The first compilation needs
-an internet connection.
+This C version uses the same device requests and pixel layout. Compare its drawing loops with
+the calls to `fill_rect` above. Press **Compile** to translate `drawing.c` for x86, then **Build** and **Run**.
+The first compilation needs an internet connection.
 
 ```c|playground|target=x86|file=drawing.c|open-screen|no-registers|no-flags|allow-open
 // @screen width=320 height=240
@@ -291,15 +353,14 @@ int main(void) {
 }
 ```
 
-At **-O0** the compiler turns the inner loop of `fill_rect` into several instructions a pixel,
-where `rep stosd` fills a whole line in one: the C version runs about 1.2 million instructions to
-draw this picture, and the NASM one under 7,000. Choose **-O2** and compile again: about 250,000.
-
 ## Try it
 
-1. Move the sun: change `SUN_X` and `SUN_Y`, or make it bigger with `SUN_R`. Keep the whole disc on
-   the Screen, since `fill_rect` does not clip.
-2. Put a chimney on the roof: a `fill_rect` of 12 by 30 pixels at column 170, line 70, in `WALL`'s
-   colour, before the roof is drawn so that the roof covers its foot.
-3. Change `@screen width=320 height=240` to `@screen width=640 height=480` and run again. The sky
-   and the grass follow `xres` and `yres`; the house keeps its size, now in the top-left quarter.
+1. Move the sun by changing `SUN_X` and `SUN_Y`, or set `SUN_R` to another positive radius. For radius 24
+   on a 320 by 240 Screen, centres from 24 through 295 horizontally and 24 through 215 vertically
+   leave room for the whole disc. Try `(50, 50)` first. Recheck the bounds if you change the radius.
+2. Add a chimney: fill a 12 by 30 rectangle at column 170, row 70, using `WALL`. Insert the call
+   before the roof loop so that the roof covers the chimney's foot.
+3. Change `@screen width=320 height=240` to `@screen width=640 height=480`, then build and run again.
+   The sky and grass use the reported width and height, so they cover the larger Screen. The
+   horizon stays at row 180 and the house keeps its coordinates and size, within the top-left
+   quarter. Resizing the Screen does not scale the drawing or add clipping.

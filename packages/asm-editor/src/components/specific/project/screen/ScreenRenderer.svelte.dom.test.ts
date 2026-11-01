@@ -221,7 +221,9 @@ it('still releases the Screen on Escape for every other Target', () => {
 
 it('says where a focused Screen sends its input', () => {
     const { canvas } = panel()
-    expect(canvas.title).toMatch(/input devices, not to its standard input; Shift\+Tab to release/)
+    expect(canvas.title).toBe(
+        'Click to send keyboard and mouse input to the program through /dev/input. Type in the Terminal for standard input. Press Shift+Tab to return keyboard focus to the page.'
+    )
     const other = panel({ x86: false })
     expect(other.canvas.title).toBe(
         'Click to send keyboard and mouse input to the program, Esc to release it'
@@ -230,7 +232,7 @@ it('says where a focused Screen sends its input', () => {
 
 it('asks to be clicked while the program waits for a key, until it has the keyboard', () => {
     const { canvas } = panel({ waitingFor: 'Waiting for a key' })
-    expect(canvas.title).toMatch(/^Waiting for a key\. Click to send keys and the pointer/)
+    expect(canvas.title).toMatch(/^Waiting for a key\. Click to send keyboard and mouse input/)
     expect(canvas.getAttribute('aria-label')).toMatch(/^Screen screen, waiting for a key, click/)
     expect(canvas.classList.contains('waiting')).toBe(true)
     canvas.focus()

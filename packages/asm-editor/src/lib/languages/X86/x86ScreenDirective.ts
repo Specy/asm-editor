@@ -141,7 +141,7 @@ export function parseX86ScreenDirective(
                 makeWarning(
                     site.lineIndex,
                     site.column,
-                    `A program has one @screen directive; this one is ignored, the one on line ${directive.lineIndex + 1} is used.`
+                    `Only the first @screen directive is used (line ${directive.lineIndex + 1}). This directive is ignored.`
                 )
             )
             continue
@@ -245,7 +245,7 @@ function readEntries(
             diagnostics.push(
                 warnOn(
                     directive,
-                    `"${stray}" is not a name=value setting. Write the directive as ${EXAMPLE[style]}.`
+                    `"${stray}" must be written as name=value. For example: ${EXAMPLE[style]}.`
                 )
             )
             return
@@ -266,7 +266,7 @@ function readEntry(
         diagnostics.push(
             warnOn(
                 directive,
-                `x86's screen has no ${name}: a framebuffer pixel is one Screen pixel, and the Screen's zoom scales it up. The settings are width and height.`
+                `"${name}" is not an x86 screen setting. Use the Screen's zoom to enlarge pixels. The settings are width and height.`
             )
         )
         return
@@ -275,24 +275,24 @@ function readEntry(
         diagnostics.push(
             warnOn(
                 directive,
-                `x86's screen has no ${name}: the program maps /dev/fb0 wherever mmap puts it. The settings are width and height.`
+                `"${name}" is not an x86 screen setting. Use mmap to map /dev/fb0 into the program. The settings are width and height.`
             )
         )
         return
     }
     if (key !== 'width' && key !== 'height') {
         diagnostics.push(
-            warnOn(
-                directive,
-                `"${name}" is not a screen setting. The settings are width and height.`
-            )
+            warnOn(directive, `"${name}" is not an x86 screen setting. Use width or height.`)
         )
         return
     }
     const parsed = readNumber(value)
     if (parsed === null) {
         diagnostics.push(
-            warnOn(directive, `"${value}" is not a number, so ${name} is left as it was.`)
+            warnOn(
+                directive,
+                `"${value}" is not a valid number for ${name}. The previous value is kept.`
+            )
         )
         return
     }
@@ -302,7 +302,7 @@ function readEntry(
         diagnostics.push(
             warnOn(
                 directive,
-                `${name}=${parsed} is not between ${X86_DISPLAY_SIZE_MIN} and ${X86_DISPLAY_SIZE_MAX}, the sizes in pixels the screen takes; using ${clamped}.`
+                `${name} must be between ${X86_DISPLAY_SIZE_MIN} and ${X86_DISPLAY_SIZE_MAX} pixels. Using ${clamped} instead of ${parsed}.`
             )
         )
     }
@@ -315,7 +315,7 @@ function readEntry(
         diagnostics.push(
             warnOn(
                 directive,
-                `${name}=${parsed} is not a multiple of 8, which a framebuffer's width always is here; using ${snapped}.`
+                `The screen width must be a multiple of 8 pixels. Using ${snapped} instead of ${parsed}.`
             )
         )
     }

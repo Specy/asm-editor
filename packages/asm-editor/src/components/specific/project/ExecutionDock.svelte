@@ -390,7 +390,7 @@
                 disabled={restartable ? buildDisabled || building : executionDisabled || building}
                 {@attach tooltip(
                     restartable
-                        ? 'Go back to the start'
+                        ? 'Reset the program to the start'
                         : running
                           ? 'Pause the program'
                           : 'Run to the end or the next breakpoint'

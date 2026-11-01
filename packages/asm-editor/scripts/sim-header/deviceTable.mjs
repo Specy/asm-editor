@@ -470,7 +470,7 @@ export const DEVICE_HEADERS = [
                     'fd_set *exceptfds',
                     'struct timeval *timeout'
                 ],
-                'Waits until a descriptor below nfds in readfds can be read, one in writefds written, or the timeout passes (NULL waits for ever, a zero timeout only checks). Removes the descriptors that are not ready from the sets and returns how many are left, 0 when the time ran out, or -1 with errno set. On Linux *timeout is left holding the time not waited.',
+                'Waits for readiness: readfds for reading, writefds for writing, and exceptfds for exceptional conditions (POLLPRI). Set nfds to one more than the highest descriptor in any set. Pass NULL for an unused set or an unlimited timeout; a zero timeout only checks. On success, the sets contain only ready descriptors. Returns the total number of ready bits across all sets, 0 on timeout, or -1 with errno set. One descriptor can count in more than one set. The sets and *timeout are modified; prepare them again before another wait. *timeout holds the remaining time.',
                 { syscall: 'select' }
             )
         ]
@@ -501,14 +501,14 @@ export const DEVICE_HEADERS = [
                 'clock_gettime',
                 'int',
                 ['clockid_t clockid', 'struct timespec *tp'],
-                'Stores the time of the clock clockid in *tp. Returns 0, or -1 with errno set (EINVAL for an unknown clock).',
+                'Reads the time from clockid into *tp as seconds and nanoseconds. Returns 0, or -1 with errno set (EINVAL for an unknown clock).',
                 { syscall: 'clock_gettime' }
             ),
             posix(
                 'nanosleep',
                 'int',
                 ['const struct timespec *request', 'struct timespec *remaining'],
-                'Waits for the time in *request. Returns 0, or -1 with errno set: EINTR when a signal ended the wait early, with the time left in *remaining unless it is NULL.',
+                'Waits for the duration in *request. Returns 0 on completion, or -1 with errno set. If a signal interrupts the wait, errno is EINTR and *remaining receives the time left, unless remaining is NULL.',
                 { syscall: 'nanosleep' }
             )
         ]
@@ -530,14 +530,14 @@ export const DEVICE_HEADERS = [
                 'read',
                 'ssize_t',
                 ['int fd', 'void *buffer', 'size_t count'],
-                'Reads up to count bytes from fd into buffer. Returns how many it read, which can be fewer, 0 at the end of input, or -1 with errno set (EAGAIN when fd is non-blocking and nothing is ready, EINVAL for an input device and a buffer smaller than one event).',
+                'Reads up to count bytes from fd into buffer. Returns the byte count, which may be less than count, 0 at end of input, or -1 with errno set. EAGAIN means a nonblocking descriptor has no input ready. For an input device, a buffer smaller than one input_event fails with EINVAL.',
                 { syscall: 'read' }
             ),
             posix(
                 'write',
                 'ssize_t',
                 ['int fd', 'const void *buffer', 'size_t count'],
-                'Writes count bytes from buffer to fd. Returns how many it wrote, or -1 with errno set (EAGAIN when fd is non-blocking and the device has no room).',
+                'Writes up to count bytes from buffer to fd. Returns the byte count, or -1 with errno set. After a short successful write, submit the remaining bytes in another call. EAGAIN means a nonblocking descriptor cannot accept any bytes now.',
                 { syscall: 'write' }
             ),
             posix('close', 'int', ['int fd'], 'Closes fd. Returns 0, or -1 with errno set.', {
@@ -547,21 +547,21 @@ export const DEVICE_HEADERS = [
                 'getpid',
                 'pid_t',
                 ['void'],
-                "The program's process id, which kill takes. It never fails.",
+                "Returns the program's process ID, which can be passed to kill. This call does not fail.",
                 { syscall: 'getpid', args: [] }
             ),
             posix(
                 'lseek',
                 'off_t',
                 ['int fd', 'off_t offset', 'int whence'],
-                "Moves fd's position to offset from the start (SEEK_SET), the current position (SEEK_CUR) or the end (SEEK_END). Returns the new position, or -1 with errno set (ESPIPE for the Terminal and for every device but /dev/fb0, which have no position).",
+                'Sets the byte position of fd to offset relative to the start (SEEK_SET), current position (SEEK_CUR) or end (SEEK_END). Returns the new position, or -1 with errno set. The Terminal and devices other than /dev/fb0 have no seek position and fail with ESPIPE.',
                 { syscall: 'lseek' }
             ),
             posix(
                 'isatty',
                 'int',
                 ['int fd'],
-                'Whether fd is a terminal: 1 for the Terminal and the console, or 0 with errno set (ENOTTY for a file or any other device, EBADF for a descriptor that is not open). It asks with the TCGETS ioctl, as the C library does.',
+                'Returns 1 if fd refers to the Terminal or console. Otherwise returns 0 with errno set: ENOTTY for a file or another device, EBADF for a descriptor that is not open.',
                 {
                     syscall: 'ioctl',
                     //the kernel's struct termios, which TCGETS fills: 36 bytes
@@ -574,14 +574,14 @@ export const DEVICE_HEADERS = [
                 'fsync',
                 'int',
                 ['int fd'],
-                'Finishes every write to fd; on /dev/fb0 it shows what was drawn on the Screen at once. Returns 0, or -1 with errno set.',
+                'Synchronizes pending file changes for fd. On /dev/fb0, requests an immediate update of the Screen from the framebuffer. Returns 0, or -1 with errno set.',
                 { syscall: 'fsync' }
             ),
             posix(
                 'usleep',
                 'int',
                 ['useconds_t microseconds'],
-                'Waits for the given number of microseconds, through nanosleep. Returns 0, or -1 with errno set.',
+                'Waits for the requested number of microseconds. Returns 0 on completion, or -1 with errno set; EINTR means a signal interrupted the wait.',
                 {
                     syscall: 'nanosleep',
                     before: [
@@ -594,7 +594,7 @@ export const DEVICE_HEADERS = [
                 'sleep',
                 'unsigned int',
                 ['unsigned int seconds'],
-                'Waits for the given number of seconds, through nanosleep. Returns 0, or the whole seconds left when a signal ended the wait early.',
+                'Waits for the requested number of seconds. Returns 0 on completion, or the whole seconds remaining if a signal interrupts the wait.',
                 {
                     syscall: 'nanosleep',
                     before: [
@@ -660,7 +660,7 @@ export const DEVICE_HEADERS = [
                 'open',
                 'int',
                 ['const char *path', 'int flags', '...'],
-                'Opens the file or device at path, such as "/dev/fb0" or "/dev/input/event1", with flags such as O_RDWR or O_RDONLY | O_NONBLOCK. With O_CREAT, a third argument gives the new file\'s mode, such as 0644. Returns the new descriptor, or -1 with errno set (ENOENT when there is no such file, ENODEV for a device the editor does not have).',
+                'Opens the file or device at path, such as "/dev/fb0", using flags such as O_RDWR or O_RDONLY | O_NONBLOCK. With O_CREAT, supply a third argument for the new file mode, such as 0644. Returns a file descriptor, or -1 with errno set. ENOENT means the path does not exist; ENODEV means the device is unavailable here.',
                 {
                     syscall: 'open',
                     before: [
@@ -679,7 +679,7 @@ export const DEVICE_HEADERS = [
                 'fcntl',
                 'int',
                 ['int fd', 'int cmd', '...'],
-                'Runs the command cmd on fd, with a third argument for the commands that take one: fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) makes fd non-blocking. Returns what the command answers, or -1 with errno set.',
+                "Applies cmd to fd. Commands that need a value take a third argument. For example, fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) enables nonblocking I/O. Returns the command's result, or -1 with errno set.",
                 {
                     syscall: 'fcntl',
                     before: [
@@ -742,7 +742,7 @@ export const DEVICE_HEADERS = [
                 'ioctl',
                 'int',
                 ['int fd', 'unsigned long request', '...'],
-                'Asks the device behind fd to carry out request, with a third argument when the request takes one: usually a pointer to the structure it reads or fills, sometimes a number. Returns 0 or a number the request defines, or -1 with errno set (ENOTTY for a request the device does not know, EINVAL for an argument it refuses).',
+                "Applies request to the device open on fd. The request defines whether the third argument is a pointer, an immediate integer or unused; check its device reference. Returns the request's result, usually 0, or -1 with errno set. ENOTTY means the device does not support the request; EINVAL means an invalid argument.",
                 {
                     syscall: 'ioctl',
                     before: [
@@ -806,7 +806,7 @@ export const DEVICE_HEADERS = [
                     'int fd',
                     'off_t offset'
                 ],
-                'Maps length bytes of fd from offset into the program, where it chooses when address is NULL. For the Screen: mmap(NULL, fix.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0). Returns the mapped memory, or MAP_FAILED with errno set.',
+                "Maps length bytes of fd starting at offset into the program's address space. If address is NULL, the system chooses the address. For the Screen, use mmap(NULL, fix.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0). Returns the mapped address, or MAP_FAILED with errno set.",
                 { syscall: 'mmap', result: '(void *)__aed_syscall_return(rax)' }
             ),
             posix(
@@ -851,7 +851,7 @@ export const DEVICE_HEADERS = [
                 'poll',
                 'int',
                 ['struct pollfd *fds', 'nfds_t nfds', 'int timeout'],
-                'Waits until one of the nfds descriptors of fds has what its events ask for, or timeout milliseconds pass (-1 waits for ever, 0 only checks). Fills in every revents and returns how many are not 0, 0 when the time ran out, or -1 with errno set.',
+                'Checks the first nfds elements of fds. Each events field requests readiness, such as POLLIN for reading or POLLOUT for writing; revents receives the resulting flags. Waits up to timeout milliseconds (-1 waits indefinitely, 0 only checks). Returns the number of array elements with nonzero revents, 0 on timeout, or -1 with errno set.',
                 { syscall: 'poll' }
             )
         ]
@@ -859,9 +859,9 @@ export const DEVICE_HEADERS = [
     {
         path: 'termios.h',
         nasmSummary:
-            'struct termios and its mode bits, which the TCGETS and TCSETS ioctls of sys/ioctl.inc read and set: turning ICANON off in c_lflag gives each key as it is typed, and turning ECHO off stops typed keys from being shown.',
+            'struct termios and its mode bits for TCGETS and TCSETS from sys/ioctl.inc. Clear ICANON in c_lflag to read bytes without waiting for Enter, and clear ECHO to hide typed input.',
         summary:
-            "the Terminal's modes. A program reads them with tcgetattr, changes the struct and sets it with tcsetattr: turning ICANON off gives each key as it is typed instead of whole lines, and turning ECHO off stops typed keys from being shown. cfmakeraw turns all of that processing off at once.",
+            'terminal settings. Read them with tcgetattr, modify the structure, then apply it with tcsetattr. Clear ICANON to read bytes without waiting for Enter, or ECHO to hide typed input. cfmakeraw disables line buffering, echo, signal-generating control characters and byte processing.',
         includes: ['bits/syscall.h'],
         items: [
             typedef('tcflag_t', 'unsigned int', 'A set of mode bits'),
@@ -1005,7 +1005,7 @@ export const DEVICE_HEADERS = [
                 'tcgetattr',
                 'int',
                 ['int fd', 'struct termios *termios'],
-                "Reads the modes of the terminal fd into *termios, through the TCGETS ioctl. Returns 0, or -1 with errno set (ENOTTY when fd is not a terminal). As in the C library, c_cc past the kernel's 19 characters is 0, and c_ispeed and c_ospeed are c_cflag's speed bits.",
+                'Reads the terminal settings for fd into *termios. Returns 0, or -1 with errno set (ENOTTY if fd is not a terminal). The c_cc array contains 19 control-character slots used by the kernel; later slots are zero. c_ispeed and c_ospeed reflect the baud-rate bits in c_cflag.',
                 {
                     syscall: 'ioctl',
                     args: ['fd', '0x5401 /* TCGETS */', '(long)termios'],
@@ -1023,7 +1023,7 @@ export const DEVICE_HEADERS = [
                 'tcsetattr',
                 'int',
                 ['int fd', 'int action', 'const struct termios *termios'],
-                'Sets the modes of the terminal fd from *termios, at the time action says (TCSANOW, TCSADRAIN or TCSAFLUSH), through the TCSETS ioctls. Returns 0, or -1 with errno set.',
+                'Applies *termios to terminal fd. action selects when: TCSANOW applies immediately, TCSADRAIN waits for output to drain, and TCSAFLUSH also discards unread input after draining output. These use TCSETS, TCSETSW and TCSETSF respectively. Returns 0, or -1 with errno set.',
                 {
                     syscall: 'ioctl',
                     before: [
@@ -1037,21 +1037,21 @@ export const DEVICE_HEADERS = [
                 'tcflush',
                 'int',
                 ['int fd', 'int queue'],
-                'Discards what the terminal fd holds: the input not read yet (TCIFLUSH), the output not sent (TCOFLUSH) or both (TCIOFLUSH), through the TCFLSH ioctl. A game calls it to drop the keys typed while it was busy. Returns 0, or -1 with errno set.',
+                'Discards queued terminal data on fd: unread input for TCIFLUSH, unsent output for TCOFLUSH, or both for TCIOFLUSH. Returns 0, or -1 with errno set.',
                 { syscall: 'ioctl', args: ['fd', '0x540b /* TCFLSH */', 'queue'] }
             ),
             posix(
                 'tcdrain',
                 'int',
                 ['int fd'],
-                'Waits until everything written to the terminal fd has been sent, through the TCSBRK ioctl, which here is at once. Returns 0, or -1 with errno set.',
+                "Waits until all output written to terminal fd has been sent. The editor's Terminal drains immediately. Returns 0, or -1 with errno set.",
                 { syscall: 'ioctl', args: ['fd', '0x5409 /* TCSBRK */', '1'] }
             ),
             posix(
                 'cfmakeraw',
                 'void',
                 ['struct termios *termios'],
-                "Changes *termios to raw mode: every key is read as it is typed, nothing is echoed, Ctrl+C is an ordinary byte and output is written as it is, '\\n' without '\\r'. Set it with tcsetattr.",
+                "Disables line buffering, echo, signal-generating control characters, input translations and output processing in *termios. Apply the changed settings with tcsetattr. Input remains a byte stream; special keys can produce escape sequences. Output '\\n' no longer supplies '\\r', so write '\\r\\n' for a new line.",
                 {
                     documentation: 'ioctl',
                     body: [
@@ -1219,7 +1219,7 @@ export const DEVICE_HEADERS = [
                 'opendir',
                 'DIR *',
                 ['const char *path'],
-                'Opens the directory at path for readdir, such as "/dev/input". Returns it, or NULL with errno set (ENOENT when there is no such directory, ENOTDIR for a file).',
+                'Opens a directory stream for path, such as "/dev/input", for use with readdir. Returns a DIR pointer, or NULL with errno set (ENOENT if the path does not exist, ENOTDIR if it is not a directory).',
                 {
                     documentation: 'getdents64',
                     body: [
@@ -1246,7 +1246,7 @@ export const DEVICE_HEADERS = [
                 'readdir',
                 'struct dirent *',
                 ['DIR *dir'],
-                'The next entry of dir, ".", ".." and the names in it in no set order, or NULL after the last one (errno unchanged) or for a failure (errno set). The entry lasts until the next readdir or closedir of dir.',
+                'Returns the next entry in dir, including "." and "..", in no guaranteed order. Returns NULL at end of directory without changing errno, or on error with errno set. To distinguish the two, set errno to 0 before the call and inspect it after a NULL result. The returned entry is valid until the next readdir or closedir on this stream.',
                 {
                     documentation: 'getdents64',
                     body: [
@@ -1270,7 +1270,7 @@ export const DEVICE_HEADERS = [
                 'rewinddir',
                 'void',
                 ['DIR *dir'],
-                'Starts dir over, so that readdir gives its first entry again.',
+                'Resets dir to the beginning so the next readdir returns its first entry again.',
                 {
                     documentation: 'lseek',
                     body: [
@@ -1284,14 +1284,14 @@ export const DEVICE_HEADERS = [
                 'dirfd',
                 'int',
                 ['DIR *dir'],
-                'The descriptor dir reads, for fstat or openat; closedir closes it.',
+                'Returns the file descriptor used by dir, for calls such as fstat or openat. closedir closes that descriptor.',
                 { documentation: 'getdents64', body: ['return dir->__fd;'] }
             ),
             posix(
                 'closedir',
                 'int',
                 ['DIR *dir'],
-                'Closes dir and gives back its memory: dir and the entries readdir gave are gone. Returns 0, or -1 with errno set.',
+                'Closes the directory stream and frees its memory. The DIR pointer and entries returned by readdir are no longer valid. Returns 0, or -1 with errno set.',
                 {
                     documentation: 'close',
                     body: [
@@ -1550,7 +1550,7 @@ export const DEVICE_HEADERS = [
                 'sigfillset',
                 'int',
                 ['sigset_t *set'],
-                'Puts every signal in *set, but 32 and 33, which the C library keeps for itself. Returns 0.',
+                'Fills *set with every signal except 32 and 33, which are reserved by the C library. Returns 0.',
                 {
                     documentation: 'rt_sigprocmask',
                     body: [
@@ -1566,7 +1566,7 @@ export const DEVICE_HEADERS = [
                 'sigaddset',
                 'int',
                 ['sigset_t *set', 'int sig'],
-                'Adds the signal sig to *set. Returns 0, or -1 with errno set (EINVAL for a number that is no signal).',
+                'Adds sig to *set. Returns 0, or -1 with errno set to EINVAL for an invalid signal number.',
                 {
                     documentation: 'rt_sigprocmask',
                     body: [
@@ -1581,7 +1581,7 @@ export const DEVICE_HEADERS = [
                 'sigdelset',
                 'int',
                 ['sigset_t *set', 'int sig'],
-                'Removes the signal sig from *set. Returns 0, or -1 with errno set (EINVAL for a number that is no signal).',
+                'Removes sig from *set. Returns 0, or -1 with errno set to EINVAL for an invalid signal number.',
                 {
                     documentation: 'rt_sigprocmask',
                     body: [
@@ -1596,7 +1596,7 @@ export const DEVICE_HEADERS = [
                 'sigismember',
                 'int',
                 ['const sigset_t *set', 'int sig'],
-                'Whether the signal sig is in *set: 1 or 0, or -1 with errno set (EINVAL for a number that is no signal).',
+                'Returns 1 if sig belongs to *set, or 0 otherwise. Returns -1 with errno set to EINVAL for an invalid signal number.',
                 {
                     documentation: 'rt_sigprocmask',
                     body: [
@@ -1610,7 +1610,7 @@ export const DEVICE_HEADERS = [
                 'sigprocmask',
                 'int',
                 ['int how', 'const sigset_t *set', 'sigset_t *old'],
-                'Changes which signals are blocked, as how says (SIG_BLOCK, SIG_UNBLOCK or SIG_SETMASK) with *set, and stores the ones blocked before in *old unless it is NULL. A blocked signal waits until it is unblocked. Returns 0, or -1 with errno set.',
+                'Changes the blocked signal set: SIG_BLOCK adds *set, SIG_UNBLOCK removes *set, and SIG_SETMASK replaces the blocked set with *set. A NULL set leaves it unchanged. If old is not NULL, stores the previous blocked set in *old. A blocked signal remains pending until unblocked. Returns 0, or -1 with errno set.',
                 {
                     syscall: 'rt_sigprocmask',
                     //the C library keeps 32 and 33 for itself, out of any set it is given
@@ -1622,7 +1622,7 @@ export const DEVICE_HEADERS = [
                 'sigaction',
                 'int',
                 ['int sig', 'const struct sigaction *action', 'struct sigaction *old'],
-                'Sets what the signal sig does from *action, unless it is NULL, and stores what it did in *old, unless it is NULL: struct sigaction action = { 0 }; action.sa_handler = handler; sigaction(SIGINT, &action, NULL). Returns 0, or -1 with errno set (EINVAL for SIGKILL and SIGSTOP).',
+                'Installs *action for sig; a NULL action leaves it unchanged. If old is not NULL, stores the previous action in *old. For example: struct sigaction action = { 0 }; action.sa_handler = handler; sigaction(SIGINT, &action, NULL). Returns 0, or -1 with errno set. SIGKILL and SIGSTOP cannot have their actions changed (EINVAL).',
                 {
                     syscall: 'rt_sigaction',
                     before: [
@@ -1651,7 +1651,7 @@ export const DEVICE_HEADERS = [
                 'signal',
                 'sighandler_t',
                 ['int sig', 'sighandler_t handler'],
-                "Runs handler for the signal sig from now on, or SIG_DFL or SIG_IGN: signal(SIGINT, on_ctrl_c). The handler takes the signal's number; a read it interrupts starts over (SA_RESTART). Returns the handler before, or SIG_ERR with errno set.",
+                'Installs handler for sig. Pass a function taking the signal number, SIG_DFL to restore the default action, or SIG_IGN to ignore the signal. For example: signal(SIGINT, on_ctrl_c). Uses SA_RESTART so eligible interrupted calls restart automatically; see the syscall reference for restart rules. Returns the previous handler or action, or SIG_ERR with errno set.',
                 {
                     documentation: 'rt_sigaction',
                     body: [
@@ -1674,14 +1674,14 @@ export const DEVICE_HEADERS = [
                 'kill',
                 'int',
                 ['pid_t pid', 'int sig'],
-                'Sends the signal sig to the process pid; the program itself is getpid(), from <unistd.h>. Returns 0, or -1 with errno set (ESRCH when there is no such process).',
+                'Sends sig to process pid. Use getpid() from <unistd.h> to identify this program. Returns 0, or -1 with errno set (ESRCH if no such process exists).',
                 { syscall: 'kill' }
             ),
             posix(
                 'raise',
                 'int',
                 ['int sig'],
-                'Sends the signal sig to the program itself, through tgkill: its handler runs before raise returns. Returns 0, or -1 with errno set.',
+                'Sends sig to this program. An unblocked signal with a handler runs that handler before raise returns. A blocked signal remains pending until unblocked. SIG_IGN discards the signal; SIG_DFL applies its default action, which may end the program. Returns 0, or -1 with errno set.',
                 {
                     documentation: 'tgkill',
                     body: [
@@ -1701,18 +1701,38 @@ export const DEVICE_HEADERS = [
         items: [
             define('FB_MAX', 32, 'How many framebuffers Linux numbers'),
             note('The requests.'),
-            define('FBIOGET_VSCREENINFO', 0x4600, 'Read the struct fb_var_screeninfo', {
-                radix: 16
-            }),
-            define('FBIOPUT_VSCREENINFO', 0x4601, 'Ask for another struct fb_var_screeninfo', {
-                radix: 16
-            }),
-            define('FBIOGET_FSCREENINFO', 0x4602, 'Read the struct fb_fix_screeninfo', {
-                radix: 16
-            }),
-            define('FBIOPAN_DISPLAY', 0x4606, "Show the page at the fb_var_screeninfo's yoffset", {
-                radix: 16
-            }),
+            define(
+                'FBIOGET_VSCREENINFO',
+                0x4600,
+                'Read the current dimensions, pan offsets and pixel layout into struct fb_var_screeninfo',
+                {
+                    radix: 16
+                }
+            ),
+            define(
+                'FBIOPUT_VSCREENINFO',
+                0x4601,
+                'Apply reported dimensions and pan offsets; the configured Screen size and allocation remain fixed',
+                {
+                    radix: 16
+                }
+            ),
+            define(
+                'FBIOGET_FSCREENINFO',
+                0x4602,
+                'Read the framebuffer allocation and row stride into struct fb_fix_screeninfo',
+                {
+                    radix: 16
+                }
+            ),
+            define(
+                'FBIOPAN_DISPLAY',
+                0x4606,
+                'Display the page at fb_var_screeninfo.yoffset at the next vertical blank',
+                {
+                    radix: 16
+                }
+            ),
             define(
                 'FBIOBLANK',
                 0x4611,
@@ -1727,7 +1747,7 @@ export const DEVICE_HEADERS = [
                 "'F'",
                 0x20,
                 '__u32',
-                'Wait for the next vertical blank, 1/60 s; the argument points to a __u32 0'
+                'Wait for the next vertical blank; the display refreshes at 60 Hz'
             ),
             note(
                 "FBIOBLANK's argument, a number rather than a pointer: every level but FB_BLANK_UNBLANK leaves the Screen black."
@@ -1824,15 +1844,27 @@ export const DEVICE_HEADERS = [
                 'fb_var_screeninfo',
                 "What FBIOGET_VSCREENINFO reads and FBIOPUT_VSCREENINFO asks for: the visible size, the size of the memory behind it, which part of it is shown, and how a pixel's bits are laid out.",
                 [
-                    field('__u32', 'xres', 'The visible width, in pixels'),
-                    field('__u32', 'yres', 'The visible height'),
+                    field(
+                        '__u32',
+                        'xres',
+                        'Reported width in pixels; initially the configured Screen width'
+                    ),
+                    field(
+                        '__u32',
+                        'yres',
+                        'Reported height in pixels; initially the configured Screen height'
+                    ),
                     field('__u32', 'xres_virtual', 'The width of the memory, in pixels'),
-                    field('__u32', 'yres_virtual', 'Its height: twice yres here, two pages'),
+                    field(
+                        '__u32',
+                        'yres_virtual',
+                        'Allocated height: twice the configured Screen height'
+                    ),
                     field('__u32', 'xoffset', 'The first visible column'),
                     field(
                         '__u32',
                         'yoffset',
-                        'The first visible line: 0 shows the first page, yres the second'
+                        'First displayed row: 0 for the first page, the configured Screen height for the second'
                     ),
                     field('__u32', 'bits_per_pixel', '32 here'),
                     field('__u32', 'grayscale'),
@@ -2136,11 +2168,11 @@ export const DEVICE_HEADERS = [
             ),
             struct(
                 'input_absinfo',
-                "What EVIOCGABS reads for one axis: its value now and its range. Convert the tablet's x to a pixel with (value * xres + 32766) / 32767.",
+                'The current value and range of an absolute axis, read by EVIOCGABS. For this tablet, clamp (value * xres + 32766) / 32767 to 0 through xres - 1 to obtain a horizontal pixel coordinate; minimum is 0 and maximum is 32767.',
                 [
                     field('__s32', 'value', 'The position now'),
-                    field('__s32', 'minimum'),
-                    field('__s32', 'maximum'),
+                    field('__s32', 'minimum', 'Lowest axis value: 0 for the Screen tablet'),
+                    field('__s32', 'maximum', 'Highest axis value: 32767 for the Screen tablet'),
                     field('__s32', 'fuzz'),
                     field('__s32', 'flat'),
                     field('__s32', 'resolution')
@@ -2180,7 +2212,7 @@ export const DEVICE_HEADERS = [
                 'EVIOCGNAME',
                 ['len'],
                 "_IOC(_IOC_READ, 'E', 0x06, len)",
-                'The device\'s name, such as "AT Translated Set 2 keyboard".',
+                'Read the device name into a buffer of len bytes, such as "AT Translated Set 2 keyboard".',
                 {
                     samples: [['256']]
                 }
@@ -2216,7 +2248,7 @@ export const DEVICE_HEADERS = [
                 'EVIOCGKEY',
                 ['len'],
                 "_IOC(_IOC_READ, 'E', 0x18, len)",
-                'The keys and buttons held now, one bit per code; it also discards the key events still queued for this reader.',
+                'Read held keys and buttons into a bit set of len bytes, one bit per code. Also discard queued EV_KEY events for this reader.',
                 {
                     samples: [['96']]
                 }
@@ -2246,7 +2278,7 @@ export const DEVICE_HEADERS = [
                 'EVIOCGBIT',
                 ['ev', 'len'],
                 "_IOC(_IOC_READ, 'E', 0x20 + (ev), len)",
-                'Which codes of the type ev the device has, one bit per code; with ev 0, which types it has, one bit per EV_* type.',
+                'Read supported codes for event type ev into a bit set of len bytes. With ev equal to 0, read supported event types instead.',
                 {
                     samples: [
                         ['0', '4'],
@@ -2259,7 +2291,7 @@ export const DEVICE_HEADERS = [
                 'EVIOCGABS',
                 ['abs'],
                 "_IOR('E', 0x40 + (abs), struct input_absinfo)",
-                'The value and range of the axis abs, into a struct input_absinfo.',
+                'Read the current value and range for axis code abs, such as ABS_X, into struct input_absinfo. Queued events remain unchanged.',
                 {
                     nasm: "_IOC(_IOC_READ, 'E', 0x40 + (abs), input_absinfo_size)",
                     samples: [['ABS_X'], ['ABS_Y']]
@@ -2281,7 +2313,7 @@ export const DEVICE_HEADERS = [
                 "'E'",
                 0x90,
                 'int',
-                "With 1, this reader alone gets the device's events; with 0, it lets go"
+                'An immediate integer 1 gives this reader exclusive events; 0 releases the device'
             ),
             ioctl('EVIOCREVOKE', 'W', "'E'", 0x91, 'int'),
             ioctl(
@@ -2371,7 +2403,7 @@ export const DEVICE_HEADERS = [
                 "'P'",
                 2,
                 'int',
-                'The rate in samples a second, 1000 to 192000; it opens at 8000',
+                'Set the sample rate and write back the selected value, from 1000 to 192000 samples per second; initially 8000',
                 { spelling: '_SIO' }
             ),
             ioctl(
@@ -2383,16 +2415,24 @@ export const DEVICE_HEADERS = [
                 '0 mono, 1 stereo: the old way of SNDCTL_DSP_CHANNELS',
                 { spelling: '_SIO' }
             ),
-            ioctl('SNDCTL_DSP_GETBLKSIZE', 'WR', "'P'", 4, 'int', 'The fragment size in bytes', {
-                spelling: '_SIO'
-            }),
+            ioctl(
+                'SNDCTL_DSP_GETBLKSIZE',
+                'WR',
+                "'P'",
+                4,
+                'int',
+                'Read the selected fragment size in bytes',
+                {
+                    spelling: '_SIO'
+                }
+            ),
             ioctl(
                 'SNDCTL_DSP_SETFMT',
                 'WR',
                 "'P'",
                 5,
                 'int',
-                'The sample format, one AFMT_*; it opens at AFMT_U8',
+                'Set an AFMT_* sample format and write back the selected value; initially AFMT_U8',
                 { spelling: '_SIO' }
             ),
             define('SNDCTL_DSP_SAMPLESIZE', 'SNDCTL_DSP_SETFMT'),
@@ -2402,7 +2442,7 @@ export const DEVICE_HEADERS = [
                 "'P'",
                 6,
                 'int',
-                'How many channels, 1 to 128: 1 mono, 2 stereo',
+                'Set the channel count, 1 to 128, and write back the selected value: 1 is mono, 2 stereo',
                 { spelling: '_SIO' }
             ),
             ioctl(
@@ -2421,7 +2461,7 @@ export const DEVICE_HEADERS = [
                 "'P'",
                 10,
                 'int',
-                "The buffer's size, before the first write: 0xMMMMSSSS asks for MMMM fragments of 2 to the power SSSS bytes. 0x0004000A is four fragments of 1024 bytes: a smaller buffer answers sooner",
+                'Request the buffer configuration through an int pointer: 0xMMMMSSSS requests MMMM fragments of 2^SSSS bytes. Call immediately after open; only one request can succeed per playback open. A smaller buffer reduces queued playback delay',
                 { spelling: '_SIO' }
             ),
             ioctl(
@@ -2470,16 +2510,28 @@ export const DEVICE_HEADERS = [
             ].map(([name, value, doc]) => define(name, value, doc, { radix: 16, linux: false })),
             struct(
                 'audio_buf_info',
-                "What SNDCTL_DSP_GETOSPACE reads: the room in the device's buffer.",
+                'Playback buffer capacity and free space returned by SNDCTL_DSP_GETOSPACE. Total capacity in bytes is fragstotal * fragsize.',
                 [
                     field(
                         'int',
                         'fragments',
-                        'Whole fragments free: a write of fragments * fragsize bytes would not wait'
+                        'Whole free fragments; may be negative while a partial fragment is staged'
                     ),
-                    field('int', 'fragstotal', 'Fragments in the buffer'),
-                    field('int', 'fragsize', 'Bytes in a fragment'),
-                    field('int', 'bytes', 'Bytes free')
+                    field(
+                        'int',
+                        'fragstotal',
+                        'Total fragment count; capacity is fragstotal times fragsize bytes'
+                    ),
+                    field(
+                        'int',
+                        'fragsize',
+                        'Fragment size in bytes, also returned by SNDCTL_DSP_GETBLKSIZE'
+                    ),
+                    field(
+                        'int',
+                        'bytes',
+                        'Free bytes; can be negative while a partial fragment is staged'
+                    )
                 ],
                 { typedef: 'audio_buf_info' }
             ),
@@ -2489,7 +2541,7 @@ export const DEVICE_HEADERS = [
                 "'P'",
                 12,
                 'audio_buf_info',
-                'The room for writing, into an audio_buf_info',
+                'Read playback buffer capacity and free space into audio_buf_info',
                 { spelling: '_SIO' }
             ),
             ioctl('SNDCTL_DSP_GETISPACE', 'R', "'P'", 13, 'audio_buf_info', undefined, {
@@ -2557,7 +2609,7 @@ export const DEVICE_HEADERS = [
                 "'P'",
                 23,
                 'int',
-                'Bytes written and not played yet, into an int',
+                'Read bytes submitted for playback but not yet heard, excluding an incomplete staged fragment',
                 { spelling: '_SIO' }
             ),
             note('The older names of the same requests.'),

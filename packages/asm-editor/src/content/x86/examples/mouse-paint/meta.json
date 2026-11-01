@@ -1,6 +1,6 @@
 {
     "name": "Paint with the mouse",
-    "description": "Find the tablet by asking each input device what it reports, turn its 0 to 32767 positions into pixels, paint while the left button is down and change colour with the wheel, in NASM and in C.",
+    "description": "Find the Screen pointer, convert its positions to pixels, and paint with button and wheel events.",
     "order": 23,
     "topic": "mouse-paint"
 }

@@ -139,7 +139,7 @@ export function defaultPreferences(): PreferenceValues {
                 { value: 256, label: '256 bytes' },
                 { value: 128, label: '128 bytes (default)' },
                 { value: 64, label: '64 bytes' },
-                { value: 0, label: '0 bytes (hidden)' }
+                { value: 0, label: 'Hidden' }
             ],
             'layout'
         )

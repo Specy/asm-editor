@@ -1,8 +1,8 @@
 /*
- * <termios.h>: the Terminal's modes. A program reads them with tcgetattr, changes the struct and
- * sets it with tcsetattr: turning ICANON off gives each key as it is typed instead of whole lines,
- * and turning ECHO off stops typed keys from being shown. cfmakeraw turns all of that processing
- * off at once.
+ * <termios.h>: terminal settings. Read them with tcgetattr, modify the structure, then apply it
+ * with tcsetattr. Clear ICANON to read bytes without waiting for Enter, or ECHO to hide typed
+ * input. cfmakeraw disables line buffering, echo, signal-generating control characters and byte
+ * processing.
  *
  * Part of the x86 Runtime library, written for the editor in the shape of Linux's own header: the
  * same names, values and layouts, with only what the editor's devices use.
@@ -139,9 +139,9 @@ struct termios {
 #define TCIOFLUSH 2 /* Both. */
 
 /**
- * Reads the modes of the terminal fd into *termios, through the TCGETS ioctl. Returns 0, or -1 with
- * errno set (ENOTTY when fd is not a terminal). As in the C library, c_cc past the kernel's 19
- * characters is 0, and c_ispeed and c_ospeed are c_cflag's speed bits.
+ * Reads the terminal settings for fd into *termios. Returns 0, or -1 with errno set (ENOTTY if fd
+ * is not a terminal). The c_cc array contains 19 control-character slots used by the kernel; later
+ * slots are zero. c_ispeed and c_ospeed reflect the baud-rate bits in c_cflag.
  */
 static inline int tcgetattr(int fd, struct termios *termios) {
     register long rax __asm__("rax") = 16; /* ioctl */
@@ -158,8 +158,9 @@ static inline int tcgetattr(int fd, struct termios *termios) {
 }
 
 /**
- * Sets the modes of the terminal fd from *termios, at the time action says (TCSANOW, TCSADRAIN or
- * TCSAFLUSH), through the TCSETS ioctls. Returns 0, or -1 with errno set.
+ * Applies *termios to terminal fd. action selects when: TCSANOW applies immediately, TCSADRAIN
+ * waits for output to drain, and TCSAFLUSH also discards unread input after draining output. These
+ * use TCSETS, TCSETSW and TCSETSF respectively. Returns 0, or -1 with errno set.
  */
 static inline int tcsetattr(int fd, int action, const struct termios *termios) {
     if (action < TCSANOW || action > TCSAFLUSH)
@@ -173,9 +174,8 @@ static inline int tcsetattr(int fd, int action, const struct termios *termios) {
 }
 
 /**
- * Discards what the terminal fd holds: the input not read yet (TCIFLUSH), the output not sent
- * (TCOFLUSH) or both (TCIOFLUSH), through the TCFLSH ioctl. A game calls it to drop the keys typed
- * while it was busy. Returns 0, or -1 with errno set.
+ * Discards queued terminal data on fd: unread input for TCIFLUSH, unsent output for TCOFLUSH, or
+ * both for TCIOFLUSH. Returns 0, or -1 with errno set.
  */
 static inline int tcflush(int fd, int queue) {
     register long rax __asm__("rax") = 16; /* ioctl */
@@ -187,8 +187,8 @@ static inline int tcflush(int fd, int queue) {
 }
 
 /**
- * Waits until everything written to the terminal fd has been sent, through the TCSBRK ioctl, which
- * here is at once. Returns 0, or -1 with errno set.
+ * Waits until all output written to terminal fd has been sent. The editor's Terminal drains
+ * immediately. Returns 0, or -1 with errno set.
  */
 static inline int tcdrain(int fd) {
     register long rax __asm__("rax") = 16; /* ioctl */
@@ -200,8 +200,10 @@ static inline int tcdrain(int fd) {
 }
 
 /**
- * Changes *termios to raw mode: every key is read as it is typed, nothing is echoed, Ctrl+C is an
- * ordinary byte and output is written as it is, '\n' without '\r'. Set it with tcsetattr.
+ * Disables line buffering, echo, signal-generating control characters, input translations and
+ * output processing in *termios. Apply the changed settings with tcsetattr. Input remains a byte
+ * stream; special keys can produce escape sequences. Output '\n' no longer supplies '\r', so write
+ * '\r\n' for a new line.
  */
 static inline void cfmakeraw(struct termios *termios) {
     termios->c_iflag &= ~(tcflag_t)(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);

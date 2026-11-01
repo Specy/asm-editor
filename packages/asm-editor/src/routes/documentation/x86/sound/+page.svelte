@@ -9,5 +9,5 @@
     {chapter}
     heading="x86-64 Sound"
     title="x86-64 Sound: /dev/dsp, MIDI and the PC speaker"
-    description="Make sound from an x86 program: a tone on the PC speaker, General MIDI notes on /dev/snd/midiC1D0, samples on /dev/dsp with SNDCTL_DSP_SETFRAGMENT for low latency, and the volume on /dev/mixer."
+    description="Play PC speaker tones, MIDI notes or audio samples from x86. Configure playback buffering and volume through /dev/dsp and /dev/mixer."
 />

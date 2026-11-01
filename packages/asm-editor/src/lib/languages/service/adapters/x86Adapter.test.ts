@@ -56,7 +56,7 @@ describe('x86 Project analysis adapter', () => {
         expect(snapshot.diagnostics).toEqual([
             expect.objectContaining({
                 severity: 'warning',
-                message: expect.stringContaining('not a multiple of 8'),
+                message: expect.stringContaining('must be a multiple of 8'),
                 location: {
                     path: 'main.asm',
                     range: { start: { line: 0, column: 2 }, end: { line: 0, column: 9 } }

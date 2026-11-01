@@ -75,14 +75,18 @@ function table(header: string[], rows: string[][]): string {
  * spells through another macro, as `SOUND_MIXER_WRITE_VOLUME` is `MIXER_WRITE(SOUND_MIXER_VOLUME)`,
  * is given its meaning here.
  */
-function requests(rows: (string | [spelling: string, doc: string])[]): string {
+function requests(rows: [spelling: string, argument: string, doc?: string][]): string {
     return table(
-        ['Request', 'Number', 'What it does'],
-        rows.map((row) => {
-            const [spelling, doc] = typeof row === 'string' ? [row, undefined] : row
+        ['Request', 'Number', 'Third ioctl argument', 'What it does'],
+        rows.map(([spelling, argument, doc]) => {
             const name = /^\w+/.exec(spelling)![0]
             const value = spelling === name ? valueOf(name) : evaluate(spelling)
-            return [`\`${spelling}\``, `\`${number(value, 16)}\``, meaning(doc ?? item(name).doc)]
+            return [
+                `\`${spelling}\``,
+                `\`${number(value, 16)}\``,
+                argument,
+                meaning(doc ?? item(name).doc)
+            ]
         })
     )
 }
@@ -138,11 +142,11 @@ function screen(): Chapter {
     const href = `${BASE}/screen`
     const markdown = fillPlaceholders(screenProse, {
         requests: requests([
-            'FBIOGET_VSCREENINFO',
-            'FBIOGET_FSCREENINFO',
-            'FBIOPUT_VSCREENINFO',
-            'FBIOPAN_DISPLAY',
-            'FBIO_WAITFORVSYNC'
+            ['FBIOGET_VSCREENINFO', '`struct fb_var_screeninfo *` (output)'],
+            ['FBIOGET_FSCREENINFO', '`struct fb_fix_screeninfo *` (output)'],
+            ['FBIOPUT_VSCREENINFO', '`struct fb_var_screeninfo *` (input/output)'],
+            ['FBIOPAN_DISPLAY', '`struct fb_var_screeninfo *` (input/output)'],
+            ['FBIO_WAITFORVSYNC', 'Pointer to a 32-bit 0']
         ]),
         fields: [
             fields('fb_var_screeninfo', [
@@ -169,7 +173,7 @@ function screen(): Chapter {
         title: 'The Screen',
         href,
         description:
-            'Draw on the Screen through /dev/fb0: read its size, map its pixels, draw the next frame on the hidden page and pan to it at the vertical blank, and choose its size with @screen.',
+            'Draw pixels and switch framebuffer pages through /dev/fb0. Configure the Screen size with Display or @screen.',
         entries: proseEntries({
             language: 'x86',
             chapter: 'screen',
@@ -219,13 +223,29 @@ function input(): Chapter {
         ]),
         absinfoFields: fields('input_absinfo', ['value', 'minimum', 'maximum']),
         stateRequests: requests([
-            'EVIOCGNAME(64)',
-            'EVIOCGBIT(0, 4)',
-            'EVIOCGBIT(EV_KEY, 96)',
-            'EVIOCGKEY(96)',
-            'EVIOCGABS(ABS_X)',
-            'EVIOCGABS(ABS_Y)',
-            'EVIOCGRAB'
+            ['EVIOCGNAME(64)', 'Pointer to a 64-byte output buffer', 'Read the device name'],
+            ['EVIOCGBIT(0, 4)', 'Pointer to a 4-byte output bit set', 'Read supported event types'],
+            [
+                'EVIOCGBIT(EV_KEY, 96)',
+                'Pointer to a 96-byte output bit set',
+                'Read supported key and button codes'
+            ],
+            [
+                'EVIOCGKEY(96)',
+                'Pointer to a 96-byte output bit set',
+                'Read held keys and buttons into the 96-byte bit set, one bit per code; discard queued EV_KEY events for this reader'
+            ],
+            [
+                'EVIOCGABS(ABS_X)',
+                '`struct input_absinfo *` (output)',
+                'Read the horizontal position and range; queued events remain'
+            ],
+            [
+                'EVIOCGABS(ABS_Y)',
+                '`struct input_absinfo *` (output)',
+                'Read the vertical position and range; queued events remain'
+            ],
+            ['EVIOCGRAB', 'Immediate integer: 1 to grab, 0 to release']
         ])
     })
     return {
@@ -234,7 +254,7 @@ function input(): Chapter {
         title: 'Keys and the pointer',
         href,
         description:
-            "Read the Screen's keys and pointer through /dev/input: find the devices, read input events, turn the pointer's position into pixels, wait with poll, and read the Terminal's keys one at a time.",
+            'Read Screen keys, pointer positions and buttons through /dev/input, or read Terminal characters through standard input.',
         entries: proseEntries({
             language: 'x86',
             chapter: 'input',
@@ -255,25 +275,35 @@ function sound(): Chapter {
                 ['SND_BELL', '1000 Hz for any value but 0; 0 stops it']
             ]),
             '',
-            requests(['KIOCSOUND', 'KDMKTONE'])
+            requests([
+                ['KIOCSOUND', 'Immediate integer: timer divider, or 0 to stop'],
+                ['KDMKTONE', 'Immediate integer: duration and divider packed into 32 bits']
+            ])
         ].join('\n'),
         dspFormats: constants(['AFMT_U8', 'AFMT_S16_LE', 'AFMT_S32_LE']),
+        bufferFields: fields('audio_buf_info'),
         dspRequests: requests([
-            'SNDCTL_DSP_SETFRAGMENT',
-            'SNDCTL_DSP_SETFMT',
-            'SNDCTL_DSP_CHANNELS',
-            'SNDCTL_DSP_SPEED',
-            'SNDCTL_DSP_SYNC',
-            'SNDCTL_DSP_RESET',
-            'SNDCTL_DSP_GETOSPACE',
-            'SNDCTL_DSP_GETODELAY'
+            ['SNDCTL_DSP_SETFRAGMENT', '`int *` (input)'],
+            ['SNDCTL_DSP_SETFMT', '`int *` (input/output)'],
+            ['SNDCTL_DSP_CHANNELS', '`int *` (input/output)'],
+            ['SNDCTL_DSP_SPEED', '`int *` (input/output)'],
+            ['SNDCTL_DSP_GETBLKSIZE', '`int *` (output)'],
+            ['SNDCTL_DSP_SYNC', 'Ignored; pass 0'],
+            ['SNDCTL_DSP_RESET', 'Ignored; pass 0'],
+            ['SNDCTL_DSP_GETOSPACE', '`audio_buf_info *` (output)'],
+            ['SNDCTL_DSP_GETODELAY', '`int *` (output)']
         ]),
         mixerRequests: requests([
             [
                 'SOUND_MIXER_READ_VOLUME',
+                '`int *` (output)',
                 'Read the master volume into an int, left in the low byte and right in the next'
             ],
-            ['SOUND_MIXER_WRITE_VOLUME', 'Set the master volume from an int, which it writes back']
+            [
+                'SOUND_MIXER_WRITE_VOLUME',
+                '`int *` (input/output)',
+                'Set the master volume and write back the applied levels'
+            ]
         ])
     })
     return {
@@ -282,7 +312,7 @@ function sound(): Chapter {
         title: 'Sound',
         href,
         description:
-            'Make sound through device files: a tone on the PC speaker, notes on the MIDI port, samples on /dev/dsp with a buffer small enough to answer at once, and the volume on /dev/mixer.',
+            'Play PC speaker tones, MIDI notes or audio samples. Configure playback buffering and volume through /dev/dsp and /dev/mixer.',
         entries: proseEntries({
             language: 'x86',
             chapter: 'sound',

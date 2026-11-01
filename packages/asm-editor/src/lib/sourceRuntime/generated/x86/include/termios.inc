@@ -1,7 +1,6 @@
 ; termios.inc: the constants and structures of <termios.h> for NASM, under the same names: struct
-; termios and its mode bits, which the TCGETS and TCSETS ioctls of sys/ioctl.inc read and set:
-; turning ICANON off in c_lflag gives each key as it is typed, and turning ECHO off stops typed keys
-; from being shown.
+; termios and its mode bits for TCGETS and TCSETS from sys/ioctl.inc. Clear ICANON in c_lflag to
+; read bytes without waiting for Enter, and clear ECHO to hide typed input.
 ;
 ; A structure is a struc: name.field is a field's offset, name.outer.inner one of a structure inside
 ; it, and name_size its size. Use it as [rdi + input_event.code], or reserve one with resb

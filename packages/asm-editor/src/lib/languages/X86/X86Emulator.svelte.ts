@@ -165,14 +165,14 @@ const STARTED_STATES: ReadonlySet<BlinkState> = new Set([
 const MOUSE_PACKETS = {
     device: 'PS/2 mouse packets',
     instead:
-        "Read the pointer from the tablet's event device instead; find it with EVIOCGBIT or in `/proc/bus/input/devices`."
+        'Read pointer events from the tablet instead. Find its event device with EVIOCGBIT or in `/proc/bus/input/devices`.'
 }
 const ALSA_CONTROLS = {
     device: "ALSA's mixer controls",
     instead: 'Set the volume through `/dev/mixer` instead.'
 }
 const SECOND_CARD = {
-    device: 'the sound card the reference machine plays MIDI on',
+    device: 'a secondary sound card',
     instead: 'Play sound through `/dev/dsp` instead.'
 }
 const VIRTUAL_CONSOLE = {
@@ -217,7 +217,7 @@ const UNSUPPORTED_DEVICES: Record<string, { device: string; instead: string }> =
     '/dev/input/js0': {
         device: "the tablet's joystick interface",
         instead:
-            "Read the pointer from the tablet's event device instead; find it with EVIOCGBIT or in `/proc/bus/input/devices`."
+            'Read pointer events from the tablet instead. Find its event device with EVIOCGBIT or in `/proc/bus/input/devices`.'
     },
     '/dev/uinput': {
         device: 'input devices made by a program',
@@ -242,7 +242,7 @@ const UNSUPPORTED_DEVICES: Record<string, { device: string; instead: string }> =
  * "The program waited for a key, and a Testcase has no keyboard or pointer."
  */
 function inputDeviceWaitMessage(devices: readonly X86InputDeviceId[]): string {
-    return `The program waited for ${inputDeviceEvent(devices)}, and a Testcase has no keyboard or pointer.`
+    return `The program is waiting for ${inputDeviceEvent(devices)}. Testcases cannot provide keyboard or pointer input.`
 }
 
 /** What a wait on input devices waits for, in words: "a key", "the pointer" or both. */
@@ -791,7 +791,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.notedDevices.add(path)
         const known = UNSUPPORTED_DEVICES[path]
         const device = known ? `\`${path}\` (${known.device})` : `\`${path}\``
-        const opened = `This emulator doesn't support ${device}, so opening it returned ENODEV.`
+        const opened = `This emulator does not support ${device}. Opening it returned ENODEV.`
         this.addNote({ tone: 'warning', text: known ? `${opened} ${known.instead}` : opened })
     }
 

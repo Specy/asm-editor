@@ -82,7 +82,7 @@ describe('the x86 device Chapters', () => {
     })
 
     it('give the pointer conversion and say where the Screen keys go', () => {
-        expect(markdownOf('input')).toContain('x = (value × xres + 32766) ÷ 32767')
+        expect(markdownOf('input')).toContain('x = min(xres - 1, (value × xres + 32766) ÷ 32767)')
         expect(markdownOf('screen')).toContain('never to its standard input')
         expect(markdownOf('screen')).toContain('**Shift+Tab**')
     })

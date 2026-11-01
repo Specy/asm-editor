@@ -1,5 +1,33 @@
-A ball crosses the Screen and turns round at its edges, sixty frames a second, for ten seconds. Each
-frame is drawn where it cannot be seen and then shown all at once, so the ball never flickers.
+Animate a ball that turns around at the screen's edges. The program draws 600 frames, at up to
+60 frames a second, so it runs for at least ten seconds. With two framebuffer pages, it finishes
+each picture out of view before showing it. If only one page is available, it draws directly on
+the visible page instead.
+
+## How a frame reaches the screen
+
+A **page** is enough framebuffer memory for one whole picture. The Screen in this editor provides
+two pages, one after the other in memory. Only one is visible at a time. The program starts by
+painting both pages with the background colour, then repeats these steps:
+
+1. Choose the page to draw on and erase the rectangle around its previous ball.
+2. Move the ball, reverse its step if it passes an edge, and draw it at the new position.
+3. Ask the Screen to show the completed page, then choose the other page for the next frame.
+
+Several values keep these jobs separate:
+
+- `yres` is the height of one visible picture. `yres_virtual` is the height of all the framebuffer
+  memory, including lines outside that picture. Two pages need at least `2 × yres` lines.
+- `page` selects the page to draw on: 0 or 1. `drawn_x` and `drawn_y` remember the last ball
+  position separately for each page, so the program can erase the correct rectangle.
+- `yoffset` selects the first framebuffer line to display. The `FBIOPAN_DISPLAY` ioctl asks the
+  Screen to display the picture starting at that line.
+- On this editor's Screen, that ioctl also waits for the next **vertical blank**, the interval
+  between display refreshes. This supplies the frame loop's timing, including in one-page mode.
+
+For example, the first frame draws on page 1 while page 0 is visible, then shows page 1. The
+second frame draws on page 0 and shows it. The third returns to page 1, which still contains the
+ball from the first frame. Its saved position tells the program what to erase. On the first visit
+to each page there is no ball yet, so erasing its initial rectangle just paints background again.
 
 Press **Build**, then **Run**.
 
@@ -12,7 +40,7 @@ default rel
 %include "linux/fb.inc"
 
 BALL        equ 16                  ; the ball's width and height
-FRAMES      equ 600                 ; ten seconds at 60 frames a second
+FRAMES      equ 600                 ; at least ten seconds, at up to 60 frames a second
 BACKGROUND  equ 0x00101820
 BALL_COLOUR equ 0x00ffcc33
 
@@ -115,7 +143,7 @@ frame:
     add rax, [pixels]
     mov rbx, rax
 
-    mov eax, [page]                 ; erase the ball this page had, two frames ago
+    mov eax, [page]                 ; erase the rectangle at this page's saved ball position
     lea rcx, [drawn_x]
     mov edi, [rcx + rax*4]
     lea rcx, [drawn_y]
@@ -125,7 +153,7 @@ frame:
     mov r8d, BACKGROUND
     call fill_rect
 
-    mov eax, [x]                    ; move across, and turn round at an edge
+    mov eax, [x]                    ; move across, and turn around at an edge
     add eax, [step_x]
     js turn_x                       ; past the left edge
     mov ecx, [var + fb_var_screeninfo.xres]
@@ -139,7 +167,7 @@ turn_x:
 x_done:
     mov [x], eax
 
-    mov eax, [y]                    ; the same down the Screen
+    mov eax, [y]                    ; the same vertically
     add eax, [step_y]
     js turn_y
     mov ecx, [var + fb_var_screeninfo.yres]
@@ -201,64 +229,74 @@ fail:
     syscall
 ```
 
-## Two pages
+## Selecting and showing a page
 
-Here the framebuffer has room for two pictures: `yres_virtual` is twice `yres`, and the second
-page's lines follow the first's in memory. `yoffset` in `var` says which line the Screen shows at its
-top, 0 for the first page and `yres` for the second. The `FBIOPAN_DISPLAY` ioctl shows the line
-`yoffset` names: it **pans** the Screen to the other page.
+`rbx` tells `fill_rect` where its page begins. Page 0 starts at `pixels`; page 1 starts
+`yres × line_length` bytes later. The frame loop computes this address as
+`pixels + page × yres × line_length`, so the drawing routine can use the same coordinates on
+either page.
 
-Two pages are this machine's setting: a stock Linux kernel gives the framebuffer one page, where
-the second page is not there to draw on. So the program checks `yres_virtual` first, and with one
-page it sets `page` and `flip` to 0 and draws every frame on the page that is shown.
+To show page 0, the program sets `yoffset` to 0. To show page 1, it sets `yoffset` to `yres`,
+skipping the first page's lines. It then passes `var` to `FBIOPAN_DISPLAY`.
 
-Each frame draws on the page that is not shown, the one `page` names, and only then pans to it.
-Nobody sees the ball erased and drawn again, only finished frames. This is **double buffering**.
-At the end of the frame `xor [page], eax`, with `eax` the 1 in `flip`, turns 1 into 0 and 0 into 1,
-so the next frame is drawn on the page that was shown until then.
+With two pages, drawing happens on the hidden page and panning shows only the finished picture.
+This is **double buffering**: the viewer does not see the erase and redraw steps. At the end of
+the frame, `xor [page], eax` uses the 1 in `flip` to switch `page` between 1 and 0.
 
-`rbx` is where `fill_rect` draws, so pointing it at the page's first pixel, `page × yres` lines
-after the first page's, is all it takes to draw on one page or the other.
+A framebuffer does not always provide two pages. The program checks `yres_virtual` before using
+the second one. If there is room for only one, it sets both `page` and `flip` to 0. XOR with 0
+leaves `page` at 0, and `yoffset` stays 0 too. Each frame erases and draws on the visible page,
+so the intermediate drawing may be visible. In this mode the saved position belongs to the
+previous frame, rather than two frames ago.
 
-## Erasing only what changed
+## Erasing and drawing the ball
 
-Painting a whole page every frame would take 76,800 stores. Instead, the program erases the ball
-and draws it again. The page it is about to draw on still shows the frame from **two** frames ago,
-since the frame in between went on the other page, so the ball to erase is where that page last
-had it. `drawn_x` and `drawn_y` keep one position for each page, and `[rcx + rax*4]` picks the
-page's: `rax` is 0 or 1, and each position is four bytes.
+Painting a whole 320-by-240 page every frame would take 76,800 pixel stores. Instead, the program
+erases the whole 16-by-16 rectangle around that page's old ball, then draws the new ball. Nothing
+else on the page changes, so this produces the same finished picture as a full repaint.
 
-Nothing else on the page changes, so erasing the old ball and drawing the new one leaves the page
-exactly as a full repaint would.
+`drawn_x` and `drawn_y` each contain two four-byte coordinates. In `[rcx + rax*4]`, `rax` is the
+page number: 0 selects the first coordinate and 1 selects the second. These arrays keep the two
+pages' positions separate even though `x` and `y` hold just the ball's current position.
 
-The ball is 16 rows from a table of widths, `ball_rows`, each row centred: a disc drawn in 16
-calls of `fill_rect`, not 256 pixel tests.
+The table `ball_rows` gives the width of each of the ball's 16 rows. Each row is centred inside
+the 16-pixel width with `(BALL - width) / 2`. For the first row, the width is 6, so drawing starts
+`(16 - 6) / 2 = 5` pixels to the right of `x`. The middle rows have width 16 and start at `x`.
+Sixteen calls to `fill_rect`, each one line high, produce the disc.
 
-## One frame per vertical blank
+## Frame timing
 
-The pan waits for the **vertical blank**, the moment between two pictures on the monitor, which
-comes sixty times a second, and shows the new page then: never in the middle of a picture. So the
-frame loop is only **draw, then pan**, and the animation runs at sixty frames a second however fast
-the program draws. `FBIO_WAITFORVSYNC` waits for the vertical blank without panning; called before
-the pan it would cost a second blank each frame, and the ball would move at thirty frames a
-second.
+On this editor's Screen, `FBIOPAN_DISPLAY` waits for the next vertical blank. The Screen
+refreshes 60 times a second. If drawing finishes before the next blank, the pan waits for it
+and then shows the requested page. If drawing takes longer, the program misses refreshes and
+the animation runs more slowly. Its maximum rate is therefore 60 frames a second.
 
-After `FRAMES` frames the program ends, and the Screen keeps the last frame. Change `FRAMES` to
-6000 to watch it for 100 seconds.
+The loop needs only **draw, then pan**. Adding `FBIO_WAITFORVSYNC`, which waits without panning,
+before the pan would add another wait. Even with fast drawing, that would limit the animation
+to 30 frames a second on this Screen.
+
+After `FRAMES` frames the program ends, and the Screen keeps the last frame. With `FRAMES` set
+to 600, this takes at least ten seconds. Set it to 6000 for at least 100 seconds.
 
 ## Turning at an edge
 
 `x` is the ball's left edge, so it fits while `x` is from 0 to `xres - BALL`. The program adds the
 step; a result below 0 sets the sign flag for `js`, and one above `xres - BALL` fails `jle`. Either
-way `neg` turns the step round, and adding it twice goes back to where the ball was and on one step
-the other way.
+way, `neg` reverses the step. Adding the reversed step once returns to the previous position;
+adding it again moves one step in the other direction.
+
+For example, the rightmost allowed `x` is `320 - 16 = 304`. From `x = 302`, a step of 3 would
+reach 305. The program reverses the step to -3, adds it to return to 302, then adds it again to
+reach 299. The vertical movement uses the same calculation with `y` and `yres`.
 
 ## Try it
 
 1. Make the ball faster: set `step_x` to 5 and `step_y` to 4.
-2. Leave a trail: delete the `call fill_rect` that erases the ball. Each page then keeps every ball
-   drawn on it, every other frame's.
-3. Give the ball a new colour at each bounce. Add `colour: dd BALL_COLOUR` to `.data`, change
-   `mov r8d, BALL_COLOUR` in the ball's loop to `mov r8d, [colour]`, and after each
-   `neg dword [step_x]` and `neg dword [step_y]` add `xor dword [colour], 0x00ffffff`, which turns
-   a colour into its opposite.
+2. Leave a trail: delete the `call fill_rect` that erases the ball. With two pages, each page then
+   keeps the balls drawn on alternate frames. With one page, it keeps every frame's ball.
+3. Alternate between two colours when the ball reverses direction on an axis. Add
+   `colour: dd BALL_COLOUR` to `.data`, change `mov r8d, BALL_COLOUR` in the ball's loop to
+   `mov r8d, [colour]`, and after each `neg dword [step_x]` and `neg dword [step_y]` add
+   `xor dword [colour], 0x00ffffff`. This toggles the red, green and blue bits between the
+   original colour and its opposite. If both axes reverse in one frame, the two toggles cancel
+   and the displayed colour stays the same.

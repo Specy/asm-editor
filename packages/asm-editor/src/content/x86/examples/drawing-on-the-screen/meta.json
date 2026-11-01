@@ -1,6 +1,6 @@
 {
     "name": "Drawing shapes on the screen",
-    "description": "A house, a sun and a sky drawn into /dev/fb0's memory by one subroutine that fills a rectangle a line at a time with rep stosd, then the same picture in C.",
+    "description": "Draw a house and a sun with rectangles, pixel addresses and rep stosd.",
     "order": 20,
     "topic": "drawing-on-the-screen",
     "template": 6

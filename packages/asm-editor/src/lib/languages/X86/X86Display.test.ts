@@ -61,7 +61,7 @@ describe('the x86 Display configuration', () => {
                     severity: 'warning',
                     file: 'main.asm',
                     lineIndex: 0,
-                    message: expect.stringContaining('not a multiple of 8')
+                    message: expect.stringContaining('must be a multiple of 8')
                 })
             ])
         } finally {

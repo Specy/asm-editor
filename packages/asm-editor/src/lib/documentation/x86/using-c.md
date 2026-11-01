@@ -15,7 +15,7 @@ Select the source file and choose **Compile**. The generated assembly opens besi
 
 Type `sim_` to see the simulator functions for this project, or press **Ctrl+Space** to open suggestions. Small snippets help you write loops, functions and structures; press **Tab** to move through their editable fields. Suggestions inside an `#include` path offer available headers.
 
-Hover over a known function such as `printf` to see its declaration, required header and a documentation link. Parameter hints highlight the current argument while you write a call. Selecting a function inserts its name; add the indicated header yourself.
+Hover over a known function such as `printf`, `open` or `poll` to see its declaration, required header and documentation link. Device and POSIX function help also describes arguments, return values and errors. Parameter hints highlight the current argument while you write a call. Selecting a function inserts its name; add the indicated header yourself.
 
 Names you declare in the current file also appear in suggestions, with variable types or function declarations. Ordinary functions get parameter hints, and nearer block declarations take priority. Complex declarations may be missed.
 
@@ -79,7 +79,9 @@ int main(void) {
 }
 ```
 
-The POSIX calls a device program makes are there too, with Linux's own headers: `open`, `read`, `write`, `close`, `ioctl`, `mmap`, `poll`, `select`, `tcgetattr`, `tcsetattr`, `usleep`, `nanosleep` and `clock_gettime` from `<fcntl.h>`, `<unistd.h>`, `<sys/ioctl.h>`, `<sys/mman.h>`, `<poll.h>`, `<sys/select.h>`, `<termios.h>` and `<time.h>`, and the devices' constants and structures from `<linux/fb.h>`, `<linux/input.h>`, `<sys/soundcard.h>`, `<sound/asound.h>` and `<linux/kd.h>`. Each call returns -1 and sets `errno` when it fails, as on Linux. [The Screen](/documentation/x86/screen), [Keys and the pointer](/documentation/x86/input) and [Sound](/documentation/x86/sound) show them in use.
+Device programs can use the POSIX functions `open`, `read`, `write`, `close`, `ioctl`, `mmap`, `poll`, `select`, `tcgetattr`, `tcsetattr`, `usleep`, `nanosleep` and `clock_gettime`. Their declarations come from `<fcntl.h>`, `<unistd.h>`, `<sys/ioctl.h>`, `<sys/mman.h>`, `<poll.h>`, `<sys/select.h>`, `<termios.h>` and `<time.h>`. Device constants and structures come from `<linux/fb.h>`, `<linux/input.h>`, `<sys/soundcard.h>`, `<sound/asound.h>` and `<linux/kd.h>`.
+
+These functions use C error conventions. Calls such as `open`, `read`, `write` and `ioctl` return -1 on failure and set `errno`; `mmap` returns `MAP_FAILED` instead. Include `<errno.h>` to inspect the error number. A successful `read` or `write` returns a byte count, which may be smaller than requested. After a short write, submit the remaining bytes. [The Screen](/documentation/x86/screen), [Keys and the pointer](/documentation/x86/input) and [Sound](/documentation/x86/sound) show these interfaces in use.
 
 Include `<sim.h>` to make the simulator's Linux-style system calls directly. Find the simulator functions' signatures and results under **From C** in [Syscalls](/documentation/x86/syscall), also available in the editor's Documentation panel. `sim_write(1, text, length)` writes `length` bytes to descriptor `1`, the Terminal. Each function returns its system call's result, with failures reported as negative error numbers. Standard input functions can keep characters they read ahead, so avoid mixing `sim_read` and functions such as `scanf` on one line.
 

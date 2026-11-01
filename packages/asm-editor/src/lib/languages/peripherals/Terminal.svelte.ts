@@ -217,7 +217,7 @@ const NO_INPUT_LEFT_ERROR = 'Input does not have any values left'
 const INPUT_CANCELLED_ERROR = 'Input cancelled'
 const DIALOG_NOT_AVAILABLE_ERROR = 'Message dialogs are not available while running scripted input'
 /** What raw mode's standing read says it takes, for a label. */
-const RAW_KEYS_QUESTION = 'Keys go to the program as they are typed'
+const RAW_KEYS_QUESTION = 'Keys are sent to the program immediately'
 /** DEL, what Backspace sends on a serial line. */
 const DELETE = '\x7f'
 

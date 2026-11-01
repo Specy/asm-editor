@@ -1,7 +1,43 @@
-A square you steer with the arrow keys. It moves while an arrow is held and stops when it is let go;
-**Escape** ends the program, and so do ten seconds without a key. **Click the Screen first**: its keys
-go to the program's keyboard device only while it has the focus. **Shift+Tab** gives the keyboard
-back to the page.
+Move a square with the arrow keys: hold an arrow to move and release it to stop. **Escape**
+ends the program. It also ends after 600 frames without a key event, about ten seconds at 60 frames
+per second.
+
+**Click the Screen first** so its keys reach the program. **Shift+Tab** gives the keyboard back to
+the page.
+
+## Reading the keyboard without waiting
+
+Each read from the keyboard device returns records describing key changes. The program uses
+these records to track which arrows are held: one byte for each arrow, 1 for held and 0 for released.
+
+The program opens `/dev/input/by-path/platform-i8042-serio-0-event-kbd` with
+`O_RDONLY | O_NONBLOCK`. The path names the emulated PC keyboard. `O_NONBLOCK` lets a read return
+immediately when no event is waiting, with `-EAGAIN` (-11) in `rax`. Without it, the program could
+stop at `read` and leave the square motionless until another event arrived.
+
+Each input event occupies 24 bytes. The include file supplies `input_event_size` and the field
+offsets used to read it:
+
+| Field   | Size     | Meaning                              |
+| ------- | -------- | ------------------------------------ |
+| Time    | 16 bytes | When the event occurred; unused here |
+| `type`  | 2 bytes  | The kind of event                    |
+| `code`  | 2 bytes  | Which key or other item changed      |
+| `value` | 4 bytes  | What changed                         |
+
+For an `EV_KEY` event, `code` names the key and `value` is 1 for a press, 0 for a release, or 2
+for a repeat while the key stays held. The arrows use `KEY_LEFT`, `KEY_RIGHT`, `KEY_UP` and
+`KEY_DOWN`. These codes identify keys rather than typed characters.
+
+Other events accompany the key: `EV_MSC` with code `MSC_SCAN` carries its scan code, and `EV_SYN`
+with code `SYN_REPORT` ends a group of events. This program skips all types except `EV_KEY`.
+
+## The program
+
+The framebuffer setup and `fill_rect` come from the previous examples. After setup, each trip
+through `frame` reads the waiting events, moves the square, redraws the selected page if needed,
+and displays that page. Look for `read_event`, `events_done`, `redraw` and `present` as you follow
+the loop.
 
 ```x86|playground|open-screen|no-registers|no-flags|allow-open
 ; @screen width=320 height=240
@@ -14,7 +50,7 @@ default rel
 
 BOX        equ 20                   ; the square's width and height
 SPEED      equ 3                    ; pixels a frame while an arrow is held
-IDLE       equ 600                  ; frames without a key before the end: 10 seconds
+IDLE       equ 600                  ; frames without an EV_KEY event before exit
 BACKGROUND equ 0x00101820
 BOX_COLOUR equ 0x0000c060
 
@@ -118,7 +154,7 @@ two_pages:
     test rax, rax
     js fail
     mov r14, rax                    ; r14: the keyboard
-    mov r15d, IDLE                  ; r15: frames left without a key
+    mov r15d, IDLE                  ; r15: frames left without an EV_KEY event
 
 frame:
 read_event:                         ; take every event waiting, one at a time
@@ -128,10 +164,10 @@ read_event:                         ; take every event waiting, one at a time
     mov edx, input_event_size
     syscall
     cmp rax, input_event_size
-    jne events_done                 ; -EAGAIN: none left
+    jne events_done                 ; stop reading on any result other than a full event
     cmp word [event + input_event.type], EV_KEY
     jne read_event                  ; skip MSC_SCAN, SYN_REPORT and the rest
-    mov r15d, IDLE                  ; a key: count ten seconds again
+    mov r15d, IDLE                  ; any key event restarts the frame countdown
     mov eax, [event + input_event.value]
     cmp eax, 2
     je read_event                   ; a repeat: the key is still held
@@ -243,48 +279,50 @@ fail:
     syscall
 ```
 
-## Opening the keyboard
+## Following one event
 
-The keyboard is the file `/dev/input/by-path/platform-i8042-serio-0-event-kbd`, a name Linux makes
-for the keyboard plugged into the PC's keyboard port. It is a link to one of `/dev/input/event0`,
-`event1` and the rest, whose numbers change from one machine to the next. A USB keyboard has another
-name; the [mouse paint Example](/learn/courses/x86/examples/mouse-paint) shows how to find a device
-on any machine.
+Suppose you press Left. `read` writes its event into `event` and returns 24 in `rax`. The type
+check accepts `EV_KEY`, and `mov r15d, IDLE` restarts the idle countdown. The program then loads
+the value, 1, into `eax`. It is not a repeat, so execution reaches the key-code checks.
 
-`O_NONBLOCK` makes a read that has no event to give return `-EAGAIN` (-11) at once instead of
-waiting. The program draws a frame whether or not a key was pressed, so it must never wait for one.
+`movzx ecx, word [event + input_event.code]` loads `KEY_LEFT` into `ecx`. This leaves `eax`
+unchanged: the code and value are in different registers. After the comparison matches,
+`mov [left], al` stores the low byte of `eax`, which is still 1. Releasing Left follows the same
+path with value 0 and clears that byte. Repeats restart the countdown too, but branch back to
+`read_event` before changing the held-state bytes.
 
-## Events and the keys held now
-
-Each read gives one **event** of 24 bytes, a `struct input_event`: its time, then its `type`,
-`code` and `value`. A key gives an `EV_KEY` event whose `code` names the key and whose `value` is 1
-when it goes down, 0 when it comes up and 2 for each repeat while it is held. Around it come events
-the program skips: an `EV_MSC` with the key's scan code before it and an `EV_SYN` after it.
-
-Every frame starts by reading events until none is left, so a key pressed between two frames is
-seen in the next one. The program keeps one byte for each arrow. Since the value is 1 for down and 0
-for up, `mov [left], al` stores whether the left arrow is held now, and a repeat changes nothing.
-This is how a game knows that two arrows are held at once and moves the square diagonally.
-
-The codes name keys by where they are on the keyboard, not by what they type, so the arrows are
-`KEY_LEFT`, `KEY_RIGHT`, `KEY_UP` and `KEY_DOWN` whatever the keyboard's layout.
+The read loop asks for one event at a time and continues until a read returns something other
+than 24. Normally that is `-EAGAIN`, meaning the queue is empty. This example also takes that
+branch for an error, an end-of-file result, or a short read. It proceeds to movement without
+reporting or recovering from them; it does not establish that the device is still working.
 
 ## Moving and drawing
 
-`right - left` is 1 while only the right arrow is held, -1 for only the left one and 0 for neither
-or both; times `SPEED`, it is how far the square moves this frame. Past an edge the square stops at
-the edge.
+`right - left` is 1 while only Right is held, -1 for only Left and 0 for neither or both.
+Multiplying by `SPEED` gives the horizontal movement for this frame. `down - up` does the same
+vertically. Two held arrows can therefore move the square diagonally. Each coordinate is clamped
+between 0 and the screen dimension minus `BOX`, keeping the whole square visible.
 
-The drawing is the [bouncing ball's](/learn/courses/x86/examples/bouncing-ball): each frame erases
-the square on the page that is not shown, where that page last had it, draws it at its new place
-and pans to that page, the pan waiting for the vertical blank. As there, the program checks that the
-framebuffer has room for two pages, and draws on the page shown when it has one. A page that already has the square
-where it is now needs nothing drawn, so while no arrow is held a frame is only the pan.
+Drawing follows the [bouncing ball](/learn/courses/x86/examples/bouncing-ball). Each page remembers
+where it last held the square in `drawn_x` and `drawn_y`. When that differs from the new position,
+`redraw` erases the old square on that page and draws the new one. `present` pans to the selected
+page, waits for the vertical blank here, then selects the other page for the next frame. With only
+one page, the program draws on the displayed page instead.
 
-`r15` counts the frames left before the program gives up. Every key event sets it back to 600, ten
-seconds at sixty frames a second, so the program ends only after ten seconds without a key.
+Once both pages show the square at its current position, the comparisons before `redraw` skip the
+pixel writes. The loop still reads input, computes the position, presents the page and decrements
+the idle counter.
 
-## The same program in C
+`r15d` starts at 600 and decreases once per frame. Every `EV_KEY` event resets it, including
+repeats and keys other than the arrows. The accompanying `EV_MSC` and `EV_SYN` events do not.
+Holding a key keeps the program running while repeat events continue to arrive. A held key that
+produces no repeats does not by itself reset the counter. The timeout is about ten seconds at
+60 frames per second; slower frames make it longer. Movement is also measured in pixels per frame,
+so it slows down when the frame rate drops.
+
+## Supplementary C version
+
+This C version uses Linux's C interfaces for the same input-state and drawing loop.
 
 ```c|playground|target=x86|file=keyboard.c|open-screen|no-registers|no-flags|allow-open
 // @screen width=320 height=240
@@ -363,17 +401,24 @@ int main(void) {
 }
 ```
 
-`read` returns the number of bytes it read, or -1 with `errno` set to `EAGAIN` when there is no
-event, which ends the inner loop. The headers are the ones a C program includes on Linux, so this
-program builds unchanged there too. It runs as it does here on a machine set up like this one, a
-Linux virtual machine whose console is a serial line, for a user allowed to read the keyboard. On a
-PC's own screen the text console or the desktop draws on the framebuffer too, and a desktop also
-takes the keyboard.
+C's `read` reports an error as -1 and records the error code in `errno`; an empty nonblocking
+queue is reported with `EAGAIN`. As in the assembly version, this loop stops reading on any result
+other than one full event, without distinguishing the reason.
+
+Outside the editor, the keyboard path, framebuffer format and permissions must match the machine.
+The program also assumes it can control the display and keyboard without a desktop or text console
+using them at the same time. A normal desktop session does not provide that setup automatically.
 
 ## Try it
 
-1. Make the square wrap round instead of stopping: when `x` goes past the right edge, set it to 0,
-   and when it goes below 0, to `xres - BOX`. Do the same for `y`.
-2. Make Space change the square's colour. Add a `colour` variable, test for `KEY_SPACE` with a
-   value of 1, and draw the square with it.
-3. Hold two arrows at once to move diagonally, then hold left and right together: they cancel.
+1. Replace the horizontal and vertical clamp blocks between `events_done` and the store to `y`.
+   For `x`, when the candidate is below 0, use `xres - BOX`; when it exceeds `xres - BOX`, use 0.
+   Apply the same rule to `y` with `yres`. Keep the final stores to `x` and `y`. This wraps the
+   square to the opposite edge and discards any overshoot from that frame.
+2. Make Space toggle between green (`0x0000c060`) and orange (`0x00e08020`). Add
+   `colour: dd BOX_COLOUR` in `.data`. In the key-code checks, handle `KEY_SPACE` only when
+   `eax` is 1, and toggle with `xor dword [colour], 0x00e04040` (the XOR of the two colours).
+   Replace `mov r8d, BOX_COLOUR` with `mov r8d, [colour]`. To show the change even while the
+   square is stationary, remove the four instructions from `cmp edi, [x]` through `je present`
+   just before `redraw`. Every selected page will then be erased and drawn in the current colour.
+3. Hold two arrows at once to move diagonally, then hold Left and Right together: they cancel.

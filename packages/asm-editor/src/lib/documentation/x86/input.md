@@ -1,10 +1,20 @@
-An x86 program sees the keyboard in two ways, as a Linux program does. Its **standard input** gives the characters typed into the **Terminal**. The **input devices** under `/dev/input` give what happens on the **Screen**: each key going down and up, the pointer's position and its buttons, with the time of each. A text program reads standard input; a game reads the input devices.
+An x86 program reads **Terminal** characters from standard input. It reads **Screen** keys, pointer positions and buttons from Linux input devices under `/dev/input`. Input devices report presses and releases separately, with timestamps, so a program can track held keys and buttons.
 
 Keys typed into the Terminal go to standard input only, and keys typed into a focused Screen go to the input devices only.
 
 ## Opening the keyboard {#keyboard}
 
-Each input device is a file, `/dev/input/event0`, `event1` and so on. The numbers are given in the order the devices were found, and change from one machine to the next, so a program should not guess them. Here `event0` is the keyboard, `event1` the mouse's port, which stays silent, `event2` the pointer, `event3` the PC speaker and `event4` the power button, but a machine with a USB keyboard has it elsewhere, and a program that reads a device that never sends anything waits forever.
+Each input device has a file named `/dev/input/event0`, `/dev/input/event1` and so on. This machine uses the following numbers:
+
+| Device file         | Device                                |
+| ------------------- | ------------------------------------- |
+| `/dev/input/event0` | Keyboard                              |
+| `/dev/input/event1` | PS/2 mouse port; sends no events here |
+| `/dev/input/event2` | Screen pointer                        |
+| `/dev/input/event3` | PC speaker                            |
+| `/dev/input/event4` | Power button                          |
+
+On other Linux machines, device discovery order determines these numbers. A program that must work across machines should identify devices by their capabilities. Reading the wrong device may wait indefinitely.
 
 Linux also makes names that say where a device is connected. The keyboard is:
 
@@ -12,7 +22,7 @@ Linux also makes names that say where a device is connected. The keyboard is:
 /dev/input/by-path/platform-i8042-serio-0-event-kbd
 ```
 
-This name is right on laptops and on PCs whose keyboard is plugged into a PS/2 port, as here. A USB keyboard has another name, so a program meant for any machine looks for its devices instead, as the next section shows.
+This path identifies this machine's PS/2 keyboard connection. A USB keyboard uses a different path. The next section shows how to discover devices without depending on their connection or event number.
 
 A program usually opens the keyboard with `O_NONBLOCK`, so that a read with nothing to give returns at once instead of waiting: in C, `read` returns -1 and sets `errno` to `EAGAIN`; in NASM, the system call returns `-EAGAIN`, -11, in `rax`.
 
@@ -22,7 +32,9 @@ int keyboard = open("/dev/input/by-path/platform-i8042-serio-0-event-kbd", O_RDO
 
 ## Finding a device {#finding-devices}
 
-To find a device on any machine, open `event0`, `event1` and the rest in turn and ask each what it has. The `EVIOCGBIT` ioctl fills a set of bits, one per code: `EVIOCGBIT(0, size)` gives the event types the device sends, and `EVIOCGBIT(EV_KEY, size)` the keys it has. A device with `KEY_A` is a keyboard, one with `EV_ABS` reports a position, the pointer here, and one with `EV_SND` makes sounds. Do not look for the pointer by `EV_REL` or `BTN_LEFT`: the PS/2 mouse, `event1`, has both, comes first, and never reports anything here. `EVIOCGNAME` gives the device's name. Bit n of a set is bit `n % 8` of byte `n / 8`.
+Open the `event` files and query their capabilities with `EVIOCGBIT`. `EVIOCGBIT(0, size)` returns supported event types as a bit set. `EVIOCGBIT(EV_KEY, size)` returns supported key and button codes. Bit n is bit `n % 8` of byte `n / 8`. `EVIOCGNAME` returns the device name.
+
+On this machine, `KEY_A` identifies the keyboard, `EV_ABS` identifies the Screen pointer, and `EV_SND` identifies the speaker. The pointer test is specific to these devices: other Linux machines can have additional absolute-position devices. Do not identify this machine's pointer by `EV_REL` or `BTN_LEFT` alone. The silent PS/2 mouse port, `event1`, advertises both and appears before the Screen pointer.
 
 ```c
 #include <fcntl.h>
@@ -66,7 +78,7 @@ A read gives whole events, 24 bytes each, as a `struct input_event`. A read into
 
 {eventFields}
 
-A key gives an `EV_KEY` event whose code names the key and whose value is 1 when it goes down, 0 when it goes up, and 2 for each repeat while it is held. Before it comes an `EV_MSC` `MSC_SCAN` event with the key's scan code, and after it an `EV_SYN` `SYN_REPORT`, which closes the **report**: the events that happened together. Skip the types a program does not use. The types and codes a program meets most:
+A key produces an `EV_KEY` event: `code` identifies the key, and `value` is 1 for a press, 0 for a release or 2 for a repeat while held. An `EV_MSC` event with code `MSC_SCAN` precedes it and supplies the scan code. An `EV_SYN` event with code `SYN_REPORT` ends the **report**, the group of events delivered together. Skip event types the program does not use. Common types and codes are:
 
 {eventCodes}
 
@@ -160,23 +172,32 @@ int main(void) {
 }
 ```
 
-Each `open` of a device gets its own queue of events, and every reader sees every event. Read often: a queue holds 4,096 events, and once a reader falls that far behind, what it did not read is thrown away and an `EV_SYN` `SYN_DROPPED` event says so.
+Each `open` of a device gets its own event queue. Unless a reader has grabbed the device with `EVIOCGRAB`, every reader receives its events. A queue holds 4,096 events. If it overflows, unread events are discarded and an `EV_SYN` event with code `SYN_DROPPED` reports the loss. A program that maintains held-key or button state must then [rebuild that state](#state).
 
 ## The pointer {#pointer}
 
-The pointer is a USB **tablet**: a device that reports where the pointer is, not how far it moved. It sends `EV_ABS` events with the codes `ABS_X` and `ABS_Y`, `EV_KEY` events for its five buttons, `BTN_LEFT`, `BTN_RIGHT`, `BTN_MIDDLE`, and `BTN_SIDE` and `BTN_EXTRA` for a mouse's back and forward buttons, which a focused Screen keeps from moving the page back and forward, and `EV_REL` events for the wheel: `REL_WHEEL`, 1 a notch away from you and -1 toward you, and beside it in the same report `REL_WHEEL_HI_RES`, the same turn in 120ths of a notch, 120 or -120. Check the code: a program that counts every `EV_REL` event as a notch counts 121 for each. Each report ends with `SYN_REPORT`, so a move along both axes is two `EV_ABS` events and one `SYN_REPORT`.
+The Screen pointer reports absolute positions: where it is within the Screen, rather than how far it moved. Linux identifies this device as a USB **tablet**. It sends:
 
-The positions are not pixels. They run from 0 at the left or top edge of the Screen to 32767 at the right or bottom, whatever the Screen's size. The `EVIOCGABS(ABS_X)` ioctl fills a `struct input_absinfo` with the range, and the pixel is:
+- `EV_ABS` with `ABS_X` or `ABS_Y` for horizontal or vertical position.
+- `EV_KEY` with `BTN_LEFT`, `BTN_RIGHT`, `BTN_MIDDLE`, `BTN_SIDE` or `BTN_EXTRA` for its five buttons. `BTN_SIDE` and `BTN_EXTRA` are the back and forward buttons. A focused Screen prevents their usual browser navigation.
+- `EV_REL` with `REL_WHEEL` for wheel movement: 1 for a notch away from you, -1 toward you. The same report also contains `REL_WHEEL_HI_RES`, measured in 120ths of a notch: 120 or -120 for that turn. Process one wheel code, rather than adding both values.
+
+Each report ends with `SYN_REPORT`. A move along both axes produces two `EV_ABS` events followed by one `SYN_REPORT`.
+
+The position range is independent of the Screen size. Here `minimum` is 0, at the left or top edge, and `maximum` is 32767, at the right or bottom edge. `EVIOCGABS(ABS_X)` fills a `struct input_absinfo` with the current value and range. For this zero-based range, convert a horizontal position to a pixel with:
 
 ```
-x = (value × xres + 32766) ÷ 32767
+value = min(32767, max(0, value))
+x = min(xres - 1, (value × xres + 32766) ÷ 32767)
 ```
 
-with `xres` from `FBIOGET_VSCREENINFO`, the same for `y` with `ABS_Y` and `yres`, and a division that drops the remainder. 32766 is the range's `maximum` less 1. The tablet reports the pixel the pointer is on, and the formula gives that pixel back, from 0 to `xres - 1`; a drag that leaves the Screen gives the pixel at its edge. A program that uses the value as a pixel draws a hundred times too far, off the Screen. The fields of `struct input_absinfo` a program reads:
+`min` selects the smaller value, `max` the larger, and division discards the remainder. `xres` is the initial width from `FBIOGET_VSCREENINFO`; use `yres` and `ABS_Y` for the vertical coordinate. Use a sufficiently wide intermediate for `value × xres`. The final clamp is required: at 32767 the quotient is `xres`, so it must become `xres - 1`. The result is always a valid pixel from 0 through `xres - 1`. A drag outside the Screen stays at its edge.
+
+This conversion assumes `minimum == 0` and `maximum == 32767`, as reported here. Another device may report a different range. The relevant `input_absinfo` fields are:
 
 {absinfoFields}
 
-The tablet has no name a program can count on, so find it as [Finding a device](#finding-devices) shows: it is the device with `EV_ABS`, not the silent PS/2 mouse with `EV_REL`. This C program prints where each left click lands, for ten seconds:
+Use the capability query in [Finding a device](#finding-devices) to locate this machine's tablet. This C program prints each left click's pixel coordinates and stops after ten seconds without another report:
 
 ```c
 #include <fcntl.h>
@@ -236,7 +257,9 @@ There is no double-click event and no event for a modifier held during a click: 
 
 ## What is held now {#state}
 
-A game often wants to know which keys are held at this moment rather than every key that went down. `EVIOCGKEY(size)` fills a set of bits, one per key code, with the keys and buttons held now; size `KEY_MAX / 8 + 1`, 96 bytes, holds them all. It also throws away the key events still waiting for that reader, so a program uses one or the other on a descriptor: either it reads events, or it asks what is held. `EVIOCGABS` gives the pointer's position now in the `value` of its `input_absinfo`.
+`EVIOCGKEY(size)` fills a bit set of the keys and buttons held now. A buffer of `KEY_MAX / 8 + 1`, 96 bytes, holds every code. The call also discards queued `EV_KEY` events for that reader. Use it deliberately: polling this state loses the individual press, release and repeat events that were waiting.
+
+`EVIOCGABS` returns the current position in `input_absinfo.value`. It does not remove queued events. A position event already in the queue may therefore describe an earlier position than this query.
 
 ```c
 unsigned char held[KEY_MAX / 8 + 1];
@@ -245,7 +268,14 @@ if (held[KEY_LEFT / 8] >> (KEY_LEFT % 8) & 1)
     x--; /* the left arrow is held */
 ```
 
-The requests of this chapter, with the number each one is at the sizes used here:
+To recover maintained state after `SYN_DROPPED` on a nonblocking descriptor:
+
+1. Discard the rest of the affected report, through its next `SYN_REPORT`. Discard any later events already returned in the same read buffer too.
+2. Read and discard the remaining queued reports until `read` reports `EAGAIN`. This prevents old absolute-position events from overwriting the state you are about to query.
+3. Replace the held-key or button state with `EVIOCGKEY`. For the pointer, also query `EVIOCGABS(ABS_X)` and `EVIOCGABS(ABS_Y)` and replace both coordinates.
+4. Resume processing new reports normally. Lost clicks, repeats and wheel turns cannot be reconstructed from current state.
+
+For a raw `ioctl` syscall, the request number goes in `rsi` and the third argument in `rdx`. These request numbers use the buffer sizes shown:
 
 {stateRequests}
 
@@ -285,7 +315,7 @@ int main(void) {
 
 In NASM, `TCGETS` and `TCSETS` from `sys/ioctl.inc` read and change the same `struct termios` of `termios.inc`.
 
-- Without `ICANON`, a read returns as soon as one key is there. Keys typed before the read wait for it.
+- Without `ICANON`, a read can return available bytes without waiting for Enter. Bytes typed before the read remain queued.
 - Without `ECHO`, typed keys are not shown. With it, a control key such as Ctrl+A is echoed as its byte, which shows nothing: the Terminal starts without `ECHOCTL`, as the reference machine's serial line does, and a program that turns `ECHOCTL` on sees `^A`.
 - The arrows and the other special keys arrive as **escape sequences**, the bytes an `xterm` sends: the up arrow is `ESC [ A` (27, 91, 65), down `ESC [ B`, right `ESC [ C`, left `ESC [ D`, Home `ESC [ H` and End `ESC [ F`. Enter is 13, which a program reads as 10 unless it turned `ICRNL` off, and Backspace is 127.
 - In this mode Escape goes to the program. Press **Shift+Tab** to give the keyboard back to the page.
@@ -303,14 +333,14 @@ The devices behave as they do on a QEMU virtual machine running Linux, the refer
 - **Ctrl+Z does nothing.** With no shell to continue it, a program stopped by `SIGTSTP` could never go on.
 - **Ctrl+S never freezes the output**, whatever `IXON` says; in a raw program Ctrl+S and Ctrl+Q arrive as their characters.
 - **The arrow keys always send `ESC [ A` to `ESC [ D`**, even when a program asks a terminal for its other cursor-key mode.
-- **Ctrl+C and Ctrl+\\ always send the signals**, even when a program names other keys for them in `c_cc`.
+- **With `ISIG` enabled, Ctrl+C and Ctrl+\\ use fixed signal assignments**, even when a program names other keys for them in `c_cc`.
 - **The Terminal has no grid of rows and columns.** Every character takes one column, a tab and a wide character included. `\r` goes back to the start of the last line and `\b` back one column, but an escape sequence that moves the cursor elsewhere is not followed.
 - **A drag that leaves the Screen stays at its edge**, and losing the focus lifts every key and button, as a QEMU window does.
 - **Some keys never reach the program.** The browser and the operating system keep their shortcuts for themselves: Ctrl+N, Ctrl+T and Ctrl+W, Alt+Tab and Alt+F4, and on Windows the Windows key and Ctrl+Esc. Give anything such a key would do another key or a button too.
 
 ## Not covered {#not-covered}
 
-- **The mouse's own devices**, `/dev/input/mice`, `mouse0` and `mouse1`: they give how far a mouse moved, which fits a pointer in a window badly. Opening one fails with `ENODEV`, and the **Log** says to read the tablet's events instead.
+- **The mouse devices** `/dev/input/mice`, `/dev/input/mouse0` and `/dev/input/mouse1` are unavailable. Opening one fails with `ENODEV`, and the **Log** directs the program to the tablet's events.
 - **`epoll`** answers `ENOSYS`. Use `poll` or `select`, which wait on the same descriptors.
-- **Signal-driven input**, `O_ASYNC` and `SIGIO`, which only does what `poll` does. Use `poll`.
+- **Signal-driven input** with `O_ASYNC` and `SIGIO` is unavailable. Use `poll`.
 - **Scripted keys and pointer moves in a Testcase**: a Testcase scripts standard input only.

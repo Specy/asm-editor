@@ -1,6 +1,16 @@
-A small paint program. Hold the left button down and move the pointer over the Screen to paint;
-turn the mouse wheel to change the colour, shown in the square at the top-left corner. Thirty
-seconds without touching the mouse ends the program.
+Hold the left button and move the pointer over the Screen to paint. Turn the wheel to change
+colour, shown in the square at the top-left. Thirty seconds without a pointer event ends the program.
+
+This combines the framebuffer drawing from the earlier examples with the input-event loop from
+keyboard control. Three pieces are new:
+
+- Find the Screen pointer by asking input devices whether they report absolute positions.
+- Convert those positions into pixel coordinates, then keep the whole brush on the Screen.
+- Wait for input with `poll`, read the queued events, and paint when a complete report arrives.
+
+In the listing, `find_tablet` finds the device, `to_pixel` converts one coordinate, and `paint`
+positions the brush. `wait_for_events` and `read_event` form the input loop. The framebuffer setup
+and `fill_rect` serve the same roles as before.
 
 ```x86|playground|open-screen|no-registers|no-flags|allow-open
 ; @screen width=320 height=240
@@ -291,51 +301,102 @@ fail:
 
 ## Finding the tablet
 
-The pointer is a USB **tablet**: an input device that reports where the pointer is, rather than how
-far it moved. Its number among `/dev/input/event0`, `event1` and the rest changes from one machine
-to the next, so the program asks each device in turn what it is. It writes the digit into the path,
-opens the device, and asks with `EVIOCGBIT(0, 4)` which types of event it sends: one bit for each
-type, bit `EV_ABS` for absolute positions. The first device with that bit is the tablet; the others
-are closed again. A number with no device fails to open, and the program tries the next one.
+The Screen pointer appears as a USB **tablet**: a device that reports where the pointer is,
+rather than how far it moved. Its `/dev/input/eventN` number can change, so `find_tablet` tries
+`event0` through `event9` and asks each open device which event types it supports.
 
-`EVIOCGBIT(0, 4)` and `EVIOCGABS(ABS_X)` are written like C's macros: the include file defines
-them with arguments, and NASM works out the request number when it assembles.
+In the string `/dev/input/event0`, the digit is byte 16, counting from zero. `r14d` holds a number
+from 0 through 9. Adding `'0'` produces that digit's character code, and writing `al` to
+`[event_path + 16]` changes just the digit. A failed open moves on to the next number.
+
+`EVIOCGBIT(0, 4)` asks for four bytes of event-type bits in `types`. Event type number `n` has
+bit `n`: `EV_ABS` is 3, so its mask is `1 << 3`, or binary `1000`. The instruction
+`test dword [types], 1 << EV_ABS` checks that bit without changing the stored bits. `jnz` takes
+the device when the bit is set. Otherwise the program closes it and continues searching. This
+identifies the pointer among this Screen's devices, not every possible Linux input device.
+
+`EVIOCGBIT(0, 4)` and `EVIOCGABS(ABS_X)` are NASM macros supplied by the include file.
+Their arguments determine the request number at assembly time.
 
 ## From the tablet's units to pixels
 
-The tablet does not report pixels. Its positions run from 0 at the Screen's left or top edge to
-32767 at the right or bottom, whatever the Screen's size. `EVIOCGABS` fills a `struct
-input_absinfo` with an axis's range in `minimum` and `maximum`, and its position now in `value`.
-`to_pixel` turns a position into a column with
+This Screen's tablet has a range of 0 through 32767 on each axis, independent of the Screen's
+size. Other tablets can have different ranges. `EVIOCGABS` fills `input_absinfo`: `minimum`
+and `maximum` describe the range, and `value` is the current position. The listing reads both
+structures but uses only their `maximum` and `value` fields: it assumes the zero minimum
+reported by this Screen.
+
+The Screen starts with a whole pixel coordinate and sends an integer in the tablet's range. For a
+320-pixel-wide Screen, pixel 160 becomes `160 × 32767 ÷ 320`, rounded down: 16383. The program
+reverses that scaling by rounding **up**:
 
 ```
 column = (value × xres + maximum - 1) ÷ maximum
 ```
 
-the division dropping the remainder, which `div` does. The tablet reports the pixel the pointer is
-on, and the formula gives that pixel back: with `maximum` 32767 and `xres` 320, the left column's 0
-is column 0 and the middle column's 16383 is column 160. A drag that leaves the Screen gives the
-pixel at its edge. `paint` puts the brush's left edge 3 pixels left of the pointer and keeps the
-whole brush on the Screen, so near an edge the brush moves in.
+All divisions here discard the remainder. Adding `maximum - 1` makes that integer division
+round up instead. For 16383, the result is `(16383 × 320 + 32766) ÷ 32767 = 160`.
+Using `xres`, rather than `xres - 1`, reverses the Screen's own encoding, which also uses the
+full width. Treating 16383 directly as a column would address column 16383 on a Screen whose
+last column is 319.
 
-A program that took `value` for a pixel would paint a hundred times too far, off the Screen.
+For a complete bounded conversion with this zero-based range, the formula is:
 
-## Events and reports
+```
+value = min(maximum, max(minimum, value))
+column = min(xres - 1, (value × xres + maximum - 1) ÷ maximum)
+```
 
-Moving the pointer sends an `EV_ABS` event for each axis that changed, `ABS_X` and `ABS_Y`, with the
-new position as its value. The left button sends `EV_KEY` with the code `BTN_LEFT`, 1 down and 0
-up. A notch of the wheel sends `EV_REL` with the code `REL_WHEEL`, 1 away from you and -1 toward
-you, and beside it `REL_WHEEL_HI_RES`, the same turn in 120ths of a notch, which the program skips.
+`min` selects the smaller number and `max` the larger. At `value = maximum`, the quotient is
+`xres`, so the final `min` brings it back to the last valid pixel, `xres - 1`. This formula
+still assumes `minimum = 0`; another device's nonzero minimum needs a different conversion.
 
-The events of one movement form a **report**, which ends with an `EV_SYN` `SYN_REPORT` event. A
-move along both axes is two `EV_ABS` events and then the `SYN_REPORT`, so the program paints only at
-the end of a report, once it knows both coordinates.
+The listing's `to_pixel` performs the division without those clamps. That is sufficient for
+this Screen: its input values come from valid whole pixels, so they never reach 32767. A drag
+outside the Screen stays at an edge pixel. The multiply also fits in 32 bits at the Screen sizes
+used here.
 
-`poll` waits until the tablet has an event to read, for at most thirty seconds. It returns 0 when
-the time ran out, which ends the program; otherwise the program reads events until a read returns
-`-EAGAIN`, and waits again.
+`paint` then subtracts `BRUSH / 2` from each converted coordinate to centre the brush. It keeps
+the left edge between 0 and `xres - BRUSH`, and the top edge between 0 and `yres - BRUSH`.
+These bounds keep the entire rectangle inside the framebuffer, including near an edge.
 
-## The same program in C
+## Waiting, reading, and painting
+
+`waiter` is one `pollfd` structure. Its `fd` field is the tablet descriptor, and `events` is
+`POLLIN`, requesting notification when input can be read. `poll` fills `revents` with what
+happened. The syscall receives the structure's address, a count of one descriptor, and the
+`QUIET` timeout in milliseconds.
+
+A positive `poll` result means a descriptor has reported something. Zero means the timeout
+expired, and a negative raw result means an error. This example ends on either zero or an error
+with `jle done`. It assumes the found tablet remains available: it does not inspect `revents`
+for device errors.
+
+After a positive result, `read_event` reads one 24-byte `input_event` at a time. Opening with
+`O_NONBLOCK` lets the program drain all queued events: once the queue is empty, the raw read
+returns `-EAGAIN` instead of waiting. The branch back to `wait_for_events` handles that case.
+It also takes that branch for any other result that is not a complete event, rather than
+handling read errors separately. Waiting again avoids repeatedly reading an empty queue.
+
+As in keyboard control, `type`, `code`, and `value` identify each event:
+
+- `EV_ABS` with `ABS_X` or `ABS_Y` replaces the corresponding saved position.
+- `EV_KEY` with `BTN_LEFT` saves 1 for down or 0 for up in `pressed`.
+- `EV_REL` with `REL_WHEEL` changes the colour by one for each notch. The matching
+  `REL_WHEEL_HI_RES` event describes the same turn in finer units and is ignored.
+
+A movement's events form a **report**, ending with `EV_SYN` and `SYN_REPORT`. A diagonal move
+can update both axes before that marker. Painting only at `SYN_REPORT` uses both new coordinates,
+instead of drawing once with the old y and again with the new y. The button flag must be nonzero
+to paint. A repeat value of 2 would also count as held, though this Screen sends button presses
+and releases without repeats.
+
+`paint` ends with `jmp fill_rect`. Unlike `call`, that jump adds no return address: `fill_rect`'s
+`ret` uses the address saved by the caller of `paint`. `show_colour` uses the same arrangement
+for its final rectangle. The indicator shares the canvas, so painting over it is allowed.
+Turning the wheel draws it again.
+
+## Supplementary C version
 
 ```c|playground|target=x86|file=paint.c|open-screen|no-registers|no-flags|allow-open
 // @screen width=320 height=240
@@ -438,15 +499,20 @@ int main(void) {
 }
 ```
 
-`open_tablet` builds each path with `snprintf`, so it looks at `event0` to `event31` where the NASM
-program stops at `event9`. `types` has a bit for every type up to `EV_MAX`, and bit n of it is bit
-`n % 8` of byte `n / 8`.
+The C version uses the same drawing and report-based painting steps. Its `open_tablet` builds
+paths with `snprintf` and searches through `event31`. Its byte array of type bits uses byte
+`n / 8`, bit `n % 8`, for event type `n`, instead of NASM's single four-byte bitmask.
 
 ## Try it
 
-1. Make the brush bigger with `BRUSH`.
-2. Let the right button erase: keep whether `BTN_RIGHT` is down as `pressed` keeps `BTN_LEFT`, and
-   paint in `PAPER`'s colour while it is.
+1. Increase `BRUSH` from 6 to 12. Keep it positive and no larger than either Screen dimension,
+   so the rectangle bounds in `paint` remain valid.
+2. Make the right button erase, with erasing taking priority when both buttons are held.
+   Add a byte such as `erasing` beside `pressed`. In the `EV_KEY` branch, save `BTN_RIGHT`'s
+   value there as the code saves `BTN_LEFT` in `pressed`. Treat any nonzero value as held,
+   including a repeat value of 2. At `SYN_REPORT`, call `paint` when either flag is nonzero.
+   Inside `paint`, where it currently loads `r8d` from `colours`, choose `PAPER` instead when
+   `erasing` is nonzero. Leave the wheel's chosen colour intact for the next left-button stroke.
 3. Add white, `0x00ffffff`, to `colours`. `COLOURS` follows, since NASM counts the table's bytes.
-4. Change `@screen` to `width=640 height=480` and paint again: the same tablet positions now give
-   twice as many pixels, and the brush still lands under the pointer.
+4. Change `@screen` to `width=640 height=480` and paint again. The conversion now uses twice
+   as many pixels on each axis, and the brush still lands under the pointer.

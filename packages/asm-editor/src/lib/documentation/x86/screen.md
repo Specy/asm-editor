@@ -1,17 +1,17 @@
-An x86 program draws the way a Linux program draws on its framebuffer: it opens the device file `/dev/fb0`, asks it how big the screen is, and maps its memory into the program. After that, a pixel is a 32-bit word in memory, and storing a word changes the pixel on the **Screen**. Nothing else is needed: no system call per pixel, and no drawing commands.
+An x86 program draws on the **Screen** through the Linux framebuffer interface, `/dev/fb0`. Open the device, read its dimensions and pixel layout, then map its memory with `mmap`. Each pixel is a 32-bit word. Storing a word changes that pixel without another system call.
 
 Every x86 Debug session has a Screen. It stays black until a program opens `/dev/fb0`, and keeps what the program drew after it ends, until the next run starts.
 
 ## Opening and mapping `/dev/fb0` {#opening}
 
-A program takes four steps before it draws, each a system call.
+A program takes four steps before it draws:
 
 1. `open("/dev/fb0", O_RDWR)` gives a descriptor for the framebuffer.
-2. The `FBIOGET_VSCREENINFO` ioctl fills a `struct fb_var_screeninfo`: the visible size in pixels (`xres` by `yres`) and how a pixel is laid out.
-3. The `FBIOGET_FSCREENINFO` ioctl fills a `struct fb_fix_screeninfo`: how many bytes the memory has (`smem_len`) and how many bytes one line of pixels takes (`line_length`).
+2. The `FBIOGET_VSCREENINFO` ioctl fills a `struct fb_var_screeninfo`. At the start of a run, `xres` and `yres` give the configured Screen size in pixels. The structure also describes the pixel layout and virtual dimensions.
+3. The `FBIOGET_FSCREENINFO` ioctl fills a `struct fb_fix_screeninfo`. `smem_len` is the total framebuffer size in bytes, and `line_length` is the number of bytes from one row to the next.
 4. `mmap` of `smem_len` bytes with `PROT_READ | PROT_WRITE` and `MAP_SHARED` returns the address of the top-left pixel.
 
-The framebuffer's requests, with the number each one is:
+For a raw `ioctl` syscall, put the request number in `rsi` and the third argument in `rdx`. C uses `ioctl(fd, request, argument)` from `<sys/ioctl.h>`. The framebuffer requests are:
 
 {requests}
 
@@ -122,27 +122,29 @@ int main(void) {
 }
 ```
 
-A program can also `write` pixels to `/dev/fb0` at an offset it chose with `lseek`, and `read` them back, but a mapping is simpler and faster.
+A program can also choose a byte offset with `lseek`, then `write` pixels to `/dev/fb0` or `read` them back.
 
 ## Pixels {#pixels}
 
 One pixel is one little-endian 32-bit word, `0x00RRGGBB`: blue in the low byte, then green, then red, and the top byte unused. In memory the bytes are blue, green, red, 0. `0x00ffffff` is white, `0x00000000` black and `0x00ff0000` pure red. `fb_var_screeninfo` says the same thing in its `red`, `green` and `blue` fields: each is an `offset` in bits from the right (16, 8 and 0) and a `length` of 8.
 
-The pixel at column x and line y is at `address + y × line_length + x × 4`. Use `line_length` rather than `xres × 4` to step from one line to the next: here the two are equal, but on other hardware a line can have unused bytes at its end, and a program that uses `line_length` draws right on both.
+The pixel at column x and line y is at `address + y × line_length + x × 4`. Use `line_length` to step between rows. It equals the configured Screen width times 4 here; other framebuffers may add padding at the end of each row. A change to the reported `xres` through `FBIOPUT_VSCREENINFO` does not change this stride.
 
-Drawing every pixel of the Screen one at a time takes a noticeable fraction of a second at this emulator's speed, more for a large Screen. Draw only what changes, and fill whole lines with `rep stosd`, which stores `eax` `rcx` times: filling a 640 × 480 Screen a line at a time with it takes about a tenth of the time a loop storing one pixel at a time takes, in C or in assembly. A C program can call such a routine written in a `.asm` File of the Project, as [Linking project Files](/documentation/x86/using-c#linking-project-files) shows.
+Redrawing every pixel can take a noticeable fraction of a second, especially on a large Screen. Update only the areas that change. In assembly, `rep stosd` fills a span by storing `eax` `rcx` times and is faster here than a loop that stores one pixel per iteration. A C program can call a routine in a Project `.asm` File; see [Linking project Files](/documentation/x86/using-c#linking-project-files).
 
 **Undo** walks the picture back with the code: a pixel is memory, and Undo restores memory. A `rep stosd` that fills a whole page is one step that Undo takes back at once.
 
 ## Double buffering {#double-buffering}
 
-A program that draws on the page the Screen shows can be seen half way through a frame: the old picture partly erased, the new one partly drawn. The cure is **double buffering**: draw the next frame where it cannot be seen, then show it all at once.
+A program that draws on the visible page can show an incomplete frame: part of the old picture and part of the new one. **Double buffering** avoids this by drawing the next frame on a hidden page, then switching the display to that page.
 
 Here the framebuffer has room for two pages: `yres_virtual` is twice `yres`. The first page is lines 0 to `yres - 1` and the second is lines `yres` to `2 × yres - 1`, right below it in memory. `yoffset` says which line the Screen shows at its top. To show the second page, set `yoffset` to `yres` in the `fb_var_screeninfo` the program read and pass it to `FBIOPAN_DISPLAY`; to show the first again, set it to 0. A program draws on the page it does not show, pans to it, and then draws the next frame on the other page.
 
-Two pages are a setting of this machine, not of every Linux machine. A stock Linux kernel gives the framebuffer one page, `yres_virtual` equal to `yres`, and there a store into the second page falls outside the mapping and a pan to it fails. So check `yres_virtual >= 2 × yres` before using the second page, and otherwise draw every frame on the page that is shown, as the program below does.
+This machine allocates two pages. Other Linux framebuffers may provide only one, with `yres_virtual` equal to `yres`; a second page would then lie outside the framebuffer and panning to it would fail. Check `yres_virtual >= 2 × yres` before using the second page. Otherwise, draw on the visible page, as the program below does.
 
-The frame loop is **draw, then pan**. The pan waits for the next **vertical blank**, the moment between two pictures on the monitor, sixty times a second, and shows the new page then, so the loop runs at 60 frames a second at most with no other wait. Setting a new `yoffset` with `FBIOPUT_VSCREENINFO` waits too, for two blanks. `FBIO_WAITFORVSYNC` waits for the next blank without panning, for a program that draws on the page it shows and wants to change it between two pictures; its argument points to a 32-bit 0, the first display. Waiting for it and then panning costs two blanks a frame, 30 frames a second.
+The frame loop is **draw, then pan**. `FBIOPAN_DISPLAY` waits for the next **vertical blank**, the interval between display refreshes, then shows the new page. Refreshes occur 60 times a second, so this loop runs at most 60 frames a second; drawing time can make it slower. Applying a new `yoffset` through `FBIOPUT_VSCREENINFO` normally waits for two blanks.
+
+For drawing on the visible page, `FBIO_WAITFORVSYNC` waits for the next blank without panning. Its argument points to a 32-bit 0, identifying the first display. Waiting for it and then calling `FBIOPAN_DISPLAY` adds two waits per frame, limiting the loop to at most 30 frames a second. Waiting for a blank does not make a large visible-page update atomic: drawing may continue into the next refresh.
 
 This C program moves a white square across the Screen, one pixel a frame. Each frame it redraws only the band of lines the square moves along. With one page, `pages` is 1 and it draws on the page it shows.
 
@@ -202,7 +204,9 @@ Undo puts the page that was shown back, with the pixels.
 
 ## The Screen's size {#display}
 
-The size of the framebuffer is the machine's, not the program's: the program reads it with `FBIOGET_VSCREENINFO` and cannot change it. It starts at {defaultSize}. To choose another, use the **Display** button of the Screen panel: it offers {sizes}, and **Custom…** takes any width that is a multiple of {widthStep} and any height, from {sizeMin} to {sizeMax} pixels. The size is saved with the Program, applies from the next run, and Testcases run with it too. A width that is not a multiple of {widthStep} is rounded down to one.
+The **configured Screen size** is the width and height chosen before a run. It starts at {defaultSize}. The **Display** button in the Screen panel offers {sizes}. **Custom…** accepts widths in multiples of {widthStep} and any height, with both dimensions from {sizeMin} to {sizeMax} pixels. Other widths are rounded down to a multiple of {widthStep}. The setting is saved with the Program and applies to the next run, including Testcases.
+
+At the first open of `/dev/fb0`, `xres` and `yres` equal that configured size. The framebuffer allocation has the same width and twice the height. Its allocation, row stride and configured Screen size remain fixed during the run.
 
 A program can name the size it wants in a comment, so that opening it and pressing **Build** is all it takes:
 
@@ -221,13 +225,15 @@ In NASM the comment starts with `;`. In a C or C++ program it is a `//` or `/* *
 - A setting that is not `width` or `height`, or a value that is not a number, is a _warning_ on the comment's line, never an error. A size outside {sizeMin} to {sizeMax} is replaced by the nearest one inside.
 - A change in the Display menu afterwards rewrites the comment to match, so the next Build reads it back.
 
-`FBIOPUT_VSCREENINFO` answers as Linux does: a size that fits in the virtual size, `xres_virtual` by `yres_virtual`, is accepted and read back, while the Screen keeps showing the whole mode; a size larger than the virtual size or another pixel format fails with `EINVAL`. Write programs that read `xres` and `yres` and draw at that size.
+`FBIOPUT_VSCREENINFO` can change the **reported dimensions** in `fb_var_screeninfo` and request new pan offsets. It accepts dimensions of at least 8 pixels that fit within the existing virtual allocation, and subsequent `FBIOGET_VSCREENINFO` calls return them. It does not resize the configured Screen, the allocation or the row stride. The Screen still displays a rectangle of the configured width and height from the displayed offset. For example, reducing a reported width from 320 to 160 leaves a 320-pixel-wide Screen; drawing only 160 columns leaves the other columns as they were.
+
+Dimensions outside the allocation or an unsupported pixel format fail with `EINVAL`. For ordinary drawing and double buffering, keep the initial `xres` and `yres`, use `line_length` for row addresses, and change only `yoffset` with `FBIOPAN_DISPLAY`.
 
 ## The Screen's keys {#screen-keys}
 
 Clicking the Screen gives it the keyboard and the pointer. Its keys and the pointer then go to the program's input devices under `/dev/input`, never to its standard input: a program that waits in `read(0, …)` or `scanf` gets nothing from keys typed into the Screen. Keys typed into the **Terminal** go to standard input only. [Keys and the pointer](/documentation/x86/input) explains how a program reads both.
 
-A focused Screen hands **Escape** to the program, as `KEY_ESC`, since games often quit on it. Press **Shift+Tab**, or click outside the Screen, to give the keyboard back to the page.
+A focused Screen sends **Escape** to the program as `KEY_ESC`. Press **Shift+Tab**, or click outside the Screen, to give the keyboard back to the page.
 
 ## What is different from a real Linux machine {#differences}
 
@@ -240,5 +246,5 @@ The devices behave as they do on a QEMU virtual machine running Linux, the refer
 
 ## Not covered {#not-covered}
 
-- **DRM**, `/dev/dri/card0`: Linux's newer graphics interface, made for a graphics library. Setting a mode by hand takes dozens of ioctls and teaches nothing the framebuffer does not. Opening it fails with `ENODEV`, and the **Log** says to draw on `/dev/fb0` instead.
+- **DRM**, `/dev/dri/card0`, is unavailable. Opening it fails with `ENODEV`, and the **Log** directs the program to `/dev/fb0`.
 - **The text console on the Screen.** The program's terminal is the Terminal, a serial line, so the Screen is the program's alone: nothing else ever draws on it, and `KDSETMODE` on the program's own terminal answers `ENOTTY`.

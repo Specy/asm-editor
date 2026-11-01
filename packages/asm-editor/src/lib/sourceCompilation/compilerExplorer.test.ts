@@ -281,10 +281,10 @@ describe('Compiler Explorer failures', () => {
         expect(large.assembly.length).toBeGreaterThan(0)
         await expect(
             compileSource(request(), undefined, answer([], 'x'.repeat(16 * 1024 * 1024)))
-        ).rejects.toThrow(/16\.0 MiB, more than the 16 MiB the editor takes\. Compile at a lower/)
+        ).rejects.toThrow(/16\.0 MiB\. The editor supports up to 16 MiB\. Compile at a lower/)
         await expect(
             compileSource(request(), undefined, answer(Array(400_001).fill({ text: '' })))
-        ).rejects.toThrow(/400,001 lines of assembly, more than the 400,000 the editor takes/)
+        ).rejects.toThrow(/400,001 lines of assembly\. The editor supports up to 400,000 lines/)
     })
     it('rejects malformed nested locations and keeps successful informational output nonblocking', async () => {
         await expect(
