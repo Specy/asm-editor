@@ -1766,6 +1766,18 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
+    _labelSyntax = { comment: ';' as const, colonless: true }
+    /** An assembled program's symbols; a loaded Executable's are its Listing's. */
+    _getProgramLabels() {
+        if (this.executable || !this.core) return undefined
+        return this.core.getMemoryLayout().symbols.map((symbol) => ({
+            name: symbol.name,
+            address: symbol.address,
+            fromLibrary: symbol.fromLibrary,
+            ...(symbol.file ? { file: symbol.file } : {})
+        }))
+    }
+
     /**
      * Where a name the memory view's address box takes is at run time: a symbol the Core knows, or
      * else a label of the running Executable's Listing, such as an Invented name (`FUN_…`, `DAT_…`)

@@ -343,6 +343,14 @@ export abstract class BaseEmulator<R extends string> {
     _getArgumentsArea?(): import('./commonLanguageFeatures.svelte').ArgumentsArea | undefined
     _getDeviceRegions?(): import('./commonLanguageFeatures.svelte').DeviceRegion[]
     _resolveMemoryLabel?(name: string): bigint | undefined
+    /**
+     * Every label of the built program, code and data, its libraries' marked, for the Symbols
+     * panel ([workbench.md](../../../../../docs/design/workbench.md), Symbols in every Target);
+     * undefined for a program that has a Listing instead, a loaded Executable.
+     */
+    _getProgramLabels?(): import('./programSymbols').CoreLabel[] | undefined
+    /** How the Target's assembly writes a label, to find one `_getProgramLabels` gives no line. */
+    _labelSyntax?: import('./programSymbols').LabelSyntax
 
     abstract _getSp(): bigint
 

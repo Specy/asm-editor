@@ -120,18 +120,25 @@ export function listingStrings(listing: Listing, bytes: Uint8Array): StringSymbo
     return strings.sort((a, b) => a.address - b.address)
 }
 
-/** An address as the Symbols panel writes it, run-time, as Go to Symbol and the hover do. */
-export function symbolAddress(address: number): string {
-    return `0x${address.toString(16)}`
+/**
+ * An address as the Symbols panel writes it, run-time, as Go to Symbol and the hover do; for a
+ * program the editor built, with its Target's prefix, `$` on the M68K.
+ */
+export function symbolAddress(address: number | bigint, prefix = '0x'): string {
+    return `${prefix}${address.toString(16)}`
 }
 
 /**
- * What a filter typed in the panel matches against an address: its hex digits, without the `0x`
- * typed before them, which alone matches every address; nothing when the filter cannot be part of
- * an address.
+ * What a filter typed in the panel matches against an address: its hex digits, without the `0x` or
+ * `$` typed before them, which alone matches every address; nothing when the filter cannot be part
+ * of an address.
  */
-function addressQuery(query: string): string | undefined {
-    const digits = query.startsWith('0x') ? query.slice(2) : query
+export function addressQuery(query: string): string | undefined {
+    const digits = query.startsWith('0x')
+        ? query.slice(2)
+        : query.startsWith('$')
+          ? query.slice(1)
+          : query
     return /^[0-9a-f]*$/.test(digits) ? digits : undefined
 }
 

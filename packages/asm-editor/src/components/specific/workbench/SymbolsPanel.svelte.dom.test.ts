@@ -11,7 +11,6 @@ import { readFileSync } from 'node:fs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, tick, unmount, type Component } from 'svelte'
 import type { StoredProject } from '#lib/Project.svelte.ts'
-import { hasExecutable } from '#lib/executables.ts'
 import { loadDemangler, type Demangler } from '#lib/languages/demangle/loadDemangler.ts'
 import { loadDecoder, type ListingDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
@@ -26,6 +25,9 @@ import { toast } from '#stores/toastStore.ts'
 import { editorGroupsFixture } from '#lib/workbench/__fixtures__/editorGroups.svelte.ts'
 import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 import type { RailEntry } from './workbenchContext'
+import { workbenchRail } from './workbenchRail'
+import type { ProgramSymbols } from '#lib/languages/programSymbols.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 // svelte/motion reads the reduced motion query as it loads, before any hook runs
 vi.hoisted(() => {
@@ -190,14 +192,11 @@ async function until(condition: () => boolean) {
 }
 
 describe('the rail entry', () => {
-    it('is offered only in a Project that has an Executable', () => {
-        expect(hasExecutable({ crackme: { encoding: 'base64', content: crackme } })).toBe(true)
-        expect(
-            hasExecutable({
-                'main.s': { encoding: 'plain', content: 'nop' },
-                'data.bin': { encoding: 'base64', content: 'AAECAw==' }
-            })
-        ).toBe(false)
+    it('is offered in every Target, saying what it lists', () => {
+        const entry = workbenchRail({ access: {}, hostPanels: [], hostLinks: [] }).find(
+            (each) => each.id === 'symbols'
+        )
+        expect(entry?.tooltip).toBe('Symbols: the labels and strings of the program')
     })
 })
 
@@ -286,7 +285,9 @@ describe('the Symbols panel', () => {
         view.session.selectProgram('main.s')
         flushSync()
         expect(view.rows()).toHaveLength(0)
-        expect(view.panel().textContent).toContain('Open an Executable')
+        expect(view.panel().textContent).toContain(
+            'Build the program to see its labels and strings, or open an Executable to see its functions and strings.'
+        )
     })
 
     it('reveals a row in the Listing, switching the focused pane from the bytes', async () => {
@@ -564,5 +565,316 @@ describe('renaming and commenting from the Symbols panel', () => {
         )
         flushSync()
         expect(view.panel().querySelector('.annotation-prompt')).toBeNull()
+    })
+})
+
+describe('the Symbols panel of a program the editor built', () => {
+    const plain = (content: string) => ({ encoding: 'plain' as const, content })
+    const FILES = {
+        'main.s': plain('.include "data.s"\n.text\nmain:\n    la $a0, prompt\nloop:\n    j loop'),
+        'data.s': plain('.data\nprompt: .asciiz "Enter: "\ncount: .word 3')
+    }
+    const SYMBOLS: ProgramSymbols = {
+        labels: [
+            {
+                name: 'main',
+                display: 'main',
+                address: 0x400000n,
+                kind: 'code',
+                size: 8n,
+                definition: { file: 'main.s', line: 2 }
+            },
+            {
+                name: 'loop',
+                display: 'loop',
+                address: 0x400008n,
+                kind: 'code',
+                size: 4n,
+                definition: { file: 'main.s', line: 4 }
+            },
+            {
+                name: 'prompt',
+                display: 'prompt',
+                address: 0x10010000n,
+                kind: 'data',
+                size: 8n,
+                definition: { file: 'data.s', line: 1 }
+            },
+            { name: 'count', display: 'count', address: 0x10010008n, kind: 'data', size: 4n }
+        ],
+        strings: [
+            {
+                label: 'prompt',
+                text: 'Enter: ',
+                escaped: 'Enter: ',
+                address: 0x10010000n,
+                definition: { file: 'data.s', line: 1 }
+            }
+        ]
+    }
+    const copied: string[] = []
+
+    /** The side panel showing Symbols in a Project of `language`, with `build` to start a Debug session. */
+    function programPanel({ language = 'MIPS' as AvailableLanguages, touch = false } = {}) {
+        const fixture = editorGroupsFixture(language, {
+            entry: 'main.s',
+            files: FILES,
+            programs: { 'main.s': {} },
+            selectedProgram: 'main.s'
+        })
+        const moves: bigint[] = []
+        Object.assign(fixture.emulator, {
+            memory: { global: { pageSize: 256 } },
+            setGlobalMemoryAddress: (address: bigint) => moves.push(address)
+        })
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: { writeText: async (text: string) => void copied.push(text) }
+        })
+        copied.length = 0
+        const viewport = $state({ deviceClass: 'desktop' as const, canHover: !touch })
+        let active = $state<string | null>(null)
+        const ui = new WorkbenchUi(viewport, { get: () => active, set: (id) => (active = id) })
+        ui.open('symbols')
+        const target = document.createElement('div')
+        document.body.append(target)
+        const app = mount(WorkbenchPartHarness, {
+            target,
+            props: { session: fixture.session, ui, rail, part: 'side-panel' }
+        })
+        flushSync()
+        disposers.push(() => {
+            void unmount(app)
+            fixture.dispose()
+        })
+        const panel = () => target.querySelector<HTMLElement>('.symbols')!
+        const rows = () => [...target.querySelectorAll<HTMLButtonElement>('button.symbol-row')]
+        return {
+            ...fixture,
+            ui,
+            panel,
+            rows,
+            moves,
+            rowTexts: () =>
+                rows().map((row) =>
+                    [...row.querySelectorAll('span')].map((span) => span.textContent!.trim())
+                ),
+            rowOf: (name: string) =>
+                rows().find((row) => row.querySelector('.symbol-name')?.textContent === name)!,
+            pick: (label: string) => {
+                target
+                    .querySelector<HTMLButtonElement>(
+                        `[role="group"][aria-label="Symbols to list"] button[aria-label="${label}"]`
+                    )!
+                    .click()
+                flushSync()
+            },
+            typeFilter: (text: string) => {
+                const input = target.querySelector<HTMLInputElement>('.filter input')!
+                input.value = text
+                input.dispatchEvent(new Event('input', { bubbles: true }))
+                flushSync()
+            },
+            build: (symbols: ProgramSymbols = SYMBOLS) => {
+                fixture.emulator.buildSources = { entry: 'main.s', files: FILES }
+                fixture.emulator.programSymbols = symbols
+                fixture.emulator.canExecute = true
+                flushSync()
+            },
+            stop: () => {
+                fixture.emulator.canExecute = false
+                fixture.emulator.buildSources = undefined
+                fixture.emulator.programSymbols = undefined
+                flushSync()
+            }
+        }
+    }
+
+    /**
+     * A pane's text editor as far as a reveal reads it: holding the model of the version the pane
+     * shows, and moving its cursor as the real one does, which the session hears as its cursor
+     * event.
+     */
+    function textEditor(session: WorkbenchSession, pane: EditorGroup) {
+        pane.editor = {
+            getModel: () => {
+                const selection = pane.sourceSelection
+                const version =
+                    selection.sourceKind === 'live' ? 'live' : `build-${selection.buildGeneration}`
+                return {
+                    uri: {
+                        scheme: 'asm-editor',
+                        authority: session.languageSessionId,
+                        path: `/${version}/${selection.path}`
+                    },
+                    isDisposed: () => false,
+                    getLineCount: () => 10
+                }
+            },
+            revealLineInCenter: () => {},
+            setPosition: ({ lineNumber }: { lineNumber: number }) =>
+                session.cursorMoved(pane, lineNumber - 1),
+            focus: () => {}
+        } as unknown as typeof pane.editor
+    }
+
+    const menuItems = () =>
+        [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((item) =>
+            item.textContent!.trim()
+        )
+    const pickItem = (label: string) => {
+        ;[...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+            .find((item) => item.textContent!.trim() === label)!
+            .click()
+        flushSync()
+    }
+
+    it('says to Build, then lists the labels and strings of the Debug session’s program', () => {
+        const view = programPanel()
+        expect(view.panel().textContent?.trim()).toBe(
+            'Build the program to see its labels and strings.'
+        )
+        view.build()
+        const file = view.panel().querySelector<HTMLElement>('.symbols-file')!
+        expect(file.querySelector('strong')?.textContent).toBe('main.s')
+        expect(file.querySelector('.entry-mark')).not.toBeNull()
+        expect(view.panel().querySelector('.count')?.textContent?.trim()).toBe('4 labels')
+        expect(view.rowTexts()).toEqual([
+            ['main', 'code', '0x400000', '8 B'],
+            ['loop', 'code', '0x400008', '4 B'],
+            ['prompt', 'data', '0x10010000', '8 B'],
+            ['count', 'data', '0x10010008', '4 B']
+        ])
+        expect(view.rows()[2].title).toBe(
+            'prompt at 0x10010000, 8 bytes\nData, defined in data.s at line 2'
+        )
+        expect(view.rows()[3].title).toBe(
+            'count at 0x10010008, 4 bytes\nData, not found in the source'
+        )
+        view.pick('Strings')
+        expect(view.panel().querySelector('.count')?.textContent?.trim()).toBe('1 string')
+        expect(view.rowTexts()).toEqual([['"Enter: "', '0x10010000']])
+        expect(view.rows()[0].title).toBe(
+            '"Enter: " at 0x10010000\nprompt, defined in data.s at line 2'
+        )
+        //Stop ends the Debug session, and the list with it
+        view.stop()
+        expect(view.rows()).toHaveLength(0)
+        expect(view.panel().textContent?.trim()).toBe(
+            'Build the program to see its labels and strings.'
+        )
+    })
+
+    it('filters by name or address, and writes an M68K address with its $', () => {
+        const view = programPanel({ language: 'M68K' })
+        view.build()
+        expect(view.rowTexts()[0]).toEqual(['main', 'code', '$400000', '8 B'])
+        view.typeFilter('LOO')
+        expect(view.rowTexts().map((row) => row[0])).toEqual(['loop'])
+        view.typeFilter('$1001')
+        expect(view.rowTexts().map((row) => row[0])).toEqual(['prompt', 'count'])
+        expect(view.panel().querySelector('.count')?.textContent?.trim()).toBe('2 of 4 labels')
+        view.pick('Strings')
+        view.typeFilter('enter')
+        expect(view.rows()).toHaveLength(1)
+        //a string is found by its label too
+        view.typeFilter('prompt')
+        expect(view.rows()).toHaveLength(1)
+    })
+
+    it('reveals the line that defines a row’s label, and marks the label the cursor is under', async () => {
+        const view = programPanel()
+        const pane = view.session.groups[0]
+        textEditor(view.session, pane)
+        view.build()
+        view.rowOf('prompt').click()
+        await until(() => pane.displayedPath === 'data.s' && pane.cursorLine === 1)
+        //in the Build's version of the File, which the Debug session shows
+        expect(pane.sourceSelection.sourceKind).toBe('build')
+        expect(view.rowOf('prompt').classList.contains('current')).toBe(true)
+        view.pick('Strings')
+        expect(view.rows()[0].classList.contains('current')).toBe(true)
+        view.pick('Labels')
+        view.rowOf('loop').click()
+        await until(() => pane.displayedPath === 'main.s' && pane.cursorLine === 4)
+        expect(view.rowOf('loop').classList.contains('current')).toBe(true)
+        //a line below a label is under it
+        view.session.cursorMoved(pane, 5)
+        flushSync()
+        expect(view.rowOf('loop').classList.contains('current')).toBe(true)
+        view.session.cursorMoved(pane, 0)
+        flushSync()
+        expect(view.panel().querySelector('.current')).toBeNull()
+    })
+
+    it('shows a label the source does not define in memory, and any from its menu', async () => {
+        const view = programPanel()
+        view.build()
+        view.rowOf('count').click()
+        flushSync()
+        expect(view.moves).toEqual([0x10010000n])
+        expect(view.ui.memoryMark?.address).toBe(0x10010008n)
+        view.rowOf('main').dispatchEvent(
+            new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                clientX: 30,
+                clientY: 40
+            })
+        )
+        flushSync()
+        await tick()
+        expect(view.rowOf('main').classList.contains('menu-open')).toBe(true)
+        expect(menuItems()).toEqual(['Show in memory', 'Copy address'])
+        pickItem('Copy address')
+        await tick()
+        expect(copied).toEqual(['0x400000'])
+        view.pick('Strings')
+        view.rows()[0].dispatchEvent(
+            new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                clientX: 30,
+                clientY: 40
+            })
+        )
+        flushSync()
+        await tick()
+        pickItem('Show in memory')
+        expect(view.moves.at(-1)).toBe(0x10010000n)
+        expect(view.ui.memoryMark?.address).toBe(0x10010000n)
+    })
+
+    it('has a button for a row’s menu on a touch screen', async () => {
+        const view = programPanel({ touch: true })
+        view.build()
+        const button = view.panel().querySelector<HTMLButtonElement>('button.row-menu')!
+        expect(button.getAttribute('aria-label')).toBe('Show main in memory or copy its address')
+        button.click()
+        flushSync()
+        await tick()
+        expect(menuItems()).toEqual(['Show in memory', 'Copy address'])
+    })
+
+    it('lists an Executable shown in the focused pane instead', async () => {
+        const view = symbolsPanel({
+            files: {
+                crackme: { encoding: 'base64', content: crackme },
+                'main.asm': plain('global _start\n_start:\n    nop')
+            },
+            programs: { crackme: {}, 'main.asm': {} },
+            selectedProgram: 'main.asm'
+        })
+        view.emulator.buildSources = { entry: 'main.asm', files: view.project.files }
+        view.emulator.programSymbols = {
+            labels: [{ ...SYMBOLS.labels[0], name: '_start', display: '_start' }],
+            strings: []
+        }
+        view.emulator.canExecute = true
+        show(view.session, 'main.asm')
+        expect(view.rowTexts()).toEqual([['_start', 'code', '0x400000', '8 B']])
+        show(view.session, 'crackme')
+        await view.listed()
+        expect(view.panel().querySelector('.count')?.textContent?.trim()).toBe('22 functions')
     })
 })

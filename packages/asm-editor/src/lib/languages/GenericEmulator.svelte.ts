@@ -8,6 +8,7 @@ import {
     type BuildOutputHost
 } from '#lib/buildOutput.ts'
 import { compiledMemoryNames, prepareMemoryNames } from './compiledMemoryNames'
+import { programSymbols, type ProgramSymbols } from './programSymbols'
 import { sameChangedCode } from './changedCode'
 import { mergeMemoryRegions, readOnlyMemoryAt, withArgumentsArea } from './memoryRegions'
 import {
@@ -250,6 +251,10 @@ export abstract class GenericEmulator<T, R extends string>
 
     get dataLabels() {
         return this.memoryLayout?.dataLabels ?? []
+    }
+    private programSymbolsRead = $state.raw<ProgramSymbols | undefined>()
+    get programSymbols(): ProgramSymbols | undefined {
+        return this.programSymbolsRead
     }
     get readOnlyMemory(): readonly ReadOnlyMemory[] {
         return this.memoryLayout?.readOnly ?? []
@@ -516,6 +521,32 @@ export abstract class GenericEmulator<T, R extends string>
                 this._buildSources!,
                 (address, length) => this._readMemoryBytes(address, length)
             )
+        }
+    }
+
+    /**
+     * The labels and strings of the Build a Debug session starts from, for the Symbols panel
+     * ([workbench.md](../../../../../docs/design/workbench.md), Symbols in every Target): read
+     * before the program runs, so its strings are the ones it was built with. A Core that cannot
+     * say leaves the panel without them rather than failing the Build.
+     */
+    private readProgramSymbols() {
+        this.programSymbolsRead = undefined
+        const sources = this._buildSources
+        if (!sources) return
+        try {
+            const labels = this._getProgramLabels?.()
+            if (!labels) return
+            this.programSymbolsRead = programSymbols({
+                labels,
+                sections: this.memoryLayout?.sections ?? [],
+                sources,
+                syntax: this._labelSyntax ?? { comment: ';' },
+                locate: (address) => this.getSourceLocationFromAddress(address),
+                read: (address, length) => this._readMemoryBytes(address, length)
+            })
+        } catch (e) {
+            console.error(e)
         }
     }
 
@@ -1398,6 +1429,7 @@ export abstract class GenericEmulator<T, R extends string>
     private forgetBuild(): void {
         this._buildSources = undefined
         this.memoryLayout = undefined
+        this.programSymbolsRead = undefined
         this.memoryLayoutKey = undefined
         this.heapBounds = undefined
         this.stackTop = undefined
@@ -1611,6 +1643,7 @@ export abstract class GenericEmulator<T, R extends string>
                 : sources
             this._beginExecutionSession?.()
             this.addDecorations()
+            if (stopInUserCode) this.readProgramSymbols()
             this.state.canExecute = true
             this.state.canUndo = false
             let endedBeforeStart = false
