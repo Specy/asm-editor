@@ -80,7 +80,11 @@ describe('the committed device files', () => {
 
     it('are offered to x86 C and C++ alone, the private header aside', () => {
         expect([...X86_DEVICE_HEADERS].sort()).toEqual(
-            DEVICE_C_HEADERS.filter((path) => !path.startsWith('bits/') && path !== 'time.h').sort()
+            //the additions to the Runtime library's own headers are offered as those
+            DEVICE_C_HEADERS.filter(
+                (path) =>
+                    !path.startsWith('bits/') && !['errno.h', 'stdio.h', 'time.h'].includes(path)
+            ).sort()
         )
     })
 
@@ -278,6 +282,7 @@ describe.skipIf(!gcc || !uapi)('the layouts, against the kernel and the C librar
                 'fcntl.h',
                 'poll.h',
                 'signal.h',
+                'stdio.h',
                 'termios.h',
                 'time.h',
                 'unistd.h',
@@ -493,6 +498,13 @@ static void on_signal(int sig) {
     caught = sig;
 }
 
+/* A file of one byte at path. */
+static void make(const char *path) {
+    FILE *file = fopen(path, "w");
+    fputc('x', file);
+    fclose(file);
+}
+
 int main(void) {
     report("open", open("/no/such/file", O_RDONLY), ENOENT);
     report("close", close(99), EBADF);
@@ -554,6 +566,28 @@ int main(void) {
     sigaction(SIGUSR1, NULL, &old);
     printf("sigaction %d %d\\n", old.sa_handler == on_signal, (old.sa_flags & SA_RESTART) != 0);
     report("sigaction", sigaction(SIGKILL, &old, NULL), EINVAL);
+    make("made.txt");
+    printf("mkdir %d", mkdir("folder", 0755));
+    printf(" rename %d", rename("made.txt", "folder/moved.txt"));
+    printf(" stat %d\\n", stat("folder/moved.txt", &st) == 0 && S_ISREG(st.st_mode));
+    report("mkdir", mkdir("folder", 0755), EEXIST);
+    report("mkdir", mkdir("missing/below", 0755), ENOENT);
+    report("rmdir", rmdir("folder"), ENOTEMPTY);
+    report("unlink", unlink("folder"), EISDIR);
+    printf("remove %d", remove("folder/moved.txt"));
+    printf(" %d\\n", remove("folder"));
+    report("unlink", unlink("folder/moved.txt"), ENOENT);
+    make("gone.txt");
+    printf("unlink %d\\n", unlink("gone.txt"));
+    signal(SIGALRM, on_signal);
+    caught = 0;
+    struct itimerval timer = { { 0, 0 }, { 0, 2000 } }, left;
+    printf("setitimer %d", setitimer(ITIMER_REAL, &timer, NULL));
+    for (int i = 0; i < 100 && !caught; i++) usleep(1000);
+    printf(" %d", caught);
+    got = getitimer(ITIMER_REAL, &left);
+    printf(" getitimer %d %ld\\n", got, (long)left.it_value.tv_usec);
+    report("setitimer", setitimer(ITIMER_VIRTUAL, &timer, NULL), EOPNOTSUPP);
     return 0;
 }
 `
@@ -589,6 +623,16 @@ const CALLS_OUTPUT = [
     'kill 0 10',
     'sigaction 1 1',
     'sigaction -1 1',
+    'mkdir 0 rename 0 stat 1',
+    'mkdir -1 1',
+    'mkdir -1 1',
+    'rmdir -1 1',
+    'unlink -1 1',
+    'remove 0 0',
+    'unlink -1 1',
+    'unlink 0',
+    'setitimer 0 14 getitimer 0 0',
+    'setitimer -1 1',
     ''
 ].join('\n')
 

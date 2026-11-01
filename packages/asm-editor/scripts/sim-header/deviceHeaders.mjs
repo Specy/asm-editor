@@ -541,8 +541,11 @@ function cHeader(header, syscalls) {
     ]
     const body = []
     let previous
-    //a check is for the layout test alone
-    for (const group of runs(header.items.filter((item) => item.kind !== 'check'))) {
+    //a check is for the layout test alone, and what the shared header of the same name declares is
+    //for NASM alone
+    for (const group of runs(
+        header.items.filter((item) => item.kind !== 'check' && !item.shared)
+    )) {
         const [item] = group
         //a comment introduces what follows it, and a macro without one belongs with the one before
         if (
@@ -583,6 +586,19 @@ function cHeader(header, syscalls) {
         ...(externC ? ['', '#ifdef __cplusplus', 'extern "C" {', '#endif'] : []),
         ...body,
         ...(externC ? ['', '#ifdef __cplusplus', '}', '#endif'] : []),
+        //names C++'s header of the same name, <cstdio> for <stdio.h>, has in namespace std too
+        ...(header.std
+            ? [
+                  '',
+                  '#ifdef __cplusplus',
+                  'extern "C++" {',
+                  'namespace std {',
+                  ...header.std.map((name) => `using ::${name};`),
+                  '}',
+                  '}',
+                  '#endif'
+              ]
+            : []),
         '',
         '#endif',
         ''
@@ -857,7 +873,8 @@ export function deviceProbe(syscalls) {
                     `__builtin_types_compatible_p(__typeof__(${item.name}), ${item.returns} (${params}))`,
                     1,
                     {
-                        function: true
+                        function: true,
+                        ...(item.linux === false ? { linux: false } : {})
                     }
                 )
             }

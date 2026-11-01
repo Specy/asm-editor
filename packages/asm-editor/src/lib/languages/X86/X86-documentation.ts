@@ -1194,10 +1194,10 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
         'Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
     renameat2:
         'Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. `RENAME_NOREPLACE` refuses an existing destination; `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR` and an ordinary rename that would replace an existing File returns `-EEXIST`.',
-    mkdir: 'Requests a directory at the path in `rdi`, with the mode in `rsi`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths.',
+    mkdir: 'Makes a directory at the path in `rdi`, with the mode in `rsi`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone.',
     mkdirat:
-        'Requests a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths.',
-    rmdir: 'Requests removal of the empty directory named by the path at `rdi`. Project directories cannot be removed this way: they exist only as prefixes of File paths and disappear when their last File is removed.',
+        'Makes a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone.',
+    rmdir: 'Removes the empty directory named by the path at `rdi`. Under `/project`, a directory that holds Files returns `-ENOTEMPTY`, and one that does not disappears by itself when its last File is removed; an empty one made by `mkdir` is removed.',
     unlink: 'Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. Under `/project`, removing a directory’s last File also removes that implicit directory.',
     uname: 'Writes system name and version fields to the Linux `struct utsname` buffer at `rdi`.',
     gettimeofday:
