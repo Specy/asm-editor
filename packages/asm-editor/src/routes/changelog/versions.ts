@@ -7,6 +7,21 @@ type Version = {
 }
 export const versions: Version[] = [
     {
+        version: '14.0.0',
+        title: 'x86-64 graphics and sound & a real 68000',
+        date: new Date('2026-11-01'),
+        changes: [
+            'Added a Screen, keyboard, mouse and sound to x86-64 through Linux device files, usable from both C/C++ and assembly',
+            'The M68K simulator now behaves like a real 68000. Code is placed in memory at its real size, with exceptions, user and supervisor mode, interrupts and cycle counts',
+            'Added the 68010 and 68020 processors to M68K, chosen with opt p=68010 or opt p=68020',
+            'Added a Pixel editor to draw on BMP images, and an edit history to undo changes to images and binary files',
+            'The Symbols panel now lists the labels and strings of programs',
+            'x86-64 and RISC-V instruction pages now link to the Intel and RISC-V reference manuals',
+            "Added tooltips that explain the editor's buttons and controls",
+            'Improved x86-64 simulator speed and M68K graphics smoothness, and fixed many bugs across the editor'
+        ]
+    },
+    {
         version: '13.0.0',
         title: 'Decompile and disassemble ELF files & Audio',
         date: new Date('2026-10-24'),
