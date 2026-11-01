@@ -1,6 +1,6 @@
 /*
  * <unistd.h>: the POSIX calls on descriptors: read, write, close and lseek, which work on files and
- * devices alike, and the sleeps.
+ * devices alike; unlink and rmdir, which delete a file and a folder; and the sleeps.
  *
  * Part of the x86 Runtime library, written for the editor in the shape of Linux's own header: the
  * same names, values and layouts, with only what the editor's devices use.
@@ -110,6 +110,29 @@ static inline int isatty(int fd) {
 static inline int fsync(int fd) {
     register long rax __asm__("rax") = 74; /* fsync */
     register long rdi __asm__("rdi") = fd;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi) : "rcx", "r11", "memory");
+    return (int)__aed_syscall_return(rax);
+}
+
+/**
+ * Deletes the file at path. A descriptor already open on it keeps reading and writing it. Returns
+ * 0, or -1 with errno set: ENOENT if there is no such file, EISDIR for a folder, which rmdir
+ * deletes.
+ */
+static inline int unlink(const char *path) {
+    register long rax __asm__("rax") = 87; /* unlink */
+    register long rdi __asm__("rdi") = (long)path;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi) : "rcx", "r11", "memory");
+    return (int)__aed_syscall_return(rax);
+}
+
+/**
+ * Deletes the empty folder at path. Returns 0, or -1 with errno set: ENOTEMPTY while it holds
+ * anything, ENOENT if there is no such folder.
+ */
+static inline int rmdir(const char *path) {
+    register long rax __asm__("rax") = 84; /* rmdir */
+    register long rdi __asm__("rdi") = (long)path;
     __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi) : "rcx", "r11", "memory");
     return (int)__aed_syscall_return(rax);
 }

@@ -134,6 +134,12 @@ const errnoCodes = [
     ['ENOTSUP', 'EOPNOTSUPP', 'Same as EOPNOTSUPP']
 ]
 
+/** The error numbers of x86's own calls, which the other Targets' Runtime library has no use for. */
+const x86ErrnoCodes = [
+    ['EXDEV', 18, 'Cross-device link: rename between file systems'],
+    ['ENOTEMPTY', 39, 'Directory not empty: rmdir of a folder that holds something']
+]
+
 /**
  * `KEY_*` from 0 to 248, the keyboard keys: what `KeyboardEvent.code` maps to, whatever the
  * layout. A string value is another key's name.
@@ -401,9 +407,9 @@ export const DEVICE_HEADERS = [
     {
         path: 'sys/time.h',
         nasmSummary:
-            "struct timeval, a time in seconds and microseconds: the time stamp of every input event, and select's timeout.",
+            "struct timeval, a time in seconds and microseconds: the time stamp of every input event, and select's timeout; and struct itimerval, the interval timer's setting.",
         summary:
-            "struct timeval, a time in seconds and microseconds: the time stamp of every input event, select's timeout and gettimeofday's answer. It also gives select, from <sys/select.h>, as the C library's does.",
+            "struct timeval, a time in seconds and microseconds: the time stamp of every input event, select's timeout and gettimeofday's answer; and the interval timer, which setitimer sets to send SIGALRM. It also gives select, from <sys/select.h>, as the C library's does.",
         includes: ['sys/types.h', 'bits/types/struct_timeval.h', 'bits/syscall.h'],
         items: [
             struct(
@@ -417,6 +423,38 @@ export const DEVICE_HEADERS = [
                 ['struct timeval *tv', 'void *tz'],
                 'Stores the current time, CLOCK_REALTIME, in *tv, in seconds and microseconds since 1970-01-01 UTC. Pass NULL for tz. Returns 0, or -1 with errno set.',
                 { syscall: 'gettimeofday' }
+            ),
+            note('The interval timers: which one setitimer and getitimer set and read.'),
+            define('ITIMER_REAL', 0, 'Counts time as it passes and sends SIGALRM: the one here'),
+            define('ITIMER_VIRTUAL', 1, "Counts the program's own running time: EOPNOTSUPP here"),
+            define('ITIMER_PROF', 2, 'Counts running and system time: EOPNOTSUPP here'),
+            struct(
+                'itimerval',
+                "An interval timer's setting: when it expires next, and then how often.",
+                [
+                    field(
+                        'struct timeval',
+                        'it_interval',
+                        'The time between expiries after the first; zero expires once'
+                    ),
+                    field('struct timeval', 'it_value', 'The time until it expires; zero stops it')
+                ]
+            ),
+            posix(
+                'setitimer',
+                'int',
+                ['int which', 'const struct itimerval *value', 'struct itimerval *old'],
+                'Sets the interval timer which from *value, and stores its previous setting in *old unless old is NULL. ITIMER_REAL sends SIGALRM each time it expires, which ends the program unless signal or sigaction from <signal.h> gave it a handler first. Returns 0, or -1 with errno set: EOPNOTSUPP for ITIMER_VIRTUAL and ITIMER_PROF.',
+                //glibc's GNU C declaration takes an enum __itimer_which, not POSIX's int
+                { syscall: 'setitimer', linux: false }
+            ),
+            posix(
+                'getitimer',
+                'int',
+                ['int which', 'struct itimerval *value'],
+                'Stores in *value the time until the interval timer which expires, and its interval. Returns 0, or -1 with errno set.',
+                //glibc's GNU C declaration takes an enum __itimer_which, not POSIX's int
+                { syscall: 'getitimer', linux: false }
             ),
             include('sys/select.h')
         ]
@@ -514,10 +552,43 @@ export const DEVICE_HEADERS = [
         ]
     },
     {
+        path: 'stdio.h',
+        summary:
+            "x86's additions to the Runtime library's <stdio.h>, which it includes first: rename and remove, as Linux's C library has them.",
+        includeNext: 'stdio.h',
+        includes: ['bits/syscall.h'],
+        guard: '_AED_X86_STDIO_H',
+        //C++'s <cstdio> includes this header, and these are among its names
+        std: ['rename', 'remove'],
+        items: [
+            posix(
+                'rename',
+                'int',
+                ['const char *from', 'const char *to'],
+                'Renames or moves the file at from to the path to. Returns 0, or -1 with errno set. Under /project a file at to stays and the call fails with EEXIST, and a folder cannot move (EISDIR).',
+                { syscall: 'rename' }
+            ),
+            posix(
+                'remove',
+                'int',
+                ['const char *path'],
+                'Deletes the file at path, or the folder at path when it is empty, as unlink and rmdir do. Returns 0, or -1 with errno set.',
+                {
+                    documentation: 'unlink',
+                    body: [
+                        'long result = __aed_syscall(__NR_unlink, (long)path, 0, 0, 0, 0, 0);',
+                        'if (result == -21 /* EISDIR */) result = __aed_syscall(__NR_rmdir, (long)path, 0, 0, 0, 0, 0);',
+                        'return (int)__aed_syscall_return(result);'
+                    ]
+                }
+            )
+        ]
+    },
+    {
         path: 'unistd.h',
         nasmSummary: "the standard descriptors, and lseek's starting points.",
         summary:
-            'the POSIX calls on descriptors: read, write, close and lseek, which work on files and devices alike, and the sleeps.',
+            'the POSIX calls on descriptors: read, write, close and lseek, which work on files and devices alike; unlink and rmdir, which delete a file and a folder; and the sleeps.',
         includes: ['sys/types.h', 'bits/syscall.h'],
         items: [
             define('STDIN_FILENO', 0, 'Standard input: what is typed in the Terminal'),
@@ -576,6 +647,20 @@ export const DEVICE_HEADERS = [
                 ['int fd'],
                 'Synchronizes pending file changes for fd. On /dev/fb0, requests an immediate update of the Screen from the framebuffer. Returns 0, or -1 with errno set.',
                 { syscall: 'fsync' }
+            ),
+            posix(
+                'unlink',
+                'int',
+                ['const char *path'],
+                'Deletes the file at path. A descriptor already open on it keeps reading and writing it. Returns 0, or -1 with errno set: ENOENT if there is no such file, EISDIR for a folder, which rmdir deletes.',
+                { syscall: 'unlink' }
+            ),
+            posix(
+                'rmdir',
+                'int',
+                ['const char *path'],
+                'Deletes the empty folder at path. Returns 0, or -1 with errno set: ENOTEMPTY while it holds anything, ENOENT if there is no such folder.',
+                { syscall: 'rmdir' }
             ),
             posix(
                 'usleep',
@@ -1072,7 +1157,7 @@ export const DEVICE_HEADERS = [
         nasmSummary:
             'struct stat, which the stat, fstat and lstat system calls fill in, and the type and permission bits of its st_mode: S_IFCHR for a device such as /dev/fb0.',
         summary:
-            'stat, fstat and lstat, which describe a file: its type, size and permissions and, for a device, which one it is. S_ISCHR(st.st_mode) tells a device such as /dev/fb0 or /dev/input/event0 from a file.',
+            'stat, fstat and lstat, which describe a file: its type, size and permissions and, for a device, which one it is. S_ISCHR(st.st_mode) tells a device such as /dev/fb0 or /dev/input/event0 from a file. mkdir makes a folder.',
         includes: ['sys/types.h', 'bits/types/struct_timespec.h', 'bits/syscall.h'],
         items: [
             struct('stat', 'What stat, fstat and lstat fill in, as Linux lays it out on x86-64.', [
@@ -1169,6 +1254,13 @@ export const DEVICE_HEADERS = [
                 ['const char *path', 'struct stat *buffer'],
                 'As stat, but describes a symbolic link itself rather than what it names. Returns 0, or -1 with errno set.',
                 { syscall: 'lstat' }
+            ),
+            posix(
+                'mkdir',
+                'int',
+                ['const char *path', 'mode_t mode'],
+                'Makes the folder path, with the permission bits in mode, such as 0755. Its parent must exist. Returns 0, or -1 with errno set: EEXIST if something has the name already, ENOENT if the parent does not exist. Under /project a new folder lasts for the run, and the first file made in it keeps it in the Project.',
+                { syscall: 'mkdir' }
             )
         ]
     },
@@ -2889,13 +2981,19 @@ export const DEVICE_HEADERS = [
     },
     {
         path: 'errno.h',
-        summary:
+        nasmSummary:
             'the error numbers. The kernel answers a failed system call with one of them, negated, in rax: compare rax with -ENOTTY, or check for any failure with cmp rax, -4095 and jae.',
-        /** The Runtime library's shared <errno.h> declares them for C; the table only checks it. */
-        c: false,
-        items: errnoCodes.map(([name, value, doc]) => define(name, value, doc))
+        summary:
+            "x86's additions to the Runtime library's <errno.h>, which it includes first: the error numbers of the calls only x86 makes, such as rmdir's ENOTEMPTY.",
+        includeNext: 'errno.h',
+        guard: '_AED_X86_ERRNO_H',
+        items: [
+            //the Runtime library's shared <errno.h> declares these for C; NASM gets them here
+            ...errnoCodes.map(([name, value, doc]) => define(name, value, doc, { shared: true })),
+            ...x86ErrnoCodes.map(([name, value, doc]) => define(name, value, doc))
+        ]
     }
 ]
 
-/** The error numbers, with what each means. */
+/** The error numbers every Target's Runtime library has, with what each means. */
 export const ERRNO_CODES = errnoCodes.map(([name, value, doc]) => ({ name, value, doc }))

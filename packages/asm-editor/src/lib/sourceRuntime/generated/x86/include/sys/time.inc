@@ -1,6 +1,6 @@
 ; sys/time.inc: the constants and structures of <sys/time.h> for NASM, under the same names: struct
 ; timeval, a time in seconds and microseconds: the time stamp of every input event, and select's
-; timeout.
+; timeout; and struct itimerval, the interval timer's setting.
 ;
 ; A structure is a struc: name.field is a field's offset, name.outer.inner one of a structure inside
 ; it, and name_size its size. Use it as [rdi + input_event.code], or reserve one with resb
@@ -19,6 +19,22 @@
 struc timezone
     .tz_minuteswest: resd 1
     .tz_dsttime:     resd 1
+endstruc
+
+; The interval timers: which one setitimer and getitimer set and read.
+%define ITIMER_REAL    0 ; Counts time as it passes and sends SIGALRM: the one here.
+%define ITIMER_VIRTUAL 1 ; Counts the program's own running time: EOPNOTSUPP here.
+%define ITIMER_PROF    2 ; Counts running and system time: EOPNOTSUPP here.
+
+; An interval timer's setting: when it expires next, and then how often.
+; itimerval_size is 32.
+struc itimerval
+    .it_interval:                ; The time between expiries after the first; zero expires once.
+    .it_interval.tv_sec:  resq 1 ; Whole seconds.
+    .it_interval.tv_usec: resq 1 ; Microseconds, 0 to 999999.
+    .it_value:                   ; The time until it expires; zero stops it.
+    .it_value.tv_sec:     resq 1 ; Whole seconds.
+    .it_value.tv_usec:    resq 1 ; Microseconds, 0 to 999999.
 endstruc
 
 %endif

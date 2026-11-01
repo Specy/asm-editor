@@ -499,7 +499,7 @@ static inline long sim_rename(const void *path1, const void *path2) {
     return rax;
 }
 
-/** mkdir, syscall 83. Requests a directory at the path in `rdi`, with the mode in `rsi`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths. */
+/** mkdir, syscall 83. Makes a directory at the path in `rdi`, with the mode in `rsi`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone. */
 static inline long sim_mkdir(const void *path, long mode) {
     register long rax __asm__("rax") = 83;
     register const void *rdi __asm__("rdi") = path;
@@ -508,7 +508,7 @@ static inline long sim_mkdir(const void *path, long mode) {
     return rax;
 }
 
-/** rmdir, syscall 84. Requests removal of the empty directory named by the path at `rdi`. Project directories cannot be removed this way: they exist only as prefixes of File paths and disappear when their last File is removed. */
+/** rmdir, syscall 84. Removes the empty directory named by the path at `rdi`. Under `/project`, a directory that holds Files returns `-ENOTEMPTY`, and one that does not disappears by itself when its last File is removed; an empty one made by `mkdir` is removed. */
 static inline long sim_rmdir(const void *path) {
     register long rax __asm__("rax") = 84;
     register const void *rdi __asm__("rdi") = path;
@@ -1070,7 +1070,7 @@ static inline long sim_openat(long dirfd, const void *string, long flags, long m
     return rax;
 }
 
-/** mkdirat, syscall 258. Requests a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Creating an empty directory under `/project` is unsupported and returns `-EOPNOTSUPP`: Project directories exist only as prefixes of File paths. */
+/** mkdirat, syscall 258. Makes a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone. */
 static inline long sim_mkdirat(long dirfd, const void *path, long mode) {
     register long rax __asm__("rax") = 258;
     register long rdi __asm__("rdi") = dirfd;

@@ -44,5 +44,7 @@
 %define EILSEQ      84         ; Invalid multibyte or wide character.
 %define EOPNOTSUPP  95         ; Operation not supported.
 %define ENOTSUP     EOPNOTSUPP ; Same as EOPNOTSUPP.
+%define EXDEV       18         ; Cross-device link: rename between file systems.
+%define ENOTEMPTY   39         ; Directory not empty: rmdir of a folder that holds something.
 
 %endif

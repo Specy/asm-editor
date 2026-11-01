@@ -91,6 +91,7 @@ export function programSymbols(input: ProgramSymbolsInput): ProgramSymbols {
         label.file !== undefined && !!sources.compiledLanguages?.[label.file]
     const demangler = loadedDemangler()
     const kindOf = (label: CoreLabel) => (runAt(label.address)?.kind === 'code' ? 'code' : 'data')
+    const source = new SourceIndex(sources, syntax)
     const definitionOf = (label: CoreLabel): LabelDefinition | undefined => {
         if (label.file !== undefined && label.line !== undefined && label.line >= 0)
             return { file: label.file, line: label.line }
@@ -99,15 +100,18 @@ export function programSymbols(input: ProgramSymbolsInput): ProgramSymbols {
             if (at && at.line >= 0) {
                 //the label's own line, at or above its first instruction's
                 const names = spellings(label.name, syntax)
-                const own = definitionLine(sources, at.file, names, syntax, at.line)
+                const own = source.definitionLine(at.file, names, at.line)
                 return { file: at.file, line: own ?? at.line }
             }
         }
-        return findDefinition(sources, label, syntax)
+        return findDefinition(source, label, syntax)
     }
 
     const listed = own.filter((label) => !(compiled(label) && COMPILER_LOCAL.test(label.name)))
     const isListed = new Set(listed)
+    //the first label listed at each address
+    const listedAt = new Map<bigint, CoreLabel>()
+    for (const label of listed) if (!listedAt.has(label.address)) listedAt.set(label.address, label)
     //where a label listed ends: at the next one, or at a library's, whose labels are not listed
     //but whose code or data starts there
     const ends = sorted
@@ -146,9 +150,7 @@ export function programSymbols(input: ProgramSymbolsInput): ProgramSymbols {
         const text = textAt(input.read, label.address, end)
         if (text === undefined) continue
         //a label listed that names it, when the first at its address is not
-        const named = isListed.has(label)
-            ? label
-            : (listed.find((other) => other.address === label.address) ?? label)
+        const named = isListed.has(label) ? label : (listedAt.get(label.address) ?? label)
         const definition = definitionOf(named)
         strings.push({
             label: named.name,
@@ -240,67 +242,119 @@ function spellings(name: string, syntax: LabelSyntax): string[] {
 }
 
 /**
- * Whether a line's code defines a label of one of those names: `name:`, after other labels too, or
- * NASM's `name db`.
+ * The labels a line's code defines: `name:`, after other labels too, and NASM's `name db`.
  */
-function definesLabel(code: string, names: readonly string[], syntax: LabelSyntax): boolean {
+function labelsDefined(code: string, syntax: LabelSyntax): string[] {
+    const names: string[] = []
     let rest = code.trimStart()
     for (;;) {
         const label = IDENTIFIER.exec(rest)
-        if (!label) return false
+        if (!label) return names
         const after = rest.slice(label[0].length).trimStart()
         if (after.startsWith(':')) {
-            if (names.includes(label[1])) return true
+            names.push(label[1])
             rest = after.slice(1).trimStart()
             continue
         }
-        return !!syntax.colonless && names.includes(label[1]) && NASM_DATA.test(after)
+        if (syntax.colonless && NASM_DATA.test(after)) names.push(label[1])
+        return names
     }
-}
-
-/**
- * The line of a File that defines a label of one of those names, the first after `after`, or with
- * `before` the last at or above that line.
- */
-function definitionLine(
-    sources: BuildSources,
-    path: string,
-    names: readonly string[],
-    syntax: LabelSyntax,
-    before?: number,
-    after = -1
-): number | undefined {
-    const file = sources.files[path]
-    if (!file || file.encoding !== 'plain') return undefined
-    const lines = file.content.split(/\r?\n/)
-    const defines = (line: number) =>
-        definesLabel(splitAssemblyComment(lines[line], syntax.comment).code, names, syntax)
-    if (before !== undefined) {
-        for (let line = Math.min(before, lines.length - 1); line >= 0; line--)
-            if (defines(line)) return line
-        return undefined
-    }
-    for (let line = after + 1; line < lines.length; line++) if (defines(line)) return line
-    return undefined
 }
 
 const INCLUDE = /^\s*(?:\.include|%include|#include|include)\s+(["'])(.*?)\1/i
 
-/** A File and the Files it includes, and theirs, in the order the assembler reads them. */
-function unitFiles(sources: BuildSources, path: string, syntax: LabelSyntax): string[] {
-    const files: string[] = []
-    const visit = (path: string) => {
-        const file = sources.files[path]
-        if (files.includes(path) || !file || file.encoding !== 'plain') return
-        files.push(path)
-        for (const line of file.content.split(/\r?\n/)) {
-            const written = INCLUDE.exec(splitAssemblyComment(line, syntax.comment).code)?.[2]
-            const included = written && resolveProjectInclude(path, written, sources)
-            if (included) visit(included)
+/**
+ * The Build's source Files, each read once however many labels are looked up in it: the labels
+ * every line defines, and the Files each one includes. A compiled program has thousands of labels
+ * in tens of thousands of lines.
+ */
+class SourceIndex {
+    /** Each label a File defines, and the 0-based lines that define it, in order. */
+    private readonly definitions = new Map<string, Map<string, number[]> | null>()
+    private readonly units = new Map<string, string[]>()
+    private readonly code = new Map<string, string[] | null>()
+
+    constructor(
+        readonly sources: BuildSources,
+        private readonly syntax: LabelSyntax
+    ) {}
+
+    /** A text File's lines without their comments; none for another File, or no File. */
+    private codeOf(path: string): string[] | null {
+        let lines = this.code.get(path)
+        if (lines === undefined) {
+            const file = this.sources.files[path]
+            lines =
+                file && file.encoding === 'plain'
+                    ? file.content
+                          .split(/\r?\n/)
+                          .map((line) => splitAssemblyComment(line, this.syntax.comment).code)
+                    : null
+            this.code.set(path, lines)
         }
+        return lines
     }
-    visit(path)
-    return files
+
+    private definitionsOf(path: string): Map<string, number[]> | null {
+        let found = this.definitions.get(path)
+        if (found === undefined) {
+            const lines = this.codeOf(path)
+            found = lines && new Map()
+            lines?.forEach((code, line) => {
+                for (const name of labelsDefined(code, this.syntax)) {
+                    const at = found!.get(name)
+                    if (at) at.push(line)
+                    else found!.set(name, [line])
+                }
+            })
+            this.definitions.set(path, found)
+        }
+        return found
+    }
+
+    /**
+     * The line of a File that defines a label of one of those names, the first after `after`, or
+     * with `before` the last at or above that line.
+     */
+    definitionLine(
+        path: string,
+        names: readonly string[],
+        before?: number,
+        after = -1
+    ): number | undefined {
+        const definitions = this.definitionsOf(path)
+        if (!definitions) return undefined
+        let best: number | undefined
+        for (const name of names)
+            for (const line of definitions.get(name) ?? []) {
+                if (before !== undefined ? line > before : line <= after) continue
+                if (best === undefined || (before !== undefined ? line > best : line < best))
+                    best = line
+            }
+        return best
+    }
+
+    /** A File and the Files it includes, and theirs, in the order the assembler reads them. */
+    unitFiles(path: string): string[] {
+        let files = this.units.get(path)
+        if (!files) {
+            const found: string[] = []
+            const visit = (path: string) => {
+                const lines = found.includes(path) ? null : this.codeOf(path)
+                if (!lines) return
+                found.push(path)
+                for (const code of lines) {
+                    const written = INCLUDE.exec(code)?.[2]
+                    const included = written && resolveProjectInclude(path, written, this.sources)
+                    if (included) visit(included)
+                }
+            }
+            visit(path)
+            files = found
+            this.units.set(path, files)
+        }
+        return files
+    }
 }
 
 /**
@@ -309,26 +363,27 @@ function unitFiles(sources: BuildSources, path: string, syntax: LabelSyntax): st
  * below `main`.
  */
 function findDefinition(
-    sources: BuildSources,
+    source: SourceIndex,
     label: CoreLabel,
     syntax: LabelSyntax
 ): LabelDefinition | undefined {
-    const unit = unitFiles(sources, label.file ?? sources.entry, syntax)
+    const { sources } = source
+    const unit = source.unitFiles(label.file ?? sources.entry)
     const paths =
         label.file !== undefined
             ? unit
             : [...unit, ...Object.keys(sources.files).filter((path) => !unit.includes(path))]
     for (const path of paths) {
-        const line = definitionLine(sources, path, [label.name], syntax)
+        const line = source.definitionLine(path, [label.name])
         if (line !== undefined) return { file: path, line }
     }
     const [, local] = spellings(label.name, syntax)
     if (local === undefined) return undefined
     const global = label.name.slice(0, label.name.length - local.length)
     for (const path of paths) {
-        const parent = definitionLine(sources, path, [global], syntax)
+        const parent = source.definitionLine(path, [global])
         if (parent === undefined) continue
-        const line = definitionLine(sources, path, [local], syntax, undefined, parent)
+        const line = source.definitionLine(path, [local], undefined, parent)
         if (line !== undefined) return { file: path, line }
     }
     return undefined

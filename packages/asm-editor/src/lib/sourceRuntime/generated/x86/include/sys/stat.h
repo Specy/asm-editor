@@ -1,7 +1,7 @@
 /*
  * <sys/stat.h>: stat, fstat and lstat, which describe a file: its type, size and permissions and,
  * for a device, which one it is. S_ISCHR(st.st_mode) tells a device such as /dev/fb0 or
- * /dev/input/event0 from a file.
+ * /dev/input/event0 from a file. mkdir makes a folder.
  *
  * Part of the x86 Runtime library, written for the editor in the shape of Linux's own header: the
  * same names, values and layouts, with only what the editor's devices use.
@@ -121,6 +121,20 @@ static inline int lstat(const char *path, struct stat *buffer) {
     register long rax __asm__("rax") = 6; /* lstat */
     register long rdi __asm__("rdi") = (long)path;
     register long rsi __asm__("rsi") = (long)buffer;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi) : "rcx", "r11", "memory");
+    return (int)__aed_syscall_return(rax);
+}
+
+/**
+ * Makes the folder path, with the permission bits in mode, such as 0755. Its parent must exist.
+ * Returns 0, or -1 with errno set: EEXIST if something has the name already, ENOENT if the parent
+ * does not exist. Under /project a new folder lasts for the run, and the first file made in it
+ * keeps it in the Project.
+ */
+static inline int mkdir(const char *path, mode_t mode) {
+    register long rax __asm__("rax") = 83; /* mkdir */
+    register long rdi __asm__("rdi") = (long)path;
+    register long rsi __asm__("rsi") = mode;
     __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi) : "rcx", "r11", "memory");
     return (int)__aed_syscall_return(rax);
 }

@@ -80,35 +80,6 @@ const EXAMPLES = [
         openTabs: ['README.md', 'assembly/main.s', 'c/pacman.c', 'assets/sprites.bmp'],
         activeTab: 'assembly/main.s',
         fileViews: { 'README.md': 'preview' }
-    },
-    {
-        folder: 'examples/x86/desktop',
-        archive: 'desktop.asmproj',
-        name: 'asmOS',
-        description:
-            'A small desktop operating system with windows, a taskbar and eight applications, in C and x86 assembly.',
-        language: 'X86',
-        programs: {
-            //what the source's @screen comment names, so the Screen is right before a Build
-            'os/main.c.asm': { display: { width: 640, height: 480 } }
-        },
-        selectedProgram: 'os/main.c.asm',
-        //as the editor's Compile wrote it for -O1, which runs about as fast as -O2 since the pixel
-        //loops are assembly, and makes less assembly
-        compilations: [
-            {
-                runtimeAbi: 'v1',
-                sourcePath: 'os/main.c',
-                outputPath: 'os/main.c.asm',
-                target: 'X86',
-                language: 'c',
-                compilerId: 'cg142',
-                optimization: '1'
-            }
-        ],
-        openTabs: ['README.md', 'os/main.c', 'os/main.c.asm'],
-        activeTab: 'os/main.c.asm',
-        fileViews: { 'README.md': 'preview' }
     }
 ]
 

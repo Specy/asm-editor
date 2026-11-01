@@ -1,7 +1,7 @@
 /*
  * <sys/time.h>: struct timeval, a time in seconds and microseconds: the time stamp of every input
- * event, select's timeout and gettimeofday's answer. It also gives select, from <sys/select.h>, as
- * the C library's does.
+ * event, select's timeout and gettimeofday's answer; and the interval timer, which setitimer sets
+ * to send SIGALRM. It also gives select, from <sys/select.h>, as the C library's does.
  *
  * Part of the x86 Runtime library, written for the editor in the shape of Linux's own header: the
  * same names, values and layouts, with only what the editor's devices use.
@@ -41,6 +41,44 @@ static inline int gettimeofday(struct timeval *tv, void *tz) {
     register long rax __asm__("rax") = 96; /* gettimeofday */
     register long rdi __asm__("rdi") = (long)tv;
     register long rsi __asm__("rsi") = (long)tz;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi) : "rcx", "r11", "memory");
+    return (int)__aed_syscall_return(rax);
+}
+
+/* The interval timers: which one setitimer and getitimer set and read. */
+#define ITIMER_REAL    0 /* Counts time as it passes and sends SIGALRM: the one here. */
+#define ITIMER_VIRTUAL 1 /* Counts the program's own running time: EOPNOTSUPP here. */
+#define ITIMER_PROF    2 /* Counts running and system time: EOPNOTSUPP here. */
+
+/** An interval timer's setting: when it expires next, and then how often. */
+struct itimerval {
+    struct timeval it_interval; /* The time between expiries after the first; zero expires once. */
+    struct timeval it_value;    /* The time until it expires; zero stops it. */
+};
+
+/**
+ * Sets the interval timer which from *value, and stores its previous setting in *old unless old is
+ * NULL. ITIMER_REAL sends SIGALRM each time it expires, which ends the program unless signal or
+ * sigaction from <signal.h> gave it a handler first. Returns 0, or -1 with errno set: EOPNOTSUPP
+ * for ITIMER_VIRTUAL and ITIMER_PROF.
+ */
+static inline int setitimer(int which, const struct itimerval *value, struct itimerval *old) {
+    register long rax __asm__("rax") = 38; /* setitimer */
+    register long rdi __asm__("rdi") = which;
+    register long rsi __asm__("rsi") = (long)value;
+    register long rdx __asm__("rdx") = (long)old;
+    __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx) : "rcx", "r11", "memory");
+    return (int)__aed_syscall_return(rax);
+}
+
+/**
+ * Stores in *value the time until the interval timer which expires, and its interval. Returns 0, or
+ * -1 with errno set.
+ */
+static inline int getitimer(int which, struct itimerval *value) {
+    register long rax __asm__("rax") = 36; /* getitimer */
+    register long rdi __asm__("rdi") = which;
+    register long rsi __asm__("rsi") = (long)value;
     __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi) : "rcx", "r11", "memory");
     return (int)__aed_syscall_return(rax);
 }
