@@ -23,6 +23,12 @@ import {
 } from '#lib/languages/mars/marsDisplay.ts'
 import { MARS_RECEIVER_CONTROL } from '#lib/languages/mars/MarsDevices.ts'
 import {
+    DEFAULT_X86_DISPLAY,
+    X86_DISPLAY_SIZE_MAX,
+    X86_DISPLAY_SIZE_MIN,
+    X86_DISPLAY_WIDTH_STEP
+} from '#lib/languages/X86/x86Display.ts'
+import {
     SYNTH_BASES,
     SYNTH_CHANNEL_REGISTERS,
     SYNTH_UPLOAD_REGISTERS,
@@ -473,8 +479,25 @@ function SYNTH_INFORMATION(base: string, half: string, byte: string, wait: strin
     ].join('\n')
 }
 
+/**
+ * x86's devices, which a program reaches as a Linux program does, through device files
+ * ([x86 devices](../../../../../../../docs/design/x86-devices.md)): the Screen's framebuffer, the
+ * input devices, the Terminal's modes and the four sound devices, a paragraph each as the MARS
+ * Screen's and the Synth's are, so the agent opens the files a real program opens.
+ */
+const X86_DEVICE_INFORMATION = [
+    '- A program is a Linux x86-64 process: syscall with the number in rax and the arguments in rdi, rsi, rdx, r10, r8, r9; the result, or a negative error number, comes back in rax. Devices are files under /dev, opened with open and driven with read, write, ioctl and mmap. NASM include files give Linux\'s names for numbers, constants and structures: %include "sys/syscall.inc" (mov eax, SYS_open), "fcntl.inc", "sys/mman.inc", "sys/ioctl.inc", "poll.inc", "termios.inc", "time.inc", "linux/fb.inc", "linux/input.inc", "linux/soundcard.inc", "linux/kd.inc" and "sound/asound.inc"; a structure is a struc, so a field is [rdi + input_event.code] and its size input_event_size. C has the same names from <linux/fb.h>, <linux/input.h>, <sys/soundcard.h>, <sound/asound.h> and <linux/kd.h>, with the POSIX calls.',
+    `- The Screen is the framebuffer /dev/fb0. Open it O_RDWR; ioctl FBIOGET_VSCREENINFO fills a struct fb_var_screeninfo (xres, yres, and yres_virtual, twice yres on this machine) and FBIOGET_FSCREENINFO a struct fb_fix_screeninfo (smem_len, line_length); then mmap smem_len bytes with PROT_READ | PROT_WRITE and MAP_SHARED. A pixel is a little-endian 32-bit word 0x00RRGGBB at y * line_length + x * 4 from the mapping. For animation without flicker, draw on the hidden page (lines yres to 2 * yres - 1), set yoffset in the fb_var_screeninfo to yres and call FBIOPAN_DISPLAY, then alternate; a stock Linux kernel gives one page, so check yres_virtual >= 2 * yres first and otherwise draw on the page shown: the pan itself waits for the next vertical blank, 1/60 s, so draw-then-pan runs at 60 frames a second with no other wait (FBIO_WAITFORVSYNC before it would halve that; it is for programs that do not pan, and its argument points to a 32-bit 0). The size is the machine's and the program only reads it: ${DEFAULT_X86_DISPLAY.width} by ${DEFAULT_X86_DISPLAY.height} unless the Screen's Display menu or a comment the editor reads at every Build says otherwise, "; @screen width=640 height=480" in NASM or "// @screen width=640 height=480" in the C source, widths a multiple of ${X86_DISPLAY_WIDTH_STEP}, both from ${X86_DISPLAY_SIZE_MIN} to ${X86_DISPLAY_SIZE_MAX}. Read xres and yres rather than assume them. The emulator runs about 6,000 instructions a millisecond, so fill runs of pixels with rep stosd and redraw only what changes.`,
+    '- Keys and the pointer of the focused Screen go to Linux input devices, never to standard input. The keyboard is /dev/input/by-path/platform-i8042-serio-0-event-kbd. The pointer is a USB tablet with no fixed name: find it by opening /dev/input/event0 to event31 and taking the one whose EVIOCGBIT(0, 4) bits have EV_ABS (the numbers differ between machines, so never hardcode one; the PS/2 mouse, event1, has EV_REL and buttons but never reports anything). A read gives whole 24-byte struct input_event: a 16-byte time, then u16 type, u16 code and s32 value. A key is EV_KEY with a KEY_* code, physical keys whatever the layout, and value 1 down, 0 up, 2 repeat; an EV_MSC MSC_SCAN comes before it and an EV_SYN SYN_REPORT closes each report, so skip the types you do not use. The tablet sends EV_ABS ABS_X and ABS_Y from 0 to 32767 across the whole Screen whatever its size: the pixel is (value * xres + 32766) / 32767, kept below xres; BTN_LEFT, BTN_RIGHT, BTN_MIDDLE, BTN_SIDE and BTN_EXTRA (back and forward) are EV_KEY; the wheel is EV_REL REL_WHEEL, 1 or -1 a notch, with REL_WHEEL_HI_RES, 120 or -120, in the same report, so check the code rather than count every EV_REL. Open devices with O_NONBLOCK, where an empty read returns -EAGAIN from the raw syscall (read in C returns -1 with errno EAGAIN), and wait with poll and a timeout. EVIOCGKEY(96) reads the keys held now as bits and throws away the key events queued for that descriptor, so do not mix it with reading events on the same descriptor; EVIOCGABS(ABS_X) gives the position now. A Testcase has no keys or pointer: poll with a timeout returns 0 on its virtual clock, and a blocking read of an input device, or a poll with no timeout on input devices alone, stops the Testcase with an error, so always use a timeout.',
+    '- Standard input is the Terminal, a line at a time until the program clears ICANON (and ECHO to hide the keys) in its termios with tcgetattr and tcsetattr, or ioctl TCGETS and TCSETS on descriptor 0; then each key arrives as it is typed, arrows as ESC [ A to ESC [ D. Under ISIG, on by default, Ctrl+C typed in the Terminal sends SIGINT. cfmakeraw also turns off ISIG and output processing, so write \\r\\n. The settings end with the program.',
+    "- /dev/dsp plays samples. It opens at 8000 Hz, unsigned 8-bit (128 is silence), mono; set SNDCTL_DSP_SETFMT (AFMT_S16_LE), SNDCTL_DSP_CHANNELS and SNDCTL_DSP_SPEED in that order, each through a pointer to an int that it writes back. Call SNDCTL_DSP_SETFRAGMENT with 0x0004000A, asking for 4 fragments of 1 KB, right after open: the default buffer holds seconds of sound, which is then heard seconds late. The device picks the size in the end (4 of 512 bytes at the default format, 4 of 2048 at 22,050 Hz 16-bit mono); SNDCTL_DSP_GETBLKSIZE reads it back. A write blocks while the buffer is full, so the sound paces the program; a write shorter than a fragment stays silent until SNDCTL_DSP_SYNC, which waits until everything has played, or close. Keep the rate at 22,050 Hz or less, since computing samples is slow here. /dev/mixer's SOUND_MIXER_WRITE_VOLUME sets /dev/dsp's volume through a pointer to an int, left | right << 8, each 0 to 100.",
+    "- General MIDI: write MIDI bytes to /dev/snd/midiC1D0. 0x90 + channel, note, velocity starts a note (60 is middle C); 0x80 + channel, note, 0 ends it; 0xC0 + channel, instrument picks the General MIDI instrument; 0xB0 + channel, 7, volume sets the channel volume. Channel 10 (0x99) is the drum kit. Bytes go out at MIDI's 31,250 baud and close waits until they have; pace a melody with nanosleep or usleep between note on and note off. Notes still on are released when the program ends.",
+    '- The PC speaker: write one struct input_event with type EV_SND, code SND_TONE and the frequency in Hz as value to /dev/input/by-path/platform-pcspkr-event-spkr to start a square-wave tone (above 20 and below 32767 Hz), and another with value 0 to stop it. ioctl KIOCSOUND on /dev/tty0 with 1193182 / Hz, 0 for silence, does the same.',
+    "- Testcases are silent and keep the time sound takes on their virtual clock. Not available: DRM (/dev/dri/card0), ALSA's PCM, control and sequencer devices, /dev/input/mice, /dev/audio (all ENODEV), epoll (ENOSYS), SIGIO, recording and mmap of /dev/dsp."
+].join('\n')
+
 const EMULATOR_INFORMATION = `# Emulator Information
-The editor supports projects with assembly, C/C++ sources, local headers and data files, an output-only console and, for M68K, MIPS, RISC-V and Z80, a pixel screen with a keyboard and a mouse, and sound. There are no imported ROMs and no produced binaries.
+The editor supports projects with assembly, C/C++ sources, local headers and data files, and a Terminal for the program's output and typed input. Every language also has a pixel screen with a keyboard and a mouse, and sound: M68K, MIPS, RISC-V and Z80 through their simulators' own interfaces, X86 through Linux's device files. There are no imported ROMs; an X86 project can also run an imported Linux executable.
 
 ## M68K
 - Uses Easy68K-style syntax and big-endian memory.
@@ -510,6 +533,7 @@ ${SYNTH_INFORMATION(`0x${SYNTH_BASES.riscv.toString(16)}`, 'sh', 'sb', 'service 
 
 ## X86
 - The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.
+${X86_DEVICE_INFORMATION}
 
 ## Z80
 - Uses the z80-asm syntax: ";" comments, labels ending with ":", directives like .org, .byte, .asciz and equ. Memory is 64 KB and little-endian.
@@ -540,10 +564,10 @@ These instructions take precedence over assembly workflow steps when editing C/C
 - Read existing source before editing. Edit the original C/C++ source or local headers rather than generated assembly. Source and header writes are saved without assembler checks and invalidate execution.
 - Call compile_source with the .c/.cpp path after source or header edits. This sends one source file and the Project files its quoted includes reach to Compiler Explorer, requires internet, and generates assembly with compilation records and source maps. Other .c/.cpp files are not compiled or linked separately; put helpers in headers, or #include "helpers.c" from the source, which pastes the file in as one compilation.
 - Start with optimization "0". When the source defines main, compile_source makes its generated assembly the selected program's Entry file. Then call compile (the assembly Build) before running or stepping. Compiler errors must be fixed in the source and recompiled; a saved source edit alone does not prove validity.
-- MIPS and RISC-V support C17 with a supplied runtime, including printf/scanf, malloc/free, strings and math. Include the appropriate standard header. X86 is freestanding: use <sim.h> for I/O; printf, malloc and the hosted runtime are unavailable.
+- MIPS, RISC-V and X86 support C17 with a supplied runtime, including printf/scanf, malloc/free, strings and math. Include the appropriate standard header. X86 also has Linux's device headers (<linux/fb.h>, <linux/input.h>, <sys/soundcard.h>, <sound/asound.h>, <linux/kd.h>) and the POSIX calls of <fcntl.h>, <unistd.h>, <sys/ioctl.h>, <sys/mman.h>, <poll.h>, <sys/select.h>, <termios.h> and <time.h> (open, read, write, close, ioctl, mmap, poll, select, tcgetattr, tcsetattr, cfmakeraw, usleep, nanosleep, clock_gettime), which return -1 and set errno on failure.
 - <sim.h> declares simulator services; use search_documentation to find their signatures rather than guessing. C++ uses C++17 with compatibility headers and no full standard library, exceptions or RTTI.
 - Debug execution through the generated assembly. Use generated assembly paths and instruction lines for breakpoints; registers and memory describe the target architecture. Keep user-facing explanations tied to the original source.
-- For a fresh C example on MIPS or RISC-V, start with:
+- For a fresh C example on MIPS, RISC-V or X86, start with:
 \`\`\`c
 #include <stdio.h>
 

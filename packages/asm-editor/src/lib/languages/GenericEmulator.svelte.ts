@@ -1110,7 +1110,8 @@ export abstract class GenericEmulator<T, R extends string>
      * termination and only loses it here, which is what the design record asks for.
      */
     private resetPeripherals(): void {
-        const { terminal, screen, keyboard, mouse, clock, random, audio } = this._peripherals
+        const { terminal, screen, keyboard, mouse, x86Input, clock, random, audio } =
+            this._peripherals
         audio.reset()
         terminal.clear()
         terminal.useInteractiveInput()
@@ -1118,6 +1119,7 @@ export abstract class GenericEmulator<T, R extends string>
         screen.reset()
         keyboard.reset()
         mouse.reset()
+        x86Input.reset()
         clock.reset()
         random.reset()
     }
@@ -1993,9 +1995,9 @@ export abstract class GenericEmulator<T, R extends string>
      * renderer already compares, and it moves for a change to the visible image whether or not
      * anybody has painted it yet, which is why the flag itself is no longer consulted.
      *
-     * The Screen still has to be watched: a Screen nobody paints — x86's, which has no panel, or
-     * any surface whose Screen toggle is closed — would otherwise hold its programs at the
-     * animation budget for as long as they draw, with no frames to show for it.
+     * The Screen still has to be watched: a Screen nobody paints, on any surface whose Screen
+     * toggle is closed, would otherwise hold its programs at the animation budget for as long as
+     * they draw, with no frames to show for it.
      */
     private sliceTimeBudgetMs(): number {
         return this.screenIsAnimating() ? SCREEN_SLICE_MS : COMPUTE_SLICE_MS

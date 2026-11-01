@@ -1,0 +1,6 @@
+{
+    "name": "Move a square with the keyboard",
+    "description": "The keyboard's event device read once a frame without waiting, the arrow keys held now kept from their down and up events, and a square that moves while an arrow is held, in NASM and in C.",
+    "order": 22,
+    "topic": "keyboard-control"
+}

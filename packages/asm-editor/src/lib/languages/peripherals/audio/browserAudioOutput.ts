@@ -1,8 +1,10 @@
 import type { AudioCommand, AudioNeed, AudioOutput, ChipCommand, SoundData } from './AudioOutput'
 import { pageAudio, type AudioRoute, type PageAudio } from './audioContext'
 import type { ChipNode } from './chips/chipNode'
+import type { PcmNode } from './pcm/pcmNode'
 import { inspectSoundFile } from './soundFiles'
-import type { EngineVoice, SynthesizerEngine } from './synthesizerEngine'
+import type { EngineVoice, MidiPorts, SynthesizerEngine } from './synthesizerEngine'
+import { X86Output } from './x86Output'
 
 /**
  * Where **Audio** becomes sound in a browser ([the plan](../../../../../../../docs/design/audio-plan.md),
@@ -22,18 +24,24 @@ import type { EngineVoice, SynthesizerEngine } from './synthesizerEngine'
  *   their first command ([the plan](../../../../../../../docs/design/waveform-sound-plan.md),
  *   decisions 5 and 6). A chip is a state, so what is sent before the node runs is kept and played
  *   once it does, and nothing waits for it; Stop, Build and dispose dispose of the node.
+ * - **x86's timeline**, `/dev/dsp`, the raw MIDI port and the PC speaker, plays through an
+ *   `X86Output` of the output's own (`x86Output.ts`), made on its first command: a PCM worklet node,
+ *   a MIDI synthesizer lent by the page's pool of them, and the chip node for the speaker.
  */
 
-/** The page's synthesizer engine, loaded on the first need for it and shared by every output. */
-export class SharedEngine {
-    private loading: Promise<SynthesizerEngine> | null = null
+/**
+ * The page's synthesizer engine, or its pool of MIDI port synthesizers, loaded on the first need for
+ * it and shared by every output.
+ */
+export class SharedEngine<T = SynthesizerEngine> {
+    private loading: Promise<T> | null = null
     /** The engine, once it has loaded. */
-    loaded: SynthesizerEngine | null = null
+    loaded: T | null = null
 
-    constructor(private readonly load: (route: AudioRoute) => Promise<SynthesizerEngine>) {}
+    constructor(private readonly load: (route: AudioRoute) => Promise<T>) {}
 
     /** The promise of the engine, or null once it is loaded. A failed load is never tried again. */
-    prepare(route: AudioRoute): Promise<SynthesizerEngine> | null {
+    prepare(route: AudioRoute): Promise<T> | null {
         if (this.loaded) return null
         this.loading ??= this.load(route).then((engine) => (this.loaded = engine))
         return this.loading
@@ -45,6 +53,11 @@ const pageEngine = new SharedEngine(async ({ context, destination }) => {
     return loadSynthesizerEngine(context, destination)
 })
 
+const pageMidiPorts = new SharedEngine<MidiPorts>(async ({ context, destination }) => {
+    const { loadMidiPorts } = await import('./synthesizerEngine')
+    return loadMidiPorts(context, destination)
+})
+
 export type BrowserAudioOptions = {
     /** The page's audio by default; the tests hand in one on a fake context. */
     page?: PageAudio
@@ -52,10 +65,17 @@ export type BrowserAudioOptions = {
     engine?: SharedEngine
     /** Makes the chips' node; the worklet's by default. */
     chips?: (route: AudioRoute) => Promise<ChipNode>
+    /** The page's pool of synthesizers for x86's raw MIDI port by default. */
+    midiPorts?: SharedEngine<MidiPorts>
+    /** Makes the node x86's `/dev/dsp` plays on; the worklet's by default. */
+    pcm?: (route: AudioRoute) => Promise<PcmNode>
 }
 
 const createChipNode = async (route: AudioRoute): Promise<ChipNode> =>
     (await import('./chips/chipNode')).createChipNode(route)
+
+const createPcmNode = async (route: AudioRoute): Promise<PcmNode> =>
+    (await import('./pcm/pcmNode')).createPcmNode(route)
 
 /** How many decoded WAVs an output keeps; one played after it was pushed out is decoded again. */
 const DECODED_KEPT = 32
@@ -64,7 +84,9 @@ export function createBrowserAudioOutput(options: BrowserAudioOptions = {}): Aud
     return new BrowserAudioOutput(
         options.page ?? pageAudio(),
         options.engine ?? pageEngine,
-        options.chips ?? createChipNode
+        options.chips ?? createChipNode,
+        options.midiPorts ?? pageMidiPorts,
+        options.pcm ?? createPcmNode
     )
 }
 
@@ -82,11 +104,14 @@ class BrowserAudioOutput implements AudioOutput {
     /** Decoded WAVs by `SoundData.id`, the least recently used first. */
     private readonly decoded = new Map<number, Decoded>()
     private chips: ChipVoice | null = null
+    private x86: X86Output | null = null
 
     constructor(
         private readonly page: PageAudio,
         private readonly engine: SharedEngine,
-        private readonly makeChips: (route: AudioRoute) => Promise<ChipNode>
+        private readonly makeChips: (route: AudioRoute) => Promise<ChipNode>,
+        private readonly midiPorts: SharedEngine<MidiPorts>,
+        private readonly makePcm: (route: AudioRoute) => Promise<PcmNode>
     ) {}
 
     /** Whether anything this output started may still be heard; forgets what cannot. */
@@ -105,6 +130,10 @@ class BrowserAudioOutput implements AudioOutput {
         }
         //the worklet may not answer while the context is suspended for being idle
         this.page.use()
+        if (need.kind === 'midiPort') {
+            this.x86 ??= new X86Output(this.midiPorts, this.makePcm)
+            return this.x86.prepareMidi(route)
+        }
         const midi = need.kind === 'sound'
         const loading = this.engine.prepare(route)
         if (loading === null) return midi ? this.engine.loaded!.prepareMidi() : null
@@ -115,9 +144,22 @@ class BrowserAudioOutput implements AudioOutput {
         const route = this.page.open()
         if (route === null) return
         let audible: boolean | undefined
+        let timelineAudible: boolean | undefined
         let chips: ChipCommand[] = []
         for (const command of commands) {
             switch (command.type) {
+                case 'programTime':
+                case 'pcm':
+                case 'pcmGain':
+                case 'midi':
+                case 'tone':
+                case 'cut':
+                case 'programEnd': {
+                    const x86 = (this.x86 ??= new X86Output(this.midiPorts, this.makePcm))
+                    timelineAudible ??= this.page.use(x86.sounding)
+                    x86.take(route, command, timelineAudible, chips)
+                    break
+                }
                 case 'note':
                 case 'sound': {
                     audible ??= this.page.use(this.sounding)
@@ -139,11 +181,13 @@ class BrowserAudioOutput implements AudioOutput {
                     chips = []
                     this.chips?.dispose()
                     this.chips = null
+                    this.x86?.stopAll()
                     break
                 default:
                     chips.push(command)
             }
         }
+        this.x86?.flush()
         if (chips.length > 0) {
             const voice = (this.chips ??= new ChipVoice(this.makeChips(route)))
             voice.send(chips)

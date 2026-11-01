@@ -5,7 +5,7 @@ date: 2026-10-05
 
 # Environments match their reference
 
-Amended in part by [ADR 0041](./0041-runtime-compatibility-protects-calls-and-standard-meanings.md).
+Amended in part by [ADR 0041](./0041-runtime-compatibility-protects-calls-and-standard-meanings.md) and, for x86's devices, by [ADR 0067](./0067-x86-devices-follow-a-qemu-guest.md).
 
 Every service a program reaches the outside world through (syscalls, traps, ports, memory-mapped devices) behaves as it does in the Target's **Reference environment**: EASy68K 5.16 for M68K, MARS 4.5 for MIPS, RARS 1.6 for RISC-V, a Linux process on a tty for x86, and, for the Z80, whose Port map has no real counterpart, the Port map as [ADR 0002](./0002-z80-console-ports.md) and [ADR 0011](./0011-z80-peripherals-through-the-port-map.md) define it. This extends [ADR 0003](./0003-preserve-simulator-graphics-conventions.md) from graphics to every service. Three rules apply:
 

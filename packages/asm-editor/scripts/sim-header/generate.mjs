@@ -3,17 +3,19 @@
  * Writes the Environment library's committed headers, `src/lib/sourceRuntime/generated/sim/<target>.h`
  * for `mips`, `riscv32` and `riscv64`, from the syscall entries the Documentation shows and the
  * MARS/RARS device registers the editor runs on, and `x86_64` from the x86 syscall table and its
- * C bindings. Run it after changing any of them:
+ * C bindings; and x86's device headers and NASM include files, `src/lib/sourceRuntime/generated/x86/
+ * include/`, from `deviceTable.mjs` and the same syscall table. Run it after changing any of them:
  *
  *   node scripts/sim-header/generate.mjs [--check]
  *
  * `--check` writes nothing and fails when a committed header or help catalog differs from its inputs,
  * which is what the editor's drift test runs.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { registerHooks } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { DEVICE_DIRECTORY, deviceFunctions, generateDeviceFiles } from './deviceHeaders.mjs'
 import {
     generateSimHeader,
     generateX86SimHeader,
@@ -51,6 +53,7 @@ const { riscvSyscalls } = await load('src/lib/documentation/mars/riscvSyscalls.t
 const devices = await load('src/lib/languages/mars/MarsDevices.ts')
 const display = await load('src/lib/languages/mars/marsDisplay.ts')
 const { x86SimHeaderData } = await load('src/lib/documentation/x86/syscallBinding.ts')
+const { X86_SYSCALLS } = await load('src/lib/languages/X86/generated/x86Syscalls.ts')
 const synth = await load('src/lib/languages/synthRegisters.ts')
 
 const address = (label) =>
@@ -100,8 +103,9 @@ const catalogs = [
         target,
         marsHelpCatalog(target, settings.syscalls === 'mips' ? mipsSyscalls : riscvSyscalls)
     ]),
-    [X86_SIM_HEADER.file, x86HelpCatalog(x86SimHeaderData())]
+    [X86_SIM_HEADER.file, x86HelpCatalog(x86SimHeaderData(), deviceFunctions())]
 ]
+const deviceFiles = generateDeviceFiles(X86_SYSCALLS)
 
 const check = process.argv.includes('--check')
 let stale = false
@@ -110,7 +114,8 @@ const outputs = [
     ...catalogs.map(([target, catalog]) => [
         `src/lib/sourceLanguageHelp/generated/${target}.json`,
         JSON.stringify(catalog) + '\n'
-    ])
+    ]),
+    ...Object.entries(deviceFiles).map(([path, text]) => [`${DEVICE_DIRECTORY}/${path}`, text])
 ]
 for (const [relative, text] of outputs) {
     const path = join(repository, relative)
@@ -124,6 +129,27 @@ for (const [relative, text] of outputs) {
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, text)
     console.log(`wrote ${relative} (${Buffer.byteLength(text)} bytes)`)
+}
+//a file the table no longer generates
+const generated = new Set(Object.keys(deviceFiles))
+const walk = (directory) =>
+    existsSync(directory)
+        ? readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+              entry.isDirectory()
+                  ? walk(join(directory, entry.name))
+                  : [join(directory, entry.name)]
+          )
+        : []
+for (const path of walk(join(repository, DEVICE_DIRECTORY))) {
+    const name = relative(join(repository, DEVICE_DIRECTORY), path).split('\\').join('/')
+    if (generated.has(name)) continue
+    if (check) {
+        console.error(`${DEVICE_DIRECTORY}/${name} is no longer generated`)
+        stale = true
+    } else {
+        rmSync(path)
+        console.log(`removed ${DEVICE_DIRECTORY}/${name}`)
+    }
 }
 if (stale) {
     console.error('Run node scripts/sim-header/generate.mjs to regenerate them.')

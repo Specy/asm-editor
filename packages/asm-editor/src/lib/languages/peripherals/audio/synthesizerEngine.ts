@@ -2,6 +2,7 @@ import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 import bankUrl from './assets/soundbank-emg.sf2?url'
 import { MAX_MIDI_SOUNDING, MAX_SOUNDING } from './Audio'
+import { MIDI_LOOKAHEAD_S, PORT_CHANNELS, type MidiPortSynthesizer } from './midiPort'
 
 /**
  * The synthesizer every **Note** and MIDI File plays on: spessasynth_lib on the bank MARS plays on
@@ -18,6 +19,11 @@ import { MAX_MIDI_SOUNDING, MAX_SOUNDING } from './Audio'
  * - **MIDI Sounds** each play on a synthesizer of their own through a `Sequencer` (decision 3): at
  *   most 4, made when none is free, kept for reuse, and disconnected while idle so they cost the
  *   audio thread nothing.
+ * - **x86's raw MIDI port** plays on a synthesizer of its own per output and run (`loadMidiPorts`),
+ *   sixteen channels with the drums on channel 10, which takes whole messages and SysEx: the Notes'
+ *   pool forces every channel melodic. Its ports are lent from a pool of the page's, kept for reuse
+ *   and disconnected while idle; one given back is reset with GM System On before it is lent again.
+ *   Loading it loads the processor and the bank, never the Notes' synthesizer.
  */
 
 /** A Note or MIDI Sound started on the engine. */
@@ -47,6 +53,13 @@ const FIRST_CHANNELS = 16
 const MIDI_PORT_CHANNELS = 64
 /** All Sound Off: silences one channel at once, notes still releasing included. */
 const ALL_SOUND_OFF = 120
+/** GM System On, which resets a synthesizer to General MIDI's defaults. */
+const GM_SYSTEM_ON = Uint8Array.of(0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7)
+/**
+ * How long a port given back waits before its reset: past every message handed to it already, at
+ * most the lookahead ahead, so none of them lands on the next run.
+ */
+const PORT_QUIET_S = MIDI_LOOKAHEAD_S + 0.05
 /** How long an idle MIDI synthesizer stays connected, for the release of its last notes. */
 const IDLE_DISCONNECT_MS = 2_000
 /** How long past its length a one-shot MIDI Sound counts as playing if the sequencer never says it ended. */
@@ -54,12 +67,30 @@ const MIDI_END_GRACE_S = 2
 
 const ENDED: EngineVoice = { sounding: () => false, stop: () => {} }
 
+const assets = new WeakMap<BaseAudioContext, Promise<ArrayBuffer>>()
+
+/** The processor added to `context` and the bank fetched, once per context for every synthesizer. */
+function loadAssets(context: AudioContext): Promise<ArrayBuffer> {
+    let loading = assets.get(context)
+    if (loading === undefined) {
+        loading = (async () => {
+            if (!context.audioWorklet) throw new Error('this browser has no AudioWorklet')
+            const [bank] = await Promise.all([
+                fetchBank(),
+                context.audioWorklet.addModule(processorUrl)
+            ])
+            return bank
+        })()
+        assets.set(context, loading)
+    }
+    return loading
+}
+
 export async function loadSynthesizerEngine(
     context: AudioContext,
     destination: AudioNode
 ): Promise<SynthesizerEngine> {
-    if (!context.audioWorklet) throw new Error('this browser has no AudioWorklet')
-    const [bank] = await Promise.all([fetchBank(), context.audioWorklet.addModule(processorUrl)])
+    const bank = await loadAssets(context)
     const notes = new WorkletSynthesizer(context)
     await withBank(notes, bank)
     //`channelCount` counts every added channel twice, once at the call and once when the worklet
@@ -339,6 +370,135 @@ class Engine implements SynthesizerEngine {
             if (player.voice !== null || !player.connected) return
             player.synth.disconnect()
             player.connected = false
+        }, IDLE_DISCONNECT_MS)
+    }
+}
+
+// ------------------------------------------------------------------ x86's raw MIDI port
+
+/** The page's synthesizers for x86's raw MIDI port. */
+export type MidiPorts = {
+    /**
+     * Lends an output a port for a run, reset to General MIDI's defaults: one given back earlier, or
+     * a new one, which takes messages at once and plays them once its bank is in.
+     */
+    take(): MidiPortSynthesizer
+}
+
+export async function loadMidiPorts(
+    context: AudioContext,
+    destination: AudioNode
+): Promise<MidiPorts> {
+    return new PortPool(context, destination, await loadAssets(context))
+}
+
+type Port = {
+    readonly synth: WorkletSynthesizer
+    /** Between the synthesizer and the destination: muted the moment it is given back. */
+    readonly gain: GainNode
+    readonly ready: Promise<void>
+    loaded: boolean
+    lent: boolean
+    /** Output time its reset has played by, before which it is lent to nobody. */
+    freeAt: number
+    connected: boolean
+    idleTimer: ReturnType<typeof setTimeout> | null
+}
+
+class PortPool implements MidiPorts {
+    private readonly ports: Port[] = []
+
+    constructor(
+        private readonly context: AudioContext,
+        private readonly destination: AudioNode,
+        private readonly bank: ArrayBuffer
+    ) {}
+
+    take(): MidiPortSynthesizer {
+        const port = this.free() ?? this.create()
+        port.lent = true
+        if (port.idleTimer !== null) clearTimeout(port.idleTimer)
+        port.idleTimer = null
+        if (!port.connected) port.synth.connect(port.gain)
+        port.connected = true
+        const now = this.context.currentTime
+        port.gain.gain.cancelScheduledValues(now)
+        port.gain.gain.setValueAtTime(1, now)
+        let lent = true
+        return {
+            whenReady: () => (port.loaded ? null : port.ready),
+            send: (message, time) => {
+                if (lent) port.synth.sendMessage(message, 0, { time })
+            },
+            sounding: () => lent && port.synth.voiceCount > 0,
+            release: () => {
+                if (!lent) return
+                lent = false
+                this.release(port)
+            }
+        }
+    }
+
+    /** A port nobody has, whose reset has played. */
+    private free(): Port | undefined {
+        const now = this.context.currentTime
+        return this.ports.find((port) => !port.lent && now >= port.freeAt)
+    }
+
+    private create(): Port {
+        const synth = new WorkletSynthesizer(this.context)
+        const gain = this.context.createGain()
+        gain.connect(this.destination)
+        synth.connect(gain)
+        const port: Port = {
+            synth,
+            gain,
+            ready: withBank(synth, this.bank),
+            loaded: false,
+            lent: false,
+            freeAt: 0,
+            connected: true,
+            idleTimer: null
+        }
+        //after the bank, which the synthesizer resets itself on: GM System On puts it in General
+        //MIDI's mode, where a bank select changes nothing, as on FluidSynth's GM sound font
+        synth.sendMessage(GM_SYSTEM_ON)
+        port.ready.then(
+            () => (port.loaded = true),
+            () => {}
+        )
+        this.ports.push(port)
+        return port
+    }
+
+    /**
+     * Silences `port` at once, muted and with All Sound Off, and resets it once whatever was handed
+     * to it before has played, silently; then it waits to be lent again, disconnected once idle.
+     */
+    private release(port: Port): void {
+        const now = this.context.currentTime
+        port.gain.gain.cancelScheduledValues(now)
+        port.gain.gain.setValueAtTime(0, now)
+        const quiet = now + PORT_QUIET_S
+        for (let channel = 0; channel < PORT_CHANNELS; channel++) {
+            port.synth.controllerChange(channel, ALL_SOUND_OFF, 0)
+            port.synth.controllerChange(channel, ALL_SOUND_OFF, 0, { time: quiet })
+        }
+        port.synth.sendMessage(GM_SYSTEM_ON, 0, { time: quiet })
+        port.freeAt = quiet + 0.01
+        port.lent = false
+        this.idle(port)
+    }
+
+    /** Disconnects a port nobody has once it has been idle a while, past its reset. */
+    private idle(port: Port): void {
+        port.idleTimer = setTimeout(() => {
+            port.idleTimer = null
+            if (port.lent || !port.connected) return
+            //a context suspended meanwhile has not played the reset yet
+            if (this.context.currentTime < port.freeAt) return this.idle(port)
+            port.synth.disconnect()
+            port.connected = false
         }, IDLE_DISCONNECT_MS)
     }
 }

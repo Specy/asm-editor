@@ -277,8 +277,9 @@ export abstract class MarsEmulator<
     /**
      * The Screen panel's configuration popover, applied at once and with a re-sync from memory, as
      * the MARS tool does. The caller stores the same value in the project so it comes back with it.
+     * Any Program's display is read, a field MARS has and it lacks taking MARS's default.
      */
-    setDisplay(display: ProjectDisplay): void {
+    setDisplay(display: Partial<ProjectDisplay>): void {
         this.display = normalizeMarsDisplay(display)
         //a hand edit wins until the next Build reads the directive again
         this.displayOrigin = 'user'

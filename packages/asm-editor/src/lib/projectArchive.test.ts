@@ -280,7 +280,7 @@ describe('Programs in an archive', () => {
         expect(imported.programs).toEqual(project.programs)
         expect(imported.selectedProgram).toBe('sort.s')
         expect(imported.program('sort.s')?.testcases[0]?.expectedRegisters.a0).toBe(3n)
-        expect(imported.program('sort.s')?.display?.unitWidth).toBe(4)
+        expect(imported.program('sort.s')?.display).toMatchObject({ unitWidth: 4 })
     })
 
     it('round trips a Project without a Program through version 3, still without one', () => {

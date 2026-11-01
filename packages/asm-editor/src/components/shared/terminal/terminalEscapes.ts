@@ -21,6 +21,8 @@
  * Plain TypeScript, so it runs under node in the tests.
  */
 
+import { escapeSequenceEnd, INCOMPLETE_SEQUENCE } from '#lib/languages/peripherals/terminalText.ts'
+
 /** One of the sixteen colours: 0–7 as SGR 30–37 name them, 8–15 their bright forms. */
 export type TerminalColor = number
 
@@ -38,11 +40,21 @@ export type TerminalSpan =
 export const PLAIN_STYLE: TerminalStyle = { foreground: null, background: null, bold: false }
 
 const ESCAPE = '\x1b'
-const BELL = '\x07'
-const STRING_TERMINATOR = '\\'
-/** The introducers of the control strings (OSC, DCS, SOS, PM, APC), which end at BEL or `ESC \`. */
-const STRING_INTRODUCERS = new Set([']', 'P', 'X', '^', '_'])
-const INCOMPLETE = -1
+
+/**
+ * A parser's state, which `restore` takes it back to. Kept cheaply: what is on screen only grows at
+ * its end, its last span replaced as text is added to it, or starts again from nothing at a clear,
+ * so the spans up to the mark are the array as it was, cut back to its length with its last span
+ * put back.
+ */
+export type TerminalParserMark = {
+    readonly committed: TerminalSpan[]
+    readonly length: number
+    readonly last: TerminalSpan | undefined
+    readonly style: TerminalStyle
+    readonly pending: string
+    readonly homed: boolean
+}
 
 /**
  * Reads output as it streams: `feed` takes what was written since, and a sequence split between two
@@ -67,14 +79,38 @@ export class TerminalEscapeParser {
                 return
             }
             if (escape > index) this.appendText(input.slice(index, escape))
-            const end = sequenceEnd(input, escape)
-            if (end === INCOMPLETE) {
+            const end = escapeSequenceEnd(input, escape)
+            if (end === INCOMPLETE_SEQUENCE) {
                 this.pending = input.slice(escape)
                 return
             }
             this.apply(input.slice(escape, end))
             index = end
         }
+    }
+
+    /** The parser as it is now, for `restore`. */
+    mark(): TerminalParserMark {
+        const committed = this.committed
+        return {
+            committed,
+            length: committed.length,
+            last: committed[committed.length - 1],
+            style: this.style,
+            pending: this.pending,
+            homed: this.homed
+        }
+    }
+
+    /** Back to a `mark` of this parser; any of its marks, as often as needed. */
+    restore(mark: TerminalParserMark): void {
+        const committed = mark.committed
+        committed.length = mark.length
+        if (mark.last !== undefined) committed[mark.length - 1] = mark.last
+        this.committed = committed
+        this.style = mark.style
+        this.pending = mark.pending
+        this.homed = mark.homed
     }
 
     /** What is on screen, a sequence still being written shown escaped at the end. */
@@ -144,23 +180,45 @@ export function parseTerminalEscapes(text: string): TerminalSpan[] {
 /**
  * Follows a transcript that is handed over whole each time it changes: what was added since the
  * last call is all that is parsed while the transcript only grows, as it does while a program
- * writes, and anything else (Backspace taking back an echo, a cleared or prefixed transcript)
- * starts over from the beginning.
+ * writes. A change within the last line, a serial line's `\r` or `\b` overwriting it or Backspace
+ * taking back an echo, is read again from where that line starts, so a progress counter costs a
+ * line each time and not the whole transcript; anything else (a cleared or prefixed transcript, an
+ * Undo of earlier lines) starts over from the beginning.
  */
 export class TerminalTranscriptReader {
     private parser = new TerminalEscapeParser()
     private read = ''
+    /** Where the last line read starts, and the parser as it was there. */
+    private lineStart: { offset: number; mark: TerminalParserMark } | null = null
 
     spansOf(transcript: string): TerminalSpan[] {
-        if (!transcript.startsWith(this.read)) {
-            this.parser = new TerminalEscapeParser()
-            this.read = ''
-        }
+        if (!transcript.startsWith(this.read)) this.rewind(transcript)
         if (transcript.length > this.read.length) {
-            this.parser.feed(transcript.slice(this.read.length))
+            const added = transcript.slice(this.read.length)
+            const newline = added.lastIndexOf('\n')
+            if (newline === -1) this.parser.feed(added)
+            else {
+                this.parser.feed(added.slice(0, newline + 1))
+                const offset = this.read.length + newline + 1
+                this.lineStart = { offset, mark: this.parser.mark() }
+                this.parser.feed(added.slice(newline + 1))
+            }
             this.read = transcript
         }
         return this.parser.spans
+    }
+
+    /** Back to the start of the last line when the transcript still has every line before it. */
+    private rewind(transcript: string): void {
+        const start = this.lineStart
+        if (start && transcript.startsWith(this.read.slice(0, start.offset))) {
+            this.parser.restore(start.mark)
+            this.read = this.read.slice(0, start.offset)
+            return
+        }
+        this.parser = new TerminalEscapeParser()
+        this.read = ''
+        this.lineStart = null
     }
 }
 
@@ -171,46 +229,6 @@ export function styleClasses(style: TerminalStyle): string {
     if (style.background !== null) classes.push(`bg-${style.background}`)
     if (style.bold) classes.push('bold')
     return classes.join(' ')
-}
-
-/**
- * Where the sequence starting at `start` (an ESC) ends, or INCOMPLETE when the input ends first. A
- * malformed sequence ends where it stops being one, so the character that broke it is read again as
- * text; an ESC that starts nothing is a sequence of its own.
- */
-function sequenceEnd(input: string, start: number): number {
-    const introducer = input[start + 1]
-    if (introducer === undefined) return INCOMPLETE
-    if (introducer === '[') {
-        let index = start + 2
-        while (index < input.length && inRange(input, index, 0x30, 0x3f)) index++
-        while (index < input.length && inRange(input, index, 0x20, 0x2f)) index++
-        if (index >= input.length) return INCOMPLETE
-        return inRange(input, index, 0x40, 0x7e) ? index + 1 : index
-    }
-    if (STRING_INTRODUCERS.has(introducer)) {
-        for (let index = start + 2; index < input.length; index++) {
-            if (input[index] === BELL) return index + 1
-            if (input[index] !== ESCAPE) continue
-            if (index + 1 >= input.length) return INCOMPLETE
-            //an ESC ends the string either way: as its terminator, or by starting what comes next
-            return input[index + 1] === STRING_TERMINATOR ? index + 2 : index
-        }
-        return INCOMPLETE
-    }
-    if (inRange(input, start + 1, 0x20, 0x2f)) {
-        let index = start + 1
-        while (index < input.length && inRange(input, index, 0x20, 0x2f)) index++
-        if (index >= input.length) return INCOMPLETE
-        return inRange(input, index, 0x30, 0x7e) ? index + 1 : index
-    }
-    if (inRange(input, start + 1, 0x30, 0x7e)) return start + 2
-    return start + 1
-}
-
-function inRange(input: string, index: number, low: number, high: number): boolean {
-    const code = input.charCodeAt(index)
-    return code >= low && code <= high
 }
 
 /** A complete CSI sequence without intermediate bytes, the only ones interpreted. */

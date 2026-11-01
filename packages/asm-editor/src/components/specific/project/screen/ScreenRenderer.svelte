@@ -14,6 +14,7 @@
     import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
     import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
     import type { Mouse, MouseButton } from '#lib/languages/peripherals/Mouse.ts'
+    import type { X86Button, X86Input } from '#lib/languages/peripherals/x86Input.ts'
     import type { ScreenHeader } from './screenHeader'
 
     /**
@@ -25,12 +26,26 @@
      * repainted from an animation frame that compares the Screen's version counter, the upstream
      * TRS-80 pattern that keeps the machine from ever waiting for a frame
      * ([ADR 0006](../../../../../../../docs/adr/0006-screen-double-buffering.md)).
+     *
+     * On x86 the keys and the pointer go to `x86Input` instead, as the Linux input events the
+     * program reads from `/dev/input`: physical keys with the browser's repeats, the pointer on
+     * whole pixels as QEMU reports it, and the wheel, which the focused Screen keeps from scrolling
+     * the page. They never
+     * reach the program's standard input, whose Terminal is a serial line apart from the Screen
+     * ([ADR 0068](../../../../../../../docs/adr/0068-x86-programs-run-on-a-serial-console.md)).
      */
 
     interface Props {
         screen: Screen
         keyboard: Keyboard
         mouse: Mouse
+        /** x86's input devices, which take the keys and the pointer in place of the Keyboard and Mouse. */
+        x86Input?: X86Input
+        /**
+         * What the program waits for that only this Screen can give it, "Waiting for a key", while
+         * it waits for nothing else: the unfocused Screen asks to be clicked.
+         */
+        waitingFor?: string
         /** The environment this Screen belongs to, shown in the header. */
         name?: string
         style?: string
@@ -65,6 +80,8 @@
         screen,
         keyboard,
         mouse,
+        x86Input,
+        waitingFor,
         name = 'Screen',
         style = '',
         configuration,
@@ -75,6 +92,35 @@
     }: Props = $props()
 
     const MOUSE_BUTTONS: Record<number, MouseButton> = { 0: 'left', 1: 'middle', 2: 'right' }
+    //x86's tablet has five buttons: the browser's back and forward are BTN_SIDE and BTN_EXTRA
+    const X86_BUTTONS: Record<number, X86Button> = { ...MOUSE_BUTTONS, 3: 'side', 4: 'extra' }
+    /** The browser's back and forward buttons, which navigate the page on their own. */
+    const isHistoryButton = (event: MouseEvent) => event.button === 3 || event.button === 4
+
+    //x86 reads the keys and the pointer as Linux input events, every other Target as its Keyboard
+    //and Mouse
+    const keys = $derived(x86Input ?? keyboard)
+    const pointer = $derived(x86Input ?? mouse)
+    //where a focused Screen's input goes, which a learner who clicks the Screen and then types at a
+    //`scanf` needs to know on x86 (ADR 0068), and how to get it back: an x86 program reads Escape
+    //like any key, so Shift+Tab releases it there, as in the Terminal's raw mode. A program waiting
+    //for the Screen's input says so first
+    const focusHint = $derived.by(() => {
+        const hint = x86Input
+            ? {
+                  label: "click to send keys and the pointer to the program's input devices",
+                  title: "Click to send keys and the pointer to the program's input devices, not to its standard input; Shift+Tab to release them"
+              }
+            : {
+                  label: 'click to send keyboard and mouse input to the program',
+                  title: 'Click to send keyboard and mouse input to the program, Esc to release it'
+              }
+        if (waitingFor === undefined) return hint
+        return {
+            label: `${waitingFor.toLowerCase()}, ${hint.label}`,
+            title: `${waitingFor}. ${hint.title}`
+        }
+    })
 
     let canvas: HTMLCanvasElement | undefined = $state()
     //the stage's content box rather than its clientWidth, which counts padding: the padding is the
@@ -91,6 +137,9 @@
     //whether the panel offers the drawing buffer at all
     let doubleBuffering = $state(untrack(() => screen.doubleBuffering))
     let focused = $state(false)
+    //a program waiting for what only this Screen can give it, while the Screen does not have the
+    //keyboard: the ring the focus would draw, dashed, asks for the click
+    const waiting = $derived(waitingFor !== undefined && !focused)
     //the floating window is another container for the same canvas, never a second panel: the
     //component that calls `screen.watch()` has to stay mounted exactly once, or the scheduler
     //counts two painters (ADR 0007)
@@ -189,6 +238,10 @@
         context ??= canvas.getContext('2d')
         if (!context) return
         const source = drawingView ? screen.drawingPixels : screen.visiblePixels
+        //what changed since the frame this canvas shows, when the Screen knows it: x86's catch-up
+        //names the rows and columns it changed, and a pointer moving over a large Screen is then a
+        //few hundred pixels to copy rather than the whole image
+        let region = drawingView ? null : screen.changedRegion(paintedVersion)
         //ImageData wraps the Screen's own array instead of copying it, so it is only rebuilt when
         //that array is replaced: a Build, a resize, a double-buffering change or a switch between
         //the two images
@@ -202,8 +255,11 @@
             //the DOM's ImageDataArray asks for
             const pixels = source as Uint8ClampedArray<ArrayBuffer>
             image = new ImageData(pixels, screen.width, screen.height)
+            region = null
         }
-        context.putImageData(image, 0, 0)
+        if (!region) context.putImageData(image, 0, 0)
+        else if (region.width > 0 && region.height > 0)
+            context.putImageData(image, 0, 0, region.x, region.y, region.width, region.height)
         //the drawing view leaves it at -1 so that going back to the visible image paints it once,
         //however long the program has been sitting on the same frame
         paintedVersion = drawingView ? -1 : screen.version
@@ -224,8 +280,32 @@
         }
     }
 
+    /** The button of a pointer event the program's input takes, if it takes it. */
+    function buttonOf(event: PointerEvent): X86Button | undefined {
+        return x86Input ? X86_BUTTONS[event.button] : MOUSE_BUTTONS[event.button]
+    }
+
+    function press(button: X86Button, down: boolean, x: number, y: number) {
+        if (x86Input) {
+            if (down) x86Input.buttonDown(button, x, y)
+            else x86Input.buttonUp(button, x, y)
+        } else if (button !== 'side' && button !== 'extra') {
+            if (down) mouse.buttonDown(button, x, y)
+            else mouse.buttonUp(button, x, y)
+        }
+    }
+
+    /**
+     * The back and forward buttons navigate the page from their release, which a focused Screen
+     * keeps them from doing on every Target, as it keeps the wheel from scrolling: on x86 they are
+     * the program's, and elsewhere they would take the learner away from a running program.
+     */
+    function keepHistoryButton(event: MouseEvent) {
+        if (focused && isHistoryButton(event)) event.preventDefault()
+    }
+
     function handlePointerDown(event: PointerEvent) {
-        const button = MOUSE_BUTTONS[event.button]
+        const button = buttonOf(event)
         if (!button) return
         //keeps the browser's gestures off the Screen: text selection, the drag image, and the
         //middle-click autoscroll that would otherwise steal the button from the program
@@ -236,28 +316,43 @@
         //a drag that started inside keeps reporting until the button comes back up, wherever the
         //pointer goes (ADR 0008)
         canvas?.setPointerCapture(event.pointerId)
-        mouse.buttonDown(button, x, y)
+        press(button, true, x, y)
     }
 
     function handlePointerMove(event: PointerEvent) {
         const { x, y } = logicalPosition(event)
-        mouse.moveTo(x, y)
+        //x86's tablet takes the pixel the position is on, as QEMU does (`tabletAxis`)
+        pointer.moveTo(x, y)
     }
 
     function handlePointerUp(event: PointerEvent) {
-        const button = MOUSE_BUTTONS[event.button]
+        keepHistoryButton(event)
+        const button = buttonOf(event)
         const { x, y } = logicalPosition(event)
         if (canvas?.hasPointerCapture(event.pointerId))
             canvas.releasePointerCapture(event.pointerId)
         if (!button) return
-        mouse.buttonUp(button, x, y)
+        press(button, false, x, y)
     }
 
     function handlePointerCancel(event: PointerEvent) {
         if (canvas?.hasPointerCapture(event.pointerId))
             canvas.releasePointerCapture(event.pointerId)
         //the gesture was taken away mid-drag, so no button release is coming for it
-        mouse.releaseAll()
+        pointer.releaseAll()
+    }
+
+    /**
+     * x86's wheel, a notch at a time to the program's tablet. The focused Screen keeps it from
+     * scrolling the page, which is why the listener is not passive; unfocused, the wheel scrolls the
+     * page as it always does and the program hears nothing of it, as with keys.
+     */
+    function handleWheel(event: WheelEvent) {
+        if (!x86Input || !focused) return
+        event.preventDefault()
+        //`deltaMode` before `deltaY`: Firefox reports pixels to a page that reads `deltaY` first
+        const deltaMode = event.deltaMode
+        x86Input.wheel({ deltaMode, deltaY: event.deltaY })
     }
 
     /**
@@ -277,27 +372,37 @@
         if (!event.ctrlKey && !event.metaKey) event.preventDefault()
     }
 
+    /** The key that gives the keyboard back to the page: Shift+Tab on x86, Escape elsewhere. */
+    function isReleaseKey(event: KeyboardEvent) {
+        return x86Input ? event.code === 'Tab' && event.shiftKey : event.code === 'Escape'
+    }
+
     function handleKeyDown(event: KeyboardEvent) {
-        //every other key belongs to the program while this panel has focus, so Escape is the one
-        //way back out for someone working without a mouse. It is the panel's own gesture and the
-        //page must not see it either: a user who binds an action to Escape would otherwise trigger
-        //it from a focused Screen, which ADR 0008 forbids
-        if (event.code === 'Escape') {
+        //every other key belongs to the program while this panel has focus, so the release key is
+        //the one way back out for someone working without a mouse. Escape is the panel's own
+        //gesture on the Targets whose programs never asked for it, and the page must not see it
+        //either: a user who binds an action to Escape would otherwise trigger it from a focused
+        //Screen, which ADR 0008 forbids. An x86 program reads Escape as KEY_ESC, so there Shift+Tab
+        //is left to the browser, which moves the focus back and so releases the Screen
+        if (isReleaseKey(event)) {
+            if (x86Input) return
             event.stopPropagation()
             canvas?.blur()
             return
         }
-        keyboard.keyDown(event)
+        keys.keyDown(event)
         routeKey(event, true)
     }
 
     function handleKeyUp(event: KeyboardEvent) {
-        if (event.code === 'Escape') return
-        keyboard.keyUp(event)
+        if (!x86Input && event.code === 'Escape') return
+        keys.keyUp(event)
         routeKey(event, false)
     }
 
     function handlePaste(event: ClipboardEvent) {
+        //evdev carries keys, not text: a paste has nowhere to go on x86
+        if (x86Input) return
         const text = event.clipboardData?.getData('text')
         if (!text) return
         event.preventDefault()
@@ -309,6 +414,7 @@
         //the release event is delivered to whoever has focus now (ADR 0008)
         keyboard.releaseAll()
         mouse.releaseAll()
+        x86Input?.releaseAll()
     }
 
     function handleBlur() {
@@ -343,6 +449,14 @@
     })
 
     $effect(() => {
+        //added by hand, because only a listener that is not passive may keep the page from scrolling
+        const target = canvas
+        if (!target || !x86Input) return
+        target.addEventListener('wheel', handleWheel, { passive: false })
+        return () => target.removeEventListener('wheel', handleWheel)
+    })
+
+    $effect(() => {
         if (!expanded) return
         //the window's size comes from the viewport, so a resize has to give it back a place inside
         const onResize = () => fitWindowToViewport('keep')
@@ -354,7 +468,8 @@
         if (!expanded) return
         //Escape closes the floating window, but only once the Screen no longer holds the keyboard:
         //the canvas stops its own Escape from propagating, so the first press releases the input
-        //(ADR 0008's way out of a focused Screen) and the next one reaches this listener
+        //(ADR 0008's way out of a focused Screen) and the next one reaches this listener. On x86 the
+        //focused canvas hands Escape to the program, stopped the same way, and Shift+Tab releases it
         function closeOnEscape(event: KeyboardEvent) {
             if (event.code !== 'Escape') return
             expanded = false
@@ -454,12 +569,14 @@
             <canvas
                 bind:this={canvas}
                 class:focused
+                class:waiting
                 width={logicalWidth}
                 height={logicalHeight}
                 style="width: {logicalWidth * zoom}px; height: {logicalHeight * zoom}px;"
                 tabindex="0"
-                aria-label="{name} screen, click to send keyboard and mouse input to the program"
-                title="Click to send keyboard and mouse input to the program, Esc to release it"
+                data-program-screen
+                aria-label="{name} screen, {focusHint.label}"
+                title={focusHint.title}
                 onfocus={() => (focused = true)}
                 onblur={handleBlur}
                 onkeydown={handleKeyDown}
@@ -471,6 +588,8 @@
                 onpointercancel={handlePointerCancel}
                 oncontextmenu={(e) => e.preventDefault()}
                 onauxclick={(e) => e.preventDefault()}
+                onmousedown={keepHistoryButton}
+                onmouseup={keepHistoryButton}
             ></canvas>
         </div>
     </div>
@@ -651,5 +770,11 @@
        focusing it moves nothing. */
     canvas.focused {
         outline: var(--focus-ring) solid var(--accent);
+    }
+
+    /* the same room, dashed: the program waits for a key or the pointer, and the Screen does not
+       have them yet */
+    canvas.waiting {
+        outline: var(--focus-ring) dashed var(--accent);
     }
 </style>

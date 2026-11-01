@@ -264,7 +264,15 @@ async function loadX86Descriptor(monacoInstance: MonacoType): Promise<AssemblyLa
         completion: language.createX86CompletionProvider(monacoInstance),
         hover: language.createX86HoverProvider(monacoInstance),
         signatureHelp: language.createX86SignatureHelpProvider(monacoInstance),
-        projectOptions: { comment: ';', dialect: 'x86' },
+        projectOptions: {
+            comment: ';',
+            dialect: 'x86',
+            //`%include "linux/fb.inc"`, which NASM finds through the include path
+            systemIncludes: () =>
+                import('#lib/languages/X86/x86Project.ts').then((project) =>
+                    project.x86SystemIncludes()
+                )
+        },
         textOptions: language.X86_TEXT_OPTIONS,
         insightOptions: { bits: 64, comment: ';', dialect: 'x86' },
         projectHover: false

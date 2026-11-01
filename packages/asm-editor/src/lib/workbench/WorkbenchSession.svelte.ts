@@ -16,7 +16,7 @@ import {
 } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import {
     isEnvironmentHeaderPath,
-    loadedEnvironmentHeader
+    loadedEnvironmentFile
 } from '#lib/sourceRuntime/environmentLibrary.ts'
 import {
     sameFileContent,
@@ -107,14 +107,15 @@ import {
     resolveProjectSettings,
     undoHistorySize
 } from '#lib/projectSettings.ts'
-import { rewriteScreenDirective } from '#lib/languages/mars/screenDirective.ts'
+import type { MarsDisplayOrigin } from '#lib/languages/mars/marsDisplay.ts'
 import {
-    DEFAULT_PROJECT_DISPLAY,
-    type MarsDisplayOrigin,
-    marsDisplayEquals,
-    normalizeMarsDisplay,
-    type ProjectDisplay
-} from '#lib/languages/mars/marsDisplay.ts'
+    isMarsDisplay,
+    programDisplay,
+    programDisplayEquals,
+    rewriteProgramScreenDirective,
+    screenDirectiveFile,
+    type ProgramDisplay
+} from '#lib/languages/programDisplay.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import {
     buildSource,
@@ -136,7 +137,7 @@ import { languageDiagnosticToDiagnostic } from '#lib/languages/service/diagnosti
 import { registerProjectNavigation } from '#lib/languages/service/navigation.ts'
 import { zeroBasedLineToMonaco } from '#lib/languages/service/monacoConversions.ts'
 import { navigationButtonStep, navigationKeyStep } from '#lib/monaco/editorLineActions.ts'
-import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import { DEFAULT_MEMORY_PANEL_SIZE, preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import {
     modShortcutKey,
     ShortcutAction,
@@ -368,10 +369,11 @@ export class WorkbenchSession {
             return linksX86StartUnit(this.sourceInput) ? X86_START_UNIT_FILES[path] : undefined
         const source = parseRuntimeSourcePath(path)
         if (source) {
-            //`<sim.h>`, which compiling for this Target loaded, or one of the library's C sources
+            //`<sim.h>` or a device header, which compiling for this Target loaded, or one of the
+            //library's C sources
             const text =
                 source.kind === 'environment'
-                    ? loadedEnvironmentHeader(this.project.language)
+                    ? loadedEnvironmentFile(this.project.language, source.name)
                     : loadedRuntimeSources(source.abi)?.[source.source]
             return text === undefined ? undefined : { encoding: 'plain', content: text }
         }
@@ -573,6 +575,11 @@ export class WorkbenchSession {
 
     running = $state(false)
     building = $state(false)
+    /**
+     * Restart's Stop and Build are under way: the Debug session's column stays where it is, since
+     * the same Program comes back to it, rather than going away and coming back with the Build.
+     */
+    restarting = $state(false)
     compiling = $state(false)
     compilingGroupId = $state<string | undefined>()
     sourceDiagnostics = $state.raw<Diagnostic[]>([])
@@ -856,7 +863,7 @@ export class WorkbenchSession {
         })
         this.configurableDisplay = $derived(this.emulator.setDisplay !== undefined)
         this.currentDisplay = $derived(
-            normalizeMarsDisplay(this.project.selected?.display ?? DEFAULT_PROJECT_DISPLAY)
+            programDisplay(this.project.language, this.project.selected?.display)
         )
         this.testcasesEditable = $derived(this.host.canEditTestcases && !this.host.readonly)
         this.pokeable = $derived(
@@ -938,7 +945,10 @@ export class WorkbenchSession {
             this.pseudocode.dispose()
         })
         $effect(() => {
-            const pageSize = preferencesStore.values.memoryPanelSize.value
+            //a hidden panel keeps the default page, so Show in memory, and the strip that brings
+            //the panel back, find it in place
+            const pageSize =
+                preferencesStore.values.memoryPanelSize.value || DEFAULT_MEMORY_PANEL_SIZE
             untrack(() => this.emulator.setGlobalMemorySize(pageSize, pageSize / 16))
         })
 
@@ -1228,10 +1238,10 @@ export class WorkbenchSession {
     declare readonly diagnosticCounts: Record<string, { errors: number; warnings: number }>
     /** The worst severity among the Diagnostics, for the colour of the Problems badge. */
     declare readonly worstSeverity: Diagnostic['severity'] | undefined
-    //only MARS and RARS put the screen's geometry in the user's hands: every other environment's
-    //program sizes its own screen, so there is nothing to configure
+    //MARS, RARS and x86's guest put the screen's geometry in the user's hands: the M68K's and the
+    //Z80's programs size their own screen, so there is nothing to configure
     declare readonly configurableDisplay: boolean
-    declare readonly currentDisplay: ProjectDisplay
+    declare readonly currentDisplay: ProgramDisplay
     declare readonly testcasesEditable: boolean
     //the page's half of the Poke availability rule ([the design record](../../../../../docs/design/pokes.md)):
     //a read-only Project takes no Pokes, and neither does one whose Core is building or running.
@@ -1486,7 +1496,7 @@ export class WorkbenchSession {
     }
 
     /** The Screen popover's choice, for the Selected program. */
-    applyDisplay(next: ProjectDisplay) {
+    applyDisplay(next: ProgramDisplay) {
         if (this.fileSystemLocked) {
             toast.warn('Stop execution before changing the display')
             return
@@ -1498,10 +1508,32 @@ export class WorkbenchSession {
         }
         //a program that states its display in its Entry file's @screen comment gets that comment
         //rewritten to say what was chosen, so the code and the popover agree and the next Build
-        //reads it back; a program without one keeps the choice in its Program alone
-        const rewritten = rewriteScreenDirective(this.project.code, this.currentDisplay, next)
-        const baseChanged = next.baseAddress !== this.currentDisplay.baseAddress
-        if (rewritten !== null) this.project.fileSystem.writeText(entry, rewritten)
+        //reads it back; a program without one keeps the choice in its Program alone. On x86 the
+        //comment of a compiled Entry is in its C or C++ source
+        const { language, files, compilations } = this.project
+        const path = screenDirectiveFile(
+            language,
+            files,
+            entry,
+            compiledEntrySource(entry, compilations)
+        )
+        const source = files[path]
+        const rewritten =
+            source?.encoding === 'plain'
+                ? rewriteProgramScreenDirective(
+                      language,
+                      path,
+                      source.content,
+                      this.currentDisplay,
+                      next
+                  )
+                : null
+        const current = this.currentDisplay
+        const baseChanged =
+            isMarsDisplay(next) &&
+            isMarsDisplay(current) &&
+            next.baseAddress !== current.baseAddress
+        if (rewritten !== null) this.project.fileSystem.writeText(path, rewritten)
         this.project.setProgramDisplay(entry, next)
         this.displayOrigin = rewritten !== null ? 'directive' : 'user'
         if (rewritten === null || baseChanged) this.displayBaseLabel = undefined
@@ -1522,8 +1554,8 @@ export class WorkbenchSession {
         this.displayBaseLabel = configured.baseLabel
         if (configured.origin !== 'directive') return
         const program = this.project.program(sources.entry)
-        const saved = normalizeMarsDisplay(program?.display ?? DEFAULT_PROJECT_DISPLAY)
-        if (!program || marsDisplayEquals(saved, configured.display)) return
+        const saved = programDisplay(this.project.language, program?.display)
+        if (!program || programDisplayEquals(saved, configured.display)) return
         this.project.setProgramDisplay(sources.entry, configured.display)
         this.changed()
     }
@@ -2737,7 +2769,8 @@ export class WorkbenchSession {
     /**
      * The mapped pair's source pane follows the current instruction to the File it was compiled
      * from, as a debugger shows an inlined function's source: into `<sim.h>` for the instructions an
-     * inlined `sim_` function contributed, and back to the caller's File after them.
+     * inlined `sim_` function contributed, or into x86's `<unistd.h>` for an inlined `read`, and
+     * back to the caller's File after them.
      */
     private followExecutionSource() {
         const pair = this.mappingPair
@@ -4276,10 +4309,11 @@ export class WorkbenchSession {
     /**
      * Unlocks the page's sound inside the click or key press that starts a Build, Run or Step,
      * before anything awaits, which is when every browser allows it
-     * ([audio.md](../../../../../docs/design/audio.md#autoplay-mute-and-volume)). x86 plays nothing.
+     * ([audio.md](../../../../../docs/design/audio.md#autoplay-mute-and-volume)), x86's devices
+     * included.
      */
     private wakeAudio(): void {
-        if (this.project.language !== 'X86') wakeAudio()
+        wakeAudio()
     }
 
     async step() {
@@ -4340,6 +4374,24 @@ export class WorkbenchSession {
         else this.clearExecution()
         this.running = false
         this.testcasesResult = []
+    }
+
+    /**
+     * Restart, in Run's place once the program has ended: Stop, then a Build of the Debug session's
+     * Program, so it waits at its start as after any Build, with its Breakpoints and Command line.
+     * The Files are read-only during the session, so the Build reads what the ended one read.
+     */
+    async restart() {
+        const entry = this.emulator.buildSources?.entry
+        if (entry === undefined || this.host.readonly) return
+        if (this.building || this.running || this.compiling) return
+        this.restarting = true
+        try {
+            this.stop()
+            await this.build(entry)
+        } finally {
+            this.restarting = false
+        }
     }
 
     /**

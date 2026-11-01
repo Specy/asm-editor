@@ -362,8 +362,9 @@ export class EditorGroup {
         return this.displayedPath.startsWith(RUNTIME_NAMESPACE)
     }
     /**
-     * Whether the displayed File is `<sim.h>`: read-only like a library member, but its functions
-     * are compiled into the program's own Generated assembly, so Breakpoints stop in them.
+     * Whether the displayed File is `<sim.h>` or another file of the include directory, such as
+     * x86's `<unistd.h>`: read-only like a library member, but its functions are compiled into the
+     * program's own Generated assembly, so Breakpoints stop in them.
      */
     get displayedEnvironmentHeader() {
         return isEnvironmentHeaderPath(this.displayedPath)

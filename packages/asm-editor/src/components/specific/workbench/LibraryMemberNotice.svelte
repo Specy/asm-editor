@@ -1,6 +1,9 @@
 <script lang="ts">
     import { X86_START_UNIT_PATH, X86_SUPPORT_UNIT_PATH } from '#lib/languages/X86/x86StartUnit.ts'
-    import { isEnvironmentHeaderPath } from '#lib/sourceRuntime/environmentLibrary.ts'
+    import {
+        ENVIRONMENT_HEADER,
+        environmentFileName
+    } from '#lib/sourceRuntime/environmentLibrary.ts'
     import ReadOnlyNotice from './ReadOnlyNotice.svelte'
 
     /**
@@ -18,12 +21,17 @@
         /** Whether the editor's find widget is open, which the notice hides for. */
         findOpen?: boolean
     } = $props()
+    const included = $derived(environmentFileName(path))
     const label = $derived(
         path === X86_START_UNIT_PATH || path === X86_SUPPORT_UNIT_PATH
             ? 'Start code of compiled programs, read-only.'
-            : isEnvironmentHeaderPath(path)
+            : included === ENVIRONMENT_HEADER
               ? 'Environment library, <sim.h>, read-only.'
-              : `${path.endsWith('.s') ? 'Runtime library code' : 'Runtime library source'}, read-only.`
+              : included?.endsWith('.inc')
+                ? `NASM include file "${included}", read-only.`
+                : included !== undefined
+                  ? `Runtime library header <${included}>, read-only.`
+                  : `${path.endsWith('.s') ? 'Runtime library code' : 'Runtime library source'}, read-only.`
     )
 </script>
 

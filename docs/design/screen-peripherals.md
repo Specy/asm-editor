@@ -6,7 +6,7 @@ The current feature includes a graphical **Screen** with optional double bufferi
 
 Existing EASy68K and MARS/RARS graphics examples are the compatibility target after display configuration.
 
-x86 is outside this version: `@specy/x86` wraps Blink, a Linux x86-64 userland emulator compiled to WebAssembly with no graphics device and no memory or port hook, so a Screen would first require C changes in the Blink fork and a rebuilt module, and Linux userland has no teaching convention for pixels to preserve under [ADR 0003](../adr/0003-preserve-simulator-graphics-conventions.md). x86 keeps Terminal I/O only, and its program time stays Blink's real clock, including during Testcases (the exception noted in [ADR 0010](../adr/0010-program-time-without-clock-pacing.md)). The documentation must state this unevenness plainly. Decided on 2026-09-06; easy to reverse, so no ADR.
+x86 is outside this version: `@specy/x86` wraps Blink, a Linux x86-64 userland emulator compiled to WebAssembly with no graphics device and no memory or port hook, so a Screen would first require C changes in the Blink fork and a rebuilt module, and Linux userland has no teaching convention for pixels to preserve under [ADR 0003](../adr/0003-preserve-simulator-graphics-conventions.md). x86 keeps Terminal I/O only, and its program time stays Blink's real clock, including during Testcases (the exception noted in [ADR 0010](../adr/0010-program-time-without-clock-pacing.md)). The documentation must state this unevenness plainly. Decided on 2026-09-06; easy to reverse, so no ADR. Reversed on 2026-10-31: x86 gets a Screen, Keyboard and Mouse through Linux's device files, decided in [x86-devices.md](./x86-devices.md).
 
 ## Agreed architecture
 

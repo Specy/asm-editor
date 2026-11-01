@@ -69,7 +69,7 @@ export const SCREEN_LABEL_PROBE_ADDRESS = 0x10040000
 /** `#` before the keyword so the line is a comment in both assemblers; `##` and `#@screen` too. */
 const DIRECTIVE_PATTERN = /#+[ \t]*@screen\b/i
 /** One `name=value`, with any amount of space around the `=` and commas allowed as separators. */
-const ENTRY_PATTERN = /^([A-Za-z][A-Za-z0-9_-]*)[ \t]*=[ \t]*([^\s,]+)/
+export const ENTRY_PATTERN = /^([A-Za-z][A-Za-z0-9_-]*)[ \t]*=[ \t]*([^\s,]+)/
 /** MARS's and RARS's label charset, which is what tells a label apart from a mistyped number. */
 const LABEL_PATTERN = /^[A-Za-z_.$][A-Za-z0-9_.$]*$/
 
@@ -338,7 +338,7 @@ function readBase(
 }
 
 /** Decimal or `0x` hexadecimal, the two spellings both assemblers take for an address. */
-function readNumber(value: string): number | null {
+export function readNumber(value: string): number | null {
     if (/^0[xX][0-9a-fA-F]+$/.test(value)) return Number.parseInt(value.slice(2), 16)
     if (/^\d+$/.test(value)) return Number.parseInt(value, 10)
     return null
@@ -361,7 +361,7 @@ function warnOn(directive: ScreenDirective, message: string): Diagnostic {
  * must not stop a program from assembling here when it assembles in MARS and RARS. What could not
  * be understood is left at the configuration the Screen already had.
  */
-function makeWarning(lineIndex: number, column: number, message: string): Diagnostic {
+export function makeWarning(lineIndex: number, column: number, message: string): Diagnostic {
     return {
         severity: 'warning',
         lineIndex,

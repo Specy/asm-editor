@@ -102,17 +102,24 @@ describe('the captured x86 <sim.h> compiles', () => {
                 `-iquote 'project/src' -iquote project -include 'project/${fixture.sourcePath}'`
             )
             expect(prepared.body.options.userArguments).toBe(expectedArguments)
-            //and what compileSource sends is that request, `<sim.h>` included
+            //and what compileSource sends is that request, `<sim.h>` included, with x86's device
+            //headers in a directory of their own searched first (ADR 0070)
             const { fetcher, result } = compile(fixture)
             await result.catch(() => undefined)
             const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
             const body = JSON.parse(String(init.body))
-            expect(body.options.userArguments).toBe(expectedArguments)
+            expect(body.options.userArguments).toBe(
+                expectedArguments.replace(
+                    '-nostdinc -isystem sysroot/include',
+                    '-nostdinc -isystem sysroot/x86_64/include -isystem sysroot/include'
+                )
+            )
             const files = body.files as { filename: string; contents: string }[]
             expect(files.find((file) => file.filename === 'sysroot/include/sim.h')?.contents).toBe(
                 header
             )
             expect(files.map((file) => file.filename)).toContain('sysroot/include/stdio.h')
+            expect(files.map((file) => file.filename)).toContain('sysroot/x86_64/include/unistd.h')
         }
     )
 })

@@ -22,6 +22,7 @@
     import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
+    import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import TopBar from './TopBar.svelte'
     import IconRail from './IconRail.svelte'
     import SidePanel from './SidePanel.svelte'
@@ -29,6 +30,7 @@
     import BottomPanel from './BottomPanel.svelte'
     import ExecutionControls from './ExecutionControls.svelte'
     import RegistersArea from './RegistersArea.svelte'
+    import MemoryStrip from './MemoryStrip.svelte'
     import ScreenArea from './ScreenArea.svelte'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
@@ -57,6 +59,9 @@
     //a page of memory, which the registers fill beside it and are no taller than under it
     let memoryBox: readonly ResizeObserverSize[] | undefined = $state()
     const memoryHeight = $derived(memoryBox?.[0]?.blockSize ?? 0)
+    //set to 0 bytes in the Preferences: a strip beside the registers, which are then as tall as
+    //their list, stands in for memory
+    const memoryHidden = $derived(preferencesStore.values.memoryPanelSize.value === 0)
     const firstPanel = $derived(context.rail.find((entry) => !entry.action)?.id)
     const panelShown = $derived(phone ? ui.drawerOpen : !!ui.activePanel)
     let restoring = $state(false)
@@ -76,6 +81,7 @@
     //while that pane shows an Entry file that is no C or C++, whose pane has Compile instead
     const executionBar = $derived(
         session.debugSession ||
+            session.restarting ||
             (session.controlsGroup.displayedProgram !== undefined &&
                 !sourceLanguage(session.controlsGroup.displayedPath))
     )
@@ -129,53 +135,65 @@
                 style="height: var(--compact-bottom-height); flex: none; border-top: var(--wb-section-rule, none);"
             />
             {#if debugSectionsBuilt}
-                <div class="debug-sections" class:hidden={!session.debugSession}>
+                <div
+                    class="debug-sections"
+                    class:hidden={!session.debugSession && !session.restarting}
+                >
                     <CollapsibleSection id="compact:registers" title="Registers & memory">
-                        <div class="registers-memory">
+                        <div class="registers-memory" class:memory-hidden={memoryHidden}>
                             <div
                                 class="card registers"
-                                style:width={registersWidth || undefined}
+                                style:width={(!memoryHidden && registersWidth) || undefined}
                                 style:min-width={registersWidth || undefined}
-                                style:max-height={memoryHeight ? `${memoryHeight}px` : undefined}
+                                style:max-height={!memoryHidden && memoryHeight
+                                    ? `${memoryHeight}px`
+                                    : undefined}
                             >
                                 <RegistersArea style="flex: 1;" bind:size={registersSize} />
                             </div>
-                            <div class="card memory" bind:borderBoxSize={memoryBox}>
-                                <div class="memory-controls">
-                                    <MemoryControls
-                                        {emulator}
-                                        buttonVar="secondary"
+                            {#if memoryHidden}
+                                <div class="card memory strip">
+                                    <MemoryStrip />
+                                </div>
+                            {:else}
+                                <div class="card memory" bind:borderBoxSize={memoryBox}>
+                                    <div class="memory-controls">
+                                        <MemoryControls
+                                            {emulator}
+                                            buttonVar="secondary"
+                                            systemSize={emulator.systemSize}
+                                            bytesPerPage={emulator.memory.global.pageSize}
+                                            memorySize={MEMORY_SIZE[language]}
+                                            inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
+                                            currentAddress={emulator.memory.global.address}
+                                            onAddressChange={(address) =>
+                                                moveMemoryView(session, ui, address)}
+                                            hideLabel={emulator.memory.global.rowSize < 16}
+                                        />
+                                    </div>
+                                    <MemoryVisualiser
+                                        memoryRegions={emulator?.memoryRegions}
+                                        dataLabels={emulator?.dataLabels}
+                                        readOnlyMemory={emulator?.readOnlyMemory}
                                         systemSize={emulator.systemSize}
-                                        bytesPerPage={emulator.memory.global.pageSize}
+                                        endianess={emulator.memory.global.endianess}
                                         memorySize={MEMORY_SIZE[language]}
-                                        inputStyle="height: 100%; padding: 0 0 0 0.6rem;"
+                                        dense
+                                        defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
+                                        bytesPerRow={emulator.memory.global.rowSize}
+                                        pageSize={emulator.memory.global.pageSize}
+                                        memory={emulator.memory.global.data}
                                         currentAddress={emulator.memory.global.address}
-                                        onAddressChange={(address) =>
-                                            moveMemoryView(session, ui, address)}
-                                        hideLabel={emulator.memory.global.rowSize < 16}
+                                        sp={emulator.sp}
+                                        callStackAddresses={makeColorizedLabels(emulator.callStack)}
+                                        pokeable={session.pokeable}
+                                        onPoke={(address, bytes) =>
+                                            session.pokeMemory(address, bytes)}
+                                        cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
+                                        markedAddress={markedMemoryAddress(session, ui)}
                                     />
                                 </div>
-                                <MemoryVisualiser
-                                    memoryRegions={emulator?.memoryRegions}
-                                    dataLabels={emulator?.dataLabels}
-                                    readOnlyMemory={emulator?.readOnlyMemory}
-                                    systemSize={emulator.systemSize}
-                                    endianess={emulator.memory.global.endianess}
-                                    memorySize={MEMORY_SIZE[language]}
-                                    dense
-                                    defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}
-                                    bytesPerRow={emulator.memory.global.rowSize}
-                                    pageSize={emulator.memory.global.pageSize}
-                                    memory={emulator.memory.global.data}
-                                    currentAddress={emulator.memory.global.address}
-                                    sp={emulator.sp}
-                                    callStackAddresses={makeColorizedLabels(emulator.callStack)}
-                                    pokeable={session.pokeable}
-                                    onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
-                                    cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
-                                    markedAddress={markedMemoryAddress(session, ui)}
-                                />
-                            </div>
+                            {/if}
                         </div>
                     </CollapsibleSection>
                     {#if hasScreen}
@@ -340,6 +358,11 @@
         gap: 0.5rem var(--wb-gap);
         margin: 0.3rem;
         overflow-x: auto;
+
+        /* memory's strip stays beside the registers, never under them */
+        &.memory-hidden {
+            flex-wrap: nowrap;
+        }
     }
 
     .card {
@@ -384,6 +407,12 @@
             right: 0;
             height: 1px;
         }
+    }
+
+    /* memory's strip, as tall as the registers beside it */
+    .memory.strip {
+        flex: none;
+        align-self: stretch;
     }
 
     /* each section is as tall as what it holds, not as the tallest in its row */

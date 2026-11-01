@@ -37,6 +37,17 @@ export type ScreenSize = {
     height: number
 }
 
+/**
+ * A page of an XRGB8888 framebuffer, x86's `/dev/fb0`: one little-endian `0x00RRGGBB` word a
+ * pixel, `lineLength` bytes from one line to the next.
+ */
+export type FramebufferPage = {
+    bytes: Uint8Array
+    width: number
+    height: number
+    lineLength: number
+}
+
 /** The shape of a cell-mapped display: how many character cells the mirrored memory holds. */
 export type ScreenCellGrid = {
     columns: number
@@ -112,7 +123,27 @@ export class Screen {
     private cellGlyphs: Uint8Array | null = null
 
     private _version = 0
+    /** The `version` at which `syncFramebufferPage` last left the image black, see there. */
+    private blackAtVersion = -1
     private _dirty = true
+    /**
+     * What of the visible image changed since version `changedSince`, the one a renderer last
+     * painted: a rectangle while every change since named one (the framebuffer catch-up does),
+     * `'all'` once any change did not, and null for none.
+     */
+    private changed: Rect | 'all' | null = 'all'
+    private changedSince = -1
+    /**
+     * The framebuffer page as the last catch-up read it, raw: the next one compares each row with
+     * it two pixels at a time and converts only the words that differ. It holds while nothing else
+     * has changed the image since (`shadowVersion`) and the page keeps its shape.
+     */
+    private pageShadow: Uint32Array | null = null
+    private shadowVersion = -1
+    private shadowImage: Uint8ClampedArray | null = null
+    private shadowStride = 0
+    private shadowColumns = 0
+    private shadowRows = 0
     /** How many renderers are painting this Screen; see `watch`. */
     private watchers = 0
     /** Depth of the open compound operations and the records they have collected so far. */
@@ -252,6 +283,19 @@ export class Screen {
 
     markPainted(): void {
         this._dirty = false
+        this.changed = null
+        this.changedSince = this._version
+    }
+
+    /**
+     * What of the visible image changed after version `since`, when the Screen knows it: a renderer
+     * that painted version `since` and then called `markPainted` puts back only this rectangle, which
+     * is empty when nothing changed. Null means the whole image, as after a change that named no
+     * rectangle or for a renderer that painted some other version.
+     */
+    changedRegion(since: number): Rect | null {
+        if (since !== this.changedSince || this.changed === 'all') return null
+        return this.changed ?? { x: 0, y: 0, width: 0, height: 0 }
     }
 
     /** Whether a renderer is painting this Screen, and so whether `dirty` can ever come back down. */
@@ -263,8 +307,8 @@ export class Screen {
      * Registers a renderer and answers with the function that unregisters it. The scheduler asks for
      * the short slice budget only for a watched Screen
      * ([ADR 0007](../../../../../../../docs/adr/0007-generic-emulator-run-scheduling.md)): a Screen nobody
-     * paints — x86's, which has no panel, or any surface whose Screen toggle is closed — stays dirty
-     * for the whole run and would otherwise hold every program at the animation budget.
+     * paints, on any surface whose Screen toggle is closed, stays dirty for the whole run and would
+     * otherwise hold every program at the animation budget.
      */
     watch(): () => void {
         this.watchers++
@@ -686,6 +730,153 @@ export class Screen {
             image[index] = packColor(words[index])
         }
         this.markDrawn()
+    }
+
+    /**
+     * Shows a whole framebuffer page, or black for null: x86's catch-up, which re-reads the page
+     * the scanout shows because nothing marks what changed
+     * ([x86 devices](../../../../../../../docs/design/x86-devices.md), "Double buffering and the
+     * vsync wait"). What falls outside the image is cut off and what the page does not reach is
+     * black. Only a pixel that changed counts as drawing, so a page read again unchanged at every
+     * slice does not look like an animation to the scheduler.
+     */
+    syncFramebufferPage(page: FramebufferPage | null): void {
+        //black again with nothing drawn since, which every slice of a program that never opens
+        //the device would otherwise check pixel by pixel
+        if (page === null && this._version === this.blackAtVersion && !this._doubleBuffering) return
+        const image = imageWords(this.drawing)
+        const width = this._width
+        const height = this._height
+        let words: Uint32Array | null = null
+        let stride = 0
+        let columns = 0
+        let rows = 0
+        if (page && page.lineLength >= BYTES_PER_PIXEL) {
+            words = framebufferWords(page.bytes)
+            stride = Math.floor(page.lineLength / BYTES_PER_PIXEL)
+            columns = Math.max(0, Math.min(width, page.width, stride))
+            rows = Math.max(0, Math.min(height, page.height, Math.floor(words.length / stride)))
+        }
+        if (words && this.syncChangedRows(words, image, stride, columns, rows)) return
+        const black = packColor(BLACK)
+        let changed = false
+        for (let y = 0; y < height; y++) {
+            let target = y * width
+            const end = target + width
+            if (words && y < rows) {
+                let source = y * stride
+                const last = target + columns
+                for (; target < last; target++, source++) {
+                    const pixel = framebufferPixel(words[source])
+                    if (image[target] !== pixel) {
+                        image[target] = pixel
+                        changed = true
+                    }
+                }
+            }
+            for (; target < end; target++) {
+                if (image[target] !== black) {
+                    image[target] = black
+                    changed = true
+                }
+            }
+        }
+        if (changed) this.markDrawn()
+        if (page === null) this.blackAtVersion = this._version
+        this.keepPageShadow(words, stride, columns, rows)
+    }
+
+    /**
+     * The catch-up while the image still shows the page the last one read (`pageShadow`): a row is
+     * compared with that copy two pixels at a time, which skips an unchanged row in a few hundred
+     * comparisons, and of a changed row only the words from its first difference to its last are
+     * converted. What changed is marked as one rectangle, so a renderer repaints only that. Returns
+     * false, doing nothing, when there is no copy to compare with: the full pass then makes one.
+     *
+     * The pairs are compared as `Float64Array` elements, the one typed array that compares 64 bits
+     * at once without BigInt. Two equal pairs of words always compare equal, which is all the skip
+     * relies on. The only unequal words that can compare equal differ in the sign bit, the top bit
+     * of the second pixel's unused byte, which shows nothing; a NaN pattern never compares equal,
+     * and is converted again, which is only slower.
+     */
+    private syncChangedRows(
+        words: Uint32Array,
+        image: Uint32Array,
+        stride: number,
+        columns: number,
+        rows: number
+    ): boolean {
+        const shadow = this.pageShadow
+        if (
+            !shadow ||
+            this._doubleBuffering ||
+            this.shadowVersion !== this._version ||
+            this.shadowImage !== this.drawing ||
+            this.shadowStride !== stride ||
+            this.shadowColumns !== columns ||
+            this.shadowRows !== rows ||
+            words.byteOffset % 8 !== 0
+        )
+            return false
+        const width = this._width
+        const pairs = columns / 2
+        const pagePairs = new Float64Array(words.buffer, words.byteOffset, (rows * stride) / 2)
+        const shadowPairs = new Float64Array(shadow.buffer, shadow.byteOffset, (rows * stride) / 2)
+        let top = -1
+        let bottom = -1
+        let left = columns
+        let right = -1
+        for (let y = 0; y < rows; y++) {
+            const base = (y * stride) / 2
+            let first = 0
+            while (first < pairs && pagePairs[base + first] === shadowPairs[base + first]) first++
+            if (first === pairs) continue
+            let last = pairs - 1
+            while (pagePairs[base + last] === shadowPairs[base + last]) last--
+            const from = first * 2
+            const to = last * 2 + 2
+            const source = y * stride
+            const target = y * width
+            for (let x = from; x < to; x++) {
+                const word = words[source + x]
+                shadow[source + x] = word
+                image[target + x] = framebufferPixel(word)
+            }
+            if (top < 0) top = y
+            bottom = y
+            left = Math.min(left, from)
+            right = Math.max(right, to)
+        }
+        if (top >= 0) {
+            this.markDrawn({ x: left, y: top, width: right - left, height: bottom - top + 1 })
+            this.shadowVersion = this._version
+        }
+        return true
+    }
+
+    /**
+     * Keeps a copy of the page the full pass just showed, for `syncChangedRows` to compare the next
+     * one with; none for a page whose rows cannot be compared in pairs of aligned words.
+     */
+    private keepPageShadow(
+        words: Uint32Array | null,
+        stride: number,
+        columns: number,
+        rows: number
+    ): void {
+        if (!words || this._doubleBuffering || stride % 2 !== 0 || columns % 2 !== 0 || !rows) {
+            this.pageShadow = null
+            return
+        }
+        const length = rows * stride
+        if (!this.pageShadow || this.pageShadow.length !== length)
+            this.pageShadow = new Uint32Array(length)
+        this.pageShadow.set(words.subarray(0, length))
+        this.shadowVersion = this._version
+        this.shadowImage = this.drawing
+        this.shadowStride = stride
+        this.shadowColumns = columns
+        this.shadowRows = rows
     }
 
     // ----------------------------------------------------------------- undo
@@ -1340,15 +1531,19 @@ export class Screen {
         }
     }
 
-    private markDrawn(): void {
+    /** Marks drawing done, on the rectangle `region` when it is all that changed. */
+    private markDrawn(region?: Rect): void {
         //with double buffering on, drawing changes the off-screen image and the renderer has
         //nothing new to paint until `present` (ADR 0006)
-        if (!this._doubleBuffering) this.markVisible()
+        if (!this._doubleBuffering) this.markVisible(region)
     }
 
-    private markVisible(): void {
+    private markVisible(region?: Rect): void {
         this._dirty = true
         this._version += 1
+        if (!region) this.changed = 'all'
+        else if (this.changed !== 'all')
+            this.changed = this.changed ? unionRect(this.changed, region) : region
     }
 }
 
@@ -1361,6 +1556,43 @@ export class Screen {
  */
 function imageWords(image: Uint8ClampedArray): Uint32Array {
     return new Uint32Array(image.buffer, image.byteOffset, image.length / BYTES_PER_PIXEL)
+}
+
+/**
+ * A framebuffer's little-endian words as numbers: a view of the bytes where the host reads them in
+ * that order and they are aligned, which is every page a wasm heap holds on every host this runs
+ * on, and a copy otherwise.
+ */
+function framebufferWords(bytes: Uint8Array): Uint32Array {
+    const count = Math.floor(bytes.length / BYTES_PER_PIXEL)
+    if (LITTLE_ENDIAN && bytes.byteOffset % BYTES_PER_PIXEL === 0)
+        return new Uint32Array(bytes.buffer, bytes.byteOffset, count)
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    return Uint32Array.from({ length: count }, (_, index) =>
+        view.getUint32(index * BYTES_PER_PIXEL, true)
+    )
+}
+
+/** The smallest rectangle holding both. */
+function unionRect(a: Rect, b: Rect): Rect {
+    const x = Math.min(a.x, b.x)
+    const y = Math.min(a.y, b.y)
+    return {
+        x,
+        y,
+        width: Math.max(a.x + a.width, b.x + b.width) - x,
+        height: Math.max(a.y + a.height, b.y + b.height) - y
+    }
+}
+
+/**
+ * A framebuffer word, `0x00RRGGBB`, as the opaque pixel `imageWords` stores: `packColor`'s
+ * little-endian branch inlined, since it runs for every pixel a catch-up converts.
+ */
+function framebufferPixel(word: number): number {
+    return LITTLE_ENDIAN
+        ? (0xff000000 | ((word & 0xff) << 16) | (word & 0xff00) | ((word >>> 16) & 0xff)) >>> 0
+        : packColor(word)
 }
 
 /** One opaque pixel of a color as the word `imageWords` stores, red first in memory order. */

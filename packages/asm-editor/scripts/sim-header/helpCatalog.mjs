@@ -4,12 +4,12 @@ import { parametersOf } from '../source-language-help/declarations.mjs'
 
 const capital = (text) => text[0].toUpperCase() + text.slice(1)
 const clean = (text) => text.replace(/\s+/g, ' ').trim()
-const entry = (name, declaration, summary, href, kind = 'function') => ({
+const entry = (name, declaration, summary, href, kind = 'function', headers = ['sim.h']) => ({
     name,
     kind,
     declaration,
     parameters: parametersOf(declaration, name),
-    headers: ['sim.h'],
+    headers,
     summary: clean(summary),
     href,
     definition: 'documentation'
@@ -70,7 +70,11 @@ export function marsHelpCatalog(target, syscalls) {
     return { revision: 1, target: language, entries }
 }
 
-export function x86HelpCatalog(data) {
+/**
+ * x86's catalog: a `sim_` function for each system call, and the POSIX calls of its device headers
+ * (`deviceFunctions()` of `deviceHeaders.mjs`), each linked to the system call it makes.
+ */
+export function x86HelpCatalog(data, functions = []) {
     const entries = data.calls.map(({ name, description, binding }) => {
         let summary = description.replace(/`/g, '')
         for (const parameter of binding.parameters)
@@ -88,5 +92,16 @@ export function x86HelpCatalog(data) {
             `/documentation/x86/syscall#syscall-${name}`
         )
     })
+    for (const call of functions)
+        entries.push(
+            entry(
+                call.name,
+                call.declaration,
+                call.doc,
+                `/documentation/x86/syscall#syscall-${call.documentation}`,
+                'function',
+                [call.header]
+            )
+        )
     return { revision: 1, target: 'X86', entries }
 }

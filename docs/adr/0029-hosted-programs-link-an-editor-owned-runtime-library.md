@@ -5,6 +5,8 @@ date: 2026-10-04
 
 # Hosted programs link an editor-owned Runtime library
 
+Widened on x86 by [ADR 0070](./0070-the-x86-runtime-library-offers-the-linux-device-interfaces.md): kernel-shaped device headers and the POSIX calls device programs make, header-only beside the Runtime library's own headers.
+
 Programs from Source compilation may use a C standard library: stdio on the Terminal and the FileSystem, `malloc`, `<string.h>`, `<ctype.h>`, `qsort`/`strtol`, `<math.h>`, and the C++ support behind global constructors, `new`/`delete` and virtual destructors. That library is our own Runtime library, not picolibc or another existing libc. Its headers are lean, written for it, and uploaded with every compile through the Compiler driver; its stdio and system-call layer target each Core's syscalls; algorithms that are hard to get right (libm, `strtod`, `qsort`, float formatting) are taken from musl's MIT-licensed implementations instead of rewritten. Its scope is a written list of supported functions, tested against host glibc output. This supersedes the self-contained boundary of [ADR 0027](./0027-source-compilation-starts-with-self-contained-programs.md).
 
 ## Considered options

@@ -52,6 +52,7 @@ import executablesProse from './executables.md?raw'
 import vectorProse from './vector-instructions.md?raw'
 import runtimeProse from './runtime-library.md?raw'
 import { runtimeLibraryChapter } from '../runtimeFunctions'
+import { deviceChapters } from './devices'
 import { x86CallingConvention } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import {
     x86SimBinding,
@@ -697,6 +698,7 @@ export function chapters(): Chapter[] {
         registersAndFlags(),
         vectorInstructions(),
         syscalls(),
+        ...deviceChapters(),
         usingC(),
         runtimeLibraryChapter({
             language: 'x86',

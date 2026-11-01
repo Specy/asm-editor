@@ -10,7 +10,15 @@ const directory = join(runtimeRoot, 'generated/v1')
 const headers = JSON.parse(readFileSync(join(directory, 'include.json'), 'utf8'))
 const functions = JSON.parse(readFileSync(join(directory, 'functions.json'), 'utf8'))
 // The committed runtime artifacts remain the authority. Never contact a compiler to generate help.
-const actualHeaders = readdirSync(join(runtimeRoot, 'include')).sort()
+// Headers in a subfolder (`sys/x.h`) are named by their path, as the build names them.
+const listHeaders = (directory, prefix = '') =>
+    readdirSync(join(runtimeRoot, 'include', directory), { withFileTypes: true }).flatMap(
+        (entry) =>
+            entry.isDirectory()
+                ? listHeaders(join(directory, entry.name), `${prefix}${entry.name}/`)
+                : [`${prefix}${entry.name}`]
+    )
+const actualHeaders = listHeaders('').sort()
 if (JSON.stringify(actualHeaders) !== JSON.stringify(Object.keys(headers).sort()))
     throw new Error('Runtime header list has drifted; regenerate the Runtime library artifacts.')
 for (const header of actualHeaders)

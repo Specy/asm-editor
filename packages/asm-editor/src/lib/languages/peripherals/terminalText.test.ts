@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import {
     createTextStreamDecoder,
     encodeText,
+    SerialTranscript,
     terminalTextConventions,
     type TerminalEncoding
 } from './terminalText'
@@ -25,11 +26,133 @@ function everyByteAsWindows1252(): string {
 
 describe('terminal text conventions', () => {
     it("follows each Target's Reference environment", () => {
-        expect(terminalTextConventions('M68K')).toEqual({ encoding: 'windows-1252', enter: '\r' })
-        expect(terminalTextConventions('Z80')).toEqual({ encoding: 'latin-1', enter: '\n' })
-        for (const language of ['MIPS', 'RISC-V', 'RISC-V-64', 'X86'] as const) {
-            expect(terminalTextConventions(language)).toEqual({ encoding: 'utf-8', enter: '\n' })
+        expect(terminalTextConventions('M68K')).toEqual({
+            encoding: 'windows-1252',
+            enter: '\r',
+            serialLine: false
+        })
+        expect(terminalTextConventions('Z80')).toEqual({
+            encoding: 'latin-1',
+            enter: '\n',
+            serialLine: false
+        })
+        for (const language of ['MIPS', 'RISC-V', 'RISC-V-64'] as const) {
+            expect(terminalTextConventions(language)).toEqual({
+                encoding: 'utf-8',
+                enter: '\n',
+                serialLine: false
+            })
         }
+        //ADR 0068: x86's Terminal is the guest's serial console
+        expect(terminalTextConventions('X86')).toEqual({
+            encoding: 'utf-8',
+            enter: '\n',
+            serialLine: true
+        })
+    })
+})
+
+describe('the serial line', () => {
+    /** What `text` shows written at once, `\n` returning unless `staircase`. */
+    function shown(text: string, staircase = false): SerialTranscript {
+        const serial = new SerialTranscript()
+        serial.write(text, !staircase)
+        return serial
+    }
+
+    it('appends what only adds to the end, line feeds included', () => {
+        expect(shown('one\ntwo\n').text).toBe('one\ntwo\n')
+        expect(shown('one\ntwo\n').cursor).toBe(8)
+    })
+
+    it('overwrites the line from its start after a carriage return', () => {
+        expect(shown('loading 10%\rloading 20%').text).toBe('loading 20%')
+        expect(shown('abcdef\rXY').text).toBe('XYcdef')
+        expect(shown('abcdef\rXY').cursor).toBe(2)
+        //only the last line: what came before it is never written into
+        expect(shown('first\nabc\rX').text).toBe('first\nXbc')
+    })
+
+    it("takes ONLCR's carriage return and line feed as one new line", () => {
+        expect(shown('hello\r\nworld\r\n').text).toBe('hello\nworld\n')
+        //a new line starts after the whole of the line, whatever column the cursor is in
+        expect(shown('abc\rX\r\n').text).toBe('Xbc\n')
+        expect(shown('abc\rX\n').text).toBe('Xbc\n')
+    })
+
+    it('moves down without returning when the output is unprocessed, the staircase', () => {
+        expect(shown('a\nb\nc', true).text).toBe('a\n b\n  c')
+        expect(shown('ab\r\ncd', true).text).toBe('ab\ncd')
+        //a sequence takes no column, so it does not widen the step
+        expect(shown('\x1b[31mab\x1b[0m\nc', true).text).toBe('\x1b[31mab\x1b[0m\n  c')
+    })
+
+    it('steps back a column on a backspace, never past the start of the line', () => {
+        expect(shown('abc\b\bX').text).toBe('aXc')
+        expect(shown('ab\b \b').text).toBe('a ')
+        expect(shown('ab\b \b').cursor).toBe(1)
+        expect(shown('x\nab\b\b\b\bY').text).toBe('x\nYb')
+    })
+
+    it('overwrites and steps back over whole characters outside the Basic Multilingual Plane', () => {
+        expect(shown('😀b\rX').text).toBe('Xb')
+        expect(shown('a😀\b!').text).toBe('a!')
+        expect(shown('ab\r😀').text).toBe('😀b')
+    })
+
+    it('keeps escape sequences where they were, stepping over them as it overwrites', () => {
+        expect(shown('\x1b[31mred\x1b[0m\rX').text).toBe('\x1b[31mXed\x1b[0m')
+        expect(shown('ab\x1b[1mcd\rxyz').text).toBe('xy\x1b[1mzd')
+        expect(shown('ab\x1b[0m\rxyz').text).toBe('xy\x1b[0mz')
+    })
+
+    it('puts a sequence written inside the line where the cursor is once it is complete', () => {
+        const serial = shown('abcd\r')
+        for (const character of '\x1b[32mX') serial.write(character, true)
+        expect(serial.text).toBe('\x1b[32mXbcd')
+        expect(serial.pendingEscape).toBe('')
+        const split = shown('abcd\rX\x1b[')
+        expect(split.text).toBe('Xbcd')
+        expect(split.pendingEscape).toBe('\x1b[')
+        split.write('1mY', true)
+        expect(split.text).toBe('X\x1b[1mYcd')
+    })
+
+    it('says when a write may change what is already there', () => {
+        const serial = shown('abc')
+        expect(serial.mayEdit('def\n')).toBe(false)
+        expect(serial.mayEdit('\rX')).toBe(true)
+        expect(serial.mayEdit('\b')).toBe(true)
+        serial.write('\r', true)
+        expect(serial.mayEdit('X')).toBe(true)
+    })
+
+    it('erases an echo off the end of the line, or with a space inside it', () => {
+        const serial = shown('> ab')
+        expect(serial.erase('b')).toBe(true)
+        expect(serial.text).toBe('> a')
+        expect(serial.erase('x')).toBe(false)
+        const inside = shown('> abcd\r> X')
+        expect(inside.erase('X')).toBe(true)
+        expect(inside.text).toBe('>  bcd')
+        expect(inside.cursor).toBe(2)
+    })
+
+    it('keeps the cursor where it was when text is put before everything', () => {
+        const serial = shown('abc\r')
+        serial.prepend('head\n\n')
+        expect(serial.text).toBe('head\n\nabc')
+        serial.write('X', true)
+        expect(serial.text).toBe('head\n\nXbc')
+    })
+
+    it('starts again from a transcript and a cursor, as Undo restores them', () => {
+        const serial = new SerialTranscript()
+        serial.reset('one\ntwo', 5)
+        expect(serial.lineStart).toBe(4)
+        expect(serial.lastLine).toBe('two')
+        serial.write('W', true)
+        expect(serial.text).toBe('one\ntWo')
     })
 })
 

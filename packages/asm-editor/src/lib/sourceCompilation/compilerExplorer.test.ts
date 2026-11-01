@@ -267,6 +267,25 @@ describe('Compiler Explorer failures', () => {
             })
         ).toThrow(SourceCompilationError)
     })
+    it('takes an answer up to 16 MiB, and says what to do about a larger one', async () => {
+        const answer =
+            (asm: unknown[], padding = '') =>
+            async () =>
+                new Response(JSON.stringify({ code: 0, asm, padding }))
+        //4 MiB, which a C program of a few thousand lines reaches at -O2, was the limit once
+        const large = await compileSource(
+            request(),
+            undefined,
+            answer(fixtures[0].response.asm, 'x'.repeat(6 * 1024 * 1024))
+        )
+        expect(large.assembly.length).toBeGreaterThan(0)
+        await expect(
+            compileSource(request(), undefined, answer([], 'x'.repeat(16 * 1024 * 1024)))
+        ).rejects.toThrow(/16\.0 MiB, more than the 16 MiB the editor takes\. Compile at a lower/)
+        await expect(
+            compileSource(request(), undefined, answer(Array(400_001).fill({ text: '' })))
+        ).rejects.toThrow(/400,001 lines of assembly, more than the 400,000 the editor takes/)
+    })
     it('rejects malformed nested locations and keeps successful informational output nonblocking', async () => {
         await expect(
             compileSource(

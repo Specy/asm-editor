@@ -669,6 +669,117 @@ describe('Screen framebuffer mode', () => {
         expect(screen.history.depth).toBe(0)
     })
 
+    /** An XRGB8888 page of little-endian words, `lineLength` bytes a line, as x86's `/dev/fb0` has it. */
+    function page(width: number, height: number, lineLength: number, words: number[]) {
+        const bytes = new Uint8Array(lineLength * height)
+        const view = new DataView(bytes.buffer)
+        words.forEach((word, index) => view.setUint32(index * 4, word, true))
+        return { bytes, width, height, lineLength }
+    }
+
+    it('shows a whole x86 page, its little-endian 0x00RRGGBB words, or black for none', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(2, 2)
+        screen.syncFramebufferPage(page(2, 2, 8, [0xff0000, 0x00ff00, 0x0000ff, 0xff123456]))
+        expect(visibleColors(screen)).toEqual([RED, GREEN, BLUE, 0x123456])
+        expect([...screen.visiblePixels.slice(12)]).toEqual([0x12, 0x34, 0x56, 255])
+        screen.syncFramebufferPage(null)
+        expect(visibleColors(screen)).toEqual([BLACK, BLACK, BLACK, BLACK])
+    })
+
+    it('cuts off what falls outside the image and leaves what the page misses black', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(3, 2)
+        //a page two pixels wide, lines padded to three words, one line tall
+        screen.syncFramebufferPage(page(2, 1, 12, [0xff0000, 0x00ff00, 0x0000ff]))
+        expect(visibleColors(screen)).toEqual([RED, GREEN, BLACK, BLACK, BLACK, BLACK])
+        screen.useFramebuffer(1, 1)
+        screen.syncFramebufferPage(page(2, 1, 8, [0x0000ff, 0x00ff00]))
+        expect(visibleColors(screen)).toEqual([BLUE])
+    })
+
+    it('reads a page that is not word-aligned in its buffer', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(1, 1)
+        const bytes = new Uint8Array(5)
+        bytes.set([0x56, 0x34, 0x12, 0], 1)
+        screen.syncFramebufferPage({
+            bytes: bytes.subarray(1),
+            width: 1,
+            height: 1,
+            lineLength: 4
+        })
+        expect(visibleColors(screen)).toEqual([0x123456])
+    })
+
+    it('counts an x86 page read again unchanged as no change', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(2, 1)
+        const shown = page(2, 1, 8, [0xff0000, 0])
+        screen.syncFramebufferPage(shown)
+        const version = screen.version
+        screen.markPainted()
+        screen.syncFramebufferPage(shown)
+        expect(screen.version).toBe(version)
+        expect(screen.dirty).toBe(false)
+        screen.syncFramebufferPage(page(2, 1, 8, [0xff0000, 0x0000ff]))
+        expect(screen.version).toBe(version + 1)
+    })
+
+    it('converts only what changed since the page it last read, and names that rectangle', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(8, 4)
+        const shown = page(8, 4, 32, new Array(32).fill(0x008080))
+        screen.syncFramebufferPage(shown)
+        screen.markPainted()
+        const painted = screen.version
+        //a pixel in each of two rows: the rectangle holds both, widened to whole pairs of words
+        const view = new DataView(shown.bytes.buffer)
+        view.setUint32((1 * 8 + 3) * 4, 0xff0000, true)
+        view.setUint32((2 * 8 + 4) * 4, 0x0000ff, true)
+        screen.syncFramebufferPage(shown)
+        expect(screen.changedRegion(painted)).toEqual({ x: 2, y: 1, width: 4, height: 2 })
+        const colors = visibleColors(screen)
+        expect([colors[1 * 8 + 3], colors[2 * 8 + 4]]).toEqual([RED, BLUE])
+        expect(colors.filter((color) => color === 0x008080)).toHaveLength(30)
+        //a renderer that painted some other version repaints everything
+        expect(screen.changedRegion(painted - 1)).toBe(null)
+        screen.markPainted()
+        expect(screen.changedRegion(screen.version)).toEqual({ x: 0, y: 0, width: 0, height: 0 })
+        //and so does one after a change that named no rectangle
+        const before = screen.version
+        screen.clear()
+        expect(screen.changedRegion(before)).toBe(null)
+    })
+
+    it('reads the whole page again once the Screen has drawn on its image itself', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(2, 1)
+        const shown = page(2, 1, 8, [0xff0000, 0x00ff00])
+        screen.syncFramebufferPage(shown)
+        //the page is the same, but the image no longer shows it
+        screen.clear()
+        screen.syncFramebufferPage(shown)
+        expect(visibleColors(screen)).toEqual([RED, GREEN])
+    })
+
+    it('reads no pixel of an image a black page left black, and blacks out what was drawn since', () => {
+        const screen = makeScreen()
+        screen.useFramebuffer(2, 1)
+        screen.syncFramebufferPage(page(2, 1, 8, [0xff0000, 0]))
+        screen.syncFramebufferPage(null)
+        expect(visibleColors(screen)).toEqual([BLACK, BLACK])
+        //a byte changed behind the Screen's back, which none of its operations does: not looked at
+        screen.visiblePixels[0] = 0xff
+        screen.syncFramebufferPage(null)
+        expect(screen.visiblePixels[0]).toBe(0xff)
+        //anything the Screen drew counts
+        screen.setPenColor(BLUE)
+        screen.drawPixel(1, 0)
+        screen.syncFramebufferPage(null)
+        expect(visibleColors(screen)).toEqual([BLACK, BLACK])
+    })
+
     it('goes back to journaling when drawing mode is restored', () => {
         const screen = makeScreen()
         screen.useFramebuffer(4, 2)

@@ -1,0 +1,7 @@
+{
+    "name": "Play a tune",
+    "description": "Play the first phrase of Ode to Joy on the General MIDI synthesizer, writing note on and note off messages to the raw MIDI port, with a drum on channel 10 under every note.",
+    "order": 25,
+    "topic": "play-a-tune",
+    "template": 7
+}

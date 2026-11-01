@@ -143,21 +143,44 @@ describe('x86 scheduled instruction limits', () => {
                     slices.push(slice.instructions)
                     return slice
                 }
-                await emulator.run(100_001)
+                //longer than two of the Core's native batches, the longest slice without history
+                await emulator.run(400_001)
                 expect(slices.length).toBeGreaterThan(1)
-                expect(slices.reduce((sum, count) => sum + count, 0)).toBe(100_001)
-                expect(registerOf(fileOf(emulator, 'cpu'), 'rbx').value).toBe(50_001n)
+                expect(slices.reduce((sum, count) => sum + count, 0)).toBe(400_001)
+                expect(registerOf(fileOf(emulator, 'cpu'), 'rbx').value).toBe(200_001n)
                 expect(emulator.terminated).toBe(false)
                 expect(emulator.canUndo).toBe(history > 0)
                 if (history > 0) {
                     expect(emulator.undo()).toBe(1)
-                    expect(registerOf(fileOf(emulator, 'cpu'), 'rbx').value).toBe(50_000n)
+                    expect(registerOf(fileOf(emulator, 'cpu'), 'rbx').value).toBe(200_000n)
                 }
             } finally {
                 emulator.dispose()
             }
         }
     )
+
+    it('keeps the short slices of a recorded history while Undo recording is paused', async () => {
+        //startup code runs with recording paused, which the Core records at the same cost
+        const code = 'global _start\nsection .text\n_start:\n    inc rbx\n    jmp _start\n'
+        const emulator = await X86Emulator(code, { automaticChecking: false })
+        try {
+            await emulator.compile(1000, code)
+            const slices: number[] = []
+            const runSlice = emulator._runSlice.bind(emulator)
+            emulator._runSlice = async (request) => {
+                const slice = await runSlice(request)
+                slices.push(slice.instructions)
+                return slice
+            }
+            emulator._setUndoRecording!(false)
+            await emulator.run(100_000)
+            expect(slices.length).toBeGreaterThan(1)
+            expect(Math.max(...slices)).toBeLessThanOrEqual(30_000)
+        } finally {
+            emulator.dispose()
+        }
+    })
 })
 
 describe('x86 termination', () => {

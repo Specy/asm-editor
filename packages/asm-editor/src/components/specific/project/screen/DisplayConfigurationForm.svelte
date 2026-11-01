@@ -2,12 +2,18 @@
     import { tick } from 'svelte'
     import Select from '#cmp/shared/input/Select.svelte'
     /**
-     * MARS's and RARS's five bitmap display parameters, with their choice lists: the form of the
-     * Screen header's Display popover and of the Workbench's Display section. `disabled` makes it a
-     * read-only summary, which is what it is during a Debug session.
+     * A Program's Display configuration: the form of the Screen header's Display popover and of the
+     * Workbench's Display section. `disabled` makes it a read-only summary, which is what it is
+     * during a Debug session.
+     *
+     * For MIPS and RISC-V, MARS's and RARS's five bitmap display parameters with their choice
+     * lists; for x86, the framebuffer's width and height, with no unit or base, since fbdev has
+     * neither ([x86 devices](../../../../../../../docs/design/x86-devices.md)). The form follows the
+     * shape of the display it is given.
      *
      * A size menu ends in Custom, which opens a field for any size the display takes; the field
-     * stays open while the size is one MARS's list lacks, such as the 224 of a `@screen` comment.
+     * stays open while the size is one the list lacks, such as the 224 of a `@screen` comment. x86's
+     * width field takes multiples of 8 alone, the widths the guest's modes have.
      */
     import {
         DISPLAY_SIZE_MAX,
@@ -24,10 +30,21 @@
         UNIT_SIZE_MAX,
         UNIT_SIZE_MIN
     } from '#lib/languages/mars/marsDisplay.ts'
+    import {
+        formatX86Display,
+        normalizeX86Display,
+        snapX86DisplayHeight,
+        snapX86DisplayWidth,
+        X86_DISPLAY_SIZE_CHOICES,
+        X86_DISPLAY_SIZE_MAX,
+        X86_DISPLAY_SIZE_MIN,
+        X86_DISPLAY_WIDTH_STEP
+    } from '#lib/languages/X86/x86Display.ts'
+    import { isMarsDisplay, type ProgramDisplay } from '#lib/languages/programDisplay.ts'
 
     interface Props {
-        display: ProjectDisplay
-        onChange: (display: ProjectDisplay) => void
+        display: ProgramDisplay
+        onChange: (display: ProgramDisplay) => void
         origin?: MarsDisplayOrigin
         /** The label the directive's `base=` named, when it named one rather than an address. */
         baseLabel?: string
@@ -49,6 +66,7 @@
     }: Props = $props()
 
     const fromDirective = $derived(origin === 'directive')
+    const x86 = $derived(!isMarsDisplay(display))
     const current = $derived(normalizeMarsDisplay(display))
     const geometry = $derived(marsDisplayGeometry(current))
     const baseChoices = $derived(listBaseChoices(current.baseAddress, baseLabel))
@@ -107,6 +125,52 @@
         fields[field]?.select()
     }
 
+    //x86: one menu of sizes, whose Custom entry opens a width and a height field
+    const x86Current = $derived(normalizeX86Display(display))
+    const x86Choice = $derived(
+        X86_DISPLAY_SIZE_CHOICES.findIndex(
+            (choice) => choice.width === x86Current.width && choice.height === x86Current.height
+        )
+    )
+    let x86CustomPicked = $state(false)
+    const x86Custom = $derived(x86CustomPicked || x86Choice < 0)
+    const x86Dimensions = [
+        {
+            field: 'width',
+            title: 'Width in pixels',
+            text: `Width, a multiple of ${X86_DISPLAY_WIDTH_STEP} from ${X86_DISPLAY_SIZE_MIN} to ${X86_DISPLAY_SIZE_MAX}`,
+            step: X86_DISPLAY_WIDTH_STEP
+        },
+        {
+            field: 'height',
+            title: 'Height in pixels',
+            text: `Height, any size from ${X86_DISPLAY_SIZE_MIN} to ${X86_DISPLAY_SIZE_MAX}`,
+            step: 1
+        }
+    ] as const
+    type X86Field = (typeof x86Dimensions)[number]['field']
+    const x86Fields: Partial<Record<X86Field, HTMLInputElement>> = {}
+
+    async function pickX86Size(index: number) {
+        x86CustomPicked = index === CUSTOM
+        const choice = X86_DISPLAY_SIZE_CHOICES[index]
+        if (choice) return onChange({ width: choice.width, height: choice.height })
+        await tick()
+        x86Fields.width?.select()
+    }
+
+    /** A typed size, brought to one the framebuffer takes: a width down to a multiple of 8. */
+    function commitX86(field: X86Field, input: HTMLInputElement) {
+        x86CustomPicked = true
+        const typed = input.value.trim() === '' ? Number.NaN : Number(input.value)
+        const size =
+            field === 'width'
+                ? snapX86DisplayWidth(typed, x86Current.width)
+                : snapX86DisplayHeight(typed, x86Current.height)
+        input.value = String(size)
+        if (size !== x86Current[field]) onChange({ ...x86Current, [field]: size })
+    }
+
     /**
      * A typed size, brought into the range; one that is not a number puts the field back. The field
      * stays open whatever was typed, a size on MARS's list included, as it would after picking
@@ -127,7 +191,7 @@
 
 <div class="display-form" class:panel>
     {#if heading}
-        <h3>Bitmap display</h3>
+        <h3>{x86 ? 'Framebuffer' : 'Bitmap display'}</h3>
     {/if}
     {#if fromDirective}
         <p class="hint source-note">
@@ -135,6 +199,53 @@
             in the code and is applied in the next build.
         </p>
     {/if}
+    {#if x86}
+        <div class="display-setting">
+            <span>Screen size in pixels</span>
+            <Select
+                {disabled}
+                options={[
+                    ...X86_DISPLAY_SIZE_CHOICES.map((choice, index) => ({
+                        key: formatX86Display(choice),
+                        value: index
+                    })),
+                    { key: 'Custom…', searchText: 'custom', value: CUSTOM }
+                ]}
+                value={x86Custom ? CUSTOM : x86Choice}
+                ariaLabel="Screen size in pixels"
+                style={selectStyle}
+                wrapperStyle="min-width: 5rem; max-width: 10rem"
+                onChange={(value) => pickX86Size(value)}
+            />
+        </div>
+        {#if x86Custom}
+            {#each x86Dimensions as dimension (dimension.field)}
+                <label class="display-setting custom-size">
+                    <span>{dimension.text}</span>
+                    <input
+                        bind:this={x86Fields[dimension.field]}
+                        type="number"
+                        min={X86_DISPLAY_SIZE_MIN}
+                        max={X86_DISPLAY_SIZE_MAX}
+                        step={dimension.step}
+                        {disabled}
+                        value={x86Current[dimension.field]}
+                        aria-label="{dimension.title}, custom"
+                        onchange={(event) => commitX86(dimension.field, event.currentTarget)}
+                    />
+                </label>
+            {/each}
+        {/if}
+        <p class="hint">
+            {formatX86Display(x86Current)} pixels, which the program reads from
+            <code>/dev/fb0</code>, each a 32-bit 0x00RRGGBB word.
+        </p>
+    {:else}
+        {@render marsForm()}
+    {/if}
+</div>
+
+{#snippet marsForm()}
     {#each dimensions as dimension (dimension.field)}
         {@const custom = isCustom(dimension.field, dimension.sizes.choices)}
         <div class="display-setting">
@@ -187,7 +298,7 @@
             geometry.baseAddress
         )}, one word per pixel, its low 24 bits the color.
     </p>
-</div>
+{/snippet}
 
 <style lang="scss">
     .display-form {
@@ -195,9 +306,12 @@
         flex-direction: column;
         gap: 0.4rem;
     }
+    .hint code {
+        font-family: 'Fira Code', monospace;
+    }
+
     .source-note {
         code {
-            font-family: 'Fira Code', monospace;
             color: var(--accent);
         }
     }

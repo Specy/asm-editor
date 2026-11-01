@@ -1,17 +1,19 @@
 import type { ChipCommand } from '../AudioOutput'
 import { CHIP_PROCESSOR, type ChipMessage, type ChipReport } from './chipMessages'
 import { SoundChipCore } from './soundChipCore'
+import { SpeakerCore } from './speakerCore'
 import { SynthCore } from './synthCore'
 
 /**
- * The AudioWorklet that plays an Emulator's chips, the **Synth** and the **Sound chip**, from the
- * commands its output posts ([the plan](../../../../../../../../docs/design/waveform-sound-plan.md),
- * decision 5). The app bundles it on its own with Vite's `?worker&url`, so it must import nothing
- * that touches the page. Each chip is made on its first command; the node renders until the output
- * disposes of it.
+ * The AudioWorklet that plays an Emulator's chips, the **Synth**, the **Sound chip** and x86's PC
+ * speaker, from the commands its output posts
+ * ([the plan](../../../../../../../../docs/design/waveform-sound-plan.md), decision 5). The app
+ * bundles it on its own with Vite's `?worker&url`, so it must import nothing that touches the page.
+ * Each chip is made on its first command; the node renders until the output disposes of it.
  */
 
 declare const sampleRate: number
+declare const currentTime: number
 declare class AudioWorkletProcessor {
     readonly port: MessagePort
 }
@@ -28,6 +30,7 @@ const TAIL_FRAMES = 4096
 class ChipProcessor extends AudioWorkletProcessor {
     private synth: SynthCore | null = null
     private soundChip: SoundChipCore | null = null
+    private speaker: SpeakerCore | null = null
     private scratch = new Float32Array(128)
     private alive = true
     private audible = false
@@ -76,13 +79,23 @@ class ChipProcessor extends AudioWorkletProcessor {
             case 'releaseChips':
                 this.synth?.releaseAll()
                 this.soundChip?.releaseAll()
+                this.speaker?.silence()
+                break
+            case 'speaker':
+                ;(this.speaker ??= new SpeakerCore(sampleRate)).schedule(command.at, command.hz)
+                break
+            case 'speakerCut':
+                this.speaker?.cut(command.after)
                 break
         }
         this.quietFrames = 0
     }
 
     private report(): void {
-        const audible = (this.synth?.audible ?? false) || (this.soundChip?.audible ?? false)
+        const audible =
+            (this.synth?.audible ?? false) ||
+            (this.soundChip?.audible ?? false) ||
+            (this.speaker?.audible ?? false)
         if (audible === this.audible) return
         this.audible = audible
         this.port.postMessage({ type: 'audible', audible } satisfies ChipReport)
@@ -102,9 +115,15 @@ class ChipProcessor extends AudioWorkletProcessor {
                 for (let i = 0; i < out.length; i++) out[i] += this.scratch[i]
             }
         }
+        //the speaker adds itself, at the frames its tones are due
+        this.speaker?.render(out, currentTime)
         this.report()
-        //rendering goes on while an envelope moves, heard or not, and for a tail after that
-        const active = (this.synth?.active ?? false) || (this.soundChip?.active ?? false)
+        //rendering goes on while an envelope moves or a tone is to come, heard or not, and for a
+        //tail after that
+        const active =
+            (this.synth?.active ?? false) ||
+            (this.soundChip?.active ?? false) ||
+            (this.speaker?.active ?? false)
         this.quietFrames = active ? 0 : this.quietFrames + out.length
         return true
     }

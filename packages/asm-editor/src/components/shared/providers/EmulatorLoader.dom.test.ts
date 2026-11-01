@@ -24,7 +24,6 @@ it('shows and logs a Core that failed to load', async () => {
     const app = mount(EmulatorLoader, {
         target: document.body,
         props: {
-            //x86 plays no sound, so no audio output is made for it
             language: 'X86',
             code: '',
             children: createRawSnippet<[Emulator]>(() => ({ render: () => '<p>loaded</p>' }))

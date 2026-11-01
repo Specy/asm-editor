@@ -7,6 +7,7 @@ import { formatHex, hexPrefix } from '#lib/testcases.ts'
 import { clampBigInt } from '#lib/utils.ts'
 import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
 import type { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
+import { DEFAULT_MEMORY_PANEL_SIZE, preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 import FaCopy from '~icons/fa-solid/copy'
 import FaHashtag from '~icons/fa-solid/hashtag'
@@ -26,8 +27,13 @@ import FaMemory from '~icons/fa-solid/memory'
  * the memory view.
  */
 
-/** Moves the memory view to the page holding an address, which it marks there. */
+/**
+ * Moves the memory view to the page holding an address, which it marks there, and brings the
+ * memory panel back from its strip, at its default size, when the Preferences hid it.
+ */
 export function showInMemory(session: WorkbenchSession, ui: WorkbenchUi, address: bigint) {
+    if (preferencesStore.values.memoryPanelSize.value === 0)
+        preferencesStore.setValue('memoryPanelSize', DEFAULT_MEMORY_PANEL_SIZE)
     const emulator = session.emulator
     const page = address - (address % BigInt(emulator.memory.global.pageSize))
     emulator.setGlobalMemoryAddress(clampBigInt(page, 0n, MEMORY_SIZE[session.project.language]))

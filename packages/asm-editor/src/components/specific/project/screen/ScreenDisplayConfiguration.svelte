@@ -1,24 +1,25 @@
 <script lang="ts">
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaSlidersH from '~icons/fa-solid/sliders-h'
-    import type { MarsDisplayOrigin, ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
+    import type { MarsDisplayOrigin } from '#lib/languages/mars/marsDisplay.ts'
+    import { isMarsDisplay, type ProgramDisplay } from '#lib/languages/programDisplay.ts'
     import DisplayConfigurationForm from './DisplayConfigurationForm.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     /**
-     * The bitmap display configuration of the MIPS and RISC-V Screen panel: MARS's and RARS's own
-     * five parameters, with their choice lists and their defaults. It renders into the panel
-     * header's configuration slot.
+     * The Display configuration of the MIPS, RISC-V and x86 Screen panel: MARS's and RARS's own
+     * five bitmap display parameters, with their choice lists and their defaults, or the size of
+     * x86's framebuffer. It renders into the panel header's configuration slot.
      *
      * The user configures these, as in MARS's own settings window, unless the program says what it
-     * wants in a `# @screen` comment, which every Build reads. Either way a change is applied at
-     * once and the Screen re-syncs from memory, as MARS does; the caller stores the value in the
-     * project so it comes back with it, and testcases run with it too.
+     * wants in a `@screen` comment, which every Build reads. Either way a change is applied at once,
+     * the MIPS and RISC-V Screen re-syncing from memory as MARS does; the caller stores the value in
+     * the project so it comes back with it, and testcases run with it too.
      */
 
     interface Props {
-        display: ProjectDisplay
-        onChange: (display: ProjectDisplay) => void
+        display: ProgramDisplay
+        onChange: (display: ProgramDisplay) => void
         /**
          * Where these five values came from. `directive` means they are the program's own `@screen`
          * comment's, read by the last Build or rewritten by a change made here, which the popover
@@ -46,6 +47,9 @@
     }: Props = $props()
 
     const fromDirective = $derived(origin === 'directive')
+    const parameters = $derived(
+        isMarsDisplay(display) ? 'Bitmap display parameters' : 'Framebuffer size'
+    )
 
     let open = $state(false)
     let panel: HTMLDivElement | undefined = $state()
@@ -68,9 +72,7 @@
     <button
         class="display-button"
         {@attach tooltip(
-            fromDirective
-                ? "Bitmap display parameters, set by the program's @screen comment"
-                : 'Bitmap display parameters'
+            fromDirective ? `${parameters}, set by the program's @screen comment` : parameters
         )}
         aria-expanded={onOpen ? undefined : open}
         disabled={onOpen ? false : disabled}

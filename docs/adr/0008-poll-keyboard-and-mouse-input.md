@@ -4,6 +4,10 @@ Amended in part by [ADR 0065](./0065-m68k-devices-deliver-irqs.md): on M68K, a k
 
 Amended by [ADR 0066](./0066-key-state-changes-at-the-event.md), which replaces "Key hold time" below: the key state is EASy68K's, changed at the key event and read as it is, with no queue and no hold interval.
 
+Update 2026-10-31: the rule in "Keyboard views" that every environment uses EASy68K's key codes is removed. Each environment uses its **Reference environment**'s codes: EASy68K's on M68K and in the Z80's **Port map**, which keeps EASy68K's table, and Linux's `KEY_*` on x86, read from evdev ([x86 devices](../design/x86-devices.md)).
+
+Update 2026-10-31: x86 does not use the three "Mouse views" below. It observes its pointer, QEMU's USB tablet, as current state and as pointer events, with coordinates from 0 to 32767 rather than pixels; the edge behaviour of "Mouse coordinates" and "Mouse drags" still holds ([x86 devices](../design/x86-devices.md)).
+
 The first version of **Keyboard** and **Mouse** input will use polling: programs explicitly inspect device state or available input through their environment's guest interface, and these peripherals will not deliver CPU interrupts. This supports interactive graphics while deferring the additional interrupt routing, handler execution and history semantics that interrupt-driven input requires. Programs requiring device-generated CPU interrupts are outside first-version compatibility, including the interrupt-driven keyboard mode supported by [MARS](https://raw.githubusercontent.com/dpetersanderson/MARS/main/mars/tools/KeyboardAndDisplaySimulator.java); exact polling interfaces remain to be settled, and shared typed input with **Terminal** is covered by [ADR 0009](./0009-share-screen-keyboard-input-with-terminal.md).
 
 ## Live input after Undo

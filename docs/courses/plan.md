@@ -168,7 +168,7 @@ Playground in it opens on the Register file that holds the answer, with the `fpu
 `csr` fence flag, and every Exercise moves its answer into a general register first, because a
 Testcase still reads the CPU file only (`docs/design/register-files.md`).
 
-### The x86 course (`x86`), 21 lectures and 19 Examples
+### The x86 course (`x86`), 21 lectures and 26 Examples
 
 | module                         | slug                                         | title                                       | topic               |
 | ------------------------------ | -------------------------------------------- | ------------------------------------------- | ------------------- |
@@ -202,10 +202,28 @@ Testcase still reads the CPU file only (`docs/design/register-files.md`).
   `languageHasScreen` is false for x86, because blink emulates a Linux process and a Linux process has
   no framebuffer. The "Ports, devices and the kernel in between" lecture says so.
 
+Update 2026-10-31: both reasons are gone. x86 programs read the Terminal, and draw, read keys and the
+pointer and make sound through Linux's device files ([x86-devices.md](../design/x86-devices.md));
+the "syscall and the Linux ABI" lecture gained four sections on them ("Devices are files", "Drawing
+on the Screen", "Reading keys and the pointer", "Making sound"), and the missing rungs are M10's
+Examples ([x86-devices-plan.md](../design/x86-devices-plan.md)).
+
+Update 2026-10-31, M10: seven device Examples, each a NASM program the content test runs on the
+virtual clock and inside its 2M instruction budget (decision 19 of the devices plan): drawing ends
+once drawn, the animations after a fixed number of frames or ten seconds without a key, the input
+programs read without blocking or `poll` with a timeout, and the sound runs at 22,050 Hz or less.
+`drawing-on-the-screen` (20, template 6), `bouncing-ball` (21) and `keyboard-control` (22) keep the
+ladder's slots; `mouse-paint` (23) and `pc-speaker` (24) are x86's own topics, in the slots of the
+`snake` and `flappy-bird` it does not have; `play-a-tune` (25, template 7) and `sampled-sound` (27)
+take the sound ladder's. Drawing, keyboard control and mouse paint add a C version of the same
+program after the NASM one (`c|playground|target=x86|file=…`). The system-call Lecture's drawing and
+`/dev/dsp` programs are Playgrounds now that NASM searches the include directory.
+
 The Examples keep the ladder's `order`, so the numbering runs 0 to 17 and then 19, with the gap where
 `sum-of-two-numbers` would be. Four of them carry `template` keys (1 `moving-values`,
 2 `counting-loop`, 3 `subroutine-with-register-arguments`, 4 `hello-world`), which replaced
-`src/lib/content/x86Templates.ts`; that file is deleted.
+`src/lib/content/x86Templates.ts`; that file is deleted. Since M10, six: 6 `drawing-on-the-screen` and
+7 `play-a-tune` joined them.
 
 Getting started covers, in this order: what the CPU is and where it was used (verify every date and
 name before writing it), which simulator the editor imitates (EASy68K, MARS, RARS; none for the Z80),

@@ -13,8 +13,14 @@ export type SoundData = {
     readonly bytes: Uint8Array
 }
 
-/** What has to be ready before something can sound: the synthesizer and its bank, or a decoded Sound. */
-export type AudioNeed = { kind: 'synthesizer' } | { kind: 'sound'; sound: SoundData }
+/**
+ * What has to be ready before something can sound: the synthesizer and its bank, a decoded Sound, or
+ * the synthesizer of x86's raw MIDI port.
+ */
+export type AudioNeed =
+    | { kind: 'synthesizer' }
+    | { kind: 'sound'; sound: SoundData }
+    | { kind: 'midiPort' }
 
 export type AudioCommand =
     | {
@@ -29,6 +35,7 @@ export type AudioCommand =
     | { type: 'stop'; voice: number }
     | { type: 'stopAll' }
     | ChipCommand
+    | TimelineCommand
 
 /**
  * What the **Synth** and the **Sound chip** are told, in the order the program did it. A chip is a
@@ -46,6 +53,41 @@ export type ChipCommand =
     | { type: 'soundChipLoad'; registers: number[] }
     /** A program's own end: every Synth gate off and every Sound chip volume to 0. */
     | { type: 'releaseChips' }
+    /**
+     * x86's PC speaker from `at`, in seconds on the output's clock: a square wave at `hz`, 0 silent.
+     * Only the output makes these, from the timeline's `tone`.
+     */
+    | { type: 'speaker'; at: number; hz: number }
+    /** Drops the PC speaker's tones due after `after`, in seconds on the output's clock. */
+    | { type: 'speakerCut'; after: number }
+
+/** Which of x86's sound devices a cut drops from; every one when a cut names none. */
+export type TimelineDevice = 'dsp' | 'midi' | 'speaker'
+
+/**
+ * x86's sound: a timeline on **Program time**, in milliseconds
+ * ([x86-devices-plan.md](../../../../../../../docs/design/x86-devices-plan.md), decision 10). Blink
+ * decides when each thing sounds, as its devices drain on Program time; the output plays it then, a
+ * fixed latency behind on its own clock, and never decides anything.
+ */
+export type TimelineCommand =
+    /** Program time as the batch leaves, which the output maps its clock against; first in any batch with the others. */
+    | { type: 'programTime'; now: number }
+    /** Samples `/dev/dsp` plays from `start`: stereo frames, interleaved, `rate` of them a second. */
+    | { type: 'pcm'; start: number; rate: number; frames: Float32Array }
+    /** `/dev/dsp`'s gain from `at`, the program's mixer levels VOLUME × PCM for each side, 0 to 1. */
+    | { type: 'pcmGain'; at: number; left: number; right: number }
+    /** One complete message leaving the raw MIDI port at `at`, a SysEx with its F0 and F7. */
+    | { type: 'midi'; at: number; message: Uint8Array }
+    /** The PC speaker's tone from `at`, in Hz; 0 is silence. */
+    | { type: 'tone'; at: number; hz: number }
+    /** Everything due after `after` dropped, on `device` or on all of them: an Undo, a RESET, a DROP. */
+    | { type: 'cut'; after: number; device?: TimelineDevice }
+    /**
+     * The program ended at `at`: the PC speaker falls silent, and every MIDI note still held is
+     * released once what the port had queued has gone out. `/dev/dsp` plays out.
+     */
+    | { type: 'programEnd'; at: number }
 
 export interface AudioOutput {
     /**

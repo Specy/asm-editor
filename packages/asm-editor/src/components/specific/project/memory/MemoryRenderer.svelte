@@ -576,14 +576,16 @@
                         {/if}
                     </div>
                 {/if}
+                <!-- a byte in hex is always two digits, `0F` and not `F`, as the Hex editor and the
+                     selection's popup write it, so that bytes read side by side make the word -->
                 <ValueDiff
-                    value={unreadableByte ? '??' : getTextFromValue(BigInt(word), 0, type)}
+                    value={unreadableByte ? '??' : getTextFromValue(BigInt(word), 2, type)}
                     id={`${id}-${i}`}
                     diff={unreadableByte
                         ? '??'
                         : getTextFromValue(
                               BigInt(memory.prevState[i] ?? defaultMemoryValue),
-                              0,
+                              2,
                               type
                           )}
                     hasSoftDiff={!unreadableByte &&

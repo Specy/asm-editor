@@ -119,12 +119,14 @@ receives the keyboard's hardware interrupt.
 ## What faults look like in this playground
 
 This playground runs the program in a user-mode environment and implements selected Linux system
-calls. Its fault display is simpler than a real Linux process:
+calls. Faults reach the program as they would on Linux, through signals:
 
-- No device generates a hardware interrupt.
-- No Linux signal is delivered, and an installed signal handler will not run.
-- A CPU fault ends the run silently. `rip` remains on the faulting instruction, and instructions
-  after it do not execute.
+- No device generates a hardware interrupt. The keyboard, the pointer and the sound devices are
+  files the program reads and writes with system calls.
+- A CPU fault becomes the signal Linux would send, such as `SIGFPE` for a division by zero. An
+  installed signal handler runs; Ctrl-C typed in the console sends `SIGINT` the same way.
+- A fault with no handler ends the run, and the editor names the signal. `rip` remains on the
+  faulting instruction, and instructions after it do not execute.
 
 Known register values make that last rule visible. This divide-by-zero fault leaves `r8` at
 `0x1111` and `r9` at `0x2222`; the assignment after `div` is never reached.

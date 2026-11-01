@@ -4,6 +4,9 @@ import type { BuildSources } from '#lib/projectFiles.ts'
 import { x86ReachableFiles } from '#lib/languages/X86/x86Project.ts'
 import { x86CoreProject, prepareX86Runtime } from '#lib/languages/X86/x86StartUnit.ts'
 import { downloadReason } from '#lib/languages/X86/x86Downloads.ts'
+import { readX86ScreenDirective } from '#lib/languages/X86/x86ScreenDirective.ts'
+import { DEFAULT_X86_DISPLAY } from '#lib/languages/X86/x86Display.ts'
+import type { Diagnostic } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { ProjectAnalysisSnapshot, ProjectFileAnalysisStatus } from '../protocol'
 import type { LanguageDiagnostic } from '../sourceModel'
 import { unresolvedSnapshot, unresolvedSources } from './unresolved'
@@ -33,6 +36,25 @@ export function x86DiagnosticToLanguageDiagnostic(
             }
         },
         message: error.message
+    }
+}
+
+/**
+ * A `@screen` warning, which `x86ScreenDirective.ts` makes in the editor's shape, as the Worker's:
+ * what a Build would say of the comment, so its squiggle is there while it is typed.
+ */
+function screenDiagnostic(diagnostic: Diagnostic, entry: string): LanguageDiagnostic {
+    const line = Math.max(0, diagnostic.lineIndex)
+    const column = Math.max(0, diagnostic.column - 1)
+    return {
+        severity: diagnostic.severity,
+        source: 'asm-editor',
+        message: diagnostic.message,
+        location: {
+            path: diagnostic.file ?? entry,
+            //the `@screen` keyword
+            range: { start: { line, column }, end: { line, column: column + '@screen'.length } }
+        }
     }
 }
 
@@ -116,9 +138,14 @@ export async function analyzeX86Project(
         sessionId,
         revision,
         target: 'X86',
-        diagnostics: diagnostics.map((diagnostic) =>
-            x86DiagnosticToLanguageDiagnostic(diagnostic, sources.entry)
-        ),
+        diagnostics: [
+            ...readX86ScreenDirective(sources, DEFAULT_X86_DISPLAY).diagnostics.map((diagnostic) =>
+                screenDiagnostic(diagnostic, sources.entry)
+            ),
+            ...diagnostics.map((diagnostic) =>
+                x86DiagnosticToLanguageDiagnostic(diagnostic, sources.entry)
+            )
+        ],
         symbols: [],
         occurrences: [],
         fileStatus

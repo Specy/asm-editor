@@ -13,6 +13,8 @@ import {
     DEFAULT_PROJECT_DISPLAY as MARS_DEFAULT_DISPLAY,
     type ProjectDisplay
 } from './languages/mars/marsDisplay'
+import { DEFAULT_X86_DISPLAY } from './languages/X86/x86Display'
+import type { ProgramDisplay } from './languages/programDisplay'
 import { serializer } from '#lib/json.ts'
 import { isFileView, type FileView } from './fileViews'
 import { detectAssemblyLanguage } from './languages/languageDetector'
@@ -49,7 +51,8 @@ export type AvailableProgrammingLanguages = 'c' | 'cpp'
 export type Program = {
     settings: ProjectSettingsDecisions
     testcases: Testcase[]
-    display?: ProjectDisplay
+    /** The Display configuration, in the shape of the Project's Target (`programDisplay.ts`). */
+    display?: ProgramDisplay
 }
 
 /**
@@ -147,9 +150,11 @@ export type StoredProject = Partial<
 /**
  * The MIPS and RISC-V bitmap display configuration lives with the two adapters that read it, since
  * the parameters, their choice lists and their defaults are MARS's and RARS's own; it is re-exported
- * here because it is project data, saved and shared with the rest of a project.
+ * here because it is project data, saved and shared with the rest of a project. x86's lives in
+ * `languages/X86/x86Display.ts`, and `ProgramDisplay` is either.
  */
 export { DEFAULT_PROJECT_DISPLAY, type ProjectDisplay } from './languages/mars/marsDisplay'
+export type { ProgramDisplay } from './languages/programDisplay'
 
 export function isAvailableLanguage(value: unknown): value is AvailableLanguages {
     return typeof value === 'string' && (AVAILABLE_LANGUAGES as string[]).includes(value)
@@ -232,7 +237,8 @@ function cleanPrograms(
     raw: unknown,
     selected: unknown,
     files: ProjectFiles,
-    compilations: readonly CompilationRecord[] | undefined
+    compilations: readonly CompilationRecord[] | undefined,
+    language: AvailableLanguages
 ): Pick<ProjectData, 'programs' | 'selectedProgram'> {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw))
         throw new ProjectFormatError('Programs must be an Entry-path-to-program map')
@@ -240,7 +246,7 @@ function cleanPrograms(
         Object.entries(raw).map(([entry, program]) => {
             if (!isValidFilePath(entry))
                 throw new ProjectFormatError(`Invalid entry path: ${entry}`)
-            return [entry, cleanProgram(program)]
+            return [entry, cleanProgram(program, language)]
         })
     )
     const selectedProgram =
@@ -253,9 +259,9 @@ function cleanPrograms(
 /**
  * A Program's parts, as tolerantly as they were read when they were the Project's own: what cannot
  * be used is dropped, so a Program always loads. An earlier Project's top-level fields are these
- * same parts.
+ * same parts. The Display configuration takes the shape of the Project's Target.
  */
-function cleanProgram(raw: unknown): Program {
+function cleanProgram(raw: unknown, language: AvailableLanguages): Program {
     const parts = (raw && typeof raw === 'object' ? raw : {}) as {
         settings?: unknown
         testcases?: unknown
@@ -264,7 +270,7 @@ function cleanProgram(raw: unknown): Program {
     return {
         settings: cleanProjectSettings(parts.settings),
         testcases: cleanTestcases(Array.isArray(parts.testcases) ? parts.testcases : []),
-        ...(parts.display ? { display: cleanDisplay(parts.display) } : {})
+        ...(parts.display ? { display: cleanDisplay(parts.display, language) } : {})
     }
 }
 
@@ -298,10 +304,10 @@ export function normalizeProjectData(raw: StoredProject | undefined): ProjectDat
     )
     let programs: Pick<ProjectData, 'programs' | 'selectedProgram'>
     if (raw?.programs !== undefined) {
-        programs = cleanPrograms(raw.programs, raw.selectedProgram, files, compilations)
+        programs = cleanPrograms(raw.programs, raw.selectedProgram, files, compilations, language)
     } else {
         const entry = pickEntry(raw?.entry, files, language)
-        programs = { programs: { [entry]: cleanProgram(raw) }, selectedProgram: entry }
+        programs = { programs: { [entry]: cleanProgram(raw, language) }, selectedProgram: entry }
     }
     return {
         id: raw?.id ?? '',
@@ -528,7 +534,7 @@ type ProjectMetadata = {
     id: string
     testcases: Testcase[]
     exam?: Exam
-    display?: ProjectDisplay
+    display?: ProgramDisplay
     entry: string
     settings: ProjectSettingsDecisions
     files: ProjectFiles
@@ -875,9 +881,9 @@ export function makeProject(data?: StoredProject) {
         existingProgram(entry).testcases = testcases
     }
 
-    function setProgramDisplay(entry: string, display: ProjectDisplay | undefined) {
+    function setProgramDisplay(entry: string, display: ProgramDisplay | undefined) {
         const program = existingProgram(entry)
-        if (display) program.display = cleanDisplay(display)
+        if (display) program.display = cleanDisplay(display, state.language)
         else delete program.display
     }
 
@@ -1116,9 +1122,18 @@ export function cleanTestcases(testcases: Testcase[]) {
 /**
  * A display read back from storage or from a shared file, which is JSON and can be missing fields or
  * carry strings where numbers belong, exactly like the testcases above. Anything unusable falls back
- * to MARS's default rather than failing the load: a project must always open.
+ * to the Target's default rather than failing the load: a project must always open. An x86 Program
+ * keeps the width and height alone, every other Program MARS's five fields.
  */
-export function cleanDisplay(display: Partial<ProjectDisplay> | undefined): ProjectDisplay {
+export function cleanDisplay(
+    display: Partial<ProjectDisplay> | undefined,
+    language?: AvailableLanguages
+): ProgramDisplay {
+    if (language === 'X86')
+        return {
+            width: cleanDisplayNumber(display?.width, DEFAULT_X86_DISPLAY.width),
+            height: cleanDisplayNumber(display?.height, DEFAULT_X86_DISPLAY.height)
+        }
     const fallback = MARS_DEFAULT_DISPLAY
     return {
         unitWidth: cleanDisplayNumber(display?.unitWidth, fallback.unitWidth),

@@ -14,6 +14,12 @@ export type ProjectAssemblyLanguageOptions = {
     /** Lower-case mnemonics/directives which cannot be colonless Z80 labels. */
     knownOperations?: ReadonlySet<string>
     excludeCurrentFromCompletion?: boolean
+    /**
+     * The include files the assembler finds through its include path when no File is at the path
+     * written, by that path (`linux/fb.inc`), each with the read-only path the editor shows it at:
+     * links open them, and completion offers them after `%include`.
+     */
+    systemIncludes?: () => Promise<Readonly<Record<string, string>>>
 }
 
 type SourceSymbol = {
@@ -290,27 +296,43 @@ export function createProjectSymbolCompletionProvider(
                 })()
             if (includePrefix) {
                 const typed = includePrefix.path
-                return {
-                    suggestions: Object.keys(context.sources.files)
-                        .filter((path) => path !== context.identity.path)
-                        .map((path) => ({
-                            path,
-                            inserted: relativePath(context.identity.path, path)
-                        }))
-                        .filter(({ inserted }) => inserted.startsWith(typed))
-                        .map(({ path, inserted }) => ({
-                            label: path,
-                            insertText: inserted,
-                            detail: 'Project File',
-                            kind: monaco.languages.CompletionItemKind.File,
-                            range: new monaco.Range(
-                                position.lineNumber,
-                                includePrefix.startColumn + 1,
-                                position.lineNumber,
-                                includePrefix.endColumn + 1
-                            )
-                        }))
-                }
+                const range = new monaco.Range(
+                    position.lineNumber,
+                    includePrefix.startColumn + 1,
+                    position.lineNumber,
+                    includePrefix.endColumn + 1
+                )
+                const files = Object.keys(context.sources.files)
+                    .filter((path) => path !== context.identity.path)
+                    .map((path) => ({
+                        path,
+                        inserted: relativePath(context.identity.path, path)
+                    }))
+                    .filter(({ inserted }) => inserted.startsWith(typed))
+                    .map(({ path, inserted }) => ({
+                        label: path,
+                        insertText: inserted,
+                        detail: 'Project File',
+                        kind: monaco.languages.CompletionItemKind.File,
+                        range
+                    }))
+                //an include file is text to `%include`, never an `incbin`'s bytes
+                if (!options.systemIncludes || !/%include/i.test(prefix))
+                    return { suggestions: files }
+                return options.systemIncludes().then((system) => ({
+                    suggestions: [
+                        ...files,
+                        ...Object.keys(system)
+                            .filter((name) => name.startsWith(typed))
+                            .map((name) => ({
+                                label: name,
+                                insertText: name,
+                                detail: 'Include file, read-only',
+                                kind: monaco.languages.CompletionItemKind.File,
+                                range
+                            }))
+                    ]
+                }))
             }
             if (!isOperandContext(prefix, options)) return { suggestions: [] }
             const word = model.getWordUntilPosition(position)
@@ -428,32 +450,56 @@ export function createProjectDocumentLinkProvider(
     monaco: MonacoType,
     options: ProjectAssemblyLanguageOptions
 ): monaco.languages.LinkProvider {
+    const linksOf = (
+        model: monaco.editor.ITextModel,
+        context: NonNullable<ReturnType<typeof contextForModel>>,
+        system: Readonly<Record<string, string>> | undefined
+    ) => {
+        const links: monaco.languages.ILink[] = []
+        for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
+            const include = includeOnLine(model.getLineContent(lineNumber), options)
+            if (!include) continue
+            const range = new monaco.Range(
+                lineNumber,
+                include.startColumn + 1,
+                lineNumber,
+                include.endColumn + 1
+            )
+            const target = resolveProjectInclude(
+                context.identity.path,
+                include.path,
+                context.sources
+            )
+            if (target) {
+                links.push({
+                    range,
+                    url: projectSourceUri(monaco, { ...context.identity, path: target }),
+                    tooltip: `Open ${target}`
+                })
+                continue
+            }
+            //an include file of the include path, which the editor shows read-only
+            const shown =
+                system && Object.hasOwn(system, include.path) ? system[include.path] : null
+            if (!shown) continue
+            links.push({
+                range,
+                url: projectSourceUri(monaco, {
+                    sessionId: context.identity.sessionId,
+                    sourceKind: 'live',
+                    path: shown
+                }),
+                tooltip: `Open ${shown}`
+            })
+        }
+        return { links }
+    }
     return {
         provideLinks(model) {
             const context = contextForModel(model)
             if (!context) return { links: [] }
-            const links: monaco.languages.ILink[] = []
-            for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
-                const include = includeOnLine(model.getLineContent(lineNumber), options)
-                if (!include) continue
-                const target = resolveProjectInclude(
-                    context.identity.path,
-                    include.path,
-                    context.sources
-                )
-                if (!target) continue
-                links.push({
-                    range: new monaco.Range(
-                        lineNumber,
-                        include.startColumn + 1,
-                        lineNumber,
-                        include.endColumn + 1
-                    ),
-                    url: projectSourceUri(monaco, { ...context.identity, path: target }),
-                    tooltip: `Open ${target}`
-                })
-            }
-            return { links }
+            if (!options.systemIncludes) return linksOf(model, context, undefined)
+            return options.systemIncludes().then((system) => linksOf(model, context, system))
         }
     }
 }

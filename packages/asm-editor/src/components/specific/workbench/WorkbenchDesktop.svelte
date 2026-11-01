@@ -72,10 +72,11 @@
 
     //A Build at a narrow desktop width closes the side panel to make room for the debug column.
     //A test run builds each Testcase on the same Emulator, which is no Build of the person's: it
-    //leaves the panel open, since Run all is pressed in the Testcases panel to see its results there
+    //leaves the panel open, since Run all is pressed in the Testcases panel to see its results there.
+    //A Restart's Stop and Build keep the column, so neither closes it a second time
     let wasDebugging = untrack(() => session.debugSession)
     $effect(() => {
-        const debugging = session.debugSession
+        const debugging = session.debugSession || session.restarting
         if (debugging && !wasDebugging && !session.testing) {
             untrack(() => {
                 if (!ui.activePanel) return
@@ -166,7 +167,7 @@
             <BottomPanel style="height: {layout.bottomHeight}px; flex: none;" />
         </div>
         {#if debugUiBuilt}
-            <div class="debug-slot" class:hidden={!session.debugSession}>
+            <div class="debug-slot" class:hidden={!session.debugSession && !session.restarting}>
                 <Splitter
                     orientation="vertical"
                     size={layout.debugWidth ?? debugWidth}

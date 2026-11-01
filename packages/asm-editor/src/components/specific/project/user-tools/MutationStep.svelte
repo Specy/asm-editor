@@ -336,16 +336,12 @@
                 </div>
             {/if}
             {#if flags.length !== 0}
-                <div class="row space-between">
+                <div class="row space-between ccr">
                     <span> CCR </span>
-                    <span>
-                        <div class="row flags">
-                            {#each flags as flag, i (flag)}
-                                <div class="flag" class:flag-active={ccr[i]}>
-                                    {flag}
-                                </div>
-                            {/each}
-                        </div>
+                    <span class="flags">
+                        {#each flags as flag, i (flag)}
+                            <span class="flag" class:flag-active={ccr[i]}>{flag}</span>
+                        {/each}
                     </span>
                 </div>
             {/if}
@@ -498,13 +494,27 @@
         border: 1px solid var(--wb-line, var(--tertiary));
     }
 
+    //the flags go under CCR, all together, when they do not fit beside it, and a row still too
+    //narrow for them ends in an ellipsis: inline text in a block, which is what one cuts
+    .ccr {
+        flex-wrap: wrap;
+        column-gap: 0.5rem;
+    }
+
     .flags {
-        gap: 0.3rem;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
     }
 
     .flag {
         border-radius: 0.2rem;
         opacity: 0.3;
+
+        & + & {
+            margin-left: 0.3rem;
+        }
 
         &.flag-active {
             opacity: 1;

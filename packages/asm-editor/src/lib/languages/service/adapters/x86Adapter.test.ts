@@ -35,6 +35,36 @@ describe('x86 Project analysis adapter', () => {
         )
     })
 
+    it("warns about the Entry's @screen comment, on the keyword, as a Build does", async () => {
+        const sources = normalizeBuildInput({
+            entry: 'main.asm',
+            files: {
+                'main.asm': {
+                    encoding: 'plain',
+                    content: [
+                        '; @screen width=322',
+                        'global _start',
+                        'section .text',
+                        '_start:',
+                        '  mov rax, 60',
+                        '  syscall'
+                    ].join('\n')
+                }
+            }
+        })
+        const snapshot = await analyzeX86Project(sources, 'test', 1)
+        expect(snapshot.diagnostics).toEqual([
+            expect.objectContaining({
+                severity: 'warning',
+                message: expect.stringContaining('not a multiple of 8'),
+                location: {
+                    path: 'main.asm',
+                    range: { start: { line: 0, column: 2 }, end: { line: 0, column: 9 } }
+                }
+            })
+        ])
+    })
+
     it('counts a File linked by `extern` as part of the build, not as unreachable', async () => {
         const sources = normalizeBuildInput({
             entry: 'main.asm',

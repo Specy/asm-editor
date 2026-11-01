@@ -4,6 +4,7 @@ import type { MemoryRegion } from '#lib/languages/commonLanguageFeatures.svelte.
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
 import type { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
+import { DEFAULT_MEMORY_PANEL_SIZE, preferencesStore } from '#stores/preferencesStore.svelte.ts'
 import {
     markedMemoryAddress,
     memoryCellMenu,
@@ -87,6 +88,7 @@ Object.defineProperty(navigator, 'clipboard', {
 
 afterEach(() => {
     copied.length = 0
+    preferencesStore.setValue('memoryPanelSize', DEFAULT_MEMORY_PANEL_SIZE)
 })
 
 describe("a register value's menu", () => {
@@ -143,6 +145,14 @@ describe('the memory view a menu moves', () => {
         //the next Build's memory is another run's
         emulator.buildSources = { ...emulator.buildSources }
         expect(markedMemoryAddress(session, ui)).toBe(undefined)
+    })
+
+    it('brings the memory panel back at its default size when the Preferences hid it', () => {
+        const { emulator, session, ui } = fixture()
+        preferencesStore.setValue('memoryPanelSize', 0)
+        item(registerValueMenu(session, ui, 0x1234n, 8), 'Show in memory').onSelect()
+        expect(preferencesStore.values.memoryPanelSize.value).toBe(DEFAULT_MEMORY_PANEL_SIZE)
+        expect(emulator.setGlobalMemoryAddress).toHaveBeenCalledWith(0x1200n)
     })
 
     it('forgets the mark when the view is moved by hand', () => {

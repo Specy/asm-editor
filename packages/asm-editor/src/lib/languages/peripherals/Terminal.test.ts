@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from 'vite-plus/test'
 import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
 import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import { Keyboard } from './Keyboard'
-import { Terminal, type TerminalOptions } from './Terminal.svelte'
+import { Terminal, type TerminalLineMode, type TerminalOptions } from './Terminal.svelte'
+import type { TerminalKeyPress } from './terminalKeys'
 
 function makeTerminal(options: Omit<TerminalOptions, 'executionController'> = {}) {
     const executionController = new ExecutionController(() => Prompt.cancel())
@@ -1100,5 +1101,479 @@ describe('dialogs', () => {
         await expect(terminal.messageDialog('Done', execution)).rejects.toThrow(
             'Message dialogs are not available'
         )
+    })
+})
+
+/** The termios the guest's serial line starts with: canonical, echoing (control characters as themselves), with signals, output processed. */
+const COOKED: TerminalLineMode = {
+    canonical: true,
+    echo: true,
+    echoControl: false,
+    signals: true,
+    crToNl: true,
+    outputProcessing: true,
+    nlToCrNl: true
+}
+/** What `cfmakeraw` leaves: no line, no echo, no signals, no processing either way. */
+const MADE_RAW: TerminalLineMode = {
+    canonical: false,
+    echo: false,
+    echoControl: false,
+    signals: false,
+    crToNl: false,
+    outputProcessing: false,
+    nlToCrNl: false
+}
+/** What `stty -icanon` leaves: keys as they are typed, still echoed, signals still on. */
+const NONCANONICAL: TerminalLineMode = { ...COOKED, canonical: false }
+
+/**
+ * An x86 Terminal wired as its adapter wires it, a serial line handing its keys and signals over:
+ * `keys` holds each handing of keys as text, `bytes` as it was handed.
+ */
+function makeSerial(mode: TerminalLineMode | null = COOKED) {
+    const made = makeConsole({ serialLine: true })
+    const keys: string[] = []
+    const bytes: Uint8Array[] = []
+    const signals: number[] = []
+    made.terminal.setKeySink((sent) => {
+        bytes.push(sent)
+        keys.push(text(sent))
+    })
+    made.terminal.setSignalSink((signal) => signals.push(signal))
+    made.terminal.setLineMode(mode)
+    return { ...made, keys, bytes, signals }
+}
+
+/** A key pressed in the console, with no modifier unless given. */
+function key(name: string, modifiers: Partial<TerminalKeyPress> = {}): TerminalKeyPress {
+    return {
+        key: name,
+        code: '',
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false,
+        metaKey: false,
+        ...modifiers
+    }
+}
+
+const ctrl = (name: string) => key(name, { ctrlKey: true })
+
+describe("a serial line's output", () => {
+    it("overwrites the last line after a carriage return, and shows ONLCR's \\r\\n as a new line", () => {
+        const { terminal } = makeTerminal({ serialLine: true })
+        terminal.writeBytes(new TextEncoder().encode('50%\r60%\r\ndone\r\n'))
+        expect(terminal.output).toBe('60%\ndone\n')
+    })
+
+    it('moves down without returning while the program has output processing off', () => {
+        const { terminal } = makeSerial(MADE_RAW)
+        terminal.write('a\nb')
+        expect(terminal.output).toBe('a\n b')
+        terminal.setLineMode(COOKED)
+        terminal.write('\nc')
+        expect(terminal.output).toBe('a\n b\nc')
+        terminal.setLineMode({ ...COOKED, nlToCrNl: false })
+        terminal.write('\nd')
+        expect(terminal.output).toBe('a\n b\nc\n d')
+    })
+
+    it('keeps its cursor when the results of a test run are put before it', () => {
+        const { terminal } = makeTerminal({ serialLine: true })
+        terminal.write('abc\r')
+        terminal.prepend('Running\n')
+        terminal.write('X')
+        expect(terminal.output).toBe('Running\nXbc')
+    })
+
+    it('starts again from an empty line when cleared', () => {
+        const { terminal } = makeTerminal({ serialLine: true })
+        terminal.write('abc\r')
+        terminal.clearOutput()
+        terminal.write('X')
+        expect(terminal.output).toBe('X')
+    })
+
+    it("goes through as written in a Testcase's run, as a pipe's output does", () => {
+        const { terminal } = makeTerminal({ serialLine: true })
+        terminal.setSerialOutput(false)
+        terminal.writeBytes(new TextEncoder().encode('Hello\r\n50%\r100%\nab\bc\n'))
+        expect(terminal.output).toBe('Hello\r\n50%\r100%\nab\bc\n')
+        //back on the serial line, it takes up where that transcript ends
+        terminal.setSerialOutput(true)
+        terminal.write('x\ry')
+        expect(terminal.output).toBe('Hello\r\n50%\r100%\nab\bc\ny')
+        //and the next run starts on the serial line
+        terminal.setSerialOutput(false)
+        terminal.clear()
+        terminal.write('a\rb')
+        expect(terminal.output).toBe('b')
+    })
+
+    it('is not what the other Targets have: their \\r and \\b stay as written', () => {
+        const { terminal } = makeTerminal()
+        terminal.setLineMode(MADE_RAW)
+        terminal.write('a\rb\bc\nd')
+        expect(terminal.output).toBe('a\rb\bc\nd')
+    })
+})
+
+describe('raw mode', () => {
+    it('hands every key to the key sink as it is typed, with no read waiting', () => {
+        const { terminal, keys } = makeSerial(MADE_RAW)
+        terminal.insertText('w')
+        expect(terminal.pressKey(key('ArrowUp'))).toBe(true)
+        expect(terminal.pressKey(key('Escape'))).toBe(true)
+        terminal.pressEnter()
+        terminal.pressBackspace()
+        expect(terminal.pressKey(ctrl('d'))).toBe(true)
+        expect(keys).toEqual(['w', '\x1b[A', '\x1b', '\r', '\x7f', '\x04'])
+        //without ECHO nothing shows, and nothing waits in the Terminal: the queue is the Core's
+        expect(terminal.output).toBe('')
+        expect(terminal.hasPendingInput()).toBe(false)
+    })
+
+    it('leaves text, Shift+Tab and the page shortcuts to the console', () => {
+        const { terminal, keys } = makeSerial(MADE_RAW)
+        expect(terminal.pressKey(key('a'))).toBe(false)
+        expect(terminal.pressKey(key('Tab', { shiftKey: true }))).toBe(false)
+        expect(terminal.pressKey(ctrl('v'))).toBe(false)
+        expect(keys).toEqual([])
+    })
+
+    it('hands a paste over as typed, each line break as Enter, in UTF-8', () => {
+        const { terminal, keys, bytes } = makeSerial(MADE_RAW)
+        terminal.paste('one\r\ntwo\nthré')
+        expect(keys).toEqual(['one\rtwo\rthré'])
+        expect([...bytes[0].subarray(-2)]).toEqual([0xc3, 0xa9])
+    })
+
+    it('echoes under ECHO as a tty does: under ECHOCTL control characters as ^X', () => {
+        const echoControl = { ...NONCANONICAL, echoControl: true }
+        const { terminal } = makeSerial(echoControl)
+        terminal.insertText('a')
+        terminal.pressKey(key('ArrowLeft'))
+        terminal.pressEnter()
+        terminal.pressKey(ctrl('a'))
+        terminal.pressBackspace()
+        expect(terminal.output).toBe('a^[[D\n^A^?')
+        //without ICRNL the tty does not make Enter a new line, and echoes its carriage return
+        terminal.setLineMode({ ...echoControl, crToNl: false })
+        terminal.pressEnter()
+        expect(terminal.output).toBe('a^[[D\n^A^?^M')
+    })
+
+    it('echoes control characters as themselves without ECHOCTL, as the serial line starts', () => {
+        const { terminal } = makeSerial(NONCANONICAL)
+        terminal.insertText('a')
+        terminal.pressKey(ctrl('a'))
+        terminal.pressBackspace()
+        terminal.pressEnter()
+        //what a terminal shows of them: nothing
+        expect(terminal.output).toBe('a\x01\x7f\n')
+        //without ICRNL, Enter's carriage return takes the cursor back to the start of the line
+        terminal.setLineMode({ ...NONCANONICAL, crToNl: false })
+        terminal.insertText('bc')
+        terminal.pressEnter()
+        terminal.insertText('X')
+        expect(terminal.output).toBe('a\x01\x7f\nXc')
+    })
+
+    it('stands as a read of keys while it lasts, so a host reveals its console', () => {
+        const { terminal } = makeSerial(COOKED)
+        expect(terminal.pendingRead).toBeNull()
+        terminal.setLineMode(MADE_RAW)
+        const read = terminal.pendingRead
+        expect(read).toMatchObject({
+            kind: 'keys',
+            source: 'terminal',
+            prompt: false,
+            endOfInput: false,
+            echo: false
+        })
+        //the program setting the same mode again does not start another read
+        terminal.setLineMode({ ...MADE_RAW })
+        expect(terminal.pendingRead).toBe(read)
+        terminal.setLineMode(COOKED)
+        expect(terminal.pendingRead).toBeNull()
+    })
+
+    it('ends with the program: clear forgets the line mode', () => {
+        const { terminal, keys } = makeSerial(MADE_RAW)
+        terminal.clear()
+        expect(terminal.lineMode).toBeNull()
+        expect(terminal.pendingRead).toBeNull()
+        terminal.insertText('x')
+        expect(keys).toEqual([])
+        expect(terminal.hasPendingInput()).toBe(true)
+    })
+
+    it('hands over what was typed ahead for a line once it has started, as Linux does', () => {
+        const { terminal, keys } = makeSerial(COOKED)
+        terminal.insertText('ab\n')
+        terminal.pressBackspace()
+        terminal.setLineMode(MADE_RAW)
+        //the adapter's to ask for, once the system call that changed the termios has returned
+        expect(keys).toEqual([])
+        terminal.handOverTypedInput()
+        expect(keys).toEqual(['ab\r\x7f'])
+        expect(terminal.hasPendingInput()).toBe(false)
+    })
+
+    it('hands over the line a read is editing, already echoed, before what was typed ahead', async () => {
+        const { terminal, keys, execution } = makeSerial(COOKED)
+        const read = terminal.readStandardInput(10, 'q', execution).catch(() => null)
+        terminal.insertText('xy')
+        await settle()
+        expect(terminal.output).toBe('xy')
+        terminal.setLineMode(NONCANONICAL)
+        terminal.handOverTypedInput()
+        expect(keys).toEqual(['xy'])
+        expect(terminal.pendingRead?.line).toBe('')
+        //echoed once, as it was typed
+        expect(terminal.output).toBe('xy')
+        terminal.cancelPendingInput()
+        expect(await read).toBeNull()
+        //and nothing outside raw mode
+        terminal.setLineMode(COOKED)
+        terminal.insertText('z')
+        terminal.handOverTypedInput()
+        expect(keys).toEqual(['xy'])
+    })
+
+    it('leaves the line reads in place with no adapter to take the keys', async () => {
+        const { terminal, execution } = makeConsole({ serialLine: true })
+        terminal.setLineMode(MADE_RAW)
+        expect(terminal.pendingRead).toBeNull()
+        expect(terminal.pressKey(key('ArrowUp'))).toBe(false)
+        terminal.insertText('x\n')
+        expect(text(await terminal.readStandardInput(10, 'q', execution))).toBe('x\n')
+    })
+
+    it("takes no keys in a scripted run, whose answers are the Testcase's", async () => {
+        const { terminal, keys, execution } = makeSerial(MADE_RAW)
+        terminal.useScriptedInput(['scripted'])
+        expect(terminal.pendingRead).toBeNull()
+        expect(terminal.pressKey(key('Escape'))).toBe(false)
+        expect(text(await terminal.readStandardInput(20, 'q', execution))).toBe('scripted\n')
+        terminal.useInteractiveInput()
+        expect(terminal.pendingRead?.kind).toBe('keys')
+        expect(keys).toEqual([])
+    })
+})
+
+describe('signals typed under ISIG', () => {
+    it('raise SIGINT on Ctrl+C and SIGQUIT on Ctrl+\\, echoed as a tty echoes them', () => {
+        const { terminal, signals } = makeSerial(COOKED)
+        expect(terminal.pressKey(ctrl('c'))).toBe(true)
+        expect(terminal.pressKey(ctrl('\\'))).toBe(true)
+        expect(signals).toEqual([2, 3])
+        //as themselves, without ECHOCTL; as ^C and ^\ with it
+        expect(terminal.output).toBe('\x03\x1c')
+        terminal.setLineMode({ ...COOKED, echoControl: true })
+        terminal.pressKey(ctrl('c'))
+        terminal.pressKey(ctrl('\\'))
+        expect(terminal.output).toBe('\x03\x1c^C^\\')
+    })
+
+    it('drop the line being typed and what was typed ahead, keeping its echo', async () => {
+        const { terminal, signals, execution } = makeSerial(COOKED)
+        const read = terminal.readStandardInput(100, 'q', execution)
+        terminal.insertText('abc')
+        await settle()
+        expect(terminal.pendingRead?.line).toBe('abc')
+        terminal.pressKey(ctrl('c'))
+        expect(terminal.pendingRead?.line).toBe('')
+        //Backspace has nothing left to erase
+        terminal.pressBackspace()
+        terminal.insertText('d\n')
+        expect(text(await read)).toBe('d\n')
+        expect(terminal.output).toBe('abc\x03d\n')
+        terminal.insertText('ahead')
+        terminal.pressKey(ctrl('c'))
+        expect(terminal.hasPendingInput()).toBe(false)
+        expect(signals).toEqual([2, 2])
+    })
+
+    it('take Ctrl+Z and do nothing with it, since no shell could resume the program', () => {
+        const { terminal, signals, keys } = makeSerial(NONCANONICAL)
+        expect(terminal.pressKey(ctrl('z'))).toBe(true)
+        expect(signals).toEqual([])
+        expect(keys).toEqual([])
+        expect(terminal.output).toBe('')
+    })
+
+    it('work in raw mode too, where without ISIG Ctrl+C is only a character', () => {
+        const { terminal, signals, keys } = makeSerial(NONCANONICAL)
+        terminal.pressKey(ctrl('c'))
+        expect(signals).toEqual([2])
+        expect(keys).toEqual([])
+        terminal.setLineMode(MADE_RAW)
+        terminal.pressKey(ctrl('c'))
+        terminal.pressKey(ctrl('\\'))
+        terminal.pressKey(ctrl('z'))
+        expect(keys).toEqual(['\x03', '\x1c', '\x1a'])
+        expect(signals).toEqual([2])
+    })
+
+    it('echo nothing with ECHO off', () => {
+        const { terminal, signals } = makeSerial({ ...COOKED, echo: false })
+        terminal.pressKey(ctrl('c'))
+        expect(signals).toEqual([2])
+        expect(terminal.output).toBe('')
+    })
+
+    it('leave Ctrl+C to copy without ISIG, without an adapter, and on the other Targets', () => {
+        expect(makeSerial({ ...COOKED, signals: false }).terminal.pressKey(ctrl('c'))).toBe(false)
+        const unwired = makeConsole({ serialLine: true }).terminal
+        unwired.setLineMode(COOKED)
+        expect(unwired.pressKey(ctrl('c'))).toBe(false)
+        expect(unwired.signalsTyped).toBe(false)
+        expect(makeConsole().terminal.pressKey(ctrl('c'))).toBe(false)
+    })
+})
+
+describe('canonical mode under the termios', () => {
+    it('leaves every key but the signals to the console, as before', () => {
+        const { terminal, keys } = makeSerial(COOKED)
+        for (const pressed of [key('ArrowUp'), key('Escape'), key('Enter'), ctrl('d'), ctrl('a')]) {
+            expect(terminal.pressKey(pressed)).toBe(false)
+        }
+        expect(keys).toEqual([])
+    })
+
+    it('reads a line as before with ECHO on', async () => {
+        const { terminal, execution } = makeSerial(COOKED)
+        const read = terminal.readStandardInput(100, 'q', execution)
+        terminal.insertText('hi\n')
+        expect(text(await read)).toBe('hi\n')
+        expect(terminal.output).toBe('hi\n')
+    })
+
+    it('echoes nothing of a line with ECHO off, not even its new line', async () => {
+        const { terminal, execution } = makeSerial({ ...COOKED, echo: false })
+        terminal.write('Password: ')
+        const read = terminal.readStandardInput(100, 'q', execution)
+        terminal.insertText('secret\n')
+        expect(text(await read)).toBe('secret\n')
+        expect(terminal.output).toBe('Password: ')
+        expect(terminal.pendingRead).toBeNull()
+    })
+})
+
+describe('Undo on a serial line', () => {
+    /** A serial line journaled as the x86 adapter journals it: `at` names the running instruction. */
+    function makeJournaledSerial(mode: TerminalLineMode = COOKED) {
+        const made = makeSerial(mode)
+        let position: number | null = null
+        made.terminal.trackHistory(() => position, 100)
+        return { ...made, at: (next: number | null) => (position = next) }
+    }
+
+    it('puts back a line an instruction overwrote, and the cursor where it was', () => {
+        const { terminal, at } = makeJournaledSerial()
+        at(1)
+        terminal.write('loading 10%')
+        at(2)
+        terminal.write('\rloading 20%')
+        at(3)
+        terminal.write('\r\ndone\r\n')
+        expect(terminal.output).toBe('loading 20%\ndone\n')
+        terminal.undoAfter(2)
+        expect(terminal.output).toBe('loading 20%')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('loading 10%')
+        at(2)
+        terminal.write('!')
+        expect(terminal.output).toBe('loading 10%!')
+    })
+
+    it('takes back several overwrites of one line at once', () => {
+        const { terminal, at } = makeJournaledSerial()
+        at(1)
+        terminal.write('abc')
+        at(2)
+        terminal.write('\rX')
+        at(3)
+        terminal.write('\rYZ')
+        expect(terminal.output).toBe('YZc')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('abc')
+        terminal.undoAfter(0)
+        expect(terminal.output).toBe('')
+    })
+
+    it('puts the cursor back inside the line, and forgets a sequence still being written', () => {
+        const { terminal, at } = makeJournaledSerial()
+        at(1)
+        terminal.write('abcd\r')
+        at(2)
+        terminal.write('X\x1b[')
+        expect(terminal.output).toBe('Xbcd')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('abcd')
+        //the cursor is at the start again, and `Y` is text, not the end of a sequence
+        terminal.write('Y')
+        expect(terminal.output).toBe('Ybcd')
+    })
+
+    it('takes back a staircase', () => {
+        const { terminal, at } = makeJournaledSerial(MADE_RAW)
+        at(1)
+        terminal.write('ab')
+        at(2)
+        terminal.write('\nc')
+        expect(terminal.output).toBe('ab\n  c')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('ab')
+        terminal.write('\nd')
+        expect(terminal.output).toBe('ab\n  d')
+    })
+
+    it('puts back a line an instruction cleared and then overwrote', () => {
+        const { terminal, at } = makeJournaledSerial()
+        at(1)
+        terminal.write('abc')
+        at(2)
+        terminal.clearOutput()
+        terminal.write('xyz\rQ')
+        expect(terminal.output).toBe('Qyz')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('abc')
+        terminal.write('d')
+        expect(terminal.output).toBe('abcd')
+    })
+
+    it('takes back the echo of a line typed over a prompt, Backspace included', async () => {
+        const { terminal, execution, at } = makeJournaledSerial()
+        at(1)
+        terminal.write('> ____\r> ')
+        at(2)
+        const read = terminal.readStandardInput(100, 'q', execution)
+        terminal.insertText('ab')
+        await settle()
+        terminal.pressBackspace()
+        await settle()
+        expect(terminal.output).toBe('> a __')
+        terminal.insertText('c\n')
+        expect(text(await read)).toBe('ac\n')
+        expect(terminal.output).toBe('> ac__\n')
+        terminal.undoAfter(1)
+        expect(terminal.output).toBe('> ____')
+    })
+
+    it("takes back the echo of a key a waiting read took, keeping a typed-ahead key's", () => {
+        const { terminal, keys, at } = makeJournaledSerial(NONCANONICAL)
+        //typed while the program ran between instructions: the Core puts the key back on Undo
+        at(null)
+        terminal.insertText('a')
+        //typed while a read waited in instruction 5: Undo asks for it again
+        at(5)
+        terminal.insertText('b')
+        expect(terminal.output).toBe('ab')
+        terminal.undoAfter(4)
+        expect(terminal.output).toBe('a')
+        expect(keys).toEqual(['a', 'b'])
     })
 })
