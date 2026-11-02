@@ -17,6 +17,15 @@ import { PSEUDOCODE_DOCUMENTATION } from '#lib/documentation/x86/executableSecti
 export const PSEUDOCODE_LINK = `[Learn to read the Pseudocode](${globalThis.location?.origin ?? ''}${PSEUDOCODE_DOCUMENTATION})`
 
 /**
+ * Whether a function name with no target is a system call the decompiler writes as a call
+ * (`sys_write`, or `syscall` for one whose number it did not find), whose hover
+ * `systemCallHovers.ts` gives.
+ */
+export function isSystemCallName(word: string): boolean {
+    return /^(?:sys_\w+|syscall)$/.test(word)
+}
+
+/**
  * The value of a constant as the decompiler prints it: decimal or hexadecimal, maybe negative,
  * with any integer suffix, or a character (`'A'`, `'\n'`, `L'\x7f'`). Undefined for anything else,
  * such as a floating-point number or a string.

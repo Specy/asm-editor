@@ -8,9 +8,18 @@ import { documentationFor } from '#lib/documentation/documentation.ts'
 import { resolveDocumentationLink } from '#lib/documentation/links.ts'
 import {
     LISTING_DOCUMENTATION,
-    PSEUDOCODE_DOCUMENTATION
+    PSEUDOCODE_DOCUMENTATION,
+    syscallDocumentation
 } from '#lib/documentation/x86/executableSections.ts'
-import { constantValue, ghidraWordMarkdown, PSEUDOCODE_LINK } from './pseudocodeHovers'
+import { X86_SYSCALLS } from '#lib/languages/X86/generated/x86Syscalls.ts'
+import { describeX86Syscall } from '#lib/languages/X86/x86SyscallDescriptions.ts'
+import {
+    constantValue,
+    ghidraWordMarkdown,
+    isSystemCallName,
+    PSEUDOCODE_LINK
+} from './pseudocodeHovers'
+import { systemCallMarkdown } from './systemCallHovers'
 
 describe('a constant of the Pseudocode', () => {
     it('reads as the decompiler prints numbers and characters', () => {
@@ -94,6 +103,59 @@ describe("Ghidra's words", () => {
     })
 })
 
+describe('a system call the decompiler writes as a call', () => {
+    const hover = systemCallMarkdown
+
+    it('names one the simulator implements, says what it does and links to its entry', () => {
+        const write = hover('sys_write')
+        expect(write).toMatch(/^\*\*sys_write\*\*: the Linux system call `write`, number 1\. /)
+        expect(write).toContain(
+            'the values in `rdi`, `rsi`, `rdx`, `r10`, `r8` and `r9`, in that order'
+        )
+        expect(write).toContain('Its result is what `rax` holds afterwards.')
+        expect(write).toContain(describeX86Syscall('write'))
+        //exit has no result: it never returns
+        expect(hover('sys_exit')).toContain('`r8` and `r9`, in that order.')
+        expect(hover('sys_exit')).not.toContain('Its result')
+        expect(
+            write.endsWith(
+                `[Read about \`write\` in the Syscalls chapter](${syscallDocumentation('write')})`
+            )
+        ).toBe(true)
+        //one the Documentation describes in no words still has its number and entry
+        const undescribed = X86_SYSCALLS.find((syscall) => !describeX86Syscall(syscall.name))
+        if (undescribed)
+            expect(hover(`sys_${undescribed.name}`)).toContain(`, number ${undescribed.number}.`)
+    })
+
+    it('says the simulator does not implement the others', () => {
+        const initModule = hover('sys_init_module')
+        expect(initModule).toMatch(
+            /^\*\*sys_init_module\*\*: the Linux system call `init_module`\. /
+        )
+        expect(initModule).toContain('The simulator does not implement it')
+        expect(initModule.endsWith(`\n\n${PSEUDOCODE_LINK}`)).toBe(true)
+    })
+
+    it('explains one whose number the decompiler did not find or Linux does not have', () => {
+        const syscall = hover('syscall')
+        expect(syscall).toContain(
+            'a system call whose number the decompiler could not work out, or that Linux does not have'
+        )
+        expect(syscall).toContain('The argument shown is the number')
+        expect(syscall.endsWith(`\n\n${PSEUDOCODE_LINK}`)).toBe(true)
+    })
+
+    it("is told from Ghidra's other operations and from a namespaced name", () => {
+        expect(isSystemCallName('sys_write')).toBe(true)
+        expect(isSystemCallName('syscall')).toBe(true)
+        for (const word of ['cpuid', 'halt_baddata', 'LOCK', 'sys_', 'system', 'std::sys_write'])
+            expect(isSystemCallName(word)).toBe(false)
+        //the hover provider gives it (systemCallHovers.ts), not the words of Ghidra's it knows
+        expect(ghidraWordMarkdown('sys_write', 'function')).toBeUndefined()
+    })
+})
+
 describe('the Documentation sections the Listing and the Pseudocode link to', () => {
     it('are entries of the x86 Executables Chapter', async () => {
         const chapters = await documentationFor('x86')
@@ -105,5 +167,14 @@ describe('the Documentation sections the Listing and the Pseudocode link to', ()
             kind: 'entry',
             entry: { chapter: 'executables', anchor: 'pseudocode', title: 'Reading the Pseudocode' }
         })
+    })
+
+    it("are the Syscalls Chapter's entries, for every call the simulator implements", async () => {
+        const chapters = await documentationFor('x86')
+        for (const { name } of X86_SYSCALLS)
+            expect(resolveDocumentationLink(syscallDocumentation(name), chapters)).toMatchObject({
+                kind: 'entry',
+                entry: { chapter: 'syscalls', anchor: `syscall-${name}`, title: name }
+            })
     })
 })

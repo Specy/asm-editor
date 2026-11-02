@@ -17,6 +17,7 @@ import {
 import {
     constantValue,
     ghidraWordMarkdown,
+    isSystemCallName,
     PSEUDOCODE_LINK,
     renamedVariableMarkdown
 } from '#lib/pseudocode/pseudocodeHovers.ts'
@@ -194,6 +195,14 @@ export function createPseudocodeProviders(monacoInstance: MonacoType) {
                         }
                     ]
                 }
+            //a system call's hover reads the Syscalls Chapter's table, loaded when one is hovered
+            if (token.kind === 'function' && isSystemCallName(word))
+                return import('#lib/pseudocode/systemCallHovers.ts').then(
+                    ({ systemCallMarkdown }) => ({
+                        range: at,
+                        contents: [{ value: systemCallMarkdown(word) }]
+                    })
+                )
             //a number's card is the Listing's, at its width: Ghidra's constants carry no size
             const value = token.kind === 'constant' ? constantValue(word) : undefined
             const markdown =

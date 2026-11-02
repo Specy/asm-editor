@@ -6,3 +6,10 @@
  */
 export const LISTING_DOCUMENTATION = '/documentation/x86/executables#listing'
 export const PSEUDOCODE_DOCUMENTATION = '/documentation/x86/executables#pseudocode'
+
+/**
+ * The x86 Syscalls Chapter's entry for a call the Core implements, which the Pseudocode's hover on
+ * that system call (`sys_write`) links to; `x86.ts` gives each entry the anchor `syscall-` and the
+ * call's name.
+ */
+export const syscallDocumentation = (name: string) => `/documentation/x86/syscall#syscall-${name}`

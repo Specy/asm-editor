@@ -74,7 +74,8 @@ async function decompileFixture(
     const { base } = fixtureListing
     const program = decompiler.openProgram(
         programImage({ bytes, listing: fixtureListing, analysis, prototypes: glibc }),
-        { namespaces: 'minimal' }
+        //as the worker opens it (pseudocodeService.ts)
+        { namespaces: 'minimal', syscalls: 'linux' }
     )
     for (const name of names(fixtureListing)) {
         const fn = fixtureListing.functions.find((candidate) => candidate.name === name)!
@@ -121,6 +122,10 @@ beforeAll(async () => {
         },
         true
     )
+    //written by hand, making its system calls directly
+    await decompileFixture('../../../static/downloads/blog/first-branch', 'first-branch:', () => [
+        'main'
+    ])
 })
 
 afterAll(() => decompiler.dispose())
@@ -183,6 +188,31 @@ describe('the hover of a Pseudocode', () => {
         expect(hover('_start', 'unaff_retaddr')[0]).toContain('return address')
         //punctuation has nothing to say
         expect(hover('main', 'acStack_98,0x80', 10)).toEqual([])
+    })
+
+    it('says what a system call is, with its entry in the Syscalls chapter, and goes nowhere', async () => {
+        //loaded when hovered, so the hover is a promise
+        const systemCall = async (text: string) => {
+            const result = await createPseudocodeProviders(monacoStub).hover.provideHover(
+                pseudocodeModel('first-branch:main'),
+                at('first-branch:main', text),
+                {} as never
+            )
+            return result?.contents.map((content) => content.value) ?? []
+        }
+        const [write] = await systemCall('sys_write')
+        expect(write).toMatch(/^\*\*sys_write\*\*: the Linux system call `write`, number 1\. /)
+        expect(write).toContain(
+            '[Read about `write` in the Syscalls chapter](/documentation/x86/syscall#syscall-write)'
+        )
+        expect((await systemCall('sys_exit'))[0]).toContain('number 60')
+        //a system call is not in the Executable: nothing to go to
+        const definition = createPseudocodeProviders(monacoStub).definition.provideDefinition(
+            pseudocodeModel('first-branch:main'),
+            at('first-branch:main', 'sys_write'),
+            {} as never
+        )
+        expect(definition).toBeNull()
     })
 
     it('says a name is invented, as the Listing does', () => {
@@ -401,7 +431,7 @@ describe('the hover of a name the person gave (annotations-and-search.md, decisi
         })
         const program = decompiler.openProgram(
             programImage({ bytes, listing: of, analysis, prototypes: glibc }),
-            { namespaces: 'minimal' }
+            { namespaces: 'minimal', syscalls: 'linux' }
         )
         try {
             const fn = of.functions.find((candidate) => candidate.name === name)!

@@ -79,8 +79,12 @@ export function createPseudocodeService(
                 programs.delete(request.program)
                 //a C++ name as far as tells it apart where it is used: `std::string::operator+=`
                 //from `main`, `size` inside another member of `std::string` (cpp-demangling.md,
-                //decision 14)
-                const program = loaded.openProgram(request.image, { namespaces: 'minimal' })
+                //decision 14); every Executable is a Linux one, so a `syscall` whose number is
+                //known is that system call, `sys_write(1,"Hi\n",3)`
+                const program = loaded.openProgram(request.image, {
+                    namespaces: 'minimal',
+                    syscalls: 'linux'
+                })
                 programs.set(request.program, program)
                 post({ type: 'opened', id: request.id, warnings: program.warnings })
             } else {
