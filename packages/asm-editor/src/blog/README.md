@@ -61,9 +61,10 @@ layouts, and the article's Playground and Open in editor actions.
 
 ## Reverse-engineering practice executable
 
-The walkthrough's Linux x86-64 ELF is built from
-`static/downloads/blog/first-branch.s` with GNU Intel assembly syntax. From this
-package directory, rebuild it using:
+The Linux x86-64 ELF in the cover screenshot is built from
+`static/downloads/blog/first-branch.s`, written in GNU Intel assembly syntax. The
+article no longer links to it. Its download URLs remain because links to them have
+already been shared. From this package directory, rebuild it using:
 
 ```sh
 gcc -nostdlib -static -no-pie -Wl,--build-id=none,-e,main \
@@ -72,7 +73,29 @@ gcc -nostdlib -static -no-pie -Wl,--build-id=none,-e,main \
 ```
 
 The program checks its first input byte. Uppercase `A` prints `Accepted`; `B`
-prints `Try again`. After rebuilding, verify both paths in the simulator and check
-the article's addresses, Listing text, flags, and screenshot against the new
-artifact. Its source is offered for external rebuilding, while the walkthrough
-imports the executable itself.
+prints `Try again`. After rebuilding, verify both paths in the simulator. Then
+check the addresses, Listing text and flags in the cover screenshot against the new
+artifact.
+
+## Decompilation flag executable
+
+The flag example uses a dynamically linked Linux x86-64 executable built from
+`static/downloads/blog/find-the-flag.c`. From this package directory, rebuild it
+using:
+
+```sh
+gcc -O0 -fno-stack-protector -fcf-protection=none -fno-pie -no-pie \
+    -Wl,--build-id=none static/downloads/blog/find-the-flag.c \
+    -o static/downloads/blog/find-the-flag
+```
+
+The matching input, `flag{read_the_pseudocode}`, prints `Flag accepted`, while a
+different input prints `Wrong flag`. After rebuilding, check both paths in the
+simulator and verify the article's Pseudocode and screenshot against the new
+executable.
+
+The article's **Try ASM Editor** link opens this executable as a Project with one
+testcase for each path. After rebuilding, make a new link from a Project that holds
+the new executable and those testcases (`createSharePayload` in `src/lib/utils.ts`).
+`examples.test.ts` checks that the link's executable is the same as the download and
+that its testcases pass.

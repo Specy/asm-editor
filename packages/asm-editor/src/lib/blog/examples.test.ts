@@ -8,8 +8,12 @@ import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSourc
 import { compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'
 import { loadDecoder } from '#lib/listing/decoder.ts'
 import { generateListing } from '#lib/listing/generateListing.ts'
+import { programImage } from '#lib/pseudocode/programImage.ts'
+import { loadDecompiler } from '@specy/decompiler'
+import glibc from '@specy/decompiler/prototypes/glibc'
 import totalsC from './fixtures/totals-c.json'
 import totalsCpp from './fixtures/totals-cpp.json'
+import lzstring from 'lz-string'
 
 const blog = new URL('../../blog/', import.meta.url)
 const examples = readdirSync(blog, { withFileTypes: true })
@@ -84,6 +88,38 @@ describe('blog worked examples', () => {
         expect(listing.text).toContain('main:')
     }, 30000)
 
+    it('reveals the flag comparison and success branch in the practice Pseudocode', async () => {
+        const bytes = new Uint8Array(
+            readFileSync(new URL('../../../static/downloads/blog/find-the-flag', import.meta.url))
+        )
+        const decoder = await loadDecoder()
+        const analysis = decoder.analyze(bytes)
+        const listing = generateListing(decoder, {
+            bytes,
+            name: 'find-the-flag',
+            base: 0,
+            version: 'v1'
+        })
+        const main = listing.functions.find((fn) => fn.name === 'main')
+        expect(main).toBeDefined()
+        const decompiler = await loadDecompiler({ architecture: 'x86-64' })
+        try {
+            const program = decompiler.openProgram(
+                programImage({ bytes, listing, analysis, prototypes: glibc })
+            )
+            const result = program.decompile(main!.address)
+            program.dispose()
+            if ('error' in result) throw new Error(result.error)
+            const text = result.lines.map((line) => line.text).join('\n')
+            expect(text).toMatch(/strcmp\([^,\n]+,"flag\{read_the_pseudocode\}"\)/)
+            expect(text).toMatch(/if \(\w+ == 0\)/)
+            expect(text).toContain('puts("Flag accepted");')
+            expect(text).toContain('puts("Wrong flag");')
+        } finally {
+            decompiler.dispose()
+        }
+    }, 30000)
+
     for (const { slug, example } of examples) {
         it(`${slug} playground ${example.index}`, async () => {
             const sources = {
@@ -124,19 +160,58 @@ describe('blog worked examples', () => {
         }, 30000)
     }
 
+    it('opens the flag executable from the Try ASM Editor link, its testcases passing', async () => {
+        const article = readFileSync(
+            new URL('first-x86-reverse-engineering/index.md', blog),
+            'utf8'
+        )
+        const payload = /class="blog-try-button" href="\/projects\/share\?project=([^"]+)"/.exec(
+            article
+        )
+        expect(payload).not.toBeNull()
+        const shared = JSON.parse(lzstring.decompressFromEncodedURIComponent(payload![1]))
+        const bytes = readFileSync(
+            new URL('../../../static/downloads/blog/find-the-flag', import.meta.url)
+        )
+        expect(shared.entry).toBe('find-the-flag')
+        expect(shared.files['find-the-flag'].content).toBe(bytes.toString('base64'))
+        expect(shared.testcases.map((testcase: { input: string[] }) => testcase.input)).toEqual([
+            ['flag{read_the_pseudocode}'],
+            ['flag{guess}']
+        ])
+        const project = makeProject(shared)
+        const emulator = await createEmulator('X86', programBuildSources(project), {
+            language: 'X86',
+            automaticChecking: false
+        })
+        try {
+            const results = await emulator.test(
+                programBuildSources(project),
+                shared.testcases,
+                10000
+            )
+            expect(results.map((result) => result.passed)).toEqual([true, true])
+            expect(emulator.errors).toEqual([])
+        } finally {
+            emulator.dispose()
+        }
+    }, 30000)
+
     it.each([
-        ['A', 'Accepted'],
-        ['B', 'Try again']
+        ['first-branch', 'A', 'Type a letter: Accepted\n'],
+        ['first-branch', 'B', 'Type a letter: Try again\n'],
+        ['find-the-flag', 'flag{read_the_pseudocode}', 'Enter the flag:\nFlag accepted\n'],
+        ['find-the-flag', 'wrong', 'Enter the flag:\nWrong flag\n']
     ])(
-        'practice executable: %s produces %s',
-        async (input, output) => {
+        'practice executable %s: %s produces %s',
+        async (name, input, output) => {
             const bytes = readFileSync(
-                new URL('../../../static/downloads/blog/first-branch', import.meta.url)
+                new URL(`../../../static/downloads/blog/${name}`, import.meta.url)
             )
             const project = makeProject({
                 language: 'X86',
-                entry: 'first-branch',
-                files: { 'first-branch': { encoding: 'base64', content: bytes.toString('base64') } }
+                entry: name,
+                files: { [name]: { encoding: 'base64', content: bytes.toString('base64') } }
             })
             const emulator = await createEmulator('X86', programBuildSources(project), {
                 language: 'X86',
@@ -148,7 +223,7 @@ describe('blog worked examples', () => {
                     [
                         {
                             input: [input],
-                            expectedOutput: `Type a letter: ${output}\n`,
+                            expectedOutput: output,
                             startingRegisters: {},
                             expectedRegisters: {},
                             startingMemory: [],
