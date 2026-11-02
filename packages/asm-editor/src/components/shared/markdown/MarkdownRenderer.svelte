@@ -319,7 +319,7 @@
     :global(.markdown-body h5),
     :global(.markdown-body h6) {
         width: min(100%, 46rem);
-        margin: 0 var(--md-inline-margin, auto);
+        margin: 0 var(--md-inline-margin, 0);
     }
 
     :global(.markdown-body h1:not(:first-child)),

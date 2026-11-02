@@ -95,10 +95,11 @@
         color: #181818;
     }
     /* the console scrolls inside, so the box keeps its height and the icon its corner. A card like
-       the code and the registers around it, inside the same 1px edge */
+       the code and the registers around it, inside the same 1px edge. Held low, so that what a run
+       prints moves the panels around it as little as possible */
     .std-out {
         min-height: 4rem;
-        max-height: 8rem;
+        max-height: 6.5rem;
         position: relative;
         border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
         border-radius: var(--wb-radius, 0.4rem);
@@ -109,7 +110,6 @@
         color: var(--secondary-text);
         @media screen and (max-width: 1000px) {
             width: 100%;
-            max-height: 10rem;
         }
     }
     /* Draw the focus ring on the rounded panel so its clipped contents cannot cut off the corners. */
