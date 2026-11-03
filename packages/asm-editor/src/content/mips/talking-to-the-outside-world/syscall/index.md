@@ -291,8 +291,8 @@ than 1 it writes nothing.
 - Service 9 allocates bytes from the heap and returns their address in `$v0`. Under the Playground's
   default memory layout, that heap begins at `0x10040000`; a different memory layout can place it
   elsewhere.
-- Services 13–16 open, read, write and close files in the Playground project's **Files**. They do not
-  expose arbitrary files from the computer running the browser.
+- Services 13–16 open, read, write and close files: the ones shown in the editor's file explorer.
+  They never reach the files of the computer running the browser.
 - Services 41–44 take a generator ID in `$a0`. Service 41 replaces `$a0` with a signed integer;
   service 42 replaces it with an integer in the range `0 <= value < $a1`, so `$a1` must be positive.
   Service 43 returns a float in `$f0`, and service 44 returns a double in `$f0` / `$f1`. This

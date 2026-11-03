@@ -112,7 +112,7 @@ export function marsHelpCatalog(target, syscalls, functions = []) {
                 call.name,
                 call.declaration,
                 call.doc,
-                `/documentation/${route}/runtime-library#folders`,
+                `/documentation/${route}/runtime-library#${call.name}`,
                 'function',
                 [call.header]
             )

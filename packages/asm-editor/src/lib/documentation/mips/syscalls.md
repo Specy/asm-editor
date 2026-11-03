@@ -15,7 +15,7 @@ A C or C++ program reaches the same services through `<sim.h>`. Each entry names
 
 ## Files and folders {#folders}
 
-A program reads and writes the **Project Files**, the files you see in the editor, never your computer’s disk. A path names a file from the Project’s top folder: `data/scores.txt` is the file `scores.txt` in the folder `data`. Open, read, write and close work on files (services 13, 14, 15 and 16). Six more services work with folders, and with files by name:
+A program reads and writes files and folders: the ones shown in the editor’s file explorer, never your computer’s disk. Changes stay after the program ends, except that each Testcase works on a copy. A path names a file from the top folder, which is always the current folder: `data/scores.txt` is the file `scores.txt` in the folder `data`. Open, read, write and close work on files (services 13, 14, 15 and 16). Six more services work with folders, and with files by name:
 
 | Service       | What it does                                                  |
 | ------------- | ------------------------------------------------------------- |
@@ -36,21 +36,21 @@ These six report a failure differently from the older file services. Instead of 
 | -21    | The path names a folder where a file was expected.                  |
 | -39    | The folder still holds a file or a folder, so it cannot be deleted. |
 
-Folders behave as they do in this editor’s Project:
+Folders on this machine behave this way:
 
-- **A folder that mkdir makes lasts until the program ends.** It stays in the Project only once a file is written inside it, so a program that wants to keep an empty folder writes a small hidden file such as `.keep` into it. A program run again may find its folder already there: treat -17 from mkdir as success.
+- **A folder that mkdir makes lasts until the program ends.** It stays after that only once a file is written inside it, so a program that wants to keep an empty folder writes a small hidden file such as `.keep` into it. A program run again may find its folder already there: treat -17 from mkdir as success.
 - **rmdir deletes only an empty folder.** Delete its files first with unlink.
 - **rename moves files, not folders:** renaming a folder, or a file onto a folder, fails with -21, and a folder onto a file with -20. Renaming a file onto another file replaces that file, as Linux does, and Undo brings both back.
 - **A listing starts with `.` and `..`**, the folder itself and the folder that holds it, then names its files and folders in name order. Each entry has an **inode number**, a number that identifies it and stays the same for the whole run.
 
-Undo takes back every one of these services, and each Testcase runs on its own copy of the Project Files, so nothing it makes, deletes or renames reaches the Project.
+Undo takes back every one of these services, and each Testcase runs on its own copy of the files, so nothing it makes, deletes or renames stays after it ends.
 
 ### Listing a folder from assembly
 
 To list a folder, open it with service 13 and flag 0, as if reading a file, then call getdents (1065) with a buffer. It fills the buffer with one **record** per entry and returns how many bytes it stored; call it again until it returns 0. Each record starts with the entry’s inode number (4 bytes) and the position of the next entry (4 bytes). The record’s length is the halfword at offset 8, the name starts at offset 10 and ends with a NUL, and the record’s last byte says what the entry is: 4 for a folder, 8 for a file.
 
 ```mips
-# Lists the Project's top folder, one name per line, with a / after each folder.
+# Lists the top folder, one name per line, with a / after each folder.
         .data
 here:   .asciiz "."
 slash:  .asciiz "/"
@@ -119,7 +119,7 @@ int main(void) {
         perror("mkdir notes");
         return 1;
     }
-    /* A folder stays in the Project only while a file is inside it. */
+    /* A folder outlasts the program only while a file is inside it. */
     FILE *keep = fopen("notes/.keep", "w");
     if (keep) fclose(keep);
 

@@ -193,13 +193,13 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
         name: 'open file',
         code: 13,
         arguments: [
-            { name: '$a0', description: 'address of NUL-terminated UTF-8 path in Project Files' },
+            { name: '$a0', description: 'address of NUL-terminated UTF-8 path' },
             { name: '$a1', description: 'flags' },
             { name: '$a2', description: 'mode' }
         ],
         result: {
             arguments: [{ name: '$v0', description: 'contains file descriptor (-1 if error)' }],
-            other: 'Opens a file in the Project Files, without accessing the computer’s disk. Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. A folder opened with flag 0 gives a descriptor that service 1065 lists; opening a folder for writing fails. The mode argument is ignored. Failure returns -1. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3. Undo restores file changes; each Testcase starts with its own copy of the Project Files.'
+            other: 'Opens a file. Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. A folder opened with flag 0 gives a descriptor that service 1065 lists; opening a folder for writing fails. The mode argument is ignored. Failure returns -1. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; the files a program opens receive descriptors starting at 3. Undo restores file changes; each Testcase starts with its own copy of the files.'
         },
         implemented: true,
         binding: {
@@ -227,7 +227,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains number of bytes read (0 if end-of-file, -1 if error)'
                 }
             ],
-            other: 'Reads bytes from an open Project File. Descriptor 0 reads standard input from the Terminal: enter a line and press Enter. Ctrl+D or End of input on an empty line ends standard input; a Testcase uses scripted input and reaches end of input when its answers run out. Returns 0 at end of input or file, and -1 on failure. Undo restores file state; each Testcase uses its own copy of Project Files.'
+            other: 'Reads bytes from an open file. Descriptor 0 reads standard input from the Terminal: enter a line and press Enter. Ctrl+D or End of input on an empty line ends standard input; a Testcase uses scripted input and reaches end of input when its answers run out. Returns 0 at end of input or file, and -1 on failure. Undo restores file state; each Testcase uses its own copy of the files.'
         },
         implemented: true,
         binding: {
@@ -255,7 +255,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains number of bytes written (-1 if error)'
                 }
             ],
-            other: 'Writes bytes to an open Project File; descriptors 1 and 2 write to the Terminal as standard output and standard error. Returns the number of bytes written, or -1 on failure. Undo restores file changes; each Testcase uses its own copy of Project Files.'
+            other: 'Writes bytes to an open file; descriptors 1 and 2 write to the Terminal as standard output and standard error. Returns the number of bytes written, or -1 on failure. Undo restores file changes; each Testcase uses its own copy of the files.'
         },
         implemented: true,
         binding: {
@@ -889,7 +889,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains 0 if the file was deleted, or a negative error number'
                 }
             ],
-            other: 'Deletes a file from the Project Files. Fails with -2 when nothing is at the path, and with -21 when the path is a folder, which service 1031 deletes instead. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the Project Files.'
+            other: 'Deletes a file. Fails with -2 when nothing is at the path, and with -21 when the path is a folder, which service 1031 deletes instead. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the files.'
         },
         implemented: true,
         binding: {
@@ -911,7 +911,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains 0 if the folder was made, or a negative error number'
                 }
             ],
-            other: 'Makes a folder. The folder that holds it must exist already (-2 if it does not, -20 if that path is a file), and nothing may be at the path yet: -17 means it already exists, which a program run a second time should treat as success. A folder made this way lasts until the run ends, and stays in the Project only once a file is written inside it, so a program that wants to keep an empty folder writes a small hidden file such as `.keep` into it. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the Project Files.'
+            other: 'Makes a folder. The folder that holds it must exist already (-2 if it does not, -20 if that path is a file), and nothing may be at the path yet: -17 means it already exists, which a program run a second time should treat as success. A folder made this way lasts until the run ends, and stays after it only once a file is written inside it, so a program that wants to keep an empty folder writes a small hidden file such as `.keep` into it. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the files.'
         },
         implemented: true,
         binding: {
@@ -936,7 +936,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains 0 if the folder was deleted, or a negative error number'
                 }
             ],
-            other: 'Deletes a folder, but only an empty one: -39 means it still holds a file or a folder, -20 that the path is a file, and -2 that nothing is there. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the Project Files.'
+            other: 'Deletes a folder, but only an empty one: -39 means it still holds a file or a folder, -20 that the path is a file, and -2 that nothing is there. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the files.'
         },
         implemented: true,
         binding: {
@@ -959,7 +959,7 @@ export const mipsSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains 0 if the file was renamed, or a negative error number'
                 }
             ],
-            other: 'Renames a file, or moves it into another folder, which must exist already (-2 if it does not). Only files move: a folder gives -21, and so does a new name that is a folder, while a folder renamed onto a file gives -20. A file that already has the new name is replaced by the one moved there, as on Linux, and renaming a file to its own name does nothing. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the Project Files.'
+            other: 'Renames a file, or moves it into another folder, which must exist already (-2 if it does not). Only files move: a folder gives -21, and so does a new name that is a folder, while a folder renamed onto a file gives -20. A file that already has the new name is replaced by the one moved there, as on Linux, and renaming a file to its own name does nothing. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the files.'
         },
         implemented: true,
         binding: {

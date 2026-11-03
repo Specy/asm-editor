@@ -204,6 +204,15 @@ newline (10). A `runFor` testcase without input, such as the one above, only run
 instruction budget and checks that no runtime error occurred. No testcase checks the rendered Screen
 image, so try that part interactively.
 
+## Arrow keys, held keys and the mouse
+
+The receiver only hands over typed characters. Keys that type nothing, such as the arrows and
+Shift, never reach it, and neither does a key coming back up. A game that steers with the arrows or
+moves only while a key is held needs more. For that, and for the mouse, this editor adds the
+**Input controller** at `0xffff0300`: it reports every key going down and up, which keys are held
+right now, and where the pointer is. The [Input controller](/documentation/mips/input-controller)
+page shows how to read it.
+
 ## Optional application: a moving dot
 
 The same address calculation and service 32 are enough for a small animation. This program draws a

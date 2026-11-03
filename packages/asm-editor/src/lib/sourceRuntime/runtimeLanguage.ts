@@ -6,16 +6,19 @@ import {
     loadedRuntimeFunctions,
     loadedRuntimeLibrary,
     loadRuntimeFunctions,
+    runtimeFunctionOn,
     type RuntimeFunction
 } from './runtimeLibrary'
 
 /**
- * The Runtime library functions an editor model can call: those of the ABI its Build links, or
- * none when the Build links no library (hand-written assembly with the Setting off). The list loads
- * on first use; until it arrives the model offers none, and the next request has them.
+ * The Runtime library functions an editor model of a Target can call: those of the ABI its Build
+ * links that exist on the Target, or none when the Build links no library (hand-written assembly
+ * with the Setting off). The list loads on first use; until it arrives the model offers none, and
+ * the next request has them.
  */
 export function runtimeFunctionsForModel(
-    model: monaco.editor.ITextModel
+    model: monaco.editor.ITextModel,
+    language: AvailableLanguages
 ): readonly RuntimeFunction[] {
     const identity = model.uri ? parseProjectSourceUri(model.uri) : null
     if (!identity) return []
@@ -30,7 +33,7 @@ export function runtimeFunctionsForModel(
         void loadRuntimeFunctions(abi)
         return []
     }
-    return list.functions
+    return list.functions.filter((entry) => runtimeFunctionOn(entry, language))
 }
 
 /**

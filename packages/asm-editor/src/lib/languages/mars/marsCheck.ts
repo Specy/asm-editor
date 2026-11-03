@@ -191,7 +191,7 @@ export function checkMarsProgram<C extends MarsCheckCore>(
         return index
     }
     const assembled = result.errors.map((error) =>
-        coreDiagnostic(error, sources, source, spansFor(error.sourcePath), functions)
+        coreDiagnostic(error, sources, source, spansFor(error.sourcePath), functions, target)
     )
     if (!result.errors.some((error) => !error.isWarning))
         assembled.push(...unlinkedUnitHints(sources, core, source))
@@ -310,7 +310,8 @@ function coreDiagnostic(
     sources: BuildSources,
     source: string,
     spans: TokenSpanIndex,
-    functions: RuntimeFunctionList | undefined
+    functions: RuntimeFunctionList | undefined,
+    target: MarsTarget
 ): LanguageDiagnostic {
     const line = Math.max(0, error.sourceLine - 1)
     const column = Math.max(0, error.sourceColumn - 1)
@@ -336,7 +337,7 @@ function coreDiagnostic(
             }
         }
     })
-    const hint = error.isWarning ? undefined : runtimeLibraryHint(error.message, functions)
+    const hint = error.isWarning ? undefined : runtimeLibraryHint(error.message, functions, target)
     return {
         severity: error.isWarning ? 'warning' : 'error',
         source,

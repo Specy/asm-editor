@@ -235,7 +235,7 @@ Recorded on 2026-11-03 with the implementation. None changes a decision; each se
 - **Covered** (11) means the device writes no memory and no read takes an event, while it keeps receiving input and keeps its state, as a chip whose addresses a display decodes in its place would. Uncovering it writes the block as it is then; switching off leaves nothing stuck, since key-ups still reach it.
 - **Stale Emulators.** Every Core of a package shares one memory, so an Emulator that was never disposed still hears another one's program. The Input controller answers only for the devices that attached to that memory last; the receiver, the transmitter and the Synth still answer for every instance, as before.
 - **`ld` on RISC-V 64** reads its high word first, so an `ld` from Status (+0x08) returns the oldest event in its upper half and a Status already one lower in its lower half.
-- **`<sim.h>`** also has `sim_input_pending()`, Status's count, so a program's loop needs no mask. The key names took each header past the drift test's 32 KB guard, which is now 40 KB; the request limit is 1 MiB.
+- **`<sim.h>`** also has `sim_input_pending()`, Status's count, so a program's loop needs no mask. The key names took each header past the drift test's 32 KB guard. The guard now measures what the size costs instead: an empty program's whole compile request, the Runtime library's headers and the Target's own included, must stay under a third of the 1 MiB limit (about 107 KiB on MIPS and RISC-V, 247 KiB on x86, on 2026-11-03).
 - **A focusing click's position** is read before the canvas takes the focus, which can scroll a canvas that was partly out of view under the pointer (`ScreenRenderer.svelte`, every Target).
 
 ## Deferred

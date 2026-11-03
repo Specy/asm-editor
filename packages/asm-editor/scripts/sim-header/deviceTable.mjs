@@ -1259,7 +1259,7 @@ export const DEVICE_HEADERS = [
                 'mkdir',
                 'int',
                 ['const char *path', 'mode_t mode'],
-                'Makes the folder path, with the permission bits in mode, such as 0755. Its parent must exist. Returns 0, or -1 with errno set: EEXIST if something has the name already, ENOENT if the parent does not exist. Under /project a new folder lasts for the run, and the first file made in it keeps it in the Project.',
+                'Makes the folder path, with the permission bits in mode, such as 0755. Its parent must exist. Returns 0, or -1 with errno set: EEXIST if something has the name already, ENOENT if the parent does not exist. Under /project a new folder lasts for the run, and the first file made in it keeps it after the run.',
                 { syscall: 'mkdir' }
             )
         ]

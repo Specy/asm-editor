@@ -2548,7 +2548,7 @@ function x86LinkHint(message: string, sources: BuildSources): string | undefined
     if (duplicate) return duplicate
     //hand-written assembly links no library by default: say how to get printf
     if (sources.runtimeAbi === undefined)
-        return runtimeLibraryHint(message, loadedRuntimeFunctions(CURRENT_RUNTIME_ABI))
+        return runtimeLibraryHint(message, loadedRuntimeFunctions(CURRENT_RUNTIME_ABI), 'X86')
     return undefined
 }
 

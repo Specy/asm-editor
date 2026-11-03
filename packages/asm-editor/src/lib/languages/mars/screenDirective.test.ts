@@ -83,7 +83,9 @@ describe('parsing the directive', () => {
         expect(parseScreenDirective('# see @screen below').directive).toBe(null)
         //nor in a string, where a # starts no comment: help text that explains the directive
         expect(
-            parseScreenDirective('help: .asciz "a comment such as\\n# @screen width=64 base=pic\\n"\n')
+            parseScreenDirective(
+                'help: .asciz "a comment such as\\n# @screen width=64 base=pic\\n"\n'
+            )
         ).toEqual({ directive: null, diagnostics: [] })
         expect(parseScreenDirective("li t0, '#' # @screen unit=4").directive?.unitWidth).toBe(4)
     })

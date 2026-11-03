@@ -1,5 +1,6 @@
 /* Runtime library: strerror (written for this library). The messages are glibc's, for the errno values that
- * <errno.h> defines; any other number gives "Unknown error". */
+ * <errno.h> defines and for the two that only some Targets' calls report, which each Target's own <errno.h>
+ * names: EXDEV (18) on x86, and rmdir's ENOTEMPTY (39) on every Target. Any other number gives "Unknown error". */
 #include <errno.h>
 #include <string.h>
 
@@ -22,6 +23,7 @@ char *strerror(int e)
 	case EFAULT: s = "Bad address"; break;
 	case EBUSY: s = "Device or resource busy"; break;
 	case EEXIST: s = "File exists"; break;
+	case 18: s = "Invalid cross-device link"; break; /* EXDEV */
 	case ENODEV: s = "No such device"; break;
 	case ENOTDIR: s = "Not a directory"; break;
 	case EISDIR: s = "Is a directory"; break;
@@ -35,6 +37,7 @@ char *strerror(int e)
 	case EDOM: s = "Numerical argument out of domain"; break;
 	case ERANGE: s = "Numerical result out of range"; break;
 	case ENOSYS: s = "Function not implemented"; break;
+	case 39: s = "Directory not empty"; break; /* ENOTEMPTY */
 	case EOVERFLOW: s = "Value too large for defined data type"; break;
 	case EILSEQ: s = "Invalid or incomplete multibyte or wide character"; break;
 	case EOPNOTSUPP: s = "Operation not supported"; break;

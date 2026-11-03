@@ -72,13 +72,13 @@ export const M68K_TRAP_GROUP_DOCS: {
         group: 'files',
         title: 'Files',
         description:
-            'Reading and writing the Project’s Files. A path is a NUL-terminated string (ended by a zero byte) of at most 255 characters, relative to the Project root, with `/` or `\\` between its parts. At most eight files are open at once, numbered 0 to 7, and D0.W reports the result: 0 success, 1 end of file, 2 error, 3 read only. A reported file error leaves execution running. Undo restores changes made by a file task, and each testcase works on its own copy of the Files.'
+            'Reading and writing files: the ones shown in the editor’s file explorer, never your computer’s disk. Changes stay after the program ends, except that each testcase works on its own copy. A path is a NUL-terminated string (ended by a zero byte) of at most 255 characters, relative to the top folder, with `/` or `\\` between its parts. At most eight files are open at once, numbered 0 to 7, and D0.W reports the result: 0 success, 1 end of file, 2 error, 3 read only. A reported file error leaves execution running. Undo restores changes made by a file task.'
     },
     {
         group: 'sound',
         title: 'Sound',
         description:
-            'Play sound files from the project using two separate players.\n\nThe **standard player** (tasks 70, 71, 72 and 76) plays one WAV file at a time. While it is busy, another play request returns 0 in D0.W. The **DirectX player** (tasks 73, 74, 75 and 77) mixes WAV and MIDI files; this is an EASy68K-compatible interface supplied by the editor, with no Windows or DirectX installation required.\n\nEach player has its own 256 slots, numbered by D1.B. Loading a file into a slot makes it available for later playback on that player. Paths follow the [file-task rules](/documentation/m68k/traps#files) and are relative to the project root.\n\nA `.wav` extension alone does not guarantee compatibility: the audio samples stored in the file must use a supported encoding, either 8-, 16-, 24-, or 32-bit integer PCM, or 32-bit floating point. These are different ways of storing each sample as a number. The **Log** identifies missing or unplayable files.\n\nTestcases are silent and have no active playback, so the standard player is never busy; file and slot results are otherwise unchanged. Undo stops sounds started by the task and restores slots it changed. [Sound in this editor](/documentation/m68k/traps#sound-differences) lists the differences from EASy68K.'
+            'Play sound files using two separate players.\n\nThe **standard player** (tasks 70, 71, 72 and 76) plays one WAV file at a time. While it is busy, another play request returns 0 in D0.W. The **DirectX player** (tasks 73, 74, 75 and 77) mixes WAV and MIDI files; this is an EASy68K-compatible interface supplied by the editor, with no Windows or DirectX installation required.\n\nEach player has its own 256 slots, numbered by D1.B. Loading a file into a slot makes it available for later playback on that player. Paths follow the [file-task rules](/documentation/m68k/traps#files) and are relative to the top folder.\n\nA `.wav` extension alone does not guarantee compatibility: the audio samples stored in the file must use a supported encoding, either 8-, 16-, 24-, or 32-bit integer PCM, or 32-bit floating point. These are different ways of storing each sample as a number. The **Log** identifies missing or unplayable files.\n\nTestcases are silent and have no active playback, so the standard player is never busy; file and slot results are otherwise unchanged. Undo stops sounds started by the task and restores slots it changed. [Sound in this editor](/documentation/m68k/traps#sound-differences) lists the differences from EASy68K.'
     }
 ]
 
@@ -331,7 +331,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'A1 = NUL terminated path',
         output: 'D1.L = file number, or -1; D0.W = 0, 3 when it opened for reading only, 2 when it did not open',
         description:
-            'Opens the existing File at the path at its start. D0.W is 0 when it opens for reading and writing, or 3 when it opens for reading only. A path with no File, a Directory, or a ninth open file is an error.'
+            'Opens the existing file at the path at its start. D0.W is 0 when it opens for reading and writing, or 3 when it opens for reading only. A path with no file, a folder, or a ninth open file is an error.'
     },
     {
         task: 52,
@@ -340,7 +340,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'A1 = NUL terminated path',
         output: 'D1.L = file number, or -1; D0.W = 0, or 2 when it did not open',
         description:
-            'Creates the File at the path, or empties the one that is there, and opens it for reading and writing. The Directories on its path are created with it.'
+            'Creates the file at the path, or empties the one that is there, and opens it for reading and writing. The folders on its path are created with it.'
     },
     {
         task: 53,
@@ -360,7 +360,7 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.L = file number, A1 = buffer address, D2.L = byte count',
         output: 'D0.W = 0, or 2 on an error',
         description:
-            'Writes the D2.L bytes at (A1) at the file’s position, growing the File as needed, and moves the position past them. A write of no bytes, and one to a file opened for reading only, report 2.'
+            'Writes the D2.L bytes at (A1) at the file’s position, growing the file as needed, and moves the position past them. A write of no bytes, and one to a file opened for reading only, report 2.'
     },
     {
         task: 55,
@@ -384,9 +384,9 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         group: 'files',
         title: 'Delete a file',
         input: 'A1 = NUL terminated path',
-        output: 'D0.W = 0, or 2 when there is no File there',
+        output: 'D0.W = 0, or 2 when there is no file there',
         description:
-            'Removes the File at the path from the Project. A file the program still has open stays readable and writable through its number until it is closed.'
+            'Removes the file at the path. A file the program still has open stays readable and writable through its number until it is closed.'
     },
     {
         task: 58,
@@ -395,17 +395,17 @@ export const M68K_TRAP_DOCS: M68KTrapDoc[] = [
         input: 'D1.L = 0 to open, 1 to save; A1 = title, A2 = filter, either 0 for none; A3 = a 256 byte buffer',
         output: 'The path chosen at (A3), NULs to 256 bytes; D1.L = 1, or 0 when the dialog was cancelled; D0.W = 0, or 2 when the buffer runs past the end of memory',
         description:
-            'Asks for the path of a File, for the program to open with task 51 or create with task 52. Cancel, or an empty answer, leaves (A3) alone and puts 0 in D1.L. A testcase answers it with its next scripted input.',
+            'Asks for the path of a file, for the program to open with task 51 or create with task 52. Cancel, or an empty answer, leaves (A3) alone and puts 0 in D1.L. A testcase answers it with its next scripted input.',
         deviation:
-            'Shows a text prompt naming the title and asking for a path from the Project root. A D1.L other than 0 or 1 stops the program with an error naming the value.'
+            'Shows a text prompt naming the title and asking for a path from the top folder. A D1.L other than 0 or 1 stops the program with an error naming the value.'
     },
     {
         task: 59,
         group: 'files',
         title: 'Check that a file exists',
         input: 'A1 = NUL terminated path',
-        output: 'D0.W = 0 when the File can be written, 3 when it can only be read, 2 when there is none',
-        description: 'Whether there is a File at the path. A Directory is not one, so it answers 2.'
+        output: 'D0.W = 0 when the file can be written, 3 when it can only be read, 2 when there is none',
+        description: 'Whether there is a file at the path. A folder is not one, so it answers 2.'
     },
     {
         task: 61,

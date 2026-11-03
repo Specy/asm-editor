@@ -11,12 +11,32 @@ export type RuntimeFunction = {
     prototype: string
     /** The one-line documentation comment above the declaration. */
     doc: string
+    /**
+     * The Targets it exists on, by the names their libraries are built under (`mips`, `riscv32`,
+     * `riscv64`, `x86_64`), or every Target when absent: the folder functions of MIPS and RISC-V's
+     * own headers name theirs.
+     */
+    targets?: string[]
+}
+
+/** The name each Target's library is built under, as `RuntimeFunction.targets` names it. */
+const RUNTIME_TARGET_NAMES: Partial<Record<AvailableLanguages, string>> = {
+    MIPS: 'mips',
+    'RISC-V': 'riscv32',
+    'RISC-V-64': 'riscv64',
+    X86: 'x86_64'
+}
+
+/** Whether a library function exists on a Target. */
+export function runtimeFunctionOn(entry: RuntimeFunction, language: AvailableLanguages): boolean {
+    return !entry.targets || entry.targets.includes(RUNTIME_TARGET_NAMES[language] ?? '')
 }
 
 /**
- * The public functions of one Runtime ABI, the same for every Target because they come from the
- * headers. Small, so live checking can explain an undefined `printf` and completion can offer the
- * library without downloading any member.
+ * The public functions of one Runtime ABI, read from its headers: one list for every Target, whose
+ * entries with `targets` exist only there (`runtimeFunctionOn`). Small, so live checking can
+ * explain an undefined `printf` and completion can offer the library without downloading any
+ * member.
  */
 export type RuntimeFunctionList = {
     abi: string
@@ -228,9 +248,14 @@ export function unresolvedSymbol(message: string): string | undefined {
  */
 export function runtimeLibraryHint(
     message: string,
-    list: RuntimeFunctionList | undefined
+    list: RuntimeFunctionList | undefined,
+    language: AvailableLanguages
 ): string | undefined {
     const name = unresolvedSymbol(message)
-    if (!name || !list?.functions.some((entry) => entry.name === name)) return undefined
+    if (
+        !name ||
+        !list?.functions.some((entry) => entry.name === name && runtimeFunctionOn(entry, language))
+    )
+        return undefined
     return `${name} is in the Runtime library. Turn on "Link Runtime library" in the Project Settings to use it.`
 }

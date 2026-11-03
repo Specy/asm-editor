@@ -121,7 +121,7 @@ Macros: `EXIT_SUCCESS`, `EXIT_FAILURE`, `RAND_MAX`, `MB_CUR_MAX` (1), `NULL`; ty
 | `strtok` | musl `string/strtok.c` | |
 | `strdup` | musl `string/strdup.c` | |
 | `strndup` | musl `string/strndup.c` | |
-| `strerror` | own | glibc's messages for the `<errno.h>` values, otherwise "Unknown error". |
+| `strerror` | own | glibc's messages for the `<errno.h>` values and for `ENOTEMPTY` (39) and x86's `EXDEV` (18), which only the Targets' own `<errno.h>` define; otherwise "Unknown error". |
 
 ## `<ctype.h>`
 
@@ -245,7 +245,7 @@ MIPS and RISC-V have their own headers, in `posix/include/`, searched before `in
 | `<stdio.h>` | `rename`, `remove` | own | `remove` unlinks, then removes the folder when the path is one, as glibc does. |
 | `<errno.h>` | | own | Adds `ENOTEMPTY` (39). |
 
-Each returns -1 (`opendir` and `readdir` NULL) and sets `errno` from the call's negative result. The folder semantics are the editor's Project's: a folder `mkdir` makes lasts for the run unless a File ends up in it, `rmdir` takes only an empty folder, a folder cannot be renamed (`EISDIR`), and a file renamed onto another replaces it, as on Linux. They have no corpus program: the corpus also runs natively and on x86, which compile against `include/` alone. The editor's tests run them on the Cores.
+Each returns -1 (`opendir` and `readdir` NULL) and sets `errno` from the call's negative result. The folders behave as x86's mount makes them: a folder `mkdir` makes lasts for the run unless a file ends up in it, `rmdir` takes only an empty folder, a folder cannot be renamed (`EISDIR`), and a file renamed onto another replaces it, as on Linux. They have no corpus program: the corpus also runs natively and on x86, which compile against `include/` alone. The editor's tests run them on the Cores. The ABI pins them on MIPS and RISC-V only: their exports and signatures, and `abi/posix-layout.c`'s layouts of `struct dirent` and `struct stat` and values of the `DT_`, `S_IF` and `ENOTEMPTY` constants. `functions.json` marks them with the Targets they exist on.
 
 ## Freestanding headers
 
