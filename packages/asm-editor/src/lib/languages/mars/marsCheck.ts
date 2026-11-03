@@ -50,10 +50,15 @@ import { makeTokenSpanIndex, tokenSpanEnd, type SpanLine, type TokenSpanIndex } 
 /** The Targets a MARS-derived Core assembles for. */
 export type MarsTarget = 'MIPS' | 'RISC-V' | 'RISC-V-64'
 
-/** What a Build links besides its Files: the Runtime library and the global execution starts at. */
+/**
+ * What a Build links besides its Entry's unit: the Runtime library, the global execution starts at,
+ * and the Project's other GNU-profile units, which the Core takes as an archive's members
+ * (`BuildConfiguration.linkUnits`).
+ */
 export type MarsLink = {
     library?: ReturnType<typeof coreLibrary>
     entrySymbol?: string
+    units?: readonly string[]
 }
 
 /** A Core of `target` for the Files, assembled from `entry` and linked as `link` says. */
@@ -83,7 +88,14 @@ type MarsAssembleError = MarsSourceLocation & {
 /** The part of a MARS or RARS Core a check reads, which `JsMips` and `JsRiscV` both have. */
 export type MarsCheckCore = ScreenLabelTable & {
     assemble(): { readonly report: string; readonly errors: readonly MarsAssembleError[] }
+    /** The Entry's unit: the Entry and what it includes. */
     getTokenizedLines(): readonly SpanLine[]
+    /** The unit of the Entry or of one of the Build's other units, by its File. */
+    getTokenizedUnit(path: string): readonly SpanLine[]
+    /** Every File the units read, the Entry's and every other unit's, linked or not. */
+    getUnitFiles(): readonly string[]
+    /** The Entry, then the other units the link took. */
+    getLinkedUnits(): readonly string[]
     readMemoryBytes(address: number, length: number): ArrayLike<number>
 }
 
@@ -129,7 +141,8 @@ export async function prepareMarsRuntime(sources: BuildSources, target: MarsTarg
 
 /** The library and entry symbol `prepareMarsRuntime` loaded for these sources. */
 export function marsRuntimeLink(sources: BuildSources, target: MarsTarget): MarsLink {
-    if (sources.runtimeAbi === undefined) return {}
+    const units = sources.linkUnits?.length ? { units: sources.linkUnits } : {}
+    if (sources.runtimeAbi === undefined) return units
     //only a Compilation record's requirement starts at the library's _start (resolveRuntimeLink)
     const problem = unsupportedRuntimeAbi(sources.runtimeAbi, sources.entrySymbol !== undefined)
     if (problem) throw new ProjectFormatError(problem)
@@ -138,7 +151,8 @@ export function marsRuntimeLink(sources: BuildSources, target: MarsTarget): Mars
         throw new ProjectFormatError(`The Runtime library ${sources.runtimeAbi} is not loaded`)
     return {
         library: coreLibrary(library),
-        ...(sources.entrySymbol ? { entrySymbol: sources.entrySymbol } : {})
+        ...(sources.entrySymbol ? { entrySymbol: sources.entrySymbol } : {}),
+        ...units
     }
 }
 
@@ -161,15 +175,26 @@ export function checkMarsProgram<C extends MarsCheckCore>(
     let { core, result } = assemble()
     const lines = tokenizedLines(core)
     const spans = makeTokenSpanIndex(lines)
-    const reached = new Set(lines.map((line) => line.sourcePath))
+    //every unit was read and checked, the ones the link left out too
+    const reached = new Set([...lines.map((line) => line.sourcePath), ...unitFiles(core)])
     reached.add(sources.entry)
     const source = target === 'MIPS' ? 'mips' : 'risc-v'
     //hand-written assembly links no library by default: say how to get printf
     const functions =
         sources.runtimeAbi === undefined ? loadedRuntimeFunctions(CURRENT_RUNTIME_ABI) : undefined
+    //another unit's tokens are read only for a unit with something to say
+    const unitSpans = new Map<string, TokenSpanIndex>()
+    const spansFor = (path: string) => {
+        if (!sources.linkUnits?.includes(path)) return spans
+        let index = unitSpans.get(path)
+        if (!index) unitSpans.set(path, (index = makeTokenSpanIndex(tokenizedUnit(core, path))))
+        return index
+    }
     const assembled = result.errors.map((error) =>
-        coreDiagnostic(error, sources, source, spans, functions)
+        coreDiagnostic(error, sources, source, spansFor(error.sourcePath), functions)
     )
+    if (!result.errors.some((error) => !error.isWarning))
+        assembled.push(...unlinkedUnitHints(sources, core, source))
     //read after everything else this check takes from its Core, since a probe assembles another
     let probed = false
     const screen = applyScreenDirective(
@@ -206,6 +231,54 @@ function tokenizedLines(core: MarsCheckCore): readonly SpanLine[] {
     } catch {
         return []
     }
+}
+
+function tokenizedUnit(core: MarsCheckCore, path: string): readonly SpanLine[] {
+    try {
+        return core.getTokenizedUnit(path)
+    } catch {
+        return []
+    }
+}
+
+function unitFiles(core: MarsCheckCore): readonly string[] {
+    try {
+        return core.getUnitFiles()
+    } catch {
+        return []
+    }
+}
+
+/**
+ * A Hint on each of the Build's other units the link left out, as x86 gives one
+ * ([ADR 0039](../../../../../../docs/adr/0039-x86-links-start-objects-before-user-and-support-archives.md)):
+ * it was checked, but nothing the program needs is defined there. A unit the Entry's unit includes
+ * is part of that one, and gets none.
+ */
+function unlinkedUnitHints(
+    sources: BuildSources,
+    core: MarsCheckCore,
+    source: string
+): LanguageDiagnostic[] {
+    if (!sources.linkUnits?.length) return []
+    const linked = new Set(core.getLinkedUnits())
+    const included = new Set(tokenizedLines(core).map((line) => line.sourcePath))
+    return sources.linkUnits
+        .filter((path) => !linked.has(path) && !included.has(path))
+        .map((path) => ({
+            severity: 'suggestion' as const,
+            source,
+            code: 'not-linked',
+            message:
+                'Nothing refers to a symbol this File defines, so it is not part of the program.',
+            location: {
+                path,
+                range: {
+                    start: { line: 0, column: 0 },
+                    end: { line: 0, column: sourceLineText(sources, path, 0).length }
+                }
+            }
+        }))
 }
 
 /**

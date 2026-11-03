@@ -264,3 +264,42 @@ describe('key events as they happen', () => {
         expect(heard).toEqual(['keyDown'])
     })
 })
+
+describe('the physical key stream', () => {
+    /** What the Input controller hears: each physical key, by its `KeyboardEvent.code`. */
+    function physical(keyboard: Keyboard) {
+        const heard: string[] = []
+        keyboard.onPhysicalKey((code, down) => heard.push(`${down ? 'down' : 'up'} ${code}`))
+        return heard
+    }
+
+    it('tells every key down, repeat and up by its physical key, those EASy68K lacks included', () => {
+        const { keyboard } = makeKeyboard()
+        const heard = physical(keyboard)
+        keyboard.keyDown({ code: 'IntlBackslash', key: '<' })
+        keyboard.keyDown({ code: 'IntlBackslash', key: '<', repeat: true })
+        keyboard.keyUp({ code: 'IntlBackslash', key: '<' })
+        keyboard.keyDown({ code: 'Unidentified', key: 'Unidentified' })
+        expect(heard).toEqual(['down IntlBackslash', 'down IntlBackslash', 'up IntlBackslash'])
+    })
+
+    it('lifts every physical key still down on focus loss, and nothing on a reset', () => {
+        const { keyboard } = makeKeyboard()
+        const heard = physical(keyboard)
+        keyboard.keyDown({ code: 'ShiftLeft', key: 'Shift' })
+        keyboard.keyDown({ code: 'ShiftRight', key: 'Shift' })
+        keyboard.releaseAll()
+        expect(heard.slice(2)).toEqual(['up ShiftLeft', 'up ShiftRight'])
+        keyboard.keyDown({ code: 'KeyA', key: 'a' })
+        keyboard.reset()
+        keyboard.releaseAll()
+        expect(heard.slice(4)).toEqual(['down KeyA'])
+    })
+
+    it('types Escape as character 27 and presses EASy68K’s Escape', () => {
+        const { keyboard } = makeKeyboard()
+        keyboard.keyDown({ code: 'Escape', key: 'Escape' })
+        expect(keyboard.readCharacterCode()).toBe(27)
+        expect(keyboard.lastKeys().down).toBe(KEY_CODES.ESCAPE)
+    })
+})

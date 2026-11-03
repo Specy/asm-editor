@@ -23,7 +23,8 @@ import {
     SIM_HEADER_TARGETS,
     X86_SIM_HEADER
 } from './simHeader.mjs'
-import { marsHelpCatalog, x86HelpCatalog } from './helpCatalog.mjs'
+import { marsHelpCatalog, posixFunctions, x86HelpCatalog } from './helpCatalog.mjs'
+import { runtimeRoot } from '@asm-editor/runtime/paths'
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -55,6 +56,7 @@ const display = await load('src/lib/languages/mars/marsDisplay.ts')
 const { x86SimHeaderData } = await load('src/lib/documentation/x86/syscallBinding.ts')
 const { X86_SYSCALLS } = await load('src/lib/languages/X86/generated/x86Syscalls.ts')
 const synth = await load('src/lib/languages/synthRegisters.ts')
+const input = await load('src/lib/languages/inputControllerRegisters.ts')
 
 const address = (label) =>
     display.MARS_BASE_ADDRESS_CHOICES.find((choice) => choice.label === label).address
@@ -88,7 +90,8 @@ const data = {
         wavetableSize: synth.SYNTH_WAVETABLE_SIZE,
         gate: synth.SYNTH_GATE,
         loop: synth.SYNTH_LOOP
-    }
+    },
+    input: input.inputHeaderData()
 }
 
 const headers = [
@@ -98,10 +101,14 @@ const headers = [
     }),
     [X86_SIM_HEADER.file, generateX86SimHeader(x86SimHeaderData())]
 ]
+//MIPS and RISC-V's own headers, as the Runtime library's build wrote them for the editor
+const posix = posixFunctions(
+    JSON.parse(readFileSync(join(runtimeRoot, 'generated/v1/posix-include.json'), 'utf8'))
+)
 const catalogs = [
     ...Object.entries(SIM_HEADER_TARGETS).map(([target, settings]) => [
         target,
-        marsHelpCatalog(target, settings.syscalls === 'mips' ? mipsSyscalls : riscvSyscalls)
+        marsHelpCatalog(target, settings.syscalls === 'mips' ? mipsSyscalls : riscvSyscalls, posix)
     ]),
     [X86_SIM_HEADER.file, x86HelpCatalog(x86SimHeaderData(), deviceFunctions())]
 ]

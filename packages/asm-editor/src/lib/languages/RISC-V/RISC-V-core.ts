@@ -1,10 +1,14 @@
 import { RISCV, type RuntimeLibrary } from '@specy/risc-v'
 import { validateAssemblerProfile, type AssemblerProfile } from '#lib/assemblerProfiles.ts'
 
-/** What a Build links besides its Files: the Runtime library and the global execution starts at. */
+/**
+ * What a Build links besides its Entry's unit: the Runtime library, the global execution starts at,
+ * and the Project's other GNU-profile units, which the Core takes as an archive's members.
+ */
 export type RiscVLink = {
     library?: RuntimeLibrary
     entrySymbol?: string
+    units?: readonly string[]
 }
 
 /**
@@ -23,6 +27,7 @@ export function makeRiscVCore(
         assemblerProfile: profile,
         is64Bit,
         ...(link.library ? { libraries: [link.library] } : {}),
-        ...(link.entrySymbol ? { entrySymbol: link.entrySymbol } : {})
+        ...(link.entrySymbol ? { entrySymbol: link.entrySymbol } : {}),
+        ...(link.units?.length ? { units: [...link.units] } : {})
     })
 }

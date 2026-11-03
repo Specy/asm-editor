@@ -3,7 +3,9 @@ import {
     FileErrorCode,
     FileSystem,
     FileSystemGuestError,
+    guestErrno,
     guestFileFailure,
+    type DirectoryRecord,
     type FileDescriptorOptions
 } from './FileSystem'
 import {
@@ -429,7 +431,6 @@ describe('FileSystemSession guest failures', () => {
             [FileErrorCode.NotFound, () => run.truncate('missing', 0)],
             [FileErrorCode.NotFound, () => run.rename('missing', 'other')],
             [FileErrorCode.NotFound, () => run.list('missing')],
-            [FileErrorCode.Exists, () => run.rename('top', 'docs/a.txt')],
             [FileErrorCode.BadDescriptor, () => run.read(42, 1)],
             [FileErrorCode.BadDescriptor, () => run.close(42)],
             [FileErrorCode.BadDescriptor, () => run.fstat(42)],
@@ -459,6 +460,37 @@ describe('FileSystemSession guest failures', () => {
         for (const [code, operation] of cases) expect(failure(() => step(operation))).toBe(code)
         expect(fs.files).toBe(before)
         expect(decode(step(() => run.read(reader, 9)))).toBe('t')
+    })
+
+    it('replaces a File a rename lands on, as rename(2) does, and Undo puts both back', () => {
+        const { fs, run, step, undo } = steppedSession({
+            'a.txt': 'moved',
+            'docs/b.txt': 'replaced'
+        })
+        const moved = step(() => run.open('a.txt', 'read'))
+        const replaced = step(() => run.open('docs/b.txt', { access: 'read-write' }))
+        const before = fs.files
+        step(() => run.rename('a.txt', 'docs/b.txt'))
+        expect(fs.files).toEqual({ 'docs/b.txt': { encoding: 'plain', content: 'moved' } })
+        //a descriptor of the replaced File keeps it, though no path names it any more
+        expect(decode(step(() => run.read(replaced, 9)))).toBe('replaced')
+        step(() => run.write(replaced, encode('!')))
+        expect(run.fstat(replaced)).toEqual({ kind: 'file', size: 9 })
+        expect(fs.readText('docs/b.txt')).toBe('moved')
+        expect(decode(step(() => run.read(moved, 9)))).toBe('moved')
+        //the reads, the write and the rename, newest first
+        undo()
+        undo()
+        undo()
+        expect(fs.readText('docs/b.txt')).toBe('moved')
+        undo()
+        expect(fs.files).toEqual(before)
+        expect(fs.readText('a.txt')).toBe('moved')
+        expect(fs.readText('docs/b.txt')).toBe('replaced')
+        expect(decode(step(() => run.pread(replaced, 0, 9)))).toBe('replaced')
+        //onto itself it changes nothing, and is no Undo step of its own
+        step(() => run.rename('./a.txt', 'a.txt'))
+        expect(fs.files).toEqual(before)
     })
 
     it('keeps environment failures exceptions that no program is told about', () => {
@@ -1242,5 +1274,266 @@ describe('Annotations in the FileSystem', () => {
         fs.annotate('chall', big(0, 5))
         expect(Object.keys(fs.files.chall.annotations!.comments!)).toHaveLength(5)
         session.stop()
+    })
+})
+
+/**
+ * The folder calls MIPS and RISC-V make (unlink, mkdir, rmdir, rename, stat, getdents), with the
+ * folder semantics of x86's Project mount ([folder-calls.md](../../../../../../docs/design/folder-calls.md),
+ * decision 4).
+ */
+describe('FileSystemSession folder calls', () => {
+    /** Every record a folder open on `fd` still has, read in one go as the next Core step. */
+    const listing = ({ run, step }: ReturnType<typeof steppedSession>, fd: number) =>
+        step(() => run.readDirectory(fd, () => true))
+    const names = (records: DirectoryRecord[]) => records.map((record) => record.name)
+
+    it('reports each failure as minus the Linux error number', () => {
+        const { run, step } = steppedSession({ 'docs/a.txt': 'a', top: 't' })
+        const reader = step(() => run.open('top', 'read'))
+        const errno = (operation: () => unknown) => {
+            try {
+                step(operation)
+            } catch (error) {
+                return guestErrno(error)
+            }
+            return 0
+        }
+        expect(errno(() => run.inspect('missing'))).toBe(-2)
+        expect(errno(() => run.unlink('missing'))).toBe(-2)
+        expect(errno(() => run.rmdir('missing'))).toBe(-2)
+        expect(errno(() => run.mkdir('missing/below'))).toBe(-2)
+        expect(errno(() => run.move('missing', 'other'))).toBe(-2)
+        expect(errno(() => run.move('top', 'missing/top'))).toBe(-2)
+        expect(errno(() => run.inspect(''))).toBe(-2)
+        expect(errno(() => run.mkdir('docs'))).toBe(-17)
+        expect(errno(() => run.mkdir('top'))).toBe(-17)
+        expect(errno(() => run.mkdir('/'))).toBe(-17)
+        expect(errno(() => run.rmdir('top'))).toBe(-20)
+        expect(errno(() => run.mkdir('top/inner'))).toBe(-20)
+        expect(errno(() => run.inspect('top/inner'))).toBe(-20)
+        expect(errno(() => run.inspect('top/'))).toBe(-20)
+        expect(errno(() => run.unlink('top/'))).toBe(-20)
+        expect(errno(() => run.readDirectory(reader, () => true))).toBe(-20)
+        expect(errno(() => run.openDirectory('top'))).toBe(-20)
+        expect(errno(() => run.unlink('docs'))).toBe(-21)
+        expect(errno(() => run.move('docs', 'moved'))).toBe(-21)
+        expect(errno(() => run.move('top', 'docs'))).toBe(-21)
+        expect(errno(() => run.rmdir('docs'))).toBe(-39)
+        expect(errno(() => run.readDirectory(42, () => true))).toBe(-9)
+        expect(errno(() => run.rmdir('/'))).toBe(-16)
+        expect(errno(() => run.mkdir('../outside'))).toBe(-13)
+        expect(errno(() => run.mkdir('bad\u0001name'))).toBe(-22)
+        expect(guestErrno(new ProjectFormatError('Invalid file path'))).toBe(-22)
+        expect(() => guestErrno(new Error('FileSystem session has ended'))).toThrow('has ended')
+    })
+
+    it('keeps a folder mkdir made for the run, and in the Project only once a File is inside', () => {
+        const { fs, run, step } = steppedSession({ 'real/keep.txt': 'k' })
+        step(() => run.mkdir('made'))
+        step(() => run.mkdir('made/deeper/'))
+        step(() => run.mkdir('empty'))
+        expect(run.inspect('made')).toMatchObject({ kind: 'directory', size: 0, links: 1 })
+        expect(run.stat('made/deeper')).toEqual({ kind: 'directory', size: 0 })
+        expect(run.list('')).toEqual([
+            { name: 'empty', kind: 'directory' },
+            { name: 'made', kind: 'directory' },
+            { name: 'real', kind: 'directory' }
+        ])
+        //nothing is published for a folder alone
+        expect(Object.keys(fs.files)).toEqual(['real/keep.txt'])
+        //a hidden `.keep`, as asmOS writes, makes the folder one of the Project's
+        const keep = step(() => run.open('made/.keep', 'write'))
+        step(() => run.close(keep))
+        expect(Object.keys(fs.files).sort()).toEqual(['made/.keep', 'real/keep.txt'])
+        run.stop()
+        const next = fs.beginSession()
+        expect(next.stat('made')).toEqual({ kind: 'directory', size: 0 })
+        expect(next.stat('made/deeper')).toBeUndefined()
+        expect(next.stat('empty')).toBeUndefined()
+        next.stop()
+    })
+
+    it('removes only an empty folder, and one a File left keeps until rmdir', () => {
+        const { fs, run, step } = steppedSession({ 'real/keep.txt': 'k' })
+        step(() => run.mkdir('made'))
+        const note = step(() => run.open('made/note.txt', 'write'))
+        step(() => run.close(note))
+        expect(failure(() => step(() => run.rmdir('made')))).toBe(FileErrorCode.NotEmpty)
+        step(() => run.unlink('made/note.txt'))
+        //the folder mkdir made outlives its last File
+        expect(run.stat('made')).toEqual({ kind: 'directory', size: 0 })
+        step(() => run.mkdir('made/inner'))
+        expect(failure(() => step(() => run.rmdir('made')))).toBe(FileErrorCode.NotEmpty)
+        step(() => run.rmdir('made/inner'))
+        step(() => run.rmdir('made/'))
+        expect(run.stat('made')).toBeUndefined()
+        expect(failure(() => step(() => run.rmdir('made')))).toBe(FileErrorCode.NotFound)
+        //a folder of the Project holds a File by definition
+        expect(failure(() => step(() => run.rmdir('real')))).toBe(FileErrorCode.NotEmpty)
+        //one emptied by unlink was only ever its Files' folder, and is gone with them
+        step(() => run.unlink('real/keep.txt'))
+        expect(run.stat('real')).toBeUndefined()
+        expect(fs.files).toEqual({})
+    })
+
+    it('keeps a made folder inside a folder whose Files all go, and the folder with it', () => {
+        const { run, step } = steppedSession({ 'a/f.txt': 'f' })
+        step(() => run.mkdir('a/b'))
+        step(() => run.unlink('a/f.txt'))
+        expect(run.stat('a')).toEqual({ kind: 'directory', size: 0 })
+        expect(run.list('a')).toEqual([{ name: 'b', kind: 'directory' }])
+        expect(failure(() => step(() => run.rmdir('a')))).toBe(FileErrorCode.NotEmpty)
+    })
+
+    it('renames Files into folders that exist, onto a File it replaces, but never a folder', () => {
+        const { fs, run, step } = steppedSession({ 'a.txt': 'a', 'b.txt': 'b', 'docs/c.txt': 'c' })
+        step(() => run.mkdir('made'))
+        step(() => run.move('a.txt', 'made/a.txt'))
+        expect(fs.readText('made/a.txt')).toBe('a')
+        step(() => run.move('made/a.txt', '/docs//a.txt'))
+        expect(fs.readText('docs/a.txt')).toBe('a')
+        expect(failure(() => step(() => run.move('made', 'other')))).toBe(FileErrorCode.IsDirectory)
+        expect(failure(() => step(() => run.move('docs', 'other')))).toBe(FileErrorCode.IsDirectory)
+        //a folder onto a File, as Linux and x86 have it
+        expect(failure(() => step(() => run.move('made', 'b.txt')))).toBe(FileErrorCode.NotDirectory)
+        expect(failure(() => step(() => run.move('b.txt', 'docs')))).toBe(FileErrorCode.IsDirectory)
+        expect(failure(() => step(() => run.move('b.txt', 'made')))).toBe(FileErrorCode.IsDirectory)
+        expect(failure(() => step(() => run.move('b.txt', 'b.txt/x')))).toBe(
+            FileErrorCode.NotDirectory
+        )
+        expect(failure(() => step(() => run.move('b.txt', 'nowhere/b.txt')))).toBe(
+            FileErrorCode.NotFound
+        )
+        expect(failure(() => step(() => run.move('b.txt', 'c/')))).toBe(FileErrorCode.NotDirectory)
+        //renaming a File or a folder to itself is nothing to do, as on Linux
+        step(() => run.move('b.txt', 'b.txt'))
+        step(() => run.move('made', 'made/'))
+        step(() => run.move('docs/', './docs'))
+        expect(fs.readText('b.txt')).toBe('b')
+        expect(fs.readText('docs/c.txt')).toBe('c')
+        expect(run.stat('made')).toEqual({ kind: 'directory', size: 0 })
+        //onto a File, it replaces it, keeping the moved File's inode number
+        const inode = run.inspect('b.txt').inode
+        step(() => run.move('b.txt', 'docs/c.txt'))
+        expect(fs.files).toEqual({
+            'docs/a.txt': { encoding: 'plain', content: 'a' },
+            'docs/c.txt': { encoding: 'plain', content: 'b' }
+        })
+        expect(run.inspect('docs/c.txt').inode).toBe(inode)
+    })
+
+    it('lists . and .. first, then the folder in name order, with stable inode numbers', () => {
+        const session = steppedSession({ 'z.txt': 'z', 'docs/a.txt': 'aa', 'b.txt': 'bbb' })
+        const { run, step } = session
+        step(() => run.mkdir('made'))
+        const root = step(() => run.openDirectory('/'))
+        const records = listing(session, root)
+        expect(names(records)).toEqual(['.', '..', 'b.txt', 'docs', 'made', 'z.txt'])
+        expect(records.map((record) => record.kind)).toEqual([
+            'directory',
+            'directory',
+            'file',
+            'directory',
+            'directory',
+            'file'
+        ])
+        expect(records.map((record) => record.next)).toEqual([1, 2, 3, 4, 5, 6])
+        //the root's own and its parent's are the root's, 1
+        expect(records[0].inode).toBe(1)
+        expect(records[1].inode).toBe(1)
+        expect(run.inspect('/').inode).toBe(1)
+        const inodes = new Map(records.map((record) => [record.name, record.inode]))
+        expect(new Set(inodes.values()).size).toBe(5)
+        //the same numbers whoever asks, and again later in the run
+        for (const name of ['b.txt', 'docs', 'made', 'z.txt'])
+            expect(run.inspect(name).inode).toBe(inodes.get(name))
+        const docs = step(() => run.openDirectory('docs/'))
+        const inside = listing(session, docs)
+        expect(names(inside)).toEqual(['.', '..', 'a.txt'])
+        expect(inside[0].inode).toBe(inodes.get('docs'))
+        expect(inside[1].inode).toBe(1)
+        //a File keeps its number when it moves
+        const before = run.inspect('docs/a.txt').inode
+        step(() => run.move('docs/a.txt', 'moved.txt'))
+        expect(run.inspect('moved.txt')).toEqual({
+            kind: 'file',
+            size: 2,
+            inode: before,
+            links: 1
+        })
+        //and the end of a folder is an empty read
+        expect(listing(session, root)).toEqual([])
+    })
+
+    it('reads a folder from where the last read stopped, and Undo moves it back', () => {
+        const { run, step, undo } = steppedSession({ a: '', b: '', c: '' })
+        const fd = step(() => run.openDirectory('.'))
+        let left = 2
+        expect(names(step(() => run.readDirectory(fd, () => left-- > 0)))).toEqual(['.', '..'])
+        expect(names(step(() => run.readDirectory(fd, () => true)))).toEqual(['a', 'b', 'c'])
+        undo()
+        expect(names(step(() => run.readDirectory(fd, () => true)))).toEqual(['a', 'b', 'c'])
+        //lseek back to an offset a record reported
+        expect(step(() => run.seek(fd, 3, 0))).toBe(3)
+        expect(names(step(() => run.readDirectory(fd, () => true)))).toEqual(['b', 'c'])
+        expect(failure(() => step(() => run.seek(fd, 0, 2)))).toBe(FileErrorCode.InvalidArgument)
+        //a read is refused on a folder's descriptor, as RARS's Read refuses what it cannot read
+        expect(failure(() => step(() => run.read(fd, 1)))).toBe(FileErrorCode.BadDescriptor)
+        step(() => run.close(fd))
+        expect(failure(() => step(() => run.readDirectory(fd, () => true)))).toBe(
+            FileErrorCode.BadDescriptor
+        )
+        //the refused read, then the close
+        undo()
+        undo()
+        expect(names(step(() => run.readDirectory(fd, () => true)))).toEqual([])
+    })
+
+    it('numbers folder descriptors with the Files', () => {
+        const { run, step } = steppedSession({ a: '' }, { maxOpen: 2 })
+        const file = step(() => run.open('a', 'read'))
+        const folder = step(() => run.openDirectory('/'))
+        expect([file, folder]).toEqual([3, 4])
+        expect(failure(() => step(() => run.openDirectory('/')))).toBe(FileErrorCode.TooManyOpen)
+        step(() => run.closeAll())
+        expect(step(() => run.openDirectory('/'))).toBe(3)
+    })
+
+    it('takes back each folder call with Undo', () => {
+        const session = steppedSession({ 'a.txt': 'a', 'docs/b.txt': 'b' })
+        const { fs, run, step, undo } = session
+        step(() => run.mkdir('made'))
+        undo()
+        expect(run.stat('made')).toBeUndefined()
+
+        step(() => run.mkdir('made'))
+        step(() => run.rmdir('made'))
+        undo()
+        expect(run.stat('made')).toEqual({ kind: 'directory', size: 0 })
+
+        step(() => run.unlink('a.txt'))
+        expect(fs.files['a.txt']).toBeUndefined()
+        undo()
+        expect(fs.readText('a.txt')).toBe('a')
+
+        step(() => run.move('docs/b.txt', 'made/b.txt'))
+        expect(Object.keys(fs.files).sort()).toEqual(['a.txt', 'made/b.txt'])
+        undo()
+        expect(Object.keys(fs.files).sort()).toEqual(['a.txt', 'docs/b.txt'])
+
+        step(() => run.move('docs/b.txt', 'a.txt'))
+        expect(fs.files).toEqual({ 'a.txt': { encoding: 'plain', content: 'b' } })
+        undo()
+        expect(fs.readText('a.txt')).toBe('a')
+        expect(fs.readText('docs/b.txt')).toBe('b')
+
+        const fd = step(() => run.openDirectory('made'))
+        undo()
+        expect(failure(() => run.readDirectory(fd, () => true))).toBe(FileErrorCode.BadDescriptor)
+        const again = step(() => run.openDirectory('made'))
+        step(() => run.close(again))
+        undo()
+        expect(names(listing(session, again))).toEqual(['.', '..'])
     })
 })

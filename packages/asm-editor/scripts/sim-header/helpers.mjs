@@ -101,3 +101,49 @@ export const SYNTH_HELPERS = [
             ].join('\n    ')
     }
 ]
+
+/**
+ * The Input controller's helpers; everything else is a register or a field macro. The bodies use the
+ * header's own macros, so they read the same registers a program reaches through `SIM_INPUT_*`.
+ */
+export const INPUT_HELPERS = [
+    {
+        name: 'sim_input_present',
+        returns: { type: 'int' },
+        parameters: [],
+        summary:
+            'Returns nonzero if the Input controller is there: its ID register reads "INP". In MARS and RARS it reads 0.',
+        body: () => 'return (SIM_INPUT_ID >> 8) == 0x494e50u;'
+    },
+    {
+        name: 'sim_input_pending',
+        returns: { type: 'unsigned' },
+        parameters: [],
+        summary:
+            'Returns how many events wait in the queue, from the Status register. Reading it takes nothing.',
+        body: () => 'return SIM_INPUT_STATUS & 0x7fu;'
+    },
+    {
+        name: 'sim_input_event',
+        returns: { type: 'unsigned' },
+        parameters: [],
+        summary:
+            'Takes the oldest event out of the queue and returns it, or 0 when the queue is empty. Read its fields with SIM_INPUT_KIND and SIM_INPUT_CODE.',
+        body: () => 'return SIM_INPUT_EVENT;'
+    },
+    {
+        name: 'sim_input_key_down',
+        returns: { type: 'int' },
+        parameters: [{ type: 'unsigned', name: 'usage' }],
+        summary: 'Returns nonzero if the key with this HID usage, a SIM_KEY_ name, is held now.',
+        body: () => 'return (int)((SIM_INPUT_KEYS[(usage & 0xffu) >> 3] >> (usage & 7u)) & 1u);'
+    },
+    {
+        name: 'sim_input_pointer',
+        returns: { type: 'unsigned' },
+        parameters: [],
+        summary:
+            'Returns the pointer register: read it with SIM_INPUT_X, SIM_INPUT_Y and SIM_INPUT_BUTTONS.',
+        body: () => 'return SIM_INPUT_POINTER;'
+    }
+]

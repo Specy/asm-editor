@@ -216,6 +216,18 @@ export abstract class MarsEmulator<
     private slicing = false
     /** The `argv` the next Core stores at every start, `argv[0]` included (`_setProgramArguments`). */
     private programArgv: string[] = []
+    /**
+     * Whether the program has run its first instruction since the Build: what opens the Input
+     * controller to the Screen's input, so the click that focuses the Screen before Run is no
+     * phantom click waiting in its queue (decision 13 of the design record).
+     */
+    private programStarted = false
+    /**
+     * Set while a Build runs the Runtime library's start code up to `main`, outside the Undo history
+     * (`_setUndoRecording`): that is not the program running for the person, who has not pressed
+     * Run or Step yet.
+     */
+    private runningStartCode = false
 
     constructor(
         source: BuildInput,
@@ -240,7 +252,9 @@ export abstract class MarsEmulator<
             screen: this._peripherals.screen,
             keyboard: this._peripherals.keyboard,
             terminal: this._peripherals.terminal,
-            audio: () => this._peripherals.audio
+            audio: () => this._peripherals.audio,
+            mouse: this._peripherals.mouse,
+            inputOpen: () => this.takesInput()
         })
         this.devices.setDisplay(this.display)
         this.handlers = new MarsHandlers({
@@ -257,6 +271,7 @@ export abstract class MarsEmulator<
                 if (this.slicing) this.core?.pause()
             },
             fileSystem: () => this.fileSystemSession,
+            target: () => this.target,
             instructionSerial: () => this.requireCore().getCurrentInstructionSerial()
         })
     }
@@ -336,6 +351,29 @@ export abstract class MarsEmulator<
 
     _setUndoRecording(recording: boolean): void {
         this.core?.setUndoEnabled(recording && this.undoEnabled)
+        //the only callers pause it around the start code a Build runs before the program's own
+        this.runningStartCode = !recording
+    }
+
+    /**
+     * Whether the Screen's keys and pointer reach the Input controller now: once the program has
+     * run an instruction of its own, until it ends, and never in a Testcase, which has no keyboard
+     * or mouse, as x86's `takesInputReports` has it
+     * ([the design record](../../../../../../docs/design/input-controller.md), decisions 9 and 13).
+     */
+    private takesInput(): boolean {
+        const core = this.core
+        return (
+            core !== null &&
+            this.programStarted &&
+            !core.terminated &&
+            this._peripherals.terminal.inputSource === 'interactive'
+        )
+    }
+
+    /** A Run or a Step is about to run the program: from now on it takes the Screen's input. */
+    private startProgram(): void {
+        if (!this.runningStartCode) this.programStarted = true
     }
 
     /**
@@ -478,6 +516,9 @@ export abstract class MarsEmulator<
         //and so are the Notes it plays
         //([ADR 0059](../../../../../../docs/adr/0059-undo-takes-back-the-sounds-an-instruction-made.md))
         this._peripherals.audio.track(instruction, undoSize)
+        //and so are the events its reads take from the Input controller (decision 9)
+        this.programStarted = false
+        this.devices.input.track(instruction, undoSize)
     }
 
     _dispose(): void {
@@ -495,6 +536,9 @@ export abstract class MarsEmulator<
     clear(): void {
         super.clear()
         this.devices?.resetScreen(this.display)
+        //Clear execution and Stop are the Screen's reset path, which empties the Input controller
+        this.devices?.resetInput()
+        this.programStarted = false
     }
 
     /** Framebuffer mode journals nothing, so Undo restores the image from the rolled-back memory. */
@@ -805,7 +849,9 @@ export abstract class MarsEmulator<
     }
 
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
-        this.requireCore().setMemoryBytes(Number(address), Array.from(data))
+        const core = this.requireCore()
+        //a Poke, or a Testcase's starting memory: the Input controller states its words over it
+        this.devices.hostWrite(() => core.setMemoryBytes(Number(address), Array.from(data)))
     }
 
     /**
@@ -814,6 +860,7 @@ export abstract class MarsEmulator<
      */
     async _step(): Promise<{ terminated: boolean }> {
         const core = this.requireCore()
+        this.startProgram()
         this.handlers.beginExecution()
         const stop = await this.coreCall(() => core.step())
         return { terminated: this.endsProgram(stop) }
@@ -840,10 +887,16 @@ export abstract class MarsEmulator<
         this.devices.rewind(() => core.undo())
         this.failedAt = null
         const readSynth = () => this.devices.readSynthBlock()
-        if (serial === undefined) return this._peripherals.audio.resyncSynth(readSynth)
+        if (serial === undefined) {
+            //a rewound Poke may have been one into the Input controller's block
+            this.devices.input.restate()
+            return this._peripherals.audio.resyncSynth(readSynth)
+        }
         this.fileSystemSession?.undoAfter(serial)
         this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
         this._peripherals.audio.undoAfter(BigInt(serial) - 1n, readSynth)
+        //the events the instruction's reads took go back, and the whole block is stated again
+        this.devices.input.undoAfter(BigInt(serial) - 1n)
     }
 
     /**
@@ -879,6 +932,7 @@ export abstract class MarsEmulator<
         if (core.terminated) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(core, request.breakpoints)
         const { stopReasons } = this.dialect
+        this.startProgram()
         this.handlers.beginExecution()
         this.slicing = true
         try {

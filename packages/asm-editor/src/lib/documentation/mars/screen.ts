@@ -156,6 +156,8 @@ export function screenEntries(
     const mips = variant === 'MIPS'
     const markdown = fillPlaceholders(template, {
         variant,
+        route: language,
+        simulator: mips ? 'MARS' : 'RARS',
         call: mips ? 'syscall' : 'ecall',
         service: mips ? '$v0' : 'a7',
         argument: mips ? '$a0' : 'a0',

@@ -57,6 +57,21 @@ Descriptors 0, 1 and 2 are the Terminal. Writes to 1 and 2 print. Reads from 0 h
 - **lseek** is needed by `fseek`, `ftell`, `rewind`, `fgetpos` and `fsetpos` only.
 - **Symbols named like registers.** C's `time` is also the name of a RISC-V CSR. The GNU profile must treat an identifier in a symbol position (`call time`, `%hi(time)`, `.word time`, a label `time:`) as a symbol; the GNU profile resolves these references, including user functions named `cycle`, `instret`, `fcsr` and so on.
 
+## The folder calls (MIPS and RISC-V)
+
+The members in `posix/src/` also make the folder calls ([ADR 0072](../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md)), through `__aed_folder_call` in `posix/src/internal/aed_folder.h`, which takes the same numbers on both Targets. Unlike the services above they report a failure as minus Linux's error number, which `__aed_folder_result` turns into -1 and `errno`.
+
+| Call | Service | Arguments | Result |
+| --- | --- | --- | --- |
+| unlink | 1026 | path | 0 or minus the error number |
+| mkdir | 1030 | path | 0 or minus the error number |
+| rmdir | 1031 | path | 0 or minus the error number |
+| rename | 1034 | from, to | 0 or minus the error number |
+| stat | 1038 | path, buffer | 0, the buffer filled with Linux's `struct stat64` (MIPS, RV32) or `struct stat` (RV64); or minus the error number |
+| getdents | 1065 | fd, buffer, size | bytes of `linux_dirent` records stored, 0 at the end, or minus the error number |
+
+`opendir` opens a folder with `__aed_open` mode 0, which the Cores answer with a descriptor getdents reads.
+
 ## Program start: `crt0.s`
 
 `arch/riscv32/crt0.s`, `arch/riscv64/crt0.s` and `arch/mips/crt0.s` (one file per Target; RV32 and RV64 differ only in the pointer size, so there are two files rather than a width-independent one) define `_start`, the entry symbol of a Build whose Entry is Generated assembly. They are plain GNU assembly, written exactly in the shape GCC 14.2 emits for the same code (`%hi`/`%lo` addresses, `.L`/`$L` local labels, `call`; on MIPS `.set noreorder` with an explicit `nop` in every delay slot, so they run the same with or without delayed branching), using only `.text`, `.align`, `.globl`, `.type`, `.size` and, on MIPS, the `.set`, `.ent` and `.end` directives GCC also emits. `_start`:

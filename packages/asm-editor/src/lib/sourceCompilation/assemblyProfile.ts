@@ -12,6 +12,7 @@ import {
     unsupportedRuntimeAbi,
     type RuntimeLibrarySetting
 } from '#lib/runtimeAbi.ts'
+import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type { CompilationRecord } from './records'
 
 /** The Compilation records whose Generated assembly the Entry file's include unit reaches. */
@@ -83,11 +84,48 @@ export function resolveAssemblyProfile(
 }
 
 /**
+ * The Project's other GNU-profile units a MIPS or RISC-V Build takes as an archive's members
+ * ([asmOS portability](../../../../../docs/design/asmos-portability.md), decision 11): the Generated
+ * assembly of every Compilation record for the Project's Target, other than the Entry, whose File
+ * the Project still has, in path order so two Builds lay the program out alike. The Core links one
+ * only when it defines a global the program still needs, as the program's own code, and leaves out
+ * one the Entry's unit includes; it checks every one either way. A Build in the RARS or MARS dialect
+ * links none: a hand-written Entry keeps building as it did.
+ */
+export function resolveLinkUnits(
+    sources: BuildSources,
+    records: readonly CompilationRecord[] | undefined,
+    language: AvailableLanguages,
+    profile: AssemblerProfile
+): string[] {
+    if (profile !== 'gnu-compiler-v1') return []
+    const paths = new Set<string>()
+    for (const record of records ?? []) {
+        if (record.target !== language || record.assemblerProfile !== 'gnu-compiler-v1') continue
+        const file = sources.files[record.outputPath]
+        if (record.outputPath === sources.entry || file?.encoding !== 'plain') continue
+        paths.add(record.outputPath)
+    }
+    return [...paths].sort()
+}
+
+/** The Compilation records whose Generated assembly a Build takes as its other units. */
+function linkUnitRecords(
+    sources: BuildSources,
+    records: readonly CompilationRecord[] | undefined
+): CompilationRecord[] {
+    const units = new Set(sources.linkUnits ?? [])
+    return (records ?? []).filter((record) => units.has(record.outputPath))
+}
+
+/**
  * The Runtime library a Build links and where it starts. Generated assembly whose Compilation
  * record requires a Runtime ABI links that ABI and starts at the library's `_start`, which runs
  * its startup code and then `main`; otherwise the *Link Runtime library* Setting decides, and a
  * hand-written program keeps its own start
  * ([ADR 0031](../../../../../docs/adr/0031-projects-pin-the-runtime-abi-not-its-implementation.md)).
+ * The Build's other units (`linkUnits`) pin their ABI too, and link it, but only the Entry's unit
+ * moves the start.
  */
 export function resolveRuntimeLink(
     sources: BuildSources,
@@ -97,8 +135,15 @@ export function resolveRuntimeLink(
     const required = new Set<`v${number}`>()
     for (const record of reachableRecords(sources, records))
         if (record.runtimeAbi !== undefined) required.add(record.runtimeAbi)
+    const starts = required.size > 0
+    for (const record of linkUnitRecords(sources, records))
+        if (record.runtimeAbi !== undefined) required.add(record.runtimeAbi)
     if (required.size > 1)
-        throw new ProjectFormatError('Conflicting required Runtime ABIs in the include unit')
+        throw new ProjectFormatError(
+            sources.linkUnits?.length
+                ? "Conflicting required Runtime ABIs in the program's units"
+                : 'Conflicting required Runtime ABIs in the include unit'
+        )
     const runtimeAbi =
         required.values().next().value ??
         (setting !== undefined && isRuntimeLibrarySetting(setting) && setting !== 'off'
@@ -110,7 +155,7 @@ export function resolveRuntimeLink(
         throw new ProjectFormatError(
             `${shadowed} is inside ${RUNTIME_NAMESPACE}, which the Runtime library reserves. Move it to link the Runtime library.`
         )
-    return required.size ? { runtimeAbi, entrySymbol: RUNTIME_ENTRY_SYMBOL } : { runtimeAbi }
+    return starts ? { runtimeAbi, entrySymbol: RUNTIME_ENTRY_SYMBOL } : { runtimeAbi }
 }
 
 /**
@@ -151,12 +196,17 @@ export function resolveX86Start(
     }
 }
 
-/** Keep compiler names scoped to Generated assembly, including mixed assembly/source Builds. */
+/**
+ * Keep compiler names scoped to Generated assembly, including mixed assembly/source Builds: the
+ * Entry's unit's and the Build's other units' (`linkUnits`).
+ */
 export function compiledLanguages(
     sources: BuildSources,
     records: readonly CompilationRecord[] | undefined
 ) {
     return Object.fromEntries(
-        reachableRecords(sources, records).map((record) => [record.outputPath, record.language])
+        [...reachableRecords(sources, records), ...linkUnitRecords(sources, records)].map(
+            (record) => [record.outputPath, record.language]
+        )
     )
 }

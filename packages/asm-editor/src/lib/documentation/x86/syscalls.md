@@ -18,7 +18,7 @@ Calendar, elapsed-time and instruction-based CPU clocks are available; [`clock_g
 
 Wait requests retain nanosecond precision. At very large elapsed times, a requested wait smaller than the clock's next representable increment fails with a precision error.
 
-The working directory `/project` exposes the Project's Files. A program starts with the current Project Files; each Testcase gets an independent copy, and changes made by a program remain in the Project Files after Stop. Directories are implicit path prefixes. Links and persistent permissions, ownership, or timestamps are not represented. Metadata is synthetic: mode `0777`, uid and gid zero, and epoch timestamps. See [`mkdir`](#syscall-mkdir), [`rmdir`](#syscall-rmdir), [`unlink`](#syscall-unlink) and [`rename`](#syscall-rename) for directory and replacement limits, and [`mmap`](#syscall-mmap) for File mappings.
+The working directory `/project` exposes the Project's Files. A program starts with the current Project Files; each Testcase gets an independent copy, and changes made by a program remain in the Project Files after Stop. Directories are implicit path prefixes. Links and persistent permissions, ownership, or timestamps are not represented. Metadata is synthetic: mode `0777`, uid and gid zero, and epoch timestamps. See [`mkdir`](#syscall-mkdir), [`rmdir`](#syscall-rmdir), [`unlink`](#syscall-unlink) and [`rename`](#syscall-rename) for how directories behave and how a rename replaces a File, and [`mmap`](#syscall-mmap) for File mappings.
 
 Vector I/O has specific partial-effect rules: see [`readv`](#syscall-readv), [`writev`](#syscall-writev) and [`pwritev`](#syscall-pwritev) before retrying a failed operation.
 

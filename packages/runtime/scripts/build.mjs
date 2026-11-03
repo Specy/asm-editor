@@ -6,12 +6,22 @@
 //
 // Every library source is compiled once per Target. Responses are cached under .cache by a hash of
 // everything that affects them, so a rebuild only asks the service about changed sources; --offline
-// fails instead of asking. The outputs are committed and the editor imports them:
+// fails instead of asking. A member whose part of the library (src/, or posix/) was built from the
+// same inputs as the committed library is taken from that library instead, so a clone without the
+// cache asks only about what changed; --rebuild compiles everything. The outputs are committed and
+// the editor imports them:
 //
 //   generated/<abi>/<target>.json  members, index, member C line maps
 //   generated/<abi>/functions.json public functions from the headers
 //   generated/<abi>/include.json   the headers, uploaded with every compile
 //   generated/<abi>/sources.json   the C sources, for reading a member's origin
+//
+//   generated/<abi>/posix-include.json  MIPS and RISC-V's own headers, searched before the others
+//
+// MIPS and RISC-V also build posix/: their own headers (<dirent.h>, <sys/stat.h>, <unistd.h>, and
+// the <errno.h> and <stdio.h> that add to the shared ones through #include_next) and the members
+// over the folder calls. Only those members' requests upload posix/, so a change there leaves every
+// other member's request, and its cached answer, as it was.
 //
 // The build fails when a member does not parse as GNU compiler assembly, when two members define
 // the same strong global, when a documented function has no member, or when the ABI changes
@@ -38,6 +48,13 @@ export const TARGETS = RUNTIME_TARGETS
 
 const LIBRARY_FLAGS =
     '-Os -g1 -fdiagnostics-color=never -fno-verbose-asm -ffreestanding -fno-builtin -fno-tree-loop-distribute-patterns -fno-stack-protector -fno-pie -fno-section-anchors -nostdinc -isystem sysroot/include -I src/internal'
+/** Where posix/include is uploaded: searched before the shared headers, as x86's own are. */
+export const POSIX_SYSROOT_INCLUDE = 'sysroot/posix/include'
+/** A posix/ member's flags: LIBRARY_FLAGS with its own headers first and its internal ones. */
+const POSIX_LIBRARY_FLAGS = LIBRARY_FLAGS.replace(
+    '-isystem sysroot/include',
+    `-isystem ${POSIX_SYSROOT_INCLUDE} -isystem sysroot/include`
+).replace('-I src/internal', '-I src/internal -I posix/src/internal')
 
 const args = process.argv.slice(2)
 const option = (name) => {
@@ -54,6 +71,9 @@ const abiOnly = args.includes('--abi-only')
 const checkAssets = args.includes('--check-assets')
 const updateAbi = args.includes('--update-abi')
 const abiReport = option('--abi-report')
+// Compiles every member, where a member whose inputs have not changed since the committed library
+// was built is otherwise taken from it.
+const rebuild = args.includes('--rebuild')
 const targets = (option('--target') ?? Object.keys(TARGETS).join(',')).split(',')
 
 function walk(directory, accept) {
@@ -86,13 +106,42 @@ function headerFiles(target) {
     return files
 }
 
+/** Whether a Target builds posix/, the folder calls' headers and members: MIPS and RISC-V. */
+const hasPosix = (target) => TARGETS[target].core !== 'x86'
+const isPosixSource = (path) => posix(relative(runtime, path)).startsWith('posix/')
+
+/** posix/'s public headers, keyed by their path under its include directory. */
+function posixHeaders() {
+    const include = join(runtime, 'posix', 'include')
+    return Object.fromEntries(
+        walk(include, () => true).map((path) => [posix(relative(include, path)), read(path)])
+    )
+}
+
+/** What a posix/ member's request uploads besides `headerFiles`: posix/'s headers, public and internal. */
+function posixFiles() {
+    return [
+        ...Object.entries(posixHeaders()).map(([path, contents]) => ({
+            filename: `${POSIX_SYSROOT_INCLUDE}/${path}`,
+            contents
+        })),
+        ...walk(join(runtime, 'posix', 'src'), (path) => /\.(h|inc)$/.test(path)).map((path) => ({
+            filename: posix(relative(runtime, path)),
+            contents: read(path)
+        }))
+    ]
+}
+
 let lastRequest = 0
 async function compile(target, path, files) {
     const settings = TARGETS[target]
     const language = path.endsWith('.cpp') ? 'cpp' : 'c'
     const relativePath = posix(relative(runtime, path))
     const directory = posix(dirname(relativePath))
-    const userArguments = `${LIBRARY_FLAGS} -iquote ${directory} -I arch ${settings.flags} ${compilerLanguageFlags(language)}`
+    //posix/ members alone see posix/, so no other member's request changes with it
+    const own = isPosixSource(path)
+    if (own) files = [...files, ...posixFiles()]
+    const userArguments = `${own ? POSIX_LIBRARY_FLAGS : LIBRARY_FLAGS} -iquote ${directory} -I arch ${settings.flags} ${compilerLanguageFlags(language)}`
     const body = {
         source: `#line 1 "${relativePath}"\n${read(path)}`,
         lang: language === 'cpp' ? 'c++' : 'c',
@@ -168,7 +217,9 @@ function memberPath(path) {
     const relativePath = posix(relative(runtime, path))
     const inside = relativePath.startsWith('src/')
         ? relativePath.slice(4)
-        : relativePath.replace(/^arch\/[^/]+\//, '')
+        : relativePath.startsWith('posix/src/')
+          ? relativePath.slice('posix/src/'.length)
+          : relativePath.replace(/^arch\/[^/]+\//, '')
     return `@runtime/${ABI}/${inside.replace(/\.(c|cpp|s|S)$/, '.s')}`
 }
 
@@ -221,11 +272,15 @@ async function analyzer(target) {
     }
 }
 
-function sources() {
-    const files = walk(
-        join(runtime, 'src'),
-        (path) => /\.(c|cpp)$/.test(path) && (!only || posix(path).includes(only))
-    )
+/** The library's sources, posix/'s included for a Target that builds it, or every Target's with none. */
+function sources(target) {
+    const accept = (path) => /\.(c|cpp)$/.test(path) && (!only || posix(path).includes(only))
+    const files = [
+        ...walk(join(runtime, 'src'), accept),
+        ...(target === undefined || hasPosix(target)
+            ? walk(join(runtime, 'posix', 'src'), accept)
+            : [])
+    ]
     if (files.length === 0) throw new Error('src has no sources')
     return files
 }
@@ -250,10 +305,27 @@ async function buildTarget(target, functions) {
         }
     }
     let done = 0
-    const all = sources()
+    let reused = 0
+    const all = sources(target)
+    const builtPath = join(output, `${target}.json`)
+    const built = existsSync(builtPath) ? JSON.parse(read(builtPath)) : undefined
+    const unchanged = unchangedParts(built, target)
     for (const path of all) {
-        const { response } = await compile(target, path, files)
         const relativePath = posix(relative(runtime, path))
+        const member = memberPath(path)
+        const before = unchanged[isPosixSource(path) ? 'posix' : 'shared'] ? built : undefined
+        if (
+            before?.members[member] !== undefined &&
+            before.memberSources[member]?.source === relativePath
+        ) {
+            if (members[member]) throw new Error(`Two sources make the member ${member}`)
+            members[member] = before.members[member]
+            memberSources[member] = before.memberSources[member]
+            record(member, members[member])
+            reused += 1
+            continue
+        }
+        const { response } = await compile(target, path, files)
         if (response.code !== 0) {
             const messages = [...(response.stderr ?? []), ...(response.stdout ?? [])]
                 .map((line) => line.text)
@@ -262,14 +334,14 @@ async function buildTarget(target, functions) {
             continue
         }
         const prepared = prepare(response.asm, target, relativePath)
-        const member = memberPath(path)
         if (members[member]) throw new Error(`Two sources make the member ${member}`)
         members[member] = prepared.text
         memberSources[member] = { source: relativePath, lines: prepared.map }
         record(member, prepared.text)
         done += 1
-        if (done % 25 === 0) console.log(`  ${target}: ${done}/${all.length}`)
+        if (done % 25 === 0) console.log(`  ${target}: ${done}/${all.length - reused}`)
     }
+    if (reused) console.log(`  ${target}: ${reused} members unchanged since the last build`)
     // Startup code is written as GNU assembly for each Target.
     const crt0 = walk(join(runtime, 'arch', settings.arch), (path) => /crt0\.s$/.test(path))
     if (crt0.length !== 1) problems.push(`arch/${settings.arch} must have exactly one crt0.s`)
@@ -297,6 +369,7 @@ async function buildTarget(target, functions) {
         abi: ABI,
         target,
         inputsDigest: inputsDigest(target),
+        ...(hasPosix(target) ? { sharedDigest: sharedDigest(target) } : {}),
         compiler: settings.compilers.c,
         members,
         index,
@@ -305,7 +378,11 @@ async function buildTarget(target, functions) {
     }
 }
 
-function inputsDigest(target) {
+/**
+ * The digest of everything src/'s members are built from: the whole library's for x86, and what a
+ * MIPS or RISC-V library's was before posix/ existed, so libraries built then still match it.
+ */
+function sharedDigest(target) {
     const settings = TARGETS[target]
     return sha(
         JSON.stringify({
@@ -314,10 +391,45 @@ function inputsDigest(target) {
             libraryFlags: LIBRARY_FLAGS,
             compilerContract: sha(read(join(runtime, 'lib', 'compilerContract.mjs'))),
             files: headerFiles(target),
-            sources: sources().map((path) => [posix(relative(runtime, path)), read(path)]),
+            sources: sources(target)
+                .filter((path) => !isPosixSource(path))
+                .map((path) => [posix(relative(runtime, path)), read(path)]),
             crt0: read(join(runtime, 'arch', settings.arch, 'crt0.s'))
         })
     )
+}
+
+/** The digest of what posix/'s members are built from, beside the shared one. */
+function posixDigest(target) {
+    return sha(
+        JSON.stringify({
+            shared: sharedDigest(target),
+            libraryFlags: POSIX_LIBRARY_FLAGS,
+            posix: posixFiles(),
+            sources: sources(target)
+                .filter(isPosixSource)
+                .map((path) => [posix(relative(runtime, path)), read(path)])
+        })
+    )
+}
+
+/** Everything the library is built from: x86's is the shared digest alone. */
+function inputsDigest(target) {
+    return hasPosix(target) ? posixDigest(target) : sharedDigest(target)
+}
+
+/**
+ * Which parts of the library built before, generated/<abi>/<target>.json, were built from the same
+ * inputs as now: their members are what compiling them again would give, so the build takes them
+ * from it instead of asking the service. A library built before posix/ existed has only the shared
+ * digest, as its inputsDigest.
+ */
+function unchangedParts(built, target) {
+    if (!built || rebuild) return { shared: false, posix: false }
+    return {
+        shared: (built.sharedDigest ?? built.inputsDigest) === sharedDigest(target),
+        posix: hasPosix(target) && built.inputsDigest === posixDigest(target)
+    }
 }
 
 /** Sizes and offsets of the public structs, read back from a compiled table. */
@@ -488,8 +600,8 @@ async function main() {
             continue
         }
         writeFileSync(join(output, `${target}.json`), JSON.stringify(library))
-        layoutTables[target] = await layouts(target)
         if (!skipAbi) {
+            layoutTables[target] = await layouts(target)
             exported[target] = await requiredSymbols(target, library, functions)
             signatureTables[target] = await signatures(target, functions)
         }
@@ -509,6 +621,7 @@ async function main() {
         0
     )
     writeFileSync(join(output, 'include.json'), JSON.stringify(headers))
+    writeFileSync(join(output, 'posix-include.json'), JSON.stringify(posixHeaders()))
     writeFileSync(
         join(output, 'functions.json'),
         JSON.stringify({
@@ -518,10 +631,12 @@ async function main() {
     )
     const cSources = Object.fromEntries([
         ...sources().map((path) => [posix(relative(runtime, path)), read(path)]),
-        ...walk(join(runtime, 'src'), (path) => /\.(h|inc)$/.test(path)).map((path) => [
-            posix(relative(runtime, path)),
-            read(path)
-        ])
+        ...[join(runtime, 'src'), join(runtime, 'posix', 'src')].flatMap((directory) =>
+            walk(directory, (path) => /\.(h|inc)$/.test(path)).map((path) => [
+                posix(relative(runtime, path)),
+                read(path)
+            ])
+        )
     ])
     writeFileSync(join(output, 'sources.json'), JSON.stringify(cSources))
     if (skipAbi) return

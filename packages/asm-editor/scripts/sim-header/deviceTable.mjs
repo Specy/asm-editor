@@ -565,7 +565,7 @@ export const DEVICE_HEADERS = [
                 'rename',
                 'int',
                 ['const char *from', 'const char *to'],
-                'Renames or moves the file at from to the path to. Returns 0, or -1 with errno set. Under /project a file at to stays and the call fails with EEXIST, and a folder cannot move (EISDIR).',
+                'Renames or moves the file at from to the path to, replacing a file already at to, as on Linux. Returns 0, or -1 with errno set. Under /project a folder cannot move (EISDIR).',
                 { syscall: 'rename' }
             ),
             posix(

@@ -3,6 +3,8 @@
  * keyboard device" and "The pointer"): keys and the pointer go to x86's input devices as Linux
  * input events instead of to the Keyboard and Mouse, the focused Screen keeps the wheel from
  * scrolling the page, focus loss lifts what is held, and the focus hint says where the input goes.
+ * On every Target Escape is the program's and Shift+Tab gives the keyboard back
+ * ([ADR 0008](../../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md), 2026-11-03).
  * jsdom lays nothing out, so the canvas is given the box it would have at twice its size.
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
@@ -211,12 +213,48 @@ it('hands Escape to an x86 program and leaves Shift+Tab to release the Screen', 
     }
 })
 
-it('still releases the Screen on Escape for every other Target', () => {
+it('hands Escape to the program on every other Target too, as a key and as character 27', () => {
     const { canvas, peripherals } = panel({ x86: false })
+    const outside = vi.fn()
+    window.addEventListener('keydown', outside)
+    try {
+        canvas.focus()
+        const escape = key('keydown', 'Escape')
+        canvas.dispatchEvent(escape)
+        canvas.dispatchEvent(key('keyup', 'Escape'))
+        expect(document.activeElement).toBe(canvas)
+        expect(escape.defaultPrevented).toBe(true)
+        //EASy68K's Escape on M68K and in the Port map, BREAK in the TRS-80 matrix, 27 at MARS's
+        //receiver, and usage 0x29 at the Input controller, which hears the physical key
+        expect(peripherals.keyboard.lastKeys()).toEqual({ down: 0x1b, up: 0x1b })
+        expect(peripherals.keyboard.readCharacterCode()).toBe(27)
+        //neither the page's shortcuts nor the floating window's Escape see it
+        expect(outside).not.toHaveBeenCalled()
+    } finally {
+        window.removeEventListener('keydown', outside)
+    }
+})
+
+it('leaves Shift+Tab to release the Screen on every other Target, its Shift reaching the program', () => {
+    const { canvas, peripherals } = panel({ x86: false })
+    const physical: string[] = []
+    peripherals.keyboard.onPhysicalKey((code, down) => physical.push(`${down ? '+' : '-'}${code}`))
     canvas.focus()
-    canvas.dispatchEvent(key('keydown', 'Escape'))
-    expect(document.activeElement).not.toBe(canvas)
-    expect(peripherals.keyboard.lastKeys().down).toBe(0)
+    canvas.dispatchEvent(key('keydown', 'ShiftLeft'))
+    const back = new KeyboardEvent('keydown', {
+        code: 'Tab',
+        key: 'Tab',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+    })
+    canvas.dispatchEvent(back)
+    //the browser's own Shift+Tab moves the focus back, which jsdom does not do itself
+    expect(back.defaultPrevented).toBe(false)
+    expect(peripherals.keyboard.hasTypedInput()).toBe(false)
+    canvas.blur()
+    expect(physical).toEqual(['+ShiftLeft', '-ShiftLeft'])
+    expect(peripherals.keyboard.lastKeys()).toEqual({ down: 0x10, up: 0x10 })
 })
 
 it('says where a focused Screen sends its input', () => {
@@ -226,7 +264,7 @@ it('says where a focused Screen sends its input', () => {
     )
     const other = panel({ x86: false })
     expect(other.canvas.title).toBe(
-        'Click to send keyboard and mouse input to the program, Esc to release it'
+        'Click to send keyboard and mouse input to the program. Press Shift+Tab to return keyboard focus to the page.'
     )
 })
 
@@ -241,13 +279,27 @@ it('asks to be clicked while the program waits for a key, until it has the keybo
     expect(canvas.classList.contains('focused')).toBe(true)
 })
 
-it('keeps the Keyboard and Mouse paths for every other Target', () => {
+it('keeps the Keyboard and Mouse paths for every other Target, the wheel included', () => {
     const { canvas, peripherals, reports } = panel({ x86: false })
+    const turns: number[] = []
+    peripherals.mouse.onWheel((notches) => turns.push(notches))
+    const unfocused = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true })
+    canvas.dispatchEvent(unfocused)
+    expect(unfocused.defaultPrevented).toBe(false)
     canvas.focus()
     canvas.dispatchEvent(key('keydown', 'KeyA'))
-    const wheel = new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true })
+    //a notch towards the user, at the pixel under the pointer of a Screen shown at twice its size
+    const wheel = new WheelEvent('wheel', {
+        deltaY: 100,
+        clientX: 21,
+        clientY: 41,
+        bubbles: true,
+        cancelable: true
+    })
     canvas.dispatchEvent(wheel)
     expect(peripherals.keyboard.lastKeys().down).toBe(0x41)
-    expect(wheel.defaultPrevented).toBe(false)
+    expect(wheel.defaultPrevented).toBe(true)
+    expect(turns).toEqual([-1])
+    expect([peripherals.mouse.x, peripherals.mouse.y]).toEqual([10, 20])
     expect(reports).toEqual([])
 })

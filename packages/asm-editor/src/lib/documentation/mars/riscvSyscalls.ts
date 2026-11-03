@@ -62,7 +62,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             arguments: [
                 { name: 'a0', description: 'contains the integer parsed from the input line' }
             ],
-            other: 'Waits for a line in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as an integer. Invalid input stops the program with an input error.'
+            other: 'Waits for a line typed at the keyboard in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as an integer. Invalid input stops the program with an input error.'
         },
         implemented: true,
         binding: {
@@ -82,7 +82,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains the floating-point value parsed from the input line'
                 }
             ],
-            other: 'Waits for a line in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as a floating-point value. Invalid input stops the program with an input error.'
+            other: 'Waits for a line typed at the keyboard in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as a floating-point value. Invalid input stops the program with an input error.'
         },
         implemented: true,
         binding: {
@@ -102,7 +102,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                     description: 'contains the double-precision value parsed from the input line'
                 }
             ],
-            other: 'Waits for a line in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as a double-precision value. Invalid input stops the program with an input error.'
+            other: 'Waits for a line typed at the keyboard in the Terminal and Enter, or reads scripted input in a Testcase. Trims surrounding whitespace and parses it as a double-precision value. Invalid input stops the program with an input error.'
         },
         implemented: true,
         binding: {
@@ -119,7 +119,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             { name: 'a1', description: 'size of input buffer in bytes' }
         ],
         result: {
-            other: 'Waits for a line in the Terminal and Enter, or reads scripted input in a Testcase. Stores UTF-8 with fgets-style limits: for buffer size n, writes at most n-1 bytes, adds a newline if there is room, then a NUL byte. Truncation can split a multibyte character. If n = 1, ignores input and writes only NUL; if n < 1, ignores input and writes nothing.'
+            other: 'Waits for a line typed at the keyboard in the Terminal and Enter, or reads scripted input in a Testcase. Stores UTF-8 with fgets-style limits: for buffer size n, writes at most n-1 bytes, adds a newline if there is room, then a NUL byte. Truncation can split a multibyte character. If n = 1, ignores input and writes only NUL; if n < 1, ignores input and writes nothing.'
         },
         implemented: true,
         binding: {
@@ -225,7 +225,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         ],
         result: {
             arguments: [{ name: 'a0', description: 'contains file descriptor (-1 if error)' }],
-            other: 'Opens a file in the Project Files, without accessing the computer’s disk. Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. The mode argument is ignored. Failure returns -1. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3. Undo restores file changes; each Testcase starts with its own copy of the Project Files.'
+            other: 'Opens a file in the Project Files, without accessing the computer’s disk. Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. A folder opened with flag 0 gives a descriptor that service 1065 lists; opening a folder for writing fails. The mode argument is ignored. Failure returns -1. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; project files receive descriptors starting at 3. Undo restores file changes; each Testcase starts with its own copy of the Project Files.'
         },
         implemented: true,
         binding: {
@@ -901,6 +901,166 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                 { name: 'text', type: 'const char *', register: 'a1' }
             ],
             returns: { type: 'void' }
+        }
+    },
+    [1026]: {
+        name: 'unlink (delete a file)',
+        code: 1026,
+        arguments: [
+            {
+                name: 'a0',
+                description: 'address of NUL-terminated UTF-8 path of the file to delete'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: 'a0',
+                    description: 'contains 0 if the file was deleted, or a negative error number'
+                }
+            ],
+            other: 'Deletes a file from the Project Files. Fails with -2 when nothing is at the path, and with -21 when the path is a folder, which service 1031 deletes instead. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the Project Files.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_unlink',
+            parameters: [{ name: 'path', type: 'const char *', register: 'a0' }],
+            returns: { type: 'int', register: 'a0' }
+        }
+    },
+    [1030]: {
+        name: 'mkdir (make a folder)',
+        code: 1030,
+        arguments: [
+            { name: 'a0', description: 'address of NUL-terminated UTF-8 path of the new folder' }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: 'a0',
+                    description: 'contains 0 if the folder was made, or a negative error number'
+                }
+            ],
+            other: 'Makes a folder. The folder that holds it must exist already (-2 if it does not, -20 if that path is a file), and nothing may be at the path yet: -17 means it already exists, which a program run a second time should treat as success. A folder made this way lasts until the run ends, and stays in the Project only once a file is written inside it, so a program that wants to keep an empty folder writes a small hidden file such as `.keep` into it. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the Project Files.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_mkdir',
+            parameters: [{ name: 'path', type: 'const char *', register: 'a0' }],
+            returns: { type: 'int', register: 'a0' }
+        }
+    },
+    [1031]: {
+        name: 'rmdir (delete an empty folder)',
+        code: 1031,
+        arguments: [
+            {
+                name: 'a0',
+                description: 'address of NUL-terminated UTF-8 path of the folder to delete'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: 'a0',
+                    description: 'contains 0 if the folder was deleted, or a negative error number'
+                }
+            ],
+            other: 'Deletes a folder, but only an empty one: -39 means it still holds a file or a folder, -20 that the path is a file, and -2 that nothing is there. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the Project Files.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_rmdir',
+            parameters: [{ name: 'path', type: 'const char *', register: 'a0' }],
+            returns: { type: 'int', register: 'a0' }
+        }
+    },
+    [1034]: {
+        name: 'rename (rename or move a file)',
+        code: 1034,
+        arguments: [
+            { name: 'a0', description: 'address of NUL-terminated UTF-8 path of the file' },
+            { name: 'a1', description: 'address of NUL-terminated UTF-8 path it moves to' }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: 'a0',
+                    description: 'contains 0 if the file was renamed, or a negative error number'
+                }
+            ],
+            other: 'Renames a file, or moves it into another folder, which must exist already (-2 if it does not). Only files move: a folder gives -21, and so does a new name that is a folder, while a folder renamed onto a file gives -20. A file that already has the new name is replaced by the one moved there, as on Linux, and renaming a file to its own name does nothing. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the Project Files.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_rename',
+            parameters: [
+                { name: 'from', type: 'const char *', register: 'a0' },
+                { name: 'to', type: 'const char *', register: 'a1' }
+            ],
+            returns: { type: 'int', register: 'a0' }
+        }
+    },
+    [1038]: {
+        name: 'stat (describe a path)',
+        code: 1038,
+        arguments: [
+            { name: 'a0', description: 'address of NUL-terminated UTF-8 path' },
+            {
+                name: 'a1',
+                description:
+                    'address of a buffer of 104 bytes in RV32 and 128 in RV64, which the service fills'
+            }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: 'a0',
+                    description: 'contains 0 if the buffer was filled, or a negative error number'
+                }
+            ],
+            other: 'Tells what is at a path. The buffer receives Linux’s `struct stat` for this machine. Its useful fields are the same in RV32 and RV64: the inode number (8 bytes) at offset 8, the mode word at 16, the link count at 20 and the size (8 bytes) at 48. In the mode word, the bits that `0xF000` selects are `0x4000` for a folder and `0x8000` for a file. A folder’s size is 0. The inode number identifies a file or folder for the whole run, and the link count is 1; every other field, the times and owners included, is 0. Fails with -2 when nothing is at the path, and with -20 when the path runs through a file. From C, `stat()` in `<sys/stat.h>` reads the same buffer by field name. Like every folder service, it reports a failure as minus an error number.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_stat',
+            parameters: [
+                { name: 'path', type: 'const char *', register: 'a0' },
+                { name: 'buffer', type: 'void *', register: 'a1', out: true }
+            ],
+            returns: { type: 'int', register: 'a0' }
+        }
+    },
+    [1065]: {
+        name: 'getdents (list a folder)',
+        code: 1065,
+        arguments: [
+            {
+                name: 'a0',
+                description: 'file descriptor of a folder, opened with service 1024 and flag 0'
+            },
+            { name: 'a1', description: 'address of the buffer to fill' },
+            { name: 'a2', description: 'size of the buffer in bytes' }
+        ],
+        result: {
+            arguments: [
+                {
+                    name: 'a0',
+                    description:
+                        'contains the number of bytes stored, 0 once every entry has been listed, or a negative error number'
+                }
+            ],
+            other: 'Lists a folder, filling the buffer with one record per entry: `.` (the folder itself) and `..` (the folder that holds it) first, then its files and folders in name order. Each record holds the entry’s inode number at offset 0, the position of the next entry, the record’s own length (2 bytes) and the name, ending with a NUL. The first two fields are 4 bytes each in RV32, so the length is at 8 and the name at 10, and 8 bytes each in RV64, so the length is at 16 and the name at 18. The record’s last byte is the entry’s type: 4 for a folder, 8 for a file. Add a record’s length to its address to reach the next one, and call the service again for more until it returns 0. Fails with -22 when the buffer is too small for the next record, -9 when the descriptor is not open, and -20 when it is a file’s. Reading a folder’s descriptor with service 63 fails with -1; close it with service 57. From C, `opendir()` and `readdir()` in `<dirent.h>` walk the records for you.'
+        },
+        implemented: true,
+        binding: {
+            name: 'sim_getdents',
+            parameters: [
+                { name: 'fd', type: 'int', register: 'a0' },
+                { name: 'buffer', type: 'void *', register: 'a1', out: true },
+                { name: 'length', type: 'int', register: 'a2' }
+            ],
+            returns: { type: 'int', register: 'a0' }
         }
     }
 }

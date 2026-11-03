@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
+import { inputControllerEntries } from '#lib/documentation/inputController.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { MIPS } from '@specy/mips'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
@@ -2477,6 +2478,7 @@ describe('MIPS Synth', () => {
         ).toEqual([
             ['MMIO', 0xffff0000n, 0xffff0010n],
             ['Synth', 0xffff0100n, 0xffff0300n],
+            ['Input controller', 0xffff0300n, 0xffff0340n],
             ['Bitmap display', 0x10010000n, 0x10010100n]
         ])
     })
@@ -2607,5 +2609,225 @@ main:   li      $t0, 0xffff0100
         expect(results[0]?.errors ?? []).toEqual([])
         expect(results[0]?.passed).toBe(true)
         expect(synthWrites(output)).toEqual([])
+    })
+})
+
+/**
+ * The Input controller at 0xffff0300 against the real Core
+ * ([the design record](../../../../../../docs/design/input-controller.md)): what the program reads
+ * after the Screen's keys and pointer reach the Keyboard and the Mouse, Undo putting back what a
+ * read took, and the gates that keep input away before Run, after the end and in a Testcase.
+ */
+describe('MIPS Input controller', () => {
+    it('runs the chapter’s first program: the arrows pressed, until Escape', async () => {
+        const entry = inputControllerEntries('MIPS', 'mips', '/documentation').find(
+            (candidate) => candidate.anchor === 'first-program'
+        )!
+        const example = /```\w+\n([\s\S]*?)```/.exec(entry.searchText)![1]
+        const keyboard = new Keyboard()
+        const emulator = await build(example, { keyboard, virtualClock: true })
+        await emulator.step()
+        for (const code of ['ArrowLeft', 'ArrowUp', 'KeyA', 'ArrowRight', 'Escape']) {
+            keyboard.keyDown({ code, key: code })
+            keyboard.keyUp({ code, key: code })
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('LUR')
+        expect(emulator.terminated).toBe(true)
+    })
+
+    it('says so when the simulator has no Input controller, as under a covering display', async () => {
+        const entry = inputControllerEntries('MIPS', 'mips', '/documentation').find(
+            (candidate) => candidate.anchor === 'first-program'
+        )!
+        const example = /```\w+\n([\s\S]*?)```/.exec(entry.searchText)![1]
+        const emulator = await run(example, {
+            display: { ...SMALL, baseAddress: 0xffff0000, width: 512, height: 512 }
+        })
+        expect(emulator.stdOut).toBe('This simulator has no Input controller.\n')
+    })
+
+    const READS = `        li      $s0, 0xffff0300
+        lw      $t0, 0($s0)
+        lw      $t1, 8($s0)
+        lw      $t2, 12($s0)
+        lw      $t3, 12($s0)
+        lw      $t4, 16($s0)
+        lw      $t5, 0x28($s0)
+        lw      $t6, 12($s0)
+        lw      $t7, 8($s0)
+`
+    const valueOf = (emulator: Emulator, name: string) =>
+        Number(emulator.registers.find((r) => r.name === name)?.value ?? -1n) >>> 0
+    const record = (kind: number, code: number, x = 0, y = 0) =>
+        ((y << 21) | (x << 11) | (kind << 8) | code) >>> 0
+    const arrowLeft = { code: 'ArrowLeft', key: 'ArrowLeft' }
+
+    it('reads its ID, the queued events in order, the pointer and the key map', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(DATA + READS + EXIT, { keyboard })
+        //the program has started: the first instruction of `li` ran
+        await emulator.step()
+        keyboard.keyDown(arrowLeft)
+        emulator.peripherals.mouse.buttonDown('left', 3, 2)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$t0')).toBe(0x494e5001)
+        expect(valueOf(emulator, '$t1')).toBe(2)
+        expect(valueOf(emulator, '$t2')).toBe(record(1, 0x50))
+        expect(valueOf(emulator, '$t3')).toBe(record(4, 1, 3, 2))
+        expect(valueOf(emulator, '$t4')).toBe(((2 << 21) | (3 << 11) | 1) >>> 0)
+        expect(valueOf(emulator, '$t5')).toBe(1 << (0x50 - 64))
+        //an empty queue reads 0
+        expect(valueOf(emulator, '$t6')).toBe(0)
+        expect(valueOf(emulator, '$t7')).toBe(0)
+    })
+
+    it('hears nothing before the program starts, such as the click that focused the Screen', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(DATA + READS + EXIT, { keyboard })
+        emulator.peripherals.mouse.buttonDown('left', 1, 1)
+        emulator.peripherals.mouse.buttonUp('left', 1, 1)
+        keyboard.keyDown(arrowLeft)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(valueOf(emulator, '$t1')).toBe(0)
+        expect(valueOf(emulator, '$t4')).toBe(0)
+        expect(valueOf(emulator, '$t5')).toBe(0)
+    })
+
+    it('puts back an event a read took when Undo rewinds past the read', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(DATA + READS + EXIT, { keyboard })
+        await emulator.step()
+        keyboard.keyDown(arrowLeft)
+        keyboard.keyUp(arrowLeft)
+        await emulator.run(INSTRUCTION_LIMIT)
+        const word = (offset: number) => {
+            const bytes = emulator.readMemoryBytes(BigInt(0xffff0300 + offset), 4)
+            return (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) >>> 0
+        }
+        expect(word(8)).toBe(0)
+        //the exit's two instructions, the reads of $t7, $t6, $t5, $t4 and the second event's read
+        emulator.undo(7)
+        expect(word(8)).toBe(1)
+        expect(word(12)).toBe(record(2, 0x50))
+        //and the first one's: the queue holds both again, in order
+        emulator.undo(1)
+        expect(word(8)).toBe(2)
+        expect(word(12)).toBe(record(1, 0x50))
+        //the key map shows the present: the key is up
+        expect(word(0x28)).toBe(0)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(valueOf(emulator, '$t2')).toBe(record(1, 0x50))
+        expect(valueOf(emulator, '$t3')).toBe(record(2, 0x50))
+    })
+
+    it('ignores program stores and Pokes, and stops a program that enables interrupts', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(
+            DATA +
+                `        li      $s0, 0xffff0300
+        sw      $zero, 0($s0)
+        li      $t0, 77
+        sw      $t0, 8($s0)
+        lw      $t1, 0($s0)
+        lw      $t2, 8($s0)
+        li      $t0, 2
+        sw      $t0, 4($s0)
+` +
+                EXIT,
+            { keyboard }
+        )
+        expect(emulator.pokeMemory(0xffff0308n, new Uint8Array([9, 0, 0, 0]))).toBe(true)
+        expect(emulator.readMemoryBytes(0xffff0308n, 4)[0]).toBe(0)
+        //a Poke setting the interrupt-enable bit stops nothing
+        expect(emulator.pokeMemory(0xffff0304n, new Uint8Array([2, 0, 0, 0]))).toBe(true)
+        expect(emulator.readMemoryBytes(0xffff0304n, 4)[0]).toBe(0)
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.readMemoryBytes(0xffff0300n, 4)).toEqual(
+            new Uint8Array([1, 0x50, 0x4e, 0x49])
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(valueOf(emulator, '$t1')).toBe(0x494e5001)
+        expect(valueOf(emulator, '$t2')).toBe(0)
+        expect(emulator.errors.join('\n')).toContain('Interrupt-driven input is not supported')
+        expect(emulator.readMemoryBytes(0xffff0304n, 4)[0]).toBe(0)
+    })
+
+    it('is a device region of the memory view, beside the MMIO words and the Synth', async () => {
+        const emulator = await build(DATA + EXIT, { audio: new Audio() })
+        expect(
+            emulator.memoryRegions
+                .filter((region) => region.kind === 'device')
+                .map((region) => region.name)
+        ).toContain('Input controller')
+    })
+
+    it('is off while a display at the memory map base covers it, and back when it is moved away', async () => {
+        const keyboard = new Keyboard()
+        const covering = { ...SMALL, baseAddress: 0xffff0000, width: 512, height: 512 }
+        const emulator = await build(
+            DATA +
+                `        li      $s0, 0xffff0300
+        lw      $t0, 0($s0)
+        lw      $t1, 12($s0)
+        nop
+        lw      $t2, 0($s0)
+        lw      $t3, 8($s0)
+` +
+                EXIT,
+            { keyboard, display: covering }
+        )
+        expect(emulator.memoryRegions.map((region) => region.name)).not.toContain(
+            'Input controller'
+        )
+        await emulator.step()
+        keyboard.keyDown(arrowLeft)
+        for (let i = 0; i < 4; i++) await emulator.step()
+        //a pixel, not the ID, and no key press wrote one
+        expect(valueOf(emulator, '$t0')).toBe(0)
+        expect(valueOf(emulator, '$t1')).toBe(0)
+        emulator.setDisplay(SMALL)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(valueOf(emulator, '$t2')).toBe(0x494e5001)
+        //the key went down while it was off, and was kept
+        expect(valueOf(emulator, '$t3')).toBe(1)
+    })
+
+    it('is idle in a Testcase, which has no keyboard or mouse', async () => {
+        const keyboard = new Keyboard()
+        const code =
+            DATA +
+            `        li      $s0, 0xffff0000
+        lw      $t0, 4($s0)
+        li      $s0, 0xffff0300
+        lw      $a0, 8($s0)
+        li      $v0, 1
+        syscall
+        lw      $a0, 16($s0)
+        syscall
+` +
+            EXIT
+        const emulator = await build(code, { keyboard })
+        await emulator.step()
+        keyboard.keyDown(arrowLeft)
+        emulator.peripherals.mouse.moveTo(5, 5)
+        //a key pressed while the Testcase runs, when the program reads the receiver
+        const unsubscribe = emulator.peripherals.terminal.onInputChange(() => {
+            keyboard.keyDown({ code: 'KeyQ', key: 'q' })
+            emulator.peripherals.mouse.buttonDown('left', 6, 6)
+        })
+        try {
+            const results = await emulator.test(
+                code,
+                [{ ...SCREEN_TESTCASE, input: ['x'], expectedOutput: '00' }],
+                INSTRUCTION_LIMIT
+            )
+            expect(results[0]?.errors ?? []).toEqual([])
+            expect(results[0]?.passed).toBe(true)
+        } finally {
+            unsubscribe()
+        }
     })
 })

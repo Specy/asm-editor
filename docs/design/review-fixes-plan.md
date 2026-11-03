@@ -84,7 +84,8 @@ which program runs, and fix the three hazards:
 2. **Duplicate definitions.** Every File is assembled anyway. Collect each user unit's strong global definitions
    (ignore weak ones) and fail the Build with `multiple definition of 'x'` on both Files when two units define the
    same name, whether or not either would be extracted. This restores the error that linking every File used to
-   give.
+   give. _Amended 2026-11-03 by the owner: an error only among the units the link takes, as `ld` reports it
+   ([ADR 0039](../adr/0039-x86-links-start-objects-before-user-and-support-archives.md), amended)._
 3. **"Not linked" Hint.** Emit a Problems Hint for each File the linker didn't extract ("nothing refers to a
    symbol this File defines, so it is not part of the program"). This makes the classic archive pitfall, a File
    whose only effect is an `.init_array` entry or other side-effect code, visible instead of silent.

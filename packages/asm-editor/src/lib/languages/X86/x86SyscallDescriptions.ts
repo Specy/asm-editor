@@ -60,11 +60,11 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     getcwd: 'Writes the current working directory as a NUL-terminated path to the buffer at `rdi`, up to `rsi` bytes.',
     chdir: 'Changes the program’s current working directory to the path at `rdi`.',
     fchdir: 'Changes the program’s current working directory to the directory referred to by descriptor `rdi`.',
-    rename: 'Renames or moves the path at `rdi` to the path at `rsi`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
+    rename: 'Renames or moves the path at `rdi` to the path at `rsi`. A File already at the destination is replaced, as on Linux, and a descriptor still open on it keeps reading and writing it. Within `/project`, moving a directory returns `-EISDIR`.',
     renameat:
-        'Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
+        'Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. A File already at the destination is replaced, as on Linux. Within `/project`, moving a directory returns `-EISDIR`.',
     renameat2:
-        'Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. `RENAME_NOREPLACE` refuses an existing destination; `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR` and an ordinary rename that would replace an existing File returns `-EEXIST`.',
+        'Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. Without flags a File already at the destination is replaced, as on Linux; `RENAME_NOREPLACE` refuses an existing destination with `-EEXIST`, and `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR`.',
     mkdir: 'Makes a directory at the path in `rdi`, with the mode in `rsi`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone.',
     mkdirat:
         'Makes a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone.',

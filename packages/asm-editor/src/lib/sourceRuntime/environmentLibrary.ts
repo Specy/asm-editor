@@ -11,6 +11,11 @@ import type { AvailableLanguages } from '#lib/Project.svelte.ts'
  * headers under Linux's names (`<linux/fb.h>`, `<unistd.h>`, ...), whose POSIX calls are
  * `static inline` too, and NASM include files for hand-written assembly (`linux/fb.inc`), generated
  * from one table into `generated/x86/include/` by the same script.
+ *
+ * MIPS and RISC-V get their own headers of the folder calls ([ADR 0072](../../../../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md)):
+ * `<dirent.h>`, `<sys/stat.h>`, `<unistd.h>`, and the `<errno.h>` and `<stdio.h>` that add to the
+ * Runtime library's with `#include_next`. They are the Runtime library's `posix/include/`, which
+ * its build writes into `posix-include.json` beside the members that implement them.
  */
 
 /** Its name among the system headers: `#include <sim.h>`. */
@@ -36,9 +41,16 @@ const LOADERS: Partial<Record<AvailableLanguages, Loader>> = {
     X86: () => import('./generated/sim/x86_64.h?raw')
 }
 
+//MIPS and RISC-V share one set, the Runtime library ABI v1's
+const posixHeaders: FilesLoader = () =>
+    import('@asm-editor/runtime/generated/v1/posix-include.json')
+
 //A Target's other files, every one in a single chunk
 const FILE_LOADERS: Partial<Record<AvailableLanguages, FilesLoader>> = {
-    X86: () => import('./x86DeviceFiles')
+    X86: () => import('./x86DeviceFiles'),
+    MIPS: posixHeaders,
+    'RISC-V': posixHeaders,
+    'RISC-V-64': posixHeaders
 }
 
 const loaded = new Map<AvailableLanguages, string>()

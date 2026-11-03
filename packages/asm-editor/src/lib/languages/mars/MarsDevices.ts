@@ -1,6 +1,7 @@
 import type { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import type { SynthBus } from '#lib/languages/peripherals/audio/Synth.ts'
 import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import type { Mouse } from '#lib/languages/peripherals/Mouse.ts'
 import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
 import type { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import { partitionPoint } from '#lib/sorted.ts'
@@ -11,10 +12,13 @@ import {
     type ProjectDisplay
 } from './marsDisplay'
 import { SYNTH_BASES, SYNTH_BLOCK_SIZE } from '../synthRegisters'
+import { INPUT_BASE, INPUT_BLOCK_SIZE, INPUT_EVENT } from '../inputControllerRegisters'
+import { InputController } from './InputController'
 
 /**
- * The MARS and RARS memory-mapped devices: the bitmap display, the keyboard-and-display simulator
- * and the **Synth** this project adds beside them, driven through the Core's memory observers. MIPS and RISC-V share this module because
+ * The MARS and RARS memory-mapped devices: the bitmap display, the keyboard-and-display simulator,
+ * and the **Synth** and the **Input controller** this project adds beside them, driven through the
+ * Core's memory observers. MIPS and RISC-V share this module because
  * the two tools are the same tool — RARS's are ports of MARS's — and both Cores expose the same
  * observer API.
  *
@@ -104,10 +108,27 @@ export type MarsDeviceHost = {
      * swaps in a silent one; without it the block is plain memory.
      */
     audio?: () => Audio
+    /** The Mouse whose pointer, buttons and wheel the Input controller reports. */
+    mouse?: Mouse
+    /**
+     * Whether the program takes the Screen's input now: from its first instruction until it ends,
+     * and never in a Testcase ([the design record](../../../../../../docs/design/input-controller.md),
+     * decision 13). Without it the Input controller hears nothing.
+     */
+    inputOpen?: () => boolean
 }
 
 /** The Synth's block, the same on MARS and RARS. */
 const SYNTH_BASE = SYNTH_BASES.mips
+
+/**
+ * Which devices last attached to each Core package's memory. Every `JsMips`, and every `JsRiscV`,
+ * shares one memory and one list of observers, so an Emulator that was never disposed still hears
+ * the accesses of the program another one runs; the Input controller answers only for the devices
+ * that own the memory now, or a stale one would state its own registers over the live ones. Keyed
+ * by the Core's prototype, which is the package's class.
+ */
+const memoryOwners = new WeakMap<object, MarsDevices>()
 /** How much an upload's source read is split into when the whole of it cannot be read. */
 const READ_CHUNK = 4096
 
@@ -147,18 +168,41 @@ export class MarsDevices {
      * 0xffff0000: its words are then pixels, and the Synth is off rather than played by drawing.
      */
     private synthCovered = false
+    /** Set while the host writes memory, a Poke's bytes, which are no store of the program's. */
+    private hostWriting = false
+    /**
+     * The keys, the pointer and the wheel as a MIPS or RISC-V program reads them, at 0xFFFF0300
+     * ([ADR 0071](../../../../../../docs/adr/0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md)).
+     */
+    readonly input: InputController
 
     constructor(host: MarsDeviceHost) {
         this.host = host
+        this.input = new InputController({ accepts: () => host.inputOpen?.() ?? false })
         //a keystroke arrives between two instructions, so the register is loaded as soon as one is
         //typed rather than polled: the program sees Ready on its very next `lw`. The Terminal says
         //when its own input changes, a Testcase's scripted lines included
-        const unsubscribeKeyboard = host.keyboard.onTypedInput(() => this.refreshReceiver())
-        const unsubscribeTerminal = host.terminal.onInputChange(() => this.refreshReceiver())
-        this.unsubscribeInput = () => {
-            unsubscribeKeyboard()
-            unsubscribeTerminal()
-        }
+        const unsubscribers = [
+            host.keyboard.onTypedInput(() => this.refreshReceiver()),
+            host.terminal.onInputChange(() => this.refreshReceiver()),
+            //every key on the Screen feeds the receiver's typed characters and the Input
+            //controller's keys alike, and the program picks its channel (decision 5)
+            host.keyboard.onPhysicalKey((code, down) =>
+                down ? this.input.keyDown(code) : this.input.keyUp(code)
+            )
+        ]
+        const mouse = host.mouse
+        if (mouse)
+            unsubscribers.push(
+                mouse.onMouseEvent((event, button) => {
+                    if (event === 'move') this.input.pointerMoved(mouse.x, mouse.y)
+                    else if (button && event === 'down')
+                        this.input.buttonDown(button, mouse.x, mouse.y)
+                    else if (button) this.input.buttonUp(button, mouse.x, mouse.y)
+                }),
+                mouse.onWheel((notches) => this.input.wheel(notches, mouse.x, mouse.y))
+            )
+        this.unsubscribeInput = () => unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
 
     regions(): import('../commonLanguageFeatures.svelte').DeviceRegion[] {
@@ -168,6 +212,12 @@ export class MarsDevices {
                 name: 'Synth',
                 start: BigInt(SYNTH_BASE),
                 end: BigInt(SYNTH_BASE + SYNTH_BLOCK_SIZE)
+            })
+        if (!this.input.isCovered)
+            regions.push({
+                name: 'Input controller',
+                start: BigInt(INPUT_BASE),
+                end: BigInt(INPUT_BASE + INPUT_BLOCK_SIZE)
             })
         if (this.geometry)
             regions.push({
@@ -186,8 +236,35 @@ export class MarsDevices {
     attach(core: MarsCore, display: ProjectDisplay): void {
         this.detachCore()
         this.core = core
+        memoryOwners.set(memoryOf(core), this)
         this.observeRegisters()
         this.configureDisplay(display)
+        //once the display has said whether it covers the block, so a covered one gets no words
+        this.input.connect({
+            push: (address, value) => {
+                if (this.ownsMemory(core)) core.setPeripheralWord(address, value)
+            },
+            readByte: (address) => (core.readMemoryBytes(address | 0, 1)[0] ?? 0) & 0xff
+        })
+    }
+
+    /** Clear execution: the Input controller starts empty again, as at a Build. */
+    resetInput(): void {
+        this.input.reset()
+    }
+
+    /**
+     * Runs a host write to memory, a Poke's or a Testcase's starting memory, which the Core makes
+     * as a program store, so the observers hear it: the Input controller re-states its words over
+     * it, as it does for a program store, but never takes it for the program's interrupt request.
+     */
+    hostWrite<T>(write: () => T): T {
+        this.hostWriting = true
+        try {
+            return write()
+        } finally {
+            this.hostWriting = false
+        }
     }
 
     /** The Emulator is going away: no keystroke may reach a Core that no longer exists. */
@@ -288,12 +365,14 @@ export class MarsDevices {
             //only our own handles: the memory singleton is shared by every instance of a Core, so
             //`removeMemoryObservers()` would also unhook another open project's devices
             for (const handle of this.handles) core.removeMemoryObserver(handle)
+            if (memoryOwners.get(memoryOf(core)) === this) memoryOwners.delete(memoryOf(core))
         }
         this.handles = []
         this.framebufferHandle = null
         this.core = null
         this.readableWords = 0
         this.receiverArmed = false
+        this.input.connect(null)
         this.resetDirty()
     }
 
@@ -307,9 +386,9 @@ export class MarsDevices {
     private configureDisplay(display: ProjectDisplay, options = { sync: true }): void {
         const geometry = marsDisplayGeometry(display)
         this.geometry = geometry
-        this.synthCovered =
-            geometry.baseAddress >>> 0 < SYNTH_BASE + SYNTH_BLOCK_SIZE &&
-            (geometry.endAddress >>> 0) + 4 > SYNTH_BASE
+        this.synthCovered = covers(geometry, SYNTH_BASE, SYNTH_BLOCK_SIZE)
+        //switching the display can switch the controller on or off mid-run: on, it states its block
+        this.input.setCovered(covers(geometry, INPUT_BASE, INPUT_BLOCK_SIZE))
         this.words = new Int32Array(geometry.words)
         this.dirtyBlocks = new Uint8Array(Math.ceil(geometry.words / DIRTY_BLOCK_WORDS))
         this.host.screen.useFramebuffer(geometry.columns, geometry.rows)
@@ -366,7 +445,7 @@ export class MarsDevices {
                 this.onTransmitterDataWrite(value)
             )
         )
-        this.observeSynth(core)
+        this.observeExtensions(core)
         //the display is always willing to take a character, so a program polling the Ready bit
         //before its first store finds it set
         core.setPeripheralWord(MARS_TRANSMITTER_CONTROL | 0, MARS_READY_BIT)
@@ -406,26 +485,49 @@ export class MarsDevices {
     }
 
     /**
-     * Hands every store into the Synth's block to the Synth as it happens, inside the storing
+     * The two blocks this editor adds, the Synth's and the Input controller's, which sit back to
+     * back from 0xFFFF0100, watched for stores by one range observer: the Core checks every observer
+     * on every memory access, an instruction fetch included, so each one costs a little on every
+     * instruction of every program.
+     *
+     * Every store into the Synth's block reaches the Synth as it happens, inside the storing
      * instruction, so that an upload copies before the program's next instruction can change its
-     * source, and a gate pulsed off and on within a slice still retriggers.
+     * source, and a gate pulsed off and on within a slice still retriggers. A store into the Input
+     * controller's block is ignored, and the device states its words again. The Event register's
+     * reads, which take an event, need an observer of their own, the one the Core has for reads.
      */
-    private observeSynth(core: MarsCore): void {
+    private observeExtensions(core: MarsCore): void {
         const audio = this.host.audio
-        if (!audio) return
-        const bus: SynthBus = {
+        const start = audio ? SYNTH_BASE : INPUT_BASE
+        const synthBus: SynthBus = {
             littleEndian: true,
             read: (address, length) => readBytes(core, address, length)
         }
-        const handle = core.addMemoryWriteObserver(
-            SYNTH_BASE | 0,
-            (SYNTH_BASE + SYNTH_BLOCK_SIZE - 4) | 0,
-            (address, length, value) => {
-                if (this.rewinding || this.synthCovered) return
-                audio().synth.store((address >>> 0) - SYNTH_BASE, length, value, bus)
-            }
+        this.handles.push(
+            core.addMemoryWriteObserver(
+                start | 0,
+                (INPUT_BASE + INPUT_BLOCK_SIZE - 4) | 0,
+                (address, length, value) => {
+                    //Undo's restoring stores are not the program's: the controller states its whole
+                    //block once the Core has rewound, and the Synth reads its block back
+                    if (this.rewinding) return
+                    const at = address >>> 0
+                    if (at >= INPUT_BASE) {
+                        if (this.ownsMemory(core)) this.input.stored(!this.hostWriting)
+                        return
+                    }
+                    if (!audio || this.synthCovered) return
+                    audio().synth.store(at - SYNTH_BASE, length, value, synthBus)
+                }
+            ),
+            core.addMemoryAccessObserver(
+                (INPUT_BASE + INPUT_EVENT) | 0,
+                () => {
+                    if (this.ownsMemory(core)) this.input.eventRead()
+                },
+                null
+            )
         )
-        this.handles.push(handle)
     }
 
     private onReceiverDataRead(): void {
@@ -467,6 +569,11 @@ export class MarsDevices {
         this.host.terminal.write(String.fromCharCode(character))
     }
 
+    /** Whether these devices attached to `core`'s memory last, so its accesses are this program's. */
+    private ownsMemory(core: MarsCore): boolean {
+        return this.core === core && memoryOwners.get(memoryOf(core)) === this
+    }
+
     /** Fills `words` from Core memory, little-endian, keeping only the low 24 bits MARS colors use. */
     private readInto(from: number, to: number): void {
         const core = this.core
@@ -505,6 +612,16 @@ export class MarsDevices {
         if (readable(geometry.words - 1)) return geometry.words
         return partitionPoint(geometry.words - 1, readable)
     }
+}
+
+/** What identifies the memory a Core shares with every other Core of its package. */
+function memoryOf(core: MarsCore): object {
+    return Object.getPrototypeOf(core) ?? core
+}
+
+/** Whether a display's grid overlaps any of the `size` bytes from `base`. */
+function covers(geometry: MarsDisplayGeometry, base: number, size: number): boolean {
+    return geometry.baseAddress >>> 0 < base + size && (geometry.endAddress >>> 0) + 4 > base
 }
 
 /**

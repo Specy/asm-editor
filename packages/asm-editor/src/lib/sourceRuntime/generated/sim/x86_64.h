@@ -490,7 +490,7 @@ static inline long sim_fchdir(long fd) {
     return rax;
 }
 
-/** rename, syscall 82. Renames or moves the path at `rdi` to the path at `rsi`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`. */
+/** rename, syscall 82. Renames or moves the path at `rdi` to the path at `rsi`. A File already at the destination is replaced, as on Linux, and a descriptor still open on it keeps reading and writing it. Within `/project`, moving a directory returns `-EISDIR`. */
 static inline long sim_rename(const void *path1, const void *path2) {
     register long rax __asm__("rax") = 82;
     register const void *rdi __asm__("rdi") = path1;
@@ -1123,7 +1123,7 @@ static inline long sim_unlinkat(long dirfd, const void *path, long flags) {
     return rax;
 }
 
-/** renameat, syscall 264. Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`. */
+/** renameat, syscall 264. Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. A File already at the destination is replaced, as on Linux. Within `/project`, moving a directory returns `-EISDIR`. */
 static inline long sim_renameat(long dirfd1, const void *path1, long dirfd2, const void *path2) {
     register long rax __asm__("rax") = 264;
     register long rdi __asm__("rdi") = dirfd1;
@@ -1294,7 +1294,7 @@ static inline long sim_prlimit64(long pid, long resource, const void *rlim1, voi
     return rax;
 }
 
-/** renameat2, syscall 316. Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. `RENAME_NOREPLACE` refuses an existing destination; `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR` and an ordinary rename that would replace an existing File returns `-EEXIST`. */
+/** renameat2, syscall 316. Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. Without flags a File already at the destination is replaced, as on Linux; `RENAME_NOREPLACE` refuses an existing destination with `-EEXIST`, and `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR`. */
 static inline long sim_renameat2(long dirfd1, const void *path1, long dirfd2, const void *path2, long flags) {
     register long rax __asm__("rax") = 316;
     register long rdi __asm__("rdi") = dirfd1;

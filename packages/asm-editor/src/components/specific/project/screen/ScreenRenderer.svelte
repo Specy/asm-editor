@@ -14,7 +14,11 @@
     import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
     import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
     import type { Mouse, MouseButton } from '#lib/languages/peripherals/Mouse.ts'
-    import type { X86Button, X86Input } from '#lib/languages/peripherals/x86Input.ts'
+    import {
+        wheelNotches,
+        type X86Button,
+        type X86Input
+    } from '#lib/languages/peripherals/x86Input.ts'
     import type { ScreenHeader } from './screenHeader'
 
     /**
@@ -29,10 +33,16 @@
      *
      * On x86 the keys and the pointer go to `x86Input` instead, as the Linux input events the
      * program reads from `/dev/input`: physical keys with the browser's repeats, the pointer on
-     * whole pixels as QEMU reports it, and the wheel, which the focused Screen keeps from scrolling
-     * the page. They never
+     * whole pixels as QEMU reports it, and the wheel. They never
      * reach the program's standard input, whose Terminal is a serial line apart from the Screen
      * ([ADR 0068](../../../../../../../docs/adr/0068-x86-programs-run-on-a-serial-console.md)).
+     * Elsewhere the wheel goes to the Mouse, which MIPS's and RISC-V's Input controller reads; the
+     * focused Screen keeps it from scrolling the page on every Target.
+     *
+     * Every key belongs to the program while the Screen has focus, Escape included, which games and
+     * asmOS read. Shift+Tab gives the keyboard back to the page on every Target, as in the Terminal's
+     * raw mode, and so does a click outside the Screen
+     * ([ADR 0008](../../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md), 2026-11-03).
      */
 
     interface Props {
@@ -102,9 +112,9 @@
     const keys = $derived(x86Input ?? keyboard)
     const pointer = $derived(x86Input ?? mouse)
     //where a focused Screen's input goes, which a learner who clicks the Screen and then types at a
-    //`scanf` needs to know on x86 (ADR 0068), and how to get it back: an x86 program reads Escape
-    //like any key, so Shift+Tab releases it there, as in the Terminal's raw mode. A program waiting
-    //for the Screen's input says so first
+    //`scanf` needs to know on x86 (ADR 0068), and how to get it back: a program reads Escape like
+    //any key, so Shift+Tab releases it on every Target, as in the Terminal's raw mode. A program
+    //waiting for the Screen's input says so first
     const focusHint = $derived.by(() => {
         const hint = x86Input
             ? {
@@ -113,7 +123,7 @@
               }
             : {
                   label: 'click to send keyboard and mouse input to the program',
-                  title: 'Click to send keyboard and mouse input to the program, Esc to release it'
+                  title: 'Click to send keyboard and mouse input to the program. Press Shift+Tab to return keyboard focus to the page.'
               }
         if (waitingFor === undefined) return hint
         return {
@@ -269,7 +279,7 @@
         if (!drawingView) screen.markPainted()
     }
 
-    function logicalPosition(event: PointerEvent) {
+    function logicalPosition(event: MouseEvent) {
         const rect = canvas?.getBoundingClientRect()
         if (!rect || rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 }
         //logical pixels, independent of the GUI zoom; the Mouse floors and clamps them, which is
@@ -310,9 +320,11 @@
         //keeps the browser's gestures off the Screen: text selection, the drag image, and the
         //middle-click autoscroll that would otherwise steal the button from the program
         event.preventDefault()
+        //where the click landed, before the focus below scrolls a canvas that was partly out of
+        //view, which would move it under the pointer
+        const { x, y } = logicalPosition(event)
         //preventDefault also cancels the focus a pointer down would have given the canvas
         canvas?.focus()
-        const { x, y } = logicalPosition(event)
         //a drag that started inside keeps reporting until the button comes back up, wherever the
         //pointer goes (ADR 0008)
         canvas?.setPointerCapture(event.pointerId)
@@ -343,16 +355,20 @@
     }
 
     /**
-     * x86's wheel, a notch at a time to the program's tablet. The focused Screen keeps it from
-     * scrolling the page, which is why the listener is not passive; unfocused, the wheel scrolls the
-     * page as it always does and the program hears nothing of it, as with keys.
+     * The wheel, in notches: a notch at a time to x86's tablet, and elsewhere to the Mouse, at the
+     * pointer's position. The focused Screen keeps it from scrolling the page, which is why the
+     * listener is not passive; unfocused, the wheel scrolls the page as it always does and the
+     * program hears nothing of it, as with keys.
      */
     function handleWheel(event: WheelEvent) {
-        if (!x86Input || !focused) return
+        if (!focused) return
         event.preventDefault()
         //`deltaMode` before `deltaY`: Firefox reports pixels to a page that reads `deltaY` first
         const deltaMode = event.deltaMode
-        x86Input.wheel({ deltaMode, deltaY: event.deltaY })
+        const delta = { deltaMode, deltaY: event.deltaY }
+        if (x86Input) return x86Input.wheel(delta)
+        const { x, y } = logicalPosition(event)
+        mouse.wheel(wheelNotches(delta), x, y)
     }
 
     /**
@@ -372,30 +388,23 @@
         if (!event.ctrlKey && !event.metaKey) event.preventDefault()
     }
 
-    /** The key that gives the keyboard back to the page: Shift+Tab on x86, Escape elsewhere. */
+    /** The key that gives the keyboard back to the page, on every Target: Shift+Tab. */
     function isReleaseKey(event: KeyboardEvent) {
-        return x86Input ? event.code === 'Tab' && event.shiftKey : event.code === 'Escape'
+        return event.code === 'Tab' && event.shiftKey
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-        //every other key belongs to the program while this panel has focus, so the release key is
-        //the one way back out for someone working without a mouse. Escape is the panel's own
-        //gesture on the Targets whose programs never asked for it, and the page must not see it
-        //either: a user who binds an action to Escape would otherwise trigger it from a focused
-        //Screen, which ADR 0008 forbids. An x86 program reads Escape as KEY_ESC, so there Shift+Tab
-        //is left to the browser, which moves the focus back and so releases the Screen
-        if (isReleaseKey(event)) {
-            if (x86Input) return
-            event.stopPropagation()
-            canvas?.blur()
-            return
-        }
+        //every other key belongs to the program while this panel has focus, Escape included, which
+        //programs read (ADR 0008, 2026-11-03), so the release key is the one way back out for
+        //someone working without a mouse. Shift+Tab is left to the browser, which moves the focus
+        //back and so releases the Screen; the Shift that came first reached the program, and its
+        //release comes with the focus loss, as on x86
+        if (isReleaseKey(event)) return
         keys.keyDown(event)
         routeKey(event, true)
     }
 
     function handleKeyUp(event: KeyboardEvent) {
-        if (!x86Input && event.code === 'Escape') return
         keys.keyUp(event)
         routeKey(event, false)
     }
@@ -451,7 +460,7 @@
     $effect(() => {
         //added by hand, because only a listener that is not passive may keep the page from scrolling
         const target = canvas
-        if (!target || !x86Input) return
+        if (!target) return
         target.addEventListener('wheel', handleWheel, { passive: false })
         return () => target.removeEventListener('wheel', handleWheel)
     })
@@ -467,9 +476,8 @@
     $effect(() => {
         if (!expanded) return
         //Escape closes the floating window, but only once the Screen no longer holds the keyboard:
-        //the canvas stops its own Escape from propagating, so the first press releases the input
-        //(ADR 0008's way out of a focused Screen) and the next one reaches this listener. On x86 the
-        //focused canvas hands Escape to the program, stopped the same way, and Shift+Tab releases it
+        //the focused canvas hands Escape to the program and stops it from propagating, so it never
+        //reaches this listener; Shift+Tab releases the Screen first, and the next Escape closes it
         function closeOnEscape(event: KeyboardEvent) {
             if (event.code !== 'Escape') return
             expanded = false

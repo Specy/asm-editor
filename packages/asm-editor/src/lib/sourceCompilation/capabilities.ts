@@ -68,6 +68,12 @@ export const X86_DEVICE_HEADERS = [
     'termios.h',
     'unistd.h'
 ] as const
+/**
+ * MIPS and RISC-V's own headers, the POSIX functions over the folder calls, which the Runtime
+ * library's `posix/` implements ([ADR 0072](../../../../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md));
+ * its `<errno.h>` and `<stdio.h>` add to the shared ones.
+ */
+export const POSIX_HEADERS = ['dirent.h', 'sys/stat.h', 'sys/types.h', 'unistd.h'] as const
 export const SOURCE_HELP_REVISION = 1
 
 export type CompilerCapabilities = Readonly<{
@@ -85,7 +91,7 @@ export function compilerCapabilities(
     if (!isCompilationTarget(target)) return undefined
     const headerAbi = abi
     const available = isShippedRuntimeAbi(headerAbi)
-    const device = available && target === 'X86' ? X86_DEVICE_HEADERS : []
+    const device = !available ? [] : target === 'X86' ? X86_DEVICE_HEADERS : POSIX_HEADERS
     const c = available ? [...HOSTED_C_HEADERS, ...device, 'sim.h'] : ['sim.h']
     const cpp = available ? [...c, ...HOSTED_CPP_HEADERS] : ['sim.h']
     return Object.freeze({

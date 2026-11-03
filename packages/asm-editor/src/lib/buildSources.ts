@@ -5,6 +5,7 @@ import type { BuildSources, ProjectFiles } from './projectFiles'
 import {
     compiledLanguages,
     resolveAssemblyProfile,
+    resolveLinkUnits,
     resolveRuntimeLink,
     resolveX86Start
 } from './sourceCompilation/assemblyProfile'
@@ -40,14 +41,29 @@ export function projectBuildSources(project: {
         }
     }
     if (!hasRuntimeLibrary(project.language)) return sources
+    const assemblerProfile = resolveAssemblyProfile(
+        sources,
+        project.compilations,
+        project.language === 'MIPS' ? undefined : project.settings
+    )
+    //the Project's other compiled units, which the Core links as an archive's members
+    const linkUnits = resolveLinkUnits(
+        sources,
+        project.compilations,
+        project.language,
+        assemblerProfile
+    )
+    const linked = linkUnits.length
+        ? {
+              ...sources,
+              linkUnits,
+              compiledLanguages: compiledLanguages({ ...sources, linkUnits }, project.compilations)
+          }
+        : sources
     return {
-        ...sources,
-        assemblerProfile: resolveAssemblyProfile(
-            sources,
-            project.compilations,
-            project.language === 'MIPS' ? undefined : project.settings
-        ),
-        ...resolveRuntimeLink(sources, project.compilations, project.settings?.linkRuntimeLibrary)
+        ...linked,
+        assemblerProfile,
+        ...resolveRuntimeLink(linked, project.compilations, project.settings?.linkRuntimeLibrary)
     }
 }
 

@@ -2480,7 +2480,7 @@ function fromDoubleBits(bits: bigint): number {
 }
 
 function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoError): Diagnostic {
-    const hint = x86DiagnosticHint(error.code)
+    const hint = x86DiagnosticHint(error.code) ?? x86DuplicateHint(error.message, sources)
     return {
         severity: error.severity === 'hint' ? 'suggestion' : (error.severity ?? 'error'),
         file: error.file || sources.entry,
@@ -2532,13 +2532,20 @@ const DUPLICATE_MAIN_HINT =
 /**
  * What a second `_start` or `main` means ([the plan](../../../../../../docs/design/x86-compiler-assembly-translation-plan.md),
  * milestone 3a): a File that defines one too was linked, because the program uses something else it
- * defines. `ld` only says there are two. Matched on the words `ld` and the Core both use, whatever
- * line it lands on.
+ * defines. `ld` only says there are two. Matched on the words `ld`, in a Build, and the Core's check
+ * both use, whatever line it lands on.
  */
-function x86LinkHint(message: string, sources: BuildSources): string | undefined {
+function x86DuplicateHint(message: string, sources: BuildSources): string | undefined {
     if (/multiple definition of [`']main'/.test(message)) return DUPLICATE_MAIN_HINT
     if (/multiple definition of [`']_start'/.test(message) && linksX86StartUnit(sources))
         return DUPLICATE_START_HINT
+    return undefined
+}
+
+/** What a Build's message from `ld` means, where it needs saying. */
+function x86LinkHint(message: string, sources: BuildSources): string | undefined {
+    const duplicate = x86DuplicateHint(message, sources)
+    if (duplicate) return duplicate
     //hand-written assembly links no library by default: say how to get printf
     if (sources.runtimeAbi === undefined)
         return runtimeLibraryHint(message, loadedRuntimeFunctions(CURRENT_RUNTIME_ABI))

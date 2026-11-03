@@ -7,6 +7,7 @@ import type { ProjectFiles } from '#lib/projectFiles.ts'
 import {
     compileSource,
     createCompilerRequest,
+    POSIX_SYSROOT_INCLUDE,
     SourceCompilationError,
     type CompilationRequest
 } from '#lib/sourceCompilation/compilerExplorer.ts'
@@ -189,12 +190,18 @@ describe('the captured <sim.h> compiles', () => {
                 `-iquote 'project/src' -iquote project -include 'project/${fixture.sourcePath}'`
             )
             expect(prepared.body.options.userArguments).toBe(expectedArguments)
-            //and what compileSource sends is that request, `<sim.h>` included
+            //and what compileSource sends is that request, `<sim.h>` included, with MIPS and
+            //RISC-V's own headers searched first (ADR 0072), which these programs never include
             const { fetcher, result } = compile(fixture)
             await result.catch(() => undefined)
             const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
             const body = JSON.parse(String(init.body))
-            expect(body.options.userArguments).toBe(expectedArguments)
+            expect(body.options.userArguments).toBe(
+                expectedArguments.replace(
+                    '-isystem sysroot/include',
+                    `-isystem ${POSIX_SYSROOT_INCLUDE} -isystem sysroot/include`
+                )
+            )
             expect(
                 body.files.find(
                     (file: { filename: string }) => file.filename === 'sysroot/include/sim.h'

@@ -165,6 +165,21 @@ describe('the TRS-80 display', () => {
         expect(cellColor(pressed.peripherals.screen, 0)).toBe(WHITE)
     })
 
+    it('gives the program BREAK when Escape goes down on the Screen', async () => {
+        //Escape no longer releases the Screen, so it reaches the matrix as the key it always was
+        //([ADR 0008](../../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md), 2026-11-03)
+        const emulator = await build(
+            KEYBOARD_SCAN.replace(
+                'bit 6, a            ; the right arrow',
+                'bit 2, a            ; Break'
+            )
+        )
+        emulator.peripherals.keyboard.keyDown({ code: 'Escape', key: 'Escape' })
+        await emulator.run(5000)
+        expect(emulator.errors).toEqual([])
+        expect(cellColor(emulator.peripherals.screen, 0)).toBe(WHITE)
+    })
+
     it('repaints a poked cell, and repaints it back when the Poke is undone', async () => {
         const emulator = await build(STORE_TWO_CELLS)
         await emulator.step()

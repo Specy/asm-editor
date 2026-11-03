@@ -45,6 +45,11 @@ function decodeStandalone(bytes: Uint8Array): string | null {
  */
 type Node = { bytes: Uint8Array; file?: ProjectFile; busy?: true; built?: true }
 type Handle = { node: Node; offset: number; readable: boolean; writable: boolean; append: boolean }
+/**
+ * A folder open for listing: the entries it had when it was opened, and how far getdents has read
+ * them, as Linux reads a folder from where the last read stopped.
+ */
+type FolderHandle = { path: string; entries: Omit<DirectoryRecord, 'next'>[]; offset: number }
 type Inverse = { bytes: number; filesChanged?: true; restore: () => void }
 /** A Core-owned instruction identity. Values are compared exactly, without numeric coercion. */
 export type FileSystemInstructionId = number | string | bigint
@@ -85,7 +90,7 @@ export type ByteChange =
 export enum FileErrorCode {
     /** No File at the path, for an operation that does not create one. */
     NotFound = 'ENOENT',
-    /** An exclusive create, or a rename onto a File, found one already there. */
+    /** An exclusive create found a File already there, or a mkdir found anything there. */
     Exists = 'EEXIST',
     /** A descriptor that is not open, or not open for the read or write asked of it. */
     BadDescriptor = 'EBADF',
@@ -106,7 +111,9 @@ export enum FileErrorCode {
     /** A write to, or a truncation of, the running program's own File: the Build output. */
     TextBusy = 'ETXTBSY',
     /** A rename or removal of the Build output, which the running program was started from. */
-    Busy = 'EBUSY'
+    Busy = 'EBUSY',
+    /** An rmdir of a folder that still holds a File or a folder. */
+    NotEmpty = 'ENOTEMPTY'
 }
 
 /**
@@ -135,6 +142,39 @@ export class FileSystemGuestError extends Error {
  */
 export function guestFileFailure(error: unknown): number {
     if (error instanceof FileSystemGuestError || error instanceof ProjectFormatError) return -1
+    throw error
+}
+
+/**
+ * Linux's numbers for the errno names, those of its generic table (`asm-generic/errno-base.h` and
+ * `errno.h`), which the MIPS and RISC-V folder calls report on both Targets.
+ */
+const LINUX_ERRNO: Readonly<Record<FileErrorCode, number>> = {
+    [FileErrorCode.NotFound]: 2,
+    [FileErrorCode.BadDescriptor]: 9,
+    [FileErrorCode.AccessDenied]: 13,
+    [FileErrorCode.Busy]: 16,
+    [FileErrorCode.Exists]: 17,
+    [FileErrorCode.NotDirectory]: 20,
+    [FileErrorCode.IsDirectory]: 21,
+    [FileErrorCode.InvalidArgument]: 22,
+    [FileErrorCode.TooManyOpen]: 24,
+    [FileErrorCode.TextBusy]: 26,
+    [FileErrorCode.TooLarge]: 27,
+    [FileErrorCode.NoSpace]: 28,
+    [FileErrorCode.NotEmpty]: 39
+}
+
+/**
+ * Minus the Linux error number of a failed file operation, the value the MIPS and RISC-V folder
+ * calls return, Linux's way ([ADR 0072](../../../../../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md)):
+ * -2 for a path that names nothing, -17 for one that names something already, -39 for a folder
+ * that is not empty. A Project path the Files cannot take is -22, EINVAL. Anything that is not a
+ * guest failure is rethrown, as `guestFileFailure` rethrows it.
+ */
+export function guestErrno(error: unknown): number {
+    if (error instanceof FileSystemGuestError) return -LINUX_ERRNO[error.code]
+    if (error instanceof ProjectFormatError) return -LINUX_ERRNO[FileErrorCode.InvalidArgument]
     throw error
 }
 
@@ -177,6 +217,18 @@ export type FileKind = 'file' | 'directory'
 /** What `stat` reports. A Directory's size is 0: it holds Files, not bytes. */
 export type FileStat = { kind: FileKind; size: number }
 export type DirectoryEntry = { name: string; kind: FileKind }
+/**
+ * What `inspect` reports, a folder call's stat: `stat`'s, with the inode number and the link count.
+ * Inode numbers are made up, but each File and each folder keeps its own for the whole session: a
+ * File's moves with it when it is renamed, and the Project root's is 1.
+ */
+export type FileDetails = FileStat & { inode: number; links: number }
+/**
+ * One entry of a folder open for listing, as `readDirectory` hands it out: `.` and `..` first, as
+ * Linux lists them, then the folder's Files and folders in name order. `next` is the position just
+ * after it, which getdents reports as the entry's offset.
+ */
+export type DirectoryRecord = { name: string; kind: FileKind; inode: number; next: number }
 
 /**
  * Resolves a program's path against the Project root by `resolveFilePath`'s rules, with typed
@@ -199,6 +251,27 @@ function resolveSessionPath(path: string): string {
     if (resolved !== '' && !isValidFilePath(resolved))
         throw new FileSystemGuestError(FileErrorCode.InvalidArgument, `Invalid file path: ${path}`)
     return resolved
+}
+
+/**
+ * A folder call's path: `resolveSessionPath`'s, read as Linux reads one, where repeated slashes are
+ * one and a trailing slash says the path must name a folder (`directory`). An empty path names
+ * nothing (ENOENT), where the other operations take it for the Project root.
+ */
+function resolveCallPath(path: string): { path: string; directory: boolean } {
+    if (path === '')
+        throw new FileSystemGuestError(FileErrorCode.NotFound, 'No such File or Directory: ""')
+    const directory = path.endsWith('/')
+    return {
+        path: resolveSessionPath(path.replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1')),
+        directory
+    }
+}
+
+/** The folder that holds a resolved path: '' for the Project root's children. */
+function parentOf(path: string): string {
+    const slash = path.lastIndexOf('/')
+    return slash === -1 ? '' : path.slice(0, slash)
 }
 
 /** The failure for a path that names no File, after what it names instead. */
@@ -453,6 +526,18 @@ export class FileSystem {
 export class FileSystemSession {
     private paths = new Map<string, Node>()
     private handles = new Map<number, Handle>()
+    /** The folders open for listing, by descriptor, numbered with the Files' descriptors. */
+    private folderHandles = new Map<number, FolderHandle>()
+    /**
+     * The folders `mkdir` made, as x86's Project mount keeps them: a Project has no empty folders,
+     * one exists while a File's path runs through it, so a folder made for the run lasts for the
+     * run, and is a folder of the Project afterwards only if a File ends up inside it.
+     */
+    private madeFolders = new Set<string>()
+    /** The inode numbers handed out so far: a File's goes with its node, a folder's with its path. */
+    private fileInodes = new WeakMap<Node, number>()
+    private folderInodes = new Map<string, number>([['', 1]])
+    private nextInode = 2
     private history: Frame[] = []
     private frame?: Frame
     private retained = 0
@@ -688,17 +773,25 @@ export class FileSystemSession {
                 'FileSystem capacity exceeded (16 MiB / 4,096 Files)'
             )
     }
-    /** What a resolved path names. A Directory exists while some File's path runs through it. */
+    /**
+     * What a resolved path names. A Directory exists while some File's path runs through it, or
+     * while it is, or holds, a folder `mkdir` made.
+     */
     private lookup(path: string): Lookup {
         if (path === '') return { kind: 'directory' }
         const node = this.paths.get(path)
         if (node) return { kind: 'file', node }
         for (let slash = path.indexOf('/'); slash !== -1; slash = path.indexOf('/', slash + 1))
             if (this.paths.has(path.slice(0, slash))) return { kind: 'below-file' }
-        const prefix = `${path}/`
-        for (const key of this.paths.keys())
-            if (key.startsWith(prefix)) return { kind: 'directory' }
+        if (this.madeFolders.has(path) || this.holdsAnything(path)) return { kind: 'directory' }
         return { kind: 'missing' }
+    }
+    /** Whether a File or a made folder of the session is inside the folder at a resolved path. */
+    private holdsAnything(path: string): boolean {
+        const prefix = path === '' ? '' : `${path}/`
+        for (const key of this.paths.keys()) if (key.startsWith(prefix)) return true
+        for (const folder of this.madeFolders) if (folder.startsWith(prefix)) return true
+        return false
     }
     /** The File at a resolved path, or the failure for what is there instead. */
     private fileAt(path: string): Node {
@@ -736,17 +829,22 @@ export class FileSystemSession {
     }
     /** The descriptor `open` hands out: the caller's choice, or the lowest free from the first. */
     private freeDescriptor(fd?: number): number {
-        if (this.handles.size >= this.maxOpen)
+        if (this.handles.size + this.folderHandles.size >= this.maxOpen)
             throw new FileSystemGuestError(
                 FileErrorCode.TooManyOpen,
                 `Too many open files (at most ${this.maxOpen})`
             )
         if (fd === undefined) {
             fd = this.firstDescriptor
-            while (this.handles.has(fd)) fd++
+            while (this.handles.has(fd) || this.folderHandles.has(fd)) fd++
             return fd
         }
-        if (!Number.isSafeInteger(fd) || fd < 0 || this.handles.has(fd))
+        if (
+            !Number.isSafeInteger(fd) ||
+            fd < 0 ||
+            this.handles.has(fd) ||
+            this.folderHandles.has(fd)
+        )
             throw new FileSystemGuestError(
                 FileErrorCode.BadDescriptor,
                 `Descriptor not available: ${fd}`
@@ -808,6 +906,17 @@ export class FileSystemSession {
         return descriptor
     }
     close(fd: number) {
+        const folder = this.folderHandles.get(fd)
+        if (folder && !this.stopped) {
+            this.record({
+                bytes: 32,
+                restore: () => {
+                    this.folderHandles.set(fd, folder)
+                }
+            })
+            this.folderHandles.delete(fd)
+            return
+        }
         const handle = this.handle(fd)
         this.record({
             //Reopening this descriptor costs the Handle itself; the Node it points at stays in
@@ -823,15 +932,18 @@ export class FileSystemSession {
     /** Closes every open descriptor, as EASy68K's task 50 does; Undo reopens them where they were. */
     closeAll() {
         this.ensureActive()
-        if (this.handles.size === 0) return
+        if (this.handles.size === 0 && this.folderHandles.size === 0) return
         const closed = new Map(this.handles)
+        const folders = new Map(this.folderHandles)
         this.record({
-            bytes: 32 * closed.size,
+            bytes: 32 * (closed.size + folders.size),
             restore: () => {
                 for (const [fd, handle] of closed) this.handles.set(fd, handle)
+                for (const [fd, folder] of folders) this.folderHandles.set(fd, folder)
             }
         })
         this.handles.clear()
+        this.folderHandles.clear()
     }
     /** Moves a descriptor's position, journaled so Undo puts it back. */
     private moveTo(handle: Handle, position: number) {
@@ -896,6 +1008,8 @@ export class FileSystemSession {
      * zeros; a negative position is a guest error. Returns the new position.
      */
     seek(fd: number, offset: number, whence: number): number {
+        const folder = this.folderHandles.get(fd)
+        if (folder && !this.stopped) return this.seekFolder(folder, offset, whence)
         const handle = this.handle(fd)
         if (!Number.isSafeInteger(offset))
             throw new FileSystemGuestError(FileErrorCode.InvalidArgument, 'Invalid seek offset')
@@ -987,7 +1101,7 @@ export class FileSystemSession {
     }
     /**
      * The immediate children of the Directory at `path` ('' or '/' for the Project root), in name
-     * order, for getdents. Neither `.` nor `..` is listed.
+     * order, for getdents, the folders `mkdir` made included. Neither `.` nor `..` is listed.
      */
     list(path: string): DirectoryEntry[] {
         this.ensureActive()
@@ -1000,18 +1114,274 @@ export class FileSystemSession {
             )
         if (found.kind !== 'directory')
             throw new FileSystemGuestError(FileErrorCode.NotDirectory, `Not a Directory: ${path}`)
+        return this.children(path)
+    }
+    /** The immediate children of the folder at a resolved path, in name order. */
+    private children(path: string): DirectoryEntry[] {
         const prefix = path === '' ? '' : `${path}/`
         const children = new Map<string, FileKind>()
-        for (const key of this.paths.keys()) {
-            if (!key.startsWith(prefix)) continue
+        const add = (key: string, leaf: FileKind) => {
+            if (!key.startsWith(prefix)) return
             const rest = key.slice(prefix.length)
             const slash = rest.indexOf('/')
-            if (slash === -1) children.set(rest, 'file')
+            if (slash === -1) children.set(rest, leaf)
             else children.set(rest.slice(0, slash), 'directory')
         }
+        for (const key of this.paths.keys()) add(key, 'file')
+        for (const folder of this.madeFolders) add(folder, 'directory')
         return Array.from(children, ([name, kind]) => ({ name, kind })).sort((a, b) =>
             a.name < b.name ? -1 : 1
         )
+    }
+    /** A File's inode number, made up the first time it is asked for and kept with its node. */
+    private fileInode(node: Node): number {
+        let inode = this.fileInodes.get(node)
+        if (inode === undefined) this.fileInodes.set(node, (inode = this.nextInode++))
+        return inode
+    }
+    /** A folder's inode number, kept with its path: the Project root's is 1. */
+    private folderInode(path: string): number {
+        let inode = this.folderInodes.get(path)
+        if (inode === undefined) this.folderInodes.set(path, (inode = this.nextInode++))
+        return inode
+    }
+    /**
+     * The folder call `stat`: what is at `path`, with its inode number and link count, read as
+     * Linux reads a path (`resolveCallPath`). ENOENT when nothing is there, ENOTDIR when the path
+     * runs through a File, or names one with a trailing slash. Both a File and a folder have one
+     * link, as x86's Project mount reports them.
+     */
+    inspect(path: string): FileDetails {
+        this.ensureActive()
+        const call = resolveCallPath(path)
+        const found = this.lookup(call.path)
+        if (found.kind === 'file') {
+            if (call.directory)
+                throw new FileSystemGuestError(
+                    FileErrorCode.NotDirectory,
+                    `Not a Directory: ${path}`
+                )
+            return {
+                kind: 'file',
+                size: found.node.bytes.length,
+                inode: this.fileInode(found.node),
+                links: 1
+            }
+        }
+        if (found.kind === 'directory')
+            return { kind: 'directory', size: 0, inode: this.folderInode(call.path), links: 1 }
+        throw noFile(call.path, found)
+    }
+    /** Whether `path`, read as a folder call reads it, names a folder; false for any failure. */
+    isDirectory(path: string): boolean {
+        this.ensureActive()
+        try {
+            return this.lookup(resolveCallPath(path).path).kind === 'directory'
+        } catch (error) {
+            if (error instanceof FileSystemGuestError) return false
+            throw error
+        }
+    }
+    /**
+     * Makes a folder, as `mkdir` does: it lasts for the session, and stays in the Project only if
+     * a File ends up inside it. The folder that holds it must exist (ENOENT), as a folder and not a
+     * File (ENOTDIR); a path that names anything already, the Project root included, is EEXIST.
+     */
+    mkdir(path: string) {
+        this.ensureActive()
+        const resolved = resolveCallPath(path).path
+        const found = this.lookup(resolved)
+        if (found.kind === 'file' || found.kind === 'directory')
+            throw new FileSystemGuestError(FileErrorCode.Exists, `File exists: ${resolved || '/'}`)
+        if (found.kind === 'below-file') throw noFile(resolved, found)
+        const parent = parentOf(resolved)
+        const above = this.lookup(parent)
+        if (above.kind === 'missing')
+            throw new FileSystemGuestError(
+                FileErrorCode.NotFound,
+                `No such File or Directory: ${parent}`
+            )
+        if (above.kind !== 'directory')
+            throw new FileSystemGuestError(FileErrorCode.NotDirectory, `Not a Directory: ${parent}`)
+        if (this.madeFolders.size >= FILE_COUNT_LIMIT)
+            throw new FileSystemGuestError(
+                FileErrorCode.NoSpace,
+                `FileSystem capacity exceeded (${FILE_COUNT_LIMIT.toLocaleString('en-US')} folders)`
+            )
+        this.record({
+            bytes: resolved.length * 2 + 16,
+            restore: () => {
+                this.madeFolders.delete(resolved)
+            }
+        })
+        this.madeFolders.add(resolved)
+    }
+    /**
+     * Removes an empty folder, as `rmdir` does: one holding a File or a folder is ENOTEMPTY, so in
+     * practice only a folder `mkdir` made, once it is empty again. A File is ENOTDIR, nothing at
+     * the path ENOENT, and the Project root EBUSY.
+     */
+    rmdir(path: string) {
+        this.ensureActive()
+        const resolved = resolveCallPath(path).path
+        if (resolved === '')
+            throw new FileSystemGuestError(FileErrorCode.Busy, 'Device or resource busy: /')
+        const found = this.lookup(resolved)
+        if (found.kind === 'file')
+            throw new FileSystemGuestError(
+                FileErrorCode.NotDirectory,
+                `Not a Directory: ${resolved}`
+            )
+        if (found.kind !== 'directory') throw noFile(resolved, found)
+        if (this.holdsAnything(resolved))
+            throw new FileSystemGuestError(
+                FileErrorCode.NotEmpty,
+                `Directory not empty: ${resolved}`
+            )
+        this.record({
+            bytes: resolved.length * 2 + 16,
+            restore: () => {
+                this.madeFolders.add(resolved)
+            }
+        })
+        this.madeFolders.delete(resolved)
+    }
+    /**
+     * The folder call `unlink`: `remove` for a path read as Linux reads one. A folder is EISDIR,
+     * and a File named with a trailing slash ENOTDIR.
+     */
+    unlink(path: string) {
+        this.ensureActive()
+        const call = resolveCallPath(path)
+        if (call.directory && this.lookup(call.path).kind === 'file')
+            throw new FileSystemGuestError(FileErrorCode.NotDirectory, `Not a Directory: ${path}`)
+        this.remove(call.path)
+    }
+    /**
+     * The folder call `rename`: `rename` for paths read as Linux reads them, where the folder the
+     * File moves into must exist already (ENOENT, or ENOTDIR for a File), as it must on x86 and on
+     * Linux. A File already at `to` is replaced, as rename(2) replaces it (the owner's decision of
+     * 2026-11-03). A folder cannot move (EISDIR), as on x86's Project mount, though naming one
+     * onto itself does nothing, as it does there and on Linux; naming one onto a File is ENOTDIR,
+     * as Linux and x86's mount have it.
+     */
+    move(from: string, to: string) {
+        this.ensureActive()
+        const source = resolveCallPath(from)
+        const target = resolveCallPath(to)
+        const found = this.lookup(source.path)
+        if (found.kind === 'directory' && source.path !== '' && source.path === target.path) return
+        if (found.kind === 'directory' && this.lookup(target.path).kind === 'file')
+            throw new FileSystemGuestError(FileErrorCode.NotDirectory, `Not a Directory: ${to}`)
+        if (found.kind !== 'file') throw noFile(source.path, found)
+        if (source.directory || target.directory)
+            throw new FileSystemGuestError(FileErrorCode.NotDirectory, `Not a Directory: ${from}`)
+        if (source.path !== target.path) {
+            const parent = parentOf(target.path)
+            const above = this.lookup(parent)
+            if (above.kind === 'missing')
+                throw new FileSystemGuestError(
+                    FileErrorCode.NotFound,
+                    `No such File or Directory: ${parent}`
+                )
+            if (above.kind !== 'directory')
+                throw new FileSystemGuestError(
+                    FileErrorCode.NotDirectory,
+                    `Not a Directory: ${parent}`
+                )
+        }
+        this.rename(source.path, target.path)
+    }
+    /**
+     * Opens the folder at `path` for listing and returns its descriptor, numbered as `open`
+     * numbers them: what a folder call's Open for reading gives, which `readDirectory` reads. The
+     * folder's entries are taken as it is opened, `.` and `..` first, as getdents lists them.
+     */
+    openDirectory(path: string, fd?: number): number {
+        this.ensureActive()
+        const resolved = resolveCallPath(path).path
+        const found = this.lookup(resolved)
+        if (found.kind === 'file')
+            throw new FileSystemGuestError(
+                FileErrorCode.NotDirectory,
+                `Not a Directory: ${resolved}`
+            )
+        if (found.kind !== 'directory') throw noFile(resolved, found)
+        const descriptor = this.freeDescriptor(fd)
+        const prefix = resolved === '' ? '' : `${resolved}/`
+        const entries = [
+            { name: '.', kind: 'directory' as const, inode: this.folderInode(resolved) },
+            { name: '..', kind: 'directory' as const, inode: this.folderInode(parentOf(resolved)) },
+            ...this.children(resolved).map(({ name, kind }) => ({
+                name,
+                kind,
+                inode:
+                    kind === 'file'
+                        ? this.fileInode(this.paths.get(prefix + name)!)
+                        : this.folderInode(prefix + name)
+            }))
+        ]
+        this.record({
+            bytes: 32 + entries.reduce((sum, entry) => sum + entry.name.length * 2 + 16, 0),
+            restore: () => {
+                this.folderHandles.delete(descriptor)
+            }
+        })
+        this.folderHandles.set(descriptor, { path: resolved, entries, offset: 0 })
+        return descriptor
+    }
+    /**
+     * Reads the entries of the folder open on `fd` from where the last read stopped, for getdents:
+     * each in turn while `fits` accepts it, the position moving past those it took, journaled so
+     * Undo puts it back. An empty answer is the end of the folder unless `fits` refused the first.
+     * A descriptor of a File is ENOTDIR, one not open EBADF.
+     */
+    readDirectory(fd: number, fits: (record: DirectoryRecord) => boolean): DirectoryRecord[] {
+        this.ensureActive()
+        const folder = this.folderHandles.get(fd)
+        if (!folder) {
+            if (this.handles.has(fd))
+                throw new FileSystemGuestError(
+                    FileErrorCode.NotDirectory,
+                    `Descriptor ${fd} is not a folder`
+                )
+            throw new FileSystemGuestError(
+                FileErrorCode.BadDescriptor,
+                `Invalid file descriptor: ${fd}`
+            )
+        }
+        const records: DirectoryRecord[] = []
+        let position = folder.offset
+        while (position < folder.entries.length) {
+            const record = { ...folder.entries[position], next: position + 1 }
+            if (!fits(record)) break
+            records.push(record)
+            position++
+        }
+        this.moveFolderTo(folder, position)
+        return records
+    }
+    /** lseek on a folder: positions count entries, as the offsets getdents reports do. */
+    private seekFolder(folder: FolderHandle, offset: number, whence: number): number {
+        const base = whence === 0 ? 0 : whence === 1 ? folder.offset : undefined
+        if (base === undefined || !Number.isSafeInteger(offset) || base + offset < 0)
+            throw new FileSystemGuestError(
+                FileErrorCode.InvalidArgument,
+                'Invalid seek on a folder'
+            )
+        this.moveFolderTo(folder, base + offset)
+        return base + offset
+    }
+    private moveFolderTo(folder: FolderHandle, position: number) {
+        const previous = folder.offset
+        if (position === previous) return
+        this.record({
+            bytes: 8,
+            restore: () => {
+                folder.offset = previous
+            }
+        })
+        folder.offset = position
     }
     /**
      * Appending is what a program writing a log or an output File does, so the node's buffer grows
@@ -1078,26 +1448,31 @@ export class FileSystemSession {
         return true
     }
     /**
-     * Moves a File to a path that names nothing. Unlike POSIX it refuses to replace a File there
-     * (EEXIST), and it moves Files only: a Directory is EISDIR.
+     * Moves a File to `to`, as rename(2) does: a File already there is replaced in the same
+     * operation, which Undo takes back whole, putting both Files where they were. A descriptor open
+     * on the replaced File keeps it, as one open on a removed File does: it reads and writes the
+     * bytes it had, which no path names any more. Renaming a File onto itself does nothing. Only
+     * Files move: a Directory at either path is EISDIR. The Build output can be neither moved nor
+     * replaced (EBUSY), unlike Linux, which keeps the running program's File only from writes.
      */
     rename(from: string, to: string) {
         this.ensureActive()
         from = resolveSessionPath(from)
         to = resolveSessionPath(to)
         const node = this.fileAt(from)
-        if (node.busy) throw busyFile(from, FileErrorCode.Busy)
         if (from === to) return
+        if (node.busy) throw busyFile(from, FileErrorCode.Busy)
         const target = this.lookup(to)
         if (target.kind === 'file' && target.node.busy) throw busyFile(to, FileErrorCode.Busy)
-        if (target.kind === 'file')
-            throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${to}`)
-        if (target.kind !== 'missing') throw noFile(to, target)
+        if (target.kind !== 'file' && target.kind !== 'missing') throw noFile(to, target)
+        const replaced = target.kind === 'file' ? target.node : undefined
         this.record({
-            bytes: (from.length + to.length) * 2,
+            //the replaced File is held for Undo as a removed one is
+            bytes: (from.length + to.length) * 2 + (replaced?.bytes.length ?? 0),
             filesChanged: true,
             restore: () => {
-                this.paths.delete(to)
+                if (replaced) this.paths.set(to, replaced)
+                else this.paths.delete(to)
                 this.paths.set(from, node)
             }
         })
@@ -1121,6 +1496,8 @@ export class FileSystemSession {
     stop() {
         this.stopped = true
         this.handles.clear()
+        this.folderHandles.clear()
+        this.madeFolders.clear()
         this.paths.clear()
         this.history = []
         this.frame = undefined
