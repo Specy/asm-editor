@@ -5,6 +5,8 @@ date: 2026-10-29
 
 # Key state changes at the event
 
+Update 2026-11-03: MIPS and RISC-V no longer read only the typed-character queue. The **Input controller** ([ADR 0071](./0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md)) keeps a key state of its own, in USB HID usage IDs, with left and right modifiers apart and no last-key codes. The rule below still holds for the EASy68K key state that M68K, the Port map and the TRS-80 mode read.
+
 Amends the "Key hold time" section of [ADR 0008](./0008-poll-keyboard-and-mouse-input.md), and the sentence of [ADR 0065](./0065-m68k-devices-deliver-irqs.md) that kept it for IRQ handlers.
 
 The **Keyboard**'s key state is EASy68K's. A key going down is down at once, and its code becomes the last key down; a key coming up is up at once, and its code becomes the last key up. A read answers the state as it is when the program reads it: there is no queue of key transitions, no hold interval and no pacing. EASy68K 5.16.1 works this way: in `simIOu.cpp`, `FormKeyDown` and `FormKeyUp` set `keys[]` and `keyDownCode` or `keyUpCode` in the key event itself, and `getKeyState`, which answers task 19, only reads them. A tap that begins and ends between two reads is gone from the held keys by the second read, and the last-key codes keep it. That is how an EASy68K program catches a tap, and how a program here does.

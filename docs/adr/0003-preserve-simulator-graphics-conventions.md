@@ -12,7 +12,12 @@ EASy68K has a single output window where text tasks and graphics tasks draw into
 - MARS's transmitter text lands in the Terminal transcript next to syscall output, where the simulator shows it in the tool's own window, and the transmitter is never busy, so a program that waits for Ready proceeds immediately.
 - The bitwise drawing modes of task 92 (modes 0, 1, 3 and 5 to 15) are deferred: canvas compositing is alpha based, so they need per-pixel work on every primitive, and double buffering covers the sprite-erasing use of the XOR mode, which is the likely first follow-up.
 - The MARS and RARS bitmap display takes sizes the tool does not offer: see the update below.
+- MIPS and RISC-V programs can read the Keyboard and Mouse through the Input controller, which MARS and RARS lack: see the second update below.
 
 ## Update 2026-10-23: display sizes beyond MARS's lists
 
 MARS's and RARS's bitmap display offers powers of two only: 64 to 1024 pixels a side and units of 1 to 32. The display here takes any whole number in those ranges, from 1 pixel up, through **Custom** in the Display menus, a `@screen` comment or C's `SIM_SCREEN`, so a program can have a screen such as the 224 by 288 of an arcade machine. It is a superset: every program written for the tool's sizes behaves as before, and a size the tool lacks builds without a diagnostic. A program using one shows a different picture in real MARS and RARS, which cannot be configured with it; the Documentation and `<sim.h>` say so. Only a size outside the ranges is still reported, as a warning, and replaced by the nearest one inside them.
+
+## Update 2026-11-03: the Input controller
+
+MARS's and RARS's Keyboard and Display MMIO stays exactly as it is. Beside it, MIPS and RISC-V programs get the **Input controller** at 0xFFFF0300, after the Synth ([ADR 0071](./0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md)): key state, the pointer, and an event queue. It is an extension, as the Synth is, not a change to either environment's interface. Every program written for MARS or RARS behaves as before, except that Escape on the Screen now reaches the receiver as character 27, since it no longer releases the Screen ([ADR 0008](./0008-poll-keyboard-and-mouse-input.md), 2026-11-03). A program that uses the controller runs in neither reference simulator: there the block is plain memory reading 0, so the program sees no input, and the Documentation and `<sim.h>` say so.
