@@ -103,6 +103,7 @@ The repository is a pnpm workspace:
 | Path                  | Contents                                                                                  |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | `packages/asm-editor` | The SvelteKit app                                                                         |
+| `packages/examples`   | [asm-examples](https://github.com/Specy/asm-examples), bundled example projects (Git submodule) |
 | `packages/runtime`    | The C standard library that programs link                                                 |
 | `packages/m68k`       | [s68k](https://github.com/Specy/s68k), the M68K emulator (Git submodule)                  |
 | `packages/mips`       | [MARS](https://github.com/Specy/mars), the MIPS emulator (Git submodule)                  |
