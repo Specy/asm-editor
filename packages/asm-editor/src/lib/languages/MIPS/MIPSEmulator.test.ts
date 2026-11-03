@@ -1,5 +1,4 @@
 import { readExample } from '#lib/examples.server.ts'
-import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'

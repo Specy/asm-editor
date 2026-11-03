@@ -112,16 +112,16 @@ Before a change is done, run the whole checks, as CI does: `pnpm format:check`, 
 
 The repository is a pnpm workspace:
 
-| Path                  | Contents                                                                                  |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `packages/asm-editor` | The SvelteKit app                                                                         |
+| Path                  | Contents                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| `packages/asm-editor` | The SvelteKit app                                                                               |
 | `packages/examples`   | [asm-examples](https://github.com/Specy/asm-examples), bundled example projects (Git submodule) |
-| `packages/runtime`    | The C standard library that programs link                                                 |
-| `packages/m68k`       | [s68k](https://github.com/Specy/s68k), the M68K emulator (Git submodule)                  |
-| `packages/mips`       | [MARS](https://github.com/Specy/mars), the MIPS emulator (Git submodule)                  |
-| `packages/risc-v`     | [RARS](https://github.com/Specy/rars), the RISC-V emulator (Git submodule)                |
-| `packages/x86`        | [x86-js](https://github.com/Specy/x86-js), the X86 assembler and emulator (Git submodule) |
-| `packages/z80`        | [trs80](https://github.com/Specy/trs80), the Z80 assembler and machine (Git submodule)    |
+| `packages/runtime`    | The C standard library that programs link                                                       |
+| `packages/m68k`       | [s68k](https://github.com/Specy/s68k), the M68K emulator (Git submodule)                        |
+| `packages/mips`       | [MARS](https://github.com/Specy/mars), the MIPS emulator (Git submodule)                        |
+| `packages/risc-v`     | [RARS](https://github.com/Specy/rars), the RISC-V emulator (Git submodule)                      |
+| `packages/x86`        | [x86-js](https://github.com/Specy/x86-js), the X86 assembler and emulator (Git submodule)       |
+| `packages/z80`        | [trs80](https://github.com/Specy/trs80), the Z80 assembler and machine (Git submodule)          |
 
 The app uses the emulators checked out in `packages/`. To rebuild them manually run `pnpm cores:build`.
 
