@@ -22,13 +22,22 @@ import type { ScreenSize } from './screen/Screen'
  *
  * Each event is also told at once to whoever listens with `onMouseEvent`: the M68K adapter, whose
  * program can ask for an IRQ on a button going down or up and on a move
- * ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)).
+ * ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)), and the **Input
+ * controller** of MIPS and RISC-V, which queues button events and keeps the pointer.
+ *
+ * The wheel is a Mouse's too, though EASy68K's views have no field for it: a turn is told to whoever
+ * listens with `onWheel`, as a signed count of notches, positive away from the user, which only the
+ * Input controller reads ([ADR 0071](../../../../../../docs/adr/0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md)).
+ * It is no event of the views: it changes no snapshot and no counter.
  */
 
 export type MouseButton = 'left' | 'right' | 'middle'
 
 /** A button going down or coming up, or the pointer moving, as a listener of `onMouseEvent` hears it. */
 export type MouseEventKind = 'down' | 'up' | 'move'
+
+/** What `onMouseEvent` tells: the event, and for a button going down or up, which button. */
+export type MouseEventListener = (event: MouseEventKind, button?: MouseButton) => void
 
 export type MouseSnapshot = {
     x: number
@@ -101,7 +110,8 @@ export class Mouse {
     private _lastUp: MouseSnapshot = EMPTY_SNAPSHOT
     private previousDownButton: MouseButton | null = null
     private previousDownAt: number | null = null
-    private readonly eventListeners = new Set<(event: MouseEventKind) => void>()
+    private readonly eventListeners = new Set<MouseEventListener>()
+    private readonly wheelListeners = new Set<(notches: number) => void>()
 
     constructor(options: MouseOptions) {
         this.screen = options.screen
@@ -134,7 +144,7 @@ export class Mouse {
         this.previousDownButton = button
         this.previousDownAt = now
         this._lastDown = this.snapshot(double)
-        this.tell('down')
+        this.tell('down', button)
     }
 
     /** A button came up. Losing browser-window focus releases through `releaseAll` instead. */
@@ -144,7 +154,17 @@ export class Mouse {
         this.buttons[button] = false
         this.countEvent()
         this._lastUp = this.snapshot(false)
-        this.tell('up')
+        this.tell('up', button)
+    }
+
+    /**
+     * The wheel turned by `notches`, positive away from the user, at the given position or where the
+     * pointer already is. A turn of no notches is none.
+     */
+    wheel(notches: number, x?: number, y?: number): void {
+        this.place(x, y)
+        if (!Number.isFinite(notches) || notches === 0) return
+        for (const listener of [...this.wheelListeners]) listener(Math.trunc(notches))
     }
 
     /**
@@ -159,17 +179,25 @@ export class Mouse {
     /**
      * Called at each event, a button down or up or a move to another pixel, once the views say
      * it happened: what a device IRQ needs. A move that clamps to the same pixel is no event, and
-     * neither is a reset. Returns the unsubscribe.
+     * neither is a reset. A button event names its button. Returns the unsubscribe.
      */
-    onMouseEvent(listener: (event: MouseEventKind) => void): () => void {
+    onMouseEvent(listener: MouseEventListener): () => void {
         this.eventListeners.add(listener)
         return () => {
             this.eventListeners.delete(listener)
         }
     }
 
-    private tell(event: MouseEventKind): void {
-        for (const listener of [...this.eventListeners]) listener(event)
+    /** Called with each turn of the wheel, in notches, positive away from the user. Returns the unsubscribe. */
+    onWheel(listener: (notches: number) => void): () => void {
+        this.wheelListeners.add(listener)
+        return () => {
+            this.wheelListeners.delete(listener)
+        }
+    }
+
+    private tell(event: MouseEventKind, button?: MouseButton): void {
+        for (const listener of [...this.eventListeners]) listener(event, button)
     }
 
     // ----------------------------------------------------------- the views

@@ -57,6 +57,20 @@ export type SimHeaderData = {
         gate: number
         loop: number
     }
+    /** The Input controller's block. */
+    input: SimInputData
+}
+
+/** The Input controller's block, from `inputControllerRegisters.ts`'s `inputHeaderData()`. */
+export type SimInputData = {
+    base: number
+    depth: number
+    offsets: Record<string, number>
+    shifts: { y: number; x: number; kind: number }
+    masks: { coordinate: number; kind: number; code: number; buttons: number }
+    kinds: readonly { readonly name: string; readonly value: number }[]
+    buttons: readonly { readonly name: string; readonly code: number; readonly held: number }[]
+    keys: readonly { name: string; usage: number }[]
 }
 
 export type SimSynthRegister = {

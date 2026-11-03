@@ -1,4 +1,4 @@
-The Runtime library provides C functions for MIPS C and C++ programs compiled in the editor, and for assembly programs that explicitly link it. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, file functions use the project's Files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
+The Runtime library provides C functions for MIPS C and C++ programs compiled in the editor, and for assembly programs that explicitly link it. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`, and the folder functions in `<dirent.h>`, `<sys/stat.h>` and `<unistd.h>`. For example, `printf` and `scanf` use the Terminal, file functions use the project's Files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
 
 ## Compiled programs {#compiled-programs}
 
@@ -56,6 +56,24 @@ main:
 ```
 
 A program that calls the library this way keeps its own start and its own addresses: the library's code and data come after the program's. The library needs no initialization, so every function works without the startup code.
+
+## Files and folders {#folders}
+
+Besides the file functions of `<stdio.h>`, the library has the POSIX functions for folders and for files by name. They use the [folder services](/documentation/mips/syscall#folders), so they work on the Project Files, and Undo takes them back:
+
+| Function                                       | Header         | What it does                                                                                                                                           |
+| ---------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `int mkdir(const char *path, mode_t mode)`     | `<sys/stat.h>` | Makes a folder. `mode` is ignored: every file and folder can be read and written.                                                                      |
+| `int stat(const char *path, struct stat *buf)` | `<sys/stat.h>` | Fills `buf` with what is at `path`. `S_ISDIR(buf->st_mode)` is true for a folder and `S_ISREG(buf->st_mode)` for a file; `st_size` is a file’s length. |
+| `int unlink(const char *path)`                 | `<unistd.h>`   | Deletes a file.                                                                                                                                        |
+| `int rmdir(const char *path)`                  | `<unistd.h>`   | Deletes an empty folder.                                                                                                                               |
+| `int rename(const char *from, const char *to)` | `<stdio.h>`    | Renames a file, or moves it into a folder that exists.                                                                                                 |
+| `int remove(const char *path)`                 | `<stdio.h>`    | Deletes a file, or an empty folder.                                                                                                                    |
+| `DIR *opendir(const char *path)`               | `<dirent.h>`   | Opens a folder for listing.                                                                                                                            |
+| `struct dirent *readdir(DIR *dir)`             | `<dirent.h>`   | The next entry, `.` and `..` first, or NULL at the end. `d_name` is its name and `d_type` is `DT_DIR` for a folder and `DT_REG` for a file.            |
+| `int closedir(DIR *dir)`                       | `<dirent.h>`   | Closes the folder.                                                                                                                                     |
+
+On a failure each returns -1 (`opendir` and `readdir` NULL) and sets `errno`: `ENOENT` when nothing is at the path, `EEXIST` when `mkdir` finds something there already, `ENOTDIR` and `EISDIR` when a folder and a file are mixed up, and `ENOTEMPTY` when `rmdir` finds a file inside. A folder `mkdir` makes lasts until the program ends, and stays in the Project once a file is written inside it; a folder cannot be renamed, and `rename` onto an existing file replaces it, as on Linux. The [folder services](/documentation/mips/syscall#folders) explain these rules, with a program that handles a folder that already exists.
 
 ## Standard input {#standard-input}
 

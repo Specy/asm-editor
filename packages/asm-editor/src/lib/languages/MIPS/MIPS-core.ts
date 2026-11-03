@@ -1,10 +1,14 @@
 import { MIPS, type RuntimeLibrary } from '@specy/mips'
 import { validateAssemblerProfile, type AssemblerProfile } from '#lib/assemblerProfiles.ts'
 
-/** What a Build links besides its Files: the Runtime library and the global execution starts at. */
+/**
+ * What a Build links besides its Entry's unit: the Runtime library, the global execution starts at,
+ * and the Project's other GNU-profile units, which the Core takes as an archive's members.
+ */
 export type MipsLink = {
     library?: RuntimeLibrary
     entrySymbol?: string
+    units?: readonly string[]
 }
 
 /**
@@ -22,6 +26,7 @@ export function makeMipsCore(
     return MIPS.makeMipsFromFiles(files, entry, {
         assemblerProfile: profile === 'gnu-compiler-v1' ? profile : 'mars',
         ...(link.library ? { libraries: [link.library] } : {}),
-        ...(link.entrySymbol ? { entrySymbol: link.entrySymbol } : {})
+        ...(link.entrySymbol ? { entrySymbol: link.entrySymbol } : {}),
+        ...(link.units?.length ? { units: [...link.units] } : {})
     })
 }

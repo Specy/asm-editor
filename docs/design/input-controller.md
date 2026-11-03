@@ -1,6 +1,6 @@
 # Input controller
 
-Status: decided in a grill with the owner on 2026-11-03, then revised the same day after an independent review; nothing implemented. The model is [ADR 0071](../adr/0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md), with dated notes on [ADR 0003](../adr/0003-preserve-simulator-graphics-conventions.md), [ADR 0008](../adr/0008-poll-keyboard-and-mouse-input.md) and [ADR 0066](../adr/0066-key-state-changes-at-the-event.md). This is the extension that decision 2 of [asmOS portability](./asmos-portability.md) calls for. The facts it rests on are in [memory-mapped-input-conventions.md](../research/memory-mapped-input-conventions.md). The term is in [CONTEXT.md](../../CONTEXT.md) (**Input controller**).
+Status: decided in a grill with the owner on 2026-11-03, then revised the same day after an independent review; implemented the same day, uncommitted, on branch `feat/asmos-stage1` (worktree `.cache/wt/stage1`) together with the [folder calls](./folder-calls.md) and the linking of several units, with the interpretations listed under [Implementation notes](#implementation-notes). The model is [ADR 0071](../adr/0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md), with dated notes on [ADR 0003](../adr/0003-preserve-simulator-graphics-conventions.md), [ADR 0008](../adr/0008-poll-keyboard-and-mouse-input.md) and [ADR 0066](../adr/0066-key-state-changes-at-the-event.md). This is the extension that decision 2 of [asmOS portability](./asmos-portability.md) calls for. The facts it rests on are in [memory-mapped-input-conventions.md](../research/memory-mapped-input-conventions.md). The term is in [CONTEXT.md](../../CONTEXT.md) (**Input controller**).
 
 ## What it is
 
@@ -224,6 +224,19 @@ A memory-mapped device that lets MIPS and RISC-V programs read the **Keyboard** 
     - [ADR 0008](../adr/0008-poll-keyboard-and-mouse-input.md): the Input controller's codes (4), Undo's put-back (9) and Shift+Tab (6);
     - [ADR 0066](../adr/0066-key-state-changes-at-the-event.md): MIPS and RISC-V now read a key state too, the controller's own (4).
 - **Where the semantics live.** [ADR 0035](../adr/0035-environments-match-their-reference.md) has the Core own each service's semantics. The Input controller lives in the adapter instead, as the receiver and the Synth do: MARS's and RARS's Cores have no device model, only memory observers, and the record packing is the device. [ADR 0071](../adr/0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md) records this.
+
+## Implementation notes
+
+Recorded on 2026-11-03 with the implementation. None changes a decision; each settles something the decisions leave open.
+
+- **The device** is `packages/asm-editor/src/lib/languages/mars/InputController.ts`, plain TypeScript driven by `MarsDevices.ts`; the register module is `inputControllerRegisters.ts`.
+- **Observers.** The Cores have range observers for writes only, so the Event register's reads need a word observer of their own. Stores into the Synth's block and the Input controller's share one range observer, from 0xFFFF0100 to 0xFFFF033F, so the device adds one observer in all. Measured on raw Cores, interleaved: one more observer is within noise on MIPS and RISC-V instructions per millisecond; ten more cost 4 to 11%, about 0.4 to 1.1% each.
+- **The run gate and a Build's start code** (13). A compiled program's Build runs the Runtime library's start code up to `main`, outside the Undo history. That run does not open the gate: it opens at the first Run or Step, so the click that focuses the Screen after a Build is no phantom click for a C program either.
+- **Covered** (11) means the device writes no memory and no read takes an event, while it keeps receiving input and keeps its state, as a chip whose addresses a display decodes in its place would. Uncovering it writes the block as it is then; switching off leaves nothing stuck, since key-ups still reach it.
+- **Stale Emulators.** Every Core of a package shares one memory, so an Emulator that was never disposed still hears another one's program. The Input controller answers only for the devices that attached to that memory last; the receiver, the transmitter and the Synth still answer for every instance, as before.
+- **`ld` on RISC-V 64** reads its high word first, so an `ld` from Status (+0x08) returns the oldest event in its upper half and a Status already one lower in its lower half.
+- **`<sim.h>`** also has `sim_input_pending()`, Status's count, so a program's loop needs no mask. The key names took each header past the drift test's 32 KB guard, which is now 40 KB; the request limit is 1 MiB.
+- **A focusing click's position** is read before the canvas takes the focus, which can scroll a canvas that was partly out of view under the pointer (`ScreenRenderer.svelte`, every Target).
 
 ## Deferred
 

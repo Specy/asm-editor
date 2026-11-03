@@ -68,6 +68,29 @@ export const SCREEN_LABEL_PROBE_ADDRESS = 0x10040000
 
 /** `#` before the keyword so the line is a comment in both assemblers; `##` and `#@screen` too. */
 const DIRECTIVE_PATTERN = /#+[ \t]*@screen\b/i
+
+/**
+ * The directive on a line: in its comment, which begins at the first `#` outside a string or
+ * character literal, as the assemblers read the line. A `.asciz "# @screen …"`, such as the help
+ * text of a program that explains the directive, is data and no directive. The match's `index` is
+ * the line's own.
+ */
+function findDirective(line: string): { index: number; 0: string } | null {
+    let quote: string | null = null
+    for (let index = 0; index < line.length; index++) {
+        const character = line[index]
+        if (quote) {
+            if (character === '\\') index++
+            else if (character === quote) quote = null
+        } else if (character === '"' || character === "'") {
+            quote = character
+        } else if (character === '#') {
+            const match = DIRECTIVE_PATTERN.exec(line.slice(index))
+            return match ? { index: index + match.index, 0: match[0] } : null
+        }
+    }
+    return null
+}
 /** One `name=value`, with any amount of space around the `=` and commas allowed as separators. */
 export const ENTRY_PATTERN = /^([A-Za-z][A-Za-z0-9_-]*)[ \t]*=[ \t]*([^\s,]+)/
 /** MARS's and RARS's label charset, which is what tells a label apart from a mistyped number. */
@@ -87,7 +110,7 @@ export function ignoredIncludedScreenDiagnostics(
         const lines = code.split('\n')
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             const lineText = lines[lineIndex] ?? ''
-            const match = DIRECTIVE_PATTERN.exec(lineText)
+            const match = findDirective(lineText)
             if (!match) continue
             const column = match.index + match[0].indexOf('@') + 1
             diagnostics.push({
@@ -113,7 +136,7 @@ export function parseScreenDirective(code: string): ScreenDirectiveParse {
     const lines = code.split('\n')
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
         const lineText = lines[lineIndex] ?? ''
-        const match = DIRECTIVE_PATTERN.exec(lineText)
+        const match = findDirective(lineText)
         if (!match) continue
         const column = match.index + match[0].indexOf('@') + 1
         if (directive) {
@@ -400,7 +423,7 @@ export function rewriteScreenDirective(
 
     const lines = code.split('\n')
     const line = lines[directive.lineIndex] ?? ''
-    const match = DIRECTIVE_PATTERN.exec(line)
+    const match = findDirective(line)
     if (!match) return null
     const head = line.slice(0, match.index + match[0].length)
     const tokens: string[] = []

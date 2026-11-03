@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
+import { inputControllerEntries } from '#lib/documentation/inputController.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { RISCV } from '@specy/risc-v'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
@@ -2734,5 +2735,126 @@ main:   li      t0, 0xffff0100
         expect(results[0]?.errors ?? []).toEqual([])
         expect(results[0]?.passed).toBe(true)
         expect(synthWrites(output)).toEqual([])
+    })
+})
+
+/**
+ * The Input controller at 0xffff0300 against the real Core, on RV32 and RV64
+ * ([the design record](../../../../../../docs/design/input-controller.md)). The register semantics
+ * are covered against a fake bus in `InputController.test.ts` and end to end on MIPS in
+ * `MIPSEmulator.test.ts`; these are what differs on RARS.
+ */
+describe('RISC-V Input controller', () => {
+    it('runs the chapter’s first program: the arrows pressed, until Escape', async () => {
+        const entry = inputControllerEntries('RISC-V', 'risc-v', '/documentation').find(
+            (candidate) => candidate.anchor === 'first-program'
+        )!
+        const example = /```\w+\n([\s\S]*?)```/.exec(entry.searchText)![1]
+        const keyboard = new Keyboard()
+        const emulator = await build(example, { keyboard, virtualClock: true })
+        await emulator.step()
+        for (const code of ['ArrowLeft', 'ArrowUp', 'KeyA', 'ArrowRight', 'Escape']) {
+            keyboard.keyDown({ code, key: code })
+            keyboard.keyUp({ code, key: code })
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('LUR')
+        expect(emulator.terminated).toBe(true)
+    })
+
+    it('says so when the simulator has no Input controller, as under a covering display', async () => {
+        const entry = inputControllerEntries('RISC-V', 'risc-v', '/documentation').find(
+            (candidate) => candidate.anchor === 'first-program'
+        )!
+        const example = /```\w+\n([\s\S]*?)```/.exec(entry.searchText)![1]
+        const emulator = await run(example, {
+            display: { ...SMALL, baseAddress: 0xffff0000, width: 512, height: 512 }
+        })
+        expect(emulator.stdOut).toBe('This simulator has no Input controller.\n')
+    })
+
+    const record = (kind: number, code: number, x = 0, y = 0) =>
+        (y << 21) | (x << 11) | (kind << 8) | code
+    const value = (emulator: Emulator, name: string) =>
+        emulator.registers.find((r) => r.name === name)?.value ?? -1n
+
+    it.each(['RISC-V', 'RISC-V-64'] as const)(
+        'reads its registers on %s, words that are never negative',
+        async (language) => {
+            const keyboard = new Keyboard()
+            const code =
+                DATA +
+                `        li      s0, 0xffff0300
+        lw      t0, 0(s0)
+        lw      t1, 8(s0)
+        lw      t2, 12(s0)
+        lw      t3, 16(s0)
+        lbu     t4, 0x3c(s0)
+        lw      t5, 12(s0)
+` +
+                EXIT
+            const emulator = RISCVEmulator(code, {
+                language,
+                display: SMALL,
+                peripherals: { keyboard }
+            })
+            await emulator.check()
+            await emulator.compile(200, code)
+            await emulator.step()
+            keyboard.keyDown({ code: 'MetaRight', key: 'Meta' })
+            emulator.peripherals.mouse.moveTo(7, 7)
+            emulator.peripherals.mouse.wheel(-3)
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.errors).toEqual([])
+            expect(value(emulator, 't0')).toBe(0x494e5001n)
+            expect(value(emulator, 't1')).toBe(2n)
+            //the key went down before the pointer moved
+            expect(value(emulator, 't2')).toBe(BigInt(record(1, 0xe7)))
+            //y 7, x 7, nothing held: positive on RV64 too, where lw sign-extends
+            expect(value(emulator, 't3')).toBe(BigInt((7 << 21) | (7 << 11)))
+            //usage 0xe7 is bit 7 of the key map's last byte
+            expect(value(emulator, 't4')).toBe(0x80n)
+            expect(value(emulator, 't5')).toBe(BigInt(record(6, 0xfd, 7, 7)))
+        }
+    )
+
+    it('takes an event when an RV64 ld covers the Event register', async () => {
+        const keyboard = new Keyboard()
+        const code =
+            DATA +
+            `        li      s0, 0xffff0300
+        ld      t0, 8(s0)
+        lw      t1, 8(s0)
+` +
+            EXIT
+        const emulator = RISCVEmulator(code, {
+            language: 'RISC-V-64',
+            display: SMALL,
+            peripherals: { keyboard }
+        })
+        await emulator.check()
+        await emulator.compile(200, code)
+        await emulator.step()
+        keyboard.keyDown({ code: 'KeyA', key: 'a' })
+        keyboard.keyDown({ code: 'KeyB', key: 'b' })
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        //the oldest event in the high word; the Core reads that half first, so the Status half,
+        //read after it in the same instruction, already counts one event fewer
+        expect(value(emulator, 't0')).toBe((BigInt(record(1, 0x04)) << 32n) | 1n)
+        expect(value(emulator, 't1')).toBe(1n)
+    })
+
+    it('stops a program that sets the interrupt-enable bit with sb', async () => {
+        const emulator = await run(
+            DATA +
+                `        li      s0, 0xffff0300
+        li      t0, 2
+        sb      t0, 4(s0)
+` +
+                EXIT
+        )
+        expect(emulator.errors.join('\n')).toContain('Interrupt-driven input is not supported')
     })
 })

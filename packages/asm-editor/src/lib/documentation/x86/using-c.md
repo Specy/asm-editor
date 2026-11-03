@@ -119,6 +119,6 @@ Only the selected C or C++ source is compiled automatically. Other assembly File
 
 For example, a C declaration `extern int add_one(int value);` lets a call such as `add_one(41)` use an assembly function exported as `add_one`. In C++, declare it as `extern "C" int add_one(int value);` so the compiler uses that exact name. The assembly function must follow the [x86-64 function calling convention](/documentation/x86/runtime-library#from-assembly), including preserving the required registers and returning the result in `rax`.
 
-Project assembly definitions are considered before Runtime library functions. A File can therefore replace a Runtime support function by exporting its name. Two ordinary exported definitions of the same name cause errors on both Files, even if one File would otherwise be unused.
+Project assembly definitions are considered before Runtime library functions. A File can therefore replace a Runtime support function by exporting its name. Two ordinary exported definitions of the same name are an error only when Build includes both Files. A File the program does not need is left out, even if it exports a name another File exports too, so a project can hold two programs that each define `main`, each built from its own entry file.
 
 The **Problems** panel gives a Hint for each assembly File that was not linked. A File containing only global constructors is not included automatically: it must also supply a name referenced by the program. Other C or C++ Files are not compiled or linked automatically.

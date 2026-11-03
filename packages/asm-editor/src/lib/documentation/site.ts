@@ -40,6 +40,7 @@ export const DOCUMENTATION_SITES: Record<DocumentationLanguage, DocumentationSit
         ['registers', 'Registers', 'registers'],
         ['screen', 'Screen', 'screen'],
         ['synth', 'Synth', 'synth'],
+        ['input-controller', 'Input controller', 'input-controller'],
         ['runtime-library', 'Runtime library', 'runtime-library'],
         ['using-c', 'Using C and C++', 'using-c']
     ]),
@@ -50,6 +51,7 @@ export const DOCUMENTATION_SITES: Record<DocumentationLanguage, DocumentationSit
         ['registers', 'Registers', 'registers'],
         ['screen', 'Screen', 'screen'],
         ['synth', 'Synth', 'synth'],
+        ['input-controller', 'Input controller', 'input-controller'],
         ['runtime-library', 'Runtime library', 'runtime-library'],
         ['using-c', 'Using C and C++', 'using-c']
     ]),

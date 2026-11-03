@@ -1,5 +1,11 @@
 import { prototypeOf, x86PrototypeOf } from './simHeader.mjs'
-import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO, SYNTH_HELPERS } from './helpers.mjs'
+import {
+    DEVICE_HELPERS,
+    INPUT_HELPERS,
+    RGB_HELPER,
+    SCREEN_MACRO,
+    SYNTH_HELPERS
+} from './helpers.mjs'
 import { parametersOf } from '../source-language-help/declarations.mjs'
 
 const capital = (text) => text[0].toUpperCase() + text.slice(1)
@@ -15,7 +21,30 @@ const entry = (name, declaration, summary, href, kind = 'function', headers = ['
     definition: 'documentation'
 })
 
-export function marsHelpCatalog(target, syscalls) {
+/**
+ * The functions MIPS and RISC-V's own headers declare, the Runtime library's `posix/include/`
+ * (`<dirent.h>`, `<sys/stat.h>`, ...), each from the one-line `/** ... *\/` comment right before
+ * its declaration, as the library's build reads its shared headers.
+ */
+export function posixFunctions(headers) {
+    const functions = []
+    for (const [header, text] of Object.entries(headers).sort(([a], [b]) => (a < b ? -1 : 1))) {
+        const pattern =
+            /\/\*\*\s*([^\n]*?)\s*\*\/[ \t]*\n[ \t]*([^;{}#/]*?\b([A-Za-z_]\w*)\s*\([^;{}]*\))\s*;/g
+        for (const match of text.matchAll(pattern))
+            functions.push({
+                name: match[3],
+                header,
+                declaration: clean(match[2])
+                    .replace(/\s*\*\s*/g, ' *')
+                    .replace(/\( /g, '('),
+                doc: clean(match[1])
+            })
+    }
+    return functions
+}
+
+export function marsHelpCatalog(target, syscalls, functions = []) {
     const language = target === 'mips' ? 'MIPS' : target === 'riscv32' ? 'RISC-V' : 'RISC-V-64'
     const route = target === 'mips' ? 'mips' : 'risc-v'
     const entries = Object.values(syscalls)
@@ -65,6 +94,27 @@ export function marsHelpCatalog(target, syscalls) {
                 prototypeOf(helper),
                 helper.summary,
                 `/documentation/${route}/synth#from-c`
+            )
+        )
+    for (const helper of INPUT_HELPERS)
+        entries.push(
+            entry(
+                helper.name,
+                prototypeOf(helper),
+                helper.summary,
+                `/documentation/${route}/input-controller#from-c`
+            )
+        )
+    //the POSIX functions over the folder calls, which the Runtime library's posix/ implements
+    for (const call of functions)
+        entries.push(
+            entry(
+                call.name,
+                call.declaration,
+                call.doc,
+                `/documentation/${route}/runtime-library#folders`,
+                'function',
+                [call.header]
             )
         )
     return { revision: 1, target: language, entries }

@@ -34,6 +34,15 @@ import {
     SYNTH_UPLOAD_REGISTERS,
     SYNTH_WAVEFORMS
 } from '#lib/languages/synthRegisters.ts'
+import {
+    INPUT_BASE,
+    INPUT_BUTTONS,
+    INPUT_KEY_TABLE,
+    INPUT_KINDS,
+    INPUT_QUEUE_DEPTH,
+    INPUT_REGISTERS,
+    inputKeyName
+} from '#lib/languages/inputControllerRegisters.ts'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,
@@ -480,6 +489,66 @@ function SYNTH_INFORMATION(base: string, half: string, byte: string, wait: strin
 }
 
 /**
+ * MIPS's and RISC-V's Input controller, generated from the register model the device reads, so the
+ * agent reads exactly the registers and codes that exist
+ * ([the design record](../../../../../../../docs/design/input-controller.md)).
+ */
+function INPUT_CONTROLLER_INFORMATION(sleep: string): string {
+    const base = `0x${INPUT_BASE.toString(16)}`
+    const registers = INPUT_REGISTERS.map(
+        (register) =>
+            `+0x${register.offset.toString(16)} ${register.name.toLowerCase()} (${register.description.replaceAll('`', '')})`
+    ).join('; ')
+    const kinds = INPUT_KINDS.map(
+        (kind) => `${kind.value} ${kind.name.toLowerCase().replaceAll('_', ' ')}`
+    ).join(', ')
+    const common = INPUT_KEY_TABLE.filter((key) =>
+        [
+            'KeyA',
+            'KeyZ',
+            'Digit1',
+            'Digit0',
+            'Enter',
+            'Escape',
+            'Backspace',
+            'Tab',
+            'Space',
+            'ArrowRight',
+            'ArrowLeft',
+            'ArrowDown',
+            'ArrowUp',
+            'ShiftLeft',
+            'ShiftRight',
+            'ControlLeft'
+        ].includes(key.code)
+    )
+        .map((key) => `${key.code} 0x${key.usage.toString(16)}`)
+        .join(', ')
+    return [
+        `- Keys that type nothing (arrows, Shift), key-up, the mouse and the wheel are the Input controller, an extension of this editor that the reference simulator does not have (there its block reads 0): one-word registers at ${base}, read with lw. Registers: ${registers}.`,
+        `- An event word: y in bits 30-21, x in bits 20-11 (the pointer's position when it happened, in display words), kind in bits 10-8, code in bits 7-0; bit 31 is always 0. Kinds: ${kinds}. A key's code is its USB HID usage from the physical key (${common}; KeyA to KeyZ are 0x4 to 0x1d, Digit1 to Digit0 0x1e to 0x27); a button's is ${INPUT_BUTTONS.map((button) => `${button.code} ${button.name.toLowerCase()}`).join(', ')}; the wheel's is a signed byte of notches, positive away from the user. The pointer word has y and x in the same bits and the buttons held in bits 2-0 (${INPUT_BUTTONS.map((button) => `${button.held} ${button.name.toLowerCase()}`).join(', ')}).`,
+        `- Poll: while Status is nonzero, read Event (each read takes one, so read it once with lw), then sleep with ${sleep} about 16 ms. The queue holds ${INPUT_QUEUE_DEPTH} events; a dropped event (kind 7) means some were lost. For keys held, test bit k % 8 of the byte at ${base} + 0x20 + k / 8. Every Screen key also reaches the receiver at 0xffff0000 as a typed character, Escape as 27: use the receiver for text, the Input controller for keys. A testcase has no keyboard or mouse, and storing bit 1 of Control stops the program. In C, <sim.h> has sim_input_present(), sim_input_pending(), sim_input_event(), sim_input_key_down(SIM_KEY_...), sim_input_pointer(), SIM_INPUT_KIND/CODE/X/Y/BUTTONS/WHEEL_NOTCHES, SIM_INPUT_KEY_DOWN... and SIM_KEY_ names after the browser's KeyboardEvent.code (${['KeyA', 'ArrowLeft', 'ShiftLeft', 'Digit1'].map((code) => `SIM_KEY_${inputKeyName(code)}`).join(', ')}).`
+    ].join('\n')
+}
+
+/**
+ * The MARS and RARS file and folder services, the folder calls numbered alike on both
+ * ([ADR 0072](../../../../../../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md)),
+ * with the registers and the older services' numbers each environment has.
+ */
+function MARS_FILE_INFORMATION(
+    argument: (index: number) => string,
+    result: string,
+    files: { open: number; read: number; write: number; close: number; seek: number }
+): string {
+    const [a0, a1, a2] = [0, 1, 2].map(argument)
+    return [
+        `- Files are the Project Files, by path from the Project's top folder ("data/scores.txt"). Open is service ${files.open} (${a0} path, ${a1} flags: 0 read, 1 write creating or emptying, 9 append), then read ${files.read}, write ${files.write}, close ${files.close} and lseek ${files.seek}; these return -1 on any failure. Undo takes file changes back, and each Testcase works on its own copy of the Files.`,
+        `- Folders and files by name have six more services, which return 0 (or a count) or minus a Linux error number in ${result}: unlink 1026 (${a0} path, a file), mkdir 1030 (${a0} path), rmdir 1031 (${a0} path, an empty folder), rename 1034 (${a0} from, ${a1} to, files only), stat 1038 (${a0} path, ${a1} buffer for Linux's struct stat) and getdents 1065 (${a0} descriptor of a folder opened with service ${files.open} and flag 0, ${a1} buffer, ${a2} size; returns the bytes of linux_dirent records stored, 0 at the end). -2 nothing there, -17 already exists, -20 a file where a folder was expected, -21 a folder where a file was expected, -39 folder not empty. A folder mkdir makes lasts until the program ends and stays in the Project only once a file is written inside it (write a hidden .keep); treat -17 from mkdir as success. Renaming a folder fails (-21), and renaming a file onto an existing file replaces it. Listings start with . and .., then name order. search_documentation "getdents" gives the record layout.`
+    ].join('\n')
+}
+
+/**
  * x86's devices, which a program reaches as a Linux program does, through device files
  * ([x86 devices](../../../../../../../docs/design/x86-devices.md)): the Screen's framebuffer, the
  * input devices, the Terminal's modes and the four sound devices, a paragraph each as the MARS
@@ -497,7 +566,7 @@ const X86_DEVICE_INFORMATION = [
 ].join('\n')
 
 const EMULATOR_INFORMATION = `# Emulator Information
-The editor supports projects with assembly, C/C++ sources, local headers and data files, and a Terminal for the program's output and typed input. Every language also has a pixel screen with a keyboard and a mouse, and sound: M68K, MIPS, RISC-V and Z80 through their simulators' own interfaces, X86 through Linux's device files. There are no imported ROMs; an X86 project can also run an imported Linux executable.
+The editor supports projects with assembly, C/C++ sources, local headers and data files, and a Terminal for the program's output and typed input. Every language also has a pixel screen with a keyboard and a mouse, and sound: M68K, MIPS, RISC-V and Z80 through their simulators' own interfaces, X86 through Linux's device files. There are no imported ROMs; an X86 project can also run an imported Linux executable. A program receives the keyboard, Escape included, once the person clicks the Screen; Shift+Tab gives it back to the editor.
 
 ## M68K
 - Uses Easy68K-style syntax and big-endian memory.
@@ -522,14 +591,18 @@ ${SYNTH_INFORMATION(`0x${SYNTH_BASES.m68k.toString(16).toUpperCase()} ($${SYNTH_
 - Uses the MARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - .data starts at 0x10010000. $sp starts at 0x7ffffffc and grows downward.
 ${MARS_SCREEN_INFORMATION('$v0', '$a0')}
+${MARS_FILE_INFORMATION((index) => `$a${index}`, '$v0', { open: 13, read: 14, write: 15, close: 16, seek: 62 })}
 ${SYNTH_INFORMATION(`0x${SYNTH_BASES.mips.toString(16)}`, 'sh', 'sb', 'service 32 (sleep)')}
+${INPUT_CONTROLLER_INFORMATION('service 32 ($v0 = 32, $a0 = milliseconds)')}
 
 ## RISC-V
 - Uses the RARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - RISC-V is 32-bit; RISC-V-64 is 64-bit.
 - .data starts at 0x10010000. sp starts at 0x7ffffffc and grows downward.
 ${MARS_SCREEN_INFORMATION('a7', 'a0')}
+${MARS_FILE_INFORMATION((index) => `a${index}`, 'a0', { open: 1024, read: 63, write: 64, close: 57, seek: 62 })}
 ${SYNTH_INFORMATION(`0x${SYNTH_BASES.riscv.toString(16)}`, 'sh', 'sb', 'service 32 (sleep)')}
+${INPUT_CONTROLLER_INFORMATION('service 32 (a7 = 32, a0 = milliseconds)')}
 
 ## X86
 - The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.
@@ -564,7 +637,7 @@ These instructions take precedence over assembly workflow steps when editing C/C
 - Read existing source before editing. Edit the original C/C++ source or local headers rather than generated assembly. Source and header writes are saved without assembler checks and invalidate execution.
 - Call compile_source with the .c/.cpp path after source or header edits. This sends one source file and the Project files its quoted includes reach to Compiler Explorer, requires internet, and generates assembly with compilation records and source maps. Other .c/.cpp files are not compiled or linked separately; put helpers in headers, or #include "helpers.c" from the source, which pastes the file in as one compilation.
 - Start with optimization "0". When the source defines main, compile_source makes its generated assembly the selected program's Entry file. Then call compile (the assembly Build) before running or stepping. Compiler errors must be fixed in the source and recompiled; a saved source edit alone does not prove validity.
-- MIPS, RISC-V and X86 support C17 with a supplied runtime, including printf/scanf, malloc/free, strings and math. Include the appropriate standard header. X86 also has Linux's device headers (<linux/fb.h>, <linux/input.h>, <sys/soundcard.h>, <sound/asound.h>, <linux/kd.h>) and the POSIX calls of <fcntl.h>, <unistd.h>, <sys/ioctl.h>, <sys/mman.h>, <poll.h>, <sys/select.h>, <termios.h> and <time.h> (open, read, write, close, ioctl, mmap, poll, select, tcgetattr, tcsetattr, cfmakeraw, usleep, nanosleep, clock_gettime), which return -1 and set errno on failure.
+- MIPS, RISC-V and X86 support C17 with a supplied runtime, including printf/scanf, malloc/free, strings and math. Include the appropriate standard header. All three have the POSIX folder functions: opendir, readdir and closedir in <dirent.h>, stat and mkdir in <sys/stat.h>, unlink and rmdir in <unistd.h>, rename and remove in <stdio.h>, which return -1 and set errno (EEXIST, ENOENT, ENOTEMPTY ...) on failure. X86 also has Linux's device headers (<linux/fb.h>, <linux/input.h>, <sys/soundcard.h>, <sound/asound.h>, <linux/kd.h>) and the POSIX calls of <fcntl.h>, <unistd.h>, <sys/ioctl.h>, <sys/mman.h>, <poll.h>, <sys/select.h>, <termios.h> and <time.h> (open, read, write, close, ioctl, mmap, poll, select, tcgetattr, tcsetattr, cfmakeraw, usleep, nanosleep, clock_gettime), which return -1 and set errno on failure.
 - <sim.h> declares simulator services; use search_documentation to find their signatures rather than guessing. C++ uses C++17 with compatibility headers and no full standard library, exceptions or RTTI.
 - Debug execution through the generated assembly. Use generated assembly paths and instruction lines for breakpoints; registers and memory describe the target architecture. Keep user-facing explanations tied to the original source.
 - For a fresh C example on MIPS, RISC-V or X86, start with:

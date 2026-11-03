@@ -5,6 +5,7 @@ import type { InstructionContent } from '../instructions/content'
 import { documentSignature, type InstructionDocument } from '../instructions/document'
 import { withInstructionCategory, withInstructionContent } from '../instructions/resolve'
 import { runtimeLibraryChapter } from '../runtimeFunctions'
+import { inputControllerEntries } from '../inputController'
 import { synthEntries } from '../synth'
 import type { MarsForm } from './instructionDocument'
 import { screenEntries } from './screen'
@@ -159,7 +160,7 @@ function syscalls<F extends MarsForm>(documentation: MarsDocumentation<F>): Chap
 /**
  * The MIPS or RISC-V Documentation's Chapters, in the order the complete documentation page has
  * them: instructions, directives, services, the language's registers, the Screen, the Synth, the
- * Runtime library and Using C.
+ * Input controller, the Runtime library and Using C.
  */
 export function marsChapters<F extends MarsForm>(documentation: MarsDocumentation<F>): Chapter[] {
     const { language, base, variant } = documentation
@@ -185,6 +186,15 @@ export function marsChapters<F extends MarsForm>(documentation: MarsDocumentatio
             description:
                 'Control eight sound channels through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
             entries: synthEntries(variant, language, `${base}/synth`)
+        },
+        {
+            id: 'input-controller',
+            language,
+            title: 'Input controller',
+            href: `${base}/input-controller`,
+            description:
+                'Read the keys held, key and button events, the mouse pointer and the wheel through memory registers, for games and programs that need more than typed characters.',
+            entries: inputControllerEntries(variant, language, `${base}/input-controller`)
         },
         runtimeLibraryChapter({
             language,

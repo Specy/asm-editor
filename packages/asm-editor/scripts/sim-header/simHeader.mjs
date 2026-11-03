@@ -8,12 +8,19 @@
  * regenerate the committed headers in memory from the same data. The data comes in as arguments:
  * the syscall entries of `src/lib/documentation/mars/{mips,riscv}Syscalls.ts`, the device
  * registers of `src/lib/languages/mars/MarsDevices.ts`, the display sizes and memory map of
- * `src/lib/languages/mars/marsDisplay.ts` and the Synth's registers of
- * `src/lib/languages/synthRegisters.ts`, which the Documentation's Syscalls and Screen chapters
- * are built from too; for x86, the bindings of `src/lib/documentation/x86/syscallBinding.ts`, which
+ * `src/lib/languages/mars/marsDisplay.ts`, the Synth's registers of
+ * `src/lib/languages/synthRegisters.ts` and the Input controller's of
+ * `src/lib/languages/inputControllerRegisters.ts`, which the Documentation's Syscalls, Screen,
+ * Synth and Input controller chapters are built from too; for x86, the bindings of `src/lib/documentation/x86/syscallBinding.ts`, which
  * its Syscalls chapter shows.
  */
-import { DEVICE_HELPERS, RGB_HELPER, SCREEN_MACRO, SYNTH_HELPERS } from './helpers.mjs'
+import {
+    DEVICE_HELPERS,
+    INPUT_HELPERS,
+    RGB_HELPER,
+    SCREEN_MACRO,
+    SYNTH_HELPERS
+} from './helpers.mjs'
 
 /** Where the committed headers live, relative to the repository. */
 export const SIM_HEADER_DIRECTORY = 'src/lib/sourceRuntime/generated/sim'
@@ -345,6 +352,71 @@ ${SYNTH_HELPERS.map((helper) => `/** ${helper.summary} */\nstatic inline ${proto
 }
 
 /**
+ * The Input controller: its registers as volatile words, field macros that cast to `unsigned` and
+ * mask, so they are right for an `int` and on RISC-V 64, the kinds, the two button encodings, the
+ * helpers, and a name for every key from its browser `KeyboardEvent.code`.
+ */
+function inputSection(input, target) {
+    const base = `${hex(input.base)}ul`
+    const register = (name, type) =>
+        `#define SIM_INPUT_${name} (*(volatile ${type} *)(SIM_INPUT_BASE + ${hex(input.offsets[name])}u))`
+    const define = (name, value) => `#define ${name} ${value}`
+    const shift = (name) => input.shifts[name]
+    return `/*
+ * The Input controller is an editor extension that reads the keyboard and the mouse: keys that type
+ * nothing such as the arrows, keys coming up, Shift and the other modifiers, the pointer, its buttons
+ * and the wheel. Its registers are memory from ${hex(input.base)}. Keys are USB HID usages, the
+ * physical key whatever the layout, named after the browser's KeyboardEvent.code: SIM_KEY_A,
+ * SIM_KEY_ARROW_LEFT, SIM_KEY_SHIFT_LEFT. Events wait in a queue of ${input.depth}; sleep between polls:
+ *
+ *     for (;;) {
+ *         while (sim_input_pending()) {
+ *             unsigned event = sim_input_event();
+ *             if (SIM_INPUT_KIND(event) == SIM_INPUT_KEY_DOWN && SIM_INPUT_CODE(event) == SIM_KEY_ESCAPE)
+ *                 return 0;
+ *         }
+ *         if (sim_input_key_down(SIM_KEY_ARROW_LEFT)) x--;
+ *         sim_sleep(16);
+ *     }
+ *
+ * The typed characters of sim_keyboard_read come from the same keys. ${target.simulator} does not
+ * provide this device: there its block reads 0, so sim_input_present() is 0 and no key is ever held.
+ * The Input controller chapter of the Documentation describes it.
+ */
+${define('SIM_INPUT_BASE', base)}
+${register('ID', 'unsigned')}
+${register('CONTROL', 'unsigned')}
+${register('STATUS', 'unsigned')}
+${register('EVENT', 'unsigned')}
+${register('POINTER', 'unsigned')}
+#define SIM_INPUT_KEYS ((volatile unsigned char *)(SIM_INPUT_BASE + ${hex(input.offsets.KEYS)}u))
+
+/* An event's fields, and the pointer register's: y and x in both, buttons held in the pointer. */
+#define SIM_INPUT_KIND(e) (((unsigned)(e) >> ${shift('kind')}) & ${hex(input.masks.kind)}u)
+#define SIM_INPUT_CODE(e) ((unsigned)(e) & ${hex(input.masks.code)}u)
+#define SIM_INPUT_X(v) (((unsigned)(v) >> ${shift('x')}) & ${hex(input.masks.coordinate)}u)
+#define SIM_INPUT_Y(v) (((unsigned)(v) >> ${shift('y')}) & ${hex(input.masks.coordinate)}u)
+#define SIM_INPUT_BUTTONS(v) ((unsigned)(v) & ${hex(input.masks.buttons)}u)
+/* A wheel event's code as a signed count of notches, positive away from the user. */
+#define SIM_INPUT_WHEEL_NOTCHES(e) ((int)(((unsigned)(e) & 0xffu) ^ 0x80u) - 0x80)
+
+/* SIM_INPUT_KIND's values. */
+${input.kinds
+    .filter((kind) => kind.value !== 0)
+    .map((kind) => define(`SIM_INPUT_${kind.name}`, `${kind.value}u`))
+    .join('\n')}
+
+/* A button event's code, and the pointer register's bit for a button held. */
+${input.buttons.map((button) => define(`SIM_INPUT_BUTTON_${button.name}`, `${button.code}u`)).join('\n')}
+${input.buttons.map((button) => define(`SIM_INPUT_HELD_${button.name}`, `${hex(button.held)}u`)).join('\n')}
+
+${INPUT_HELPERS.map((helper) => `/** ${helper.summary} */\nstatic inline ${prototypeOf(helper)} {\n    ${helper.body()}\n}`).join('\n\n')}
+
+/* Every key, by its HID usage. */
+${input.keys.map((key) => define(`SIM_KEY_${key.name}`, `${hex(key.usage)}u`)).join('\n')}`
+}
+
+/**
  * The whole header for one Target. Services marked not implemented are left out, as the
  * Documentation leaves them out: their functions arrive with the Core release that offers them.
  */
@@ -358,7 +430,7 @@ export function generateSimHeader(targetName, data) {
             : 'src/lib/documentation/mars/riscvSyscalls.ts'
     return `/*
  * <sim.h>: the Environment library of ${target.language}, one function for each ${target.simulator} service the
- * Documentation lists, the keyboard, display and bitmap display, and the Synth.
+ * Documentation lists, the keyboard, display and bitmap display, the Synth and the Input controller.
  *
  * Generated by scripts/sim-header/generate.mjs from ${source}
  * and ${target.simulator}'s device registers. Do not edit it: regenerate it.
@@ -388,6 +460,8 @@ ${deviceFunctions(data.devices, target.simulator)}
 ${screenSection(data.display, target)}
 
 ${synthSection(data.synth, target)}
+
+${inputSection(data.input, target)}
 
 #ifdef __cplusplus
 }

@@ -219,3 +219,30 @@ describe('mouse events as they happen', () => {
         expect(heard).toHaveLength(6)
     })
 })
+
+describe('the wheel', () => {
+    it('tells each turn in notches at the position, and changes no view or counter', () => {
+        const { mouse } = makeMouse(320, 200)
+        const turns: number[] = []
+        mouse.onWheel((notches) => turns.push(notches))
+        const events: string[] = []
+        mouse.onMouseEvent((event, button) => events.push(`${event} ${button ?? ''}`))
+        mouse.wheel(3, 10, 20)
+        mouse.wheel(-1)
+        mouse.wheel(0)
+        expect(turns).toEqual([3, -1])
+        expect([mouse.x, mouse.y]).toEqual([10, 20])
+        expect(mouse.eventCount).toBe(0)
+        expect(events).toEqual([])
+    })
+
+    it('names the button of each button event it tells', () => {
+        const { mouse } = makeMouse(320, 200)
+        const events: string[] = []
+        mouse.onMouseEvent((event, button) => events.push(`${event} ${button ?? '-'}`))
+        mouse.buttonDown('right', 1, 1)
+        mouse.moveTo(2, 2)
+        mouse.buttonUp('right')
+        expect(events).toEqual(['down right', 'move -', 'up right'])
+    })
+})

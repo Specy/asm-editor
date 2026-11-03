@@ -104,7 +104,7 @@ describe('the committed device files', () => {
 })
 
 describe('loading the device files', () => {
-    it('gives x86 its headers and include files, and other Targets nothing', async () => {
+    it('gives x86 its headers and include files, and MIPS and RISC-V theirs', async () => {
         const files = await loadEnvironmentFiles('X86')
         expect(files).toEqual(generated)
         expect(Object.keys(environmentHeaders(files))).toContain('linux/fb.h')
@@ -114,8 +114,16 @@ describe('loading the device files', () => {
         expect(Object.keys(environmentNasmIncludes(files))).toContain('linux/fb.inc')
         expect(loadedEnvironmentFile('X86', 'linux/fb.h')).toBe(generated['linux/fb.h'])
         expect(loadedEnvironmentFile('X86', 'missing.h')).toBeUndefined()
-        expect(await loadEnvironmentFiles('MIPS')).toEqual({})
+        //the folder calls' POSIX headers, the Runtime library's posix/include (ADR 0072)
+        const posix = JSON.parse(
+            readFileSync(join(runtimeRoot, 'generated/v1/posix-include.json'), 'utf8')
+        )
+        for (const target of ['MIPS', 'RISC-V', 'RISC-V-64'] as const)
+            expect(await loadEnvironmentFiles(target)).toEqual(posix)
+        expect(Object.keys(posix)).toEqual(expect.arrayContaining(['dirent.h', 'sys/stat.h']))
         expect(loadedEnvironmentFile('MIPS', 'linux/fb.h')).toBeUndefined()
+        expect(loadedEnvironmentFile('MIPS', 'dirent.h')).toBe(posix['dirent.h'])
+        expect(await loadEnvironmentFiles('M68K')).toEqual({})
     })
 
     it('shows each read-only under @runtime/include/', () => {

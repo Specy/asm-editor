@@ -233,6 +233,20 @@ Also every `PRI*` and `SCN*` macro for the exact, least, fast, `MAX` and `PTR` t
 | `errno` | own | `extern int errno;`, a plain global. Constants: `EPERM`, `ENOENT`, `ESRCH`, `EINTR`, `EIO`, `ENXIO`, `EBADF`, `EAGAIN` (also `EWOULDBLOCK`), `ENOMEM`, `EACCES`, `EFAULT`, `EBUSY`, `EEXIST`, `ENODEV`, `ENOTDIR`, `EISDIR`, `EINVAL`, `EMFILE`, `ENOTTY`, `EFBIG`, `ENOSPC`, `ESPIPE`, `EPIPE`, `EDOM`, `ERANGE`, `ENOSYS`, `EOVERFLOW`, `EILSEQ`, `EOPNOTSUPP` (also `ENOTSUP`), with Linux's values: the library sets only some of them, and x86's device calls return the rest. |
 | `assert` | musl `exit/assert.c` (`__assert_fail`) | Honours `NDEBUG` at each inclusion. A failure prints `Assertion failed: expr (file: function: line)` on stderr and aborts (status 134). Also `static_assert`. |
 
+## Folders on MIPS and RISC-V: `posix/`
+
+MIPS and RISC-V have their own headers, in `posix/include/`, searched before `include/` and uploaded as `sysroot/posix/include`: `<dirent.h>`, `<sys/stat.h>`, `<sys/types.h>` and `<unistd.h>`, and an `<errno.h>` and a `<stdio.h>` that `#include_next` the shared ones and add to them. Their members, in `posix/src/`, are built for those Targets only, over the folder calls ([ADR 0072](../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md)). x86 has the same functions as `static inline` calls in its own headers ([ADR 0070](../../docs/adr/0070-the-x86-runtime-library-offers-the-linux-device-interfaces.md)).
+
+| Header | Functions | Implementation | Notes |
+| --- | --- | --- | --- |
+| `<dirent.h>` | `opendir`, `readdir`, `closedir` | own | `opendir` asks `stat` first, since Open fails with only -1, then opens the folder for reading; `readdir` reads 2 KiB of `linux_dirent` records per getdents and copies each into the `DIR`'s own `struct dirent`. `.` and `..` come first. |
+| `<sys/stat.h>` | `stat`, `mkdir` | own | `struct stat` is Linux's: `struct stat64` on MIPS o32 and on RV32 (104 bytes), `struct stat` on RV64 (128). Only `st_mode`, `st_size`, `st_ino` and `st_nlink` carry anything. `mkdir` ignores the mode. `S_ISDIR` and the other macros, and the permission bits. |
+| `<unistd.h>` | `unlink`, `rmdir` | own | Also `STDIN_FILENO`, `STDOUT_FILENO`, `STDERR_FILENO`. |
+| `<stdio.h>` | `rename`, `remove` | own | `remove` unlinks, then removes the folder when the path is one, as glibc does. |
+| `<errno.h>` | | own | Adds `ENOTEMPTY` (39). |
+
+Each returns -1 (`opendir` and `readdir` NULL) and sets `errno` from the call's negative result. The folder semantics are the editor's Project's: a folder `mkdir` makes lasts for the run unless a File ends up in it, `rmdir` takes only an empty folder, a folder cannot be renamed (`EISDIR`), and a file renamed onto another replaces it, as on Linux. They have no corpus program: the corpus also runs natively and on x86, which compile against `include/` alone. The editor's tests run them on the Cores.
+
 ## Freestanding headers
 
 `<stddef.h>`, `<stdint.h>`, `<stdbool.h>`, `<stdarg.h>`, `<limits.h>`, `<float.h>`, `<iso646.h>` and `<stdnoreturn.h>` contain only types and macros, all derived from GCC's predefined macros (`__SIZE_TYPE__`, `__INT64_TYPE__`, `__INT_MAX__`, `__DBL_MANT_DIG__`, …), so the same file is right for ILP32 (RV32, MIPS) and LP64 (RV64). `va_list` and the `va_*` macros use GCC's builtins. `max_align_t` includes `long double` to match compiler fundamental alignment, even though long-double arithmetic is unsupported.

@@ -61,6 +61,19 @@ export const SYSROOT_INCLUDE = 'sysroot/include'
  */
 export const X86_SYSROOT_INCLUDE = 'sysroot/x86_64/include'
 /**
+ * Where MIPS and RISC-V's own system headers are uploaded, searched before the Runtime library's
+ * as x86's are: the folder calls' `<dirent.h>`, `<sys/stat.h>` and `<unistd.h>`, and the `<errno.h>`
+ * and `<stdio.h>` that add to the Runtime library's
+ * ([ADR 0072](../../../../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md)).
+ * The Runtime library's own build uploads them under the same name.
+ */
+export const POSIX_SYSROOT_INCLUDE = 'sysroot/posix/include'
+
+/** Where a Target's own system headers go: x86's, or MIPS and RISC-V's. */
+export function targetSysrootInclude(target: CompilationTarget): string {
+    return target === 'X86' ? X86_SYSROOT_INCLUDE : POSIX_SYSROOT_INCLUDE
+}
+/**
  * Sources a compilation reads that are no Project File, by the path the editor shows them at:
  * `<sim.h>` as `@runtime/include/sim.h`, x86's `<unistd.h>` as `@runtime/include/unistd.h`. A
  * Source map may name them, a Compilation record never.
@@ -166,12 +179,13 @@ function projectPath(
         readOnly[ENVIRONMENT_HEADER_PATH] !== undefined
     )
         return ENVIRONMENT_HEADER_PATH
-    //any of x86's own headers; of the shared directory only `<sim.h>`, since its `<time.h>` is not
-    //the one shown at `@runtime/include/time.h`
-    if (relative.startsWith(`${X86_SYSROOT_INCLUDE}/`)) {
-        const shown = environmentFilePath(relative.slice(X86_SYSROOT_INCLUDE.length + 1))
-        if (readOnly[shown] !== undefined) return shown
-    }
+    //any of the Target's own headers; of the shared directory only `<sim.h>`, since its `<time.h>`
+    //is not the one shown at `@runtime/include/time.h`
+    for (const directory of [X86_SYSROOT_INCLUDE, POSIX_SYSROOT_INCLUDE])
+        if (relative.startsWith(`${directory}/`)) {
+            const shown = environmentFilePath(relative.slice(directory.length + 1))
+            if (readOnly[shown] !== undefined) return shown
+        }
     return isValidFilePath(relative) && files[relative] ? relative : undefined
 }
 
@@ -288,8 +302,9 @@ function compilerDiagnostics(
  * The Compiler Explorer request. A program is hosted: it compiles with `-nostdinc` against the
  * Runtime library's headers, uploaded as `sysroot/include`, so an unsupported header is a clear
  * error and no toolchain header leaks in, and `main` keeps its name and its implicit `return 0`.
- * The caller adds the Target's `<sim.h>` to the sysroot and gives x86's own headers as
- * `targetSysroot`, uploaded as `sysroot/x86_64/include` and searched first (`compileSource` does).
+ * The caller adds the Target's `<sim.h>` to the sysroot and gives the Target's own headers as
+ * `targetSysroot`, uploaded as `sysroot/x86_64/include` for x86 and `sysroot/posix/include` for
+ * MIPS and RISC-V and searched first (`compileSource` does).
  * Project Files are found by quoted includes only (`-iquote`, from the source's directory and from
  * the Project root), so a Project's `stdio.h` or `sim.h` never shadows `<stdio.h>` or `<sim.h>`.
  * x86 uses the same Runtime ABI headers, translating GCC's output to NASM with its pinned profile.
@@ -334,9 +349,8 @@ export function createCompilerRequest(
         contents: `#line 1 ${JSON.stringify(path)}\n${content}`
     })
     const quoteDirectory = directory === '.' ? projectDirectory : `${projectDirectory}/${directory}`
-    const targetInclude = Object.keys(targetSysroot).length
-        ? `-isystem ${X86_SYSROOT_INCLUDE} `
-        : ''
+    const targetDirectory = targetSysrootInclude(request.target)
+    const targetInclude = Object.keys(targetSysroot).length ? `-isystem ${targetDirectory} ` : ''
     const userArguments = `${common} -nostdinc ${targetInclude}-isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(quoteDirectory)} -iquote ${projectDirectory} -include ${quote(`${projectDirectory}/${request.sourcePath}`)} ${standard}`
     const body = {
         source: '/* The program is uploaded at its Project path and read through -include. */\n',
@@ -362,7 +376,7 @@ export function createCompilerRequest(
                 contents
             })),
             ...Object.entries(targetSysroot).map(([path, contents]) => ({
-                filename: `${X86_SYSROOT_INCLUDE}/${path}`,
+                filename: `${targetDirectory}/${path}`,
                 contents
             }))
         ]
@@ -657,7 +671,8 @@ export async function compileSource(
         environment === undefined
             ? runtimeHeaders
             : { ...runtimeHeaders, [ENVIRONMENT_HEADER]: environment }
-    //x86's device headers, in a directory of their own searched first; empty for other Targets
+    //the Target's own headers, in a directory of their own searched first: x86's device headers,
+    //or MIPS and RISC-V's folder calls
     const targetHeaders = environmentHeaders(await loadEnvironmentFiles(request.target))
     const readOnly: ReadOnlySources = {
         ...(environment === undefined ? {} : { [ENVIRONMENT_HEADER_PATH]: environment }),

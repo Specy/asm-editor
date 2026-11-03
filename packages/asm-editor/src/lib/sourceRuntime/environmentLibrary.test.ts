@@ -68,6 +68,7 @@ import {
     SYNTH_WAVETABLE_SIZE,
     SYNTH_WAVETABLES
 } from '#lib/languages/synthRegisters.ts'
+import { inputHeaderData } from '#lib/languages/inputControllerRegisters.ts'
 const address = (label: string) =>
     MARS_BASE_ADDRESS_CHOICES.find((choice) => choice.label === label)!.address
 const DATA: Omit<SimHeaderData, 'syscalls'> = {
@@ -99,7 +100,8 @@ const DATA: Omit<SimHeaderData, 'syscalls'> = {
         wavetableSize: SYNTH_WAVETABLE_SIZE,
         gate: SYNTH_GATE,
         loop: SYNTH_LOOP
-    }
+    },
+    input: inputHeaderData()
 }
 const TARGETS = Object.keys(SIM_HEADER_TARGETS) as SimHeaderTargetName[]
 const syscallsOf = (target: SimHeaderTargetName): Record<number, MarsSyscall> =>
@@ -112,8 +114,9 @@ describe('the committed headers', () => {
     it.each(TARGETS)('%s.h is what the data generates', (target) => {
         const text = generateSimHeader(target, { ...DATA, syscalls: syscallsOf(target) })
         expect(committed(target), `run node scripts/sim-header/generate.mjs`).toBe(text)
-        //uploaded with every compile, whose request may not pass 1 MiB
-        expect(new TextEncoder().encode(text).length).toBeLessThan(32 * 1024)
+        //uploaded with every compile, whose request may not pass 1 MiB; the Input controller's
+        //key names are most of what took it past 32 KB
+        expect(new TextEncoder().encode(text).length).toBeLessThan(40 * 1024)
     })
 
     it('x86_64.h is what the x86 syscall table generates', () => {

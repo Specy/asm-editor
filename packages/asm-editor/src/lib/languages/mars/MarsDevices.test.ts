@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test'
 import { ExecutionController } from '#lib/languages/ExecutionController.ts'
 import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import { Mouse } from '#lib/languages/peripherals/Mouse.ts'
+import {
+    INPUT_BASE,
+    INPUT_EVENT,
+    INPUT_KEYS,
+    INPUT_POINTER,
+    INPUT_STATUS
+} from '#lib/languages/inputControllerRegisters.ts'
 import { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
 import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import {
@@ -349,6 +357,7 @@ it('reports the fixed MMIO block and the bitmap bounds after its geometry moves'
     const { devices } = makeDevices()
     expect(devices.regions()).toEqual([
         { name: 'MMIO', start: 0xffff0000n, end: 0xffff0010n },
+        { name: 'Input controller', start: 0xffff0300n, end: 0xffff0340n },
         {
             name: 'Bitmap display',
             start: BigInt(SMALL.baseAddress),
@@ -356,9 +365,162 @@ it('reports the fixed MMIO block and the bitmap bounds after its geometry moves'
         }
     ])
     devices.setDisplay({ ...SMALL, baseAddress: 0x10020000, width: 128 })
-    expect(devices.regions()[1]).toEqual({
+    expect(devices.regions()[2]).toEqual({
         name: 'Bitmap display',
         start: 0x10020000n,
         end: 0x10020200n
+    })
+})
+
+/**
+ * The Input controller as the devices feed it: the Keyboard's physical keys and the Mouse's
+ * buttons, moves and wheel, focus loss, the gate the adapter holds, and the display covering it.
+ */
+describe('the Input controller, fed by the Keyboard and the Mouse', () => {
+    function makeInput(options: { open?: boolean; display?: typeof SMALL } = {}) {
+        const words = new Map<number, number>()
+        const reads = new Map<number, AccessObserver>()
+        const ranges: [number, number, (address: number, length: number, value: number) => void][] =
+            []
+        let nextHandle = 1
+        const core: MarsCore = {
+            readMemoryBytes: (address, length) => {
+                const word = words.get(((address >>> 0) & ~3) >>> 0) ?? 0
+                return Array.from({ length }, (_, i) => (word >>> (((address + i) & 3) * 8)) & 0xff)
+            },
+            setPeripheralWord: (address, value) => words.set(address >>> 0, value),
+            addMemoryWriteObserver: (start, end, handler) => {
+                ranges.push([start >>> 0, end >>> 0, handler])
+                return nextHandle++
+            },
+            addMemoryAccessObserver: (address, onRead) => {
+                if (onRead) reads.set(address >>> 0, onRead)
+                return nextHandle++
+            },
+            removeMemoryObserver: () => {}
+        }
+        let open = options.open ?? true
+        const screen = new Screen({ width: 64, height: 64 })
+        const keyboard = new Keyboard()
+        const mouse = new Mouse({ screen, keyboard })
+        const { terminal } = makeTerminal()
+        const devices = new MarsDevices({
+            screen,
+            keyboard,
+            terminal,
+            mouse,
+            inputOpen: () => open
+        })
+        devices.attach(core, options.display ?? SMALL)
+        const word = (offset: number) => (words.get((INPUT_BASE + offset) >>> 0) ?? 0) >>> 0
+        return {
+            core,
+            devices,
+            keyboard,
+            mouse,
+            word,
+            setOpen: (value: boolean) => (open = value),
+            read: () => {
+                const value = word(INPUT_EVENT)
+                reads.get((INPUT_BASE + INPUT_EVENT) >>> 0)?.(INPUT_BASE + INPUT_EVENT, value)
+                return value
+            },
+            /** A program store into the block, as the range observer hears it. */
+            store: (offset: number, value: number) => {
+                const address = (INPUT_BASE + offset) >>> 0
+                words.set(address, value)
+                for (const [start, end, handler] of ranges)
+                    if (address >= start && address <= end + 3) handler(address | 0, 4, value)
+            }
+        }
+    }
+    const kinds = (records: readonly number[]) => records.map((record) => (record >>> 8) & 7)
+    const codes = (records: readonly number[]) => records.map((record) => record & 0xff)
+    const key = (code: string, repeat = false) => ({ code, key: code, repeat })
+
+    it('reports every physical key, including those EASy68K has no code for', () => {
+        const { devices, keyboard } = makeInput()
+        keyboard.keyDown(key('IntlBackslash'))
+        keyboard.keyDown(key('ShiftRight'))
+        keyboard.keyUp(key('ShiftRight'))
+        expect(codes(devices.input.pending)).toEqual([0x64, 0xe5, 0xe5])
+        expect(kinds(devices.input.pending)).toEqual([1, 1, 2])
+        //the Keyboard's own state is EASy68K's, unchanged: one Shift for both
+        expect(keyboard.lastKeys()).toEqual({ down: 0x10, up: 0x10 })
+    })
+
+    it('counts a repeat of a key it never saw go down as a key down, and ignores a stray key-up', () => {
+        const { devices, keyboard, setOpen } = makeInput({ open: false })
+        keyboard.keyDown(key('ArrowRight'))
+        setOpen(true)
+        keyboard.keyUp(key('KeyZ'))
+        keyboard.keyDown(key('ArrowRight', true))
+        keyboard.keyDown(key('ArrowRight', true))
+        expect(kinds(devices.input.pending)).toEqual([1, 3])
+    })
+
+    it('releases every held key and button with an ordinary up when the Screen loses focus', () => {
+        const { devices, keyboard, mouse, word } = makeInput()
+        keyboard.keyDown(key('KeyW'))
+        keyboard.keyDown(key('AltRight'))
+        mouse.buttonDown('right', 4, 5)
+        keyboard.releaseAll()
+        mouse.releaseAll()
+        expect(kinds(devices.input.pending)).toEqual([1, 1, 4, 2, 2, 5])
+        expect(codes(devices.input.pending).slice(3)).toEqual([0x1a, 0xe6, 2])
+        for (let offset = INPUT_KEYS; offset < 0x40; offset += 4) expect(word(offset)).toBe(0)
+        expect(word(INPUT_POINTER) & 7).toBe(0)
+    })
+
+    it('takes the pointer and the buttons from the Mouse, and the wheel at its position', () => {
+        const { devices, mouse, word, read } = makeInput()
+        //the Screen is 8 by 8 logical pixels here, and the Mouse clamps to it
+        mouse.moveTo(3, 4)
+        expect(word(INPUT_POINTER)).toBe((4 << 21) | (3 << 11))
+        mouse.buttonDown('middle', 6, 2)
+        expect(word(INPUT_POINTER)).toBe((2 << 21) | (6 << 11) | 4)
+        mouse.wheel(2, 20, 20)
+        expect(word(INPUT_STATUS)).toBe(2)
+        expect(read()).toBe((2 << 21) | (6 << 11) | (4 << 8) | 3)
+        expect(read()).toBe((7 << 21) | (7 << 11) | (6 << 8) | 2)
+        expect(devices.input.pending).toEqual([])
+    })
+
+    it('hears nothing while the adapter says the program takes no input', () => {
+        const { devices, keyboard, mouse, word } = makeInput({ open: false })
+        keyboard.keyDown(key('KeyA'))
+        mouse.moveTo(3, 3)
+        mouse.buttonDown('left')
+        mouse.wheel(1)
+        expect(devices.input.pending).toEqual([])
+        expect(word(INPUT_POINTER)).toBe(0)
+    })
+
+    it('is off while the display covers its block, and leaves its words to the display', () => {
+        const covering = { ...SMALL, baseAddress: 0xffff0000, width: 512, height: 512 }
+        const { devices, keyboard, word, store } = makeInput({ display: covering })
+        expect(devices.regions().map((region) => region.name)).not.toContain('Input controller')
+        keyboard.keyDown(key('KeyA'))
+        //a pixel, which a store sets and the device leaves alone
+        expect(word(0)).toBe(0)
+        store(INPUT_STATUS, 0xff0000)
+        expect(word(INPUT_STATUS)).toBe(0xff0000)
+        devices.setDisplay(SMALL)
+        expect(word(0)).toBe(0x494e5001)
+        expect(word(INPUT_STATUS)).toBe(1)
+    })
+
+    it('answers only for the devices that last attached to the Core’s memory', () => {
+        //every Core of a package shares one memory, so an Emulator never disposed still hears
+        //the program another one runs: it must not state its own registers over the live ones
+        const stale = makeInput()
+        const live = makeInput()
+        //the same class of Core, as two JsMips are
+        Object.setPrototypeOf(stale.core, Object.getPrototypeOf(live.core))
+        live.devices.attach(live.core, SMALL)
+        live.keyboard.keyDown(key('KeyA'))
+        stale.keyboard.keyDown(key('KeyB'))
+        expect(live.word(INPUT_STATUS)).toBe(1)
+        expect(stale.word(INPUT_STATUS)).toBe(0)
     })
 })

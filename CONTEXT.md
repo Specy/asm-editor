@@ -324,7 +324,7 @@ The path of a **Program**'s **Entry file**, from which its Build begins; a new P
 
 ## Entry file
 
-The **File** found at a **Program**'s **Entry path**, when it exists, from which that Program's Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing, and the Build button reads Debug.
+The **File** found at a **Program**'s **Entry path**, when it exists, from which that Program's Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). MIPS and RISC-V do the same with the Project's other **Generated assembly** when the Build assembles with the GNU profile, as it does for compiled C and C++: each unit is checked, and linked as the program's own code only when it defines a symbol the program needs. A hand-written Entry in the MARS or RARS dialect links its includes alone. When the Entry file is an **Executable**, a Build loads it and assembles nothing, and the Build button reads Debug.
 _Avoid_: main file, active file, selected file, open file
 
 ## Executable

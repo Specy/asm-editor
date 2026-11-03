@@ -8,6 +8,10 @@ import {
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { X86Emulator } from './X86Emulator.svelte'
 import { X86_START_UNIT_FILES, X86_START_UNIT_PATH } from './x86StartUnit'
+import { makeProject } from '#lib/Project.svelte.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
+import { fileFingerprint } from '#lib/sourceCompilation/fingerprints.ts'
+import type { CompilationRecord } from '#lib/sourceCompilation/records.ts'
 
 describe('x86 source set', () => {
     it('builds a %include and reports the included execution location', async () => {
@@ -1244,6 +1248,74 @@ describe('x86 start unit', () => {
         }
     })
 
+    it('builds each Program of a Project whose two compiled Programs both define main', async () => {
+        //Generated assembly of two C programs, each with its own `main` and a `twice` of its own
+        const compiled = (argument: number) =>
+            [
+                '    global main',
+                '    global twice',
+                '    section .text',
+                'twice:',
+                '    lea eax, [rdi + rdi]',
+                '    ret',
+                'main:',
+                `    mov edi, ${argument}`,
+                '    call twice',
+                '    ret'
+            ].join('\n')
+        const plain = (content: string) => ({ encoding: 'plain' as const, content })
+        const files = {
+            'a.c': plain(
+                'int twice(int x) { return x + x; }\nint main(void) { return twice(3); }\n'
+            ),
+            'a.c.asm': plain(compiled(3)),
+            'b.c': plain(
+                'int twice(int x) { return x + x; }\nint main(void) { return twice(5); }\n'
+            ),
+            'b.c.asm': plain(compiled(5)),
+            'main.asm': plain(HAND_WRITTEN_START)
+        }
+        const compilations: CompilationRecord[] = ['a', 'b'].map((name) => ({
+            sourcePath: `${name}.c`,
+            outputPath: `${name}.c.asm`,
+            target: 'X86',
+            language: 'c',
+            compilerId: 'cg142',
+            optimization: '0',
+            inputs: { [`${name}.c`]: fileFingerprint(files[`${name}.c` as 'a.c'])! },
+            outputFingerprint: fileFingerprint(files[`${name}.c.asm` as 'a.c.asm'])!
+        }))
+        const project = makeProject({ language: 'X86', files, entry: 'a.c.asm', compilations })
+        project.createProgram('b.c.asm')
+        project.createProgram('main.asm')
+        const programs = [
+            ['a.c.asm', 6n],
+            ['b.c.asm', 10n],
+            ['main.asm', 0n]
+        ] as const
+        for (const [entry, result] of programs) {
+            const sources = programBuildSources(project, entry)
+            const emulator = await X86Emulator(sources, { automaticChecking: false })
+            try {
+                expect(await emulator.check()).toEqual([])
+                await emulator.compile(20, sources)
+                expect(emulator.compilerErrors).toEqual([])
+                //the other Programs' Files are left out, as `ld` leaves out what nothing needs
+                expect(
+                    emulator.compilerDiagnostics
+                        .filter((d) => d.code === 'not-linked')
+                        .map((d) => d.file)
+                        .sort()
+                ).toEqual(programs.map(([other]) => other).filter((other) => other !== entry))
+                await emulator.run(100_000)
+                expect(emulator.terminated).toBe(true)
+                expect(cpuRegister(emulator, 'rdi')).toBe(result)
+            } finally {
+                emulator.dispose()
+            }
+        }
+    })
+
     it('explains a second _start or main that comes with a File the program uses', async () => {
         const callsHelper = [
             '    global main',
@@ -1312,16 +1384,35 @@ describe('x86 start unit', () => {
                     hint: expect.stringContaining('`@runtime/start.asm`, which defines `_start`')
                 })
             )
+            //a check, which links nothing, puts it on each File the link would take
+            emulator.setSources(twoMains)
+            expect(await emulator.check()).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        file: 'a.c.asm',
+                        message: "multiple definition of 'main'; also defined in b.c.asm",
+                        hint: expect.stringContaining('Only one File linked into a program')
+                    }),
+                    expect.objectContaining({
+                        file: 'b.c.asm',
+                        message: "multiple definition of 'main'; also defined in a.c.asm"
+                    })
+                ])
+            )
+            //a Build reports `ld`'s words, on the File the link took second, naming the first
             await expect(emulator.compile(20, twoMains)).rejects.toThrow()
             expect(emulator.compilerErrors).toContainEqual(
                 expect.objectContaining({
-                    message: expect.stringContaining("multiple definition of 'main'"),
+                    file: 'b.c.asm',
+                    message: expect.stringContaining(
+                        "multiple definition of `main'; first defined in a.c.asm"
+                    ),
                     hint: expect.stringContaining('Only one File linked into a program')
                 })
             )
             await expect(emulator.compile(20, twoStarts)).rejects.toThrow()
             const [error] = emulator.compilerErrors
-            expect(error?.message).toContain("multiple definition of '_start'")
+            expect(error?.message).toContain("multiple definition of `_start'")
             expect(error?.hint).toBeUndefined()
         } finally {
             emulator.dispose()

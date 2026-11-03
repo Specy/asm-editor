@@ -810,6 +810,13 @@ export type BuildConfiguration = Readonly<{
     entrySymbol?: string
     /** x86 compiler support archive; startup is selected only for a compiled Entry. */
     x86Support?: boolean
+    /**
+     * The Project's other GNU-profile units a MIPS or RISC-V Build takes as an archive's members,
+     * by path in path order: the Core links one only when it defines a global the program still
+     * needs ([ADR 0033](../../../../docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md),
+     * 2026-11-03 note). Absent when there are none.
+     */
+    linkUnits?: readonly string[]
     /** Generated assembly path to the source language that produced it. */
     compiledLanguages?: Readonly<
         Record<string, import('./sourceCompilation/records').SourceLanguage>
@@ -830,6 +837,7 @@ const BUILD_CONFIGURATION_KEYS: Record<keyof Required<BuildConfiguration>, true>
     runtimeAbi: true,
     entrySymbol: true,
     x86Support: true,
+    linkUnits: true,
     compiledLanguages: true,
     entrySource: true
 }
@@ -841,11 +849,17 @@ export function buildConfiguration(sources: BuildConfiguration): BuildConfigurat
     }
     if (sources.compiledLanguages)
         configuration.compiledLanguages = Object.freeze({ ...sources.compiledLanguages })
+    if (sources.linkUnits) configuration.linkUnits = Object.freeze([...sources.linkUnits])
     return Object.freeze(configuration) as BuildConfiguration
 }
 
 export function buildConfigurationsEqual(left: BuildConfiguration, right: BuildConfiguration) {
     return (Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]).every((key) => {
+        if (key === 'linkUnits') {
+            const a = left.linkUnits ?? []
+            const b = right.linkUnits ?? []
+            return a.length === b.length && a.every((path, index) => path === b[index])
+        }
         if (key !== 'compiledLanguages') return left[key] === right[key]
         const a = left.compiledLanguages ?? {}
         const b = right.compiledLanguages ?? {}
@@ -861,15 +875,20 @@ export function buildConfigurationsEqual(left: BuildConfiguration, right: BuildC
  * equal, for a saved record to keep in place of the configuration.
  */
 export function buildConfigurationKey(configuration: BuildConfiguration): string {
-    return JSON.stringify(
-        (Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]).map((key) => {
+    const values: unknown[] = (
+        Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]
+    )
+        //named last, and only when there are any, so a key saved before them names the same
+        .filter((key) => key !== 'linkUnits')
+        .map((key) => {
             if (key !== 'compiledLanguages') return configuration[key] ?? null
             const languages = configuration.compiledLanguages ?? {}
             return Object.keys(languages)
                 .sort()
                 .map((path) => [path, languages[path]])
         })
-    )
+    if (configuration.linkUnits?.length) values.push([...configuration.linkUnits])
+    return JSON.stringify(values)
 }
 
 export function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
@@ -925,6 +944,15 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
         }
         if (hasOwn(input, 'x86Support') && typeof input.x86Support !== 'boolean')
             throw new ProjectFormatError('Invalid x86 compiler support setting')
+        if (
+            hasOwn(input, 'linkUnits') &&
+            (!Array.isArray(input.linkUnits) ||
+                input.linkUnits.some(
+                    (path) =>
+                        typeof path !== 'string' || !isValidFilePath(path) || path === input.entry
+                ))
+        )
+            throw new ProjectFormatError('Invalid linked units')
         if (
             hasOwn(input, 'compiledLanguages') &&
             (!input.compiledLanguages ||
