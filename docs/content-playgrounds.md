@@ -40,7 +40,8 @@ Project's `{ encoding: "plain", content: "..." }` file records. `language` still
 target. Legacy `code` URLs remain supported. The `playgroundProgram.ts` codec validates the payload
 and preserves compilation provenance when generating another embed URL.
 
-The content verifier builds named assembly programs offline. To also compile and run C/C++ course
-examples, run `ASM_EDITOR_CONTENT_COMPILE=1 npx vitest run packages/asm-editor/src/lib/content/content.test.ts` with
+The content verifier (`src/lib/content/contentSuite.ts`, run by one `content.<folder>.test.ts` per
+course folder) builds named assembly programs offline. To also compile and run C/C++ course
+examples, run `ASM_EDITOR_CONTENT_COMPILE=1 npx vitest run packages/asm-editor/src/lib/content/content.` with
 Compiler Explorer reachable. Parser, renderer, and compilation lifecycle tests remain offline,
 using recorded compiler responses.

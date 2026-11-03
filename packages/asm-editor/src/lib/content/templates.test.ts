@@ -8,7 +8,7 @@ import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 /**
  * Every program the create page offers, built and run against the real Cores.
  *
- * The Course Examples behind most of these are already gated by `content/content.test.ts`, but not
+ * The Course Examples behind most of these are already gated by `content/contentSuite.ts`, but not
  * as templates: this is what catches a `template` key on a page whose first fence is in another
  * language, an RV32 program offered to RISC-V-64 that does not assemble as RV64, and the hand
  * written x86 set, which has no Course and so no other cover.

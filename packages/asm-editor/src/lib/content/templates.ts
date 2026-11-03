@@ -9,7 +9,7 @@ import type { AvailableLanguages } from '#lib/Project.svelte.ts'
  *
  * These are not a second copy of the course examples, they are the course examples: an Example whose
  * `meta.json` carries a `template` key is offered here, and its code is the first playground fence
- * of its page. That matters because `content/content.test.ts` already builds and runs every fence
+ * of its page. That matters because `content/contentSuite.ts` already builds and runs every fence
  * against the real Cores, so a template cannot rot without the suite saying so, and a reader who
  * picks one and then finds the lecture reads the same program twice rather than two that disagree.
  *
