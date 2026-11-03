@@ -96,6 +96,18 @@ pnpm dev # builds the emulators, then runs the dev server
 
 The first run builds the emulators from source, which takes a few minutes, they are cached for next builds unless the emulator source is changed.
 
+## Checking a change
+
+While working, check only the files that differ from `main`, committed or not:
+
+```bash
+pnpm changed # formats them, lints them and runs the tests that import them
+pnpm test:changed # one step: format:changed, lint:changed or test:changed
+pnpm changed --since HEAD # only what is not committed yet
+```
+
+Before a change is done, run the whole checks, as CI does: `pnpm format:check`, `pnpm lint`, `pnpm check` and `pnpm test`.
+
 ## Repository layout
 
 The repository is a pnpm workspace:
