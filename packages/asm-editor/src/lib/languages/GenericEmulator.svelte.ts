@@ -1922,6 +1922,8 @@ export abstract class GenericEmulator<T, R extends string>
         //stopping on it again for ever (`skipBreakpointAtPc`)
         let firstSlice = options.skipBreakpointAtStart ?? true
         let startsRun = true
+        //when the host last had a turn, which a virtual clock's waits are measured against (below)
+        let yieldedAt = performance.now()
         while (remaining > 0) {
             //the slice boundary is the only place a pause can be taken: a slice is the Core running,
             //and nothing here can interrupt it once it has started
@@ -1981,9 +1983,22 @@ export abstract class GenericEmulator<T, R extends string>
                 //a wait is not execution: it costs no instructions and the run continues after it.
                 //`clear()` resets the clock, which resolves pending waits, and the generation check
                 //that follows turns the resumed run into a superseded one. A wait without a promise
-                //is a bare yield, so the loop can never spin without giving the host a turn
+                //is a bare yield, so the loop can never spin without giving the host a turn.
+                //A virtual clock's wait is over as soon as it is asked for, though, and a bare yield
+                //after each one cost a program that sleeps every few instructions a host turn per
+                //sleep for nothing: a timer under node, about a millisecond, which was 17 of the
+                //18 seconds a 200 000 instruction animation took. Those yield once a slice budget
+                //has gone by instead, as a compute run does
+                if (
+                    slice.wait === undefined &&
+                    clock.isVirtual &&
+                    performance.now() - yieldedAt < targetMs
+                ) {
+                    continue
+                }
                 const wait = slice.wait ?? yieldToHost()
                 await this.executionController.waitFor(execution, () => wait)
+                yieldedAt = performance.now()
                 continue
             }
             if (slice.reason !== 'budget') return 'stopped'
@@ -1992,6 +2007,7 @@ export abstract class GenericEmulator<T, R extends string>
             //forever, so the run ends instead of hanging the host
             if (progress <= 0) return 'stopped'
             await this.executionController.waitFor(execution, () => yieldToHost())
+            yieldedAt = performance.now()
         }
         return 'limit'
     }
