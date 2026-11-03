@@ -57,11 +57,11 @@ The Cores link with `ld` semantics ([ADR 0030](../../docs/adr/0030-cores-resolve
 ## Editor assets and the Cores
 
 ```
-node scripts/build.mjs [--target riscv32,riscv64,mips,x86_64] [--offline] [--update-abi]
-node scripts/test-cores.mjs [--target riscv32,riscv64,mips,x86_64] [--only name,...] [--optimization 0,2]
+node scripts/build.mjs [--target riscv32,riscv64,mips,x86_64] [--offline] [--plan] [--update-abi]
+node scripts/test-cores.mjs [--target riscv32,riscv64,mips,x86_64] [--only name,...] [--optimization 0,2] [--offline]
 ```
 
-`scripts/build.mjs` compiles every member through Compiler Explorer (cached under `runtime/.cache/`, so `--offline` rebuilds without network), checks each with the Core that will link it, and writes the editor's assets to `generated/v1/`. It fails when two members define one strong global, when a documented function has no member, or when an export or a struct layout of `abi/layout.c` differs from the baseline `abi/v1.json`. `scripts/test-cores.mjs` compiles every corpus program as the editor does, links it with those assets on the RARS, MARS and x86 Cores, runs it with tty standard input and an in-memory FileSystem, and compares the result with `tests/expected/`.
+`scripts/build.mjs` compiles every member through Compiler Explorer (cached under `runtime/.cache/`, so `--offline` rebuilds without network), checks each with the Core that will link it, and writes the editor's assets to `generated/v1/`. A member whose source and included headers are unchanged since the committed assets were built is taken from them instead, so only the members a change reaches are compiled; `--plan` lists the requests a build would send, and sends none. It fails when two members define one strong global, when a documented function has no member, or when an export or a struct layout of `abi/layout.c` (and, on MIPS and RISC-V, `abi/posix-layout.c`) differs from the baseline `abi/v1.json`. `scripts/test-cores.mjs` compiles every corpus program as the editor does, links it with those assets on the RARS, MARS and x86 Cores, runs it with tty standard input and an in-memory FileSystem, and compares the result with `tests/expected/`. Each compile uploads only the headers its program includes, so its cached answer (`.cache/corpus/`) stays valid until one of those headers changes.
 
 ## Native tests
 

@@ -1,9 +1,14 @@
 import { PUBLIC_ENTRIES } from './publicEntries.mjs'
 import { parametersOf } from './declarations.mjs'
 
-/** Generates only public help data from committed declarations, without filesystem or compiler work. */
+/**
+ * Generates only public help data from committed declarations, without filesystem or compiler work.
+ * Functions only some Targets have (`targets`, MIPS and RISC-V's folder functions) are left to those
+ * Targets' own catalogs, which scripts/sim-header writes from the same headers.
+ */
 export function runtimeHelpCatalog(headers, functions) {
-    const entries = functions.functions.map(({ name, header, prototype, doc }) => ({
+    const shared = functions.functions.filter((entry) => !entry.targets)
+    const entries = shared.map(({ name, header, prototype, doc }) => ({
         name,
         kind: 'function',
         declaration: prototype,

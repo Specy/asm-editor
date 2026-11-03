@@ -8,6 +8,7 @@ import { cleanProjectSettings, resolveProjectSettings } from '#lib/projectSettin
 import { normalizeBuildInput, ProjectFormatError, type BuildSources } from '#lib/projectFiles.ts'
 import { unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import {
+    runtimeFunctionOn,
     runtimeLibraryHint,
     unresolvedSymbol,
     type RuntimeFunctionList,
@@ -127,6 +128,13 @@ describe('library hints and documentation', () => {
                 header: 'stdio.h',
                 prototype: 'int printf(const char *format, ...)',
                 doc: 'Prints formatted text to standard output.'
+            },
+            {
+                name: 'rmdir',
+                header: 'unistd.h',
+                prototype: 'int rmdir(const char *path)',
+                doc: 'Deletes the folder at path when it is empty.',
+                targets: ['mips', 'riscv32', 'riscv64']
             }
         ]
     }
@@ -135,11 +143,21 @@ describe('library hints and documentation', () => {
         expect(unresolvedSymbol('Unresolved symbol: printf')).toBe('printf')
         expect(unresolvedSymbol('Symbol "printf" not found in symbol table.')).toBe('printf')
         expect(unresolvedSymbol("undefined reference to `printf'")).toBe('printf')
-        expect(runtimeLibraryHint('Unresolved symbol: printf', list)).toMatch(
+        expect(runtimeLibraryHint('Unresolved symbol: printf', list, 'RISC-V')).toMatch(
             /Link Runtime library/
         )
-        expect(runtimeLibraryHint('Unresolved symbol: mine', list)).toBeUndefined()
-        expect(runtimeLibraryHint('Unresolved symbol: printf', undefined)).toBeUndefined()
+        expect(runtimeLibraryHint('Unresolved symbol: mine', list, 'RISC-V')).toBeUndefined()
+        expect(runtimeLibraryHint('Unresolved symbol: printf', undefined, 'X86')).toBeUndefined()
+    })
+
+    it('offers a function only on the Targets it exists on', () => {
+        expect(runtimeLibraryHint('Unresolved symbol: rmdir', list, 'RISC-V-64')).toMatch(
+            /Link Runtime library/
+        )
+        expect(runtimeLibraryHint("undefined reference to `rmdir'", list, 'X86')).toBeUndefined()
+        expect(runtimeFunctionOn(list.functions[0], 'X86')).toBe(true)
+        expect(runtimeFunctionOn(list.functions[1], 'MIPS')).toBe(true)
+        expect(runtimeFunctionOn(list.functions[1], 'X86')).toBe(false)
     })
 
     it('summarizes the RISC-V calling convention from the prototype', () => {

@@ -235,7 +235,7 @@ export function createX86CompletionProvider(
             const labels = labelsIn(model.getValue())
             //the Runtime library's functions, when the Build links it
             const libraryFunctions = () =>
-                runtimeFunctionsForModel(model)
+                runtimeFunctionsForModel(model, 'X86')
                     .filter(
                         (entry) =>
                             entry.name.toLowerCase().startsWith(typed) &&
@@ -378,7 +378,7 @@ export function createX86HoverProvider(monacoInstance: MonacoType): monaco.langu
             } else if (sizeSpecifierSet.has(word)) {
                 contents.push({ value: `**Size specifier:** \`${original}\`` })
             } else {
-                const library = runtimeFunctionsForModel(model).find(
+                const library = runtimeFunctionsForModel(model, 'X86').find(
                     (entry) => entry.name === original
                 )
                 if (library && !labelsIn(model.getValue()).includes(original))

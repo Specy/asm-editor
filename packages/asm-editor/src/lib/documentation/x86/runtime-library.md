@@ -1,4 +1,4 @@
-The Runtime library provides C functions for x86 C and C++ programs compiled in the editor, and for assembly programs that explicitly link it. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, file functions use the project's Files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
+The Runtime library provides C functions for x86 C and C++ programs compiled in the editor, and for assembly programs that explicitly link it. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, file functions read and write files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
 
 Imported [Executables](/documentation/x86/executables#libraries) use the libraries inside their file or the bundled Linux shared libraries, including glibc. Their supported functions and C++ features are separate from this Runtime reference. Programs compiled in the editor do not acquire glibc or the full C++ standard library from those bundles.
 
@@ -12,7 +12,7 @@ The library supports `float` and `double`. Extended `long double` formatting and
 
 ### Program arguments
 
-Use `int main(int argc, char *argv[])` to receive startup arguments in C or C++. `argc` counts the strings, including the program name. `argv` is an array of pointers to NUL-terminated strings, with a null pointer at `argv[argc]`. `argv[0]` is `./` plus the source File's path without its final extension: `main.c` gives `./main`. The project's **Arguments** follow it. For Arguments `hello "two words"`:
+Use `int main(int argc, char *argv[])` to receive startup arguments in C or C++. `argc` counts the strings, including the program name. `argv` is an array of pointers to NUL-terminated strings, with a null pointer at `argv[argc]`. `argv[0]` is `./` plus the source file's path without its final extension: `main.c` gives `./main`. The **Arguments** follow it. For Arguments `hello "two words"`:
 
 | Value     | Contents       |
 | --------- | -------------- |
@@ -69,4 +69,4 @@ The **Explorer** is the file list for the current Build. It includes linked libr
 
 By default, **Step** over `call printf` runs the whole library call. If the call is reversible, one **Undo** reverses it. A library function that calls back into your program, such as `qsort` calling its comparison function, stops in your code. To inspect library instructions one at a time, turn on **Step into library code** in **Preferences**. For programs compiled in the editor, enabling this Preference begins execution in Runtime startup at `_start`, so you can step through startup too. For an imported Executable, Build still advances toward detected `main` or its executable entry point; the Preference controls subsequent Steps into its shared libraries, such as `libc.so.6`. See [Building and stepping](/documentation/x86/executables#stepping).
 
-Consuming standard input or changing Files is an Undo barrier, as it is for the system calls themselves, including inside a grouped library call: Undo stops before that call. Undo of a call that printed takes its output back out of the Terminal.
+Consuming standard input or changing files is an Undo barrier, as it is for the system calls themselves, including inside a grouped library call: Undo stops before that call. Undo of a call that printed takes its output back out of the Terminal.

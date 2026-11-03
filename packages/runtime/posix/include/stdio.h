@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-/** Renames or moves the file at from to the path to, whose folder must exist; returns 0, or -1 with errno set: EEXIST when a file is already at to, EISDIR when from is a folder. */
+/** Renames or moves the file at from to the path to, whose folder must exist, replacing a file already at to; returns 0, or -1 with errno set: EISDIR when either path is a folder, but ENOTDIR for a folder onto a file. */
 int rename(const char *from, const char *to);
 /** Deletes the file at path, or the folder at path when it is empty; returns 0, or -1 with errno set. */
 int remove(const char *path);

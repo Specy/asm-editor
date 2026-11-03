@@ -92,7 +92,9 @@ Status: decided with the owner on 2026-11-03; implemented the same day, uncommit
     - **Paths:** an empty path is -2, `//` collapses, and a trailing slash means "must be a folder".
 - **stat** gives the type bits with 0777 and a link count of 1. Every other field is 0, where x86 gives dev 1 and blksize 4096.
 - **The Runtime library's POSIX members** live in `packages/runtime/posix/`. They are built for MIPS and RISC-V only, and Compiles upload their headers first. `build.mjs` now reuses every member whose inputs are unchanged since the committed library, so the change sent only the 27 new requests (9 members × 3 Targets) to Compiler Explorer.
-- **Still open:**
-    - the POSIX functions are not ABI-pinned and not in the generated function reference (`--update-abi`, 8 probes);
-    - `strerror(39)` still says "Unknown error", so as not to recompile `strerror`;
-    - the runtime corpus was not run, because its local cache is stale.
+- **Settled in a second Runtime library rebuild** (2026-11-03), which sent 17 requests:
+    - The POSIX functions are ABI-pinned: exported on MIPS and RISC-V, with signatures, and `abi/posix-layout.c` pins `struct dirent`, `struct stat`, the `DT_` and `S_IF` values and `ENOTEMPTY`. `functions.json` lists them with the Targets they exist on, so they are in each Target's function reference and nowhere else.
+    - `strerror(39)` is "Directory not empty", and `strerror(18)` (x86's EXDEV) "Invalid cross-device link". Every other error the folder calls return already had its message.
+    - `build.mjs` reuses a member whenever its source and the headers it includes read the same as in the committed assets, so this rebuild compiled only `strerror`, `rename` and `remove`, plus the probes.
+    - The posix `<stdio.h>` says that rename replaces a file.
+- **The corpus** uploads only the headers each program includes, so a header change asks again only about the programs that read it. Its answers from before were moved to the new requests where a program's headers are unchanged. The GCC run passes 526 of 614 from the cache; the other 88, the 11 programs that include `<errno.h>` or `<new>` (both changed on 2026-10-21 and 2026-10-31, after the cache was last filled), need Compiler Explorer. With Clang 201 of 462 pass from the cache; the 261 others are those 11 programs and every `-O0` compile, whose Clang flags changed on 2026-10-21.

@@ -9,7 +9,9 @@
 //   node scripts/test-cores.mjs [--target riscv32,riscv64,mips,x86_64] [--only a,b] [--optimization 0,2] [--compiler gcc|clang] [--offline]
 //
 // Compiler Explorer responses are cached under .cache/corpus by a hash of the request, so a
-// rerun needs no network unless a program, a header or the flags changed; --offline fails instead.
+// rerun needs no network unless a program, a header it includes or the flags changed; --offline
+// fails instead. Each request uploads only the headers its program can reach, so a change to one
+// header asks again only about the programs that include it.
 import {
     RUNTIME_TARGETS,
     compilerPreset,
@@ -21,6 +23,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { includeClosure } from './includes.mjs'
 import { GCC_INTEL_V1, makeX86Core, prepareX86 } from './x86.mjs'
 
 const runtime = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -79,8 +82,15 @@ function walk(directory) {
         })
 }
 
-/** The editor's compile request for a hosted program (createCompilerRequest in compilerExplorer.ts). */
+/**
+ * The editor's compile request for a hosted program (createCompilerRequest in compilerExplorer.ts),
+ * with the headers the program can reach of the library's, all of them when an include is computed.
+ */
 function request(target, name, source, language, optimization, headers) {
+    const uploads = new Map(
+        Object.entries(headers).map(([path, contents]) => [`sysroot/include/${path}`, contents])
+    )
+    const reached = includeClosure(name, source, uploads, ['sysroot/include'])
     const settings = TARGETS[target]
     const profile = settings.core === 'x86' ? GCC_INTEL_V1 : undefined
     const preset = compilerPreset(settings.language, language, compiler, profile)
@@ -104,10 +114,9 @@ function request(target, name, source, language, optimization, headers) {
                     libraryCode: false
                 }
             },
-            files: Object.entries(headers).map(([path, contents]) => ({
-                filename: `sysroot/include/${path}`,
-                contents
-            }))
+            files: [...uploads]
+                .filter(([filename]) => !reached || reached.has(filename))
+                .map(([filename, contents]) => ({ filename, contents }))
         }
     }
 }

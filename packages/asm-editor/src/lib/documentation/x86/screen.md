@@ -130,7 +130,7 @@ One pixel is one little-endian 32-bit word, `0x00RRGGBB`: blue in the low byte, 
 
 The pixel at column x and line y is at `address + y × line_length + x × 4`. Use `line_length` to step between rows. It equals the configured Screen width times 4 here; other framebuffers may add padding at the end of each row. A change to the reported `xres` through `FBIOPUT_VSCREENINFO` does not change this stride.
 
-Redrawing every pixel can take a noticeable fraction of a second, especially on a large Screen. Update only the areas that change. In assembly, `rep stosd` fills a span by storing `eax` `rcx` times and is faster here than a loop that stores one pixel per iteration. A C program can call a routine in a Project `.asm` File; see [Linking project Files](/documentation/x86/using-c#linking-project-files).
+Redrawing every pixel can take a noticeable fraction of a second, especially on a large Screen. Update only the areas that change. In assembly, `rep stosd` fills a span by storing `eax` `rcx` times and is faster here than a loop that stores one pixel per iteration. A C program can call a routine written in a separate `.asm` file; see [Linking project Files](/documentation/x86/using-c#linking-project-files).
 
 **Undo** walks the picture back with the code: a pixel is memory, and Undo restores memory. A `rep stosd` that fills a whole page is one step that Undo takes back at once.
 

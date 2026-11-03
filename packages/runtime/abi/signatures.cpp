@@ -525,3 +525,38 @@ void __aed_use_asctime() { __aed_sig_asctime(static_cast<__aed_type_asctime *>(&
 using __aed_type_ctime = char *(const time_t *t);
 template<class T> __attribute__((used,noinline)) void __aed_sig_ctime(T *) {}
 void __aed_use_ctime() { __aed_sig_ctime(static_cast<__aed_type_ctime *>(&ctime)); }
+#if defined(__mips__) || defined(__riscv)
+#include <dirent.h>
+#include <errno.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+using __aed_type_opendir = DIR *(const char *path);
+template<class T> __attribute__((used,noinline)) void __aed_sig_opendir(T *) {}
+void __aed_use_opendir() { __aed_sig_opendir(static_cast<__aed_type_opendir *>(&opendir)); }
+using __aed_type_readdir = struct dirent *(DIR *dir);
+template<class T> __attribute__((used,noinline)) void __aed_sig_readdir(T *) {}
+void __aed_use_readdir() { __aed_sig_readdir(static_cast<__aed_type_readdir *>(&readdir)); }
+using __aed_type_closedir = int (DIR *dir);
+template<class T> __attribute__((used,noinline)) void __aed_sig_closedir(T *) {}
+void __aed_use_closedir() { __aed_sig_closedir(static_cast<__aed_type_closedir *>(&closedir)); }
+using __aed_type_rename = int (const char *from, const char *to);
+template<class T> __attribute__((used,noinline)) void __aed_sig_rename(T *) {}
+void __aed_use_rename() { __aed_sig_rename(static_cast<__aed_type_rename *>(&rename)); }
+using __aed_type_remove = int (const char *path);
+template<class T> __attribute__((used,noinline)) void __aed_sig_remove(T *) {}
+void __aed_use_remove() { __aed_sig_remove(static_cast<__aed_type_remove *>(&remove)); }
+using __aed_type_stat = int (const char *path, struct stat *buf);
+template<class T> __attribute__((used,noinline)) void __aed_sig_stat(T *) {}
+void __aed_use_stat() { __aed_sig_stat(static_cast<__aed_type_stat *>(&stat)); }
+using __aed_type_mkdir = int (const char *path, mode_t mode);
+template<class T> __attribute__((used,noinline)) void __aed_sig_mkdir(T *) {}
+void __aed_use_mkdir() { __aed_sig_mkdir(static_cast<__aed_type_mkdir *>(&mkdir)); }
+using __aed_type_unlink = int (const char *path);
+template<class T> __attribute__((used,noinline)) void __aed_sig_unlink(T *) {}
+void __aed_use_unlink() { __aed_sig_unlink(static_cast<__aed_type_unlink *>(&unlink)); }
+using __aed_type_rmdir = int (const char *path);
+template<class T> __attribute__((used,noinline)) void __aed_sig_rmdir(T *) {}
+void __aed_use_rmdir() { __aed_sig_rmdir(static_cast<__aed_type_rmdir *>(&rmdir)); }
+#endif

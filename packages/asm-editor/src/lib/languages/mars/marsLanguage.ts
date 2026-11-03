@@ -289,20 +289,22 @@ export function createMarsCompletion<Form extends MarsForm>(
                         suggestions.push(...labelsSuggestions)
                         //the Runtime library's functions, when the Build links it
                         suggestions.push(
-                            ...runtimeFunctionsForModel(model).map((entry) => ({
-                                label: entry.name,
-                                kind: monaco.languages.CompletionItemKind.Function,
-                                insertText: entry.name,
-                                detail: entry.prototype,
-                                documentation: {
-                                    value: runtimeFunctionDocumentation(
-                                        entry,
-                                        dialect.runtimeLanguage
-                                    )
-                                },
-                                sortText: `${1000 - 4}${entry.name}`,
-                                range
-                            }))
+                            ...runtimeFunctionsForModel(model, dialect.runtimeLanguage).map(
+                                (entry) => ({
+                                    label: entry.name,
+                                    kind: monaco.languages.CompletionItemKind.Function,
+                                    insertText: entry.name,
+                                    detail: entry.prototype,
+                                    documentation: {
+                                        value: runtimeFunctionDocumentation(
+                                            entry,
+                                            dialect.runtimeLanguage
+                                        )
+                                    },
+                                    sortText: `${1000 - 4}${entry.name}`,
+                                    range
+                                })
+                            )
                         )
                     }
                     const onlyRegs = dedupedArgs.filter(
@@ -406,7 +408,9 @@ export function createMarsHover<Form extends MarsForm>(
                     value: `Register ${register}`
                 })
             }
-            const library = runtimeFunctionsForModel(model).find((entry) => entry.name === word)
+            const library = runtimeFunctionsForModel(model, dialect.runtimeLanguage).find(
+                (entry) => entry.name === word
+            )
             if (library && !labels.includes(word)) {
                 contents.push({
                     value: runtimeFunctionDocumentation(library, dialect.runtimeLanguage)

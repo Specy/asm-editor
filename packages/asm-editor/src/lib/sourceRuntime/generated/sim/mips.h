@@ -112,7 +112,7 @@ static inline int sim_read_char(void) {
     return v0;
 }
 
-/** Open file, service 13. Takes $a0, address of NUL-terminated UTF-8 path in Project Files; $a1, flags; $a2, mode. Returns $v0, contains file descriptor (-1 if error). */
+/** Open file, service 13. Takes $a0, address of NUL-terminated UTF-8 path; $a1, flags; $a2, mode. Returns $v0, contains file descriptor (-1 if error). */
 static inline int sim_open(const char *path, int flags, int mode) {
     register int v0 __asm__("$2") = 13;
     register const char *a0 __asm__("$4") = path;

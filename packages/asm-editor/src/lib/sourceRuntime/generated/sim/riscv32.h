@@ -362,7 +362,7 @@ static inline __attribute__((__noreturn__)) void sim_exit2(int code) {
     __builtin_unreachable();
 }
 
-/** Open file, service 1024. Takes a0, address of NUL-terminated UTF-8 path in Project Files; a1, flags; a2, mode. Returns a0, contains file descriptor (-1 if error). */
+/** Open file, service 1024. Takes a0, address of NUL-terminated UTF-8 path; a1, flags; a2, mode. Returns a0, contains file descriptor (-1 if error). */
 static inline int sim_open(const char *path, int flags, int mode) {
     register int a7 __asm__("a7") = 1024;
     register const char *a0 __asm__("a0") = path;

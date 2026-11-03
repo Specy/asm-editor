@@ -202,6 +202,15 @@ In this Playground, service 32 lets an empty polling loop wait without spending 
 budget. During an interactive run it waits for the requested time; a testcase advances its virtual
 clock immediately. The wait makes the program pleasant to leave idle while it is waiting for a key.
 
+## Arrow keys, held keys and the mouse
+
+The receiver only hands over typed characters. Keys that type nothing, such as the arrows and
+Shift, never reach it, and neither does a key coming back up. A game that steers with the arrows or
+moves only while a key is held needs more. For that, and for the mouse, this editor adds the
+**Input controller** at `0xffff0300`: it reports every key going down and up, which keys are held
+right now, and where the pointer is. The [Input controller](/documentation/risc-v/input-controller)
+page shows how to read it.
+
 ## Your turn
 
 The Screen panel is a 16-by-16 word grid whose base label is `display`. Put white at the pixel with

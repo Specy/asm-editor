@@ -1,4 +1,4 @@
-The Runtime library provides C functions for RISC-V C and C++ programs compiled in the editor, and for assembly programs that explicitly link it. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`, and the folder functions in `<dirent.h>`, `<sys/stat.h>` and `<unistd.h>`. For example, `printf` and `scanf` use the Terminal, file functions use the project's Files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
+The Runtime library provides C functions for RISC-V C and C++ programs compiled in the editor, and for assembly programs that explicitly link it. Its functions are declared in `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`, and the folder functions in `<dirent.h>`, `<sys/stat.h>` and `<unistd.h>`. For example, `printf` and `scanf` use the Terminal, file functions read and write files, and allocation functions manage program memory. The function reference entries below this overview list the supported functions with their declarations and headers. C++ also gets the support needed for global constructors, `new` and `delete`; the full C++ standard library is not included. The Build links only functions the program uses and their dependencies.
 
 ## Compiled programs {#compiled-programs}
 
@@ -6,7 +6,7 @@ Compiling a C or C++ file links the Runtime library automatically. Startup runs 
 
 ### Program arguments
 
-Use `int main(int argc, char *argv[])` to receive startup arguments in C or C++. `argc` counts the strings, including the program name. `argv` is an array of pointers to NUL-terminated strings, with a null pointer at `argv[argc]`. `argv[0]` is `./` plus the source File's path without its final extension: `main.c` gives `./main`. The project's **Arguments** follow it. For Arguments `hello "two words"`:
+Use `int main(int argc, char *argv[])` to receive startup arguments in C or C++. `argc` counts the strings, including the program name. `argv` is an array of pointers to NUL-terminated strings, with a null pointer at `argv[argc]`. `argv[0]` is `./` plus the source file's path without its final extension: `main.c` gives `./main`. The **Arguments** follow it. For Arguments `hello "two words"`:
 
 | Value     | Contents       |
 | --------- | -------------- |
@@ -48,7 +48,7 @@ A program that calls the library this way keeps its own start and its own addres
 
 ## Files and folders {#folders}
 
-Besides the file functions of `<stdio.h>`, the library has the POSIX functions for folders and for files by name. They use the [folder services](/documentation/risc-v/syscall#folders), so they work on the Project Files, and Undo takes them back:
+Besides the file functions of `<stdio.h>`, the library has the POSIX functions for folders and for files by name. They use the [folder services](/documentation/risc-v/syscall#folders), so they work on the same files and folders, and Undo takes them back:
 
 | Function                                       | Header         | What it does                                                                                                                                           |
 | ---------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -62,7 +62,7 @@ Besides the file functions of `<stdio.h>`, the library has the POSIX functions f
 | `struct dirent *readdir(DIR *dir)`             | `<dirent.h>`   | The next entry, `.` and `..` first, or NULL at the end. `d_name` is its name and `d_type` is `DT_DIR` for a folder and `DT_REG` for a file.            |
 | `int closedir(DIR *dir)`                       | `<dirent.h>`   | Closes the folder.                                                                                                                                     |
 
-On a failure each returns -1 (`opendir` and `readdir` NULL) and sets `errno`: `ENOENT` when nothing is at the path, `EEXIST` when `mkdir` finds something there already, `ENOTDIR` and `EISDIR` when a folder and a file are mixed up, and `ENOTEMPTY` when `rmdir` finds a file inside. A folder `mkdir` makes lasts until the program ends, and stays in the Project once a file is written inside it; a folder cannot be renamed, and `rename` onto an existing file replaces it, as on Linux. The [folder services](/documentation/risc-v/syscall#folders) explain these rules, with a program that handles a folder that already exists.
+On a failure each returns -1 (`opendir` and `readdir` NULL) and sets `errno`: `ENOENT` when nothing is at the path, `EEXIST` when `mkdir` finds something there already, `ENOTDIR` and `EISDIR` when a folder and a file are mixed up, and `ENOTEMPTY` when `rmdir` finds a file inside. A folder `mkdir` makes lasts until the program ends, and stays after that once a file is written inside it; a folder cannot be renamed, and `rename` onto an existing file replaces it, as on Linux. The [folder services](/documentation/risc-v/syscall#folders) explain these rules, with a program that handles a folder that already exists.
 
 ## Standard input {#standard-input}
 

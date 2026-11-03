@@ -1396,7 +1396,9 @@ describe('FileSystemSession folder calls', () => {
         expect(failure(() => step(() => run.move('made', 'other')))).toBe(FileErrorCode.IsDirectory)
         expect(failure(() => step(() => run.move('docs', 'other')))).toBe(FileErrorCode.IsDirectory)
         //a folder onto a File, as Linux and x86 have it
-        expect(failure(() => step(() => run.move('made', 'b.txt')))).toBe(FileErrorCode.NotDirectory)
+        expect(failure(() => step(() => run.move('made', 'b.txt')))).toBe(
+            FileErrorCode.NotDirectory
+        )
         expect(failure(() => step(() => run.move('b.txt', 'docs')))).toBe(FileErrorCode.IsDirectory)
         expect(failure(() => step(() => run.move('b.txt', 'made')))).toBe(FileErrorCode.IsDirectory)
         expect(failure(() => step(() => run.move('b.txt', 'b.txt/x')))).toBe(

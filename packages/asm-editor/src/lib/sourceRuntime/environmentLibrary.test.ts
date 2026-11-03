@@ -40,7 +40,11 @@ import {
 } from '#lib/languages/mars/marsDisplay.ts'
 import { makeMipsCore } from '#lib/languages/MIPS/MIPS-core.ts'
 import { makeRiscVCore } from '#lib/languages/RISC-V/RISC-V-core.ts'
-import { compileSource, prepareAssembly } from '#lib/sourceCompilation/compilerExplorer.ts'
+import {
+    COMPILE_BYTE_LIMIT,
+    compileSource,
+    prepareAssembly
+} from '#lib/sourceCompilation/compilerExplorer.ts'
 import { fileFingerprint } from '#lib/sourceCompilation/records.ts'
 import {
     ENVIRONMENT_HEADER_PATH,
@@ -114,10 +118,39 @@ describe('the committed headers', () => {
     it.each(TARGETS)('%s.h is what the data generates', (target) => {
         const text = generateSimHeader(target, { ...DATA, syscalls: syscallsOf(target) })
         expect(committed(target), `run node scripts/sim-header/generate.mjs`).toBe(text)
-        //uploaded with every compile, whose request may not pass 1 MiB; the Input controller's
-        //key names are most of what took it past 32 KB
-        expect(new TextEncoder().encode(text).length).toBeLessThan(40 * 1024)
+        //its size is checked where it costs something: in the compile request, below
     })
+
+    it.each(['MIPS', 'RISC-V', 'RISC-V-64', 'X86'] as const)(
+        'leave %s programs two thirds of the 1 MiB compile request',
+        async (target) => {
+            //what every compile uploads before the program's own Files, which share the rest of
+            //COMPILE_BYTE_LIMIT: the Runtime library's headers, the Target's own (posix/, or x86's
+            //devices) and <sim.h>. On 2026-11-03 about 107 KiB on MIPS and RISC-V, 247 on x86
+            const fetcher = vi.fn(
+                async () => new Response(JSON.stringify({ code: 1, stderr: [], asm: [] }))
+            )
+            await compileSource(
+                {
+                    sourcePath: 'main.c',
+                    outputPath: 'main.c.asm',
+                    files: {
+                        'main.c': { encoding: 'plain', content: 'int main(void) { return 0; }' }
+                    },
+                    target,
+                    optimization: '0'
+                },
+                undefined,
+                fetcher
+            ).catch(() => undefined)
+            const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
+            const size = new TextEncoder().encode(String(init.body)).length
+            expect(
+                size,
+                `an empty program's request is ${size} bytes of the ${COMPILE_BYTE_LIMIT}`
+            ).toBeLessThan(COMPILE_BYTE_LIMIT / 3)
+        }
+    )
 
     it('x86_64.h is what the x86 syscall table generates', () => {
         const text = generateX86SimHeader(x86SimHeaderData())

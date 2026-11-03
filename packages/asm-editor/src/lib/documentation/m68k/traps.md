@@ -1,10 +1,10 @@
 ## Calling trap #15
 
-Call a simulator task with `trap #15`: put the task number in `D0.B`, set the listed input registers, execute the instruction, then read the output registers. These EASy68K-compatible tasks provide console and screen I/O, keyboard and mouse state, time, cycle counts, interrupt configuration, project files and sound.
+Call a simulator task with `trap #15`: put the task number in `D0.B`, set the listed input registers, execute the instruction, then read the output registers. These EASy68K-compatible tasks provide console and screen I/O, keyboard and mouse state, time, cycle counts, interrupt configuration, files and sound.
 
 A supported task runs without an exception frame or a vector lookup. `trap #0` to `trap #14` use handlers installed by your program. An unknown `trap #15` task number also uses a program handler, through vector 47. See [Exceptions](/documentation/m68k/exceptions#traps) for installation and return rules.
 
-Undo reverses a task's effects together with the instruction's register and memory changes, including printed text. If you undo an input read, stepping it again asks for input again. Testcases read scripted input and use their own copy of the project's files. Their [timers](/documentation/m68k/traps#task-32) run on a virtual clock.
+Undo reverses a task's effects together with the instruction's register and memory changes, including printed text. If you undo an input read, stepping it again asks for input again. Testcases read scripted input and work on their own copy of the files. Their [timers](/documentation/m68k/traps#task-32) run on a virtual clock.
 
 ## Input routing {#differences}
 
@@ -21,9 +21,9 @@ There is no task to switch back. Click the screen panel before typing. Its focus
 
 A color is a long written `$00BBGGRR`: blue in bits 23-16, green in bits 15-8 and red in bits 7-0. The color names shown here are also available as equates to use in assembly programs.
 
-## Pictures in Files {#pictures}
+## Pictures in files {#pictures}
 
-A program can draw a picture it reads from a File of the project, such as a sprite sheet. Open a BMP File and choose **Pixels** under the editor to draw in it, or make one with **New picture** in the Explorer. A new picture is 32-bit and stored top-down: the pixel at column x and row y is the long at `pixels + 4 × (y × width + x)`. The 68000 reads that long as `$BBGGRR00`, so `lsr.l #8` turns it into a pen color, `$00BBGGRR`. Read the File into memory with the file tasks; its pixels start at the offset held in its bytes 10 to 13, stored least significant byte first, which is 54 in the 32-bit picture **New picture** makes unless told otherwise.
+A program can draw a picture it reads from a file, such as a sprite sheet. Open a BMP File and choose **Pixels** under the editor to draw in it, or make one with **New picture** in the Explorer. A new picture is 32-bit and stored top-down: the pixel at column x and row y is the long at `pixels + 4 × (y × width + x)`. The 68000 reads that long as `$BBGGRR00`, so `lsr.l #8` turns it into a pen color, `$00BBGGRR`. Read the file into memory with the file tasks; its pixels start at the offset held in its bytes 10 to 13, stored least significant byte first, which is 54 in the 32-bit picture **New picture** makes unless told otherwise.
 
 Each stroke updates the picture in your project when you release the mouse button or lift your finger. With autosave on, the change is saved immediately. With autosave off, save the project manually to keep your changes. Use **Undo** in the Pixel editor to undo a stroke. The program reads the picture as you last drew it at its next run.
 
