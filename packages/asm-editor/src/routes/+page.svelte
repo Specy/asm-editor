@@ -176,15 +176,21 @@
                         Documentation
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/#codeCompletion')}>
+                <MainPageLinkPreview href={resolve('/examples')}>
                     {#snippet icon()}
                         <div>
-                            <FaSearch />
+                            <FaCode />
                         </div>
                     {/snippet}
                     {#snippet description()}
-                        Code completion
+                        Examples
                     {/snippet}
+                </MainPageLinkPreview>
+                <MainPageLinkPreview href={resolve('/#codeCompletion')}>
+                    {#snippet icon()}
+                        <div><FaSearch /></div>
+                    {/snippet}
+                    {#snippet description()}Code completion{/snippet}
                 </MainPageLinkPreview>
                 <MainPageLinkPreview href={resolve('/#tools')}>
                     {#snippet icon()}

@@ -26,6 +26,7 @@
         onSave,
         onShare,
         onChange,
+        onReady,
         unsaved = false,
         editJournals,
         access = {},
@@ -115,7 +116,11 @@
             return true
         })
         const unmount = session.mount()
+        const controller = new AbortController()
+        onReady?.(session, controller.signal)
         return () => {
+            controller.abort()
+            if (session.building) session.cancelBuild()
             unregisterLinks()
             unmount()
         }

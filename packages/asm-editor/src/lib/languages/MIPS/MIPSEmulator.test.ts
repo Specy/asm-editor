@@ -1,3 +1,4 @@
+import { readExample } from '#lib/examples.server.ts'
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
@@ -1158,7 +1159,7 @@ main:
 
 describe('the MIPS examples', () => {
     it('draws the bitmap tour', async () => {
-        const code = readFileSync('examples/mips/bitmap-tour.asm', 'utf8')
+        const code = readExample('mips/bitmap-tour.asm')
         //no display is passed: the example's own `@screen` comment is what configures the Screen
         const emulator = await run(code)
         expect(emulator.errors).toEqual([])
@@ -1172,7 +1173,7 @@ describe('the MIPS examples', () => {
     })
 
     it('animates the bouncing ball and lets program time pass', async () => {
-        const code = readFileSync('examples/mips/bouncing-ball.asm', 'utf8')
+        const code = readExample('mips/bouncing-ball.asm')
         const emulator = await run(code, { virtualClock: true, limit: 400_000 })
         expect(emulator.peripherals.screen.width).toBe(128)
         //the ball is somewhere on the background it painted. The run is cut off at its instruction
@@ -1191,7 +1192,7 @@ describe('the MIPS examples', () => {
     })
 
     it('echoes typed characters through the keyboard and display example', async () => {
-        const code = readFileSync('examples/mips/keyboard-display.asm', 'utf8')
+        const code = readExample('mips/keyboard-display.asm')
         const emulator = await run(code, { typed: 'abq' })
         expect(emulator.errors).toEqual([])
         expect(emulator.stdOut.endsWith('abq')).toBe(true)

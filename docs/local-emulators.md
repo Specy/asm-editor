@@ -90,3 +90,15 @@ Anyone checking out that parent commit obtains the matching Core revision with
 
 The Cores still publish to npm from their own repositories' CD, for other users of the packages; the
 app does not wait for a release.
+
+## Example projects
+
+`packages/examples` is the [asm-examples](https://github.com/Specy/asm-examples) submodule. Dev, build, test and measure build its archives; only the site's build also adds the linked executables they request (`build:example-outputs`), which takes about twenty seconds for asmOS. The site serves them at `/examples/`; open `/examples` to browse them. Tests read their source Files through `src/lib/examples.server.ts`.
+
+After editing an example's C sources, Compile and export it from the editor, then use the examples repository's `npm run sync` command to update its files and Compilation records. To recompile stale recorded units directly with the editor's compiler, run this from `packages/asm-editor`:
+
+```bash
+ASM_EXAMPLE=asmos ASM_EXAMPLE_TARGET=X86 pnpm exec vp test run --config vitest.examples.config.ts scripts/examples/recompile.task.ts
+```
+
+Leave out `ASM_EXAMPLE_TARGET` to compile every port, including drafts. This command uses Compiler Explorer and writes the generated assembly and the records returned by Compile. It does not build the archives. Run `pnpm exec vp run asm-editor#build:example-outputs` from the repository root afterwards.

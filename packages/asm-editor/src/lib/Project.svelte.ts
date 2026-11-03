@@ -394,6 +394,16 @@ export function projectContentEquals(a: ProjectData, b: ProjectData): boolean {
 }
 
 /**
+ * Whether two projects hold the same work: their content apart from how it is viewed (the open
+ * tabs, File views and cell grids) and from Build outputs nobody changed, which a Build makes
+ * again. An opened example is edited only once this differs from the archive it came from, so
+ * looking around it or building it is not editing it.
+ */
+export function projectWorkEquals(a: ProjectData, b: ProjectData): boolean {
+    return workKey(withoutBuildOutputs(a)) === workKey(withoutBuildOutputs(b))
+}
+
+/**
  * A Program's Entry file text, the Selected program's unless another Entry is named, which is what
  * a Build assembles and what an exported file's body is; empty with no such File.
  */
@@ -407,6 +417,21 @@ export function entryFileContent(
 
 function contentKey(project: ProjectData): string {
     return serializer.stringify({
+        ...workParts(project),
+        openTabs: project.openTabs,
+        activeTab: project.activeTab,
+        fileViews: project.fileViews,
+        cellGrids: project.cellGrids
+    })
+}
+
+function workKey(project: ProjectData): string {
+    return serializer.stringify(workParts(project))
+}
+
+/** What is the user's in a Project, but how it is viewed. */
+function workParts(project: ProjectData) {
+    return {
         name: project.name,
         description: project.description,
         language: project.language,
@@ -415,12 +440,8 @@ function contentKey(project: ProjectData): string {
         selectedProgram: project.selectedProgram,
         exam: project.exam,
         compilations: project.compilations,
-        builds: project.builds,
-        openTabs: project.openTabs,
-        activeTab: project.activeTab,
-        fileViews: project.fileViews,
-        cellGrids: project.cellGrids
-    })
+        builds: project.builds
+    }
 }
 
 export type MemoryValue =

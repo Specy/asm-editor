@@ -4,6 +4,7 @@
         makeProject,
         type Project,
         projectContentEquals,
+        projectWorkEquals,
         type StoredProject
     } from '#lib/Project.svelte.ts'
 
@@ -18,7 +19,6 @@
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { beforeNavigate, goto } from '$app/navigation'
     import { resolve } from '$app/paths'
-    import type { ResolvedPathname } from '$app/types'
     import Page from '#cmp/shared/layout/Page.svelte'
     import lzstring from 'lz-string'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -28,10 +28,86 @@
     import { serializer } from '#lib/json.ts'
     import { examSessionPath, parseLegacyProjectExamPayload } from '#lib/exam.ts'
     import { projectArchiveName, projectToArchive } from '#lib/projectArchive.ts'
+    import {
+        destinationPath,
+        EXAMPLE_CHANGE_MESSAGE,
+        EXAMPLE_LEAVE_MESSAGE,
+        exampleSharePath,
+        ExampleNotFoundError,
+        loadExample,
+        type ExampleDestination
+    } from '#lib/examples.ts'
+    import {
+        readShareStart,
+        shareStartQuery,
+        startSharedProject,
+        type ShareStartAction
+    } from '#lib/shareStart.ts'
+    import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
 
     let project = $state(makeProject())
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
     let linkedMigrationNoticeShown = false
+    let exampleId = $state<string | null>(null)
+    let exampleSnapshot: ReturnType<Project['toObject']> | null = null
+    /**
+     * Whether the opened example's work differs from the archive it came from. Tabs, File views
+     * and a Build output nobody changed do not count, so looking around an example or building it
+     * is not editing it. Comparing whole Projects costs too much for every key typed, so it is
+     * checked once the changes pause, and at once wherever the answer decides something.
+     */
+    let exampleEdited = $state(false)
+    let exampleCheck: ReturnType<typeof setTimeout> | undefined
+    function checkExample(): boolean {
+        clearTimeout(exampleCheck)
+        exampleEdited =
+            exampleSnapshot !== null && !projectWorkEquals(exampleSnapshot, project.toObject())
+        return exampleEdited
+    }
+    function checkExampleSoon() {
+        clearTimeout(exampleCheck)
+        exampleCheck = setTimeout(checkExample, 250)
+    }
+    $effect(() => () => clearTimeout(exampleCheck))
+    /** An example opened from a link and not yet saved as a Project of the person's own. */
+    const openExample = $derived(exampleId !== null && project.id === SHARE_ID)
+    /**
+     * The Examples page, when it shows this page in its frame: the site's own pages open there
+     * rather than inside the frame. Any other page that frames the editor is left alone.
+     */
+    function examplesPageFrame(): Window | null {
+        if (exampleId === null || window.parent === window) return null
+        try {
+            return window.parent.location.origin === window.location.origin ? window.parent : null
+        } catch {
+            return null
+        }
+    }
+    function leaveFor(destination: ExampleDestination, options?: { replace?: boolean }) {
+        const examples = examplesPageFrame()
+        if (examples) {
+            examples.postMessage(
+                { type: EXAMPLE_LEAVE_MESSAGE, example: exampleId, destination },
+                window.location.origin
+            )
+            return
+        }
+        return options
+            ? goto(destinationPath(destination), options)
+            : goto(destinationPath(destination))
+    }
+    let startupRequested = false
+
+    function startOnOpen(session: WorkbenchSession, signal: AbortSignal) {
+        if (startupRequested || page.params.project !== 'share') return
+        startupRequested = true
+        void startSharedProject(session, readShareStart(page.url.searchParams), signal).catch(
+            (error) => {
+                console.error(error)
+                if (!signal.aborted) toast.error('Could not start this shared project')
+            }
+        )
+    }
 
     /**
      * The Edit journals of the Project's Files, saved with it, one store a Project
@@ -45,10 +121,13 @@
      * Whether the Project has changes nothing will save on its own, which is when the Workbench
      * shows Save ([the design record](../../../../../../docs/design/workbench.md), Save): a shared Project
      * is nobody's until saved, and under autosave only a failed save leaves changes behind.
+     * An example asks only once its work is edited, so browsing examples does not ask to save each
+     * one.
      */
     const unsaved = $derived(
-        project.id === SHARE_ID ||
-            (dirty && (!preferencesStore.values.autoSave.value || lastSaveFailed))
+        project.id === SHARE_ID
+            ? !openExample || exampleEdited
+            : dirty && (!preferencesStore.values.autoSave.value || lastSaveFailed)
     )
 
     /**
@@ -60,6 +139,7 @@
      * (`changePage`) or follow a save.
      */
     beforeNavigate((navigation) => {
+        if (openExample) checkExample()
         if (!unsaved || navigation.willUnload || navigation.type === 'goto') return
         if (!confirm('You have unsaved changes. Do you want to leave without saving?'))
             navigation.cancel()
@@ -80,6 +160,15 @@
         'The project in the link could not be read: the link was cut short or changed on its way here. Ask for it again.'
     const EXAM_BROKEN =
         'The exam in the link could not be read: the link was cut short or changed on its way here. Ask for it again.'
+
+    $effect(() => {
+        if (exampleId !== null && status === 'loaded' && window.parent !== window) {
+            window.parent.postMessage(
+                { type: EXAMPLE_CHANGE_MESSAGE, example: exampleId, dirty: unsaved },
+                window.location.origin
+            )
+        }
+    })
 
     async function loadProject() {
         const id = page.params.project ?? ''
@@ -102,6 +191,14 @@
             }
 
             if (id === 'share') {
+                exampleId = page.url.searchParams.get('example')
+                if (exampleId !== null) {
+                    const example = await loadExample(exampleId)
+                    exampleSnapshot = example.toObject()
+                    project.set(exampleSnapshot)
+                    status = 'loaded'
+                    return
+                }
                 const code = page.url.searchParams.get('project')
                 if (!code) {
                     fail('This shared link is broken', SHARE_BROKEN)
@@ -132,7 +229,17 @@
             //a link mangled on its way here, or storage the browser blocked: an error screen, never
             //a load that does not end
             console.error(e)
-            if (id === 'share') fail('This shared link is broken', SHARE_BROKEN)
+            if (id === 'share' && exampleId !== null) {
+                fail(
+                    e instanceof ExampleNotFoundError
+                        ? 'This example is not available'
+                        : "This example didn't open",
+                    e instanceof ExampleNotFoundError
+                        ? 'Check the example link, or choose another example on the Examples page.'
+                        : 'The example project could not be loaded. Reload the page to try again.',
+                    e instanceof ExampleNotFoundError ? undefined : e
+                )
+            } else if (id === 'share') fail('This shared link is broken', SHARE_BROKEN)
             else
                 fail(
                     "This project didn't open",
@@ -180,8 +287,9 @@
                 return false
             }
             //in place of the link in the history: the page is not loaded again for the link's
-            //address, so Back to it would go on showing the saved Project under that address
-            void goto(resolve('/projects/[project]', { project: project.id }), { replace: true })
+            //address, so Back to it would go on showing the saved Project under that address.
+            //On the Examples page, the saved Project opens in the editor itself.
+            void leaveFor({ to: 'project', id: project.id }, { replace: true })
         } else {
             const result = await ProjectStore.save(project, journals)
             if (result.local === 'failed') {
@@ -265,11 +373,14 @@
         }
     }
 
-    async function share(pr: Project) {
+    async function share(pr: Project, action?: ShareStartAction) {
         if (!pr) return
         let url: string
         try {
-            url = createShareLink(pr)
+            url =
+                exampleId !== null && exampleSnapshot !== null && !checkExample()
+                    ? new URL(exampleSharePath(exampleId, action), window.location.origin).href
+                    : createShareLink(pr) + shareStartQuery(action)
         } catch (error) {
             console.error(error)
             toast.error(
@@ -283,7 +394,9 @@
         await copyText(url, 'Share link')
     }
 
-    async function changePage(page: ResolvedPathname) {
+    async function changePage(destination: ExampleDestination) {
+        //an example nobody edited is the link's to open again: nothing to keep
+        if (openExample && !checkExample()) return leaveFor(destination)
         try {
             const stored = await ProjectStore.getProjectFromDb(project.id)
             //a shared link's Project, or one deleted in another tab since it was opened
@@ -296,9 +409,10 @@
                     await ProjectStore.addProject(project)
                     toast.logPill('Project created')
                 }
-                return goto(page)
+                return leaveFor(destination)
             }
-            if (projectContentEquals(stored.toObject(), project.toObject())) return goto(page)
+            if (projectContentEquals(stored.toObject(), project.toObject()))
+                return leaveFor(destination)
             const wantsToSave = await Prompt.confirm(
                 'You have unsaved changes. Do you want to save them?'
             )
@@ -308,7 +422,7 @@
                 if (!(await saveChanges(false))) return
                 toast.logPill('Project saved')
             }
-            return goto(page)
+            return leaveFor(destination)
         } catch (e) {
             console.error(e)
             toast.error('Error updating project')
@@ -330,6 +444,7 @@
 <!-- leaving asks first only while there are changes nothing will save on its own -->
 <svelte:window
     onbeforeunload={(e) => {
+        if (openExample) checkExample()
         if (!unsaved) return
         e.preventDefault()
         e.returnValue = 'You have unsaved changes'
@@ -350,21 +465,27 @@
                         {project}
                         {unsaved}
                         editJournals={journals}
+                        onReady={startOnOpen}
                         onSave={async ({ silent }) => {
                             const saved = await saveChanges(silent)
                             if (saved && !silent) toast.logPill('Project saved')
                         }}
-                        onChange={() => (dirty = true)}
+                        onChange={() => {
+                            dirty = true
+                            if (openExample) checkExampleSoon()
+                        }}
                     >
                         {#snippet header(ui)}
                             <ProjectTopBar
                                 phone={ui.deviceClass === 'phone'}
                                 drawerOpen={ui.drawerOpen}
                                 onToggleMenu={() => (ui.drawerOpen = !ui.drawerOpen)}
-                                onHome={() => changePage(resolve('/'))}
-                                onBack={() => changePage(resolve('/projects'))}
-                                onDonate={() => changePage(resolve('/donate'))}
-                                onShare={() => share(project)}
+                                onHome={() => changePage({ to: 'home' })}
+                                onBack={() => changePage({ to: 'projects' })}
+                                onDonate={() => changePage({ to: 'donate' })}
+                                onShare={(action) => {
+                                    void share(project, action)
+                                }}
                             />
                         {/snippet}
                         {#snippet loading()}
@@ -385,6 +506,9 @@
                 >
                     {failure.description}
                     {#snippet actions()}
+                        {#if exampleId !== null}
+                            <ButtonLink href={resolve('/examples')}>Browse examples</ButtonLink>
+                        {/if}
                         <ButtonLink
                             href={resolve('/projects')}
                             cssVar={failure?.error !== undefined ? 'tertiary' : 'unset'}

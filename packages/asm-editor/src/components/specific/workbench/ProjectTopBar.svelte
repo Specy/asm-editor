@@ -7,6 +7,8 @@
     import FaHeart from '~icons/fa-solid/heart'
     import FaShareAlt from '~icons/fa-solid/share-alt'
     import './workbench.css'
+    import ShareMenu from '#cmp/shared/menu/ShareMenu.svelte'
+    import type { ShareStartAction } from '#lib/shareStart.ts'
 
     interface Props {
         phone?: boolean
@@ -15,7 +17,7 @@
         onHome: () => void
         onBack: () => void
         onDonate: () => void
-        onShare: () => void
+        onShare: (action?: ShareStartAction) => void
     }
 
     let {
@@ -71,10 +73,20 @@
         <Icon size={0.7}><FaHeart /></Icon>
         Donate
     </button>
-    <button type="button" class="action share" onclick={onShare}>
-        <Icon size={0.75}><FaShareAlt /></Icon>
-        Share
-    </button>
+    <ShareMenu {onShare}>
+        {#snippet trigger({ open, expanded })}
+            <button
+                type="button"
+                class="action share"
+                onclick={open}
+                aria-haspopup="menu"
+                aria-expanded={expanded}
+            >
+                <Icon size={0.75}><FaShareAlt /></Icon>
+                Share
+            </button>
+        {/snippet}
+    </ShareMenu>
 </nav>
 
 <style>

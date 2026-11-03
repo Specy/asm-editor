@@ -2,19 +2,22 @@
     import { resolve } from '$app/paths'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
-    let { includeEmbed = false }: { includeEmbed?: boolean } = $props()
+    let { includeEmbed = false, compact = false }: { includeEmbed?: boolean; compact?: boolean } =
+        $props()
 </script>
 
-<nav class="main-links" aria-label="Main navigation">
+<nav class="main-links" class:compact aria-label="Main navigation">
     <a class="link logo" href={resolve('/')} {@attach tooltip('Go to the home')}>
         <img src="/favicon.png" alt="ASM Editor home" />
     </a>
     <a class="link" href={resolve('/projects')} title="Go to your projects">Projects</a>
     <a class="link" href={resolve('/documentation')} title="Go to the docs">Docs</a>
-    <a class="link" href={resolve('/learn/courses')} title="Learn assembly">Learn</a>
-    <a class="link blog" href={resolve('/blog')} title="Guides and use cases">Blog</a>
-    {#if includeEmbed}
-        <a class="link embed" href={resolve('/embed')} title="Embed the website">Embed</a>
+    {#if !compact}
+        <a class="link" href={resolve('/learn/courses')} title="Learn assembly">Learn</a>
+        <a class="link blog" href={resolve('/blog')} title="Guides and use cases">Blog</a>
+        {#if includeEmbed}
+            <a class="link embed" href={resolve('/embed')} title="Embed the website">Embed</a>
+        {/if}
     {/if}
 </nav>
 
@@ -33,6 +36,11 @@
         flex: none;
         align-items: center;
         height: 2.2rem;
+    }
+
+    .compact {
+        flex: none;
+        container-type: normal;
     }
 
     .link:hover {

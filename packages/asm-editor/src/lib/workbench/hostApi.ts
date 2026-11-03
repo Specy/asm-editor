@@ -3,6 +3,7 @@ import type { Project } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import type { EditJournalStore } from '#lib/editJournal.ts'
 import type { WorkbenchUi } from './WorkbenchUi.svelte.ts'
+import type { WorkbenchSession } from './WorkbenchSession.svelte.ts'
 
 /**
  * What a page hosting the **Workbench** can give it and ask of it
@@ -69,6 +70,8 @@ export interface WorkbenchProps {
     onShare?: () => void
     /** Every change to the Project, for a host that tracks unsaved changes itself. */
     onChange?: () => void
+    /** Called once per mounted session. The signal aborts when that session is removed. */
+    onReady?: (session: WorkbenchSession, signal: AbortSignal) => void
     /** Whether the Project has changes nothing will save on its own; shows Save. */
     unsaved?: boolean
     /** Where the Edit journal is kept between visits; without one it lasts as long as the page. */

@@ -1,3 +1,4 @@
+import { readExample, exampleSourcePath } from '#lib/examples.server.ts'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
@@ -990,7 +991,7 @@ main:
 
 describe('the RISC-V examples', () => {
     it('draws the bitmap tour', async () => {
-        const code = readFileSync('examples/risc-v/bitmap-tour.s', 'utf8')
+        const code = readExample('risc-v/bitmap-tour.s')
         //no display is passed: the example's own `@screen` comment is what configures the Screen
         const emulator = await run(code)
         expect(emulator.errors).toEqual([])
@@ -1004,7 +1005,7 @@ describe('the RISC-V examples', () => {
     }, 15_000)
 
     it('animates the bouncing ball and lets program time pass', async () => {
-        const code = readFileSync('examples/risc-v/bouncing-ball.s', 'utf8')
+        const code = readExample('risc-v/bouncing-ball.s')
         const emulator = await run(code, { virtualClock: true, limit: 400_000 })
         expect(emulator.peripherals.screen.width).toBe(128)
         //the ball is somewhere on the background it painted. The run is cut off at its instruction
@@ -1023,8 +1024,12 @@ describe('the RISC-V examples', () => {
     })
 
     describe('the Pac-Man Project', () => {
-        const folder = 'examples/risc-v/pacman'
-        const { project } = makeProjectFromArchive(readFileSync(`${folder}/pacman.asmproj`))
+        const folder = exampleSourcePath('risc-v/pacman/README.md').replace(/\/README\.md$/, '')
+        const { project } = makeProjectFromArchive(
+            readFileSync(
+                new URL('../../../../../examples/dist/risc-v/pacman.asmproj', import.meta.url)
+            )
+        )
 
         /** One of its Programs built and run to its title screen, with its own Files to read. */
         async function toTitle(entry: string) {
@@ -1096,11 +1101,13 @@ describe('the RISC-V examples', () => {
         ]
 
         it('is the folder, packed, with its two Programs', () => {
-            //scripts/pack-example-projects.mjs packs the archive from the folder: the two must agree
+            //The repository packs the program's Files, leaving its metadata beside them.
             const names = (readdirSync(folder, { recursive: true }) as string[])
                 .map((name) => name.split('\\').join('/'))
                 .filter(
-                    (name) => name !== 'pacman.asmproj' && statSync(`${folder}/${name}`).isFile()
+                    (name) =>
+                        !['example.json', 'compilations.json', 'build.mjs'].includes(name) &&
+                        statSync(`${folder}/${name}`).isFile()
                 )
                 .sort()
             expect(Object.keys(project.files).sort()).toEqual(names)
@@ -1158,7 +1165,7 @@ describe('the RISC-V examples', () => {
     })
 
     it('echoes typed characters through the keyboard and display example', async () => {
-        const code = readFileSync('examples/risc-v/keyboard-display.s', 'utf8')
+        const code = readExample('risc-v/keyboard-display.s')
         const emulator = await run(code, { typed: 'abq' })
         expect(emulator.errors).toEqual([])
         expect(emulator.stdOut.endsWith('abq')).toBe(true)

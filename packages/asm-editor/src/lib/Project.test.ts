@@ -8,10 +8,13 @@ import {
     makeProjectFromExternal,
     normalizeProjectData,
     projectContentEquals,
+    projectWorkEquals,
     ProjectFormatError,
     type Testcase
 } from '#lib/Project.svelte.ts'
 import { BASE_CODE, LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
+import { makeBuildRecord } from '#lib/buildOutput.ts'
+import type { BuildSources } from '#lib/projectFiles.ts'
 
 /**
  * `cleanTestcases` runs on every project loaded from storage and on every embed URL, because a
@@ -762,5 +765,42 @@ describe('projectContentEquals', () => {
         expect(projectContentEquals(a, { ...b, description: 'changed' })).toBe(false)
         expect(projectContentEquals(a, { ...b, openTabs: [] })).toBe(false)
         expect(projectContentEquals(a, { ...b, activeTab: 'main.z80' })).toBe(false)
+    })
+})
+
+describe('projectWorkEquals', () => {
+    const program = Uint8Array.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])
+    /** An x86 Project as an example opens: `main.asm`, nothing built. */
+    function opened() {
+        const sources: BuildSources = {
+            entry: 'main.asm',
+            files: { 'main.asm': { encoding: 'plain', content: 'nop' } }
+        }
+        return {
+            sources,
+            project: makeProject({ language: 'X86', entry: 'main.asm', files: sources.files })
+        }
+    }
+
+    it('ignores how the Project is viewed and the Build outputs nobody changed', () => {
+        const { sources, project } = opened()
+        const original = project.toObject()
+        project.setFileView('main.asm', 'hex')
+        project.setOpenTabs(['main.asm'], 'main.asm')
+        project.fileSystem.writeBytes('main', program, true, 'base64')
+        project.recordBuild(makeBuildRecord(sources, 'main', project.files.main, []))
+        expect(projectContentEquals(original, project.toObject())).toBe(false)
+        expect(projectWorkEquals(original, project.toObject())).toBe(true)
+        project.fileSystem.writeText('main.asm', 'ret')
+        expect(projectWorkEquals(original, project.toObject())).toBe(false)
+    })
+
+    it('counts a Build output someone changed as work', () => {
+        const { sources, project } = opened()
+        const original = project.toObject()
+        project.fileSystem.writeBytes('main', program, true, 'base64')
+        project.recordBuild(makeBuildRecord(sources, 'main', project.files.main, []))
+        project.fileSystem.writeBytes('main', program.slice(1), true, 'base64')
+        expect(projectWorkEquals(original, project.toObject())).toBe(false)
     })
 })

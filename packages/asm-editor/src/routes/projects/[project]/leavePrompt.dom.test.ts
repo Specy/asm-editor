@@ -16,6 +16,8 @@ import { Prompt } from '#stores/promptStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 import { db } from '#lib/storage/db.ts'
 import { goto } from '$app/navigation'
+import { projectToArchive } from '#lib/projectArchive.ts'
+import * as utilities from '#lib/utils.ts'
 
 const page = vi.hoisted(() => ({
     params: { project: '' },
@@ -41,6 +43,8 @@ Element.prototype.animate ??= function () {
     return { onfinish: null, cancel() {}, finish() {} } as unknown as Animation
 }
 Element.prototype.getAnimations ??= () => []
+HTMLElement.prototype.showPopover ??= function () {}
+HTMLElement.prototype.hidePopover ??= function () {}
 
 beforeEach(() => {
     preferencesStore.values.autoSave.value = true
@@ -75,6 +79,11 @@ async function open(id: string, search = '') {
     await vi.waitFor(() => expect(button('Change')).toBeDefined())
     return {
         button,
+        copyLink(label = 'Copy link') {
+            button('Share').click()
+            flushSync()
+            button(label).click()
+        },
         /** Whether leaving now would be asked about, as a browser asks for a cancelled unload. */
         asks() {
             const event = new Event('beforeunload', { cancelable: true })
@@ -139,6 +148,150 @@ it('asks before leaving a shared Project, which is nobody’s until saved', asyn
     const project = await open('share', `?project=${shared}`)
     try {
         expect(project.asks()).toBe(true)
+    } finally {
+        await project.dispose()
+    }
+})
+
+function serveExample() {
+    const bytes = projectToArchive(makeProject({ name: 'Bouncing ball', language: 'MIPS' }))
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        if (input === '/examples/index.json')
+            return new Response(
+                JSON.stringify({
+                    version: 1,
+                    examples: {
+                        'bouncing-ball': {
+                            name: 'Bouncing ball',
+                            description: '',
+                            ports: [{ target: 'MIPS', archive: 'mips/bouncing-ball.asmproj' }]
+                        }
+                    }
+                })
+            )
+        return new Response(new Uint8Array(bytes))
+    })
+}
+
+it('opens examples without storing them, asks after an edit, and saves a personal copy on request', async () => {
+    serveExample()
+    const project = await open('share', '?example=mips-bouncing-ball')
+    try {
+        expect(ProjectStore.projects).toHaveLength(0)
+        expect(project.asks()).toBe(false)
+        project.button('Change').click()
+        flushSync()
+        expect(project.asks()).toBe(true)
+        project.button('Autosave').click()
+        await Promise.resolve()
+        expect(ProjectStore.projects).toHaveLength(0)
+        vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
+        project.button('Save').click()
+        await vi.waitFor(() => expect(ProjectStore.projects).toHaveLength(1))
+        expect(ProjectStore.projects[0].name).toBe('Bouncing ball')
+    } finally {
+        await project.dispose()
+    }
+})
+
+it('shares an unchanged example by id and includes edits in a project share link', async () => {
+    serveExample()
+    const copy = vi.spyOn(utilities, 'copyText').mockResolvedValue(true)
+    const project = await open('share', '?example=mips-bouncing-ball')
+    try {
+        project.copyLink()
+        await vi.waitFor(() => expect(copy).toHaveBeenCalledOnce())
+        expect(copy.mock.calls[0][0]).toContain('/projects/share?example=mips-bouncing-ball')
+        project.button('Change').click()
+        flushSync()
+        project.copyLink()
+        await vi.waitFor(() => expect(copy).toHaveBeenCalledTimes(2))
+        expect(copy.mock.calls[1][0]).toContain('/projects/share?project=')
+        vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
+        project.button('Save').click()
+        await vi.waitFor(() => expect(ProjectStore.projects).toHaveLength(1))
+        project.copyLink()
+        await vi.waitFor(() => expect(copy).toHaveBeenCalledTimes(3))
+        expect(copy.mock.calls[2][0]).toContain('/projects/share?project=')
+    } finally {
+        await project.dispose()
+    }
+})
+
+it('lets an example be looked around and left without asking, and still shares it by id', async () => {
+    serveExample()
+    const copy = vi.spyOn(utilities, 'copyText').mockResolvedValue(true)
+    const confirm = vi.spyOn(Prompt, 'confirm')
+    const project = await open('share', '?example=mips-bouncing-ball')
+    try {
+        //how it is viewed changes, as opening a tab or a Hex editor does, and its work does not
+        project.button('View').click()
+        flushSync()
+        expect(project.asks()).toBe(false)
+        expect(project.navigates('link')).toBe(true)
+        project.copyLink()
+        await vi.waitFor(() => expect(copy).toHaveBeenCalledOnce())
+        expect(copy.mock.calls[0][0]).toContain('/projects/share?example=mips-bouncing-ball')
+        project.button('Go back to your projects').click()
+        await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/projects'))
+        expect(confirm).not.toHaveBeenCalled()
+    } finally {
+        await project.dispose()
+    }
+})
+
+it('asks the Examples page to open the site when it shows the example in its frame', async () => {
+    serveExample()
+    const parent = { location: { origin: window.location.origin }, postMessage: vi.fn() }
+    const own = Object.getOwnPropertyDescriptor(window, 'parent')!
+    Object.defineProperty(window, 'parent', { configurable: true, get: () => parent })
+    const project = await open('share', '?example=mips-bouncing-ball')
+    try {
+        project.button('Donate').click()
+        await vi.waitFor(() =>
+            expect(parent.postMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: 'asm-editor:example-leave',
+                    example: 'mips-bouncing-ball',
+                    destination: { to: 'donate' }
+                }),
+                window.location.origin
+            )
+        )
+        expect(goto).not.toHaveBeenCalled()
+    } finally {
+        await project.dispose()
+        Object.defineProperty(window, 'parent', own)
+    }
+})
+
+it('reports an unknown example instead of falling back to a project payload', async () => {
+    serveExample()
+    expect((await failedToOpen('share', '?example=unknown&project=ignored')).title).toBe(
+        'This example is not available'
+    )
+})
+
+it.each([
+    ['Copy link with Build', 'build'],
+    ['Copy link with Build and Run', 'buildAndRun']
+])('copies example links with the startup option %s', async (label, flag) => {
+    serveExample()
+    const copy = vi.spyOn(utilities, 'copyText').mockResolvedValue(true)
+    const project = await open('share', '?example=mips-bouncing-ball')
+    try {
+        project.copyLink(label)
+        await vi.waitFor(() => expect(copy).toHaveBeenCalledOnce())
+        const url = new URL(copy.mock.calls[0][0])
+        expect(url.searchParams.get('example')).toBe('mips-bouncing-ball')
+        expect(url.searchParams.get(flag)).toBe('true')
+        project.button('Change').click()
+        flushSync()
+        project.copyLink(label)
+        await vi.waitFor(() => expect(copy).toHaveBeenCalledTimes(2))
+        const edited = new URL(copy.mock.calls[1][0])
+        expect(edited.searchParams.get('project')).toBeTruthy()
+        expect(edited.searchParams.get(flag)).toBe('true')
     } finally {
         await project.dispose()
     }

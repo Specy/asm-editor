@@ -1,4 +1,3 @@
-import { readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vite-plus/test'
 import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
@@ -325,23 +324,9 @@ function firstLine(text: string): string {
 }
 
 describe('examples/', () => {
-    it('lists every checked-in program', () => {
-        const found: string[] = []
-        const walk = (directory: string) => {
-            for (const entry of readdirSync(
-                new URL(`../../../../examples/${directory}`, import.meta.url),
-                {
-                    withFileTypes: true
-                }
-            )) {
-                const path = directory === '' ? entry.name : `${directory}/${entry.name}`
-                if (entry.isDirectory()) walk(path)
-                else if (!entry.name.endsWith('.md')) found.push(path)
-            }
-        }
-        walk('')
-        //a new example must reach the matrix, so the list above is checked against the directory
-        expect(found.sort()).toEqual(PROGRAMS.map((program) => program.path).sort())
+    it('keeps every measured program available', () => {
+        for (const program of PROGRAMS)
+            expect(example(program.path).length, program.path).toBeGreaterThan(0)
     })
 
     it(`runs every program headlessly, history ${HISTORY_SIZE}`, async () => {

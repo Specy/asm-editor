@@ -83,7 +83,7 @@
     }
 
     function buttons(): HTMLButtonElement[] {
-        return Array.from(menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+        return Array.from(menu?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
     }
 
     function close() {

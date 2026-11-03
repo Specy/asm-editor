@@ -161,6 +161,8 @@ function createProjectStore() {
     async function getProject(id: string) {
         if (!inited || loadFailed) await load()
         if (loadFailed) throw new Error('The stored projects could not be read')
+        //one saved since the list was read, by another tab or by the Examples page's frame
+        if (!projects.some((project) => project.id === id)) await load()
         return projects.find((project) => project.id === id)
     }
 

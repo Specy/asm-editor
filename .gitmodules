@@ -22,3 +22,6 @@
 	path = packages/decompiler
 	url = https://github.com/Specy/decompiler-js
 	branch = main
+[submodule "packages/examples"]
+	path = packages/examples
+	url = https://github.com/Specy/asm-examples.git

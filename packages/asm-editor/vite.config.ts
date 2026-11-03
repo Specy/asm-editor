@@ -6,32 +6,42 @@ import wasm from 'vite-plugin-wasm'
 import Icons from 'unplugin-icons/vite'
 import { defineConfig } from 'vite-plus'
 import { searchModelPlugin } from './scripts/search-model-plugin.ts'
+import { examplesPlugin } from './scripts/examples-plugin.ts'
 
-/** The Cores the editor imports, built from their checkouts by the root's tasks. */
-const CORES = ['asm-editor-monorepo#build:cores']
+/** The Cores and the example archives, built before the editor starts. */
+const BUILD_DEPENDENCIES = ['asm-editor-monorepo#build:cores', 'asm-editor-monorepo#build:examples']
 
 export default defineConfig({
     run: {
         tasks: {
+            //Only the site's build links the programs the archives carry: it Builds asmOS on the
+            //x86 Core, about twenty seconds, so dev, test and measure serve the archives without
+            //them, and a first Build in the editor makes them
+            'build:example-outputs': {
+                command:
+                    'cross-env TZ=UTC vp test run --config vitest.examples.config.ts scripts/examples/buildOutputs.task.ts',
+                dependsOn: ['asm-editor-monorepo#build:examples', 'asm-editor-monorepo#build:x86'],
+                cache: false
+            },
             dev: {
                 command: 'node scripts/search-model.mjs --optional && vp dev',
-                dependsOn: CORES,
+                dependsOn: BUILD_DEPENDENCIES,
                 cache: false
             },
             build: {
                 command:
                     'node scripts/search-model.mjs && cross-env NODE_OPTIONS=--max_old_space_size=6000 vp build',
-                dependsOn: CORES,
+                dependsOn: [...BUILD_DEPENDENCIES, 'build:example-outputs'],
                 cache: false
             },
             test: {
                 command: 'node scripts/search-model.mjs --optional && vp test run',
-                dependsOn: CORES,
+                dependsOn: BUILD_DEPENDENCIES,
                 cache: false
             },
             measure: {
                 command: 'vp test run --config vitest.measure.config.ts',
-                dependsOn: CORES,
+                dependsOn: BUILD_DEPENDENCIES,
                 cache: false
             }
         }
@@ -73,7 +83,8 @@ export default defineConfig({
             defaultClass: 'unplugin-icon'
         }),
         wasm(),
-        searchModelPlugin()
+        searchModelPlugin(),
+        examplesPlugin()
     ],
     worker: {
         format: 'es',

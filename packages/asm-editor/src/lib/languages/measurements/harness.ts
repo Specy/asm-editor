@@ -1,4 +1,5 @@
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync } from 'node:fs'
+import { readExample } from '#lib/examples.server.ts'
 import type { ExecutionSlice, ExecutionSliceRequest } from '#lib/languages/ExecutionSlice.ts'
 import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { M68KEmulator } from '#lib/languages/M68K/M68KEmulator.svelte.ts'
@@ -164,7 +165,7 @@ export function startFakeRenderer(screen: Screen, intervalMs = 16): () => void {
 }
 
 export function example(path: string): string {
-    return readFileSync(new URL(`../../../../examples/${path}`, import.meta.url), 'utf8')
+    return readExample(path)
 }
 
 /** Waits without blocking the loop the run is scheduled on. */

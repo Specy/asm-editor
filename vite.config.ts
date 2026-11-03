@@ -10,7 +10,8 @@ const CORES = [
     '/packages/m68k/',
     '/packages/x86/',
     '/packages/z80/',
-    '/packages/decompiler/'
+    '/packages/decompiler/',
+    '/packages/examples/'
 ]
 
 /**
@@ -41,6 +42,18 @@ export default defineConfig({
     defaultPackage: './packages/asm-editor',
     run: {
         tasks: {
+            'build:examples': {
+                command: 'npm ci && npm run build',
+                cwd: 'packages/examples',
+                cache: {
+                    input: [
+                        'packages/examples/**',
+                        '!packages/examples/dist/**',
+                        '!packages/examples/node_modules/**'
+                    ],
+                    output: ['packages/examples/dist/**']
+                }
+            },
             'build:mips': coreBuild(
                 'packages/mips/marsjs/ts',
                 'pnpm run build:all',
@@ -115,7 +128,6 @@ export default defineConfig({
             'pnpm-lock.yaml',
             ...CORES,
             '/packages/asm-editor/static/native-apps/',
-            '/packages/asm-editor/examples/',
             // Generated instruction tables: 1.2 MB of one-line records that the formatter would
             // explode into hundreds of thousands of lines. `scripts/x86-docs-generate.mjs`
             // writes them formatted.
@@ -150,7 +162,6 @@ export default defineConfig({
             'package/',
             'node_modules/',
             ...CORES,
-            '/packages/asm-editor/examples/',
             '/packages/asm-editor/static/',
             '*.cjs',
             // Generated libc++abi demangler; scripts/demangle/build.sh owns this module.

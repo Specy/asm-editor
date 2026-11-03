@@ -27,3 +27,16 @@ it('stores the browser copy before writing the linked file, which a closing page
         await ProjectStore.deleteProject(project)
     }
 })
+
+it('finds a project another tab or frame saved after this one read the list', async () => {
+    await ProjectStore.load()
+    //what the Examples page's frame does when it saves an example: the same database, another store
+    const saved = await db.addProject(makeProject({ name: 'saved elsewhere' }))
+    try {
+        expect(ProjectStore.projects.some((project) => project.id === saved.id)).toBe(false)
+        expect((await ProjectStore.getProject(saved.id))?.name).toBe('saved elsewhere')
+        expect(await ProjectStore.getProject('missing')).toBeUndefined()
+    } finally {
+        await ProjectStore.deleteProject(saved)
+    }
+})
