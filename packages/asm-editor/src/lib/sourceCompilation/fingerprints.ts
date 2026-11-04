@@ -22,8 +22,19 @@ export function contentFingerprint(text: string): string {
         .join('')
 }
 
+/**
+ * The fingerprints taken so far, by File record: a record is frozen, so its fingerprint never
+ * changes, and a Compilation record's status, which every change to the Files checks again, hashes
+ * only the Files that changed since.
+ */
+const fingerprints = new WeakMap<ProjectFile, string>()
+
 /** A File's content fingerprint: its encoding and content, never its Annotations. */
 export function fileFingerprint(file: ProjectFile | undefined): string | undefined {
     if (!file) return undefined
-    return contentFingerprint(`${file.encoding}\0${file.content}`)
+    const kept = fingerprints.get(file)
+    if (kept !== undefined) return kept
+    const fingerprint = contentFingerprint(`${file.encoding}\0${file.content}`)
+    if (Object.isFrozen(file)) fingerprints.set(file, fingerprint)
+    return fingerprint
 }

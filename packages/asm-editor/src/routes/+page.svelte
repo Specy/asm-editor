@@ -22,7 +22,7 @@
     import Column from '#cmp/shared/layout/Column.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
 
-    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import { storedProjectCount } from '#lib/storage/projectCount.ts'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
@@ -46,9 +46,17 @@
     })
     let shadow = $derived(textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);')
 
-    //a read that failed knows nothing of the projects, and their page says why
+    /**
+     * How many Projects are stored, counted without reading them: `pending` until the count is
+     * in, and undefined when the browser's storage could not be read.
+     */
+    let projectCount = $state<number | undefined | 'pending'>('pending')
+    onMount(() => {
+        void storedProjectCount().then((count) => (projectCount = count))
+    })
+    //a count that failed knows nothing of the projects, and their page says why
     let shouldGoToCurrentProjects = $derived(
-        ProjectStore.projects.length > 0 || !ProjectStore.inited || ProjectStore.loadFailed
+        projectCount === 'pending' || projectCount === undefined || projectCount > 0
     )
 </script>
 

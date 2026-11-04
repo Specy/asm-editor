@@ -74,7 +74,7 @@ it.skipIf(!id)(
                     async (input, init) => {
                         const response = await fetch(input, init)
                         const body = await response.text()
-                        //the bytes Compiler Explorer sent, which the 16 MiB limits count, and not
+                        //the bytes Compiler Explorer sent, which the size limits count, and not
                         //the UTF-16 units of the decoded text
                         answerBytes = Buffer.byteLength(body, 'utf8')
                         return new Response(body, {

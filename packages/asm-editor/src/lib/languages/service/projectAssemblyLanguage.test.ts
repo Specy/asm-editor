@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
-import { normalizeBuildInput } from '#lib/projectFiles.ts'
+import { cleanFiles, normalizeBuildInput, textFile } from '#lib/projectFiles.ts'
 import { x86SystemIncludes } from '#lib/languages/X86/x86Project.ts'
 import { registerLanguageSession } from './sessionRegistry'
 import { projectSourceUri } from './uri'
@@ -409,6 +409,82 @@ describe('common Project language features', () => {
             )
         } finally {
             unregisterDialect()
+        }
+    })
+
+    it('reads a File for its symbols once, and again only once it has changed', async () => {
+        const cachedSessionId = 'project-symbols-cache-test'
+        let current = normalizeBuildInput({
+            entry: 'main.s',
+            files: {
+                'main.s': { encoding: 'plain', content: 'main: nop\n.include "util.s"' },
+                'util.s': { encoding: 'plain', content: 'helper: nop' },
+                'other.s': { encoding: 'plain', content: 'other: nop' }
+            }
+        })
+        const unregisterCached = registerLanguageSession({
+            sessionId: cachedSessionId,
+            sources: current,
+            snapshot: undefined,
+            sourcesFor: () => current
+        })
+        const at = (path: string, prefix = '    j h') =>
+            ({
+                uri: projectSourceUri(monaco, {
+                    sessionId: cachedSessionId,
+                    sourceKind: 'live',
+                    path
+                }),
+                getValueInRange: () => prefix,
+                getWordUntilPosition: () => ({ word: 'h', startColumn: 6, endColumn: 7 })
+            }) as never
+        const complete = (path: string) =>
+            createProjectSymbolCompletionProvider(monaco, options).provideCompletionItems(
+                at(path),
+                { lineNumber: 1, column: 8 } as never,
+                {} as never,
+                {} as never
+            )
+        const documentSymbols = (path: string) =>
+            createProjectDocumentSymbolProvider(monaco, options).provideDocumentSymbols(
+                at(path),
+                {} as never
+            )
+        const split = vi.spyOn(String.prototype, 'split')
+        /** How many times the text of the File at `path` was split into lines since `from`. */
+        const reads = (path: string, from = 0) =>
+            split.mock.contexts
+                .slice(from)
+                .filter((text) => String(text) === current.files[path].content).length
+        try {
+            expect((await complete('main.s'))?.suggestions).toContainEqual(
+                expect.objectContaining({ label: 'helper' })
+            )
+            expect(reads('main.s')).toBeGreaterThan(0)
+            expect(reads('other.s')).toBe(0)
+            let mark = split.mock.contexts.length
+            await complete('main.s')
+            await documentSymbols('main.s')
+            await complete('util.s')
+            expect(reads('main.s', mark) + reads('util.s', mark)).toBe(0)
+            //document symbols read their own File alone, once
+            await documentSymbols('other.s')
+            await documentSymbols('other.s')
+            expect(reads('other.s', mark)).toBe(1)
+            //a change to one File reads that File again, and none of the others
+            current = normalizeBuildInput({
+                ...current,
+                files: cleanFiles({ ...current.files, 'util.s': textFile('helper2: nop') })
+            })
+            mark = split.mock.contexts.length
+            expect((await complete('main.s'))?.suggestions).toContainEqual(
+                expect.objectContaining({ label: 'helper2' })
+            )
+            expect(reads('util.s', mark)).toBeGreaterThan(0)
+            expect(reads('main.s', mark)).toBe(0)
+        } finally {
+            split.mockRestore()
+            unregisterCached()
         }
     })
 })

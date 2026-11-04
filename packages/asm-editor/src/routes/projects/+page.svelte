@@ -103,6 +103,8 @@
 
         void run()
         return () => {
+            //the list holds every stored Project, which no other page shows
+            ProjectStore.unload()
             if ('launchQueue' in window) {
                 //@ts-expect-error launchQueue is not in the types
                 window.launchQueue.setConsumer(() => {})
@@ -178,6 +180,10 @@
                         check that the browser allows this site to store data.
                     </ErrorState>
                 </div>
+            {:else if !ProjectStore.inited}
+                <!-- the list is read each time the page opens, which takes a moment for large
+                     Projects: until then nothing is known, not that there are none -->
+                <div class="empty reading" role="status">Reading your projects…</div>
             {:else if ProjectStore.projects.length === 0}
                 <div class="empty">
                     <div class="empty-title">No projects yet</div>
@@ -203,7 +209,7 @@
                                     console.error(error)
                                     toast.error(
                                         error instanceof ShareTooLargeError
-                                            ? 'This Project is too big to share as a link. Download the .asmproj archive instead.'
+                                            ? 'This Project is too large to share as a link. Download the .asmproj archive instead.'
                                             : 'Could not create a share link for this Project',
                                         10000
                                     )
@@ -211,13 +217,13 @@
                                 }
                                 await copyText(link, 'Share link')
                             }}
-                            on:download={(e) => {
+                            on:download={async (e) => {
                                 //Whichever form loses nothing: a single-File Project keeps its
                                 //name, description, Testcases, Settings and display in the
                                 //commented metadata block a source file carries, and everything
                                 //else needs the archive.
                                 try {
-                                    const download = projectDownload(e.detail)
+                                    const download = await projectDownload(e.detail)
                                     const contents =
                                         typeof download.contents === 'string'
                                             ? download.contents
@@ -281,6 +287,18 @@
 
     .load-failed {
         padding: 0;
+    }
+
+    /* shown only once the read takes long enough to notice, so a quick one does not flash it */
+    .reading {
+        opacity: 0;
+        animation: appear 0.2s ease-out 0.3s forwards;
+    }
+
+    @keyframes appear {
+        to {
+            opacity: 1;
+        }
     }
 
     .empty-title {

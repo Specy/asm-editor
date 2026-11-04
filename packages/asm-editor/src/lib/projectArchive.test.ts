@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { unzipSync, zipSync } from 'fflate'
 import lzstring from 'lz-string'
 import { serializer } from '#lib/json.ts'
@@ -23,7 +23,7 @@ import { bytesFile, fileBytes, ProjectFormatError, type ProjectFile } from '#lib
 const encoder = new TextEncoder()
 
 describe('Project archives', () => {
-    it('round trips metadata, bigints, paths, exact text and binary bytes', () => {
+    it('round trips metadata, bigints, paths, exact text and binary bytes', async () => {
         const project = makeProject({
             id: 'archive-id',
             name: 'Archive test',
@@ -49,8 +49,8 @@ describe('Project archives', () => {
             ]
         })
 
-        const archive = projectToArchive(project)
-        const imported = makeProjectFromArchive(archive).project
+        const archive = await projectToArchive(project)
+        const imported = (await makeProjectFromArchive(archive)).project
         expect(looksLikeZip(archive)).toBe(true)
         expect(imported.selectedProgram).toBe('src/main.mips')
         expect(imported.openTabs).toEqual(['src/lib.mips', 'src/main.mips'])
@@ -63,18 +63,18 @@ describe('Project archives', () => {
         )
     })
 
-    it('preserves an empty Files map and a configured missing Entry', () => {
+    it('preserves an empty Files map and a configured missing Entry', async () => {
         const project = makeProject({ language: 'Z80', files: {}, entry: 'missing.z80' })
-        const imported = makeProjectFromArchive(projectToArchive(project)).project
+        const imported = (await makeProjectFromArchive(await projectToArchive(project))).project
         expect(imported.files).toEqual({})
         expect(Object.keys(imported.programs)).toEqual(['missing.z80'])
         expect(imported.selectedProgram).toBe('missing.z80')
     })
 
-    it('rejects non-project ZIPs and traversal paths instead of treating them as source', () => {
-        expect(() =>
+    it('rejects non-project ZIPs and traversal paths instead of treating them as source', async () => {
+        await expect(
             makeProjectFromArchive(zipSync({ 'readme.txt': encoder.encode('hello') }))
-        ).toThrow(ProjectFormatError)
+        ).rejects.toThrow(ProjectFormatError)
         const manifest = encoder.encode(
             JSON.stringify({
                 version: 1,
@@ -92,14 +92,14 @@ describe('Project archives', () => {
                 files: { '../escape': { encoding: 'plain' } }
             })
         )
-        expect(() =>
+        await expect(
             makeProjectFromArchive(
                 zipSync({ 'project.json': manifest, 'files/../escape': encoder.encode('bad') })
             )
-        ).toThrow(ProjectFormatError)
+        ).rejects.toThrow(ProjectFormatError)
     })
 
-    it('rejects bytes that contradict a plain manifest encoding', () => {
+    it('rejects bytes that contradict a plain manifest encoding', async () => {
         const manifest = encoder.encode(
             JSON.stringify({
                 version: 1,
@@ -117,11 +117,11 @@ describe('Project archives', () => {
                 files: { 'main.m68k': { encoding: 'plain' } }
             })
         )
-        expect(() =>
+        await expect(
             makeProjectFromArchive(
                 zipSync({ 'project.json': manifest, 'files/main.m68k': new Uint8Array([0xff]) })
             )
-        ).toThrow('invalid UTF-8')
+        ).rejects.toThrow('invalid UTF-8')
     })
 
     it('creates a safe dedicated filename', () => {
@@ -148,7 +148,7 @@ describe('the single Project download', () => {
                 }
             ]
         })
-        const download = projectDownload(project)
+        const download = await projectDownload(project)
         expect(download.kind).toBe('source')
         expect(download.fileName).toBe('My___Project.mips')
         expect(typeof download.contents).toBe('string')
@@ -167,7 +167,7 @@ describe('the single Project download', () => {
         expect(Object.keys(reimported.files)).toEqual(['main.mips'])
     })
 
-    it('gives a multi-File Project the archive instead', () => {
+    it('gives a multi-File Project the archive instead', async () => {
         const project = makeProject({
             name: 'Multi',
             language: 'M68K',
@@ -177,16 +177,18 @@ describe('the single Project download', () => {
                 'lib.m68k': { encoding: 'plain', content: 'rts\n' }
             }
         })
-        const download = projectDownload(project)
+        const download = await projectDownload(project)
         expect(download.kind).toBe('archive')
         expect(download.fileName).toBe('Multi.asmproj')
         expect(looksLikeZip(download.contents as Uint8Array)).toBe(true)
-        const { project: reimported } = makeProjectFromArchive(download.contents as Uint8Array)
+        const { project: reimported } = await makeProjectFromArchive(
+            download.contents as Uint8Array
+        )
         expect(reimported.files).toEqual(project.files)
     })
 
-    it('gives a lone binary File the archive, which a source file could not hold', () => {
-        const download = projectDownload(
+    it('gives a lone binary File the archive, which a source file could not hold', async () => {
+        const download = await projectDownload(
             makeProject({
                 name: 'Binary',
                 entry: 'main.m68k',
@@ -244,9 +246,9 @@ describe('Programs in an archive', () => {
     const manifestOf = (archive: Uint8Array) =>
         serializer.parse<Manifest>(new TextDecoder().decode(unzipSync(archive)['project.json']))
 
-    it('writes one Program in the shape before Programs, as version 1, edited Files too', () => {
+    it('writes one Program in the shape before Programs, as version 1, edited Files too', async () => {
         const one = makeProject({ language: 'RISC-V', files, entry: 'sort.s' })
-        const manifest = manifestOf(projectToArchive(one))
+        const manifest = manifestOf(await projectToArchive(one))
         expect(manifest.version).toBe(1)
         expect(manifest.project).toMatchObject({ entry: 'sort.s', settings: {}, testcases: [] })
         expect(manifest.project).not.toHaveProperty('programs')
@@ -261,39 +263,39 @@ describe('Programs in an archive', () => {
             },
             entry: 'sort.s'
         })
-        const archive = projectToArchive(edited)
+        const archive = await projectToArchive(edited)
         expect(manifestOf(archive).version).toBe(1)
         expect(manifestOf(archive).files['data.bin']).toEqual({ encoding: 'base64' })
         expect([...unzipSync(archive)['files/data.bin']]).toEqual([0xff, 0x41, 1])
     })
 
-    it('round trips several Programs, a missing Entry and the selection through version 3', () => {
+    it('round trips several Programs, a missing Entry and the selection through version 3', async () => {
         const project = makeProject(several())
-        const archive = projectToArchive(project)
+        const archive = await projectToArchive(project)
         const manifest = manifestOf(archive)
         expect(manifest.version).toBe(3)
         expect(Object.keys(manifest.project.programs ?? {})).toEqual(['main.s', 'sort.s', 'gone.s'])
         expect(manifest.project.selectedProgram).toBe('sort.s')
         for (const field of ['entry', 'settings', 'testcases', 'display'])
             expect(manifest.project).not.toHaveProperty(field)
-        const imported = makeProjectFromArchive(archive).project
+        const imported = (await makeProjectFromArchive(archive)).project
         expect(imported.programs).toEqual(project.programs)
         expect(imported.selectedProgram).toBe('sort.s')
         expect(imported.program('sort.s')?.testcases[0]?.expectedRegisters.a0).toBe(3n)
         expect(imported.program('sort.s')?.display).toMatchObject({ unitWidth: 4 })
     })
 
-    it('round trips a Project without a Program through version 3, still without one', () => {
+    it('round trips a Project without a Program through version 3, still without one', async () => {
         const project = makeProject({ ...several(), programs: {} })
-        const archive = projectToArchive(project)
+        const archive = await projectToArchive(project)
         expect(manifestOf(archive).version).toBe(3)
-        const imported = makeProjectFromArchive(archive).project
+        const imported = (await makeProjectFromArchive(archive)).project
         expect(imported.programs).toEqual({})
         expect(imported.selectedProgram).toBeUndefined()
         expect(Object.keys(imported.files)).toEqual(['main.s', 'sort.s'])
     })
 
-    it('writes an edited File as its bytes in a version 3 archive', () => {
+    it('writes an edited File as its bytes in a version 3 archive', async () => {
         const project = makeProject({
             ...several(),
             files: {
@@ -301,15 +303,15 @@ describe('Programs in an archive', () => {
                 'data.bin': { encoding: 'base64', content: '/wAB', edits } as ProjectFile
             }
         })
-        const archive = projectToArchive(project)
+        const archive = await projectToArchive(project)
         expect(manifestOf(archive).version).toBe(3)
         expect(manifestOf(archive).files['data.bin'].edits).toBeUndefined()
-        expect([...fileBytes(makeProjectFromArchive(archive).project.files['data.bin'])]).toEqual([
-            0xff, 0x41, 1
-        ])
+        expect([
+            ...fileBytes((await makeProjectFromArchive(archive)).project.files['data.bin'])
+        ]).toEqual([0xff, 0x41, 1])
     })
 
-    it('reads each version by its own shape, and refuses one that does not match it', () => {
+    it('reads each version by its own shape, and refuses one that does not match it', async () => {
         const metadata = {
             id: '',
             name: 'Versions',
@@ -332,12 +334,18 @@ describe('Programs in an archive', () => {
                 'files/main.s': encoder.encode('nop')
             })
         for (const version of [1, 2])
-            expect(makeProjectFromArchive(archive(version, legacy)).project.programs).toEqual(
-                programs
-            )
-        expect(makeProjectFromArchive(archive(3, { programs })).project.programs).toEqual(programs)
-        expect(() => makeProjectFromArchive(archive(3, legacy))).toThrow('Malformed Project')
-        expect(() => makeProjectFromArchive(archive(2, { programs }))).toThrow('Malformed Project')
+            expect(
+                (await makeProjectFromArchive(archive(version, legacy))).project.programs
+            ).toEqual(programs)
+        expect((await makeProjectFromArchive(archive(3, { programs }))).project.programs).toEqual(
+            programs
+        )
+        await expect(makeProjectFromArchive(archive(3, legacy))).rejects.toThrow(
+            'Malformed Project'
+        )
+        await expect(makeProjectFromArchive(archive(2, { programs }))).rejects.toThrow(
+            'Malformed Project'
+        )
         for (const broken of [
             { programs: { 'main.s': { testcases: [] } } },
             { programs: { 'main.s': { settings: {}, testcases: {} } } },
@@ -347,28 +355,28 @@ describe('Programs in an archive', () => {
             { programs: [] },
             { programs, selectedProgram: 7 }
         ])
-            expect(
-                () => makeProjectFromArchive(archive(3, broken)),
+            await expect(
+                makeProjectFromArchive(archive(3, broken)),
                 JSON.stringify(broken)
-            ).toThrow(/Malformed (Program|Project)/)
+            ).rejects.toThrow(/Malformed (Program|Project)/)
     })
 
-    it('offers the single-file export only for one Program whose Entry is the only File', () => {
+    it('offers the single-file export only for one Program whose Entry is the only File', async () => {
         const one = makeProject({ files: { 'main.s': files['main.s'] }, entry: 'main.s' })
         expect(isSingleSourceProject(one)).toBe(true)
         expect(isLegacyLinkedFileCompatible(one.toObject())).toBe(true)
-        expect(projectDownload(one).kind).toBe('source')
+        expect((await projectDownload(one)).kind).toBe('source')
         const elsewhere = makeProject({ files: { 'main.s': files['main.s'] }, entry: 'gone.s' })
         expect(isSingleSourceProject(elsewhere)).toBe(false)
         const two = makeProject({ files: { 'main.s': files['main.s'] }, entry: 'main.s' })
         two.createProgram('gone.s')
         expect(isSingleSourceProject(two)).toBe(false)
         expect(isLegacyLinkedFileCompatible(two.toObject())).toBe(false)
-        expect(projectDownload(two).kind).toBe('archive')
+        expect((await projectDownload(two)).kind).toBe('archive')
         two.removeProgram('gone.s')
         two.removeProgram('main.s')
         expect(isSingleSourceProject(two)).toBe(false)
-        expect(projectDownload(two).kind).toBe('archive')
+        expect((await projectDownload(two)).kind).toBe('archive')
     })
 })
 
@@ -460,6 +468,32 @@ describe('large binary Files', () => {
         expect(differences).toBe(0)
     })
 
+    it('archives and reads back large Files, which Workers compress and inflate', async () => {
+        //well over the 160 KB fflate compresses in a Worker and the 512 KB it inflates in one,
+        //and more of them than inflate at once
+        const files = Object.fromEntries(
+            Array.from({ length: 5 }, (_, index) => [
+                `big${index}.s`,
+                { encoding: 'plain' as const, content: `nop # ${index}\n`.repeat(80_000) }
+            ])
+        )
+        const project = makeProject({ language: 'RISC-V', entry: 'big0.s', files })
+        const archive = await projectToArchive(project)
+        expect(archive.length).toBeLessThan(1024 * 1024)
+        const { project: imported } = await makeProjectFromArchive(archive)
+        expect(Object.keys(imported.files).sort()).toEqual(Object.keys(files).sort())
+        for (const [path, file] of Object.entries(files))
+            expect(imported.files[path].content === file.content).toBe(true)
+        //a large entry past the limit is refused before any is inflated
+        const tooMany = zipSync({
+            'project.json': encoder.encode('{}'),
+            ...Object.fromEntries(
+                Array.from({ length: 4097 }, (_, index) => [`files/f${index}`, new Uint8Array()])
+            )
+        })
+        await expect(makeProjectFromArchive(tooMany)).rejects.toThrow('4,096-file limit')
+    }, 30_000)
+
     it('still rejects content that is not canonical base64', () => {
         expect(() => fileBytes({ encoding: 'base64', content: 'not base64!!' })).toThrow(
             ProjectFormatError
@@ -496,33 +530,37 @@ describe('Byte edits a Project saved before, in an archive', () => {
     const manifestOf = (archive: Uint8Array) =>
         JSON.parse(new TextDecoder().decode(unzipSync(archive)['project.json']))
 
-    it('are applied as the archive is read, and written again as the File', () => {
-        const imported = makeProjectFromArchive(archive(2, edits)).project
+    it('are applied as the archive is read, and written again as the File', async () => {
+        const imported = (await makeProjectFromArchive(archive(2, edits))).project
         //a File holds its current bytes (ADR 0063)
         expect(imported.files.chall).toEqual({ encoding: 'base64', content: '/0FCAg==' })
-        const written = projectToArchive(imported)
+        const written = await projectToArchive(imported)
         expect(manifestOf(written).version).toBe(1)
         expect(manifestOf(written).files.chall).toEqual({ encoding: 'base64' })
         expect([...unzipSync(written)['files/chall']]).toEqual([0xff, 0x41, 0x42, 2])
     })
 
-    it('are read with an insertion and a deletion', () => {
+    it('are read with an insertion and a deletion', async () => {
         const kept = [
             { offset: 2, remove: 0, insert: 'QUI=' },
             { offset: 0, remove: 1, insert: '' }
         ]
-        const imported = makeProjectFromArchive(archive(2, kept)).project.files.chall
+        const imported = (await makeProjectFromArchive(archive(2, kept))).project.files.chall
         expect([...fileBytes(imported)]).toEqual([0, 0x41, 0x42, 1, 2])
     })
 
-    it('are refused in a version 1 manifest, and when they do not fit the original', () => {
-        expect(() => makeProjectFromArchive(archive(1, edits))).toThrow('Malformed manifest')
-        expect(() => makeProjectFromArchive(archive(2, 'edits'))).toThrow('Malformed manifest')
-        expect(() =>
+    it('are refused in a version 1 manifest, and when they do not fit the original', async () => {
+        await expect(makeProjectFromArchive(archive(1, edits))).rejects.toThrow(
+            'Malformed manifest'
+        )
+        await expect(makeProjectFromArchive(archive(2, 'edits'))).rejects.toThrow(
+            'Malformed manifest'
+        )
+        await expect(
             makeProjectFromArchive(archive(2, [{ offset: 3, remove: 2, insert: 'QUI=' }]))
-        ).toThrow('past the end')
+        ).rejects.toThrow('past the end')
         //version 5 was never released
-        expect(() => makeProjectFromArchive(archive(5, edits))).toThrow('Unsupported')
+        await expect(makeProjectFromArchive(archive(5, edits))).rejects.toThrow('Unsupported')
     })
 
     it('are applied in a share link, which carries the File as its bytes', () => {
@@ -585,9 +623,9 @@ describe('Annotations in an archive', () => {
             'files/chall': new Uint8Array([0xff, 0, 1, 2])
         })
 
-    it('keeps them in the manifest as version 4, the shape after Programs, and reads them back', () => {
+    it('keeps them in the manifest as version 4, the shape after Programs, and reads them back', async () => {
         const project = annotatedProject()
-        const download = projectToArchive(project)
+        const download = await projectToArchive(project)
         const manifest = manifestOf(download)
         expect(manifest.version).toBe(4)
         //one Program, which needs no Programs before Annotations, still takes the shape after them
@@ -598,7 +636,7 @@ describe('Annotations in an archive', () => {
             'notes.txt': { encoding: 'plain' }
         })
         expect([...unzipSync(download)['files/chall']]).toEqual([0xff, 0x41, 0x42, 2])
-        const imported = makeProjectFromArchive(download).project
+        const imported = (await makeProjectFromArchive(download)).project
         expect(imported.files.chall).toEqual({
             encoding: 'base64',
             content: '/0FCAg==',
@@ -609,15 +647,15 @@ describe('Annotations in an archive', () => {
         expect(imported.selectedProgram).toBe('chall')
     })
 
-    it('stays in the oldest version that holds the Project without any', () => {
+    it('stays in the oldest version that holds the Project without any', async () => {
         const project = annotatedProject()
         project.fileSystem.annotate('chall', undefined)
-        expect(manifestOf(projectToArchive(project)).version).toBe(1)
+        expect(manifestOf(await projectToArchive(project)).version).toBe(1)
         project.createProgram('notes.txt')
-        expect(manifestOf(projectToArchive(project)).version).toBe(3)
+        expect(manifestOf(await projectToArchive(project)).version).toBe(3)
     })
 
-    it('keeps them on a text File and on several Programs alike', () => {
+    it('keeps them on a text File and on several Programs alike', async () => {
         const project = makeProject({
             language: 'X86',
             files: {
@@ -629,28 +667,31 @@ describe('Annotations in an archive', () => {
                 'other.asm': { settings: {}, testcases: [] }
             }
         })
-        const download = projectToArchive(project)
+        const download = await projectToArchive(project)
         expect(manifestOf(download).version).toBe(4)
-        expect(makeProjectFromArchive(download).project.files['main.asm'].annotations).toEqual(
-            annotations
-        )
+        expect(
+            (await makeProjectFromArchive(download)).project.files['main.asm'].annotations
+        ).toEqual(annotations)
     })
 
-    it('reads older versions, and refuses Annotations where no version holds them', () => {
+    it('reads older versions, and refuses Annotations where no version holds them', async () => {
         for (const version of [2, 3]) {
             const project =
                 version === 3 ? { programs } : { entry: 'chall', settings: {}, testcases: [] }
             expect(
-                makeProjectFromArchive(archive(version, { encoding: 'base64', edits }, project))
-                    .project.files.chall
+                (
+                    await makeProjectFromArchive(
+                        archive(version, { encoding: 'base64', edits }, project)
+                    )
+                ).project.files.chall
             ).toEqual({ encoding: 'base64', content: '/0FCAg==' })
-            expect(() =>
+            await expect(
                 makeProjectFromArchive(
                     archive(version, { encoding: 'base64', annotations }, project)
                 )
-            ).toThrow('Malformed manifest File entry: chall')
+            ).rejects.toThrow('Malformed manifest File entry: chall')
         }
-        expect(() =>
+        await expect(
             makeProjectFromArchive(
                 archive(
                     1,
@@ -658,12 +699,12 @@ describe('Annotations in an archive', () => {
                     { entry: 'chall', settings: {}, testcases: [] }
                 )
             )
-        ).toThrow('Malformed manifest File entry: chall')
+        ).rejects.toThrow('Malformed manifest File entry: chall')
         //version 4 takes a File without any, and refuses the shape before Programs
         expect(
-            makeProjectFromArchive(archive(4, { encoding: 'base64' })).project.files.chall
+            (await makeProjectFromArchive(archive(4, { encoding: 'base64' }))).project.files.chall
         ).toEqual({ encoding: 'base64', content: '/wABAg==' })
-        expect(() =>
+        await expect(
             makeProjectFromArchive(
                 archive(
                     4,
@@ -671,32 +712,32 @@ describe('Annotations in an archive', () => {
                     { entry: 'chall', settings: {}, testcases: [] }
                 )
             )
-        ).toThrow('Malformed Project metadata')
+        ).rejects.toThrow('Malformed Project metadata')
     })
 
-    it('refuses Annotations that do not hold up, as a saved Project refuses them', () => {
-        expect(() =>
+    it('refuses Annotations that do not hold up, as a saved Project refuses them', async () => {
+        await expect(
             makeProjectFromArchive(archive(4, { encoding: 'base64', annotations: 'names' }))
-        ).toThrow('Malformed manifest File entry: chall')
-        expect(() =>
+        ).rejects.toThrow('Malformed manifest File entry: chall')
+        await expect(
             makeProjectFromArchive(archive(4, { encoding: 'base64', annotations: [] }))
-        ).toThrow('Malformed manifest File entry: chall')
-        expect(() =>
+        ).rejects.toThrow('Malformed manifest File entry: chall')
+        await expect(
             makeProjectFromArchive(
                 archive(4, { encoding: 'base64', annotations: { names: { main: 'check' } } })
             )
-        ).toThrow('chall has a rename or comment at a bad address (main).')
-        expect(() =>
+        ).rejects.toThrow('chall has a rename or comment at a bad address (main).')
+        await expect(
             makeProjectFromArchive(
                 archive(4, { encoding: 'base64', annotations: { names: { '0x1': 'rax' } } })
             )
-        ).toThrow('“rax” is an x86 register. Choose another name.')
-        expect(() =>
+        ).rejects.toThrow('“rax” is an x86 register. Choose another name.')
+        await expect(
             makeProjectFromArchive(archive(4, { encoding: 'base64', annotations: { notes: {} } }))
-        ).toThrow("chall has damaged renames or comments and can't be opened.")
+        ).rejects.toThrow("chall has damaged renames or comments and can't be opened.")
     })
 
-    it('never gives a one-File Project with Annotations as its source text, which loses them', () => {
+    it('never gives a one-File Project with Annotations as its source text, which loses them', async () => {
         const one = makeProject({
             files: { 'main.s': { encoding: 'plain', content: 'nop' } },
             entry: 'main.s'
@@ -705,11 +746,76 @@ describe('Annotations in an archive', () => {
         one.fileSystem.annotate('main.s', { comments: { '0x0': 'the start' } })
         expect(isSingleSourceProject(one)).toBe(false)
         expect(isLegacyLinkedFileCompatible(one.toObject())).toBe(false)
-        const download = projectDownload(one)
+        const download = await projectDownload(one)
         expect(download.kind).toBe('archive')
         expect(
-            makeProjectFromArchive(download.contents as Uint8Array).project.files['main.s']
+            (await makeProjectFromArchive(download.contents as Uint8Array)).project.files['main.s']
                 .annotations
         ).toEqual({ comments: { '0x0': 'the start' } })
     })
+})
+
+describe('reading a large archive', () => {
+    /** An archive of `count` Files of compressible text, each large enough for a Worker. */
+    async function largeArchive(count: number) {
+        const files = Object.fromEntries(
+            Array.from({ length: count }, (_, index) => [
+                `big${index}.s`,
+                { encoding: 'plain' as const, content: `nop # ${index}\n`.repeat(80_000) }
+            ])
+        )
+        return projectToArchive(makeProject({ language: 'RISC-V', entry: 'big0.s', files }))
+    }
+
+    /** Where an entry's central directory record is, by its name. */
+    function centralRecord(archive: Uint8Array, name: string) {
+        const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength)
+        const encoded = new TextEncoder().encode(name)
+        for (let at = 0; at + 46 < archive.length; at++) {
+            if (view.getUint32(at, true) !== 0x02014b50) continue
+            const length = view.getUint16(at + 28, true)
+            const written = archive.subarray(at + 46, at + 46 + length)
+            if (length === encoded.length && written.every((byte, i) => byte === encoded[i]))
+                return { view, at }
+        }
+        throw new Error(`no record for ${name}`)
+    }
+
+    it('refuses an entry whose data is longer than what it says it expands to', async () => {
+        const archive = await largeArchive(1)
+        //the record says 10 bytes, where the compressed data holds far more
+        const { view, at } = centralRecord(archive, 'files/big0.s')
+        view.setUint32(at + 24, 10, true)
+        await expect(makeProjectFromArchive(archive)).rejects.toThrow(
+            'Invalid compressed size for files/big0.s'
+        )
+    }, 30_000)
+
+    it('fails, starting no more Workers, when an entry does not inflate', async () => {
+        const archive = await largeArchive(4)
+        const { view, at } = centralRecord(archive, 'files/big1.s')
+        //the entry's data, its first bytes damaged
+        const local = view.getUint32(at + 42, true)
+        const start =
+            local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true)
+        archive.fill(0xff, start, start + 64)
+        await expect(makeProjectFromArchive(archive)).rejects.toThrow(ProjectFormatError)
+    }, 30_000)
+
+    it('stops the Workers when the page is left while it reads', async () => {
+        const archive = await largeArchive(6)
+        const page = new EventTarget()
+        const listen = vi.spyOn(page, 'addEventListener')
+        vi.stubGlobal('window', page)
+        try {
+            const reading = makeProjectFromArchive(archive)
+            await vi.waitFor(() =>
+                expect(listen).toHaveBeenCalledWith('pagehide', expect.anything())
+            )
+            page.dispatchEvent(new Event('pagehide'))
+            await expect(reading).rejects.toThrow('The page was left before the archive was read')
+        } finally {
+            vi.unstubAllGlobals()
+        }
+    }, 30_000)
 })

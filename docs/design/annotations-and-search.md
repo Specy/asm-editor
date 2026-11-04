@@ -42,7 +42,7 @@ Status: researched and planned 2026-10-22. The owner's four decisions (renames, 
 
 4. **Stale annotations stay** (_proposed_). Nothing is pruned when it no longer applies after a Byte edit: a rename whose address no longer starts a label, a comment at an address no line starts at, a local whose id the decompiler no longer reports. Each shows again when the bytes bring its address back, Undo included. A comment at an address inside a line shows on that line; a function comment whose function is gone shows above the line holding its address.
 
-5. **Limits** (_proposed_). A name has at most 128 characters; a comment at most 4,000 characters and 40 lines; a Project's annotations at most 256 KiB of text together, checked by `cleanFiles` as the 16 MiB of Files are, so that an archive's 1 MiB manifest (`E/lib/projectArchive.ts` :41) holds them beside the Byte edits.
+5. **Limits** (_proposed_). A name has at most 128 characters; a comment at most 4,000 characters and 40 lines; a Project's annotations at most 256 KiB of text together, checked by `cleanFiles` as the 16 MiB of Files are (64 MiB since 2026-11-04, [ADR 0076](../adr/0076-a-project-holds-64-mib-of-files.md)), so that an archive's 1 MiB manifest (`E/lib/projectArchive.ts` :41) holds them beside the Byte edits.
 
 ### Renames
 

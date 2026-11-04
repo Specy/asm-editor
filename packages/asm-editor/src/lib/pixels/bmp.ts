@@ -11,8 +11,8 @@
 
 /**
  * The most pixels the Pixel editor takes, 2048 × 2048: a 16 MiB File at 1 bit a pixel would hold
- * 128 million, half a gigabyte once decoded ([pixel-editor-plan.md](../../../../../docs/design/pixel-editor-plan.md),
- * decision 2).
+ * 128 million, half a gigabyte once decoded, and a File may be four times that
+ * ([pixel-editor-plan.md](../../../../../docs/design/pixel-editor-plan.md), decision 2).
  */
 export const PIXEL_LIMIT = 2048 * 2048
 

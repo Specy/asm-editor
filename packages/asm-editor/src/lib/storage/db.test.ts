@@ -294,3 +294,35 @@ describe('the version 2 upgrade', () => {
         db.close()
     })
 })
+
+describe('a save', () => {
+    beforeEach(() => {
+        Dexie.dependencies.indexedDB = new IDBFactory()
+    })
+
+    it('commits its writes as soon as it makes them, the journals with the row', async () => {
+        const db = new Db()
+        const project = await db.addProject(makeProject({ name: 'saved' }))
+        const commit = vi.spyOn(IDBTransaction.prototype, 'commit')
+        project.name = 'renamed'
+        const journal = { fingerprint: 'abc', undo: [], redo: [] }
+        await db.updateProject(project.toObject(), new Map([['main.m68k', journal]]))
+        expect(commit).toHaveBeenCalledOnce()
+        expect((await db.getProject(project.id))?.name).toBe('renamed')
+        expect(await db.journalStore(project.id).load()).toEqual(new Map([['main.m68k', journal]]))
+        //a journal written as none is taken away in the same save
+        await db.updateProject(project.toObject(), new Map([['main.m68k', undefined]]))
+        expect(await db.journalStore(project.id).load()).toEqual(new Map())
+        commit.mockRestore()
+        db.close()
+    })
+
+    it('rejects, storing nothing, when the browser refuses the row', async () => {
+        const db = new Db()
+        const project = await db.addProject(makeProject({ name: 'kept' }))
+        const row = { ...project.toObject(), name: 'refused', unclonable: () => {} }
+        await expect(db.updateProject(row)).rejects.toThrow()
+        expect((await db.getProject(project.id))?.name).toBe('kept')
+        db.close()
+    })
+})

@@ -15,7 +15,7 @@ import { programBuildSources } from './buildSources.ts'
 import { createEmulator } from './languages/Emulator.ts'
 import { FileSystem } from './languages/peripherals/FileSystem.ts'
 import { buildOutputStale } from './buildOutput.ts'
-import { SHARE_ID } from '#stores/projectsStore.svelte.ts'
+import { SHARE_ID } from '#lib/shareId.ts'
 
 const index = JSON.parse(
     readFileSync(new URL('../../../examples/dist/index.json', import.meta.url), 'utf8')
@@ -127,7 +127,7 @@ describe('bundled example projects', () => {
             const bytes = readFileSync(
                 new URL(`../../../examples/dist/${example.archive}`, import.meta.url)
             )
-            const { project } = makeProjectFromArchive(bytes)
+            const { project } = await makeProjectFromArchive(bytes)
             expect(project.language).toBe(example.language)
             for (const record of project.compilations) {
                 expect(compilationStatus(record, project.files, project.language).stale).toBe(false)

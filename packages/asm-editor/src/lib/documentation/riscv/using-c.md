@@ -122,7 +122,7 @@ triple:
 
 The function must follow the [calling convention](/documentation/risc-v/runtime-library#from-assembly) compiled code uses, with its arguments in `a0` to `a7` and its result in `a0`.
 
-A File the program does not use is left out, and is not even assembled, so an exercise in RARS's own syntax, or a File with mistakes, beside the program never breaks it. The **Problems** panel gives such a File a Hint: "This File is not part of the program: the program uses nothing it defines."
+A File the program does not use is left out, and is not even assembled, so an exercise in RARS's own syntax, or a File with mistakes, beside the program never breaks it. The **Problems** panel gives such a File a Hint: "The program doesn't use this File, so it is left out."
 
 A File the program uses is assembled as GNU assembly, the syntax C compiles to. Most of RARS's own syntax reads the same, but not all of it: GNU names the CSR first, `csrw utvec, t0`, where RARS writes `csrw t0, utvec`, and it has no `.eqv` and no `.macro`. When such a File does not assemble, the first error says why it was linked and that it must be written in GNU syntax.
 

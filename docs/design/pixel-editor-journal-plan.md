@@ -26,7 +26,7 @@ Written on 2026-10-25 when the owner chose "current bytes plus an Edit journal" 
 
 1. **`src/lib/projectFiles.ts`**:
     - Remove from `ProjectFile`: `edits`, `history`. Remove `EditStep`, `UndoneStep`, `EditHistory`, `HISTORY_BUDGET`, `STEP_LABEL_LIMIT`, `editsCost`, `historySize`, `cleanHistory`, `withByteEdits`, `editedLength`, `byteEditsKey`, `overwritesOnly`, `isWholeReplacement`, `isOverwrite` (export), `mergeOverwrites`, `JOIN_GAP`, `EDIT_CHUNK`, `originalSlice`.
-    - Keep `ByteEdit` (legacy input type), `cleanByteEdits` (private, for reading) and `applyByteEdits` (private or exported for tests); `cleanFiles` applies a File's legacy edits and returns `{ encoding: 'base64', content: encodeBase64(applied), annotations }`. Size check: the applied bytes against 16 MiB.
+    - Keep `ByteEdit` (legacy input type), `cleanByteEdits` (private, for reading) and `applyByteEdits` (private or exported for tests); `cleanFiles` applies a File's legacy edits and returns `{ encoding: 'base64', content: encodeBase64(applied), annotations }`. Size check: the applied bytes against 16 MiB. Update 2026-11-04: against the Project's limit, 64 MiB since [ADR 0076](../adr/0076-a-project-holds-64-mib-of-files.md), while what the legacy edits put in stays bounded by 16 MiB.
     - Simplify `fileBytes` (= `originalBytes`), `fileByteLength`, `fileHead` (no edits), `storedFilesSize` (content only), `sameFileContent` (encoding + content), `fileText` (no edits check).
     - Keep `decodeBase64` exported; keep `bytesFile`'s BMP rule.
 2. **`src/lib/languages/peripherals/FileSystem.ts`**:

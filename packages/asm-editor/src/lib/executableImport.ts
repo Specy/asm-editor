@@ -51,7 +51,7 @@ export async function importFile(bytes: Uint8Array, fileName: string): Promise<I
     return {
         imported:
             archive || /\.(?:asmproj|zip)$/i.test(fileName)
-                ? makeProjectFromArchive(bytes)
+                ? await makeProjectFromArchive(bytes)
                 : await makeProjectFromExternal(importedText(bytes, fileName)),
         executable: false,
         archive

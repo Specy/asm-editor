@@ -3,11 +3,17 @@
      * A reading page's way into the editor, at the foot of its sidebar: the reader's projects, or
      * making the first one when there are none yet.
      */
+    import { onMount } from 'svelte'
     import ButtonLink from './ButtonLink.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import { storedProjectCount } from '#lib/storage/projectCount.ts'
 
-    const hasProjects = $derived(ProjectStore.projects.length > 0)
+    /** How many Projects are stored, counted without reading them; until then, none. */
+    let count = $state<number | undefined>(undefined)
+    onMount(() => {
+        void storedProjectCount().then((stored) => (count = stored))
+    })
+    const hasProjects = $derived(count !== undefined && count > 0)
 </script>
 
 <ButtonLink

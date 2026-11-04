@@ -19,7 +19,7 @@ import {
     type SourceCompiler,
     type SourceLocation
 } from './records'
-import { isValidFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
+import { formatMiB, isValidFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
 import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
 import { loadRuntimeHeaders } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import {
@@ -42,11 +42,13 @@ export const COMPILE_BYTE_LIMIT = 1024 * 1024
 /**
  * The most Compiler Explorer's answer and the lines of assembly in it may be. The service sets no
  * limit on its output; these keep out an answer nothing here could hold. The answer is JSON of
- * about 70 bytes a line of assembly and more for a line with a source location, so a C program of
- * 4,000 lines is about 4 MiB at -O2. 16 MiB is what one Project File may hold; the Generated
- * assembly made from an answer is a fraction of its size.
+ * about 70 to 120 bytes a line of assembly, more for a line with a source location, so a C
+ * program of 4,000 lines is about 4 MiB at -O2, and a unit of tens of thousands of lines tens of
+ * MiB. The Generated assembly made from an answer is about a quarter of its size. The answer is read whole
+ * before it is measured, so one this size is a string of 32 MiB and its parse for a moment
+ * ([ADR 0076](../../../../../docs/adr/0076-a-project-holds-64-mib-of-files.md)).
  */
-const ASSEMBLY_BYTE_LIMIT = 16 * 1024 * 1024
+const ASSEMBLY_BYTE_LIMIT = 32 * 1024 * 1024
 const ASSEMBLY_LINE_LIMIT = 400_000
 /** What to do about an answer over either limit. */
 const TOO_LARGE_ADVICE =
@@ -702,7 +704,7 @@ export async function compileSource(
     const body = await response.text()
     if (body.length > ASSEMBLY_BYTE_LIMIT)
         throw new SourceCompilationError(
-            `Compiler output is ${(body.length / 1024 / 1024).toFixed(1)} MiB. The editor supports up to 16 MiB. ${TOO_LARGE_ADVICE}`
+            `Compiler output is ${(body.length / 1024 / 1024).toFixed(1)} MiB. The editor takes up to ${formatMiB(ASSEMBLY_BYTE_LIMIT)} of it. ${TOO_LARGE_ADVICE}`
         )
     let result: Record<string, unknown>
     try {

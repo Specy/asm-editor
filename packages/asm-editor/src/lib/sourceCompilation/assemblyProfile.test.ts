@@ -78,7 +78,7 @@ describe('assembler profile ownership', () => {
         ).toThrow(/Conflicting/)
         expect(resolveAssemblyProfile({ ...sources, entry: 'unrelated.s' }, [record])).toBe('rars')
     })
-    it('retains profile requirements after edits, save, reload, sharing shape and archives', () => {
+    it('retains profile requirements after edits, save, reload, sharing shape and archives', async () => {
         const project = makeProject({
             language: 'RISC-V',
             entry: sources.entry,
@@ -90,7 +90,7 @@ describe('assembler profile ownership', () => {
         for (const reopened of [
             makeProject(project.toObject()),
             makeProject(normalizeProjectData(JSON.parse(JSON.stringify(project.toObject())))),
-            makeProjectFromArchive(projectToArchive(project)).project
+            (await makeProjectFromArchive(await projectToArchive(project))).project
         ]) {
             expect(
                 resolveAssemblyProfile(
@@ -219,7 +219,7 @@ describe('x86 start code', () => {
         )
         expect(resolveX86Start(shadowed, undefined)).toEqual({})
     })
-    it('keeps the requirement through save, reload and archives', () => {
+    it('keeps the requirement through save, reload and archives', async () => {
         const project = makeProject({
             language: 'X86',
             entry: x86Sources.entry,
@@ -228,7 +228,7 @@ describe('x86 start code', () => {
         })
         for (const reopened of [
             makeProject(normalizeProjectData(JSON.parse(JSON.stringify(project.toObject())))),
-            makeProjectFromArchive(projectToArchive(project)).project
+            (await makeProjectFromArchive(await projectToArchive(project))).project
         ]) {
             expect(
                 resolveX86Start(

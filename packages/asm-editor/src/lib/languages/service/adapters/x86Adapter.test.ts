@@ -193,8 +193,7 @@ describe('x86 Project analysis adapter', () => {
             expect.objectContaining({
                 severity: 'suggestion',
                 location: expect.objectContaining({ path: 'main.asm' }),
-                message:
-                    'This File is not part of the program: the program uses nothing it defines.'
+                message: "The program doesn't use this File, so it is left out."
             })
         ])
         expect(snapshot.fileStatus['main.asm']).toBe('not-reachable')

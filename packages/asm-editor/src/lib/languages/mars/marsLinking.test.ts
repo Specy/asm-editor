@@ -679,8 +679,7 @@ describe.each(TARGETS)('$language: hand-written Files beside a C Program', (spec
                 file: 'exercise.asm',
                 severity: 'suggestion',
                 lineIndex: 0,
-                message:
-                    'This File is not part of the program: the program uses nothing it defines.'
+                message: "The program doesn't use this File, so it is left out."
             })
             await emulator.run(1_000_000)
             expect(emulator.termination).toEqual({ kind: 'exit', code: 42 })
@@ -820,6 +819,17 @@ describe('MIPS: an exception handler beside a C Program', () => {
                     .map((d) => d.file)
                     .sort()
             ).toEqual(['handler.mips', 'lab.asm', 'lab2.asm'])
+            //each says its handler never runs, and how to include it: by its global name, or by
+            //giving the lab's, which has none, one
+            const hint = (file: string) =>
+                emulator.compilerDiagnostics.find((d) => d.code === 'not-linked' && d.file === file)
+                    ?.message
+            expect(hint('handler.mips')).toBe(
+                "The program doesn't use this File, so it is left out. Its exception handler never runs. To include it, write `SIM_LINK(handler);` in one of your C files, outside any function."
+            )
+            expect(hint('lab.asm')).toBe(
+                "The program doesn't use this File, so it is left out. Its exception handler never runs. To include it, give the handler a name with `.globl`, then write `SIM_LINK(that_name);` in one of your C files, outside any function."
+            )
             await emulator.run(1_000_000)
             expect(emulator.termination?.kind).toBe('error')
         } finally {

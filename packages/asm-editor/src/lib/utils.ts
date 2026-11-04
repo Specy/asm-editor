@@ -1,4 +1,4 @@
-import { SHARE_ID } from '#stores/projectsStore.svelte.ts'
+import { SHARE_ID } from '#lib/shareId.ts'
 import lzstring from 'lz-string'
 import { legacyProjectShape, withoutBuildOutputs, type Project } from '#lib/Project.svelte.ts'
 import { serializer } from '#lib/json.ts'
@@ -103,6 +103,22 @@ export function capitalize(word: string) {
  */
 export const SHARE_PAYLOAD_LIMIT = 32_000
 
+/**
+ * The most a Project's Files may hold, in characters of content, and still be compressed to see
+ * whether it fits a link. The payload's 32,000 characters carry 6 bits each, 24,000 bytes, so a
+ * Project past this would need its JSON compressed more than 40 times, which lz-string reaches
+ * only on long runs of one character: compressing such a Project took seconds before it said no,
+ * a 64 MiB one half a minute and then a RangeError. It is refused at once instead.
+ */
+export const SHARE_CONTENT_LIMIT = 1024 * 1024
+
+/**
+ * How much of a Project's JSON is compressed first, to refuse before compressing the rest: a
+ * prefix's compression is the start of the whole's, but for its last few characters, so when the
+ * prefix alone passes the limit the whole does too.
+ */
+const SHARE_PROBE_LENGTH = 128 * 1024
+
 export class ShareTooLargeError extends Error {
     constructor() {
         super('This Project is too large to share as a link')
@@ -119,9 +135,21 @@ export class ShareTooLargeError extends Error {
  */
 export function createSharePayload(project: Project): string {
     const snapshot = withoutBuildOutputs(project.toObject())
+    let content = 0
+    for (const file of Object.values(snapshot.files)) content += file.content.length
+    if (content > SHARE_CONTENT_LIMIT) throw new ShareTooLargeError()
     const p = legacyProjectShape(snapshot) ?? snapshot
     p.id = SHARE_ID
-    const payload = lzstring.compressToEncodedURIComponent(serializer.stringify(p))
+    const json = serializer.stringify(p)
+    //lz-string's last code and its end mark, which a prefix's compression ends with, take a few
+    //characters; a prefix past the limit by more than them leaves the whole past it
+    if (
+        json.length > SHARE_PROBE_LENGTH &&
+        lzstring.compressToEncodedURIComponent(json.slice(0, SHARE_PROBE_LENGTH)).length >
+            SHARE_PAYLOAD_LIMIT + 16
+    )
+        throw new ShareTooLargeError()
+    const payload = lzstring.compressToEncodedURIComponent(json)
     if (payload.length > SHARE_PAYLOAD_LIMIT) throw new ShareTooLargeError()
     return payload
 }

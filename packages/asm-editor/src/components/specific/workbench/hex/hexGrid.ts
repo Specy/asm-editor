@@ -6,7 +6,7 @@
 
 /**
  * The tallest the scroller's content may be. Browsers cap an element's height (Firefox near 17.9
- * million pixels), below what a 16 MiB File's rows need, so above this the scrollbar is scaled: the
+ * million pixels), below what a large File's rows need, so above this the scrollbar is scaled: the
  * scroller keeps this height and its position maps onto the rows' whole height.
  */
 export const HEX_SCROLL_LIMIT = 8_000_000

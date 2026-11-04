@@ -122,7 +122,7 @@ triple:
 
 The function must follow the [calling convention](/documentation/mips/runtime-library#from-assembly) compiled code uses, with its arguments in `$a0` to `$a3` and its result in `$v0`.
 
-A File the program does not use is left out, and is not even assembled, so an exercise in MARS's own syntax, or a File with mistakes, beside the program never breaks it. The **Problems** panel gives such a File a Hint: "This File is not part of the program: the program uses nothing it defines."
+A File the program does not use is left out, and is not even assembled, so an exercise in MARS's own syntax, or a File with mistakes, beside the program never breaks it. The **Problems** panel gives such a File a Hint: "The program doesn't use this File, so it is left out."
 
 A File the program uses is assembled as GNU assembly, the syntax C compiles to. Most of MARS's own syntax reads the same, but not all of it: GNU assembly has no `.eqv` and no `.macro`, for example. When such a File does not assemble, the first error says why it was linked and that it must be written in GNU syntax.
 
@@ -152,4 +152,4 @@ handler:
         eret
 ```
 
-`SIM_LINK` counts as a use of the name, as if the program called it. Build fails when no File defines the name, and when two linked Files both hold `.ktext`, since only one handler can start at `0x80000180`: the error names both Files. A File the program does not use never counts, whatever it holds. [Interrupts and the timer](/documentation/mips/interrupts) shows what a handler does.
+`SIM_LINK` counts as a use of the name, as if the program called it. Build fails when no File defines the name, and when two linked Files both hold `.ktext`, since only one handler can start at `0x80000180`: the error names both Files. A File the program does not use never counts, whatever it holds: its Hint says that its handler never runs, and how to include it. [Interrupts and the timer](/documentation/mips/interrupts) shows what a handler does.

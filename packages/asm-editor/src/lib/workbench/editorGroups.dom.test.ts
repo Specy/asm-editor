@@ -124,6 +124,9 @@ describe('saved editor tabs', () => {
         flushSync()
         expect(project.openTabs).toEqual(['main.c', 'value.h', 'other.c'])
         expect(project.activeTab).toBe('value.h')
+        //autosave's pause, which the Workbench going ends at once
+        expect(onSave).not.toHaveBeenCalled()
+        session.saveNow()
         expect(onSave).toHaveBeenCalledExactlyOnceWith({ silent: true })
         session.closeTab('value.h')
         flushSync()

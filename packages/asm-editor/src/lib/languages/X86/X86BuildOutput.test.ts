@@ -14,7 +14,12 @@ import { ListingDocuments } from '#lib/listing/listingDocuments.svelte.ts'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
-import { fileBytes, type BuildSources, type ProjectFiles } from '#lib/projectFiles.ts'
+import {
+    fileBytes,
+    FILE_LIMIT_MESSAGE,
+    type BuildSources,
+    type ProjectFiles
+} from '#lib/projectFiles.ts'
 import { compileSource } from '#lib/sourceCompilation/compilerExplorer.ts'
 import { generatedAssemblyPath } from '#lib/sourceCompilation/records.ts'
 import { X86Emulator } from './X86Emulator.svelte'
@@ -195,11 +200,11 @@ describe('an x86 Build of main.asm', () => {
         const emulator = await emulatorFor(sources)
         const host = savingHost(emulator)
         host.save.mockImplementation(() => {
-            throw new Error('Project exceeds the 16 MiB file limit')
+            throw new Error(FILE_LIMIT_MESSAGE)
         })
         await emulator.compile(100, sources)
         expect(emulator.notes.map((note) => note.text)).toEqual([
-            'The built program could not be saved as `main`: Project exceeds the 16 MiB file limit'
+            'The built program could not be saved as `main`: Project exceeds the 64 MiB file limit'
         ])
         expect(emulator.canExecute).toBe(true)
         await emulator.run(0)

@@ -143,7 +143,7 @@ Every example Project the editor ships moves out of `packages/asm-editor/example
     **The build fails** on:
     - a missing Entry, or a missing File named by a Program, a tab, a File view or a record;
     - a path given by both a shared example and its port;
-    - a port over the editor's limits: 16 MiB of Files, 4,096 Files, 1,024-byte paths;
+    - a port over the editor's limits: 16 MiB of Files, 4,096 Files, 1,024-byte paths (64 MiB of Files since 2026-11-04, [ADR 0076](../adr/0076-a-project-holds-64-mib-of-files.md));
     - an unknown Target folder;
     - a stale Generated assembly (decision 4).
 
