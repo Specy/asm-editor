@@ -10,6 +10,7 @@
     import SparklesIcon from '../agent/SparklesIcon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { resolve } from '$app/paths'
+    import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -75,7 +76,7 @@
                 </div>
             {/if}
             {@render children?.()}
-            {#if aiToggle}
+            {#if AI_FEATURES_ENABLED && aiToggle}
                 <button
                     type="button"
                     class="icon ai"
@@ -93,7 +94,7 @@
                     {/if}
                     <span class="label">{aiToggle.label}</span>
                 </button>
-            {:else if !compact && !exclude?.includes('ai-chat')}
+            {:else if AI_FEATURES_ENABLED && !compact && !exclude?.includes('ai-chat')}
                 <a class="icon ai" href={resolve('/chat')} {@attach tooltip('AI Chat')}>
                     <SparklesIcon />
                     <span class="label">AI Chat</span>

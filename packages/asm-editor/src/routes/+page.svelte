@@ -27,6 +27,7 @@
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
+    import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { jsonLdScriptTag, softwareApplicationLd } from '#lib/seo.ts'
 
@@ -222,16 +223,18 @@
                         Exam
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/chat')}>
-                    {#snippet icon()}
-                        <div>
-                            <SparklesIcon style="font-size: 1.8rem" />
-                        </div>
-                    {/snippet}
-                    {#snippet description()}
-                        AI Chat
-                    {/snippet}
-                </MainPageLinkPreview>
+                {#if AI_FEATURES_ENABLED}
+                    <MainPageLinkPreview href={resolve('/chat')}>
+                        {#snippet icon()}
+                            <div>
+                                <SparklesIcon style="font-size: 1.8rem" />
+                            </div>
+                        {/snippet}
+                        {#snippet description()}
+                            AI Chat
+                        {/snippet}
+                    </MainPageLinkPreview>
+                {/if}
             </div>
         </div>
     </div>
@@ -339,25 +342,29 @@
                 where the editor is locked down.
             </div>
         </MainPageSection>
-        <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp" reverse>
-            {#snippet title()}
-                AI Chat
-            {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
-                Chat with an AI assistant that can write, run and debug assembly code directly in
-                the browser. Use the <a
-                    href={resolve('/chat')}
-                    title="AI Chat"
-                    class="external-link"
-                >
+        {#if AI_FEATURES_ENABLED}
+            <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp" reverse>
+                {#snippet title()}
                     AI Chat
-                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-                        <GoLinkExternal />
-                    </div>
-                </a>
-                to get help with M68K, MIPS, RISC-V, x86-64 and Z80 assembly.
-            </div>
-        </MainPageSection>
+                {/snippet}
+                <div class="description" class:textShadow={textShadowSecondary}>
+                    Chat with an AI assistant that can write, run and debug assembly code directly
+                    in the browser. Use the <a
+                        href={resolve('/chat')}
+                        title="AI Chat"
+                        class="external-link"
+                    >
+                        AI Chat
+                        <div
+                            style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem"
+                        >
+                            <GoLinkExternal />
+                        </div>
+                    </a>
+                    to get help with M68K, MIPS, RISC-V, x86-64 and Z80 assembly.
+                </div>
+            </MainPageSection>
+        {/if}
         <MainPageSection id="embed">
             {#snippet title()}
                 Embed

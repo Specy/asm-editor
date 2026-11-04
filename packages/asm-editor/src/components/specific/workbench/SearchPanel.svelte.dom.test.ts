@@ -27,6 +27,7 @@ import { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
 import type { BuiltinPanelId, PanelAccess } from '#lib/workbench/hostApi.ts'
 import { editorGroupsFixture } from '#lib/workbench/__fixtures__/editorGroups.svelte.ts'
 import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
+import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
 import { EXAM_PANEL_ACCESS } from '#cmp/specific/exam/examAccess.ts'
 import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 import type { RailEntry } from './workbenchContext'
@@ -386,7 +387,7 @@ describe('the rail and the shortcut', () => {
             'testcases',
             'documentation',
             'symbols',
-            'agent',
+            ...(AI_FEATURES_ENABLED ? ['agent'] : []),
             'settings'
         ])
         expect(ids()).toContain('search')

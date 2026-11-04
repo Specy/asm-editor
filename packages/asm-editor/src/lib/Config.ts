@@ -1,5 +1,11 @@
 import type { AvailableLanguages } from './Project.svelte'
 
+/**
+ * Turns every AI feature on or off: the AI Chat page and its links, the Workbench's AI assistant
+ * panel, a lecture's Ask AI and an exam's review assistant. Off, the /chat page answers 404.
+ */
+export const AI_FEATURES_ENABLED = false
+
 export const PAGE_SIZE = 16 * 16
 export const PAGE_ELEMENTS_PER_ROW = Math.sqrt(PAGE_SIZE)
 

@@ -46,6 +46,7 @@
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import ExamReviewAgentSidebar from '#cmp/specific/exam/ExamReviewAgentSidebar.svelte'
     import ExamReviewAgent from '#cmp/specific/exam/ExamReviewAgent.svelte'
+    import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import type { Emulator } from '#lib/languages/Emulator.ts'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
@@ -820,7 +821,7 @@
                     </div>
 
                     <div class="header-controls">
-                        {#if isReviewMode}
+                        {#if isReviewMode && AI_FEATURES_ENABLED}
                             <Button
                                 cssVar="accent"
                                 hasIcon
@@ -909,7 +910,9 @@
                                 bind:code={assemblyAnswers[assemblySection.id]}
                                 bind:activePanel={assemblyPanel}
                                 readonly={examDisabled}
-                                review={isReviewMode ? reviewAgent : undefined}
+                                review={isReviewMode && AI_FEATURES_ENABLED
+                                    ? reviewAgent
+                                    : undefined}
                             >
                                 {#snippet prompt()}
                                     <MarkdownRenderer
@@ -987,7 +990,7 @@
                                 {/if}
                             </div>
                         </div>
-                        {#if isReviewMode}
+                        {#if isReviewMode && AI_FEATURES_ENABLED}
                             <ExamReviewAgentSidebar
                                 bind:open={teacherAgentOpen}
                                 exam={loadedExam}

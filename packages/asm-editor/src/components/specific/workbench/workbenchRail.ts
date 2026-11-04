@@ -7,6 +7,7 @@ import FaShareAlt from '~icons/fa-solid/share-alt'
 import FaCog from '~icons/fa-solid/cog'
 import FaHistory from '~icons/fa-solid/history'
 import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
 import type {
     BuiltinPanelId,
     PanelAccess,
@@ -87,7 +88,7 @@ export function workbenchRail(options: WorkbenchRailOptions): RailEntry[] {
         builtin('history', 'Edit history', FaHistory, 'top', {
             tooltip: 'View and restore edits made in the pixel and hex editors'
         })
-    builtin('agent', 'AI assistant', SparklesIcon, 'bottom')
+    if (AI_FEATURES_ENABLED) builtin('agent', 'AI assistant', SparklesIcon, 'bottom')
     if (options.onShare) link('share', 'Share', FaShareAlt, options.onShare)
     for (const hostLink of options.hostLinks)
         link(hostLink.id, hostLink.title, hostLink.icon, hostLink.onClick)

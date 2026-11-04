@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { PageData } from './$types'
     import Page from '#cmp/shared/layout/Page.svelte'
+    import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import Header from '#cmp/shared/layout/Header.svelte'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -52,7 +53,7 @@
 
     //the course navbar shows the Ask AI toggle only while a lecture is on screen
     $effect(() => {
-        lectureAgent.available = true
+        lectureAgent.available = AI_FEATURES_ENABLED
         return () => {
             lectureAgent.available = false
             lectureAgent.open = false
@@ -218,16 +219,17 @@
     </Row>
 </Page>
 
-<FloatingAgentSidebar
-    bind:open={lectureAgent.open}
-    openSize="28rem"
-    verticalOffset="3.2rem"
-    bind:editorLanguage
-    bind:editorCode
-    {emulatorInstance}
-    canUpdateLanguage={true}
-    searchPlace={{ language: courseLanguage(data.course.slug), lectures: true }}
-    additionalInstructions={`
+{#if AI_FEATURES_ENABLED}
+    <FloatingAgentSidebar
+        bind:open={lectureAgent.open}
+        openSize="28rem"
+        verticalOffset="3.2rem"
+        bind:editorLanguage
+        bind:editorCode
+        {emulatorInstance}
+        canUpdateLanguage={true}
+        searchPlace={{ language: courseLanguage(data.course.slug), lectures: true }}
+        additionalInstructions={`
         The user is reading the lecture "${data.lecture.name}" from the course "${data.course.name}".
         Lecture description: ${data.lecture.description}
         Course description: ${data.course.description}
