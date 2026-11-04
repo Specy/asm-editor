@@ -325,18 +325,36 @@ describe.each(TARGETS)('$language: a Program of several compiled units', (spec) 
             compilations
         })
         expect(manual.linkUnits).toBeUndefined()
-        //Generated assembly of another Target is no unit of this one
-        const elsewhere = projectBuildSources({
-            files,
+        //every assembly File of the Target is one, hand-written or not, by the Target's own
+        //extension, `.asm` or `.s`; another Target's assembly, an include fragment and an
+        //extension-less File are not, nor another Program's Entry or what that one includes
+        const foreign = language === 'MIPS' ? 'riscv' : 'mips'
+        const mixed = projectBuildSources({
+            files: {
+                ...files,
+                [`hand.${extension}`]: text(asm.unused),
+                'hand.asm': text(asm.unused),
+                'lib/hand.S': text(asm.unused),
+                [`elsewhere.c.${foreign}`]: text(asm.unused),
+                'macros.inc': text(asm.unused),
+                Makefile: text('all:\n'),
+                'picture.bmp': { encoding: 'base64', content: 'AA==' },
+                'game/main.s': text('.include "parts.s"\n.include "/shared/data.asm"\nmain:\n'),
+                'game/parts.s': text(asm.unused),
+                'shared/data.asm': text(asm.unused)
+            },
             entry: path('main'),
             language,
-            compilations: compilations.map((record) =>
-                record.outputPath === path('twice')
-                    ? { ...record, target: language === 'MIPS' ? 'RISC-V' : 'MIPS' }
-                    : record
-            )
+            compilations,
+            programs: [path('main'), 'game/main.s', path('other')]
         })
-        expect(elsewhere.linkUnits).not.toContain(path('twice'))
+        expect(mixed.linkUnits).toEqual([
+            'hand.asm',
+            `hand.${extension}`,
+            'lib/hand.S',
+            path('twice'),
+            path('unused')
+        ])
         //a configuration without units is named as before they existed
         const { linkUnits, ...without } = built
         expect(linkUnits).toBeDefined()
@@ -349,7 +367,7 @@ describe.each(TARGETS)('$language: a Program of several compiled units', (spec) 
         const emulator = await build(built)
         try {
             expect(errors(emulator)).toEqual([])
-            //the two units nothing needs were checked, and say why they are left out
+            //the two units nothing needs were never assembled, and say why they are left out
             const hints = emulator.compilerDiagnostics.filter((d) => d.code === 'not-linked')
             expect(hints.map((d) => d.file).sort()).toEqual([path('other'), path('unused')])
             expect(emulator.buildArtifacts.some((a) => a.file === path('unused'))).toBe(false)
@@ -451,30 +469,59 @@ describe.each(TARGETS)('$language: a Program of several compiled units', (spec) 
         }
     })
 
-    it("reports a mistake in another unit in that unit's File, used or not", async () => {
-        for (const name of ['twice', 'unused'] as const) {
-            const broken = sources(path('main'), { [name]: outputs[name] + asm.mistake }).sources
-            const emulator = make(broken, { language })
-            try {
-                await expect(emulator.compile(200, broken)).rejects.toThrow()
-                const [error] = errors(emulator)
-                const line = (outputs[name] + asm.mistake).split('\n').length - 2
-                expect(error).toMatchObject({ file: path(name), lineIndex: line })
-                //the squiggle covers the token the Core points at, read from that unit's tokens
-                expect([error.column, error.endColumn]).toEqual([1, 1 + 'bogus'.length])
-            } finally {
-                emulator.dispose()
-            }
-            //the live check says the same, and counts every unit as checked
-            const analysis = analyzeMarsProject(broken, 'linking', 1, language)
-            expect(analysis.diagnostics.filter((d) => d.severity === 'error')).toEqual([
-                expect.objectContaining({
-                    location: expect.objectContaining({ path: path(name) })
-                })
-            ])
-            expect(analysis.fileStatus[path('unused')]).toBe('assembled')
-            expect(analysis.fileStatus[path('twice')]).toBe('assembled')
+    it("reports a mistake in a unit the program needs in that unit's File, saying why it is linked", async () => {
+        const broken = sources(path('main'), { twice: outputs.twice + asm.mistake }).sources
+        const emulator = make(broken, { language })
+        try {
+            await expect(emulator.compile(200, broken)).rejects.toThrow()
+            const [why, error] = errors(emulator)
+            //first on the line that declares what the program needs from it
+            expect(why).toMatchObject({
+                file: path('twice'),
+                lineIndex: outputs.twice.split('\n').indexOf('\t.globl\ttwice'),
+                message: expect.stringMatching(
+                    new RegExp(
+                        `^${path('twice').replaceAll('.', '\\.')} is linked into this program because it defines twice, which the program uses\\.`
+                    )
+                )
+            })
+            const line = (outputs.twice + asm.mistake).split('\n').length - 2
+            expect(error).toMatchObject({ file: path('twice'), lineIndex: line })
+            //the squiggle covers the token the Core points at, read from that unit's tokens
+            expect([error.column, error.endColumn]).toEqual([1, 1 + 'bogus'.length])
+        } finally {
+            emulator.dispose()
         }
+        //the live check says the same, and counts the units the program needs as checked
+        const analysis = analyzeMarsProject(broken, 'linking', 1, language)
+        expect(analysis.diagnostics.filter((d) => d.severity === 'error')).toEqual([
+            expect.objectContaining({ location: expect.objectContaining({ path: path('twice') }) }),
+            expect.objectContaining({ location: expect.objectContaining({ path: path('twice') }) })
+        ])
+        expect(analysis.fileStatus[path('twice')]).toBe('assembled')
+        expect(analysis.fileStatus[path('unused')]).toBe('not-reachable')
+    })
+
+    it('never assembles a unit the program does not need, so its mistake fails nothing', async () => {
+        const broken = sources(path('main'), { unused: outputs.unused + asm.mistake }).sources
+        const emulator = await build(broken)
+        try {
+            expect(errors(emulator)).toEqual([])
+            expect(
+                emulator.compilerDiagnostics
+                    .filter((d) => d.code === 'not-linked')
+                    .map((d) => d.file)
+                    .sort()
+            ).toEqual([path('other'), path('unused')])
+            await emulator.run(1_000_000)
+            expect(emulator.termination).toEqual({ kind: 'exit', code: RESULT })
+        } finally {
+            emulator.dispose()
+        }
+        const analysis = analyzeMarsProject(broken, 'linking', 1, language)
+        expect(analysis.diagnostics.filter((d) => d.severity === 'error')).toEqual([])
+        expect(analysis.fileStatus[path('unused')]).toBe('not-reachable')
+        expect(analysis.fileStatus[path('twice')]).toBe('assembled')
     })
 
     it('assembles again only the unit that changed, and never runs an old parse', async () => {
@@ -493,7 +540,8 @@ describe.each(TARGETS)('$language: a Program of several compiled units', (spec) 
                 display: undefined
             }).core.getAssembledUnits()
         const first = sources().sources
-        assembled(first)
+        //a unit the program does not need is not even parsed
+        expect(assembled(first)).not.toContain(path('unused'))
         expect(assembled(first)).toEqual([])
         const doubled =
             language === 'MIPS'
@@ -509,5 +557,323 @@ describe.each(TARGETS)('$language: a Program of several compiled units', (spec) 
             emulator.dispose()
         }
         expect(assembled(first)).toEqual([path('twice')])
+    })
+})
+
+/**
+ * Hand-written assembly Files beside a C Program ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md),
+ * decision 10): one joins the Build only when the program needs a global it declares, and must then
+ * be GNU assembly; one it does not need, an exercise in MARS's or RARS's own dialect with mistakes
+ * among them, is never assembled, and gets the Hint that it is not part of the program.
+ */
+const HAND = {
+    'RISC-V': {
+        main: '\t.text\n\t.globl\tmain\n\t.p2align\t2\nmain:\n\taddi\tsp, sp, -16\n\tsw\tra, 12(sp)\n\tli\ta0, 14\n\tcall\ttriple\n\tlw\tra, 12(sp)\n\taddi\tsp, sp, 16\n\tret\n',
+        triple: '# triple(x), written by hand in GNU syntax\n\t.text\n\t.globl\ttriple\ntriple:\n\tslli\tt0, a0, 1\n\tadd\ta0, a0, t0\n\tret\n',
+        dialect:
+            "# triple(x) in RARS's own syntax\n.eqv FACTOR, 3\n.text\n.globl triple\ntriple:\n\tli t0, FACTOR\n\tmul a0, a0, t0\n\tret\n",
+        exercise:
+            '.data\nprompt: .asciz "Number? "\n.eqv PRINT_STRING, 4\n.text\n.globl main\nmain:\n\tli a7, PRINT_STRING\n\tla a0, prompt\n\tecall\n\tthis line is wrong\n',
+        dialectName: "RARS's"
+    },
+    MIPS: {
+        main: '\t.text\n\t.globl\tmain\nmain:\n\taddiu\t$sp,$sp,-24\n\tsw\t$31,20($sp)\n\tli\t$4,14\n\tjal\ttriple\n\tlw\t$31,20($sp)\n\taddiu\t$sp,$sp,24\n\tjr\t$31\n',
+        triple: '# triple(x), written by hand in GNU syntax\n\t.text\n\t.globl\ttriple\ntriple:\n\tsll\t$2,$4,1\n\taddu\t$2,$2,$4\n\tjr\t$31\n',
+        dialect:
+            "# triple(x) in MARS's own syntax\n.eqv FACTOR 3\n.text\n.globl triple\ntriple:\n\tmul $v0, $a0, FACTOR\n\tjr $ra\n",
+        exercise:
+            '.data\nprompt: .asciiz "Number? "\n.eqv PRINT_STRING 4\n.text\n.globl main\nmain:\n\tli $v0, PRINT_STRING\n\tla $a0, prompt\n\tsyscall\n\tthis line is wrong\n',
+        dialectName: "MARS's"
+    }
+}
+
+describe.each(TARGETS)('$language: hand-written Files beside a C Program', (spec) => {
+    const { language, extension, make } = spec
+    const hand = HAND[language]
+    const entry = `main.c.${extension}`
+    const helper = `triple.${extension}`
+    function sources(files: Record<string, string>, settings = {}) {
+        const projectFiles: Record<string, ReturnType<typeof text>> = {
+            'main.c': text('int triple(int);\nint main(void) { return triple(14); }\n'),
+            [entry]: text(hand.main)
+        }
+        for (const [path, content] of Object.entries(files)) projectFiles[path] = text(content)
+        const compilations: CompilationRecord[] = [
+            {
+                sourcePath: 'main.c',
+                outputPath: entry,
+                target: language,
+                language: 'c',
+                compilerId: 'test',
+                optimization: '0',
+                inputs: { 'main.c': fileFingerprint(projectFiles['main.c'])! },
+                outputFingerprint: fileFingerprint(projectFiles[entry])!,
+                assemblerProfile: 'gnu-compiler-v1',
+                runtimeAbi: 'v1'
+            }
+        ]
+        return projectBuildSources({
+            files: projectFiles,
+            entry,
+            language,
+            compilations,
+            settings,
+            programs: [entry, 'game/main.s']
+        })
+    }
+    async function build(input: BuildSources) {
+        const emulator = make(input, { language })
+        await emulator.check()
+        await emulator.compile(200_000, input)
+        return emulator
+    }
+    const errors = (emulator: { compilerDiagnostics: readonly Diagnostic[] }) =>
+        emulator.compilerDiagnostics.filter((d) => d.severity === 'error')
+    const hints = (emulator: { compilerDiagnostics: readonly Diagnostic[] }) =>
+        emulator.compilerDiagnostics
+            .filter((d) => d.code === 'not-linked')
+            .map((d) => d.file)
+            .sort()
+
+    it(`calls a function written by hand in GNU syntax, in a .${extension} File`, async () => {
+        const input = sources({ [helper]: hand.triple })
+        expect(input.linkUnits).toEqual([helper])
+        const emulator = await build(input)
+        try {
+            expect(errors(emulator)).toEqual([])
+            expect(hints(emulator)).toEqual([])
+            await emulator.run(1_000_000)
+            expect(emulator.termination).toEqual({ kind: 'exit', code: 42 })
+            //the File is the program's own code, as a compiled unit's is
+            expect(emulator.buildArtifacts.some((a) => a.file === helper)).toBe(true)
+        } finally {
+            emulator.dispose()
+        }
+        //a File it includes is part of it, though a unit of its own by name, and no Hint says
+        //otherwise
+        const split = sources({
+            [helper]: `.include "parts/body.s"\n`,
+            'parts/body.s': hand.triple
+        })
+        expect(split.linkUnits).toEqual(['parts/body.s', helper])
+        const including = await build(split)
+        try {
+            expect(errors(including)).toEqual([])
+            expect(hints(including)).toEqual([])
+            await including.run(1_000_000)
+            expect(including.termination).toEqual({ kind: 'exit', code: 42 })
+        } finally {
+            including.dispose()
+        }
+    })
+
+    it("leaves out an exercise in the Core's own dialect, with mistakes, that the program does not need", async () => {
+        const input = sources({ [helper]: hand.triple, 'exercise.asm': hand.exercise })
+        expect(input.linkUnits).toEqual(['exercise.asm', helper])
+        const emulator = await build(input)
+        try {
+            expect(errors(emulator)).toEqual([])
+            //the Hint that says it is not part of the program, on its first line
+            const [hint] = emulator.compilerDiagnostics.filter((d) => d.code === 'not-linked')
+            expect(hint).toMatchObject({
+                file: 'exercise.asm',
+                severity: 'suggestion',
+                lineIndex: 0,
+                message:
+                    'This File is not part of the program: the program uses nothing it defines.'
+            })
+            await emulator.run(1_000_000)
+            expect(emulator.termination).toEqual({ kind: 'exit', code: 42 })
+        } finally {
+            emulator.dispose()
+        }
+        //the live check says the same, and does not count it as checked
+        const analysis = analyzeMarsProject(input, 'hand-written', 1, language)
+        expect(analysis.diagnostics.filter((d) => d.severity === 'error')).toEqual([])
+        expect(analysis.diagnostics.filter((d) => d.code === 'not-linked')).toEqual([
+            expect.objectContaining({ location: expect.objectContaining({ path: 'exercise.asm' }) })
+        ])
+        expect(analysis.fileStatus['exercise.asm']).toBe('not-reachable')
+        expect(analysis.fileStatus[helper]).toBe('assembled')
+    })
+
+    it(`fails a needed File in ${HAND[language].dialectName} own dialect, saying it must be GNU syntax`, async () => {
+        const input = sources({ [helper]: hand.dialect })
+        const emulator = make(input, { language })
+        try {
+            await expect(emulator.compile(200, input)).rejects.toThrow()
+            const [why, ...rest] = errors(emulator)
+            expect(why).toMatchObject({
+                file: helper,
+                lineIndex: hand.dialect.split('\n').indexOf('.globl triple'),
+                message: `${helper} is linked into this program because it defines triple, which the program uses. This program is assembled as GNU assembly, the syntax C compiles to, so ${helper} must be written in GNU syntax too, not in ${hand.dialectName}.`
+            })
+            expect(rest.length).toBeGreaterThan(0)
+            expect(rest.every((error) => error.file === helper)).toBe(true)
+            expect(hints(emulator)).toEqual([])
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it("never takes another Program's Entry, nor the Files it includes, though they define what is needed", async () => {
+        //game/main.s is a Program of its own, which includes its triple
+        const input = sources({
+            'game/main.s': '.include "triple.s"\n.text\n.globl main\nmain:\n',
+            'game/triple.s': hand.triple
+        })
+        expect(input.linkUnits).toBeUndefined()
+        const emulator = make(input, { language })
+        try {
+            await expect(emulator.compile(200, input)).rejects.toThrow()
+            expect(errors(emulator).map((error) => error.message)).toContain(
+                'Unresolved symbol: triple'
+            )
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('links a hand-written Entry in its own dialect alone, as before', () => {
+        const input = projectBuildSources({
+            files: { 'main.s': text('main:\n'), [helper]: text(hand.triple) },
+            entry: 'main.s',
+            language
+        })
+        expect(input.assemblerProfile).not.toBe('gnu-compiler-v1')
+        expect(input.linkUnits).toBeUndefined()
+    })
+})
+
+/**
+ * A MIPS exception handler sits at 0x80000180, where the processor enters it, so the program never
+ * names it: a File holding `.ktext` joins a C Program, as any File does, only when the program uses
+ * a global it defines, which `<sim.h>`'s `SIM_LINK` does with a `.globl` of the handler's name. A
+ * File the program does not use changes nothing, however many hold `.ktext`; two the link takes
+ * cannot both, since a program has room for one handler ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md),
+ * decisions 10 and 12).
+ */
+describe('MIPS: an exception handler beside a C Program', () => {
+    const language = 'MIPS' as const
+    const entry = 'main.c.mips'
+    //main breaks, which only a handler gets past, and returns what $2 holds then
+    const main = '\t.text\n\t.globl\tmain\nmain:\n\tli\t$2,1\n\tbreak\n\tjr\t$31\n'
+    //what `SIM_LINK(handler);` adds to the Generated assembly
+    const linked = '#APP\n\t.globl\thandler\n#NO_APP\n' + main
+    const handler =
+        '# skips the break and sets the result\n\t.globl\thandler\n\t.ktext\nhandler:\n\tmfc0\t$26,$14\n\taddiu\t$26,$26,4\n\tmtc0\t$26,$14\n\tli\t$2,42\n\teret\n'
+    //a MARS keyboard lab, in MARS's own syntax, whose handler nothing names
+    const lab =
+        '# a MARS interrupt lab\n\t.text\nloop:\tj loop\n\t.ktext 0x80000180\n\tmfc0 $k0, $13\n\tlw $t0, 0xffff0004\n\teret\n'
+    function sources(files: Record<string, string>, generated = main) {
+        const projectFiles: Record<string, ReturnType<typeof text>> = {
+            'main.c': text('int main(void) { __builtin_trap(); }\n'),
+            [entry]: text(generated)
+        }
+        for (const [path, content] of Object.entries(files)) projectFiles[path] = text(content)
+        const compilations: CompilationRecord[] = [
+            {
+                sourcePath: 'main.c',
+                outputPath: entry,
+                target: language,
+                language: 'c',
+                compilerId: 'test',
+                optimization: '0',
+                inputs: { 'main.c': fileFingerprint(projectFiles['main.c'])! },
+                outputFingerprint: fileFingerprint(projectFiles[entry])!,
+                assemblerProfile: 'gnu-compiler-v1',
+                runtimeAbi: 'v1'
+            }
+        ]
+        return projectBuildSources({ files: projectFiles, entry, language, compilations })
+    }
+    const errors = (emulator: { compilerDiagnostics: readonly Diagnostic[] }) =>
+        emulator.compilerDiagnostics.filter((d) => d.severity === 'error')
+
+    it('links a File holding .ktext that the program names with SIM_LINK, and the program gets past its break', async () => {
+        const input = sources({ 'handler.mips': handler }, linked)
+        expect(input.linkUnits).toEqual(['handler.mips'])
+        const emulator = MIPSEmulator(input, { language })
+        try {
+            await emulator.check()
+            await emulator.compile(200_000, input)
+            expect(errors(emulator)).toEqual([])
+            expect(emulator.compilerDiagnostics.filter((d) => d.code === 'not-linked')).toEqual([])
+            await emulator.run(1_000_000)
+            expect(emulator.termination).toEqual({ kind: 'exit', code: 42 })
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('leaves out Files holding .ktext that the program does not use, so its faults still stop it', async () => {
+        //a handler nothing names, and two MARS labs, which used to clash with each other
+        const input = sources({ 'handler.mips': handler, 'lab.asm': lab, 'lab2.asm': lab })
+        const emulator = MIPSEmulator(input, { language })
+        try {
+            await emulator.check()
+            await emulator.compile(200_000, input)
+            expect(errors(emulator)).toEqual([])
+            expect(
+                emulator.compilerDiagnostics
+                    .filter((d) => d.code === 'not-linked')
+                    .map((d) => d.file)
+                    .sort()
+            ).toEqual(['handler.mips', 'lab.asm', 'lab2.asm'])
+            await emulator.run(1_000_000)
+            expect(emulator.termination?.kind).toBe('error')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('fails two linked Files holding .ktext, since a program has room for one handler', async () => {
+        const second = '# another handler\n\t.globl\tsecond\n\t.ktext\nsecond:\n\teret\n'
+        const input = sources(
+            { 'a/handler.mips': handler, 'b/second.mips': second },
+            linked.replace('.globl\thandler', '.globl\thandler, second')
+        )
+        const emulator = MIPSEmulator(input, { language })
+        try {
+            await expect(emulator.compile(200, input)).rejects.toThrow()
+            expect(errors(emulator)).toContainEqual(
+                expect.objectContaining({
+                    file: 'b/second.mips',
+                    lineIndex: 4,
+                    message:
+                        'handler.mips and second.mips both hold .ktext, an exception handler, and a program has room for one, at 0x80000180, where MIPS enters it: keep the handler in one of them.'
+                })
+            )
+        } finally {
+            emulator.dispose()
+        }
+    })
+})
+
+describe('RISC-V: a hand-written Entry with the GNU profile', () => {
+    it('takes the hand-written Files it needs, as a C Program does', async () => {
+        const input = projectBuildSources({
+            files: {
+                'main.s': text(
+                    '.text\n.globl main\nmain:\n\tli a0, 14\n\tcall triple\n\tli a7, 93\n\tecall\n'
+                ),
+                'triple.riscv': text(HAND['RISC-V'].triple),
+                'exercise.asm': text(HAND['RISC-V'].exercise)
+            },
+            entry: 'main.s',
+            language: 'RISC-V',
+            settings: { riscvAssemblerProfile: 'gnu-compiler-v1' }
+        })
+        expect(input.linkUnits).toEqual(['exercise.asm', 'triple.riscv'])
+        const emulator = RISCVEmulator(input, { language: 'RISC-V' })
+        try {
+            await emulator.check()
+            await emulator.compile(200_000, input)
+            expect(emulator.compilerDiagnostics.filter((d) => d.severity === 'error')).toEqual([])
+            await emulator.run(1_000_000)
+            expect(emulator.termination).toEqual({ kind: 'exit', code: 42 })
+        } finally {
+            emulator.dispose()
+        }
     })
 })

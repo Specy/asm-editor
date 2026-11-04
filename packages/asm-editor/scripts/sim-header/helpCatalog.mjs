@@ -2,6 +2,11 @@ import { prototypeOf, x86PrototypeOf } from './simHeader.mjs'
 import {
     DEVICE_HELPERS,
     INPUT_HELPERS,
+    LINK_MACRO,
+    MIPS_TIMER_HELPERS,
+    RISCV_TIMER_HELPERS,
+    MIDI_HELPERS,
+    PCM_HELPERS,
     RGB_HELPER,
     SCREEN_MACRO,
     SYNTH_HELPERS
@@ -42,6 +47,18 @@ export function posixFunctions(headers) {
             })
     }
     return functions
+}
+
+/** `SIM_LINK`'s entry, which the Target's Using C page explains under Linking project Files. */
+function linkEntry(route) {
+    const declaration = `${LINK_MACRO.name}(${LINK_MACRO.parameters.join(', ')})`
+    return entry(
+        LINK_MACRO.name,
+        declaration,
+        LINK_MACRO.summary,
+        `/documentation/${route}/using-c#linking-project-files`,
+        'macro'
+    )
 }
 
 export function marsHelpCatalog(target, syscalls, functions = []) {
@@ -87,6 +104,16 @@ export function marsHelpCatalog(target, syscalls, functions = []) {
         entries.push(entry(helper.name, prototypeOf(helper), helper.summary, helperHref))
     const declaration = `${SCREEN_MACRO.name}(${SCREEN_MACRO.parameters.join(', ')})`
     entries.push(entry(SCREEN_MACRO.name, declaration, SCREEN_MACRO.summary, helperHref, 'macro'))
+    entries.push(linkEntry(route))
+    for (const helper of language === 'MIPS' ? MIPS_TIMER_HELPERS : RISCV_TIMER_HELPERS)
+        entries.push(
+            entry(
+                helper.name,
+                prototypeOf(helper),
+                helper.summary,
+                `/documentation/${route}/interrupts#from-c`
+            )
+        )
     for (const helper of SYNTH_HELPERS)
         entries.push(
             entry(
@@ -103,6 +130,15 @@ export function marsHelpCatalog(target, syscalls, functions = []) {
                 prototypeOf(helper),
                 helper.summary,
                 `/documentation/${route}/input-controller#from-c`
+            )
+        )
+    for (const helper of [...MIDI_HELPERS, ...PCM_HELPERS])
+        entries.push(
+            entry(
+                helper.name,
+                prototypeOf(helper),
+                helper.summary,
+                `/documentation/${route}/midi-and-audio#from-c`
             )
         )
     //the POSIX functions over the folder calls, which the Runtime library's posix/ implements
@@ -142,6 +178,7 @@ export function x86HelpCatalog(data, functions = []) {
             `/documentation/x86/syscall#syscall-${name}`
         )
     })
+    entries.push(linkEntry('x86'))
     for (const call of functions)
         entries.push(
             entry(

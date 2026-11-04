@@ -40,7 +40,8 @@ export default defineConfig({
                 cache: false
             },
             measure: {
-                command: 'vp test run --config vitest.measure.config.ts',
+                //the measurements run under node: the jsdom project would only fail to load them
+                command: 'vp test run --config vitest.measure.config.ts --project node',
                 dependsOn: BUILD_DEPENDENCIES,
                 cache: false
             }

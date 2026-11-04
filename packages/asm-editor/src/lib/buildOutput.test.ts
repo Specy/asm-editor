@@ -19,6 +19,7 @@ import {
     type BuildRecord
 } from '#lib/buildOutput.ts'
 import { makeProject, normalizeProjectData, withoutBuildOutputs } from '#lib/Project.svelte.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
 import {
     isLegacyLinkedFileCompatible,
     isSingleSourceProject,
@@ -123,6 +124,32 @@ describe('a Build record', () => {
         expect(buildOutputStale(record, { ...sources, files: edited }, edited)).toBe(true)
         expect(buildOutputStale(record, { ...sources, entrySymbol: '_start' }, files)).toBe(true)
         expect(buildOutputStale(record, undefined, files)).toBe(true)
+    })
+
+    it('is stale once an x86 Program has another File it could link, which it reads to decide', () => {
+        //the Core reads every File the Build may link to find which the program needs, and a File
+        //added before the one it took for a name, or beside the library's, can be taken instead
+        const sources = programBuildSources(
+            makeProject({
+                language: 'X86',
+                entry: 'main.asm',
+                files: { 'main.asm': plain('nop'), main: built }
+            }),
+            'main.asm'
+        )
+        const record = makeBuildRecord(sources, 'main', built, [])
+        const live = (added: Record<string, ProjectFile>) => {
+            const next = makeProject({
+                language: 'X86',
+                entry: 'main.asm',
+                files: { ...sources.files, ...added }
+            })
+            return [programBuildSources(next, 'main.asm'), next.files] as const
+        }
+        expect(buildOutputStale(record, ...live({}))).toBe(false)
+        expect(buildOutputStale(record, ...live({ 'notes.txt': plain('') }))).toBe(false)
+        for (const linkable of ['memcpy.asm', 'lib/helper.s', 'lib.nasm'])
+            expect(buildOutputStale(record, ...live({ [linkable]: plain('nop') }))).toBe(true)
     })
 })
 

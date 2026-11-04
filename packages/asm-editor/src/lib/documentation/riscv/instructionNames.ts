@@ -1108,7 +1108,7 @@ export const riscvInstructionNames: Readonly<
     wfi: {
         longName: 'Wait for interrupt',
         summary:
-            'Waits for an interrupt, a hint that lets the processor pause until one is pending.'
+            "Waits until an interrupt that uie enables is asking, the timer reaching timecmp or a key while the receiver's interrupt is on, without running instructions meanwhile."
     },
     xnor: {
         longName: 'Exclusive NOR',

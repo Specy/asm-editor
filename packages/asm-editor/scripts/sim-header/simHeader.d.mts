@@ -59,6 +59,33 @@ export type SimHeaderData = {
     }
     /** The Input controller's block. */
     input: SimInputData
+    /** RARS's Timer Tool registers, `time` and `timecmp`, which RISC-V's header names. */
+    timer: { time: number; timecmp: number }
+    /** The MIDI port's block, from `midiPortRegisters.ts`'s `midiPortHeaderData()`. */
+    midi: SimMidiData
+    /** The sampled-audio output's block, from `sampledAudioRegisters.ts`'s `sampledAudioHeaderData()`. */
+    pcm: SimPcmData
+}
+
+export type SimMidiData = {
+    base: number
+    offsets: { DATA: number; STATUS: number; COMMAND: number }
+    busy: number
+    noInput: number
+    reset: number
+    uartMode: number
+    bufferBytes: number
+}
+
+export type SimPcmData = {
+    base: number
+    offsets: Record<string, number>
+    on: number
+    stereo: number
+    rateMin: number
+    rateMax: number
+    rateDefault: number
+    fifoFrames: number
 }
 
 /** The Input controller's block, from `inputControllerRegisters.ts`'s `inputHeaderData()`. */

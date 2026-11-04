@@ -125,7 +125,7 @@ function registers(): string {
         [
             MARS_RECEIVER_CONTROL,
             'Receiver control',
-            'Bit 0 is **Ready**: a typed character is waiting in the receiver data register. The device sets it and clears it; a program only reads it.'
+            'Bit 0 is **Ready**: a typed character is waiting in the receiver data register. The device sets it and clears it; a program only reads it. Bit 1 is the **interrupt enable**: the program sets it to be interrupted while a character waits.'
         ],
         [
             MARS_RECEIVER_DATA,
@@ -135,7 +135,7 @@ function registers(): string {
         [
             MARS_TRANSMITTER_CONTROL,
             'Transmitter control',
-            'Bit 0 is **Ready**, and here it is always set: the console never makes a program wait to print.'
+            'Bit 0 is **Ready**, and here it is always set: the console never makes a program wait to print. Bit 1 is the **interrupt enable**: the program sets it to be interrupted once after each character the console takes, as it becomes ready for the next.'
         ],
         [
             MARS_TRANSMITTER_DATA,

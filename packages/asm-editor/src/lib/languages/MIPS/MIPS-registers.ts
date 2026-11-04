@@ -54,13 +54,16 @@ export const MIPSCoprocessor1RegisterNames: readonly string[] = Array.from(
 )
 
 /**
- * The four coprocessor 0 registers MARS implements, in the order `getCoprocessor0Values` returns
- * them, spelled as MARS's Coproc 0 tab spells them. The register's MIPS number is part of its name
- * because coprocessor 0 is sparse: the number is not the position in the file, and the setter takes
- * the number, so `MIPS_COPROCESSOR0_REGISTER_NUMBERS` holds the same order.
+ * The six coprocessor 0 registers the Core implements, MARS's four and MIPS32's Count and Compare,
+ * in the order `getCoprocessor0Values` returns them, spelled as MARS's Coproc 0 tab spells them. The
+ * register's MIPS number is part of its name because coprocessor 0 is sparse: the number is not the
+ * position in the file, and the setter takes the number, so `MIPS_COPROCESSOR0_REGISTER_NUMBERS`
+ * holds the same order.
  */
 export const MIPSCoprocessor0RegisterNames: readonly string[] = [
     '$8 (vaddr)',
+    '$9 (count)',
+    '$11 (compare)',
     '$12 (status)',
     '$13 (cause)',
     '$14 (epc)'

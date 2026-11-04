@@ -137,7 +137,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         arguments: [{ name: 'a0', description: 'number of bytes to allocate' }],
         result: {
             arguments: [{ name: 'a0', description: 'contains address of allocated memory' }],
-            other: 'Heap exhaustion stops execution with a runtime error.'
+            other: 'The heap ends at 0x14000000, 64 MB from the data segment, where RARS stops at 0x10400000; asking for more stops execution with a runtime error.'
         },
         implemented: true,
         binding: {

@@ -299,7 +299,9 @@ describe('stores into the block', () => {
 
     it('stop the program when one sets Control bit 1, and state Control 0 again', () => {
         const { word, store } = makeController()
-        expect(() => store(INPUT_CONTROL, 0x2)).toThrow(/Interrupt-driven input is not supported/)
+        expect(() => store(INPUT_CONTROL, 0x2)).toThrow(
+            /The Input controller does not raise interrupts/
+        )
         expect(word(INPUT_CONTROL)).toBe(0)
         //other bits are ignored
         expect(() => store(INPUT_CONTROL, 0xfffffffd)).not.toThrow()

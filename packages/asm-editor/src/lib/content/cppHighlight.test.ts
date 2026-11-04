@@ -364,8 +364,8 @@ describe("tokenizeCpp on the RISC-V chapter's examples", () => {
     const coloured = (code: string) =>
         described(code).filter((token) => !/^(?:identifier|delimiter|plain) /.test(token))
 
-    it('finds the five C programs, and rebuilds each exactly', () => {
-        expect(fences).toHaveLength(5)
+    it('finds the seven C programs, and rebuilds each exactly', () => {
+        expect(fences).toHaveLength(7)
         for (const fence of fences) expect(rebuild(fence)).toBe(fence)
     })
 

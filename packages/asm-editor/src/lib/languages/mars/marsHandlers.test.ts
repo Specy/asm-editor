@@ -52,7 +52,15 @@ function setup(
             audio
         },
         executionController,
-        devices: { flush: () => {} },
+        devices: {
+            flush: () => {},
+            onInterruptRequest: () => () => {},
+            refreshSound: () => {},
+            receiverInterruptsEnabled: false
+        },
+        elapsedTime: () => 0,
+        externalInterruptsEnabled: () => false,
+        waitingForInterrupt: () => {},
         pauseAtSleep: () => {},
         setInterrupt: (interrupt) => {
             interrupts.push(interrupt)

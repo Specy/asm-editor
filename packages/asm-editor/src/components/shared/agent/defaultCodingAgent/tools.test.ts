@@ -2290,3 +2290,38 @@ describe('C/C++ agent workflow', () => {
         expect(readOnly).not.toContain('C/C++ source workflow')
     })
 })
+
+/**
+ * What the prompt tells the agent of MIPS's and RISC-V's timers and interrupts
+ * ([ADR 0074](../../../../../../docs/adr/0074-mips-and-risc-v-timers-count-what-their-references-count.md)),
+ * so that a program it writes for a timer uses the registers each Target has.
+ */
+describe('the prompt’s timers', () => {
+    const prompt = buildDefaultCodingAgentPrompt({ enabledToolNames: [], enabledWorkflows: [] })
+    const section = (name: string) => {
+        const start = prompt.indexOf(`## ${name}\n`)
+        return prompt.slice(start, prompt.indexOf('\n## ', start + 1))
+    }
+
+    it('gives MIPS Count and Compare, counted in instructions', () => {
+        const mips = section('MIPS')
+        expect(mips).toContain('Count ($9) goes up once every two instructions')
+        expect(mips).toContain('Compare ($11)')
+        expect(mips).toContain('sim_cp0_set_compare()')
+        expect(mips).not.toContain('timecmp')
+    })
+
+    it('gives RISC-V the Timer Tool, in milliseconds the program ran, and what wakes wfi', () => {
+        const riscv = section('RISC-V')
+        expect(riscv).toContain('`timecmp` at 0xffff0020')
+        expect(riscv).toContain('sim_timer_set(when)')
+        expect(riscv).toContain('`wfi` waits until an interrupt `uie` enables arrives')
+        expect(riscv).not.toContain('Compare ($11)')
+    })
+
+    it('says the transmitter asks once per character, as in the reference simulator', () => {
+        expect(prompt).toContain(
+            'the transmitter once after each character stored while the bit is set'
+        )
+    })
+})

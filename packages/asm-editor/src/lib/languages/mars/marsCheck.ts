@@ -52,7 +52,7 @@ export type MarsTarget = 'MIPS' | 'RISC-V' | 'RISC-V-64'
 
 /**
  * What a Build links besides its Entry's unit: the Runtime library, the global execution starts at,
- * and the Project's other GNU-profile units, which the Core takes as an archive's members
+ * and the Project's other assembly Files, which the Core takes as an archive's members by need
  * (`BuildConfiguration.linkUnits`).
  */
 export type MarsLink = {
@@ -92,7 +92,7 @@ export type MarsCheckCore = ScreenLabelTable & {
     getTokenizedLines(): readonly SpanLine[]
     /** The unit of the Entry or of one of the Build's other units, by its File. */
     getTokenizedUnit(path: string): readonly SpanLine[]
-    /** Every File the units read, the Entry's and every other unit's, linked or not. */
+    /** Every File the units read: the Entry's, and those of the other units the link took. */
     getUnitFiles(): readonly string[]
     /** The Entry, then the other units the link took. */
     getLinkedUnits(): readonly string[]
@@ -175,7 +175,8 @@ export function checkMarsProgram<C extends MarsCheckCore>(
     let { core, result } = assemble()
     const lines = tokenizedLines(core)
     const spans = makeTokenSpanIndex(lines)
-    //every unit was read and checked, the ones the link left out too
+    //the Entry's unit and the other units the program needs, the only ones the Core read: one it
+    //does not need is never assembled, so it is not reached
     const reached = new Set([...lines.map((line) => line.sourcePath), ...unitFiles(core)])
     reached.add(sources.entry)
     const source = target === 'MIPS' ? 'mips' : 'risc-v'
@@ -252,8 +253,10 @@ function unitFiles(core: MarsCheckCore): readonly string[] {
 /**
  * A Hint on each of the Build's other units the link left out, as x86 gives one
  * ([ADR 0039](../../../../../../docs/adr/0039-x86-links-start-objects-before-user-and-support-archives.md)):
- * it was checked, but nothing the program needs is defined there. A unit the Entry's unit includes
- * is part of that one, and gets none.
+ * nothing the program needs is defined there, so the Core never assembled it, and its mistakes, or
+ * MARS's or RARS's own dialect, are no concern of this Build
+ * ([asmos-stage2.md](../../../../../../docs/design/asmos-stage2.md), decision 10). A unit that a
+ * unit the program needs includes is part of that one, and gets none.
  */
 function unlinkedUnitHints(
     sources: BuildSources,
@@ -261,16 +264,15 @@ function unlinkedUnitHints(
     source: string
 ): LanguageDiagnostic[] {
     if (!sources.linkUnits?.length) return []
-    const linked = new Set(core.getLinkedUnits())
+    const read = new Set([...core.getLinkedUnits(), ...unitFiles(core)])
     const included = new Set(tokenizedLines(core).map((line) => line.sourcePath))
     return sources.linkUnits
-        .filter((path) => !linked.has(path) && !included.has(path))
+        .filter((path) => !read.has(path) && !included.has(path))
         .map((path) => ({
             severity: 'suggestion' as const,
             source,
             code: 'not-linked',
-            message:
-                'Nothing refers to a symbol this File defines, so it is not part of the program.',
+            message: 'This File is not part of the program: the program uses nothing it defines.',
             location: {
                 path,
                 range: {

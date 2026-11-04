@@ -1,7 +1,9 @@
 import { validateAssemblerProfile, type AssemblerProfile } from '#lib/assemblerProfiles.ts'
+import { LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
 import {
     fileText,
     resolveFilePath,
+    resolveProjectInclude,
     ProjectFormatError,
     type BuildSources
 } from '#lib/projectFiles.ts'
@@ -83,30 +85,94 @@ export function resolveAssemblyProfile(
     return required.values().next().value ?? fallback
 }
 
+/** An include line of MARS, RARS or GNU assembly, or of NASM's, `%include` and `incbin`, and the path it names. */
+const INCLUDE_LINE =
+    /^[ \t]*(?:[A-Za-z_@$.?][\w@$.?]*[ \t]*:[ \t]*)?(?:\.include|%include|incbin)[ \t]+(["'])([^"'\n]+)\1/gim
+
 /**
- * The Project's other GNU-profile units a MIPS or RISC-V Build takes as an archive's members
- * ([asmOS portability](../../../../../docs/design/asmos-portability.md), decision 11): the Generated
- * assembly of every Compilation record for the Project's Target, other than the Entry, whose File
- * the Project still has, in path order so two Builds lay the program out alike. The Core links one
- * only when it defines a global the program still needs, as the program's own code, and leaves out
- * one the Entry's unit includes; it checks every one either way. A Build in the RARS or MARS dialect
- * links none: a hand-written Entry keeps building as it did.
+ * The Files a Program's Entry reads through its includes, the Entry among them, as far as they
+ * can be followed: `.include`, and on x86 `%include` and `incbin`, with a literal path. A path that
+ * names no File, or a macro-made include, reaches nothing; the assembler reports what it means.
+ */
+function entryTree(sources: BuildSources, entry: string, x86: boolean): Set<string> {
+    const reached = new Set<string>()
+    const visit = (path: string) => {
+        const file = sources.files[path]
+        if (!file || reached.has(path)) return
+        reached.add(path)
+        if (file.encoding !== 'plain') return
+        for (const [, , written] of fileText(file).matchAll(INCLUDE_LINE)) {
+            let target: string | null = null
+            if (x86) target = resolveProjectInclude(path, written, sources)
+            else {
+                //MARS's and RARS's rule: beside the including File, or from the root with a `/`
+                const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
+                try {
+                    target = resolveFilePath(
+                        written.startsWith('/') ? written.slice(1) : parent + written
+                    )
+                } catch {
+                    /* The assembler reports malformed includes. */
+                }
+            }
+            if (target) visit(target)
+        }
+    }
+    visit(entry)
+    return reached
+}
+
+/**
+ * The extensions of the hand-written Files a Build of `language` may link beside its Entry's unit:
+ * the Target's own in the editor's assembly set (`editorFileRouting.ts`), `.mips`, `.riscv` or
+ * `.asm`, and the `.asm` and `.s` that MARS, RARS and NASM all save assembly as, and on x86 NASM's
+ * own `.nasm` too, every extension x86's Core takes as a unit when it is given none
+ * (`x86Project.ts`). An `.inc` is an include fragment, part of whatever includes it, an
+ * extension-less File is a `README` or a `Makefile` as often as assembly, and another Target's
+ * extension is that Target's assembly, so none of them is a unit. Undefined for a Target that
+ * links its Entry's unit alone.
+ */
+function linkedExtensions(language: AvailableLanguages): ReadonlySet<string> | undefined {
+    if (language === 'X86') return new Set([LANGUAGE_EXTENSIONS[language], 'asm', 's', 'nasm'])
+    if (language !== 'MIPS' && language !== 'RISC-V' && language !== 'RISC-V-64') return undefined
+    return new Set([LANGUAGE_EXTENSIONS[language], 'asm', 's'])
+}
+
+/**
+ * The Files a Build takes as an archive's members besides its Entry's unit, by path in path order
+ * so two Builds lay the program out alike ([asmos-stage2.md](../../../../../docs/design/asmos-stage2.md),
+ * decision 10): every assembly File of the Target, Generated assembly and hand-written alike, that
+ * is no Program's Entry and that no Program's Entry reads through its includes, so another Program
+ * and its parts never join this one. The Core reads which globals each declares and assembles one
+ * only once the program needs a global it defines, as `ld` takes a member out of a library, so a
+ * File the program does not need, an exercise in MARS's dialect or a broken File among them, is
+ * never assembled and cannot fail the Build. A needed one must be GNU assembly on MIPS and RISC-V,
+ * and the Core says so when it is not.
+ *
+ * MIPS and RISC-V link units only in a GNU-profile Build: a Program in MARS's or RARS's dialect, a
+ * hand-written Entry, links its includes alone, as it always has. x86 links every Program's units
+ * this way, whatever its Entry ([ADR 0033](../../../../../docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)).
+ * `programs` are the Entries of every Program of the Project, this one's included.
  */
 export function resolveLinkUnits(
     sources: BuildSources,
-    records: readonly CompilationRecord[] | undefined,
     language: AvailableLanguages,
-    profile: AssemblerProfile
+    profile: AssemblerProfile | undefined,
+    programs: readonly string[] = [sources.entry]
 ): string[] {
-    if (profile !== 'gnu-compiler-v1') return []
-    const paths = new Set<string>()
-    for (const record of records ?? []) {
-        if (record.target !== language || record.assemblerProfile !== 'gnu-compiler-v1') continue
-        const file = sources.files[record.outputPath]
-        if (record.outputPath === sources.entry || file?.encoding !== 'plain') continue
-        paths.add(record.outputPath)
-    }
-    return [...paths].sort()
+    const extensions = linkedExtensions(language)
+    if (!extensions || (language !== 'X86' && profile !== 'gnu-compiler-v1')) return []
+    const parts = new Set<string>()
+    for (const entry of new Set([sources.entry, ...programs]))
+        for (const path of entryTree(sources, entry, language === 'X86')) parts.add(path)
+    return Object.keys(sources.files)
+        .filter((path) => {
+            if (parts.has(path) || sources.files[path]?.encoding !== 'plain') return false
+            const name = path.slice(path.lastIndexOf('/') + 1)
+            const dot = name.lastIndexOf('.')
+            return dot > 0 && extensions.has(name.slice(dot + 1).toLowerCase())
+        })
+        .sort()
 }
 
 /** The Compilation records whose Generated assembly a Build takes as its other units. */

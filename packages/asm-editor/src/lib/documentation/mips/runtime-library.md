@@ -22,9 +22,11 @@ Programs have no environment variables; `getenv` always returns NULL.
 
 ### Memory and allocation
 
-Compiled C and C++ programs reserve 4,128,768 bytes for static data from `0x10010000` through `0x103FFFFF` (exclusive end `0x10400000`). Constants, globals, and a `SIM_SCREEN` grid share this range. The heap moves after static data when needed. Assembly programs retain the assembler’s memory layout.
+Static data and the heap share 64 MB, from `0x10000000` up to `0x14000000`, which `<sim.h>` names `SIM_DATA_SEGMENT_END`. MARS has 4 MB, up to `0x10400000`, so a program that needs more than that runs here but runs out of memory in MARS.
 
-The Runtime library’s allocation service 1100 returns -1 on heap exhaustion; the assembly service 9 stops execution with a runtime error. See [`malloc`](#malloc) for allocation results and alignment.
+Compiled C and C++ programs have the 67,043,328 bytes from `0x10010000` for static data. Constants, globals, and a `SIM_SCREEN` grid share this range with the heap. The heap moves after static data when needed. Assembly programs retain the assembler’s memory layout, with the heap from `0x10040000`.
+
+The Runtime library’s allocation service 1100 returns -1 when the heap would pass `0x14000000`; the assembly service 9 stops execution with a runtime error. See [`malloc`](#malloc) for allocation results and alignment.
 
 ## From hand-written assembly {#from-assembly}
 

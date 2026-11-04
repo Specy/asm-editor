@@ -1011,7 +1011,8 @@ export const mipsInstructionNames: Readonly<
     },
     wait: {
         longName: 'Wait for interrupt',
-        summary: 'Halts the processor until an interrupt arrives.'
+        summary:
+            'Stops a real processor until an interrupt arrives; here it returns at once, and a loop around it waits for the interrupt.'
     },
     wsbh: {
         longName: 'Word swap bytes within halfwords',

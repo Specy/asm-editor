@@ -89,19 +89,10 @@ function validateRegistry(
         const item = content[name]
         expect(item, `${label} ${name}`).toBeDefined()
         expect(item.example?.code.trim(), `${label} ${name}: source`).toBeTruthy()
-        if (language === 'riscv' && name === 'wfi') {
-            const lines = item.example!.code.split(/\r?\n/).map((line) => line.trim())
-            expect(lines, 'RISC-V wfi: opt-in instruction stays commented').toContain('# wfi')
-            expect(
-                lines.some((line) => line.startsWith('#') && /wait/i.test(line)),
-                'RISC-V wfi: explain that the instruction waits'
-            ).toBe(true)
-        } else {
-            expect(
-                hasAuthoredMnemonic(item.example!.code, name),
-                `${label} ${name}: named instruction appears in source`
-            ).toBe(true)
-        }
+        expect(
+            hasAuthoredMnemonic(item.example!.code, name),
+            `${label} ${name}: named instruction appears in source`
+        ).toBe(true)
         // an authored description links only instruction pages of its own language that exist
         const base = language === 'riscv' ? 'risc-v' : 'mips'
         for (const [, path, target] of item.description?.matchAll(

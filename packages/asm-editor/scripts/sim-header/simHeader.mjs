@@ -9,15 +9,22 @@
  * the syscall entries of `src/lib/documentation/mars/{mips,riscv}Syscalls.ts`, the device
  * registers of `src/lib/languages/mars/MarsDevices.ts`, the display sizes and memory map of
  * `src/lib/languages/mars/marsDisplay.ts`, the Synth's registers of
- * `src/lib/languages/synthRegisters.ts` and the Input controller's of
- * `src/lib/languages/inputControllerRegisters.ts`, which the Documentation's Syscalls, Screen,
- * Synth and Input controller chapters are built from too; for x86, the bindings of `src/lib/documentation/x86/syscallBinding.ts`, which
+ * `src/lib/languages/synthRegisters.ts`, the Input controller's of
+ * `src/lib/languages/inputControllerRegisters.ts`, and the MIDI port's and the sampled-audio
+ * output's of `src/lib/languages/midiPortRegisters.ts` and `sampledAudioRegisters.ts`, which the
+ * Documentation's Syscalls, Screen, Synth, Input controller and MIDI and sampled audio chapters
+ * are built from too; for x86, the bindings of `src/lib/documentation/x86/syscallBinding.ts`, which
  * its Syscalls chapter shows.
  */
 import {
     DEVICE_HELPERS,
     INPUT_HELPERS,
+    LINK_MACRO,
+    MIDI_HELPERS,
+    MIPS_TIMER_HELPERS,
+    PCM_HELPERS,
     RGB_HELPER,
+    RISCV_TIMER_HELPERS,
     SCREEN_MACRO,
     SYNTH_HELPERS
 } from './helpers.mjs'
@@ -242,6 +249,77 @@ function deviceFunctions(devices, simulator) {
 ${DEVICE_HELPERS.map((helper) => `/** ${helper.headerDoc(devices, hex)} */\nstatic inline ${prototypeOf(helper)} {\n    ${helper.body(devices, address, ready)}\n}`).join('\n\n')}`
 }
 
+/**
+ * The timer: on RISC-V RARS's Timer Tool registers as volatile words and two helpers, on MIPS
+ * coprocessor 0's Count and Compare through `mfc0` and `mtc0`. Taking its interrupt needs a handler
+ * written in assembly, which the Documentation's "Interrupts and the timer" chapter shows.
+ */
+function timerSection(timer, target) {
+    const helpers = (list) =>
+        list
+            .map(
+                (helper) =>
+                    `/** ${helper.summary} */\nstatic inline ${prototypeOf(helper)} {\n    ${helper.body()}\n}`
+            )
+            .join('\n\n')
+    if (target.syscalls === 'mips')
+        return `/*
+ * The timer: coprocessor 0's Count ($9) goes up once every two instructions the program runs, and
+ * when it becomes equal to Compare ($11) the timer interrupt, Cause bit 15, is requested. The timer
+ * is off until the program first writes Compare. The interrupt is taken by a handler written in
+ * assembly in .ktext, at 0x80000180; see the Documentation's "Interrupts and the timer" chapter.
+ * ${target.simulator} 4.5 has neither register: they are MIPS32's.
+ */
+${helpers(MIPS_TIMER_HELPERS)}`
+    const word = (name, address) => `#define ${name} (*(volatile unsigned *)${hex(address)}ul)`
+    return `/*
+ * The timer: ${target.simulator}'s Timer Tool registers. time counts the milliseconds the program has run,
+ * from 0 at the start of the run, not counting time stopped at a breakpoint or between steps; in a
+ * Testcase it moves only when the program waits. Writing timecmp arms the timer: once time reaches
+ * it, one timer interrupt is requested, taken by a handler at utvec when uie bit 4 and ustatus bit 0
+ * are set. Both are 64 bits, low word first. See the Documentation's "Interrupts and the timer" chapter.
+ */
+${word('SIM_TIME_LOW', timer.time)}
+${word('SIM_TIME_HIGH', timer.time + 4)}
+${word('SIM_TIMECMP_LOW', timer.timecmp)}
+${word('SIM_TIMECMP_HIGH', timer.timecmp + 4)}
+
+${helpers(RISCV_TIMER_HELPERS)}`
+}
+
+/** Where static data and the heap end, which a program that manages its own memory needs. */
+function memorySection(display, target) {
+    //the data segment's base, where MARS's and RARS's own memory maps put it
+    const base = 0x10000000
+    return `/*
+ * Static data and the heap end at SIM_DATA_SEGMENT_END, ${(display.staticDataEnd - base) / 2 ** 20} MB from the data segment's base,
+ * ${hex(base)}: global variables, constants and every block malloc or sbrk hands out lie below it.
+ * ${target.simulator} itself ends them at 0x10400000, 4 MB from the base.
+ */
+#define SIM_DATA_SEGMENT_END ${hex(display.staticDataEnd)}ul`
+}
+
+/**
+ * `SIM_LINK`: a file-scope `.globl` of a name the unit does not define, which the assembler keeps as
+ * an undefined global and the link takes the File defining it for, as `ld -u` does.
+ */
+function linkSection(why) {
+    const intro = commentLines(
+        `SIM_LINK(name) makes the Build link the assembly File that defines the global name, though the program never uses it: ${why} Write it once, outside any function:`
+    )
+    const rest = commentLines(
+        'A File joins a Build only when the program uses something it defines, and SIM_LINK counts as a use. The Build fails when no File defines name.'
+    )
+    return `/*
+${intro.join('\n')}
+ *
+ *     SIM_LINK(handler);
+ *
+${rest.join('\n')}
+ */
+#define ${LINK_MACRO.name}(${LINK_MACRO.parameters.join(', ')}) __asm__(".globl " #name)`
+}
+
 /** `sim_rgb` and `SIM_SCREEN`, whose grid may not take more than the static data the Core has room for. */
 function screenSection(display, target) {
     const limit = display.staticDataEnd - display.staticData
@@ -263,9 +341,10 @@ function screenSection(display, target) {
  * the remainder. ${target.simulator}'s own display only offers ${listed(display.sizes)} for width and
  * height and ${listed(display.units)} for unit, so a program that runs there too keeps to those.
  *
- * The grid shares the ${limit} bytes of static data, from ${hex(display.staticData)} to ${hex(display.staticDataEnd)}, with
+ * The grid shares the ${limit} bytes of static data, from ${hex(display.staticData)} to SIM_DATA_SEGMENT_END, with
  * the program's other global variables and constants. The heap starts on the first page after
- * static data if it passes the default heap base. A larger display needs a larger unit.
+ * static data if it passes the default heap base. ${target.simulator} itself ends static data and the heap at
+ * 0x10400000, 4 MB from the data segment's base, so a program that runs there too keeps to that.
  */
 
 /** A color for the bitmap display: red, green and blue from 0 to 255, in the low 24 bits. */
@@ -416,6 +495,77 @@ ${INPUT_HELPERS.map((helper) => `/** ${helper.summary} */\nstatic inline ${proto
 ${input.keys.map((key) => define(`SIM_KEY_${key.name}`, `${hex(key.usage)}u`)).join('\n')}`
 }
 
+/** The MIDI port: its registers as volatile words, its Status bits and Commands, and the helpers. */
+function midiSection(midi, target) {
+    const register = (name) =>
+        `#define SIM_MIDI_${name} (*(volatile unsigned *)(SIM_MIDI_BASE + ${hex(midi.offsets[name])}u))`
+    return `/*
+ * The MIDI port is an editor extension that sends MIDI bytes to the General MIDI synthesizer, as an
+ * MPU-401 in UART mode does: notes, instruments, controllers, pitch bend and SysEx, from 0x${midi.base.toString(16)}.
+ * A byte leaves at MIDI's 31,250 baud, about 3,125 a second, behind a ${midi.bufferBytes}-byte buffer; one
+ * written while the port is busy is dropped, so sim_midi_write waits until it is not:
+ *
+ *     sim_midi_write(0x90);   note on, channel 1
+ *     sim_midi_write(60);     middle C
+ *     sim_midi_write(100);    struck fairly hard
+ *     sim_sleep(500);
+ *     sim_midi_write(0x80);   note off
+ *     sim_midi_write(60);
+ *     sim_midi_write(0);
+ *
+ * The port has sixteen channels of its own; the notes of sim_midi_out and sim_midi_out_sync play
+ * on channels of their own. ${target.simulator} does not provide this device: there its block reads 0, so
+ * sim_midi_present() is 0. The MIDI and sampled audio chapter of the Documentation describes it.
+ */
+#define SIM_MIDI_BASE ${hex(midi.base)}ul
+${register('DATA')}
+${register('STATUS')}
+${register('COMMAND')}
+
+/* SIM_MIDI_STATUS's bits, and the commands SIM_MIDI_COMMAND takes. */
+#define SIM_MIDI_BUSY ${hex(midi.busy)}u /* the buffer is full: a byte written now is dropped */
+#define SIM_MIDI_NO_INPUT ${hex(midi.noInput)}u /* always set: the port has no MIDI in */
+#define SIM_MIDI_RESET ${hex(midi.reset)}u /* empties the buffer and ends every note */
+#define SIM_MIDI_UART_MODE ${hex(midi.uartMode)}u /* accepted, and does nothing */
+
+${MIDI_HELPERS.map((helper) => `/** ${helper.summary} */\nstatic inline ${prototypeOf(helper)} {\n    ${helper.body()}\n}`).join('\n\n')}`
+}
+
+/** The sampled-audio output: its registers as volatile words, Control's bits, and the helpers. */
+function pcmSection(pcm, target) {
+    const register = (name) =>
+        `#define SIM_PCM_${name} (*(volatile unsigned *)(SIM_PCM_BASE + ${hex(pcm.offsets[name])}u))`
+    return `/*
+ * The sampled-audio output is an editor extension that plays sound a program computes, a sample at
+ * a time: a DAC with a FIFO of ${pcm.fifoFrames} frames, from 0x${pcm.base.toString(16)}. Set the rate and turn it on, then write
+ * samples, signed 16-bit, -32768 to 32767, while Free says there is room; the FIFO plays them at
+ * the rate, and one written when it is full is dropped, so sim_pcm_write waits for room:
+ *
+ *     sim_pcm_start(8000, 0);             8,000 samples a second, mono
+ *     for (int i = 0; i < 8000; i += 2) {
+ *         int level = (i / 10) % 2 ? -8192 : 8192;
+ *         sim_pcm_write(level, level);     a square wave at 400 Hz
+ *     }
+ *
+ * ${target.simulator} does not provide this device: there its block reads 0, so sim_pcm_present() is 0. The
+ * MIDI and sampled audio chapter of the Documentation describes it.
+ */
+#define SIM_PCM_BASE ${hex(pcm.base)}ul
+${register('CONTROL')}
+${register('RATE')}
+${register('FREE')}
+${register('DATA')}
+
+/* SIM_PCM_CONTROL's bits, and the range SIM_PCM_RATE is clamped to. */
+#define SIM_PCM_ON ${hex(pcm.on)}u /* on; off empties the FIFO */
+#define SIM_PCM_STEREO ${hex(pcm.stereo)}u /* a word is one left and right frame, not two mono samples */
+#define SIM_PCM_RATE_MIN ${pcm.rateMin}u
+#define SIM_PCM_RATE_MAX ${pcm.rateMax}u
+#define SIM_PCM_FIFO_FRAMES ${pcm.fifoFrames}u
+
+${PCM_HELPERS.map((helper) => `/** ${helper.summary} */\nstatic inline ${prototypeOf(helper)} {\n    ${helper.body()}\n}`).join('\n\n')}`
+}
+
 /**
  * The whole header for one Target. Services marked not implemented are left out, as the
  * Documentation leaves them out: their functions arrive with the Core release that offers them.
@@ -430,7 +580,7 @@ export function generateSimHeader(targetName, data) {
             : 'src/lib/documentation/mars/riscvSyscalls.ts'
     return `/*
  * <sim.h>: the Environment library of ${target.language}, one function for each ${target.simulator} service the
- * Documentation lists, the keyboard, display and bitmap display, the Synth and the Input controller.
+ * Documentation lists, the keyboard, display and bitmap display, the timer, and the devices this editor adds.
  *
  * Generated by scripts/sim-header/generate.mjs from ${source}
  * and ${target.simulator}'s device registers. Do not edit it: regenerate it.
@@ -457,11 +607,25 @@ ${services.map((syscall) => serviceFunction(syscall, target)).join('\n\n')}
 
 ${deviceFunctions(data.devices, target.simulator)}
 
+${timerSection(data.timer, target)}
+
+${memorySection(data.display, target)}
+
+${linkSection(
+    target.syscalls === 'mips'
+        ? 'an exception handler, which the processor enters at 0x80000180 by itself, in a File holding .ktext.'
+        : 'a File whose only part in the program is a constructor that runs before main, say one that puts a trap handler in utvec. Name one of the globals it defines.'
+)}
+
 ${screenSection(data.display, target)}
 
 ${synthSection(data.synth, target)}
 
 ${inputSection(data.input, target)}
+
+${midiSection(data.midi, target)}
+
+${pcmSection(data.pcm, target)}
 
 #ifdef __cplusplus
 }
@@ -581,6 +745,8 @@ extern "C" {
 #endif
 
 ${data.calls.map(linuxFunction).join('\n\n')}
+
+${linkSection('a File whose only part in the program is a constructor that runs before main, say. Name one of the globals it defines.')}
 
 #ifdef __cplusplus
 }

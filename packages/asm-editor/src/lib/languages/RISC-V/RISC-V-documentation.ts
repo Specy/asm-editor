@@ -571,7 +571,7 @@ export const riscvRegisterFiles: RISCVRegisterFileDoc[] = [
                 name: 'uie',
                 number: '0x004',
                 description:
-                    'Which user level interrupts are enabled, one bit per source. An interrupt is delivered only when its bit is set here and interrupts are enabled in `ustatus`.'
+                    'Which user level interrupts are enabled, one bit per source: bit 0 the software interrupt, bit 4 the timer and bit 8 the external interrupts, the keyboard and the display. An interrupt is delivered only when its bit is set here and interrupts are enabled in `ustatus`. [Interrupts and the timer](/documentation/risc-v/interrupts) shows them at work.'
             },
             {
                 name: 'utvec',
@@ -595,19 +595,19 @@ export const riscvRegisterFiles: RISCVRegisterFileDoc[] = [
                 name: 'ucause',
                 number: '0x042',
                 description:
-                    'Why the trap happened: a code such as an illegal instruction or a misaligned address, with the top bit set when the cause was an interrupt rather than an exception. A handler serving several causes reads this first.'
+                    'Why the trap happened: a code such as an illegal instruction or a misaligned address, with the top bit set when the cause was an interrupt rather than an exception: `0x80000004` for the timer and `0x80000008` for an external interrupt. A handler serving several causes reads this first.'
             },
             {
                 name: 'utval',
                 number: '0x043',
                 description:
-                    'The detail that goes with the cause: the address a load or store failed on, or the instruction that could not be decoded. Meaningless for causes that carry no such value.'
+                    'The detail that goes with the cause: the address a load or store failed on, the instruction that could not be decoded, or for an external interrupt which device asked, `0x40` the keyboard and `0x80` the display. Meaningless for causes that carry no such value.'
             },
             {
                 name: 'uip',
                 number: '0x044',
                 description:
-                    'Which interrupts are pending, in the same bit positions as `uie`. A source can be pending and not enabled, in which case nothing happens until the program enables it.'
+                    "Which interrupts are pending, in the same bit positions as `uie`. A source can be pending and not enabled, in which case nothing happens until the program enables it. The timer and external bits follow their sources and ignore writes; the software bit, bit 0, is the program's to set, with `csrsi uip, 1`, and taking the interrupt clears it."
             },
             {
                 name: 'cycle, time, instret',

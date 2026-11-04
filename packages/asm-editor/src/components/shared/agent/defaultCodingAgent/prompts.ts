@@ -43,6 +43,17 @@ import {
     INPUT_REGISTERS,
     inputKeyName
 } from '#lib/languages/inputControllerRegisters.ts'
+import {
+    MIDI_PORT_BASE,
+    MIDI_PORT_BUFFER_BYTES,
+    MIDI_PORT_REGISTERS
+} from '#lib/languages/midiPortRegisters.ts'
+import {
+    PCM_BASE,
+    PCM_FIFO_FRAMES,
+    PCM_RATE_DEFAULT,
+    PCM_REGISTERS
+} from '#lib/languages/sampledAudioRegisters.ts'
 import type {
     AgentWorkflow,
     DefaultCodingAgentToolName,
@@ -452,6 +463,24 @@ function toPortNumber(port: number): string {
 }
 
 /**
+ * MIPS's timer and interrupt delivery: MIPS32's Count and Compare, which count instructions
+ * ([ADR 0074](../../../../../../docs/adr/0074-mips-and-risc-v-timers-count-what-their-references-count.md)).
+ */
+const MIPS_TIMER_INFORMATION = [
+    '- Timer: coprocessor 0 Count ($9) goes up once every two instructions, from 0 at the start of the run; when it equals Compare ($11), Cause bit 15 asks for an interrupt until Compare is written again, so a handler sets Compare to the next moment it wants. The timer is off until the program first writes Compare. Count counts instructions, not time: measure it against service 30 to turn it into milliseconds. `wait` returns at once.',
+    '- Interrupts and exceptions go to the `.ktext` handler at 0x80000180 once one is assembled: Status (0x0000FF11 at the start) must have bit 0 set and bit 1 (EXL) clear, and the source unmasked in bits 8 to 15. EPC ($14) holds the interrupted instruction, which has not run; Cause ($13) has exception code 0 for an interrupt in bits 2 to 6 and the sources in bits 8 to 15 (bit 8 keyboard, 9 display, 15 timer); end the handler with `eret`, using only $k0 and $k1 or saving what it changes. In C, <sim.h> has sim_cp0_count(), sim_cp0_set_count(), sim_cp0_compare() and sim_cp0_set_compare(); the handler itself is assembly, a GNU-syntax File in `.ktext`, linked as the Using C chapter of the Documentation says.'
+].join('\n')
+
+/**
+ * RISC-V's timer: RARS's Timer Tool, which counts the milliseconds the program has run
+ * ([ADR 0074](../../../../../../docs/adr/0074-mips-and-risc-v-timers-count-what-their-references-count.md)).
+ */
+const RISCV_TIMER_INFORMATION = [
+    '- Timer: `time` at 0xffff0018 and `timecmp` at 0xffff0020, 64 bits each, low word first, count the milliseconds the program has run, from 0 at each run; they stop at Pause, at Breakpoints and between Steps. Writing `timecmp` arms one timer interrupt (`uie` bit 4) for when `time` reaches it; write it again for the next. Interrupts go to the address in `utvec` while `ustatus` bit 0 is set, with `ucause` (top bit set, 4 timer, 8 external, 0 software), `utval` (0x40 keyboard, 0x80 display) and `uepc` (the interrupted instruction, not run yet); end the handler with `uret`.',
+    '- `wfi` waits until an interrupt `uie` enables arrives: the armed timer, or a key while the receiver interrupt and `uie` bit 8 are on. With neither it waits until Pause or Stop, and in a testcase it returns at once. In a testcase `time` moves only on waits: `wfi` moves it to `timecmp`, service 32 by its argument, and a loop that only reads `time` never sees it move. In C, <sim.h> has sim_timer_now() and sim_timer_set(when) and the SIM_TIME_LOW, SIM_TIME_HIGH, SIM_TIMECMP_LOW and SIM_TIMECMP_HIGH registers; the handler itself is assembly, a GNU-syntax File, which writes `csrw utvec, t0` with the CSR first, linked as the Using C chapter of the Documentation says.'
+].join('\n')
+
+/**
  * The MARS and RARS memory-mapped devices, the same text for both environments: the two simulators'
  * bitmap display and keyboard-and-display simulator are the same two tools, and only the register a
  * service number goes in differs.
@@ -463,7 +492,7 @@ function MARS_SCREEN_INFORMATION(service: string, argument: string): string {
         `- The grid has the tool's own five parameters: unit width and height (${MARS_UNIT_SIZE_CHOICES.join(', ')} in the real tool, any from ${UNIT_SIZE_MIN} to ${UNIT_SIZE_MAX} here), display width and height (${MARS_DISPLAY_SIZE_CHOICES.join(', ')} in the real tool, any from ${DISPLAY_SIZE_MIN} to ${DISPLAY_SIZE_MAX} here) and a base address, which the user can pick in the screen panel among ${MARS_BASE_ADDRESS_CHOICES.map((choice) => formatMarsBaseAddress(choice.address)).join(', ')}. Default: ${DEFAULT_PROJECT_DISPLAY.unitWidth} by ${DEFAULT_PROJECT_DISPLAY.unitHeight} units, ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} pixels at ${formatMarsBaseAddress(DEFAULT_PROJECT_DISPLAY.baseAddress)}, so ${DEFAULT_PROJECT_DISPLAY.width} by ${DEFAULT_PROJECT_DISPLAY.height} words.`,
         `- **Any program that draws must configure them itself**, with a comment directive the editor reads at every build, before the first instruction: \`# @screen unit=1 width=256 height=256 base=display\`. \`base\` takes a label the program defines (preferred: the program never has to know the address) or an address such as 0x10010000; \`unit\` sets both unit sizes, \`unitWidth\` and \`unitHeight\` set them apart. Order and spacing are free, anything left out keeps its current value, and a bad value is a warning on that line, not an error. It is a comment, so the file still assembles in the real simulator.`,
         `- Keyboard and console are four words: 0x${base.toString(16)} receiver control (bit 0 Ready, a character is waiting), 0x${(base + 4).toString(16)} receiver data (the character, reading it takes it), 0x${(base + 8).toString(16)} transmitter control (bit 0 Ready, always set) and 0x${(base + 12).toString(16)} transmitter data (storing a character prints it, ASCII 12 clears the console).`,
-        `- Setting bit 1 of either control register, the interrupt-enable bit, stops the program with an error: poll the Ready bit instead.`,
+        `- Setting bit 1 of either control register, the interrupt-enable bit, makes that device request interrupts instead of being polled: the receiver for as long as a character waits (reading the data register takes it), and the transmitter once after each character stored while the bit is set, as in the reference simulator, so setting the bit asks for nothing until the program prints a first character, and a handler that prints nothing more is not called again. Handlers: on MIPS the \`.ktext\` at 0x80000180, on RISC-V the address in \`utvec\`, with \`uie\` bit 8 and \`ustatus\` bit 0 set.`,
         `- Service 30 (${service} = 30) answers the program time in milliseconds since the run started, low word in ${argument} and high word in the next register; service 32 (${service} = 32, ${argument} = milliseconds) waits. A wait costs no instructions, so a polling loop should sleep about 10 ms instead of spinning, or it will hit the execution limit.`,
         `- Services 31 and 33 play a Note: pitch in ${argument} (0 to 127, 60 is middle C), then the duration in milliseconds, the General MIDI instrument (0 to 127) and the volume (0 to 127) in the next three registers. 31 returns at once, so Notes overlap; 33 waits for the duration like 32, so a melody is a series of 33s. A testcase plays nothing, and 33 advances its virtual clock.`
     ].join('\n')
@@ -532,6 +561,26 @@ function INPUT_CONTROLLER_INFORMATION(sleep: string): string {
 }
 
 /**
+ * MIPS's and RISC-V's MIDI port and sampled-audio output, generated from the register models the
+ * devices read, so the agent writes exactly the registers that exist
+ * ([ADR 0075](../../../../../../../docs/adr/0075-mips-and-risc-v-get-a-midi-port-and-a-sampled-audio-output.md)).
+ */
+function SOUND_DEVICE_INFORMATION(sleep: string): string {
+    const registers = (list: readonly { name: string; offset: number; description: string }[]) =>
+        list
+            .map(
+                (register) =>
+                    `+0x${register.offset.toString(16)} ${register.name.toLowerCase()} (${register.description.replaceAll('`', '')})`
+            )
+            .join('; ')
+    return [
+        `- Streamed sound is two more extensions the reference simulator does not have (there their blocks read 0). The MIDI port at 0x${MIDI_PORT_BASE.toString(16)} sends MIDI bytes to a General MIDI synthesizer of its own, sixteen channels, channel 10 drums, sharing no channel with services 31 and 33: ${registers(MIDI_PORT_REGISTERS)}. Before each byte, wait while Status bit 6 is set: bytes leave at 31,250 baud, 0.32 ms each, behind a ${MIDI_PORT_BUFFER_BYTES}-byte buffer, and one written while it is full is dropped. 0x90 + channel, key, velocity starts a note (60 is middle C); 0x80 + channel, key, 0 ends it; 0xC0 + channel, program picks the instrument; running status and SysEx work. Pace a melody with ${sleep} between note on and note off.`,
+        `- The sampled-audio output at 0x${PCM_BASE.toString(16)} plays computed samples from a FIFO of ${PCM_FIFO_FRAMES} frames, draining at its rate: ${registers(PCM_REGISTERS)}. Set Rate (${PCM_RATE_DEFAULT} at Build), then Control bit 0; write at most Free frames, sleeping with ${sleep} while Free is 0. Changing Rate or stereo with samples queued drops them.`,
+        '- Both play out at the end of the program; a testcase is silent but keeps their timing. In C, <sim.h> has sim_midi_present(), sim_midi_write(byte), sim_pcm_present(), sim_pcm_start(rate, stereo), sim_pcm_free(), sim_pcm_write(first, second) and SIM_MIDI_* / SIM_PCM_* registers.'
+    ].join('\n')
+}
+
+/**
  * The MARS and RARS file and folder services, the folder calls numbered alike on both
  * ([ADR 0072](../../../../../../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md)),
  * with the registers and the older services' numbers each environment has.
@@ -591,18 +640,22 @@ ${SYNTH_INFORMATION(`0x${SYNTH_BASES.m68k.toString(16).toUpperCase()} ($${SYNTH_
 - Uses the MARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - .data starts at 0x10010000. $sp starts at 0x7ffffffc and grows downward.
 ${MARS_SCREEN_INFORMATION('$v0', '$a0')}
+${MIPS_TIMER_INFORMATION}
 ${MARS_FILE_INFORMATION((index) => `$a${index}`, '$v0', { open: 13, read: 14, write: 15, close: 16, seek: 62 })}
 ${SYNTH_INFORMATION(`0x${SYNTH_BASES.mips.toString(16)}`, 'sh', 'sb', 'service 32 (sleep)')}
 ${INPUT_CONTROLLER_INFORMATION('service 32 ($v0 = 32, $a0 = milliseconds)')}
+${SOUND_DEVICE_INFORMATION('service 32 ($v0 = 32, $a0 = milliseconds)')}
 
 ## RISC-V
 - Uses the RARS assembler/emulator syntax and syscalls. Memory is little-endian.
 - RISC-V is 32-bit; RISC-V-64 is 64-bit.
 - .data starts at 0x10010000. sp starts at 0x7ffffffc and grows downward.
 ${MARS_SCREEN_INFORMATION('a7', 'a0')}
+${RISCV_TIMER_INFORMATION}
 ${MARS_FILE_INFORMATION((index) => `a${index}`, 'a0', { open: 1024, read: 63, write: 64, close: 57, seek: 62 })}
 ${SYNTH_INFORMATION(`0x${SYNTH_BASES.riscv.toString(16)}`, 'sh', 'sb', 'service 32 (sleep)')}
 ${INPUT_CONTROLLER_INFORMATION('service 32 (a7 = 32, a0 = milliseconds)')}
+${SOUND_DEVICE_INFORMATION('service 32 (a7 = 32, a0 = milliseconds)')}
 
 ## X86
 - The X86 emulator is experimental and incomplete. It uses the NASM syntax and assembler. Uses Blink as the emulator.

@@ -195,9 +195,10 @@ poll from turning into a tight busy-wait. The loads, branches, `li` instructions
 instruction still count toward the running instruction budget. The elapsed pause itself adds no
 running instructions, so the program can wait without spending that budget merely to count time.
 
-Keep bit 1 of both control registers clear in this lesson. It requests interrupt-driven I/O, which
-the Playground does not support; the run stops if a program tries to set it. Poll Ready bit 0
-instead.
+Keep bit 1 of both control registers clear in this lesson. It turns on the device's interrupt,
+which runs a handler instead of polling: the
+[Interrupts and the timer](/documentation/mips/interrupts#keyboard) chapter shows how. Here, poll
+Ready bit 0.
 
 A testcase types its input lines into the receiver, one character at a time, each line followed by a
 newline (10). A `runFor` testcase without input, such as the one above, only runs up to that

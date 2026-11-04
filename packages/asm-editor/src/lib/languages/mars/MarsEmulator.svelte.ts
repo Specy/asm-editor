@@ -45,10 +45,12 @@ import {
     MarsHandlers,
     marsRuntimeErrorMessage,
     type MarsHandlerMap,
-    type MarsRuntimeError
+    type MarsRuntimeError,
+    type WfiWakers
 } from './marsHandlers'
 import { MarsSlicePacer } from './marsSlice'
 import { canUndoMarsHistoryRange } from './marsUndo'
+import { RunningTime } from './runningTime'
 
 /**
  * The Emulator of both MARS-derived Targets, MIPS on MARS and RISC-V on RARS, whose Cores are the
@@ -116,6 +118,11 @@ type MarsEmulatorCore<S> = MarsCore &
         simulateWithLimit(limit: number): Promise<number>
         simulateWithBreakpointsAndLimit(breakpoints: number[], limit: number): Promise<number>
         getStopReason(): number
+        /**
+         * The interrupt the last run call took most recently, `[pc, cause, handler]`, or empty: the
+         * instruction it interrupted, what the subclass reads its source from, and the handler.
+         */
+        getInterruptTaken(): ArrayLike<number>
         getLastRunInstructionCount(): number
         getInstructionsExecuted(): number
         pause(): void
@@ -228,6 +235,16 @@ export abstract class MarsEmulator<
      * Run or Step yet.
      */
     private runningStartCode = false
+    /**
+     * The running program's elapsed time, which RISC-V's timer registers count: from 0 at each
+     * run, counting while a Step or a Run's slices run and between a Run's slices, and stopped
+     * at a Pause, a Breakpoint and between Steps (`runningTime.ts`).
+     */
+    private readonly runningTime = new RunningTime()
+    /** What a RISC-V `wfi` waiting now waits for, for the status line (`_getRunStatus`). */
+    private interruptWait: string | undefined
+    /** Whether this run's Log already says that a `wfi` waits for an interrupt that cannot come. */
+    private warnedWfiCannotEnd = false
 
     constructor(
         source: BuildInput,
@@ -254,7 +271,12 @@ export abstract class MarsEmulator<
             terminal: this._peripherals.terminal,
             audio: () => this._peripherals.audio,
             mouse: this._peripherals.mouse,
-            inputOpen: () => this.takesInput()
+            inputOpen: () => this.takesInput(),
+            //read when the devices ask, as the subclass's Target is not there yet: both RISC-V
+            //Targets have RARS's Timer Tool, RV64's as RV32's
+            timer: () => this.target !== 'MIPS',
+            //read at each use: a Testcase swaps in a virtual clock
+            clock: () => this._peripherals.clock
         })
         this.devices.setDisplay(this.display)
         this.handlers = new MarsHandlers({
@@ -272,7 +294,16 @@ export abstract class MarsEmulator<
             },
             fileSystem: () => this.fileSystemSession,
             target: () => this.target,
-            instructionSerial: () => this.requireCore().getCurrentInstructionSerial()
+            instructionSerial: () => this.requireCore().getCurrentInstructionSerial(),
+            elapsedTime: () => this.elapsedTime(),
+            externalInterruptsEnabled: () => this.externalInterruptsEnabled(),
+            waitingForInterrupt: (wakers) => {
+                this.interruptWait = wakers && wfiStatus(wakers)
+                this.state.runStatus = this.interruptWait
+                //a Step waiting here takes a Pause, as a Run does
+                this.setStepWaiting(wakers !== undefined)
+                if (wakers && !wakers.timer && !wakers.key) this.warnWfiCannotEnd()
+            }
         })
     }
 
@@ -287,8 +318,42 @@ export abstract class MarsEmulator<
     /** One back step as a mutation of its instruction's row, or none for the Core's bookkeeping. */
     protected abstract backstepToMutation(step: S): MutationOperation | null
 
+    /**
+     * What raised the interrupt a Step took, as the Log names it, "Timer interrupt" for example:
+     * `cause` is the middle number of `getInterruptTaken`, which each Core reports its own way.
+     */
+    protected abstract interruptName(cause: number): string
+
+    /**
+     * Whether an Undo group's back steps are an interrupt being taken, a step of its own in which
+     * no instruction ran, and if so what the History row says of it: what raised it, the code the
+     * handler finds, and the handler's address. Null for an instruction's group.
+     */
+    protected abstract interruptEntry(steps: readonly S[]): MarsInterruptEntry | null
+
     /** How wide the panels read a register a Poke wrote, by the file its name belongs to. */
     protected abstract pokeRegisterSize(register: string): RegisterSize
+
+    /**
+     * Whether a device's request can end a `wfi`: RISC-V's `uie` bit 8 lets external interrupts
+     * through. MIPS has no `wfi` that waits (its `wait` returns at once), so it never asks.
+     */
+    protected externalInterruptsEnabled(): boolean {
+        return false
+    }
+
+    /**
+     * Says once a run, in the Log, that a `wfi` waits for an interrupt nothing the program turned
+     * on can send, and how to turn one on, beside the status line that says so while it waits.
+     */
+    private warnWfiCannotEnd(): void {
+        if (this.warnedWfiCannotEnd) return
+        this.warnedWfiCannotEnd = true
+        this.addNote({
+            tone: 'warning',
+            text: 'wfi is waiting for an interrupt that cannot come: the timer is not armed for one, and no key can end the wait. To wait for the timer, write timecmp and set bit 4 of uie; for a key, set bit 8 of uie and bit 1 of the receiver control register at 0xffff0000. Pause or Stop ends this wait.'
+        })
+    }
 
     /**
      * The Screen panel's configuration popover, applied at once and with a re-sync from memory, as
@@ -493,8 +558,29 @@ export abstract class MarsEmulator<
         )
     }
 
+    /**
+     * The status line beside the Terminal's tab while a RISC-V `wfi` waits, as an M68K `stop`'s
+     * shows, naming only what can end the wait: "Waiting for an interrupt: wfi waits for the timer
+     * or a key".
+     */
+    _getRunStatus(): string | undefined {
+        return this.interruptWait
+    }
+
+    /**
+     * What RISC-V's `time` register reads: in a Testcase the virtual clock, which starts at 0 and
+     * moves only on the program's waits, and otherwise the running time.
+     */
+    private elapsedTime(): number {
+        const clock = this._peripherals.clock
+        return clock.isVirtual ? clock.now() : this.runningTime.read(clock.now())
+    }
+
     _initialize(undoSize: number): void {
         const core = this.requireCore()
+        //a new run's timer counts from 0
+        this.runningTime.reset()
+        this.warnedWfiCannotEnd = false
         //the stack was already sized in `_compile`, `assemble()` engages the backstepper
         //unconditionally so this is what actually turns undo off when history is disabled
         this.undoEnabled = undoSize > 0
@@ -519,6 +605,8 @@ export abstract class MarsEmulator<
         //and so are the events its reads take from the Input controller (decision 9)
         this.programStarted = false
         this.devices.input.track(instruction, undoSize)
+        //and the bytes and samples it gives the MIDI port and the sampled-audio output (ADR 0075)
+        this.devices.trackSound(instruction, undoSize)
     }
 
     _dispose(): void {
@@ -537,13 +625,19 @@ export abstract class MarsEmulator<
         super.clear()
         this.devices?.resetScreen(this.display)
         //Clear execution and Stop are the Screen's reset path, which empties the Input controller
+        //and the sound devices
         this.devices?.resetInput()
+        this.devices?.resetSound()
         this.programStarted = false
     }
 
-    /** Framebuffer mode journals nothing, so Undo restores the image from the rolled-back memory. */
+    /**
+     * Framebuffer mode journals nothing, so Undo restores the image from the rolled-back memory
+     * ([ADR 0005](../../../../../../docs/adr/0005-restore-screen-state-on-undo.md)). The Core marked
+     * the blocks its restores wrote, as it marks a Poke's, so only those are read again.
+     */
     _resyncScreenFromMemory(): void {
-        this.devices.resync()
+        this.devices.flush()
     }
 
     _getCallStack(): StackFrame[] {
@@ -552,12 +646,15 @@ export abstract class MarsEmulator<
         return core.getCallStack().map((frame, i) => {
             const address = frame.toAddress
             const statement = this.statementAtAddress(address)
+            //the Core's addresses are signed words: a MIPS handler's in `.ktext`, at 0x80000000
+            //and above, is negative until it is read unsigned
             return {
-                address: BigInt(address),
-                destination: BigInt(frame.pc),
-                sp: BigInt(frame.sp),
+                address: BigInt(address >>> 0),
+                destination: BigInt(frame.pc >>> 0),
+                sp: BigInt(frame.sp >>> 0),
                 name:
-                    core.getLabelAtAddress(address) ?? `0x${address.toString(16).padStart(8, '0')}`,
+                    core.getLabelAtAddress(address) ??
+                    `0x${(address >>> 0).toString(16).padStart(8, '0')}`,
                 line: statement ? statement.sourceLine - 1 : -1,
                 file: statement?.sourcePath,
                 color: makeLabelColor(i, frame.sp)
@@ -601,7 +698,7 @@ export abstract class MarsEmulator<
                 //the same indented text the Markdown form uses, so an expansion lines up with the
                 //source instruction it came from rather than starting at the Editor's left edge
                 instructions: statements.map((statement, index) => ({
-                    address: BigInt(statement.address),
+                    address: BigInt(statement.address >>> 0),
                     code: lines[index] ?? formatStatement(statement.assemblyStatement)
                 }))
             })
@@ -624,8 +721,9 @@ export abstract class MarsEmulator<
         return []
     }
 
+    /** `address` unsigned, as every address this Emulator reports is, and the Core's signed word. */
     _getInstructionAt(address: bigint): Instruction | null {
-        return toInstruction(this.statementAtAddress(Number(address)))
+        return toInstruction(this.statementAtAddress(Number(BigInt.asIntN(32, address))))
     }
 
     /** None once the program has ended, even where an exit left it on a statement. */
@@ -742,21 +840,52 @@ export abstract class MarsEmulator<
      * nothing else is a row with no mutations, which is still the row "Undo to here" has to count.
      */
     private instructionGroupToStep(pc: number, steps: readonly S[]): ExecutionStep {
+        //the Core's `pc` is a signed word: an address in MIPS's `.ktext`, a handler's, reads
+        //negative until it is read unsigned, as the panels and Go to address read it
+        const address = pc >>> 0
+        //the Core reports the back steps newest first, which is the order they are undone in;
+        //a row reads as what the instruction did, so it lists them in the order they happened
+        const mutations = [...steps]
+            .reverse()
+            .map((step) => this.backstepToMutation(step))
+            .filter((mutation) => mutation !== null)
+        //an interrupt taken ran no instruction: its row is the interrupt and the handler it went
+        //to, "Timer interrupt → the handler at $80000180", with what taking it wrote below, so the
+        //jump into the handler is not shown as the interrupted instruction's own (decision 6)
+        const entry = this.interruptEntry(steps)
+        if (entry) {
+            const label = this.core?.getLabelAtAddress(entry.handler | 0)
+            return {
+                kind: 'irq',
+                pc: address,
+                old_ccr: { bits: 0 },
+                new_ccr: { bits: 0 },
+                line: -1,
+                mutations: [
+                    {
+                        type: 'TakeException',
+                        value: {
+                            vector: entry.code,
+                            name: entry.name,
+                            from: BigInt(address),
+                            handler: BigInt(entry.handler >>> 0),
+                            ...(label ? { label } : {})
+                        }
+                    },
+                    ...mutations
+                ]
+            }
+        }
         const statement = this.statementAtAddress(pc)
         return {
             kind: 'instruction',
-            pc,
+            pc: address,
             //neither has a condition code register, the UI reads these only for M68K
             old_ccr: { bits: 0 },
             new_ccr: { bits: 0 },
             line: statement ? statement.sourceLine - 1 : -1,
             file: statement?.sourcePath,
-            //the Core reports the back steps newest first, which is the order they are undone in;
-            //a row reads as what the instruction did, so it lists them in the order they happened
-            mutations: [...steps]
-                .reverse()
-                .map((step) => this.backstepToMutation(step))
-                .filter((mutation) => mutation !== null)
+            mutations
         }
     }
 
@@ -862,8 +991,33 @@ export abstract class MarsEmulator<
         const core = this.requireCore()
         this.startProgram()
         this.handlers.beginExecution()
-        const stop = await this.coreCall(() => core.step())
+        const clock = this._peripherals.clock
+        //the program runs for as long as the Step does, a `wfi`'s wait included, and not after
+        this.runningTime.start(clock.now(), false)
+        let stop: number
+        try {
+            stop = await this.coreCall(() => core.step())
+        } finally {
+            this.runningTime.stop(clock.now())
+        }
+        this.noteInterrupt(core)
         return { terminated: this.endsProgram(stop) }
+    }
+
+    /**
+     * Says in the Log when a Step took an interrupt, so that a person sees why the line jumped into
+     * the handler: "Timer interrupt at 0x00400120 → handler at 0x80000180"
+     * ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md), decision 6).
+     */
+    private noteInterrupt(core: C): void {
+        const taken = core.getInterruptTaken()
+        if (taken.length < 3) return
+        const hex = (address: number) => `0x${(address >>> 0).toString(16).padStart(8, '0')}`
+        const handler = core.getLabelAtAddress(taken[2])
+        this.addNote({
+            tone: 'info',
+            text: `${this.interruptName(taken[1])} at ${hex(taken[0])} → handler at ${hex(taken[2])}${handler ? ` (${handler})` : ''}`
+        })
     }
 
     /** A `RuntimeError` in MARS's or RARS's words and at the line it names; anything else as it says. */
@@ -888,15 +1042,24 @@ export abstract class MarsEmulator<
         this.failedAt = null
         const readSynth = () => this.devices.readSynthBlock()
         if (serial === undefined) {
-            //a rewound Poke may have been one into the Input controller's block
+            //a rewound Poke may have been one into the Input controller's block, a sound device's,
+            //or a control register's enable bit
             this.devices.input.restate()
+            this.devices.restateSound()
+            this.devices.afterUndo()
             return this._peripherals.audio.resyncSynth(readSynth)
         }
         this.fileSystemSession?.undoAfter(serial)
         this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
+        //the MIDI bytes and samples not heard yet are taken back, and the settings put back, before
+        //the Audio's own Undo, which sends what both took back
+        this.devices.undoSoundAfter(BigInt(serial) - 1n)
         this._peripherals.audio.undoAfter(BigInt(serial) - 1n, readSynth)
         //the events the instruction's reads took go back, and the whole block is stated again
         this.devices.input.undoAfter(BigInt(serial) - 1n)
+        //and the receiver states its interrupt line again, which the Core's Undo leaves to it, a
+        //keystroke the Terminal put back included; the transmitter's pulses the Core puts back
+        this.devices.afterUndo()
     }
 
     /**
@@ -905,6 +1068,8 @@ export abstract class MarsEmulator<
      */
     private async coreCall<T>(run: () => Promise<T>): Promise<T> {
         this.failedAt = null
+        //the sound devices drained while nothing ran: the program's first read sees it
+        this.devices.refreshSound()
         try {
             return await run()
         } catch (error) {
@@ -922,9 +1087,8 @@ export abstract class MarsEmulator<
      * fresh frame. The budget is spent in chunks by the pacer, which keeps a slice near its deadline
      * (`marsSlice.ts`), and every chunk is charged what the Core says it executed.
      *
-     * The bitmap display catches up once per slice rather than once per stored word, which is what
-     * keeps the observer cheap; a program that sleeps or waits for input flushes from the handler
-     * too.
+     * The bitmap display catches up once per slice, reading the blocks the Core noted as written;
+     * a program that sleeps or waits for input flushes from the handler too.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const core = this.requireCore()
@@ -935,6 +1099,9 @@ export abstract class MarsEmulator<
         this.startProgram()
         this.handlers.beginExecution()
         this.slicing = true
+        const clock = this._peripherals.clock
+        //a slice continuing a Run counts the host's turn since the last one, the Run going on
+        this.runningTime.start(clock.now(), request.startsRun !== true)
         try {
             return await this.coreCall(() =>
                 this.pacer.run(request, this.dialect.instructionsPerMs, async (limit) => {
@@ -948,6 +1115,7 @@ export abstract class MarsEmulator<
             )
         } finally {
             this.slicing = false
+            this.runningTime.stop(clock.now())
         }
     }
 
@@ -986,6 +1154,27 @@ export abstract class MarsEmulator<
 }
 
 /**
+ * The status line of a `wfi` that waits, naming only what can end the wait: the timer, a key, both,
+ * or, when nothing the program turned on can, what can.
+ */
+function wfiStatus({ timer, key }: WfiWakers): string {
+    if (timer && key) return 'Waiting for an interrupt: wfi waits for the timer or a key'
+    if (timer) return 'Waiting for an interrupt: wfi waits for the timer'
+    if (key) return 'Waiting for an interrupt: wfi waits for a key'
+    return 'Waiting for an interrupt that cannot come: Pause or Stop ends this wfi'
+}
+
+/** What the History row of an interrupt taken says of it (`interruptEntry`). */
+export type MarsInterruptEntry = {
+    /** What raised it, as the Log names it: "Timer interrupt". */
+    name: string
+    /** The code its handler finds: Cause's exception code on MIPS, `ucause`'s on RISC-V. */
+    code: number
+    /** The handler it went to, as the Core's signed word or unsigned. */
+    handler: number
+}
+
+/**
  * One source line can assemble to several machine statements — a pseudo-instruction like `la`, or a
  * macro invocation — and every one of them reports that line. Breaking on all of them stopped the
  * run once per generated instruction, so a single visible breakpoint took several Runs to clear.
@@ -997,9 +1186,13 @@ function calculateBreakpoints(
 ): number[] {
     return breakpoints.filter(isLineBreakpoint).flatMap((breakpoint) => {
         const statements = core.getStatementsAtSourceLocation(breakpoint.file, breakpoint.line + 1)
+        //compared unsigned, so a line in MIPS's `.ktext`, at 0x80000000 and above, finds its first
+        //statement too, and handed back as the Core's own signed words
         const entry = statements.reduce<number | undefined>(
             (lowest, statement) =>
-                lowest === undefined || statement.address < lowest ? statement.address : lowest,
+                lowest === undefined || statement.address >>> 0 < lowest >>> 0
+                    ? statement.address
+                    : lowest,
             undefined
         )
         return entry === undefined ? [] : [entry]
@@ -1009,7 +1202,8 @@ function calculateBreakpoints(
 function toInstruction(statement: MarsStatement | null | undefined): Instruction | null {
     if (!statement) return null
     return {
-        address: BigInt(statement.address),
+        //unsigned, as the PC is: a statement of MIPS's `.ktext` is at 0x80000000 and above
+        address: BigInt(statement.address >>> 0),
         lineNumber: statement.sourceLine - 1,
         file: statement.sourcePath,
         code: statement.source

@@ -667,7 +667,7 @@
                 fill={viewport.deviceClass === 'phone'}
                 debugging={built}
                 building={building || compiling}
-                {running}
+                running={running || emulator.stepWaiting === true}
                 {buildDisabled}
                 {compilation}
                 compileOnly={selectedIsSource}

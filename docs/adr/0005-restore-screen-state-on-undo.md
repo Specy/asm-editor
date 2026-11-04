@@ -23,3 +23,5 @@ instruction, including the Z80 IN that is retried after input becomes available.
 ## Memory-backed images
 
 When an image lives in Core memory, as with the MARS/RARS bitmap display, the Core's own rollback already restores the pixels, so Undo re-reads the mapped region into the Screen instead of journaling pixel changes on the Screen side. This follows the TRS-80 emulator that `@specy/z80` descends from, which rebuilds its screen from screen RAM after restoring a snapshot ([Trs80.ts](https://github.com/lkesteloot/trs80/blob/master/packages/trs80-emulator/src/Trs80.ts)). Images changed through drawing commands, such as EASy68K's, have no memory copy and still need Screen-side history.
+
+Update 2026-11-04: on MIPS and RISC-V the Core now marks the 1 KB blocks of the bitmap display that its stores write, the restores of a rollback included, so Undo re-reads only the blocks it changed rather than the whole region ([asmos-stage2.md](../design/asmos-stage2.md), decision 2).

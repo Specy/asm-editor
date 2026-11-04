@@ -1223,7 +1223,14 @@ describe('x86 start unit', () => {
         })
         const emulator = await X86Emulator(project, { automaticChecking: false })
         try {
-            expect(await emulator.check()).toEqual([])
+            //main.asm is never assembled, which the check says as the Build does
+            expect(await emulator.check()).toEqual([
+                expect.objectContaining({
+                    file: 'main.asm',
+                    severity: 'suggestion',
+                    code: 'not-linked'
+                })
+            ])
             //the linker takes `_start` from the start code, and nothing from main.asm
             await emulator.compile(20, project)
             expect(emulator.compilerErrors.filter((d) => d.severity === 'error')).toEqual([])
@@ -1300,13 +1307,12 @@ describe('x86 start unit', () => {
                 expect(await emulator.check()).toEqual([])
                 await emulator.compile(20, sources)
                 expect(emulator.compilerErrors).toEqual([])
-                //the other Programs' Files are left out, as `ld` leaves out what nothing needs
-                expect(
-                    emulator.compilerDiagnostics
-                        .filter((d) => d.code === 'not-linked')
-                        .map((d) => d.file)
-                        .sort()
-                ).toEqual(programs.map(([other]) => other).filter((other) => other !== entry))
+                //the other Programs' Entries are theirs: no unit of this one, so neither looked at
+                //nor said to be left out
+                expect(sources.linkUnits).toEqual([])
+                expect(emulator.compilerDiagnostics.filter((d) => d.code === 'not-linked')).toEqual(
+                    []
+                )
                 await emulator.run(100_000)
                 expect(emulator.terminated).toBe(true)
                 expect(cpuRegister(emulator, 'rdi')).toBe(result)

@@ -334,6 +334,12 @@ export abstract class GenericEmulator<T, R extends string>
     private runInFlight = false
     /** Whether the run in flight takes a Pause, which no Testcase's run to `main` does. */
     private runPausable = false
+    /**
+     * Whether a Step is in flight. Its instruction can wait for something of the program's own, a
+     * RISC-V `wfi` for an interrupt, and the adapter says so (`setStepWaiting`): Pause then ends
+     * that wait, as it ends a Run's, and the Step completes.
+     */
+    private stepInFlight = false
     /** Turns the Breakpoints the user set into the ones the Core runs with, see `setBreakpointResolver`. */
     private breakpointResolver?: (breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]
     protected fileSystemSession: FileSystemSession | null = null
@@ -1473,6 +1479,7 @@ export abstract class GenericEmulator<T, R extends string>
             canUndo: false,
             paused: false,
             runStatus: undefined,
+            stepWaiting: false,
             cycles: undefined,
             executionTime: -1,
             canExecute: false,
@@ -1876,8 +1883,22 @@ export abstract class GenericEmulator<T, R extends string>
      * answered; the GUI disables the button while an input request is pending for that reason.
      */
     pause(): void {
+        //a Step whose instruction waits, a RISC-V `wfi`, stops waiting, and its instruction completes
+        if (this.stepInFlight) {
+            if (this.state.stepWaiting) this.executionController.requestPause()
+            return
+        }
         if (!this.runInFlight || !this.runPausable) return
         this.executionController.requestPause()
+    }
+
+    /**
+     * The adapter's, while a Step's instruction waits for the program's own reason, a RISC-V `wfi`
+     * for an interrupt, and once it stops: the controls offer Pause meanwhile (`stepWaiting`). A
+     * Run's waits take its Pause already, so outside a Step this says nothing.
+     */
+    protected setStepWaiting(waiting: boolean): void {
+        this.state.stepWaiting = waiting && this.stepInFlight
     }
 
     /**
@@ -2366,11 +2387,18 @@ export abstract class GenericEmulator<T, R extends string>
     async step(): Promise<boolean> {
         if (!this.state.canExecute) return false
         const execution = this.executionController.capture()
-        return this.duringCoreOperation(() =>
-            this.executionController.isCurrent(execution)
-                ? this.stepInternal()
-                : Promise.resolve(false)
-        )
+        return this.duringCoreOperation(async () => {
+            if (!this.executionController.isCurrent(execution)) return false
+            this.stepInFlight = true
+            try {
+                return await this.stepInternal()
+            } finally {
+                this.stepInFlight = false
+                this.state.stepWaiting = false
+                //a Pause that ended the Step's wait is not left for the next Run to take
+                this.executionController.endPause()
+            }
+        })
     }
 
     private async stepInternal(): Promise<boolean> {
@@ -2953,6 +2981,11 @@ export abstract class GenericEmulator<T, R extends string>
     /** What the program waits for on its own, see `BaseEmulatorState.runStatus`. */
     get runStatus() {
         return this.state.runStatus
+    }
+
+    /** Whether a Step waits inside its instruction, see `BaseEmulatorState.stepWaiting`. */
+    get stepWaiting() {
+        return this.state.stepWaiting ?? false
     }
 
     /** The cycle counter, for a Target that counts cycles, see `BaseEmulatorState.cycles`. */

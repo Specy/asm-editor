@@ -811,10 +811,11 @@ export type BuildConfiguration = Readonly<{
     /** x86 compiler support archive; startup is selected only for a compiled Entry. */
     x86Support?: boolean
     /**
-     * The Project's other GNU-profile units a MIPS or RISC-V Build takes as an archive's members,
-     * by path in path order: the Core links one only when it defines a global the program still
-     * needs ([ADR 0033](../../../../docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md),
-     * 2026-11-03 note). Absent when there are none.
+     * The Project's other assembly Files a Build takes as an archive's members, by path in path
+     * order (`resolveLinkUnits`): the Core assembles and links one only when it defines a global
+     * the program still needs ([ADR 0033](../../../../docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md),
+     * 2026-11-03 and 2026-11-04 notes). On MIPS and RISC-V, absent when there are none; on x86
+     * always given by a Project's Build, since without it the Core takes every source File.
      */
     linkUnits?: readonly string[]
     /** Generated assembly path to the source language that produced it. */

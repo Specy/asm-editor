@@ -124,8 +124,9 @@ export async function analyzeX86Project(
             { cause: error, retry: !refused }
         )
     }
-    // NASM reports no reached set, so the editor follows literal includes for file-status hints.
-    const reached = x86ReachableFiles(sources)
+    // NASM reports no reached set, so the editor follows literal includes for file-status hints,
+    // from the Entry and the units the program needs, the only ones the check assembled.
+    const reached = x86ReachableFiles(sources, undefined, checker?.getProjectUnits()?.needed)
     const fileStatus: Record<string, ProjectFileAnalysisStatus> = Object.create(null)
     for (const [path, file] of Object.entries(sources.files)) {
         if (file.encoding !== 'plain') fileStatus[path] = 'binary'

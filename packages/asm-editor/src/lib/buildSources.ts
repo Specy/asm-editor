@@ -15,7 +15,9 @@ import { compiledEntrySource, languageTakesArguments } from './commandLine'
 /**
  * Resolve the same input for execution, live analysis and embedded programs, from an Entry and the
  * Settings it runs with, whatever holds them: a Project's Program (`programBuildSources`) or a
- * Playground's one program.
+ * Playground's one program. `programs` are the Entries of every Program of the Project, whose
+ * Files never join another Program's Build (`resolveLinkUnits`); a Playground's one program by
+ * default.
  */
 export function projectBuildSources(project: {
     files: ProjectFiles
@@ -23,6 +25,7 @@ export function projectBuildSources(project: {
     language: AvailableLanguages
     compilations?: readonly CompilationRecord[]
     settings?: ProjectSettingsDecisions
+    programs?: readonly string[]
 }): BuildSources {
     //the program's name on the Command line and in `argv[0]` (`./main` for `main.c.asm`)
     const entrySource = languageTakesArguments(project.language)
@@ -35,8 +38,11 @@ export function projectBuildSources(project: {
         ...(entrySource === undefined ? {} : { entrySource })
     }
     if (project.language === 'X86') {
+        //every assembly File no Program owns, which the Core assembles only once the program
+        //needs it; always given, so the Core never falls back to every File of the Project
         return {
             ...sources,
+            linkUnits: resolveLinkUnits(sources, project.language, undefined, project.programs),
             ...resolveX86Start(sources, project.compilations, project.settings?.linkRuntimeLibrary)
         }
     }
@@ -46,12 +52,12 @@ export function projectBuildSources(project: {
         project.compilations,
         project.language === 'MIPS' ? undefined : project.settings
     )
-    //the Project's other compiled units, which the Core links as an archive's members
+    //the Project's other assembly Files, which the Core links as an archive's members by need
     const linkUnits = resolveLinkUnits(
         sources,
-        project.compilations,
         project.language,
-        assemblerProfile
+        assemblerProfile,
+        project.programs
     )
     const linked = linkUnits.length
         ? {
@@ -91,6 +97,7 @@ export function programBuildSources(
         entry,
         language: project.language,
         compilations: project.compilations,
-        settings: project.programs[entry].settings
+        settings: project.programs[entry].settings,
+        programs: Object.keys(project.programs)
     })
 }

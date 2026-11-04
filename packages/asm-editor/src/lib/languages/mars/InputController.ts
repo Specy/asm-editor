@@ -202,7 +202,10 @@ export class InputController {
     /**
      * After a store into the block, `fromProgram` false for a Poke or another host write: the device
      * states its values again over whatever was stored. A program that set Control's interrupt-enable
-     * bit is stopped, as MARS's receiver stops it, since interrupts are not offered.
+     * bit is stopped: MIPS and RISC-V deliver interrupts, from their timers and from the keyboard
+     * receiver and display transmitter, but this controller's bit stays reserved until a program
+     * needs its interrupts, and asmOS polls it
+     * ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md), decision 5).
      */
     stored(fromProgram: boolean): void {
         if (!this.bus || this.covered) return
@@ -211,8 +214,8 @@ export class InputController {
         if (fromProgram && (control & INPUT_INTERRUPT_ENABLE_BIT) !== 0) {
             const address = (this.base + INPUT_CONTROL) >>> 0
             throw new Error(
-                `Interrupt-driven input is not supported: the program set the interrupt-enable bit ` +
-                    `(bit 1) of the Input controller's control register at 0x${address.toString(16)}. ` +
+                `The Input controller does not raise interrupts: the program set the interrupt-enable bit ` +
+                    `(bit 1) of its control register at 0x${address.toString(16)}, which is reserved. ` +
                     `Poll the Status register instead.`
             )
         }

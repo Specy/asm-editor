@@ -13,14 +13,20 @@ import {
 } from './marsDisplay'
 import { SYNTH_BASES, SYNTH_BLOCK_SIZE } from '../synthRegisters'
 import { INPUT_BASE, INPUT_BLOCK_SIZE, INPUT_EVENT } from '../inputControllerRegisters'
+import { MIDI_PORT_BASE, MIDI_PORT_BLOCK_SIZE, MIDI_PORT_STATUS } from '../midiPortRegisters'
+import { PCM_BASE, PCM_BLOCK_SIZE, PCM_FREE } from '../sampledAudioRegisters'
 import { InputController } from './InputController'
+import { MidiPortDevice } from './MidiPortDevice'
+import { SampledAudioDevice } from './SampledAudioDevice'
+import type { SoundBus, SoundClock } from './soundDevice'
 
 /**
  * The MARS and RARS memory-mapped devices: the bitmap display, the keyboard-and-display simulator,
- * and the **Synth** and the **Input controller** this project adds beside them, driven through the
- * Core's memory observers. MIPS and RISC-V share this module because
- * the two tools are the same tool — RARS's are ports of MARS's — and both Cores expose the same
- * observer API.
+ * and the **Synth**, the **Input controller**, the **MIDI port** and the **Sampled-audio output**
+ * this project adds beside them, driven through the Core's memory observers, and the display
+ * through the Core's map of written blocks. MIPS and
+ * RISC-V share this module because the two tools are the same tool — RARS's are ports of MARS's —
+ * and both Cores expose the same API.
  *
  * Plain TypeScript, no runes, so it runs under node in the tests; the adapter owns the lifetime and
  * the Screen, Keyboard and Terminal come in as the peripherals the GUI is already bound to
@@ -38,24 +44,40 @@ export const MARS_TRANSMITTER_DATA = 0xffff000c
 
 /** Bit 0 of a control register: the device has a character for the program, or wants one. */
 export const MARS_READY_BIT = 0x1
-/** Bit 1 of a control register: interrupt-driven I/O, which this editor does not have. */
+/**
+ * Bit 1 of a control register: the device requests interrupts. The receiver requests one for as
+ * long as a character waits; the transmitter one each time it becomes Ready again after taking a
+ * character, as MARS's does, so setting the bit asks for nothing by itself.
+ */
 export const MARS_INTERRUPT_ENABLE_BIT = 0x2
+
+/**
+ * What each device's interrupt carries: MARS's codes, which put Cause's pending bit 8 (keyboard) or
+ * 9 (display) on MIPS, and the value a RISC-V handler finds in `utval`, as RARS gives them.
+ */
+export const MARS_RECEIVER_INTERRUPT = 0x40
+export const MARS_TRANSMITTER_INTERRUPT = 0x80
+
+/**
+ * RARS's Timer Tool registers, which the RISC-V Core keeps: `time` at 0xFFFF0018 and `timecmp` at
+ * 0xFFFF0020, 64 bits each ([ADR 0074](../../../../../../docs/adr/0074-mips-and-risc-v-timers-count-what-their-references-count.md)).
+ */
+export const RARS_TIME = 0xffff0018
+export const RARS_TIMECMP = 0xffff0020
+export const RARS_TIMER_SIZE = 0x10
 
 /** ASCII form feed. Stored in the transmitter data register it clears MARS's display window. */
 const FORM_FEED = 12
 
 /**
- * How many framebuffer words one bit of the dirty map covers.
+ * How many framebuffer words one block of the Core's written-blocks map covers: the Cores note
+ * writes a kilobyte at a time (`trackWrites`), counted from the grid's first word.
  *
- * The grid used to be tracked as a single minimum-to-maximum interval, so a program storing two
- * words at opposite ends of it had the whole grid read back out of the Core and converted, once per
- * flush. Measured in the headless shell on a program written for it — two words a frame on a 256 by
- * 256 word grid, sleeping 16 ms, so it should reach 60 frames a second — that was 29 delivered
- * frames a second with **47% of the wall clock inside the Core's `wasm-bindgen` memory-read glue**,
- * turning 262 144 bytes into a JavaScript array every frame.
- *
- * A block is a kilobyte of Core memory, so a scattered store re-reads 256 words instead of the
- * grid, and a program writing the whole grid still flushes it as one run.
+ * The Core used to call an observer of the grid on every store, which was 55 to 65% of the Core's
+ * time while a program drew ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md),
+ * decision 2). Now the Core marks the block a store lands in, and a flush reads the map once and
+ * fetches only those blocks, so a scattered store re-reads 256 words instead of the grid, and a
+ * program writing the whole grid still flushes it as one run.
  */
 const DIRTY_BLOCK_WORDS = 256
 
@@ -76,7 +98,21 @@ const UNREPRESENTABLE_CHARACTER = '?'.charCodeAt(0)
 /** The part of a MARS-derived Core these devices use. Both `JsMips` and `JsRiscV` satisfy it. */
 export type MarsCore = {
     readMemoryBytes(address: number, length: number): number[]
+    readMemoryWords(address: number, count: number): ArrayLike<number>
+    trackWrites(start: number, end: number): void
+    takeWrittenBlocks(): ArrayLike<number>
     setPeripheralWord(address: number, value: number): void
+    /** Raises a device's level-triggered interrupt line, `MARS_RECEIVER_INTERRUPT` for example. */
+    raiseExternalInterrupt(code: number): void
+    /** Clears a device's line, and withdraws its pulse that no interrupt has taken yet. */
+    clearExternalInterrupt(code: number): void
+    /**
+     * One interrupt request from a device, edge-triggered: pending until an interrupt takes it,
+     * then spent, and part of the Undo history, which the Core journals.
+     */
+    pulseExternalInterrupt(code: number): void
+    /** RISC-V's: switches the Timer Tool's registers off while a display covers them. */
+    setTimerEnabled?(enabled: boolean): void
     addMemoryWriteObserver(
         startAddress: number,
         endAddress: number,
@@ -116,6 +152,14 @@ export type MarsDeviceHost = {
      * decision 13). Without it the Input controller hears nothing.
      */
     inputOpen?: () => boolean
+    /** Whether the Core has RARS's Timer Tool registers at 0xFFFF0018, which RISC-V's does. */
+    timer?: () => boolean
+    /**
+     * Program time, which the MIDI port and the sampled-audio output drain on, read at each use
+     * since a Testcase swaps in a virtual clock; without it, or without `audio`, their blocks are
+     * plain memory.
+     */
+    clock?: () => SoundClock
 }
 
 /** The Synth's block, the same on MARS and RARS. */
@@ -123,10 +167,11 @@ const SYNTH_BASE = SYNTH_BASES.mips
 
 /**
  * Which devices last attached to each Core package's memory. Every `JsMips`, and every `JsRiscV`,
- * shares one memory and one list of observers, so an Emulator that was never disposed still hears
- * the accesses of the program another one runs; the Input controller answers only for the devices
- * that own the memory now, or a stale one would state its own registers over the live ones. Keyed
- * by the Core's prototype, which is the package's class.
+ * shares one memory, one list of observers and one written-blocks map, so an Emulator that was never
+ * disposed still hears the accesses of the program another one runs; the Input controller answers,
+ * and the display tracks and takes written blocks, only for the devices that own the memory now, or
+ * a stale one would state its own registers over the live ones, take blocks the live display needs,
+ * or move the tracked range off it. Keyed by the Core's prototype, which is the package's class.
  */
 const memoryOwners = new WeakMap<object, MarsDevices>()
 /** How much an upload's source read is split into when the whole of it cannot be read. */
@@ -146,23 +191,29 @@ export class MarsDevices {
     /** How many words of the grid the Core will actually let us read, see `probeReadableWords`. */
     private readableWords = 0
     /**
-     * Which `DIRTY_BLOCK_WORDS`-sized blocks of the grid have been written since the last flush.
-     * `dirtyFrom` and `dirtyTo` are the first and last dirty block, so a flush that finds two of
-     * them does not walk the whole map, and -1 when nothing has changed.
-     */
-    private dirtyBlocks = new Uint8Array(0)
-    private dirtyFrom = -1
-    private dirtyTo = -1
-    /**
      * Whether the receiver data register is presenting a keystroke the program has not read yet. The
      * keystroke stays in its queue until the program reads the register: a register that took it
      * out would take it from a read syscall waiting on the same queue.
      */
     private receiverArmed = false
-    /** The framebuffer registration, kept apart so a display change can replace only it. */
-    private framebufferHandle: number | null = null
     /** Set while the Core rewinds, whose restoring stores are not the program's writes. */
     private rewinding = false
+    /**
+     * The interrupt-enable bits of the receiver's and the transmitter's control registers, as the
+     * program last stored them ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md),
+     * decision 12). The receiver's request is level-triggered: raised for as long as the bit is set
+     * and a character waits, so every key, one typed before the bit was set or a Testcase's
+     * included, reaches the handler. The transmitter's is edge-triggered, as MARS's is: one request
+     * each time it becomes Ready again after a character, which here is at once, since the console
+     * is always ready. Setting the bit asks for nothing, and a handler that prints nothing more is
+     * not called again; asking for as long as the bit was set re-entered such a handler for ever.
+     */
+    private receiverInterrupts = false
+    private transmitterInterrupts = false
+    /** Told when a device requests an interrupt, which ends a RISC-V `wfi`. */
+    private readonly interruptListeners = new Set<() => void>()
+    /** Whether the display covers RARS's timer registers, which are then pixels. */
+    private timerCovered = false
     /**
      * Whether the bitmap display covers the Synth's block, as it does at MARS's "memory map" base,
      * 0xffff0000: its words are then pixels, and the Synth is off rather than played by drawing.
@@ -175,10 +226,22 @@ export class MarsDevices {
      * ([ADR 0071](../../../../../../docs/adr/0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md)).
      */
     readonly input: InputController
+    /**
+     * MIDI bytes and streamed samples, at 0xFFFF0340 and 0xFFFF0350
+     * ([ADR 0075](../../../../../../docs/adr/0075-mips-and-risc-v-get-a-midi-port-and-a-sampled-audio-output.md)),
+     * when the host has an Audio and a clock for them.
+     */
+    readonly midi: MidiPortDevice | null = null
+    readonly pcm: SampledAudioDevice | null = null
 
     constructor(host: MarsDeviceHost) {
         this.host = host
         this.input = new InputController({ accepts: () => host.inputOpen?.() ?? false })
+        const { audio, clock } = host
+        if (audio && clock) {
+            this.midi = new MidiPortDevice({ audio, clock })
+            this.pcm = new SampledAudioDevice({ audio, clock })
+        }
         //a keystroke arrives between two instructions, so the register is loaded as soon as one is
         //typed rather than polled: the program sees Ready on its very next `lw`. The Terminal says
         //when its own input changes, a Testcase's scripted lines included
@@ -207,6 +270,12 @@ export class MarsDevices {
 
     regions(): import('../commonLanguageFeatures.svelte').DeviceRegion[] {
         const regions = [{ name: 'MMIO', start: 0xffff0000n, end: 0xffff0010n }]
+        if (this.host.timer?.() && !this.timerCovered)
+            regions.push({
+                name: 'Timer',
+                start: BigInt(RARS_TIME),
+                end: BigInt(RARS_TIME + RARS_TIMER_SIZE)
+            })
         if (this.host.audio && !this.synthCovered)
             regions.push({
                 name: 'Synth',
@@ -218,6 +287,18 @@ export class MarsDevices {
                 name: 'Input controller',
                 start: BigInt(INPUT_BASE),
                 end: BigInt(INPUT_BASE + INPUT_BLOCK_SIZE)
+            })
+        if (this.midi && !this.midi.isCovered)
+            regions.push({
+                name: 'MIDI port',
+                start: BigInt(MIDI_PORT_BASE),
+                end: BigInt(MIDI_PORT_BASE + MIDI_PORT_BLOCK_SIZE)
+            })
+        if (this.pcm && !this.pcm.isCovered)
+            regions.push({
+                name: 'Sampled-audio output',
+                start: BigInt(PCM_BASE),
+                end: BigInt(PCM_BASE + PCM_BLOCK_SIZE)
             })
         if (this.geometry)
             regions.push({
@@ -246,11 +327,56 @@ export class MarsDevices {
             },
             readByte: (address) => (core.readMemoryBytes(address | 0, 1)[0] ?? 0) & 0xff
         })
+        const sound: SoundBus = {
+            push: (address, value) => {
+                if (this.ownsMemory(core)) core.setPeripheralWord(address, value)
+            },
+            readWord: (address) => core.readMemoryWords(address | 0, 1)[0] ?? 0
+        }
+        this.midi?.connect(sound)
+        this.pcm?.connect(sound)
     }
 
     /** Clear execution: the Input controller starts empty again, as at a Build. */
     resetInput(): void {
         this.input.reset()
+    }
+
+    // -------------------------------------------------------------- the sound devices
+
+    /** Journals the Build about to run for the sound devices, as for the Terminal. */
+    trackSound(position: () => bigint | null, capacity: number): void {
+        this.midi?.track(position, capacity)
+        this.pcm?.track(position, capacity)
+    }
+
+    /** Undo: the sound devices take back what every instruction after `position` did to them. */
+    undoSoundAfter(position: bigint): void {
+        this.midi?.undoAfter(position)
+        this.pcm?.undoAfter(position)
+    }
+
+    /** After an Undo of a Poke, which may have rewound a store into their blocks: their words again. */
+    restateSound(): void {
+        this.midi?.restate()
+        this.pcm?.restate()
+    }
+
+    /** Clear execution: the sound devices start empty again, as at a Build. */
+    resetSound(): void {
+        this.midi?.reset()
+        this.pcm?.reset()
+    }
+
+    /**
+     * Brings the MIDI port's Status and the sampled-audio output's Free up to date with Program
+     * time, which went on while no instruction ran: before every run call and after every wait. A
+     * read is told to its observer only after it has its value, so this is what a program polling
+     * once a frame reads.
+     */
+    refreshSound(): void {
+        this.midi?.refresh()
+        this.pcm?.refresh()
     }
 
     /**
@@ -292,32 +418,33 @@ export class MarsDevices {
     }
 
     /**
-     * Copies the words written since the last call into the Screen. Called at the end of every
-     * slice and before a program's `sleep`, rather than once per stored word: a handler call per
-     * word costs more than the re-read of the range they touched (phase 7's Core measurements).
+     * Copies the blocks written since the last call into the Screen: the program's stores, a Poke's,
+     * and an Undo's restores, which the Core marks alike. Called at the end of every slice, before a
+     * program's `sleep` or a wait for input, and after an Undo or a Poke, which so redraw only what
+     * they changed. The samples the sampled-audio output took since go to the Audio then too.
      */
     flush(): void {
-        if (this.dirtyFrom < 0) return
-        const firstBlock = this.dirtyFrom
-        const lastBlock = this.dirtyTo
-        //the runs are collected before anything is read, so the cap can be applied to all of them
+        //the samples written since the last flush go out with the frame
+        this.pcm?.flush()
+        const core = this.core
+        if (!core || !this.geometry || !this.ownsMemory(core)) return
+        const blocks = core.takeWrittenBlocks()
+        if (blocks.length === 0) return
+        //the runs are collected before anything is read, so the cap can be applied to all of them;
+        //the Core gives the blocks in ascending order
         const runs: number[] = []
-        for (let block = firstBlock; block <= lastBlock; block++) {
-            if (this.dirtyBlocks[block] === 0) continue
-            const start = block
-            while (block + 1 <= lastBlock && this.dirtyBlocks[block + 1] !== 0) block++
-            runs.push(start, block)
+        for (let index = 0; index < blocks.length; index++) {
+            const start = blocks[index]
+            while (index + 1 < blocks.length && blocks[index + 1] === blocks[index] + 1) index++
+            runs.push(start, blocks[index])
         }
-        this.resetDirty()
-        if (runs.length === 0) return
         if (runs.length > MAX_DIRTY_RUNS * 2) {
-            //too scattered to be worth a call each: one span from the first block to the last, which
-            //is what this did for every shape of write before the map existed
-            runs.splice(0, runs.length, firstBlock, lastBlock)
+            //too scattered to be worth a call each: one span from the first block to the last
+            runs.splice(0, runs.length, runs[0], runs[runs.length - 1])
         }
         for (let index = 0; index < runs.length; index += 2) {
             const from = runs[index] * DIRTY_BLOCK_WORDS
-            //a block past the end of the grid is impossible: the map is sized from the same words
+            //the map covers the grid and nothing past it, but its last block may be partly beyond
             const to = Math.min(this.words.length, (runs[index + 1] + 1) * DIRTY_BLOCK_WORDS)
             this.readInto(from, to)
             this.host.screen.syncFramebuffer(this.words, from, to)
@@ -340,19 +467,40 @@ export class MarsDevices {
         }
     }
 
+    /**
+     * After an Undo, once the Terminal has put back what it journaled: the receiver shows what is
+     * waiting now and states its line again, which the Core's Undo leaves alone, since it is the
+     * device's and not the program's. The transmitter's requests are pulses, which the Core's Undo
+     * puts back itself.
+     */
+    afterUndo(): void {
+        this.refreshReceiver()
+    }
+
+    /** Whether the program turned the receiver's interrupt on, bit 1 of its control register. */
+    get receiverInterruptsEnabled(): boolean {
+        return this.receiverInterrupts
+    }
+
+    /** Calls `listener` each time a device requests an interrupt, until the returned function is called. */
+    onInterruptRequest(listener: () => void): () => void {
+        this.interruptListeners.add(listener)
+        return () => this.interruptListeners.delete(listener)
+    }
+
     /** The Synth's 512 bytes as memory holds them, for the Undo that has just rewound them. */
     readSynthBlock(): ArrayLike<number> {
         return this.core ? readBytes(this.core, SYNTH_BASE, SYNTH_BLOCK_SIZE) : []
     }
 
     /**
-     * Reads the whole grid back, the path Undo takes: framebuffer mode journals nothing, so the
-     * image comes from the memory the Core has already rolled back
-     * ([ADR 0005](../../../../../../docs/adr/0005-restore-screen-state-on-undo.md)).
+     * Reads the whole grid back, for a display that has just been configured. What was written
+     * before is read with it, so the blocks waiting in the map are dropped.
      */
     resync(): void {
-        this.resetDirty()
-        if (!this.core || !this.geometry) return
+        const core = this.core
+        if (!core || !this.geometry) return
+        if (this.ownsMemory(core)) core.takeWrittenBlocks()
         this.readInto(0, this.readableWords)
         this.host.screen.syncFramebuffer(this.words, 0, this.readableWords)
     }
@@ -365,22 +513,21 @@ export class MarsDevices {
             //only our own handles: the memory singleton is shared by every instance of a Core, so
             //`removeMemoryObservers()` would also unhook another open project's devices
             for (const handle of this.handles) core.removeMemoryObserver(handle)
-            if (memoryOwners.get(memoryOf(core)) === this) memoryOwners.delete(memoryOf(core))
+            if (this.ownsMemory(core)) {
+                //and the map only if it is ours, which stops the Core noting stores for nobody
+                core.trackWrites(0, 0)
+                memoryOwners.delete(memoryOf(core))
+            }
         }
         this.handles = []
-        this.framebufferHandle = null
         this.core = null
         this.readableWords = 0
         this.receiverArmed = false
+        this.receiverInterrupts = false
+        this.transmitterInterrupts = false
         this.input.connect(null)
-        this.resetDirty()
-    }
-
-    /** Forgets every dirty block, without touching how the map is sized. */
-    private resetDirty(): void {
-        if (this.dirtyFrom >= 0) this.dirtyBlocks.fill(0, this.dirtyFrom, this.dirtyTo + 1)
-        this.dirtyFrom = -1
-        this.dirtyTo = -1
+        this.midi?.connect(null)
+        this.pcm?.connect(null)
     }
 
     private configureDisplay(display: ProjectDisplay, options = { sync: true }): void {
@@ -389,41 +536,25 @@ export class MarsDevices {
         this.synthCovered = covers(geometry, SYNTH_BASE, SYNTH_BLOCK_SIZE)
         //switching the display can switch the controller on or off mid-run: on, it states its block
         this.input.setCovered(covers(geometry, INPUT_BASE, INPUT_BLOCK_SIZE))
+        //and RARS's timer, which the Core keeps: its words are pixels while the display covers them
+        this.timerCovered = !!this.host.timer?.() && covers(geometry, RARS_TIME, RARS_TIMER_SIZE)
+        this.midi?.setCovered(covers(geometry, MIDI_PORT_BASE, MIDI_PORT_BLOCK_SIZE))
+        this.pcm?.setCovered(covers(geometry, PCM_BASE, PCM_BLOCK_SIZE))
         this.words = new Int32Array(geometry.words)
-        this.dirtyBlocks = new Uint8Array(Math.ceil(geometry.words / DIRTY_BLOCK_WORDS))
         this.host.screen.useFramebuffer(geometry.columns, geometry.rows)
-        this.dirtyFrom = -1
-        this.dirtyTo = -1
         const core = this.core
         if (!core) {
             this.readableWords = 0
             return
         }
-        this.observeFramebuffer(core, geometry)
+        //the Core notes which blocks of the grid stores write, from its first word; a stale
+        //Emulator's display change must not move the range off the live one's
+        if (this.ownsMemory(core)) {
+            core.trackWrites(geometry.baseAddress | 0, (geometry.endAddress + 4) | 0)
+            core.setTimerEnabled?.(!this.timerCovered)
+        }
         this.readableWords = this.probeReadableWords(core, geometry)
         if (options.sync) this.resync()
-    }
-
-    private observeFramebuffer(core: MarsCore, geometry: MarsDisplayGeometry): void {
-        if (this.framebufferHandle !== null) {
-            core.removeMemoryObserver(this.framebufferHandle)
-            this.handles = this.handles.filter((handle) => handle !== this.framebufferHandle)
-            this.framebufferHandle = null
-        }
-        const base = geometry.baseAddress
-        const handle = core.addMemoryWriteObserver(base | 0, geometry.endAddress | 0, (address) => {
-            //a byte or halfword store reports only the bytes it touched, so the containing word
-            //is what gets re-read; `value` is deliberately ignored
-            const index = ((address >>> 0) - base) >>> 2
-            if (index >= this.words.length) return
-            const block = (index / DIRTY_BLOCK_WORDS) | 0
-            if (this.dirtyBlocks[block] !== 0) return
-            this.dirtyBlocks[block] = 1
-            if (this.dirtyFrom < 0 || block < this.dirtyFrom) this.dirtyFrom = block
-            if (block > this.dirtyTo) this.dirtyTo = block
-        })
-        this.framebufferHandle = handle
-        this.handles.push(handle)
     }
 
     private observeRegisters(): void {
@@ -431,7 +562,7 @@ export class MarsDevices {
         if (!core) return
         this.handles.push(
             core.addMemoryAccessObserver(MARS_RECEIVER_CONTROL | 0, null, (_address, value) =>
-                this.onControlWrite(MARS_RECEIVER_CONTROL, value, 'receiver')
+                this.onControlWrite(MARS_RECEIVER_CONTROL, value)
             ),
             core.addMemoryAccessObserver(
                 MARS_RECEIVER_DATA | 0,
@@ -439,7 +570,7 @@ export class MarsDevices {
                 null
             ),
             core.addMemoryAccessObserver(MARS_TRANSMITTER_CONTROL | 0, null, (_address, value) =>
-                this.onControlWrite(MARS_TRANSMITTER_CONTROL, value, 'transmitter')
+                this.onControlWrite(MARS_TRANSMITTER_CONTROL, value)
             ),
             core.addMemoryAccessObserver(MARS_TRANSMITTER_DATA | 0, null, (_address, value) =>
                 this.onTransmitterDataWrite(value)
@@ -452,6 +583,8 @@ export class MarsDevices {
         core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, 0)
         core.setPeripheralWord(MARS_RECEIVER_DATA | 0, 0)
         this.receiverArmed = false
+        this.receiverInterrupts = false
+        this.transmitterInterrupts = false
         this.refreshReceiver()
     }
 
@@ -473,53 +606,89 @@ export class MarsDevices {
         const code = this.host.terminal.peekKeystroke(this.host.keyboard)
         if (code === undefined) {
             this.receiverArmed = false
-            core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, 0)
+            core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, this.receiverControl())
+            this.updateInterrupts()
             return
         }
         core.setPeripheralWord(
             MARS_RECEIVER_DATA | 0,
             code > 0xff ? UNREPRESENTABLE_CHARACTER : code
         )
-        core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, MARS_READY_BIT)
         this.receiverArmed = true
+        core.setPeripheralWord(MARS_RECEIVER_CONTROL | 0, this.receiverControl())
+        this.updateInterrupts()
+    }
+
+    /** The receiver's control word: Ready while a keystroke waits, and the program's enable bit. */
+    private receiverControl(): number {
+        return (
+            (this.receiverArmed ? MARS_READY_BIT : 0) |
+            (this.receiverInterrupts ? MARS_INTERRUPT_ENABLE_BIT : 0)
+        )
     }
 
     /**
-     * The two blocks this editor adds, the Synth's and the Input controller's, which sit back to
-     * back from 0xFFFF0100, watched for stores by one range observer: the Core checks every observer
-     * on every memory access, an instruction fetch included, so each one costs a little on every
-     * instruction of every program.
+     * States the receiver's interrupt request to the Core: its line is raised while its enable bit
+     * is set and a character waits, and cleared otherwise, so a request withdrawn by a read of the
+     * data register, a write of the control register or an Undo is withdrawn at once. The
+     * transmitter's requests are pulses, sent as it takes each character (`onTransmitterDataWrite`).
+     * Only the devices that own the Core's memory do, as with the Input controller: a stale
+     * Emulator's receiver must not raise the live program's interrupt.
+     */
+    private updateInterrupts(): void {
+        const core = this.core
+        if (!core || !this.ownsMemory(core)) return
+        const receiver = this.receiverInterrupts && this.receiverArmed
+        if (receiver) core.raiseExternalInterrupt(MARS_RECEIVER_INTERRUPT)
+        else core.clearExternalInterrupt(MARS_RECEIVER_INTERRUPT)
+        if (receiver) this.tellInterruptListeners()
+    }
+
+    private tellInterruptListeners(): void {
+        for (const listener of [...this.interruptListeners]) listener()
+    }
+
+    /**
+     * The blocks this editor adds, the Synth's, the Input controller's, the MIDI port's and the
+     * sampled-audio output's, which sit back to back from 0xFFFF0100, watched for stores by one
+     * range observer: the Core checks every observer on every memory access, an instruction fetch
+     * included, so each one costs a little on every instruction of every program.
      *
      * Every store into the Synth's block reaches the Synth as it happens, inside the storing
      * instruction, so that an upload copies before the program's next instruction can change its
      * source, and a gate pulsed off and on within a slice still retriggers. A store into the Input
-     * controller's block is ignored, and the device states its words again. The Event register's
-     * reads, which take an event, need an observer of their own, the one the Core has for reads.
+     * controller's block is ignored, and the device states its words again. A store into the sound
+     * devices' blocks sends a MIDI byte, queues samples or changes a setting, and the device states
+     * its words again. The reads that change what a device answers next need observers of their own,
+     * the ones the Core has for reads: the Event register's, which takes an event, and the MIDI
+     * port's Status and the output's Free, whose reads in a Testcase can move the virtual clock.
      */
     private observeExtensions(core: MarsCore): void {
         const audio = this.host.audio
         const start = audio ? SYNTH_BASE : INPUT_BASE
+        const end = this.midi ? PCM_BASE + PCM_BLOCK_SIZE : INPUT_BASE + INPUT_BLOCK_SIZE
         const synthBus: SynthBus = {
             littleEndian: true,
             read: (address, length) => readBytes(core, address, length)
         }
         this.handles.push(
-            core.addMemoryWriteObserver(
-                start | 0,
-                (INPUT_BASE + INPUT_BLOCK_SIZE - 4) | 0,
-                (address, length, value) => {
-                    //Undo's restoring stores are not the program's: the controller states its whole
-                    //block once the Core has rewound, and the Synth reads its block back
-                    if (this.rewinding) return
-                    const at = address >>> 0
-                    if (at >= INPUT_BASE) {
-                        if (this.ownsMemory(core)) this.input.stored(!this.hostWriting)
-                        return
+            core.addMemoryWriteObserver(start | 0, (end - 4) | 0, (address, length, value) => {
+                //Undo's restoring stores are not the program's: the devices state their whole
+                //blocks once the Core has rewound, and the Synth reads its block back
+                if (this.rewinding) return
+                const at = address >>> 0
+                if (at >= INPUT_BASE) {
+                    if (!this.ownsMemory(core)) return
+                    if (at < INPUT_BASE + INPUT_BLOCK_SIZE) this.input.stored(!this.hostWriting)
+                    if (at + length > MIDI_PORT_BASE) {
+                        this.midi?.stored(at, length, value, !this.hostWriting)
+                        this.pcm?.stored(at, length, value, !this.hostWriting)
                     }
-                    if (!audio || this.synthCovered) return
-                    audio().synth.store(at - SYNTH_BASE, length, value, synthBus)
+                    return
                 }
-            ),
+                if (!audio || this.synthCovered) return
+                audio().synth.store(at - SYNTH_BASE, length, value, synthBus)
+            }),
             core.addMemoryAccessObserver(
                 (INPUT_BASE + INPUT_EVENT) | 0,
                 () => {
@@ -528,6 +697,25 @@ export class MarsDevices {
                 null
             )
         )
+        const midi = this.midi
+        const pcm = this.pcm
+        if (midi && pcm)
+            this.handles.push(
+                core.addMemoryAccessObserver(
+                    (MIDI_PORT_BASE + MIDI_PORT_STATUS) | 0,
+                    () => {
+                        if (this.ownsMemory(core)) midi.statusRead()
+                    },
+                    null
+                ),
+                core.addMemoryAccessObserver(
+                    (PCM_BASE + PCM_FREE) | 0,
+                    () => {
+                        if (this.ownsMemory(core)) pcm.freeRead()
+                    },
+                    null
+                )
+            )
     }
 
     private onReceiverDataRead(): void {
@@ -537,24 +725,31 @@ export class MarsDevices {
         this.refreshReceiver()
     }
 
-    private onControlWrite(
-        register: number,
-        value: number,
-        device: 'receiver' | 'transmitter'
-    ): void {
-        if ((value & MARS_INTERRUPT_ENABLE_BIT) !== 0) {
-            throw new Error(
-                `Interrupt-driven I/O is not supported: the program set the interrupt-enable bit ` +
-                    `(bit 1) of the ${device} control register at 0x${register.toString(16)}. ` +
-                    `Poll the Ready bit (bit 0) instead.`
+    /**
+     * A store into a control register: its interrupt-enable bit is the program's, kept as it
+     * stored it, an Undo's restore putting back the one it had. The Ready bit is the device's to
+     * state whatever was stored: the word an Undo puts back was stated before the keystrokes typed
+     * since, and Ready has to answer for the ones waiting now.
+     */
+    private onControlWrite(register: number, value: number): void {
+        const enabled = (value & MARS_INTERRUPT_ENABLE_BIT) !== 0
+        if (register === MARS_TRANSMITTER_CONTROL) {
+            this.transmitterInterrupts = enabled
+            const core = this.core
+            core?.setPeripheralWord(
+                register | 0,
+                MARS_READY_BIT | (enabled ? MARS_INTERRUPT_ENABLE_BIT : 0)
             )
+            //turning the interrupt off withdraws a request no interrupt has taken yet; turning it
+            //on asks for nothing, as in MARS, until the next character is taken. An Undo's restore
+            //is not the program's: the Core puts the requests back itself
+            if (!enabled && core && !this.rewinding && this.ownsMemory(core))
+                core.clearExternalInterrupt(MARS_TRANSMITTER_INTERRUPT)
+            return
         }
-        //a program is not the device: whatever it stored, the Ready bit is the device's to state.
-        //An Undo's restore is no different: the word it puts back was stated before the keystrokes
-        //typed since, and Ready has to answer for the ones waiting now
-        const ready =
-            register === MARS_TRANSMITTER_CONTROL || this.receiverArmed ? MARS_READY_BIT : 0
-        this.core?.setPeripheralWord(register | 0, ready)
+        this.receiverInterrupts = enabled
+        this.core?.setPeripheralWord(register | 0, this.receiverControl())
+        this.updateInterrupts()
     }
 
     private onTransmitterDataWrite(value: number): void {
@@ -564,9 +759,25 @@ export class MarsDevices {
             //MARS clears its display window: the output, not a read in progress or what is left of
             //the standard-input line, which are the program's input
             this.host.terminal.clearOutput()
-            return
+        } else {
+            this.host.terminal.write(String.fromCharCode(character))
         }
-        this.host.terminal.write(String.fromCharCode(character))
+        this.transmitterReady()
+    }
+
+    /**
+     * The console has taken a character and is Ready again, at once: with its interrupt enabled
+     * that is one request, as MARS's transmitter makes one when its delay runs out. It waits, as a
+     * pending request does on the hardware, until Status or `ustatus` lets it be taken, where MARS
+     * drops a request it cannot take at that moment. A Poke's store is no character the program
+     * sent, and a stale Emulator's devices must not interrupt the live program.
+     */
+    private transmitterReady(): void {
+        const core = this.core
+        if (!this.transmitterInterrupts || this.hostWriting) return
+        if (!core || !this.ownsMemory(core)) return
+        core.pulseExternalInterrupt(MARS_TRANSMITTER_INTERRUPT)
+        this.tellInterruptListeners()
     }
 
     /** Whether these devices attached to `core`'s memory last, so its accesses are this program's. */
@@ -574,24 +785,17 @@ export class MarsDevices {
         return this.core === core && memoryOwners.get(memoryOf(core)) === this
     }
 
-    /** Fills `words` from Core memory, little-endian, keeping only the low 24 bits MARS colors use. */
+    /** Fills `words` from Core memory; the Screen keeps only the low 24 bits MARS colors use. */
     private readInto(from: number, to: number): void {
         const core = this.core
         const geometry = this.geometry
         if (!core || !geometry) return
         const last = Math.min(to, this.readableWords)
         if (last <= from) return
-        const bytes = core.readMemoryBytes(
-            marsWordAddress(geometry.baseAddress, from) | 0,
-            (last - from) * 4
+        this.words.set(
+            core.readMemoryWords(marsWordAddress(geometry.baseAddress, from) | 0, last - from),
+            from
         )
-        for (let index = from; index < last; index++) {
-            const offset = (index - from) * 4
-            this.words[index] =
-                ((bytes[offset] ?? 0) & 0xff) |
-                (((bytes[offset + 1] ?? 0) & 0xff) << 8) |
-                (((bytes[offset + 2] ?? 0) & 0xff) << 16)
-        }
     }
 
     /**
@@ -603,7 +807,7 @@ export class MarsDevices {
     private probeReadableWords(core: MarsCore, geometry: MarsDisplayGeometry): number {
         const readable = (index: number): boolean => {
             try {
-                core.readMemoryBytes(marsWordAddress(geometry.baseAddress, index) | 0, 4)
+                core.readMemoryWords(marsWordAddress(geometry.baseAddress, index) | 0, 1)
                 return true
             } catch {
                 return false

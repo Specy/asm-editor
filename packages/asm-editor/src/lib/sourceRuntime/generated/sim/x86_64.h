@@ -1374,6 +1374,18 @@ static inline long sim_faccessat2(long dirfd, const void *path, long mode, long 
     return rax;
 }
 
+/*
+ * SIM_LINK(name) makes the Build link the assembly File that defines the global name, though the
+ * program never uses it: a File whose only part in the program is a constructor that runs before
+ * main, say. Name one of the globals it defines. Write it once, outside any function:
+ *
+ *     SIM_LINK(handler);
+ *
+ * A File joins a Build only when the program uses something it defines, and SIM_LINK counts as a
+ * use. The Build fails when no File defines name.
+ */
+#define SIM_LINK(name) __asm__(".globl " #name)
+
 #ifdef __cplusplus
 }
 #endif

@@ -40,14 +40,23 @@ describe('the MIPS register files', () => {
         expect(cp0.intro).toContain('mtc0')
     })
 
-    it('says the simulator raises exceptions and never an interrupt', () => {
+    it('documents the timer and the interrupts the registers deliver', () => {
         const cp0 = files.get('cp0')!
-        const status = cp0.registers.find((register) => register.name === '$12 (status)')!
-        // Nothing in the fork sets an interrupting device, so the mask and the enable bit are
-        // state and nothing more; the bit the simulator itself writes is the exception level.
-        expect(cp0.intro).toContain('nothing in it delivers an interrupt')
-        expect(status.description).toContain('exception level')
-        expect(status.description).toContain('`eret`')
+        const named = (name: string) => cp0.registers.find((register) => register.name === name)!
+        //the six registers, in the order the panel shows them, Count and Compare among them
+        expect(cp0.registers.map((register) => register.name)).toEqual([
+            '$8 (vaddr)',
+            '$9 (count)',
+            '$11 (compare)',
+            '$12 (status)',
+            '$13 (cause)',
+            '$14 (epc)'
+        ])
+        expect(cp0.intro).toContain('/documentation/mips/interrupts')
+        expect(named('$12 (status)').description).toContain('exception level')
+        expect(named('$12 (status)').description).toContain('`eret`')
+        expect(named('$9 (count)').description).toContain('every two instructions')
+        expect(named('$13 (cause)').description).toContain('bit 15 the timer')
     })
 
     it('explains every register it lists', () => {

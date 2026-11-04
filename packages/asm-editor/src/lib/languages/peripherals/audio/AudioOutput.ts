@@ -15,7 +15,7 @@ export type SoundData = {
 
 /**
  * What has to be ready before something can sound: the synthesizer and its bank, a decoded Sound, or
- * the synthesizer of x86's raw MIDI port.
+ * the synthesizer of a MIDI port, x86's raw one or the MIDI port of MIPS and RISC-V.
  */
 export type AudioNeed =
     | { kind: 'synthesizer' }
@@ -61,23 +61,27 @@ export type ChipCommand =
     /** Drops the PC speaker's tones due after `after`, in seconds on the output's clock. */
     | { type: 'speakerCut'; after: number }
 
-/** Which of x86's sound devices a cut drops from; every one when a cut names none. */
+/**
+ * Which of the timeline's devices a cut drops from, every one when a cut names none: the samples
+ * (`/dev/dsp`, the Sampled-audio output), a MIDI port, or x86's PC speaker.
+ */
 export type TimelineDevice = 'dsp' | 'midi' | 'speaker'
 
 /**
- * x86's sound: a timeline on **Program time**, in milliseconds
- * ([x86-devices-plan.md](../../../../../../../docs/design/x86-devices-plan.md), decision 10). Blink
- * decides when each thing sounds, as its devices drain on Program time; the output plays it then, a
- * fixed latency behind on its own clock, and never decides anything.
+ * The streamed sound: a timeline on **Program time**, in milliseconds
+ * ([x86-devices-plan.md](../../../../../../../docs/design/x86-devices-plan.md), decision 10). The
+ * device decides when each thing sounds, as it drains on Program time, Blink for x86 and
+ * `MarsDevices` for the MIDI port and the Sampled-audio output of MIPS and RISC-V; the output plays
+ * it then, a fixed latency behind on its own clock, and never decides anything.
  */
 export type TimelineCommand =
     /** Program time as the batch leaves, which the output maps its clock against; first in any batch with the others. */
     | { type: 'programTime'; now: number }
-    /** Samples `/dev/dsp` plays from `start`: stereo frames, interleaved, `rate` of them a second. */
+    /** Samples heard from `start`: stereo frames, interleaved, `rate` of them a second. */
     | { type: 'pcm'; start: number; rate: number; frames: Float32Array }
-    /** `/dev/dsp`'s gain from `at`, the program's mixer levels VOLUME × PCM for each side, 0 to 1. */
+    /** The samples' gain from `at`, x86's mixer levels VOLUME × PCM for each side, 0 to 1. */
     | { type: 'pcmGain'; at: number; left: number; right: number }
-    /** One complete message leaving the raw MIDI port at `at`, a SysEx with its F0 and F7. */
+    /** One complete message leaving a MIDI port at `at`, a SysEx with its F0 and F7. */
     | { type: 'midi'; at: number; message: Uint8Array }
     /** The PC speaker's tone from `at`, in Hz; 0 is silence. */
     | { type: 'tone'; at: number; hz: number }
@@ -85,7 +89,7 @@ export type TimelineCommand =
     | { type: 'cut'; after: number; device?: TimelineDevice }
     /**
      * The program ended at `at`: the PC speaker falls silent, and every MIDI note still held is
-     * released once what the port had queued has gone out. `/dev/dsp` plays out.
+     * released once what the port had queued has gone out. The samples play out.
      */
     | { type: 'programEnd'; at: number }
 

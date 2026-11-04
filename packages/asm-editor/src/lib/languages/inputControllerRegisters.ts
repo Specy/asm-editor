@@ -26,7 +26,10 @@ export const INPUT_POINTER = 0x10
 export const INPUT_KEYS = 0x20
 export const INPUT_KEYS_SIZE = 0x20
 
-/** Bit 1 of Control, the receiver's interrupt-enable bit: setting it stops the program. */
+/**
+ * Bit 1 of Control, reserved for an interrupt-enable bit: setting it stops the program, as this
+ * controller raises no interrupt yet, though the keyboard receiver and the timers do.
+ */
 export const INPUT_INTERRUPT_ENABLE_BIT = 0x2
 
 /** How many events the queue holds, 256 bytes of FIFO. */
@@ -56,7 +59,7 @@ export const INPUT_REGISTERS = [
         offset: INPUT_CONTROL,
         access: 'write',
         description:
-            'Reads 0. Storing a value with bit 1 set, the interrupt-enable bit, stops the program, as interrupts are not supported; other bits are ignored'
+            'Reads 0. Bit 1 is reserved for an interrupt-enable bit: storing a value with it set stops the program, as the Input controller raises no interrupt; poll Status instead. Other bits are ignored'
     },
     {
         name: 'STATUS',

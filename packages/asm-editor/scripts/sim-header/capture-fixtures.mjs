@@ -191,8 +191,8 @@ int main(void) {
 /** 512 by 256 words, 512 KiB: grows past the reference heap base. */
 const SCREEN_LARGE = SCREEN.replace('256, 128, 2', '512, 256, 1').replace('(256 / 2)', '512')
 
-/** 1024 by 1024 words, 4 MiB: past the GNU-profile static-data cap. */
-const SCREEN_TOO_LARGE = `#include <sim.h>
+/** 1024 by 1024 words, 4 MiB: the largest grid, past MARS's and RARS's own 4 MB of static data. */
+const SCREEN_LARGEST = `#include <sim.h>
 
 SIM_SCREEN(screen, 1024, 1024, 1);
 
@@ -285,7 +285,7 @@ const PROGRAMS = {
     services: { source: SERVICES, ...EVERY },
     screen: { source: SCREEN, ...EVERY },
     'screen-large': { source: SCREEN_LARGE, ...EVERY },
-    'screen-too-large': { source: SCREEN_TOO_LARGE, ...EVERY, optimizations: ['0'] },
+    'screen-largest': { source: SCREEN_LARGEST, ...EVERY, optimizations: ['0'] },
     'header-diagnostic': {
         source: HEADER_DIAGNOSTIC,
         ...EVERY,
@@ -296,7 +296,7 @@ const PROGRAMS = {
     'compiled-out': { source: COMPILED_OUT, ...X86, optimizations: ['0'] }
 }
 /** The programs that must fail to compile, and say why. */
-const FAILING = new Set(['screen-too-large', 'header-diagnostic', 'compiled-out'])
+const FAILING = new Set(['header-diagnostic', 'compiled-out'])
 
 const DEBUG_SECTION = /^\.(?:debug|zdebug|mdebug|note|comment|eh_frame)/
 /** Labels GCC's MIPS output defines only for the debug sections. */

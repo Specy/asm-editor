@@ -117,6 +117,7 @@ import { readX86ScreenDirective, type X86DisplayConfiguration } from './x86Scree
 import type { MarsDisplayOrigin } from '#lib/languages/mars/marsDisplay.ts'
 import type { ProgramDisplay } from '#lib/languages/programDisplay.ts'
 import type { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { fromNanoseconds } from '#lib/languages/peripherals/audio/TimelineSound.ts'
 import { X86_INPUT_INTERRUPT } from '#lib/languages/peripherals/x86Input.ts'
 
 /**
@@ -444,12 +445,27 @@ export async function X86Emulator(source: BuildInput, options: EmulatorSettings 
                 //call: the Screen shows it at the next catch-up, before anything can paint it
                 framebufferPresent: () => wrapper?.presentFramebuffer(),
                 //the sound devices' timeline, for the Audio of the run in hand: a Testcase's is
-                //silent, so it is read at every event
-                pcm: (event) => wrapper?.peripherals.audio.x86.pcm(event),
+                //silent, so it is read at every event. Blink counts Program time in nanoseconds,
+                //the timeline in milliseconds
+                pcm: (event) =>
+                    wrapper?.peripherals.audio.timeline.pcm({
+                        start: fromNanoseconds(event.start),
+                        rate: event.rate,
+                        frames: event.frames
+                    }),
                 midi: (event) => wrapper?.playMidi(event),
-                tone: (event) => wrapper?.peripherals.audio.x86.tone(event),
-                mixer: (event) => wrapper?.peripherals.audio.x86.mixer(event),
-                soundCut: (event) => wrapper?.peripherals.audio.x86.soundCut(event)
+                tone: (event) =>
+                    wrapper?.peripherals.audio.timeline.tone({
+                        at: fromNanoseconds(event.at),
+                        hz: event.hz
+                    }),
+                mixer: (event) => wrapper?.peripherals.audio.timeline.mixer(event),
+                soundCut: (event) =>
+                    wrapper?.peripherals.audio.timeline.cut(
+                        event.device === undefined
+                            ? { after: fromNanoseconds(event.after) }
+                            : { after: fromNanoseconds(event.after), device: event.device }
+                    )
             }
         }),
         //the Core has loaded the same Zydis module already; without it, an instruction the Core
@@ -760,7 +776,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             this.midiPortAudio = audio
             void audio.prepare('midiPort')
         }
-        audio.x86.midi(event)
+        audio.timeline.midi({ at: fromNanoseconds(event.at), message: event.message })
     }
 
     /** Streaming decoding belongs to the Terminal; native callbacks already exclude tool output. */

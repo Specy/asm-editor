@@ -90,10 +90,66 @@ int main(void) {
 
 Width and height are display pixels; `unit` is the side length of each colored cell. Each row has `width / unit` cells; select a cell with `y * (width / unit) + x`. Width and height can be any whole number of pixels from 1 to 1024, and unit any from 1 to 32. MARS's own display only offers 64, 128, 256, 512 or 1024 and 1, 2, 4, 8, 16 or 32, so a program that also runs there keeps to those.
 
-For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For programmable waveforms and sample playback, it names the [Synth](/documentation/mips/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`. For the keys held, key and button events, the mouse pointer and the wheel, it names the [Input controller](/documentation/mips/input-controller#from-c)'s registers and every key, and provides `sim_input_present`, `sim_input_pending`, `sim_input_event`, `sim_input_key_down` and `sim_input_pointer`.
+For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For programmable waveforms and sample playback, it names the [Synth](/documentation/mips/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`. For the keys held, key and button events, the mouse pointer and the wheel, it names the [Input controller](/documentation/mips/input-controller#from-c)'s registers and every key, and provides `sim_input_present`, `sim_input_pending`, `sim_input_event`, `sim_input_key_down` and `sim_input_pointer`. For streamed sound, it names the [MIDI port and the sampled-audio output](/documentation/mips/midi-and-audio#from-c)'s registers, and provides `sim_midi_present`, `sim_midi_write`, `sim_pcm_present`, `sim_pcm_start`, `sim_pcm_free` and `sim_pcm_write`.
 
 ## Following execution {#following-execution}
 
 Matching colors connect source lines with their generated assembly. Select a line to highlight its instructions. Use **Step** to follow those instructions, or place a breakpoint beside a source line and choose **Run** to stop at the start of its mapped assembly blocks. One source line can require several steps, especially with optimization. Use **Undo** to move back through recorded execution steps.
 
 Compile again after reopening a saved project to restore source highlights and breakpoints. Editing generated assembly removes that connection; recompilation asks before replacing your manual assembly edits.
+
+## Linking assembly Files {#linking-project-files}
+
+Only the selected C or C++ source is compiled. Assembly Files beside it can supply functions or data the program uses. Build links a File when the program uses a **global** it defines: a name the File declares with `.globl` and defines with a label. For example, this program calls `triple`, which `triple.mips` defines:
+
+```c
+int triple(int value);
+
+int main(void) {
+    return triple(14);
+}
+```
+
+```mips
+# triple.mips
+        .text
+        .globl  triple
+triple:
+        sll     $v0, $a0, 1
+        addu    $v0, $v0, $a0
+        jr      $ra
+```
+
+The function must follow the [calling convention](/documentation/mips/runtime-library#from-assembly) compiled code uses, with its arguments in `$a0` to `$a3` and its result in `$v0`.
+
+A File the program does not use is left out, and is not even assembled, so an exercise in MARS's own syntax, or a File with mistakes, beside the program never breaks it. The **Problems** panel gives such a File a Hint: "This File is not part of the program: the program uses nothing it defines."
+
+A File the program uses is assembled as GNU assembly, the syntax C compiles to. Most of MARS's own syntax reads the same, but not all of it: GNU assembly has no `.eqv` and no `.macro`, for example. When such a File does not assemble, the first error says why it was linked and that it must be written in GNU syntax.
+
+### Exception handlers
+
+MIPS enters an exception handler at `0x80000180`, the start of `.ktext`, by itself, so the program never names it, and a File that holds only a handler would be left out. Give the handler a global name, and ask for it with `SIM_LINK` from `<sim.h>`, once, outside any function:
+
+```c
+#include <sim.h>
+
+SIM_LINK(handler);
+
+int main(void) {
+    /* ... */
+    return 0;
+}
+```
+
+```mips
+# handler.mips
+        .globl  handler
+        .ktext
+handler:
+        mfc0    $k0, $14        # EPC: the instruction that faulted
+        addiu   $k0, $k0, 4     # skip it
+        mtc0    $k0, $14
+        eret
+```
+
+`SIM_LINK` counts as a use of the name, as if the program called it. Build fails when no File defines the name, and when two linked Files both hold `.ktext`, since only one handler can start at `0x80000180`: the error names both Files. A File the program does not use never counts, whatever it holds. [Interrupts and the timer](/documentation/mips/interrupts) shows what a handler does.

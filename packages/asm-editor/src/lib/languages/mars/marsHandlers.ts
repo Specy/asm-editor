@@ -92,7 +92,21 @@ export type MarsHandlerMap = {
     ) => Promise<void> | void
     time: () => number
     randomSeed: (generator: number) => number
+    /**
+     * RISC-V's timer registers: the running program's elapsed time in milliseconds. Answered at
+     * once, never awaited, since the Core reads it between run calls too.
+     */
+    elapsedTime: () => number
+    /** RISC-V's `wfi`: until an interrupt, or for at most `milliseconds` (-1: no deadline). */
+    waitForInterrupt: (milliseconds: number) => Promise<void> | void
 }
+
+/**
+ * What can end a RISC-V `wfi` that waits: the timer, armed and enabled in `uie`, and a key, while
+ * the receiver's interrupt is on and `uie` lets external interrupts through. Neither, and only
+ * Pause or Stop can.
+ */
+export type WfiWakers = { timer: boolean; key: boolean }
 
 /** What the handlers read of the adapter that registers them. */
 export type MarsHandlerHost = {
@@ -103,8 +117,30 @@ export type MarsHandlerHost = {
     peripherals: Pick<EmulatorPeripherals, 'terminal' | 'clock' | 'random' | 'audio'>
     /** What ties a wait or a read to the run that asked for it. */
     executionController: ExecutionController
-    /** The bitmap display, whose picture catches up before the program sleeps or waits on the user. */
-    devices: Pick<MarsDevices, 'flush'>
+    /**
+     * The bitmap display, whose picture catches up before the program sleeps or waits on the user,
+     * the devices whose interrupt requests end a `wfi`, and the sound devices, which catch up with
+     * the Program time the wait took.
+     */
+    devices: Pick<
+        MarsDevices,
+        'flush' | 'onInterruptRequest' | 'refreshSound' | 'receiverInterruptsEnabled'
+    >
+    /**
+     * The running program's elapsed time, which RISC-V's timer counts: Program time since the run
+     * began, counting only while the program runs, and the virtual clock in a Testcase.
+     */
+    elapsedTime(): number
+    /**
+     * Whether RISC-V's `uie` lets external interrupts through (bit 8), the receiver's and the
+     * transmitter's: only then can a device end a `wfi`.
+     */
+    externalInterruptsEnabled(): boolean
+    /**
+     * A `wfi` starts waiting, with what can end the wait, or stops, with undefined: what the status
+     * line beside the Terminal says meanwhile.
+     */
+    waitingForInterrupt(wakers: WfiWakers | undefined): void
     /**
      * Ends the Core call at the sleep being served, when a slice is running it: the Core's
      * `pause()`, which ends the slice where the program's frame does (`marsSlice.ts`). A Step or a
@@ -304,16 +340,21 @@ export class MarsHandlers {
             //the first seed of a generator the program did not seed with service 40: host randomness
             //interactively and the fixed seed in a Testcase, read at the point of use because a
             //Testcase swaps the Random source in (ADR 0037)
-            randomSeed: (generator) => this.host.peripherals.random.seedFor(generator)
+            randomSeed: (generator) => this.host.peripherals.random.seedFor(generator),
+            elapsedTime: () => this.host.elapsedTime(),
+            waitForInterrupt: (milliseconds) => this.waitForInterrupt(milliseconds)
         }
-        //Multiple handlers of one instruction share its File frame, including empty callbacks.
+        //Multiple handlers of one instruction share its File frame, including empty callbacks. The
+        //timer's clock is read between instructions too, when there is no instruction to frame
         return Object.fromEntries(
             Object.entries(handlers).map(([name, handler]) => [
                 name,
-                (...args: unknown[]) =>
-                    instructionOperation(() =>
-                        (handler as (...parameters: unknown[]) => unknown)(...args)
-                    )
+                name === 'elapsedTime'
+                    ? handler
+                    : (...args: unknown[]) =>
+                          instructionOperation(() =>
+                              (handler as (...parameters: unknown[]) => unknown)(...args)
+                          )
             ])
         ) as MarsHandlerMap
     }
@@ -354,6 +395,57 @@ export class MarsHandlers {
         //read the clock at the point of use: a Testcase swaps a virtual one in and the injected one back
         const clock = this.host.peripherals.clock
         await this.host.executionController.waitFor(execution, () => clock.wait(milliseconds))
+        //what the MIDI port and the sampled-audio output drained meanwhile is what they say next
+        this.host.devices.refreshSound()
+    }
+
+    /**
+     * RISC-V's `wfi`, when no interrupt it waits for is pending yet: the program waits in program
+     * time until the timer reaches `timecmp`, `milliseconds` from now (-1 when no timer is armed),
+     * until a device requests an interrupt while `uie` lets external interrupts through, or until
+     * a Pause or Stop, whichever comes first, a Step's wait included
+     * ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md), decision 12). A device
+     * request `uie` holds back does not end it, as on the hardware. The Screen catches up first
+     * and the slice ends after it, as at a `sleep`.
+     *
+     * A Testcase has no keyboard, so only the timer can end the wait there: the virtual clock moves
+     * to `timecmp` at once, as an M68K `stop` moves it to the next timer firing
+     * ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)). With no timer armed
+     * nothing could, and `wfi` returns at once, as the RISC-V specification allows.
+     */
+    private waitForInterrupt(milliseconds: number): Promise<void> | void {
+        const clock = this.host.peripherals.clock
+        //what the MIDI port and the sampled-audio output drained meanwhile is what they say next
+        if (clock.isVirtual)
+            return milliseconds >= 0
+                ? clock.wait(milliseconds).then(() => this.host.devices.refreshSound())
+                : undefined
+        const execution = this.execution
+        this.host.devices.flush()
+        this.host.peripherals.audio.flush()
+        this.host.pauseAtSleep()
+        const deadline = new AbortController()
+        let unsubscribe = () => {}
+        const timer = milliseconds >= 0
+        //nothing the program runs can change `uie` or a control register while it waits
+        const external = this.host.externalInterruptsEnabled()
+        const woken = new Promise<void>((resolve) => {
+            if (external) unsubscribe = this.host.devices.onInterruptRequest(resolve)
+            //an aborted timer is one the wait no longer needs
+            if (timer) clock.wait(milliseconds, deadline.signal).then(resolve, () => {})
+        })
+        //the transmitter asks only as it takes a character, which no program does while it
+        //waits, so a key is the one device that can end the wait
+        this.host.waitingForInterrupt({
+            timer,
+            key: external && this.host.devices.receiverInterruptsEnabled
+        })
+        return this.host.executionController.whileUnpaused(execution, woken).finally(() => {
+            deadline.abort()
+            unsubscribe()
+            this.host.waitingForInterrupt(undefined)
+            this.host.devices.refreshSound()
+        })
     }
 
     /**
@@ -397,6 +489,7 @@ export class MarsHandlers {
             return await answer(execution)
         } finally {
             this.host.setInterrupt(undefined)
+            this.host.devices.refreshSound()
         }
     }
 }

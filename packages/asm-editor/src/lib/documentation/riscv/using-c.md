@@ -90,10 +90,48 @@ int main(void) {
 
 Width and height are display pixels; `unit` is the side length of each colored cell. Each row has `width / unit` cells; select a cell with `y * (width / unit) + x`. Width and height can be any whole number of pixels from 1 to 1024, and unit any from 1 to 32. RARS's own display only offers 64, 128, 256, 512 or 1024 and 1, 2, 4, 8, 16 or 32, so a program that also runs there keeps to those.
 
-For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For programmable waveforms and sample playback, it names the [Synth](/documentation/risc-v/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`. For the keys held, key and button events, the mouse pointer and the wheel, it names the [Input controller](/documentation/risc-v/input-controller#from-c)'s registers and every key, and provides `sim_input_present`, `sim_input_pending`, `sim_input_event`, `sim_input_key_down` and `sim_input_pointer`.
+For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For programmable waveforms and sample playback, it names the [Synth](/documentation/risc-v/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`. For the keys held, key and button events, the mouse pointer and the wheel, it names the [Input controller](/documentation/risc-v/input-controller#from-c)'s registers and every key, and provides `sim_input_present`, `sim_input_pending`, `sim_input_event`, `sim_input_key_down` and `sim_input_pointer`. For streamed sound, it names the [MIDI port and the sampled-audio output](/documentation/risc-v/midi-and-audio#from-c)'s registers, and provides `sim_midi_present`, `sim_midi_write`, `sim_pcm_present`, `sim_pcm_start`, `sim_pcm_free` and `sim_pcm_write`.
 
 ## Following execution {#following-execution}
 
 Matching colors connect source lines with their generated assembly. Select a line to highlight its instructions. Use **Step** to follow those instructions, or place a breakpoint beside a source line and choose **Run** to stop at the start of its mapped assembly blocks. One source line can require several steps, especially with optimization. Use **Undo** to move back through recorded execution steps.
 
 Compile again after reopening a saved project to restore source highlights and breakpoints. Editing generated assembly removes that connection; recompilation asks before replacing your manual assembly edits.
+
+## Linking assembly Files {#linking-project-files}
+
+Only the selected C or C++ source is compiled. Assembly Files beside it can supply functions or data the program uses. Build links a File when the program uses a **global** it defines: a name the File declares with `.globl` and defines with a label. For example, this program calls `triple`, which `triple.riscv` defines:
+
+```c
+int triple(int value);
+
+int main(void) {
+    return triple(14);
+}
+```
+
+```riscv
+# triple.riscv
+        .text
+        .globl  triple
+triple:
+        slli    t0, a0, 1
+        add     a0, t0, a0
+        ret
+```
+
+The function must follow the [calling convention](/documentation/risc-v/runtime-library#from-assembly) compiled code uses, with its arguments in `a0` to `a7` and its result in `a0`.
+
+A File the program does not use is left out, and is not even assembled, so an exercise in RARS's own syntax, or a File with mistakes, beside the program never breaks it. The **Problems** panel gives such a File a Hint: "This File is not part of the program: the program uses nothing it defines."
+
+A File the program uses is assembled as GNU assembly, the syntax C compiles to. Most of RARS's own syntax reads the same, but not all of it: GNU names the CSR first, `csrw utvec, t0`, where RARS writes `csrw t0, utvec`, and it has no `.eqv` and no `.macro`. When such a File does not assemble, the first error says why it was linked and that it must be written in GNU syntax.
+
+A trap handler is linked like any other function: the program stores its address in `utvec`, which uses its name. [Interrupts and the timer](/documentation/risc-v/interrupts) shows one. To link a File the program never names, such as one whose only work is a constructor that runs before `main`, ask for one of its globals with `SIM_LINK` from `<sim.h>`, once, outside any function:
+
+```c
+#include <sim.h>
+
+SIM_LINK(install_handler);
+```
+
+`SIM_LINK` counts as a use of the name, as if the program called it, and Build fails when no File defines the name.

@@ -5,6 +5,8 @@ date: 2026-10-08
 
 # x86 links start objects before user and support archives
 
+Update 2026-11-04: "Assemble every translation unit" is replaced. A hand-written File is assembled only when the link needs a symbol it defines, found by a scan of its global declarations, so a File nothing needs neither is assembled nor reports errors; it keeps the Problems Hint ([ADR 0033](./0033-x86-links-the-entry-and-takes-other-files-as-needed.md), 2026-11-04 update).
+
 Amended 2026-11-03 (the owner's decision): a duplicate strong global is an error only among the units the link takes, as `ld` reports it, on x86 as on MIPS and RISC-V ([ADR 0033](./0033-x86-links-the-entry-and-takes-other-files-as-needed.md), dated note; [asmOS portability](../design/asmos-portability.md), decision 11). This replaces the second paragraph's rejection of duplicates across every user unit, extracted or not.
 
 - **A File the link leaves out may define what the program already has.** It stays unextracted, with the Problems Hint that says so, so two Programs that each define `main` build from one Project.

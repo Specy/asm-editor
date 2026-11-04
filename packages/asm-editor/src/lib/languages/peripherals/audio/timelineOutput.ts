@@ -7,16 +7,19 @@ import { ProgramTimeline } from './programTimeline'
 import type { MidiPorts } from './synthesizerEngine'
 
 /**
- * Where x86's sound timeline becomes sound in a browser
- * ([x86-devices-plan.md](../../../../../../../docs/design/x86-devices-plan.md), M8): one per output,
- * made on the first timeline command, so a silent program loads nothing. Every device maps Program
- * time through one `ProgramTimeline`, a fixed latency behind on the context's clock.
+ * Where the sound timeline becomes sound in a browser
+ * ([x86-devices-plan.md](../../../../../../../docs/design/x86-devices-plan.md), M8): x86's devices,
+ * and the MIDI port and Sampled-audio output of MIPS and RISC-V. One per output, made on the first
+ * timeline command, so a silent program loads nothing. Every device maps Program time through one
+ * `ProgramTimeline`, a fixed latency behind on the context's clock.
  *
- * - **`/dev/dsp`** plays on a PCM worklet node of the output's own (`pcm/pcmCore.ts`), made on the
- *   first samples, with the mixer's gain the program last set.
- * - **The raw MIDI port** plays on a synthesizer the page's pool lends for the run
- *   (`synthesizerEngine.ts`), through a `MidiPortScheduler` that hands it each message just before
- *   it is due; messages that come before the pool has loaded wait in it.
+ * - **The samples**, `/dev/dsp`'s or the Sampled-audio output's, play on a PCM worklet node of the
+ *   output's own (`pcm/pcmCore.ts`), made on the first samples, with the mixer's gain the program
+ *   last set.
+ * - **A MIDI port**, x86's raw one or the MIDI port of MIPS and RISC-V, plays on a synthesizer the
+ *   page's pool lends for the run (`synthesizerEngine.ts`), through a `MidiPortScheduler` that
+ *   hands it each message just before it is due; messages that come before the pool has loaded
+ *   wait in it.
  * - **The PC speaker** is a voice of the chips' worklet: its tones become `speaker` commands for the
  *   output's chip node.
  * - **Stop, Build and dispose** (`stopAll`) drop the samples at once, give the MIDI synthesizer back
@@ -33,7 +36,7 @@ export type SharedMidiPorts = {
     readonly loaded: MidiPorts | null
 }
 
-export class X86Output {
+export class TimelineOutput {
     private readonly timeline = new ProgramTimeline()
     private pcm: PcmVoice | null = null
     /** The commands for the PCM node from the batch being read, and the buffers they hand over. */
@@ -208,7 +211,7 @@ export class X86Output {
 }
 
 /**
- * An output's `/dev/dsp`: the commands posted before the node runs, then the node. A node that will
+ * An output's samples: the commands posted before the node runs, then the node. A node that will
  * not load plays nothing, and the program never notices.
  */
 class PcmVoice {

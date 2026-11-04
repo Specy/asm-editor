@@ -4576,7 +4576,8 @@ export class WorkbenchSession {
             case ShortcutAction.RunCode: {
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                if (this.running) emulator.pause()
+                //a Step waiting at a RISC-V `wfi` takes the Pause too, which ends the wait
+                if (this.running || emulator.stepWaiting) emulator.pause()
                 else void this.run()
                 break
             }
@@ -4590,14 +4591,14 @@ export class WorkbenchSession {
                 break
             }
             case ShortcutAction.Step: {
-                if (this.running || this.building) break
+                if (this.running || this.building || emulator.stepWaiting) break
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
                 void this.step()
                 break
             }
             case ShortcutAction.Undo: {
-                if (this.running || this.building) break
+                if (this.running || this.building || emulator.stepWaiting) break
                 if (emulator.interrupt !== undefined || !emulator.canExecute || !emulator.canUndo)
                     break
                 emulator.undo()

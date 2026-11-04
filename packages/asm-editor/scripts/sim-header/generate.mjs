@@ -57,6 +57,8 @@ const { x86SimHeaderData } = await load('src/lib/documentation/x86/syscallBindin
 const { X86_SYSCALLS } = await load('src/lib/languages/X86/generated/x86Syscalls.ts')
 const synth = await load('src/lib/languages/synthRegisters.ts')
 const input = await load('src/lib/languages/inputControllerRegisters.ts')
+const midi = await load('src/lib/languages/midiPortRegisters.ts')
+const pcm = await load('src/lib/languages/sampledAudioRegisters.ts')
 
 const address = (label) =>
     display.MARS_BASE_ADDRESS_CHOICES.find((choice) => choice.label === label).address
@@ -77,7 +79,7 @@ const data = {
         unitMax: display.UNIT_SIZE_MAX,
         //GNU-profile static data can grow past the default heap; the Core moves the heap after it.
         staticData: address('static data'),
-        staticDataEnd: 0x10400000
+        staticDataEnd: display.MARS_DATA_SEGMENT_END
     },
     synth: {
         base: synth.SYNTH_BASES.mips,
@@ -91,7 +93,10 @@ const data = {
         gate: synth.SYNTH_GATE,
         loop: synth.SYNTH_LOOP
     },
-    input: input.inputHeaderData()
+    input: input.inputHeaderData(),
+    timer: { time: devices.RARS_TIME, timecmp: devices.RARS_TIMECMP },
+    midi: midi.midiPortHeaderData(),
+    pcm: pcm.sampledAudioHeaderData()
 }
 
 const headers = [

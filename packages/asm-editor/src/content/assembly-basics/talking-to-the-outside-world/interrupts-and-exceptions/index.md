@@ -80,18 +80,20 @@ some urgent requests even when others are masked. Exact rules depend on the mach
 The simulators do not all provide the same events or handler mechanism:
 
 - MIPS uses a fixed exception handler address. EPC holds the faulting address and `eret` returns to
-  the address in EPC. No device interrupts are delivered.
+  the address in EPC. The timer and the keyboard can interrupt a program that turns them on; see
+  [MIPS interrupts and the timer](/documentation/mips/interrupts).
 - RISC-V can use a handler whose address the program places in `utvec`; the simulator also requires
   the user interrupt-enable bit to be set for handler entry. It saves the interrupted instruction
-  address in `uepc`, and `uret` returns to it. Device input is not interrupt-driven here.
+  address in `uepc`, and `uret` returns to it. The timer and the keyboard can interrupt a program
+  that turns them on; see [RISC-V interrupts and the timer](/documentation/risc-v/interrupts).
 - M68K uses a vector table for exceptions and supports timer, keyboard and mouse interrupts. An
   installed handler returns with `rte`. A missing handler stops the run with a message. See the
   [M68K exception reference](/documentation/m68k/exceptions) for the vector entries, interrupt
   levels, masks and waiting instruction.
 - Z80 interrupt instructions assemble, but no device in this editor raises an interrupt for them.
 
-For MIPS and RISC-V keyboard input, poll the ready bit. Setting the device's interrupt-enable bit
-instead stops the program with a message that interrupt-driven input is unsupported.
+For MIPS and RISC-V keyboard input, poll the ready bit, or set the receiver's interrupt-enable bit
+to have a handler run for every key.
 
 ## Check your understanding
 

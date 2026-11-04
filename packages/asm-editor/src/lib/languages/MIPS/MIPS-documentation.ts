@@ -441,7 +441,7 @@ export const mipsRegisterFiles: MIPSRegisterFileDoc[] = [
     {
         id: 'cp0',
         title: 'CP0 (coprocessor 0)',
-        intro: 'Coprocessor 0 is the part of the processor that deals with exceptions: a bad memory address, an overflow on `add`, a `break`. The machine writes these registers itself, at the moment it stops what the program was doing and jumps to the handler, which is whatever the program assembled at the exception vector with `.ktext 0x80000180`. A program with no handler there stops instead, with the message the simulator prints. The handler reads these registers with `mfc0`, as in `mfc0 $k0, $13`, to find out what happened and where, and writes them back with `mtc0`, as in `mtc0 $k0, $14`, which is how it steps the return address past the instruction that faulted before `eret` returns to it.\n\nThis simulator implements the four registers below, and it raises exceptions only: nothing in it delivers an interrupt, so the interrupt bits are values to read and write rather than something that changes what runs.',
+        intro: "Coprocessor 0 is the part of the processor that deals with exceptions and interrupts: a bad memory address, an overflow on `add`, a `break`, the timer running out or a key typed. The machine writes these registers itself, at the moment it stops what the program was doing and jumps to the handler, which is whatever the program assembled at the exception vector with `.ktext 0x80000180`. A program with no handler there stops instead, with the message the simulator prints. The handler reads these registers with `mfc0`, as in `mfc0 $k0, $13`, to find out what happened and where, and writes them back with `mtc0`, as in `mtc0 $k0, $14`, which is how it steps the return address past the instruction that faulted before `eret` returns to it.\n\nThis simulator implements the six registers below: MARS's four, and Count and Compare, the timer of MIPS32. [Interrupts and the timer](/documentation/mips/interrupts) shows them at work.",
         registers: [
             {
                 name: '$8 (vaddr)',
@@ -449,14 +449,24 @@ export const mipsRegisterFiles: MIPSRegisterFileDoc[] = [
                     'The address that caused the exception, when it was a memory one: the address the `lw` or `sw` failed on. It keeps whatever it held after any other kind of exception, so it is only worth reading once the cause says the exception was an address error.'
             },
             {
+                name: '$9 (count)',
+                description:
+                    "The timer's counter. It goes up by one every two instructions the program runs, from 0 at the program's first instruction, so it says how much the program has run rather than how long that took: the same instruction finds the same Count on every run. In a C program, the start code that runs before `main` has already counted a little. `mtc0` sets it, and it counts on from there. MARS 4.5 does not have it; it is MIPS32's."
+            },
+            {
+                name: '$11 (compare)',
+                description:
+                    'When Count goes up to this value, the timer asks for an interrupt by setting bit 15 of Cause. Writing it clears that request, so a handler sets it to the next moment it wants an interrupt, ahead of Count, as in Count + 1000. A write that makes the two equal at once asks only when it is an even-numbered instruction of the run; otherwise Count is already there and next goes past it, so the request waits until Count comes round again. The timer is off until the program first writes this register.'
+            },
+            {
                 name: '$12 (status)',
                 description:
-                    'The interrupt mask and the enable bits. It starts at `0x0000FF11`: every one of the eight interrupt levels unmasked, user mode, and interrupts enabled. The bit this simulator writes itself is bit 1, the exception level, which taking an exception sets and `eret` clears on the way back, so the register reads `0x0000FF13` inside a handler. A handler is free to change the mask and the enable bit with `mtc0`, as it would on a real processor, but since nothing here delivers an interrupt the change is only visible in the register.'
+                    "The interrupt mask and the enable bits. It starts at `0x0000FF11`: every one of the eight interrupt levels unmasked (bits 8 to 15), user mode, and interrupts enabled (bit 0). Bit 1, the exception level, is set by taking an exception or an interrupt and cleared by `eret` on the way back, so the register reads `0x0000FF13` inside a handler; while it is set, no other interrupt is taken. Clear bit 0, or a source's bit in the mask, with `mtc0` to keep interrupts out."
             },
             {
                 name: '$13 (cause)',
                 description:
-                    'Why the exception happened. Bits 2 to 6 hold the exception code, the number behind the message the simulator prints, so an address error on a load reads as `0x10`, which is code 4 shifted up by two. The bits above them report pending interrupts on a real processor and stay zero here, because nothing in this simulator raises one. A handler that serves several causes reads this register first and branches on the code.'
+                    "Why the exception happened. Bits 2 to 6 hold the exception code, the number behind the message the simulator prints, so an address error on a load reads as `0x10`, which is code 4 shifted up by two, and an interrupt as 0. Bits 8 to 15 show which interrupt sources are asking: bit 15 the timer, bit 8 the keyboard and bit 9 the display. They are the sources', which `mtc0` leaves as they are. A handler that serves several causes reads this register first and branches on the code."
             },
             {
                 name: '$14 (epc)',

@@ -6,9 +6,11 @@ import { documentSignature, type InstructionDocument } from '../instructions/doc
 import { withInstructionCategory, withInstructionContent } from '../instructions/resolve'
 import { runtimeLibraryChapter } from '../runtimeFunctions'
 import { inputControllerEntries } from '../inputController'
+import { soundDeviceEntries } from '../soundDevices'
 import { synthEntries } from '../synth'
 import type { MarsForm } from './instructionDocument'
 import { screenEntries } from './screen'
+import { interruptsEntries } from './interrupts'
 import { documented, syscallFields, syscallSummary, type MarsSyscall } from './syscalls'
 
 /**
@@ -159,8 +161,9 @@ function syscalls<F extends MarsForm>(documentation: MarsDocumentation<F>): Chap
 
 /**
  * The MIPS or RISC-V Documentation's Chapters, in the order the complete documentation page has
- * them: instructions, directives, services, the language's registers, the Screen, the Synth, the
- * Input controller, the Runtime library and Using C.
+ * them: instructions, directives, services, the language's registers, the Screen, interrupts and
+ * the timer, the Synth, the Input controller, MIDI and sampled audio, the Runtime library and
+ * Using C.
  */
 export function marsChapters<F extends MarsForm>(documentation: MarsDocumentation<F>): Chapter[] {
     const { language, base, variant } = documentation
@@ -179,6 +182,15 @@ export function marsChapters<F extends MarsForm>(documentation: MarsDocumentatio
             entries: screenEntries(variant, language, `${base}/screen`)
         },
         {
+            id: 'interrupts',
+            language,
+            title: 'Interrupts and the timer',
+            href: `${base}/interrupts`,
+            description:
+                'Run a handler when the timer runs out or a key is typed, instead of polling, and step through it.',
+            entries: interruptsEntries(variant, language, `${base}/interrupts`)
+        },
+        {
             id: 'synth',
             language,
             title: 'Synth',
@@ -195,6 +207,15 @@ export function marsChapters<F extends MarsForm>(documentation: MarsDocumentatio
             description:
                 'Read the keys held, key and button events, the mouse pointer and the wheel through memory registers, for games and programs that need more than typed characters.',
             entries: inputControllerEntries(variant, language, `${base}/input-controller`)
+        },
+        {
+            id: 'midi-and-audio',
+            language,
+            title: 'MIDI and sampled audio',
+            href: `${base}/midi-and-audio`,
+            description:
+                'Stream sound through memory registers: MIDI messages to a General MIDI synthesizer, and samples a program computes to a sampled-audio output.',
+            entries: soundDeviceEntries(variant, language, `${base}/midi-and-audio`)
         },
         runtimeLibraryChapter({
             language,

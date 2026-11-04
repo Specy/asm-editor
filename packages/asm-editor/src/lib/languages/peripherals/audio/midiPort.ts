@@ -1,9 +1,10 @@
 import type { ProgramTimeline } from './programTimeline'
 
 /**
- * x86's raw MIDI port as the output plays it ([x86-devices.md](../../../../../../../docs/design/x86-devices.md#the-raw-midi-port)):
- * the messages Blink lets out of the port, each at its Program time, handed to a General MIDI
- * synthesizer of the port's own at the output time the timeline maps that to.
+ * A MIDI port as the output plays it, x86's raw one ([x86-devices.md](../../../../../../../docs/design/x86-devices.md#the-raw-midi-port))
+ * or the MIDI port of MIPS and RISC-V: the messages the device lets out of the port, Blink or
+ * `MarsDevices`, each at its Program time, handed to a General MIDI synthesizer of the port's own at
+ * the output time the timeline maps that to.
  *
  * spessasynth schedules a message given a time, but keeps it until then and has no way to take it
  * back, while a cut has to drop what is still to come. So the messages wait here, and each is handed

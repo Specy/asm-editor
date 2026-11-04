@@ -27,12 +27,15 @@ import {
     MARS_RECEIVER_CONTROL,
     MARS_RECEIVER_DATA,
     MARS_TRANSMITTER_CONTROL,
-    MARS_TRANSMITTER_DATA
+    MARS_TRANSMITTER_DATA,
+    RARS_TIME,
+    RARS_TIMECMP
 } from '#lib/languages/mars/MarsDevices.ts'
 import {
     DISPLAY_SIZE_MAX,
     DISPLAY_SIZE_MIN,
     MARS_BASE_ADDRESS_CHOICES,
+    MARS_DATA_SEGMENT_END,
     MARS_DISPLAY_SIZE_CHOICES,
     MARS_UNIT_SIZE_CHOICES,
     UNIT_SIZE_MAX,
@@ -73,6 +76,8 @@ import {
     SYNTH_WAVETABLES
 } from '#lib/languages/synthRegisters.ts'
 import { inputHeaderData } from '#lib/languages/inputControllerRegisters.ts'
+import { midiPortHeaderData } from '#lib/languages/midiPortRegisters.ts'
+import { sampledAudioHeaderData } from '#lib/languages/sampledAudioRegisters.ts'
 const address = (label: string) =>
     MARS_BASE_ADDRESS_CHOICES.find((choice) => choice.label === label)!.address
 const DATA: Omit<SimHeaderData, 'syscalls'> = {
@@ -91,7 +96,7 @@ const DATA: Omit<SimHeaderData, 'syscalls'> = {
         unitMin: UNIT_SIZE_MIN,
         unitMax: UNIT_SIZE_MAX,
         staticData: address('static data'),
-        staticDataEnd: 0x10400000
+        staticDataEnd: MARS_DATA_SEGMENT_END
     },
     synth: {
         base: SYNTH_BASES.mips,
@@ -105,7 +110,10 @@ const DATA: Omit<SimHeaderData, 'syscalls'> = {
         gate: SYNTH_GATE,
         loop: SYNTH_LOOP
     },
-    input: inputHeaderData()
+    input: inputHeaderData(),
+    timer: { time: RARS_TIME, timecmp: RARS_TIMECMP },
+    midi: midiPortHeaderData(),
+    pcm: sampledAudioHeaderData()
 }
 const TARGETS = Object.keys(SIM_HEADER_TARGETS) as SimHeaderTargetName[]
 const syscallsOf = (target: SimHeaderTargetName): Record<number, MarsSyscall> =>
@@ -246,8 +254,16 @@ describe.each(TARGETS)('<sim.h> for %s', (target) => {
         )
     })
 
+    it("names where static data and the heap end, the editor's own data segment end", () => {
+        expect(text).toContain(
+            `#define SIM_DATA_SEGMENT_END 0x${MARS_DATA_SEGMENT_END.toString(16)}ul\n`
+        )
+        expect(text).toContain('from 0x10010000 to SIM_DATA_SEGMENT_END')
+    })
+
     it('caps SIM_SCREEN at the static data the Cores have room for', () => {
-        expect(text).toContain('* 4 <= 4128768, \\')
+        //64 MB from the data segment's base, where MARS and RARS have 4 MB
+        expect(text).toContain('* 4 <= 67043328, \\')
         //any size the display takes, not only the ones MARS's and RARS's tool lists
         expect(text).toContain('(width) >= 1 && (width) <= 1024')
         expect(text).toContain('(unit) >= 1 && (unit) <= 32')
@@ -512,8 +528,8 @@ describe('the static-data cap', () => {
     })
 
     it.each(TARGETS)('bounds %s GNU-profile static data', (target) => {
-        const limit = 0x10400000 - address('static data')
-        expect(limit).toBe(4128768)
+        const limit = MARS_DATA_SEGMENT_END - address('static data')
+        expect(limit).toBe(67043328)
         expect(errors(target, limit)).toEqual([])
         expect(errors(target, limit + 4).join('\n')).toContain('past the end of the data segment')
     })
