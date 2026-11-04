@@ -660,9 +660,11 @@ describe('saving renames and comments', () => {
         await shown(session)
         session.renameLabel('crackme', MAIN, 'check_password')
         session.setFunctionComment('crackme', MAIN, 'checks the password')
+        //once autosave's pause is over, or at once as here
+        session.saveNow()
         await until(() => onSave.mock.calls.length > 0)
         expect(onSave).toHaveBeenCalledWith({ silent: true })
-        const archived = makeProjectFromArchive(projectToArchive(project))
+        const archived = await makeProjectFromArchive(await projectToArchive(project))
         expect(archived.project.files?.crackme).toEqual(project.files.crackme)
         expect(archived.project.files?.crackme.annotations).toEqual({
             names: { '0x11e9': 'check_password' },

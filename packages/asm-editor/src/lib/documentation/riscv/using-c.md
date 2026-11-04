@@ -126,7 +126,7 @@ triple:
 
 The assembly function must follow the [calling convention](/documentation/risc-v/runtime-library#from-assembly) used by compiled code, including register preservation and the rules for its argument and result types. In this integer example, `value` arrives in `a0` and the result returns in `a0`.
 
-Build leaves out assembly files the program does not need, without assembling them. Errors in those files do not affect the Build. The **Problems** panel marks each with the Hint: "This File is not part of the program: the program uses nothing it defines."
+Build leaves out assembly files the program does not need, without assembling them. Errors in those files do not affect the Build. The **Problems** panel marks each with the Hint: "The program doesn't use this File, so it is left out."
 
 Linked files use this editor's GNU assembly subset, which accepts the compiler's output. For a CSR write, put the CSR first: `csrw utvec, t0`, rather than RARS's `csrw t0, utvec`. The subset does not accept `.eqv` or `.macro`; use `.equ NAME, value` for a numeric constant. If a linked file fails to assemble, its first error explains why it was included and identifies the required syntax.
 

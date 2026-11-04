@@ -93,7 +93,7 @@ describe('Source compilation lifecycle', () => {
         expect(p.toObject()).not.toHaveProperty('sourceMaps')
         for (const reopened of [
             makeProject(p.toObject()),
-            makeProjectFromArchive(projectToArchive(p)).project
+            (await makeProjectFromArchive(await projectToArchive(p))).project
         ]) {
             expect(reopened.compilations).toEqual(p.compilations)
             expect(reopened.sourceMaps).toEqual({})
@@ -497,7 +497,7 @@ describe('x86 Source compilation', () => {
         expect(record).not.toHaveProperty('runtimeAbi')
         for (const reopened of [
             makeProject(p.toObject()),
-            makeProjectFromArchive(projectToArchive(p)).project
+            (await makeProjectFromArchive(await projectToArchive(p))).project
         ]) {
             expect(reopened.compilations).toEqual(p.compilations)
         }

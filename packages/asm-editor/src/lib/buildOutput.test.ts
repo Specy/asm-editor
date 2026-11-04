@@ -234,23 +234,23 @@ describe('a Project leaving the browser', () => {
         expect(payload.builds).toBeUndefined()
     })
 
-    it('in an archive', () => {
-        const entries = Object.keys(unzipSync(projectToArchive(project())))
+    it('in an archive', async () => {
+        const entries = Object.keys(unzipSync(await projectToArchive(project())))
         expect(entries).toContain('files/main.asm')
         expect(entries).not.toContain('files/main')
     })
 
-    it('as one source File, which a Build output does not stop it being', () => {
+    it('as one source File, which a Build output does not stop it being', async () => {
         const single = project()
         expect(isSingleSourceProject(single)).toBe(true)
         expect(isLegacyLinkedFileCompatible(single.toObject())).toBe(true)
-        const download = projectDownload(single)
+        const download = await projectDownload(single)
         expect(download.kind).toBe('source')
         expect(download.contents).not.toContain(built.content)
         expect(single.toExternal()).not.toContain('"main"')
         //a Build output the person changed is theirs, which only an archive holds
         single.fileSystem.annotate('main', { names: { '0x0': 'start' } })
         expect(isSingleSourceProject(single)).toBe(false)
-        expect(projectDownload(single).kind).toBe('archive')
+        expect((await projectDownload(single)).kind).toBe('archive')
     })
 })

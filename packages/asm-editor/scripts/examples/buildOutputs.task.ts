@@ -26,7 +26,7 @@ for (const example of Object.values(index.examples)) {
             const path = `${directory}/${port.archive}`
             const zip = unzipSync(readFileSync(path))
             const manifest = JSON.parse(new TextDecoder().decode(zip['project.json']))
-            const { project } = makeProjectFromArchive(readFileSync(path))
+            const { project } = await makeProjectFromArchive(readFileSync(path))
             for (const entry of port.buildOutputs!) {
                 const sources = programBuildSources(project, entry)
                 const emulator = await X86Emulator(sources, {

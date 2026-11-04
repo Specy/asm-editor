@@ -1,6 +1,6 @@
 import { readExample, exampleSourcePath } from '#lib/examples.server.ts'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
 import { inputControllerEntries } from '#lib/documentation/inputController.ts'
@@ -19,7 +19,7 @@ import {
 } from '#lib/languages/mars/MarsDevices.ts'
 import type { ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
 import type { MarsCore } from '#lib/languages/mars/MarsDevices.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
+import type { Project, Testcase } from '#lib/Project.svelte.ts'
 import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import {
     EXCEPTION_EXAMPLE,
@@ -1066,11 +1066,14 @@ describe('the RISC-V examples', () => {
 
     describe('the Pac-Man Project', () => {
         const folder = exampleSourcePath('risc-v/pacman/README.md').replace(/\/README\.md$/, '')
-        const { project } = makeProjectFromArchive(
-            readFileSync(
-                new URL('../../../../../examples/dist/risc-v/pacman.asmproj', import.meta.url)
-            )
-        )
+        let project: Project
+        beforeAll(async () => {
+            ;({ project } = await makeProjectFromArchive(
+                readFileSync(
+                    new URL('../../../../../examples/dist/risc-v/pacman.asmproj', import.meta.url)
+                )
+            ))
+        })
 
         /** One of its Programs built and run to its title screen, with its own Files to read. */
         async function toTitle(entry: string) {

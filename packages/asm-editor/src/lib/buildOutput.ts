@@ -120,7 +120,7 @@ export function buildOutputCollision(
 /**
  * The Log's note for a program a Build did not save: a folder, or the Entry or the source it was
  * compiled from, is where it would go, the person kept the File there, or saving it failed
- * (`unsaved`, with the failure as `detail`), as at the Project's 16 MiB limit.
+ * (`unsaved`, with the failure as `detail`), as at the limit on what the Project's Files hold.
  */
 export function buildOutputNote(
     path: string,

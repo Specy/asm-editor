@@ -2,7 +2,7 @@ import { runtimeDefinition } from '#lib/sourceRuntime/runtimeLanguage.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type monaco from 'monaco-editor'
 import type { MonacoType } from '#lib/monaco/Monaco.ts'
-import { resolveProjectInclude, type BuildSources } from '#lib/projectFiles.ts'
+import { resolveProjectInclude, type BuildSources, type ProjectFile } from '#lib/projectFiles.ts'
 import { languageSession } from './sessionRegistry'
 import { parseProjectSourceUri, projectSourceUri, type ProjectModelIdentity } from './uri'
 import { splitAssemblyComment } from './assemblyText'
@@ -67,83 +67,144 @@ function contextForModel(model: monaco.editor.ITextModel) {
     return session && sources ? { identity, sources, target: session.target } : null
 }
 
+/** What one File gives, kept with the path it was read at, since a rename keeps the record. */
+type FileScan<T> = { path: string; value: T }
+type ScanCache<T> = WeakMap<ProjectFile, FileScan<T>>
+/** No `knownOperations`, as a key. */
+const NO_OPERATIONS: ReadonlySet<string> = new Set()
+
+/**
+ * Caches of what is read from each File, by File record and by the options that change the
+ * reading: a File's record is kept until the File changes, so completion, document symbols, hovers
+ * and definitions read again only the Files that changed, not every File at every request
+ * ([ADR 0076](../../../../../docs/adr/0076-a-project-holds-64-mib-of-files.md)).
+ */
+function scanCache<T>(
+    caches: WeakMap<ReadonlySet<string>, Map<string, ScanCache<T>>>,
+    options: ProjectAssemblyLanguageOptions
+): ScanCache<T> {
+    const operations = options.knownOperations ?? NO_OPERATIONS
+    let byKey = caches.get(operations)
+    if (!byKey) caches.set(operations, (byKey = new Map()))
+    const key = `${options.comment}|${options.dialect ?? ''}|${options.z80BareSymbols ? 1 : 0}`
+    let cache = byKey.get(key)
+    if (!cache) byKey.set(key, (cache = new WeakMap()))
+    return cache
+}
+
+/** `read`'s answer for the File at `path`, read once per record. */
+function scanned<T>(
+    cache: ScanCache<T>,
+    path: string,
+    file: ProjectFile,
+    read: (path: string, text: string) => T
+): T {
+    const kept = cache.get(file)
+    if (kept?.path === path) return kept.value
+    const value = read(path, file.content)
+    cache.set(file, { path, value })
+    return value
+}
+
+const symbolCaches = new WeakMap<ReadonlySet<string>, Map<string, ScanCache<SourceSymbol[]>>>()
+const includeCaches = new WeakMap<ReadonlySet<string>, Map<string, ScanCache<string[]>>>()
+
+/**
+ * The symbols the text Files at `paths` define, every text File's without them, each File read
+ * once per record.
+ */
 function sourceSymbols(
     sources: BuildSources,
+    options: ProjectAssemblyLanguageOptions,
+    paths: Iterable<string> = Object.keys(sources.files)
+): SourceSymbol[] {
+    const cache = scanCache(symbolCaches, options)
+    const symbols: SourceSymbol[] = []
+    for (const path of paths) {
+        const file = Object.hasOwn(sources.files, path) ? sources.files[path] : undefined
+        if (file?.encoding !== 'plain') continue
+        const found = scanned(cache, path, file, (at, text) => fileSymbols(at, text, options))
+        for (const symbol of found) symbols.push(symbol)
+    }
+    return symbols
+}
+
+/** The symbols one File's text defines. */
+function fileSymbols(
+    path: string,
+    text: string,
     options: ProjectAssemblyLanguageOptions
 ): SourceSymbol[] {
     const symbols: SourceSymbol[] = []
-    for (const [path, file] of Object.entries(sources.files)) {
-        if (file.encoding !== 'plain') continue
-        file.content.split(/\r?\n/).forEach((rawLine, line) => {
-            const source = lineWithoutComment(rawLine, options)
-            // A pattern that ends with the name places it past the keyword before it, where a
-            // search of the line would find the `e` in `.eqv e` or the `ac` in `.macro ac` first.
-            const directive = (match: RegExpExecArray | null, kind: SourceSymbol['kind']) => {
-                if (!match?.[1]) return
-                const from = match.index + match[0].length - match[1].length
-                symbols.push(sourceSymbol(rawLine, path, line, match[1], kind, from))
+    text.split(/\r?\n/).forEach((rawLine, line) => {
+        const source = lineWithoutComment(rawLine, options)
+        // A pattern that ends with the name places it past the keyword before it, where a
+        // search of the line would find the `e` in `.eqv e` or the `ac` in `.macro ac` first.
+        const directive = (match: RegExpExecArray | null, kind: SourceSymbol['kind']) => {
+            if (!match?.[1]) return
+            const from = match.index + match[0].length - match[1].length
+            symbols.push(sourceSymbol(rawLine, path, line, match[1], kind, from))
+        }
+        if (options.dialect === 'mars') {
+            const equ = /^\s*\.eqv\s+([A-Za-z_.$][\w.$]*)/i.exec(source)
+            const macro = /^\s*\.macro\s+([A-Za-z_.$][\w.$]*)/i.exec(source)
+            const section = /^\s*\.(text|data|ktext|kdata|bss)\b/i.exec(source)
+            directive(equ, 'constant')
+            directive(macro, 'macro')
+            if (section?.[0]) {
+                const name = section[0].trim()
+                symbols.push(sourceSymbol(rawLine, path, line, name, 'section'))
             }
-            if (options.dialect === 'mars') {
-                const equ = /^\s*\.eqv\s+([A-Za-z_.$][\w.$]*)/i.exec(source)
-                const macro = /^\s*\.macro\s+([A-Za-z_.$][\w.$]*)/i.exec(source)
-                const section = /^\s*\.(text|data|ktext|kdata|bss)\b/i.exec(source)
-                directive(equ, 'constant')
-                directive(macro, 'macro')
-                if (section?.[0]) {
-                    const name = section[0].trim()
-                    symbols.push(sourceSymbol(rawLine, path, line, name, 'section'))
-                }
-            } else if (options.dialect === 'x86') {
-                const equ = /^\s*([A-Za-z_@$.?][\w@$.?]*)\s+equ\b/i.exec(source)
-                const define = /^\s*%(?:i|x)?define\s+([A-Za-z_@$.?][\w@$.?]*)/i.exec(source)
-                const macro = /^\s*%macro\s+([A-Za-z_@$.?][\w@$.?]*)/i.exec(source)
-                const structure = /^\s*struc\s+([A-Za-z_@$.?][\w@$.?]*)/i.exec(source)
-                const section = /^\s*(?:section|segment)\s+([^\s;]+)/i.exec(source)
-                if (equ?.[1]) symbols.push(sourceSymbol(rawLine, path, line, equ[1], 'constant'))
-                else directive(define, 'constant')
-                directive(macro, 'macro')
-                directive(structure, 'data')
-                directive(section, 'section')
-            } else if (options.dialect === 'z80') {
-                const named = /^\s*([A-Za-z_.][\w.]*)\s+\.?macro\b/i.exec(source)
-                const section = /^\s*(#code|#data|\.?section(?:\s+[^\s;]+)?)/i.exec(source)
-                if (named?.[1]) symbols.push(sourceSymbol(rawLine, path, line, named[1], 'macro'))
-                else directive(/^\s*\.?macro\s+([A-Za-z_.][\w.]*)/i.exec(source), 'macro')
-                if (section?.[1]) {
-                    const name = section[1].trim()
-                    symbols.push(sourceSymbol(rawLine, path, line, name, 'section'))
-                }
+        } else if (options.dialect === 'x86') {
+            const equ = /^\s*([A-Za-z_@$.?][\w@$.?]*)\s+equ\b/i.exec(source)
+            const define = /^\s*%(?:i|x)?define\s+([A-Za-z_@$.?][\w@$.?]*)/i.exec(source)
+            const macro = /^\s*%macro\s+([A-Za-z_@$.?][\w@$.?]*)/i.exec(source)
+            const structure = /^\s*struc\s+([A-Za-z_@$.?][\w@$.?]*)/i.exec(source)
+            const section = /^\s*(?:section|segment)\s+([^\s;]+)/i.exec(source)
+            if (equ?.[1]) symbols.push(sourceSymbol(rawLine, path, line, equ[1], 'constant'))
+            else directive(define, 'constant')
+            directive(macro, 'macro')
+            directive(structure, 'data')
+            directive(section, 'section')
+        } else if (options.dialect === 'z80') {
+            const named = /^\s*([A-Za-z_.][\w.]*)\s+\.?macro\b/i.exec(source)
+            const section = /^\s*(#code|#data|\.?section(?:\s+[^\s;]+)?)/i.exec(source)
+            if (named?.[1]) symbols.push(sourceSymbol(rawLine, path, line, named[1], 'macro'))
+            else directive(/^\s*\.?macro\s+([A-Za-z_.][\w.]*)/i.exec(source), 'macro')
+            if (section?.[1]) {
+                const name = section[1].trim()
+                symbols.push(sourceSymbol(rawLine, path, line, name, 'section'))
             }
+        }
 
-            const constant = options.z80BareSymbols
-                ? /^\s*([A-Za-z_.][\w.]*)\s*:?[ \t]+(?:(?:equ|\.equ|defl)\b|=)/i.exec(source)
+        const constant = options.z80BareSymbols
+            ? /^\s*([A-Za-z_.][\w.]*)\s*:?[ \t]+(?:(?:equ|\.equ|defl)\b|=)/i.exec(source)
+            : null
+        const colonLabel = /^\s*([A-Za-z_@$.?][\w@$.?]*)\s*:/.exec(source)
+        const bareZ80Label =
+            options.z80BareSymbols && !constant && !colonLabel
+                ? /^([A-Za-z_.][\w.]*)\b/.exec(source)
                 : null
-            const colonLabel = /^\s*([A-Za-z_@$.?][\w@$.?]*)\s*:/.exec(source)
-            const bareZ80Label =
-                options.z80BareSymbols && !constant && !colonLabel
-                    ? /^([A-Za-z_.][\w.]*)\b/.exec(source)
-                    : null
-            const bareZ80Name = bareZ80Label?.[1]?.toLowerCase()
-            const label =
-                bareZ80Name && options.knownOperations?.has(bareZ80Name)
-                    ? null
-                    : (constant ?? colonLabel ?? bareZ80Label)
-            if (!label?.[1]) return
-            const dataDirective =
-                /^\s*[A-Za-z_@$.?][\w@$.?]*\s*:\s*(?:d[bdwqtoyzt]|res[bwdqtoyzt]|\.?(?:byte|half|word|float|double|ascii|asciiz|space))\b/i.test(
-                    source
-                )
-            symbols.push(
-                sourceSymbol(
-                    rawLine,
-                    path,
-                    line,
-                    label[1],
-                    constant ? 'constant' : dataDirective ? 'data' : 'label'
-                )
+        const bareZ80Name = bareZ80Label?.[1]?.toLowerCase()
+        const label =
+            bareZ80Name && options.knownOperations?.has(bareZ80Name)
+                ? null
+                : (constant ?? colonLabel ?? bareZ80Label)
+        if (!label?.[1]) return
+        const dataDirective =
+            /^\s*[A-Za-z_@$.?][\w@$.?]*\s*:\s*(?:d[bdwqtoyzt]|res[bwdqtoyzt]|\.?(?:byte|half|word|float|double|ascii|asciiz|space))\b/i.test(
+                source
             )
-        })
-    }
+        symbols.push(
+            sourceSymbol(
+                rawLine,
+                path,
+                line,
+                label[1],
+                constant ? 'constant' : dataDirective ? 'data' : 'label'
+            )
+        )
+    })
     return symbols
 }
 
@@ -182,23 +243,34 @@ function sourceIncludeOnLine(line: string, options: ProjectAssemblyLanguageOptio
     return pattern?.exec(source)?.[2] ?? null
 }
 
+/** The paths a File's text includes as source, as written, in order. */
+function writtenIncludes(text: string, options: ProjectAssemblyLanguageOptions): string[] {
+    const written: string[] = []
+    for (const line of text.split(/\r?\n/)) {
+        const writtenPath = sourceIncludeOnLine(line, options)
+        if (writtenPath) written.push(writtenPath)
+    }
+    return written
+}
+
 /** Files that participate in one textual assembly unit. Binary `incbin` inputs add no symbols. */
 function includedSourcePaths(
     sources: BuildSources,
     entry: string,
     options: ProjectAssemblyLanguageOptions
 ): Set<string> {
+    const cache = scanCache(includeCaches, options)
     const included = new Set<string>()
     const pending = [entry]
     while (pending.length > 0) {
         const path = pending.pop()!
         if (included.has(path)) continue
-        const file = sources.files[path]
+        const file = Object.hasOwn(sources.files, path) ? sources.files[path] : undefined
         if (!file || file.encoding !== 'plain') continue
         included.add(path)
-        for (const line of file.content.split(/\r?\n/)) {
-            const writtenPath = sourceIncludeOnLine(line, options)
-            if (!writtenPath) continue
+        for (const writtenPath of scanned(cache, path, file, (_, text) =>
+            writtenIncludes(text, options)
+        )) {
             const target = resolveProjectInclude(path, writtenPath, sources)
             if (target) pending.push(target)
         }
@@ -342,8 +414,7 @@ export function createProjectSymbolCompletionProvider(
                 options
             )
             return {
-                suggestions: sourceSymbols(context.sources, options)
-                    .filter((symbol) => visiblePaths.has(symbol.path))
+                suggestions: sourceSymbols(context.sources, options, visiblePaths)
                     .filter(
                         (symbol) =>
                             !options.excludeCurrentFromCompletion ||
@@ -393,9 +464,9 @@ export function createProjectDocumentSymbolProvider(
         provideDocumentSymbols(model) {
             const context = contextForModel(model)
             if (!context) return []
-            return sourceSymbols(context.sources, options)
-                .filter((symbol) => symbol.path === context.identity.path)
-                .map((symbol) => {
+            //the model's own File alone
+            return sourceSymbols(context.sources, options, [context.identity.path]).map(
+                (symbol) => {
                     const range = symbolRange(monaco, symbol)
                     return {
                         name: symbol.name,
@@ -405,7 +476,8 @@ export function createProjectDocumentSymbolProvider(
                         range,
                         selectionRange: range
                     }
-                })
+                }
+            )
         }
     }
 }

@@ -12,9 +12,13 @@ import {
     isValidFilePath,
     ProjectFormatError,
     resolveFilePath,
+    textFile,
+    formatMiB,
     ANNOTATIONS_BYTE_LIMIT,
+    ANNOTATIONS_SAVE_MESSAGE,
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
+    FILE_LIMIT_MESSAGE,
     type Annotations,
     type BuildSources,
     type ByteRun,
@@ -100,9 +104,9 @@ export enum FileErrorCode {
     NotDirectory = 'ENOTDIR',
     /** The session's limit on open descriptors is reached. */
     TooManyOpen = 'EMFILE',
-    /** The Project's 16 MiB or 4,096-File limit would be passed. */
+    /** The Project's limit on its Files' bytes (`FILE_BYTE_LIMIT`) or on 4,096 Files would be passed. */
     NoSpace = 'ENOSPC',
-    /** One File would grow past 16 MiB. */
+    /** One File would grow past `FILE_BYTE_LIMIT`, all the room the Project's Files have. */
     TooLarge = 'EFBIG',
     /** A malformed path, count, position, seek origin or open mode. */
     InvalidArgument = 'EINVAL',
@@ -370,7 +374,8 @@ export class FileSystem {
      * ([ADR 0063](../../../../../../docs/adr/0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md)).
      * Runs overwrite, so the File keeps its length, its encoding and its Annotations; a File
      * stored as text must stay UTF-8. A whole new content drops the Annotations, as `writeBytes`
-     * does. A refused change, past the File's end or the Project's 16 MiB, leaves it as it was.
+     * does. A refused change, past the File's end or the Project's `FILE_BYTE_LIMIT`, leaves it as
+     * it was.
      */
     changeBytes(path: string, changes: readonly ByteChange[]): ByteChange[] {
         this.assertEditable()
@@ -396,12 +401,12 @@ export class FileSystem {
         })
         if (file === before) return inverses
         //nothing else changed, so instead of `cleanFiles`, which would still decode the changed
-        //File whole, the size is read from the stored lengths: typing into a 16 MiB File costs what
-        //the change does
+        //File whole, the size is read from the stored lengths: typing into a File of many MiB
+        //costs what the change does
         const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
         files[path] = file
         if (storedFilesSize(files) > FILE_BYTE_LIMIT)
-            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+            throw new ProjectFormatError(FILE_LIMIT_MESSAGE)
         this.store.write(Object.freeze(files))
         this.notify(true)
         return inverses
@@ -413,7 +418,7 @@ export class FileSystem {
      * other change this is allowed while a Debug session holds the Files: the session's record of
      * the File takes them and publishes it, so that its next publish keeps them, and no instruction
      * Undo takes them back. The record is checked as a saved one is, and the Project's Annotations
-     * together must stay within 256 KiB; a refused change leaves the Files as they were. Its File
+     * together must stay within `ANNOTATIONS_BYTE_LIMIT`; a refused change leaves the Files as they were. Its File
      * change notice saves them as any change to the Files is saved. A record the same as the
      * File's changes nothing and tells no one.
      */
@@ -429,15 +434,21 @@ export class FileSystem {
         const files: Record<string, ProjectFile> = Object.assign(Object.create(null), this.files)
         files[path] = withAnnotations(path, file, annotations)
         if (storedAnnotationsSize(files) > ANNOTATIONS_BYTE_LIMIT)
-            throw new ProjectFormatError(
-                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
-            )
+            throw new ProjectFormatError(ANNOTATIONS_SAVE_MESSAGE)
         this.store.write(Object.freeze(files))
         this.notify(true)
     }
+    /**
+     * Replaces a File's whole content with text, as typing into the editor does, which drops its
+     * Annotations as `writeBytes` does. The text is not encoded to check it (`textFile`), so a
+     * keystroke in a File costs about its length, whatever the Project's size.
+     */
     writeText(path: string, text: string, replace = true) {
-        const file = { encoding: 'plain' as const, content: text }
-        this.writeBytes(path, fileBytes(file), replace)
+        this.assertEditable()
+        path = resolveFilePath(path)
+        if (!replace && hasOwn(this.files, path))
+            throw new FileSystemGuestError(FileErrorCode.Exists, `File already exists: ${path}`)
+        this.commit({ ...this.files, [path]: textFile(text) })
     }
     remove(path: string) {
         this.assertEditable()
@@ -467,7 +478,7 @@ export class FileSystem {
      * made are checked, and every other one stays the record caches keyed by it know.
      */
     private commit(files: ProjectFiles) {
-        this.store.write(cleanFiles(files, this.files))
+        this.store.write(cleanFiles(files))
         this.notify(true)
     }
     /**
@@ -625,9 +636,7 @@ export class FileSystemSession {
         for (const [other, each] of this.paths) if (each.file) records[other] = each.file
         records[path] = next
         if (storedAnnotationsSize(records) > ANNOTATIONS_BYTE_LIMIT)
-            throw new ProjectFormatError(
-                'This Project could not be saved, as it contains too many renames and comments (at most 256 KiB). Delete some and try again.'
-            )
+            throw new ProjectFormatError(ANNOTATIONS_SAVE_MESSAGE)
         node.file = next
         this.flush()
     }
@@ -758,7 +767,10 @@ export class FileSystemSession {
      */
     private capacity(node?: Node, length = 0, extra = false) {
         if (length > FILE_BYTE_LIMIT)
-            throw new FileSystemGuestError(FileErrorCode.TooLarge, 'File too large (16 MiB)')
+            throw new FileSystemGuestError(
+                FileErrorCode.TooLarge,
+                `File too large (${formatMiB(FILE_BYTE_LIMIT)})`
+            )
         //a presented program is no File of the Project, and never changes
         const nodes = new Set(
             [...this.paths.values(), ...Array.from(this.handles.values(), (h) => h.node)].filter(
@@ -770,7 +782,7 @@ export class FileSystemSession {
         if (bytes > FILE_BYTE_LIMIT || nodes.size + Number(extra) > FILE_COUNT_LIMIT)
             throw new FileSystemGuestError(
                 FileErrorCode.NoSpace,
-                'FileSystem capacity exceeded (16 MiB / 4,096 Files)'
+                `FileSystem capacity exceeded (${formatMiB(FILE_BYTE_LIMIT)} / ${FILE_COUNT_LIMIT.toLocaleString('en-US')} Files)`
             )
     }
     /**

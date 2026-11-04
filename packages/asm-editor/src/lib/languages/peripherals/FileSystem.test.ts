@@ -13,8 +13,10 @@ import {
     cleanFiles,
     encodeBase64,
     fileBytes,
+    formatMiB,
     FILE_BYTE_LIMIT,
     FILE_COUNT_LIMIT,
+    FILE_LIMIT_MESSAGE,
     ProjectFormatError
 } from '#lib/projectFiles.ts'
 
@@ -142,7 +144,7 @@ describe('FileSystem', () => {
         fs.remove('notes.md')
         expect(fs.files['assets/big.txt']).toBe(big)
         //the kept File still takes its room, and a record from elsewhere is still checked
-        expect(() => fs.writeText('more.txt', '0123456789')).toThrow('16 MiB')
+        expect(() => fs.writeText('more.txt', '0123456789')).toThrow(FILE_LIMIT_MESSAGE)
         expect(() =>
             fs.replace({ ...fs.files, 'bad.txt': { encoding: 'plain', content: '\ud800' } })
         ).toThrow(ProjectFormatError)
@@ -153,7 +155,9 @@ describe('FileSystem', () => {
         const snapshot = fs.snapshot('main')
         fs.writeText('main', 'new')
         expect(snapshot.files.main.content).toBe('old')
-        expect(() => fs.writeBytes('huge', new Uint8Array(FILE_BYTE_LIMIT))).toThrow('16 MiB')
+        expect(() => fs.writeBytes('huge', new Uint8Array(FILE_BYTE_LIMIT))).toThrow(
+            FILE_LIMIT_MESSAGE
+        )
         expect(fs.files.huge).toBeUndefined()
     })
     it('evicts whole instruction groups without rejecting file operations', () => {
@@ -517,8 +521,10 @@ describe('FileSystemSession guest failures', () => {
             expect(guestFileFailure(new FileSystemGuestError(code, 'full'))).toBe(-1)
     })
 
-    it('refuses the 16 MiB limits atomically: EFBIG for one File, ENOSPC for the Project', () => {
+    it('refuses the size limits atomically: EFBIG for one File, ENOSPC for the Project', () => {
         const MiB = 1024 * 1024
+        //a File that leaves 6 MiB of the limit, beside which 7 MiB more do not fit
+        const most = FILE_BYTE_LIMIT - 6 * MiB
         const { fs, run, step } = steppedSession({ big: '' })
         const fd = step(() => run.open('big', { access: 'read-write' }))
         expect(
@@ -533,7 +539,7 @@ describe('FileSystemSession guest failures', () => {
         )
         expect(run.fstat(fd).size).toBe(0)
 
-        step(() => run.ftruncate(fd, 10 * MiB))
+        step(() => run.ftruncate(fd, most))
         const other = step(() => run.open('other', 'write'))
         expect(failure(() => step(() => run.write(other, new Uint8Array(7 * MiB))))).toBe(
             FileErrorCode.NoSpace
@@ -547,6 +553,20 @@ describe('FileSystemSession guest failures', () => {
         step(() => run.close(fd))
         step(() => run.truncate('other', 7 * MiB))
         expect(fs.readBytes('other')).toHaveLength(7 * MiB)
+    })
+
+    it('says the limits it refuses as the Project states them', () => {
+        const { run, step } = steppedSession({ big: '' })
+        expect(() => step(() => run.truncate('big', FILE_BYTE_LIMIT + 1))).toThrow(
+            `File too large (${formatMiB(FILE_BYTE_LIMIT)})`
+        )
+        expect(formatMiB(FILE_BYTE_LIMIT)).toBe('64 MiB')
+        const fd = step(() => run.open('big', { access: 'read-write' }))
+        step(() => run.ftruncate(fd, FILE_BYTE_LIMIT))
+        const other = step(() => run.open('other', 'write'))
+        expect(() => step(() => run.write(other, new Uint8Array(1)))).toThrow(
+            'FileSystem capacity exceeded (64 MiB / 4,096 Files)'
+        )
     })
 
     it('refuses a File past the 4,096-File limit as ENOSPC, creating nothing', () => {
@@ -897,8 +917,8 @@ describe('changing bytes in the FileSystem', () => {
         expect(() => fs.changeBytes('notes.md', [write(4, encode('!!'))])).toThrow('past the end')
     })
 
-    it('keeps the Project within 16 MiB without checking every File again', () => {
-        //16 MiB less one: the File, and two bytes of UTF-8 in a one-character text File
+    it('keeps the Project within its limit without checking every File again', () => {
+        //the limit less one: the File, and two bytes of UTF-8 in a one-character text File
         const fs = new FileSystem({
             blob: {
                 encoding: 'base64',
@@ -913,13 +933,14 @@ describe('changing bytes in the FileSystem', () => {
             fs.changeBytes('blob', [
                 { content: new Uint8Array(FILE_BYTE_LIMIT - 1), encoding: 'base64' }
             ])
-        ).toThrow('Project exceeds the 16 MiB file limit')
+        ).toThrow(FILE_LIMIT_MESSAGE)
         expect(fs.files).toBe(before)
         //the Files stay as `cleanFiles` leaves them: frozen, and a map with no prototype
         expect(Object.isFrozen(fs.files)).toBe(true)
         expect(Object.getPrototypeOf(fs.files)).toBe(null)
         expect(fs.readBytes('blob')[0]).toBe(1)
-    })
+        //a File as large as the limit takes seconds to encode and decode, longer beside the suite
+    }, 30_000)
 
     it('restores the record on Undo of a Debug session, rather than rebuilding it', () => {
         const fs = edited()

@@ -5,11 +5,13 @@ import type {
 } from '#lib/languages/service/sourceModel.ts'
 import {
     buildAssemblerProfile,
+    fileText,
     ProjectFormatError,
     sourceLineText,
     sourceText,
     textAssemblyFiles,
-    type BuildSources
+    type BuildSources,
+    type ProjectFile
 } from '#lib/projectFiles.ts'
 import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import {
@@ -35,6 +37,7 @@ import {
     type ScreenLabelTable
 } from './screenDirective'
 import { makeTokenSpanIndex, tokenSpanEnd, type SpanLine, type TokenSpanIndex } from './tokenSpans'
+import { NOT_LINKED_MESSAGE, notLinkedMessage } from './exceptionHandlerScan'
 
 /**
  * How a MIPS or RISC-V program is checked, by the analysis Worker while it is typed
@@ -195,7 +198,7 @@ export function checkMarsProgram<C extends MarsCheckCore>(
         coreDiagnostic(error, sources, source, spansFor(error.sourcePath), functions, target)
     )
     if (!result.errors.some((error) => !error.isWarning))
-        assembled.push(...unlinkedUnitHints(sources, core, source))
+        assembled.push(...unlinkedUnitHints(sources, core, source, target))
     //read after everything else this check takes from its Core, since a probe assembles another
     let probed = false
     const screen = applyScreenDirective(
@@ -256,12 +259,14 @@ function unitFiles(core: MarsCheckCore): readonly string[] {
  * nothing the program needs is defined there, so the Core never assembled it, and its mistakes, or
  * MARS's or RARS's own dialect, are no concern of this Build
  * ([asmos-stage2.md](../../../../../../docs/design/asmos-stage2.md), decision 10). A unit that a
- * unit the program needs includes is part of that one, and gets none.
+ * unit the program needs includes is part of that one, and gets none. On MIPS, one that holds an
+ * exception handler is told how to include it (`notLinkedMessage`).
  */
 function unlinkedUnitHints(
     sources: BuildSources,
     core: MarsCheckCore,
-    source: string
+    source: string,
+    target: MarsTarget
 ): LanguageDiagnostic[] {
     if (!sources.linkUnits?.length) return []
     const read = new Set([...core.getLinkedUnits(), ...unitFiles(core)])
@@ -272,7 +277,7 @@ function unlinkedUnitHints(
             severity: 'suggestion' as const,
             source,
             code: 'not-linked',
-            message: 'This File is not part of the program: the program uses nothing it defines.',
+            message: target === 'MIPS' ? mipsNotLinkedHint(sources, path) : NOT_LINKED_MESSAGE,
             location: {
                 path,
                 range: {
@@ -281,6 +286,29 @@ function unlinkedUnitHints(
                 }
             }
         }))
+}
+
+/**
+ * Each unit's Hint on MIPS, by File record: the live check runs at every change to the Files, and
+ * a File's Hint changes only with the File, so its text is scanned once a record.
+ */
+const mipsHints = new WeakMap<ProjectFile, string>()
+
+/** The Hint on a MIPS unit the link left out, which says how to include its exception handler. */
+export function mipsNotLinkedHint(sources: BuildSources, path: string): string {
+    const file = sources.files[path]
+    if (!file) return NOT_LINKED_MESSAGE
+    const kept = mipsHints.get(file)
+    if (kept !== undefined) return kept
+    let text: string | undefined
+    try {
+        text = fileText(file)
+    } catch {
+        text = undefined
+    }
+    const hint = notLinkedMessage(text)
+    if (Object.isFrozen(file)) mipsHints.set(file, hint)
+    return hint
 }
 
 /**

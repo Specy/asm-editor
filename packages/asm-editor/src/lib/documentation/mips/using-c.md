@@ -126,7 +126,7 @@ triple:
 
 The assembly function must follow the [calling convention](/documentation/mips/runtime-library#from-assembly) used by compiled code, including register preservation and the rules for its argument and result types. In this integer example, `value` arrives in `$a0` and the result returns in `$v0`.
 
-Build leaves out assembly files the program does not need, without assembling them. Errors in those files do not affect the Build. The **Problems** panel marks each with the Hint: "This File is not part of the program: the program uses nothing it defines."
+Build leaves out assembly files the program does not need, without assembling them. Errors in those files do not affect the Build. The **Problems** panel marks each with the Hint: "The program doesn't use this File, so it is left out."
 
 Linked files use this editor's GNU assembly subset, which accepts the compiler's output. Some MARS syntax is unavailable in that subset, including `.eqv` and `.macro`. For a numeric constant, use `.equ NAME, value`. If a linked file fails to assemble, its first error explains why it was included and identifies the required syntax.
 
@@ -156,6 +156,6 @@ handler:
         eret
 ```
 
-`SIM_LINK` requests the file that defines the name without calling the handler. Build fails if no file defines that name. Only one linked file may contain `.ktext`, because handlers share the fixed starting address `0x80000180`. If two do, the error names both files. Files left out of the Build do not count.
+`SIM_LINK` requests the file that defines the name without calling the handler. Build fails if no file defines that name. Only one linked file may contain `.ktext`, because handlers share the fixed starting address `0x80000180`. If two do, the error names both files. Files left out of the Build do not count. The Hint on such a file says that its handler never runs, and how to include it.
 
 This minimal handler skips the faulting instruction by advancing EPC by 4. Use it only when skipping that instruction is appropriate. [Interrupts and the timer](/documentation/mips/interrupts) explains exception causes and handler behavior.

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { AVAILABLE_LANGUAGES, type AvailableLanguages } from './Project.svelte.ts'
 import { makeProjectFromArchive } from './projectArchive.ts'
-import { SHARE_ID } from '#stores/projectsStore.svelte.ts'
+import { SHARE_ID } from './shareId.ts'
 import { languageLabel } from './languages/languageLabel.ts'
 import { resolve } from '$app/paths'
 import type { ResolvedPathname } from '$app/types'
@@ -115,7 +115,7 @@ export async function loadExample(id: string, fetcher: typeof fetch = fetch) {
     if (!example) throw new ExampleNotFoundError()
     const response = await fetcher(`/examples/${example.archive}`)
     if (!response.ok) throw new Error('Could not load the example project')
-    const { project } = makeProjectFromArchive(await response.arrayBuffer())
+    const { project } = await makeProjectFromArchive(await response.arrayBuffer())
     if (project.language !== example.language) throw new Error('The example has the wrong ISA')
     project.id = SHARE_ID
     return project

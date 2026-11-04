@@ -6,7 +6,7 @@ import { zipSync } from 'fflate'
 import { ProjectStore } from '#stores/projectsStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 import { fileBytes } from '#lib/projectFiles.ts'
-import { makeProject } from '#lib/Project.svelte.ts'
+import { makeProject, type Project } from '#lib/Project.svelte.ts'
 import { importProject } from '#lib/projectImport.ts'
 import { db } from '#lib/storage/db.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
@@ -66,15 +66,22 @@ function drag(target: EventTarget, type: string, files: { file: File; folder?: b
     return event
 }
 
+/** The stored Project named `name`, once an import stored it, read where it is kept. */
 async function projectNamed(name: string) {
-    await vi.waitFor(() =>
-        expect(ProjectStore.projects.some((project) => project.name === name)).toBe(true)
-    )
-    return ProjectStore.projects.find((project) => project.name === name)!
+    let found: Project | undefined
+    await vi.waitFor(async () => {
+        found = (await db.getProjects()).find((project) => project.name === name)
+        expect(found).toBeDefined()
+    })
+    return found!
 }
 
 afterEach(async () => {
-    for (const project of [...ProjectStore.projects]) await ProjectStore.deleteProject(project)
+    //the page forgets its list as it goes, so what the test stored is cleared where it is kept
+    vi.restoreAllMocks()
+    await db.projects.clear()
+    await db.editJournals.clear()
+    ProjectStore.unload()
     ProjectStore.writableFiles.clear()
     delete (window as { showOpenFilePicker?: unknown }).showOpenFilePicker
     vi.restoreAllMocks()
@@ -234,7 +241,7 @@ it('reports an import the browser did not store as failed, whether it replaced a
     expect(await importProject({ project: same })).toBeUndefined()
     expect(error).toHaveBeenCalledTimes(2)
     expect(pill).not.toHaveBeenCalled()
-    expect(ProjectStore.projects.map((project) => project.name)).toEqual(['stored'])
+    expect((await db.getProjects()).map((project) => project.name)).toEqual(['stored'])
 })
 
 it('says the stored projects could not be read rather than that there are none', async () => {
@@ -279,5 +286,26 @@ it('opens the Project a single file launched with the app became', async () => {
     } finally {
         await dispose()
         delete (window as { launchQueue?: unknown }).launchQueue
+    }
+})
+
+it('says it is reading the projects until it has read them, not that there are none', async () => {
+    let finish!: (projects: Project[]) => void
+    const read = vi
+        .spyOn(db, 'getProjects')
+        .mockReturnValue(new Promise<Project[]>((resolve) => (finish = resolve)))
+    const { target, dispose } = await page()
+    try {
+        await vi.waitFor(() => expect(read).toHaveBeenCalled())
+        flushSync()
+        expect(target.querySelector('[role="status"]')?.textContent).toBe('Reading your projects…')
+        expect(target.querySelector('.empty-title')).toBeNull()
+        finish([])
+        await vi.waitFor(() =>
+            expect(target.querySelector('.empty-title')?.textContent).toBe('No projects yet')
+        )
+        expect(target.querySelector('[role="status"]')).toBeNull()
+    } finally {
+        await dispose()
     }
 })

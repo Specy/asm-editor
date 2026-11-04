@@ -21,6 +21,7 @@ import {
     sameFileContent,
     storedFilesSize,
     FILE_BYTE_LIMIT,
+    FILE_LIMIT_MESSAGE,
     type ByteEdit,
     type ByteRun,
     type ProjectFile
@@ -151,46 +152,52 @@ describe('Byte edits a Project saved before', () => {
         )
     })
 
-    it('count the bytes they leave toward the 16 MiB, and no more than 16 MiB put in', () => {
-        const half = new Uint8Array(FILE_BYTE_LIMIT / 2)
+    /**
+     * Only a Project saved under the 16 MiB limit has Byte edits, so what they may put in and copy
+     * stays bounded by that, whatever the Project may hold now (ADR 0076).
+     */
+    const LEGACY_LIMIT = 16 * 1024 * 1024
+
+    it('count the bytes they leave toward the Project limit, and no more than 16 MiB put in', () => {
+        const half = new Uint8Array(LEGACY_LIMIT / 2)
         const inserting = legacyFile(half, [
-            { offset: 0, remove: 0, insert: encodeBase64(new Uint8Array(FILE_BYTE_LIMIT / 2)) }
+            { offset: 0, remove: 0, insert: encodeBase64(new Uint8Array(LEGACY_LIMIT / 2)) }
         ])
         expect(() => cleanFiles({ a: inserting })).not.toThrow()
-        expect(formatError(() => cleanFiles({ a: inserting, b: byteFile(bytes(1)) }))).toBe(
-            'Project exceeds the 16 MiB file limit'
-        )
-        const deleting = legacyFile(half, [{ offset: 0, remove: FILE_BYTE_LIMIT / 2, insert: '' }])
+        //the 16 MiB the edits leave, with a File that fills the rest of the limit and one more
+        const rest = byteFile(new Uint8Array(FILE_BYTE_LIMIT - LEGACY_LIMIT + 1))
+        expect(formatError(() => cleanFiles({ a: inserting, b: rest }))).toBe(FILE_LIMIT_MESSAGE)
+        const deleting = legacyFile(half, [{ offset: 0, remove: LEGACY_LIMIT / 2, insert: '' }])
         expect(cleanFiles({ a: deleting, b: byteFile(half) }).a).toEqual(byteFile(bytes()))
-        //overwrites that put in more than a File holds, as no editor saved
-        const piece = encodeBase64(new Uint8Array(FILE_BYTE_LIMIT / 4))
+        //overwrites that put in more than a File held, as no editor saved
+        const piece = encodeBase64(new Uint8Array(LEGACY_LIMIT / 4))
         const rewritten = legacyFile(
-            new Uint8Array(FILE_BYTE_LIMIT / 4),
+            new Uint8Array(LEGACY_LIMIT / 4),
             Array.from({ length: 5 }, () => ({
                 offset: 0,
-                remove: FILE_BYTE_LIMIT / 4,
+                remove: LEGACY_LIMIT / 4,
                 insert: piece
             }))
         )
         expect(formatError(() => cleanFiles({ a: rewritten }))).toBe(
-            'Project exceeds the 16 MiB file limit'
+            'The Byte edits of this Project put in more than 16 MiB'
         )
-        //each 16 MiB File takes a few hundred milliseconds alone, longer beside the whole suite
+        //each File of many MiB takes a few hundred milliseconds alone, longer beside the suite
     }, 30_000)
 
     it('are refused when their insertions and deletions would copy the File too often', () => {
         //each deletion copies what is left: nine of a 16 MiB File copy more than the limit
         const deletions = Array.from({ length: 9 }, () => ({ offset: 0, remove: 1, insert: '' }))
-        const file = legacyFile(new Uint8Array(FILE_BYTE_LIMIT), deletions)
+        const file = legacyFile(new Uint8Array(LEGACY_LIMIT), deletions)
         expect(formatError(() => cleanFiles({ big: file }))).toBe(
             'Too many Byte edits insert or delete in big'
         )
         expect(() =>
-            cleanFiles({ big: legacyFile(new Uint8Array(FILE_BYTE_LIMIT), deletions.slice(0, 7)) })
+            cleanFiles({ big: legacyFile(new Uint8Array(LEGACY_LIMIT), deletions.slice(0, 7)) })
         ).not.toThrow()
         //and counted over the Project, so spreading them over many Files copies no more: nine of
         //each of four 4 MiB Files, each well within the limit alone
-        const quarter = () => legacyFile(new Uint8Array(FILE_BYTE_LIMIT / 4), deletions)
+        const quarter = () => legacyFile(new Uint8Array(LEGACY_LIMIT / 4), deletions)
         expect(() => cleanFiles({ a: quarter() })).not.toThrow()
         expect(
             formatError(() =>

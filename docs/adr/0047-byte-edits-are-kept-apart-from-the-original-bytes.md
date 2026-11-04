@@ -33,3 +33,7 @@ A Project archive now holds an edited File as edited, under `files/`, with its o
 ## Superseded 2026-10-25
 
 [ADR 0063](./0063-a-file-holds-its-current-bytes-and-undo-is-a-journal-beside-it.md) replaces this decision: a File holds its current bytes, and Undo is a journal beside the Project. Projects saved with Byte edits are read with them applied.
+
+## Update 2026-11-04
+
+A Project now holds 64 MiB of Files ([ADR 0076](./0076-a-project-holds-64-mib-of-files.md)). The Byte edits of a Project saved before ADR 0063, applied as it is read, stay bounded by the 16 MiB a Project held when they were written: together they put in at most 16 MiB and copy at most 128 MiB.

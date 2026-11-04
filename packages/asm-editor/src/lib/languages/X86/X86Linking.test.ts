@@ -43,7 +43,7 @@ const EXERCISE = [
     '    syscall',
     '    this line is wrong'
 ].join('\n')
-const NOT_LINKED = 'This File is not part of the program: the program uses nothing it defines.'
+const NOT_LINKED = "The program doesn't use this File, so it is left out."
 
 const plain = (content: string) => ({ encoding: 'plain' as const, content })
 

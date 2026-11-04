@@ -2,7 +2,7 @@
     /**
      * Each content's bytes, decoded once: a comment, or a write of the bytes the File already
      * holds, makes a new File record over the same content, and both panes may show it, so a
-     * 16 MiB File is not decoded again for each.
+     * File of many MiB is not decoded again for each.
      * Keyed by the content string itself, per encoding, as the ELF analyses are: a key built from
      * it would copy megabytes at every lookup.
      */

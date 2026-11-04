@@ -29,3 +29,7 @@ ADR 0050's reasons, measured on 2026-10-23: a share link compresses its payload,
 - A Testcase's program takes the place of an unchanged Build output in that Testcase's own FileSystem, and is presented beside the Files where nothing has its path; a File of the person's own at the path stays, as before.
 - Renaming or removing a Build output drops its record: a renamed one is the person's own File, which later Builds leave alone and which travels with the Project. This replaces "Keep as File", and the Explorer's separate Build output list goes.
 - A Build that links a different program changes the Project, so it is autosaved, or marked unsaved without autosave. Editors older than this read the File as an ordinary Executable and drop the records they do not know.
+
+## Update 2026-11-04
+
+A Project now holds 64 MiB of Files, and the FileSystem gives a running program the same room ([ADR 0076](./0076-a-project-holds-64-mib-of-files.md)). The Build output counts toward that limit as before; a Build whose program would pass it runs the program without saving it, and the Log says why.

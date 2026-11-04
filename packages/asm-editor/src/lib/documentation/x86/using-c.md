@@ -123,6 +123,6 @@ In C, declare `extern int add_one(int value);` before calling `add_one(41)`. In 
 
 Your assembly files are searched before Runtime library functions, so exporting a Runtime function's name can replace it. Two ordinary exported definitions of one name cause an error when both files are linked. Files the program does not need are left out without being assembled. Separate programs can therefore each define `main` in the same project, provided their files are not linked together.
 
-The **Problems** panel marks each unused assembly file with the Hint: "This File is not part of the program: the program uses nothing it defines."
+The **Problems** panel marks each unused assembly file with the Hint: "The program doesn't use this File, so it is left out."
 
 A file containing only global constructors, which initialize global objects before `main`, is not included automatically. To include it, request one of its exported names with `SIM_LINK` from `<sim.h>`, once, outside any function: `SIM_LINK(setup_tables);`. In NASM, `required setup_tables` makes the same request. This includes the file without calling `setup_tables`. Build fails if no file defines the name. Other C or C++ source files are not compiled or linked automatically.

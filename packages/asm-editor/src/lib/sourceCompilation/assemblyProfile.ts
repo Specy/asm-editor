@@ -5,7 +5,8 @@ import {
     resolveFilePath,
     resolveProjectInclude,
     ProjectFormatError,
-    type BuildSources
+    type BuildSources,
+    type ProjectFile
 } from '#lib/projectFiles.ts'
 import {
     isRuntimeLibrarySetting,
@@ -16,6 +17,30 @@ import {
 } from '#lib/runtimeAbi.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 import type { CompilationRecord } from './records'
+
+/**
+ * The paths a File's include lines name as written, the `group` of each match of `pattern`, kept
+ * by File record and pattern: the Build's sources are worked out again at every change to the
+ * Files, and this reads a File's text again only once it changed. None for a File that is no text.
+ */
+const writtenIncludes = new WeakMap<RegExp, WeakMap<ProjectFile, string[]>>()
+function includesOf(file: ProjectFile, pattern: RegExp, group: number): string[] {
+    let byFile = writtenIncludes.get(pattern)
+    if (!byFile) writtenIncludes.set(pattern, (byFile = new WeakMap()))
+    const kept = byFile.get(file)
+    if (kept) return kept
+    let text: string
+    try {
+        text = fileText(file)
+    } catch {
+        text = ''
+    }
+    const written = Array.from(text.matchAll(pattern), (match) => match[group])
+    if (Object.isFrozen(file)) byFile.set(file, written)
+    return written
+}
+
+const SOURCE_INCLUDE_LINE = /^\s*(?:\.include|%include)\s+"([^"\n]+)"/gm
 
 /** The Compilation records whose Generated assembly the Entry file's include unit reaches. */
 function reachableRecords(
@@ -33,19 +58,11 @@ function reachableRecords(
         if (record) reached.push(record)
         const file = sources.files[path]
         if (!file) return // The assembler supplies the missing-file diagnostic.
-        let text: string
-        try {
-            text = fileText(file)
-        } catch {
-            return
-        }
-        for (const match of text.matchAll(/^\s*(?:\.include|%include)\s+"([^"\n]+)"/gm)) {
+        for (const written of includesOf(file, SOURCE_INCLUDE_LINE, 1)) {
             const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
             try {
                 visit(
-                    resolveFilePath(
-                        match[1].startsWith('/') ? match[1].slice(1) : parent + match[1]
-                    )
+                    resolveFilePath(written.startsWith('/') ? written.slice(1) : parent + written)
                 )
             } catch {
                 /* The assembler reports malformed includes. */
@@ -101,7 +118,7 @@ function entryTree(sources: BuildSources, entry: string, x86: boolean): Set<stri
         if (!file || reached.has(path)) return
         reached.add(path)
         if (file.encoding !== 'plain') return
-        for (const [, , written] of fileText(file).matchAll(INCLUDE_LINE)) {
+        for (const written of includesOf(file, INCLUDE_LINE, 2)) {
             let target: string | null = null
             if (x86) target = resolveProjectInclude(path, written, sources)
             else {

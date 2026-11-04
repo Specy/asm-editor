@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import {
     cleanTestcases,
     entryFileContent,
@@ -13,6 +13,7 @@ import {
     type Testcase
 } from '#lib/Project.svelte.ts'
 import { BASE_CODE, LANGUAGE_EXTENSIONS } from '#lib/Config.ts'
+import { serializer } from '#lib/json.ts'
 import { makeBuildRecord } from '#lib/buildOutput.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'
 
@@ -802,5 +803,49 @@ describe('projectWorkEquals', () => {
         project.recordBuild(makeBuildRecord(sources, 'main', project.files.main, []))
         project.fileSystem.writeBytes('main', program.slice(1), true, 'base64')
         expect(projectWorkEquals(original, project.toObject())).toBe(false)
+    })
+})
+
+describe('comparing the Files of two Projects', () => {
+    it('compares them File by File, rather than as text, and notices every difference', () => {
+        const stringify = vi.spyOn(serializer, 'stringify')
+        const files = {
+            'main.s': { encoding: 'plain', content: 'nop\n'.repeat(1000) },
+            'data.bin': { encoding: 'base64', content: 'AAEC' }
+        } as const
+        const a = makeProject({ language: 'RISC-V', entry: 'main.s', files }).toObject()
+        //the same Files read back from storage: other records, other strings
+        const b = makeProject(structuredClone({ ...a, id: 'b' })).toObject()
+        stringify.mockClear()
+        expect(projectContentEquals(a, b)).toBe(true)
+        expect(projectWorkEquals(a, b)).toBe(true)
+        //no File's content went into the text the rest is compared as
+        for (const [value] of stringify.mock.calls)
+            expect(JSON.stringify(value) ?? '').not.toContain('nop')
+        const changed = makeProject({
+            ...a,
+            files: { ...files, 'main.s': { encoding: 'plain', content: 'nop' } }
+        }).toObject()
+        expect(projectContentEquals(a, changed)).toBe(false)
+        const moved = makeProject({
+            ...a,
+            files: { 'main.s': files['main.s'], 'data2.bin': files['data.bin'] }
+        }).toObject()
+        expect(projectContentEquals(a, moved)).toBe(false)
+        const asText = makeProject({
+            ...a,
+            files: { ...files, 'data.bin': { encoding: 'plain', content: '\u0000\u0001\u0002' } }
+        }).toObject()
+        expect(projectContentEquals(a, asText)).toBe(false)
+        const annotated = makeProject({
+            ...a,
+            files: {
+                ...files,
+                'data.bin': { ...files['data.bin'], annotations: { names: { '0x0': 'x' } } }
+            }
+        }).toObject()
+        expect(projectContentEquals(a, annotated)).toBe(false)
+        expect(projectWorkEquals(a, annotated)).toBe(false)
+        stringify.mockRestore()
     })
 })
