@@ -461,12 +461,12 @@ export const mipsRegisterFiles: MIPSRegisterFileDoc[] = [
             {
                 name: '$12 (status)',
                 description:
-                    'The interrupt enable bits and source mask. Initially `0x0000FF11`: user mode, interrupts enabled by bit 0, and all eight source mask bits, 8 to 15, set. The processor sets bit 1, EXL, on entry to a handler, giving `0x0000FF13`. No further interrupt is taken while EXL is set. `eret` clears EXL. To block interrupts, use `mtc0` to clear bit 0 or the required source mask bit.'
+                    'The interrupt enable bits and source mask. Initially `0x0000FF11`: user mode, interrupts enabled by bit 0, and all eight source mask bits, 8 to 15, set. The processor sets bit 1, EXL (exception level), on entry to a handler, giving `0x0000FF13`. No further interrupt is taken while EXL is set. `eret` clears EXL. To block interrupts, use `mtc0` to clear bit 0 or the required source mask bit.'
             },
             {
                 name: '$13 (cause)',
                 description:
-                    'The exception code is in bits 2 to 6. Code 0 means an interrupt. Code 4, an address error on a load, appears as `0x10` after shifting left by two. Pending interrupt sources appear in bits 8 to 15: bit 15 timer, bit 8 keyboard and bit 9 display. These bits follow the devices and ignore `mtc0` writes. A shared handler checks the exception code first, then the source bits for an interrupt.'
+                    'The exception code is in bits 2 to 6. Code 0 means an interrupt. Code 4, an address error on a load, appears as `0x10` after shifting left by two. Pending interrupt sources appear in bits 8 to 15: bit 15 the timer, bit 8 the keyboard and bit 9 the display. `mtc0` cannot set these bits. Writing Compare clears the timer bit. The display bit stays set in the handler until the next exception, or until `mtc0` writes it as 0. A shared handler checks the exception code first, then the source bits for an interrupt.'
             },
             {
                 name: '$14 (epc)',

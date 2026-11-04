@@ -24,7 +24,10 @@ describe('the RISC-V register files', () => {
         // "csrw t1, fcsr" in RARS, so the CSR never comes first in csrr or csrw.
         expect(csr.intro).toContain('csrw t0, fcsr')
         expect(csr.intro).toContain('csrr t0, fcsr')
-        expect(csr.intro).not.toContain('csrw fcsr, t0')
+        //GNU assembly, which Files linked to C are written in, puts the CSR first instead
+        expect(csr.intro).toContain(
+            'In GNU assembly, including Files linked to C, the write order is `csrw fcsr, t0`'
+        )
     })
 
     it('names both halves of the fmv pair', () => {
