@@ -351,7 +351,7 @@ export abstract class MarsEmulator<
         this.warnedWfiCannotEnd = true
         this.addNote({
             tone: 'warning',
-            text: 'wfi is waiting for an interrupt that cannot come: the timer is not armed for one, and no key can end the wait. To wait for the timer, write timecmp and set bit 4 of uie; for a key, set bit 8 of uie and bit 1 of the receiver control register at 0xffff0000. Pause or Stop ends this wait.'
+            text: 'wfi cannot resume because no enabled interrupt source can wake it. For timer interrupts, write timecmp and set bit 4 of uie. For keyboard interrupts, set bit 8 of uie and bit 1 of the receiver control register at 0xffff0000. Press Pause or Stop to end the wait.'
         })
     }
 
@@ -1158,10 +1158,10 @@ export abstract class MarsEmulator<
  * or, when nothing the program turned on can, what can.
  */
 function wfiStatus({ timer, key }: WfiWakers): string {
-    if (timer && key) return 'Waiting for an interrupt: wfi waits for the timer or a key'
-    if (timer) return 'Waiting for an interrupt: wfi waits for the timer'
-    if (key) return 'Waiting for an interrupt: wfi waits for a key'
-    return 'Waiting for an interrupt that cannot come: Pause or Stop ends this wfi'
+    if (timer && key) return 'Waiting for a timer or keyboard interrupt (wfi)'
+    if (timer) return 'Waiting for a timer interrupt (wfi)'
+    if (key) return 'Waiting for a keyboard interrupt (wfi)'
+    return 'No interrupt can end this wfi. Press Pause or Stop.'
 }
 
 /** What the History row of an interrupt taken says of it (`interruptEntry`). */

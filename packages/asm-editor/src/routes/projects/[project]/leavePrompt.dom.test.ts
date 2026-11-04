@@ -273,8 +273,8 @@ it('reports an unknown example instead of falling back to a project payload', as
 })
 
 it.each([
-    ['Copy link with Build', 'build'],
-    ['Copy link with Build and Run', 'buildAndRun']
+    ['Copy link to build on open', 'build'],
+    ['Copy link to build and run on open', 'buildAndRun']
 ])('copies example links with the startup option %s', async (label, flag) => {
     serveExample()
     const copy = vi.spyOn(utilities, 'copyText').mockResolvedValue(true)

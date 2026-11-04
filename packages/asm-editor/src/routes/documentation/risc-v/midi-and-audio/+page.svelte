@@ -9,5 +9,5 @@
     {chapter}
     heading="RISC-V MIDI and sampled audio"
     title="RISC-V MIDI port and sampled-audio output | Asm Editor"
-    description="Stream sound from a RISC-V program: MIDI messages to a General MIDI synthesizer at 0xFFFF0340, and computed samples to a FIFO at 0xFFFF0350, with examples in assembly and C."
+    description="Play MIDI notes and stream audio samples from RISC-V programs, with examples in assembly and C."
 />

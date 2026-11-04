@@ -61,21 +61,27 @@ A program that calls the library this way keeps its own start and its own addres
 
 ## Files and folders {#folders}
 
-Besides the file functions of `<stdio.h>`, the library has the POSIX functions for folders and for files by name. They use the [folder services](/documentation/mips/syscall#folders), so they work on the same files and folders, and Undo takes them back:
+Alongside the file streams in `<stdio.h>`, the library provides functions for folders and for files named by a path. They use the same files as the [file and folder services](/documentation/mips/syscall#folders), including their path rules, folder lifetime, Undo support and isolated Testcase copies.
 
-| Function                                       | Header         | What it does                                                                                                                                           |
-| ---------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `int mkdir(const char *path, mode_t mode)`     | `<sys/stat.h>` | Makes a folder. `mode` is ignored: every file and folder can be read and written.                                                                      |
-| `int stat(const char *path, struct stat *buf)` | `<sys/stat.h>` | Fills `buf` with what is at `path`. `S_ISDIR(buf->st_mode)` is true for a folder and `S_ISREG(buf->st_mode)` for a file; `st_size` is a file’s length. |
-| `int unlink(const char *path)`                 | `<unistd.h>`   | Deletes a file.                                                                                                                                        |
-| `int rmdir(const char *path)`                  | `<unistd.h>`   | Deletes an empty folder.                                                                                                                               |
-| `int rename(const char *from, const char *to)` | `<stdio.h>`    | Renames a file, or moves it into a folder that exists.                                                                                                 |
-| `int remove(const char *path)`                 | `<stdio.h>`    | Deletes a file, or an empty folder.                                                                                                                    |
-| `DIR *opendir(const char *path)`               | `<dirent.h>`   | Opens a folder for listing.                                                                                                                            |
-| `struct dirent *readdir(DIR *dir)`             | `<dirent.h>`   | The next entry, `.` and `..` first, or NULL at the end. `d_name` is its name and `d_type` is `DT_DIR` for a folder and `DT_REG` for a file.            |
-| `int closedir(DIR *dir)`                       | `<dirent.h>`   | Closes the folder.                                                                                                                                     |
+| Function                                       | Header         | What it does                                                                                                                        |
+| ---------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `int mkdir(const char *path, mode_t mode)`     | `<sys/stat.h>` | Creates a folder. `mode` is ignored. All files and folders have read, write and execute permissions.                                |
+| `int stat(const char *path, struct stat *buf)` | `<sys/stat.h>` | Fills `buf`. `S_ISDIR(buf->st_mode)` tests for a folder, `S_ISREG(buf->st_mode)` for a file. `st_size` is the file size in bytes.   |
+| `int unlink(const char *path)`                 | `<unistd.h>`   | Deletes a file.                                                                                                                     |
+| `int rmdir(const char *path)`                  | `<unistd.h>`   | Deletes an empty folder.                                                                                                            |
+| `int rename(const char *from, const char *to)` | `<stdio.h>`    | Renames a file or moves it into an existing folder, replacing a destination file if present.                                        |
+| `int remove(const char *path)`                 | `<stdio.h>`    | Deletes a file or an empty folder.                                                                                                  |
+| `DIR *opendir(const char *path)`               | `<dirent.h>`   | Opens a folder for listing and returns a pointer used by readdir and closedir.                                                      |
+| `struct dirent *readdir(DIR *dir)`             | `<dirent.h>`   | Returns the next entry, starting with `.` and `..`. `d_name` is its name. `d_type` is `DT_DIR` for a folder or `DT_REG` for a file. |
+| `int closedir(DIR *dir)`                       | `<dirent.h>`   | Closes a folder opened by opendir and frees its listing state.                                                                      |
 
-On a failure each returns -1 (`opendir` and `readdir` NULL) and sets `errno`: `ENOENT` when nothing is at the path, `EEXIST` when `mkdir` finds something there already, `ENOTDIR` and `EISDIR` when a folder and a file are mixed up, and `ENOTEMPTY` when `rmdir` finds a file inside. A folder `mkdir` makes lasts until the program ends, and stays after that once a file is written inside it; a folder cannot be renamed, and `rename` onto an existing file replaces it, as on Linux. The [folder services](/documentation/mips/syscall#folders) explain these rules, with a program that handles a folder that already exists.
+`mkdir`, `stat`, `unlink`, `rmdir`, `rename` and `remove` return 0 on success or -1 on failure, setting `errno` to the error number. `opendir` returns NULL on failure and sets `errno`. `closedir` returns 0 for a valid open folder.
+
+`readdir` returns NULL both at the end of a listing and on failure. At the end it leaves `errno` unchanged. On failure it sets `errno`. To tell the two apart, set `errno = 0` immediately before each call, then inspect it if the call returns NULL. The returned entry belongs to the open folder's listing state and is overwritten by the next readdir call on that folder.
+
+Common errors are `ENOENT` for a missing path, `EEXIST` when mkdir finds a file or folder at the path, `ENOTDIR` when a file is used as a folder, `EISDIR` when a folder is used as a file, and `ENOTEMPTY` when rmdir finds files or subfolders inside. After `EEXIST`, use stat and `S_ISDIR` to check that the existing path is a folder.
+
+A folder created by mkdir remains after the run only if a file still exists inside it, directly or in a subfolder. An empty `.keep` file is sufficient. Folders cannot be moved, and renaming a file onto an existing file replaces that file. The [folder services](/documentation/mips/syscall#folders) give an example and the full persistence rules.
 
 ## Standard input {#standard-input}
 

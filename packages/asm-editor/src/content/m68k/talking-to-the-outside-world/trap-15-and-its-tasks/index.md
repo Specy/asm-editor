@@ -177,11 +177,12 @@ that asks for the reading. The Cycles line over the registers counts the same wa
 
 ## Files and unsupported tasks
 
-Tasks 50 to 59 work on files: the ones shown in the editor's file explorer, never your computer's
-disk. File numbers start at 0, with at most eight open at once. Task 51 opens an existing file, 52
-creates or empties one, 53 reads bytes, 54 writes them, 55 changes the position, and 56 closes it.
+Tasks 50 to 59 access only the files shown in the editor's file explorer. File numbers start at 0,
+with at most eight open at once. Task 51 opens an existing file, 52 creates or empties one,
+53 reads bytes, 54 writes them, 55 changes the position, and 56 closes it.
 Task 50 closes all of them, 57 deletes a file, and 59 checks whether it exists. Task 58 asks for a
-path in a dialog, which can be cancelled. Read each task's registers and result codes in the [trap Documentation](/documentation/m68k/traps#files):
+path in a dialog, which you can cancel. The [trap reference](/documentation/m68k/traps#files) lists
+each task's input registers and result codes:
 `d0.w` reports success (0), end of file (1), failure (2), or read-only access (3). Undo restores
 file changes and positions with the instruction that made them.
 

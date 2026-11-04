@@ -17,45 +17,52 @@ A C or C++ program reaches the same services through `<sim.h>`. Each entry names
 
 ## Files and folders {#folders}
 
-A program reads and writes files and folders: the ones shown in the editor’s file explorer, never your computer’s disk. Changes stay after the program ends, except that each Testcase works on a copy. A path names a file from the top folder, which is always the current folder: `data/scores.txt` is the file `scores.txt` in the folder `data`. Open, read, write and close work on files (services 1024, 63, 64 and 57). Six more services work with folders, and with files by name:
+File services read and change the files shown in the editor's file explorer. They do not access your computer's disk. Outside a Testcase, file changes remain after the program ends, and Undo can reverse them. Each Testcase works on its own copy, so its changes are discarded.
 
-| Service       | What it does                                                  |
-| ------------- | ------------------------------------------------------------- |
-| 1026 unlink   | Deletes a file.                                               |
-| 1030 mkdir    | Makes a folder.                                               |
-| 1031 rmdir    | Deletes an empty folder.                                      |
-| 1034 rename   | Renames a file, or moves it into another folder.              |
-| 1038 stat     | Says whether a path is a file or a folder, and a file’s size. |
-| 1065 getdents | Lists the entries of a folder opened with service 1024.       |
+Paths start from the project's top folder, which is always the current folder. For example, `data/scores.txt` and `/data/scores.txt` name the same file. `/` and `.` name the top folder. Within a path, `.` leaves the location unchanged and `..` moves up one folder. Trying to go above the top folder fails.
 
-These six report a failure differently from the older file services. Instead of -1, `a0` holds minus an **error number** that says what went wrong, the way Linux reports it, so a program can react to each reason. A check for `a0 < 0` works for both kinds of service.
+Open, read, write and close use services 1024, 63, 64 and 57. Opening a file returns a **descriptor**, a number used to identify that open file in later calls. The following services work with paths or list an open folder:
 
-| Result | Meaning                                                             |
-| ------ | ------------------------------------------------------------------- |
-| -2     | Nothing is at the path, or a folder on the way to it is missing.    |
-| -17    | mkdir found something at the path already.                          |
-| -20    | The path names a file where a folder was expected.                  |
-| -21    | The path names a folder where a file was expected.                  |
-| -39    | The folder still holds a file or a folder, so it cannot be deleted. |
+| Service       | What it does                                              |
+| ------------- | --------------------------------------------------------- |
+| 1026 unlink   | Deletes a file.                                           |
+| 1030 mkdir    | Creates a folder.                                         |
+| 1031 rmdir    | Deletes an empty folder.                                  |
+| 1034 rename   | Renames a file or moves it into another folder.           |
+| 1038 stat     | Reports whether a path is a file or folder, and its size. |
+| 1065 getdents | Lists a folder opened with service 1024.                  |
 
-Folders on this machine behave this way:
+These six services return a negative **error number** on failure, such as -2 for a missing path. Open, read, write and seek return only -1 on failure. Close has no return value. Test for `a0 < 0` to detect either kind of failure, then inspect the value when the service supplies a specific error number.
 
-- **A folder that mkdir makes lasts until the program ends.** It stays after that only once a file is written inside it, so a program that wants to keep an empty folder writes a small hidden file such as `.keep` into it. A program run again may find its folder already there: treat -17 from mkdir as success.
-- **rmdir deletes only an empty folder.** Delete its files first with unlink.
-- **rename moves files, not folders:** renaming a folder, or a file onto a folder, fails with -21, and a folder onto a file with -20. Renaming a file onto another file replaces that file, as Linux does, and Undo brings both back.
-- **A listing starts with `.` and `..`**, the folder itself and the folder that holds it, then names its files and folders in name order. Each entry has an **inode number**, a number that identifies it and stays the same for the whole run.
+| Result | Meaning                                             |
+| ------ | --------------------------------------------------- |
+| -2     | The path or a folder leading to it does not exist.  |
+| -17    | mkdir found a file or folder at the requested path. |
+| -20    | A file was used where a folder was required.        |
+| -21    | A folder was used where a file was required.        |
+| -39    | The folder contains a file or another folder.       |
 
-Undo takes back every one of these services, and each Testcase runs on its own copy of the files, so nothing it makes, deletes or renames stays after it ends.
+Folder operations follow these rules:
+
+- **mkdir creates an empty folder for the current run.** After the run, a folder remains only if a file still exists inside it, directly or in a subfolder. An empty file such as `.keep` is enough. It does not need any contents. Removing the final file also removes the saved folder. A folder created by mkdir remains available during the current run even if its final file is deleted.
+- **An existing path is not necessarily a folder.** When mkdir returns -17, use stat to confirm that the path is a folder before treating it as success.
+- **rmdir deletes only an empty folder.** Use unlink to delete files and rmdir to delete empty subfolders first.
+- **rename moves files.** It can replace an existing destination file. Moving a folder or replacing a folder with a file returns -21. Replacing a file with a folder returns -20. Renaming a path to itself does nothing, except that the top folder cannot be renamed.
+- **A listing starts with `.` and `..`**, the folder itself and its parent, followed by its files and subfolders in name order. At the top folder, both entries refer to the top folder. Each entry has an **inode number**, an identifier that stays the same throughout the run.
 
 ### Listing a folder from assembly
 
-To list a folder, open it with service 1024 and flag 0, as if reading a file, then call getdents (1065) with a buffer. It fills the buffer with one **record** per entry and returns how many bytes it stored; call it again until it returns 0. Each record starts with the entry’s inode number and the position of the next entry, 4 bytes each in RV32 and 8 bytes each in RV64. Then come the record’s length as a halfword and the name, ending with a NUL; the record’s last byte says what the entry is: 4 for a folder, 8 for a file.
+Open the folder with service 1024 and flag 0, then call getdents (1065) with its descriptor and a buffer. It stores one **record** per entry and returns the total byte count. Call again to continue until it returns 0.
+
+Each record starts with an inode number and a next-entry position, both 4 bytes in RV32 or 8 bytes in RV64. A 2-byte record length and a NUL-terminated name follow. The record's final byte gives its type: 4 for a folder, 8 for a file.
 
 | Field                   | RV32 offset | RV64 offset |
 | ----------------------- | ----------- | ----------- |
 | Record length (2 bytes) | 8           | 16          |
 | Name                    | 10          | 18          |
 | Type (last byte)        | length - 1  | length - 1  |
+
+The following program uses the **RV32** record layout. For RV64, change `addi a0, s1, 10` to `addi a0, s1, 18`, and `lhu t0, 8(s1)` to `lhu t0, 16(s1)`.
 
 ```riscv
 # Lists the top folder, one name per line, with a / after each folder.
@@ -113,7 +120,11 @@ done:
 
 ### Folders from C
 
-C programs use the same services through the C library: `mkdir` and `stat` in `<sys/stat.h>`, `unlink` and `rmdir` in `<unistd.h>`, `rename` and `remove` in `<stdio.h>`, and `opendir`, `readdir` and `closedir` in `<dirent.h>`. On a failure they return -1 and set `errno` to the error number, such as `EEXIST` or `ENOTEMPTY`. This program makes a folder the first time it runs, and lists it every time:
+The C library provides `mkdir` and `stat` in `<sys/stat.h>`, `unlink` and `rmdir` in `<unistd.h>`, `rename` and `remove` in `<stdio.h>`, and `opendir`, `readdir` and `closedir` in `<dirent.h>`.
+
+`mkdir`, `stat`, `unlink`, `rmdir`, `rename` and `remove` return -1 on failure and set `errno`. `opendir` and `readdir` return NULL on failure instead, also setting `errno`. `readdir` also returns NULL at the end of a listing, leaving `errno` unchanged.
+
+This example creates and lists `notes`. It assumes that `notes` is absent or already a folder, and that opening and closing `.keep` succeeds. The empty `.keep` file lets the folder remain after the run:
 
 ```c
 #include <dirent.h>
@@ -144,7 +155,11 @@ int main(void) {
 }
 ```
 
-The `<sim.h>` functions `sim_mkdir`, `sim_getdents` and the rest make the raw services instead and return the negative error number. See the [Runtime library](/documentation/risc-v/runtime-library#folders) for what each C function does.
+If the path may already name a file, use `stat` and `S_ISDIR` to check its type before accepting `EEXIST`. If keeping the folder matters, also handle failure from `fopen` and `fclose`. The example skips this check when `fopen` returns NULL.
+
+The listing loop above stops on either end of listing or a read error. To distinguish them, set `errno = 0` immediately before each `readdir` call and inspect it when that call returns NULL, before making another library call. Zero means the listing ended. A nonzero value is an error.
+
+The `<sim.h>` functions such as `sim_mkdir` and `sim_getdents` return the raw service result, including negative error numbers, without setting `errno`. See the [Runtime library](/documentation/risc-v/runtime-library#folders) for the C functions and their return values.
 
 ## Sound {#sound}
 

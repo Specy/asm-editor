@@ -1,10 +1,9 @@
-This lesson describes the exception behavior supported by this Playground's MIPS simulator. It
-exposes MARS's four coprocessor 0 registers, `BadVAddr` (register 8), `Status` (12), `Cause` (13),
-and `EPC` (14), and the timer's `Count` (9) and `Compare` (11). A handler begins at `0x80000180`.
-The simulator delivers exceptions caused by the running program, and interrupts from the timer and
-the keyboard once a program turns them on. It also has no branch delay slots. The
-fixed addresses, reset values, data layout, and instruction budget mentioned below describe this
-simulator's setup, not rules for every MIPS processor.
+This lesson describes exceptions in this Playground's MIPS simulator. It provides six coprocessor 0
+registers: `BadVAddr` (register 8), `Count` (9), `Compare` (11), `Status` (12), `Cause` (13), and
+`EPC` (14). Count and Compare control the timer. A handler begins at `0x80000180`. The simulator
+handles exceptions caused by instructions and supports timer and keyboard interrupts when the
+program enables them. It has no branch delay slots. The fixed addresses, reset values, data layout,
+and instruction budget below describe this simulator's setup.
 
 ## Exceptions and interrupts
 
@@ -15,8 +14,8 @@ instruction is abandoned before the handler begins: it does not partly update a 
 An **asynchronous interrupt** comes from outside the instruction stream, usually from a device, and
 is taken between instructions. MIPS uses related state and handler machinery for both, but the
 distinction matters: a device can interrupt a program regardless of the instruction currently
-running. The examples on this page are all synchronous exceptions; the
-[Interrupts and the timer](/documentation/mips/interrupts) chapter shows interrupts.
+running. The examples on this page demonstrate synchronous exceptions. See
+[Interrupts and the timer](/documentation/mips/interrupts) for device interrupts.
 
 A **trap** is not another name for `syscall`. MIPS has conditional trap instructions, such as `teq`,
 that raise an exception when their condition is true. In this Playground, a valid, supported

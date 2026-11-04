@@ -1,10 +1,10 @@
 ## What the Input controller is
 
-The Input controller lets a program read the keyboard and the mouse the way a game or a desktop needs them. The [keyboard registers](/documentation/{route}/screen#keyboard-and-display) give a program the characters someone types. The Input controller also gives it the keys that type nothing, such as the arrows, Shift and the function keys, the moment each key goes down and comes up, where the mouse pointer is, which buttons are held, and the wheel.
+The Input controller reports key presses and releases, held keys, mouse buttons, pointer position and wheel turns. Unlike the [keyboard registers](/documentation/{route}/screen#keyboard-and-display), which provide typed characters, it also reports keys such as the arrows, Shift and the function keys.
 
-It is a device this editor adds to {simulator}, as it adds the [Synth](/documentation/{route}/synth). Its registers are memory from `{base}`, right after the Synth's. {simulator} itself does not have it: there the same addresses read 0, so a program written for it still runs there, but it sees no keys and no mouse. The ID register tells the two apart.
+This editor adds the device to {simulator}, alongside the [Synth](/documentation/{route}/synth). Its memory registers start at `{base}`, after the Synth's. In {simulator} these addresses read 0 and provide no input. Check the ID register before using the controller, as the first program below does.
 
-The Input controller hears the keyboard and the mouse only while the **Screen** panel has the focus. Click the Screen to give it the focus. Every key then goes to the program, Escape included. Press **Shift+Tab**, or click outside the Screen, to give the keyboard back to the editor.
+Click the **Screen** panel to send keyboard and mouse input to the program. While the Screen has focus, keys go to the program, including Escape. Press **Shift+Tab**, or click outside the Screen, to return keyboard control to the editor. Losing focus releases all held keys and mouse buttons: their state bits clear and release events enter the queue. This also happens when the browser window loses focus.
 
 ## A first program {#first-program}
 
@@ -12,7 +12,7 @@ This program prints a letter for each arrow key you press, R, L, D or U, and end
 
 {firstExample}
 
-It does what every program using the Input controller does:
+The program uses three registers:
 
 1. It reads the ID register once, to make sure the Input controller is there.
 2. It reads **Status**, which says how many events are waiting. If there are none, it sleeps for 16 milliseconds and looks again.
@@ -20,78 +20,86 @@ It does what every program using the Input controller does:
 
 ## The registers {#registers}
 
-Each register is a word at an offset from `{base}`. Read them with `lw`.
+Offsets below are from `{base}`. Each register is one 32-bit word, except **Keys**, which occupies 32 bytes. Read registers with `lw`. Read individual bytes of Keys with `lbu`.
 
 {registerTable}
 
-Any read of Event takes the event it returns, even a read of a single byte of it with `lbu`, so read it once with `lw` and keep the word in a register. Reading the other registers takes nothing.
+Status normally ranges from 0 to {depth}, the queue's capacity. Undo can restore additional events, so Status can exceed {depth}. It reports at most 127, even if more events are waiting.
 
-Writing to these registers changes nothing: the Input controller writes its values back at once. Only one write matters. Storing a value with bit 1 of Control set, which would ask for interrupts, stops the program with an error, because the Input controller does not interrupt the program. Poll Status instead.
+**Reading Event removes an event.** Even a byte read with `lbu` removes it. Read it once with `lw` and keep the result. Reads of the other registers remove nothing.
+
+Writes do not change the controller's state or the values later reads return. One write causes an error: setting bit 1 of Control stops the program, because this controller does not support interrupts. Leave that bit clear and poll Status.
 
 ## Events {#events}
 
-Every key press, key release, button press and turn of the wheel becomes one **event**, a single word. Events wait in a queue, oldest first, until the program reads them. Two key presses between two reads are both kept, in the order they happened.
+Key presses, repeats and releases, mouse button presses and releases, and wheel turns produce **events**, one word each. Events wait in a queue, oldest first. Two key presses between reads are both kept in order, unless the queue is full.
 
 {fieldTable}
 
-Bit 31 is always 0, so an event is never a negative number. That keeps `srl` and `sra` giving the same fields.
+Bit 31 of an Event word is always 0. Logical and arithmetic right shifts therefore give the same result when extracting its fields.
 
 {kindTable}
 
-- **A key's code** is its USB HID number, the code a USB keyboard sends for that key. It names the key's place on the keyboard rather than the character printed on it, so the key left of D is `KeyS` (`0x16`) on every layout. The table [at the end](#key-codes) lists every key.
-- **Holding a key** sends one key-down event, then key-repeat events at the speed the key repeats while typing, then one key-up event when it is released. A program that moves something for as long as a key is held reads the [keys held now](#key-state) instead of counting repeats.
+- **A key's code** is its USB HID number. It identifies a keyboard position rather than a character: the key left of D is `KeyS` (`0x16`) on every layout. The table [at the end](#key-codes) lists the supported keys.
+- **Holding a key** sends one key-down event, then repeats at the keyboard's typing repeat rate, then one key-up event on release. To move something while a key is held, read the [keys held now](#key-state) instead of counting repeats.
 - **A button's code** is 1 for the left button, 2 for the right and 3 for the middle one.
-- **The wheel's code** is a signed number of notches: positive when the wheel turns away from you, negative towards you. Turns that come quickly one after another are added into one event.
+- **The wheel's code** is a signed number of notches: positive away from you, negative towards you. Consecutive unread wheel turns in the same direction merge into one event while their sum fits from −127 to 127. The merged event uses the latest pointer position.
 - **Every event carries the pointer's position** at the moment it happened, so a click event says where the click was.
 
 Taking an event apart:
 
 {decodeExample}
 
+{decodeNote}
+
 ## Keys held now {#key-state}
 
-From offset `0x20`, 32 bytes hold one bit for every key code: the bit is 1 while that key is held down. For key code `k`, look at byte `0x20 + k / 8`, bit `k % 8`. Reading these bytes takes nothing, so a program can read them as often as it likes, with `lbu` or `lw`.
+From offset `0x20`, 32 bytes hold one bit per key code. A bit is 1 while its key is held. For code `k`, read byte `0x20 + k / 8`, bit `k % 8`, using integer division. Reads with `lbu` or `lw` leave the state unchanged.
 
 This checks whether the left arrow, code `0x50`, is held. `0x50 / 8` is 10 and `0x50 % 8` is 0, so the bit is bit 0 of the byte at offset `0x20 + 10`:
 
 {keyStateExample}
 
-A game usually reads the keys it cares about once a frame like this, and reads events only for single presses such as Escape. The keys held and the events can disagree for a moment: a key that went down and up between two frames is not held at either frame, but its two events are in the queue.
+A game can read held keys once per frame and use events for single presses such as Escape. The two views answer different questions: a key pressed and released between frames is no longer held, but both events remain queued.
 
 ## The pointer {#pointer}
 
-The Pointer register says where the mouse pointer is and which buttons are held, in one word: y in bits 30–21, x in bits 20–11, and in bits 2–0 the buttons held, bit 0 left, bit 1 right and bit 2 middle.
+The Pointer word holds y in bits 30–21, x in bits 20–11, and held buttons in bits 2–0: bit 0 left, bit 1 right and bit 2 middle.
 
-x and y count words of the [bitmap display](/documentation/{route}/screen#bitmap-display), from 0 at the top left, so the word under the pointer is word `y × columns + x` of the display, where `columns` is the number of words across. They never leave the display: dragging past an edge stops at the last word. The pointer moves only the Pointer register; it puts no events in the queue.
+x and y count words of the [bitmap display](/documentation/{route}/screen#bitmap-display), from 0 at the top left. The word under the pointer is `y × columns + x`, where `columns` is the display's width in words. Dragging past an edge keeps the coordinates at the last word. Pointer movement updates this register without queuing an event.
 
 ## Waiting for input {#waiting}
 
-There is no register that waits for a key. A program with nothing to do sleeps with service 32 for a few milliseconds, then reads Status again, as the first program does. Sleeping costs no instructions. A loop that only reads Status without sleeping would run millions of instructions a second, reach the instruction limit, and fill the Undo history with them.
+To wait for input, sleep for a few milliseconds with service 32, then read Status again, as the first program does. Sleeping costs no instructions. Polling continuously uses instructions, fills the Undo history and can reach the instruction limit.
 
 ## When the queue is full {#full-queue}
 
-The queue holds {depth} events. A program that does not read events for a long while can miss some: once the queue is full, new events are thrown away. The next event that fits is preceded by a **dropped** event, kind 7, which says that events were lost there. After a dropped event, read the keys held and the Pointer register again rather than trusting what the lost events would have said.
+The normal queue holds {depth} events, including any **dropped** markers. When it is full, new events are lost. Once space becomes available, a later arriving event first adds a dropped marker, kind 7. If only one slot is free, the marker fills it and that arriving event is lost too. Reading events alone does not add a marker.
+
+On receiving a dropped marker, read Keys and Pointer to recover the current state. Held-key and button state still updates when events are lost. Undo can temporarily restore more than {depth} events, as explained [below](#undo).
 
 ## Typed characters and keys {#typed-characters}
 
-Every key pressed on the Screen goes to both places at once: to the [keyboard registers](/documentation/{route}/screen#keyboard-and-display) at `{receiver}` as a typed character, and to the Input controller as a key. Use each for what it is good at:
+A press that produces a character feeds both the [keyboard registers](/documentation/{route}/screen#keyboard-and-display) at `{receiver}` and the Input controller. Non-character keys, such as arrows and Shift, and key releases feed only the Input controller.
 
-- **The keyboard registers** for text. They give the character the key typed on the person's own keyboard layout, Shift and AltGr included, and also what is pasted and a Testcase's input.
-- **The Input controller** for keys. It reports which key it was, not which character: a program that wants text from it has to turn key codes into characters itself.
+- Use **the keyboard registers** for text. They provide characters in the user's keyboard layout, including Shift and AltGr combinations, pasted text and Testcase input.
+- Use **the Input controller** for keys. It provides physical key codes. A program using it for text must convert those codes into characters itself.
 
-A program that reads only the Input controller leaves its typed characters waiting in the keyboard registers. If it later asks "press any key" through the keyboard registers, or reads a character with a service, it finds the old keys first. Read the receiver data register until its Ready bit is clear before such a read.
+The two queues are separate. Reading the Input controller leaves typed characters waiting in the keyboard receiver. A later character read, including a read through a service, gets those old characters first. To discard them, read receiver data until the receiver's Ready bit is clear.
 
 Escape types character 27 at the keyboard registers.
 
 ## When the Input controller hears nothing {#hears-nothing}
 
-- **Before the program starts and after it ends.** The Input controller hears input only from the program's first instruction until it ends, so the click that gives the Screen the focus before Run does not wait in the queue. A key already held when the program starts shows up at its next repeat, as a key-down event.
+- **Before the program starts and after it ends.** Input is accepted from the program's first instruction until it ends. A click that focuses the Screen before Run is not queued. A key already held when the program starts appears at its next repeat as a key-down event.
 - **In a Testcase.** A Testcase has no keyboard and no mouse: no events, no keys held, and the pointer at 0, 0. A Testcase's input still reaches the keyboard registers as typed lines.
 - **Under the bitmap display.** A display whose base address is `0xffff0000`, MARS's "memory map" base, can cover the Input controller's addresses. Its words are then pixels, and the Input controller writes none of them. Move the display, or make it smaller, to use both.
 
 ## Undo {#undo}
 
-Stepping back with **Undo** past an instruction that read Event puts that event back at the front of the queue, so running forward again reads it again. The keys held and the Pointer register always show what is held and where the pointer is now. After an Undo, the queue can therefore hold the key-down event of a key that is up now.
+**Undo** restores events removed by the instruction being undone, at the front of the queue and in their original order. Running forward can read them again. Restored events are kept even if the queue grows past {depth}. Status reports at most 127.
+
+Undo does not rewind held keys, held buttons or pointer position. Those registers show current input, so the restored queue may contain a key-down event for a key that is now released.
 
 ## From C {#from-c}
 

@@ -1,21 +1,23 @@
 ## Interrupts and the timer
 
-An **interrupt** makes the processor stop what the program is doing, between two instructions, and run a **handler** instead: a piece of code that deals with something that happened outside the program's own flow, such as a key being typed or a timer running out. When the handler is done, the program carries on from the instruction it was stopped at, as if nothing had happened.
+An **interrupt** makes the processor run a **handler** between two program instructions. The handler deals with a request, such as a typed character or a timer reaching its target. It then returns so the next program instruction can run.
 
 Four things can interrupt a RISC-V program here:
 
-| Source             | Turned on by                                            | `uie` bit | `ucause`     | `utval` |
-| ------------------ | ------------------------------------------------------- | --------- | ------------ | ------- |
-| The timer          | writing `timecmp`, at `0xffff0020`                      | 4         | `0x80000004` | `0x10`  |
-| The keyboard       | bit 1 of the receiver control register, `0xffff0000`    | 8         | `0x80000008` | `0x40`  |
-| The display        | bit 1 of the transmitter control register, `0xffff0008` | 8         | `0x80000008` | `0x80`  |
-| The program itself | `csrsi uip, 1`                                          | 0         | `0x80000000` | 0       |
+| Source             | Turned on by                                            | `uie` bit | `ucause` (RV32) | `utval` |
+| ------------------ | ------------------------------------------------------- | --------- | --------------- | ------- |
+| The timer          | writing `timecmp`, at `0xffff0020`                      | 4         | `0x80000004`    | `0x10`  |
+| The keyboard       | bit 1 of the receiver control register, `0xffff0000`    | 8         | `0x80000008`    | `0x40`  |
+| The display        | bit 1 of the transmitter control register, `0xffff0008` | 8         | `0x80000008`    | `0x80`  |
+| The program itself | `csrsi uip, 1`                                          | 0         | `0x80000000`    | 0       |
 
-The keyboard and the display are both **external** interrupts; `utval` tells them apart.
+The keyboard and display are both **external** interrupts. `utval` tells them apart. The table shows RV32 `ucause` values. On RV64, the interrupt flag is bit 63: the timer gives `0x8000000000000004` and an external interrupt gives `0x8000000000000008`.
 
 ## The handler {#handler}
 
-The control and status registers run the handler (see [Registers](/documentation/risc-v/registers#csr)). The program writes its handler's address into `utvec`, turns on the sources it wants in `uie`, and then turns interrupts on with bit 0 of `ustatus`, **UIE**:
+The processor runs the handler and records what happened in the control and status registers (see [Registers](/documentation/risc-v/registers#csr)). All enabled interrupt sources and exceptions share one handler. The examples below each handle one cause. A program using several must inspect `ucause` and, for external interrupts, `utval`.
+
+Write the handler's address to `utvec`, enable the required sources in `uie`, then set bit 0 of `ustatus`, **UIE**:
 
 ```riscv
         la      t0, handler
@@ -25,6 +27,8 @@ The control and status registers run the handler (see [Registers](/documentation
         csrsi   ustatus, 1      # interrupts on
 ```
 
+These examples use RARS operand order: `csrw t0, utvec` and `csrs t0, uie`. In assembly linked to C, use GNU order: `csrw utvec, t0` and `csrs uie, t0`. The immediate form `csrsi ustatus, 1` has the same order in both.
+
 When an interrupt is taken, the processor:
 
 1. puts the address of the instruction it stopped at in `uepc`; that instruction has not run yet;
@@ -32,16 +36,18 @@ When an interrupt is taken, the processor:
 3. copies UIE into UPIE, bit 4 of `ustatus`, and clears UIE, which holds every other interrupt back while the handler runs;
 4. jumps to the address in `utvec`.
 
-The handler ends with `uret`, which turns UIE back on and jumps to the address in `uepc`, so the stopped instruction runs next.
+End the handler with `uret`. It restores UIE from UPIE and returns to `uepc`. **Leave `uepc` unchanged after an interrupt:** it points to the next instruction, which has not run.
 
-An interrupt can arrive between any two instructions, so the handler must leave every register the program uses as it found it. In the small examples here, the main program leaves a few registers to the handler; a bigger handler saves the registers it uses, for example in memory it keeps for that, with `uscratch` holding a spare.
+The handler must restore every register the interrupted program uses. These examples reserve a few registers for their handlers. In a larger program, save the registers the handler needs in memory or on a separate handler stack. `uscratch` can hold a spare value while doing so.
 
 ## The timer {#timer}
 
-RARS's Timer Tool registers are built in: `time` at `0xffff0018` and `timecmp` at `0xffff0020`, 64 bits each, the low word first.
+RARS's Timer Tool registers are built in: `time` at `0xffff0018` and `timecmp` at `0xffff0020`. Each is 64 bits, with its low word at the lower address.
 
-- `time` is the milliseconds the program has run. It starts at 0 when the program starts, and it does not count while the program is stopped: at a Breakpoint, after Pause, or between two Steps.
-- Writing `timecmp` arms the timer. Once `time` reaches `timecmp`, the timer asks for **one** interrupt; to get another, write `timecmp` again, usually from the handler.
+- Memory-mapped `time` measures elapsed run time in milliseconds from 0. It stops while paused, at a Breakpoint and between Steps. It includes time spent waiting during a Run, such as in `wfi` or service 32.
+- Writing `timecmp` arms the timer. When `time` reaches it, the timer requests **one** interrupt. Write `timecmp` again, usually in the handler, to request another.
+
+The **`time` CSR is a different clock**. Like service 30, it returns calendar milliseconds since 1970-01-01 UTC. In an interactive run that clock continues while paused. Use memory-mapped `time`, or `sim_timer_now()` in C, to choose a `timecmp` target.
 
 This program asks for an interrupt every 100 milliseconds, counts five of them in its handler, and prints 5. Between interrupts it waits with `wfi`:
 
@@ -51,29 +57,31 @@ The main program leaves `t1`, `s0` and `s1` to the handler. The handler sets the
 
 ## Waiting with wfi {#wfi}
 
-`wfi`, wait for interrupt, waits until an interrupt that `uie` enables is asking: the timer reaching `timecmp`, with `uie` bit 4 set, or a key, with `uie` bit 8 set and the receiver's interrupt turned on. It returns at once when one is asking already. It does not take the interrupt itself: with UIE set, the interrupt is taken right after `wfi`; with UIE clear, the program just carries on after it.
+`wfi`, wait for interrupt, waits for an enabled source: the timer with `uie` bit 4 set, or a typed character with `uie` bit 8 and receiver interrupts enabled. If a request is already pending, it returns immediately. `wfi` does not enter the handler itself. With UIE set, the processor takes the interrupt after `wfi`. With UIE clear, execution continues after it.
 
-While it waits, the status line beside the Terminal says what can end the wait: "wfi waits for the timer", "for a key" or both. When nothing the program turned on can end it, the status line says so and the Log says what to turn on. Pause or Stop ends any wait, during a Step as during a Run, and after a Pause the program carries on after `wfi`.
+The status line beside the Terminal shows what can end the wait: "wfi waits for the timer", "for a key" or both. If no enabled source can end it, the status line says so and the Log explains what to enable. Pause or Stop also ends the wait, during Step or Run. Resuming after Pause continues after `wfi`.
 
-A program that waits for the timer with `wfi` costs nothing while it waits. A loop that keeps reading `time` instead runs millions of instructions for the same wait.
+Waiting in `wfi` uses no additional instructions. Polling memory-mapped `time` continuously uses instructions and can reach the instruction limit.
 
 ## Keyboard interrupts {#keyboard}
 
-Setting bit 1 of the receiver control register makes the keyboard ask for an interrupt whenever a typed character is waiting. The request stays for as long as a character waits, so the handler runs once for every key, including keys typed before the program turned the interrupt on. Reading the receiver data register takes the character and withdraws the request, if no other key is waiting.
+Set bit 1 of receiver control to request interrupts while typed characters are waiting. This includes characters queued before interrupts were enabled. Reading receiver data takes one character. The request clears only when no characters remain. A handler that reads one character per interrupt therefore runs once per queued character. Keys that type no character do not reach this receiver.
 
 This program echoes every key it is given, without polling, and ends at Enter. Click the Screen panel and type, or type in the Terminal, or run it as a Testcase whose input is a line of text:
 
 {keyboardExample}
 
-The display's interrupt works another way, as in RARS. With bit 1 of the transmitter control register set, the display asks for one interrupt each time it has taken a character and is ready for the next, which on this console is at once; `utval` is `0x80`. Setting the bit asks for nothing by itself: the program prints the first character, and the handler prints each next one. Once the handler prints nothing more, no more interrupts come, so the bit can stay set. Clearing it withdraws a request the handler has not taken yet.
+For display interrupts, set bit 1 of transmitter control. The display requests one interrupt after accepting each character, as in RARS. `utval` is `0x80`. This console accepts characters immediately. Enabling the bit alone requests nothing: the main program prints the first character, then the handler can print the next one. When the handler stops printing, the interrupts stop. Clearing the enable bit withdraws any request still pending.
 
 ## Exceptions {#exceptions}
 
-The same handler receives the program's **exceptions**, such as a misaligned `lw` or an instruction that does not exist, as long as UIE is set; without it, an exception stops the program, as in RARS. Then the top bit of `ucause` is clear, the rest is the exception's code, and `uepc` is the instruction that failed. This handler reports the code and ends the program, and prints 4, a misaligned load:
+With a handler installed and UIE set, **exceptions** also enter the handler. These include a misaligned `lw` or an illegal instruction. Without UIE, the simulator stops the program with an error, as in RARS. For an exception, the top bit of `ucause` is clear, the remaining bits hold its code, and `uepc` points to the failed instruction. This handler prints code 4, a misaligned load, then ends the program:
 
 {exceptionExample}
 
-A handler that lets the program go on instead adds 4 to `uepc` before `uret`, or the failing instruction would run, and fail, again. `ebreak` is not one of these exceptions: it stops the debugger, as a breakpoint does.
+After repairing the cause, leave `uepc` unchanged to retry the instruction with `uret`. To deliberately skip the failed instruction, add 4 to `uepc` before returning. Returning unchanged without repairing the cause usually repeats the same exception. After an interrupt, leave `uepc` unchanged so the pending program instruction runs.
+
+`ebreak` stops the debugger like a Breakpoint and does not enter this handler.
 
 ## Debugging a handler {#debugging}
 
@@ -81,14 +89,22 @@ A handler that lets the program go on instead adds 4 to `uepc` before `uret`, or
 - A Step on a `wfi` that waits waits as a Run does, until the timer or a key, and the Run button becomes Pause meanwhile: Pause ends the wait, and the Step ends after `wfi`.
 - **Breakpoints** and **Run to cursor** work inside the handler as anywhere else.
 - **Undo** steps back out of the handler to the instruction it interrupted, with `uepc`, `ucause`, `utval`, `ustatus` and `uip` as they were.
-- `time` does not move between Steps, so stepping through a program whose timer is set for 10 milliseconds does not land in the handler at every Step.
-- In a **Testcase** there is no real time: `time` moves only when the program waits, with `wfi` or [service 32](/documentation/risc-v/syscall#service-32), and a `wfi` moves it straight to `timecmp`, so the timer example above finishes at once. A `wfi` with no timer armed returns at once there, since the Testcase's input is all typed already. A program that loops reading `time` without ever waiting never sees it move, and runs into the instruction limit.
+- Memory-mapped `time` does not advance between Steps, so a timer set for 10 milliseconds does not interrupt at every Step. The calendar clock read by the `time` CSR continues to advance in interactive use.
+- In a **Testcase**, memory-mapped `time` starts at 0 and advances through virtual waits. With the timer enabled and armed, `wfi` advances it to `timecmp`, so the timer example finishes immediately. [Service 32](/documentation/risc-v/syscall#service-32) also advances it. The `time` CSR reads 2000-01-01 UTC plus those elapsed milliseconds. A `wfi` with no timer armed returns immediately in a Testcase, whose input is already supplied. A loop that only reads either clock never advances virtual time and can reach the instruction limit.
 
 To step through the main program without landing in the handler, turn the source off while debugging, as developers do on real machines.
 
 ## From C {#from-c}
 
-`<sim.h>` reads the timer with `sim_timer_now()` and arms it with `sim_timer_set(when)`, and names its registers `SIM_TIME_LOW`, `SIM_TIME_HIGH`, `SIM_TIMECMP_LOW` and `SIM_TIMECMP_HIGH`. The handler itself is assembly: put it in a `.s` file and store its address in `utvec` at run time. That file is GNU syntax, the syntax C compiles to, which names the CSR first: `csrw utvec, t0`, where RARS's own syntax above writes `csrw t0, utvec`.
+`<sim.h>` provides `sim_timer_now()` to read elapsed run time and `sim_timer_set(when)` to arm the timer. It names the memory registers `SIM_TIME_LOW`, `SIM_TIME_HIGH`, `SIM_TIMECMP_LOW` and `SIM_TIMECMP_HIGH`.
+
+Write the handler and a setup function in a `.s` File. Linked assembly uses **GNU** CSR order, as explained above. To install a timer handler from C:
+
+1. Define the handler in `.text`, ending with `uret`. It must save and restore the registers the interrupted C code may use. The registers reserved by these small assembly examples are not reserved in compiled C.
+2. In the same File, define a global setup function with `.globl install_handler` and the label `install_handler:`. Have it execute `la t0, handler`, `csrw utvec, t0`, `li t0, 0x10`, `csrs uie, t0`, `csrsi ustatus, 1`, then `ret`. This installs the address and enables the timer source and interrupts.
+3. In C, declare `void install_handler(void);`. In `main`, call `sim_timer_set(sim_timer_now() + 100)` to arm the timer, then `install_handler()` to enable delivery. The reference to `install_handler` makes Build link its File (see [Linking assembly Files](/documentation/risc-v/using-c#linking-project-files)).
+
+The handler must schedule each later tick with a new `timecmp` value. Keyboard and display interrupts use the same handler, so dispatch on `ucause` and `utval` if you enable them too.
 
 ## Compared with RARS {#compatibility}
 

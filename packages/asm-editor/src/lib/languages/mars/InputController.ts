@@ -214,9 +214,9 @@ export class InputController {
         if (fromProgram && (control & INPUT_INTERRUPT_ENABLE_BIT) !== 0) {
             const address = (this.base + INPUT_CONTROL) >>> 0
             throw new Error(
-                `The Input controller does not raise interrupts: the program set the interrupt-enable bit ` +
-                    `(bit 1) of its control register at 0x${address.toString(16)}, which is reserved. ` +
-                    `Poll the Status register instead.`
+                `The Input controller does not raise interrupts. The program set bit 1 of its ` +
+                    `Control register at 0x${address.toString(16)}, which is reserved. ` +
+                    `Leave this bit clear and poll the Status register for events.`
             )
         }
     }

@@ -40,11 +40,10 @@ function registerTable(): string {
     return [
         '| Offset | Register | In C | Access | What it holds |',
         '| --- | --- | --- | --- | --- |',
-        ...INPUT_REGISTERS.map(
-            (register) =>
-                `| \`${hex(register.offset)}\` | ${register.name[0]}${register.name.slice(1).toLowerCase()} | \`SIM_INPUT_${register.name}\` | ${ACCESS[register.access]} | ${register.description} |`
-        ),
-        '| `0x14`–`0x1F` | Reserved | | | 0, kept for later |'
+        ...INPUT_REGISTERS.flatMap((register) => [
+            ...(register.name === 'KEYS' ? ['| `0x14`–`0x1F` | Reserved | | | Reads 0 |'] : []),
+            `| \`${hex(register.offset)}\` | ${register.name[0]}${register.name.slice(1).toLowerCase()} | \`SIM_INPUT_${register.name}\` | ${ACCESS[register.access]} | ${register.description} |`
+        ])
     ].join('\n')
 }
 
@@ -255,7 +254,13 @@ int main(void) {
 
 const RISCV64_NOTES = `## On RISC-V 64 {#risc-v-64}
 
-The same programs run on RISC-V 64, with the same addresses: \`li s0, 0xffff0300\` reaches the registers there too. \`lw\` fills the upper half of a 64-bit register with copies of bit 31, and bit 31 of every Input controller word is 0, so \`lw\` gives the same value as on RISC-V 32. Read Event with \`lw\`, not \`ld\`: an \`ld\` that covers the Event register takes an event too, and then its Status half already counts one event fewer. In C, \`unsigned\` is 32 bits on both, so the \`SIM_INPUT_\` macros give the same results.
+The register addresses and layouts are the same on RV32 and RV64: \`li s0, 0xffff0300\` reaches the controller on either target. The first program and the held-key example work on both.
+
+\`lw\` sign-extends a word on RV64. Bit 31 is clear in Id, Control, Status, Event and Pointer, so those reads have the same value on both targets. Words in the Keys bitmap can have bit 31 set. Use \`lbu\` for a key byte, or mask the bit you need after a word read.
+
+The wheel decoder above uses 32-bit shifts. On RV64, replace its last two instructions with \`slli t5, t0, 56\` followed by \`srai t5, t5, 56\`. This moves the wheel code's sign bit, bit 7, into bit 63 before shifting it back. The shifts by 24 shown above are for RV32.
+
+Read Event with \`lw\`. An \`ld\` spanning Status and Event also removes an event, and its Status half already counts one fewer. In C, \`unsigned\` is 32 bits on both targets, so the \`SIM_INPUT_\` macros, including \`SIM_INPUT_WHEEL_NOTCHES\`, work on both.
 
 `
 
@@ -277,6 +282,10 @@ export function inputControllerEntries(
         fieldTable: fieldTable(),
         kindTable: kindTable(),
         decodeExample: asm(variant, DECODE_EXAMPLE[variant]),
+        decodeNote:
+            variant === 'RISC-V'
+                ? 'The last two instructions sign-extend the wheel code on **RV32**. On **RV64**, use `slli t5, t0, 56` followed by `srai t5, t5, 56`, as explained [below](#risc-v-64).'
+                : '',
         keyStateExample: asm(variant, KEY_STATE_EXAMPLE[variant]),
         cExample: fence('c', C_EXAMPLE),
         riscv64: variant === 'RISC-V' ? RISCV64_NOTES : '',

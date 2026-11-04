@@ -28,8 +28,8 @@
         onClose={() => (menu = null)}
         items={[
             { label: 'Copy link', onSelect: () => onShare() },
-            { label: 'Copy link with Build', onSelect: () => onShare('build') },
-            { label: 'Copy link with Build and Run', onSelect: () => onShare('buildAndRun') }
+            { label: 'Copy link to build on open', onSelect: () => onShare('build') },
+            { label: 'Copy link to build and run on open', onSelect: () => onShare('buildAndRun') }
         ]}
     />
 {/if}

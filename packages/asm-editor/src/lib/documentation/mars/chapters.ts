@@ -187,7 +187,7 @@ export function marsChapters<F extends MarsForm>(documentation: MarsDocumentatio
             title: 'Interrupts and the timer',
             href: `${base}/interrupts`,
             description:
-                'Run a handler when the timer runs out or a key is typed, instead of polling, and step through it.',
+                'Handle timer and keyboard interrupts, and step through an interrupt handler.',
             entries: interruptsEntries(variant, language, `${base}/interrupts`)
         },
         {
@@ -205,7 +205,7 @@ export function marsChapters<F extends MarsForm>(documentation: MarsDocumentatio
             title: 'Input controller',
             href: `${base}/input-controller`,
             description:
-                'Read the keys held, key and button events, the mouse pointer and the wheel through memory registers, for games and programs that need more than typed characters.',
+                'Read held keys, key presses and releases, mouse buttons, pointer position and wheel events through memory registers.',
             entries: inputControllerEntries(variant, language, `${base}/input-controller`)
         },
         {
@@ -213,8 +213,7 @@ export function marsChapters<F extends MarsForm>(documentation: MarsDocumentatio
             language,
             title: 'MIDI and sampled audio',
             href: `${base}/midi-and-audio`,
-            description:
-                'Stream sound through memory registers: MIDI messages to a General MIDI synthesizer, and samples a program computes to a sampled-audio output.',
+            description: 'Play MIDI notes and stream audio samples through memory registers.',
             entries: soundDeviceEntries(variant, language, `${base}/midi-and-audio`)
         },
         runtimeLibraryChapter({

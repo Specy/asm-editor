@@ -263,7 +263,9 @@ int main(void) {
 
 const RISCV64_NOTES = `## On RISC-V 64 {#risc-v-64}
 
-The same programs run on RISC-V 64, with the same addresses: \`li s0, 0xffff0340\` reaches the MIDI port there too. \`lw\` fills the upper half of a 64-bit register with copies of bit 31, and no register of either device ever has bit 31 set, so \`lw\` gives the same value as on RISC-V 32. Write Data with \`sw\`, not \`sd\`: an \`sd\` writes two registers at once. In C, \`unsigned\` is 32 bits on both, so the \`SIM_MIDI_\` and \`SIM_PCM_\` macros give the same results.
+These programs also run on RV64. The addresses are unchanged: \`li s0, 0xffff0340\` reaches the MIDI port on either target. The readable registers have bit 31 clear, so \`lw\` gives the same values on RV32 and RV64 despite sign extension.
+
+Keep word writes as \`sw\`: \`sd\` writes eight bytes and can affect two registers. The MIDI port also accepts \`sb\`, as in the first example. In C, \`unsigned\` is 32 bits on both targets, so the \`SIM_MIDI_\` and \`SIM_PCM_\` macros give the same results.
 `
 
 const SIMULATOR: Record<Variant, string> = { MIPS: 'MARS', 'RISC-V': 'RARS' }

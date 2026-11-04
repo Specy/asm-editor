@@ -77,12 +77,12 @@ const SIXTEEN_BITS = 32768
 
 const DATA_ADDRESS = `0x${(PCM_BASE + PCM_DATA).toString(16)}`
 const OFF_NOTE =
-    `Samples were dropped: the sampled-audio output was off. ` +
-    `Turn it on with bit 0 of its Control register, 0x${(PCM_BASE + PCM_CONTROL).toString(16)}, before writing samples.`
+    `Samples were dropped because the sampled-audio output was off. ` +
+    `Set bit 0 of the Control register at 0x${(PCM_BASE + PCM_CONTROL).toString(16)} before writing samples.`
 const FULL_NOTE =
-    `Samples were dropped: the sampled-audio output's FIFO was full. ` +
-    `Write only as many frames as its Free register, 0x${(PCM_BASE + PCM_FREE).toString(16)}, says it can take.`
-const PARTIAL_NOTE = `The sampled-audio output's Data register, ${DATA_ADDRESS}, takes whole words: write samples with sw.`
+    `Samples were dropped because the sampled-audio buffer was full. ` +
+    `Read the Free register at 0x${(PCM_BASE + PCM_FREE).toString(16)} before writing, and write no more than that many frames.`
+const PARTIAL_NOTE = `The sampled-audio Data register at ${DATA_ADDRESS} requires a whole word. Use sw to write samples.`
 
 export class SampledAudioDevice {
     private readonly host: SoundDeviceHost

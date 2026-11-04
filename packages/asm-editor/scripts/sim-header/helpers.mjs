@@ -49,7 +49,7 @@ export const RISCV_TIMER_HELPERS = [
         returns: { type: 'unsigned long long' },
         parameters: [],
         summary:
-            'Returns the timer register time: the milliseconds the program has run, from 0 at the start of the run, not counting time stopped at a breakpoint or between steps.',
+            'Returns elapsed program time in milliseconds, starting at 0. Time stops while paused, at breakpoints and between steps.',
         body: () =>
             [
                 'unsigned high, low;',
@@ -65,7 +65,7 @@ export const RISCV_TIMER_HELPERS = [
         returns: { type: 'void' },
         parameters: [{ type: 'unsigned long long', name: 'when' }],
         summary:
-            'Sets timecmp, arming the timer: once time reaches when, one timer interrupt is requested. Enable it with uie bit 4 and ustatus bit 0, and set utvec to the handler.',
+            'Sets timecmp to request one timer interrupt when time reaches when. Set utvec to the handler and enable interrupts with bit 4 of uie and bit 0 of ustatus.',
         body: () =>
             [
                 'SIM_TIMECMP_LOW = 0xffffffffu; /* never earlier than when, while the high word changes */',
@@ -81,8 +81,7 @@ export const MIPS_TIMER_HELPERS = [
         name: 'sim_cp0_count',
         returns: { type: 'unsigned' },
         parameters: [],
-        summary:
-            'Returns CP0 Count ($9), which goes up once every two instructions the program runs.',
+        summary: 'Returns CP0 Count ($9), which increases by one every two instructions.',
         body: () =>
             'unsigned value;\n    __asm__ volatile("mfc0 %0, $9" : "=r"(value));\n    return value;'
     },
@@ -90,7 +89,7 @@ export const MIPS_TIMER_HELPERS = [
         name: 'sim_cp0_set_count',
         returns: { type: 'void' },
         parameters: [{ type: 'unsigned', name: 'value' }],
-        summary: 'Sets CP0 Count ($9), which counts on from value.',
+        summary: 'Sets CP0 Count ($9) to value. Counting continues from that value.',
         body: () => '__asm__ volatile("mtc0 %0, $9" : : "r"(value));'
     },
     {
@@ -106,7 +105,7 @@ export const MIPS_TIMER_HELPERS = [
         returns: { type: 'void' },
         parameters: [{ type: 'unsigned', name: 'value' }],
         summary:
-            'Sets CP0 Compare ($11): the timer interrupt (Cause bit 15) is requested when Count becomes value. Writing it also clears a pending timer interrupt, and the first write turns the timer on.',
+            'Sets CP0 Compare ($11). The timer requests an interrupt (Cause bit 15) when Count reaches value. Writing Compare clears a pending timer interrupt. The first write enables the timer.',
         body: () => '__asm__ volatile("mtc0 %0, $11" : : "r"(value));'
     }
 ]
@@ -133,7 +132,7 @@ export const LINK_MACRO = {
     name: 'SIM_LINK',
     parameters: ['name'],
     summary:
-        'Links the assembly File that defines the global name, which the program never calls, such as an exception handler. Use outside functions.'
+        'Links the assembly file that defines name, even if the program does not reference it. Use outside functions, for example to include an exception handler.'
 }
 
 /** The Synth's three helpers; everything else is a register a program writes through `SIM_SYNTH8` or `SIM_SYNTH16`. */
@@ -192,7 +191,7 @@ export const INPUT_HELPERS = [
         returns: { type: 'int' },
         parameters: [],
         summary:
-            'Returns nonzero if the Input controller is there: its ID register reads "INP". In MARS and RARS it reads 0.',
+            'Returns nonzero if the Input controller is available, identified by "INP" in its ID register. Returns 0 in MARS and RARS.',
         body: () => 'return (SIM_INPUT_ID >> 8) == 0x494e50u;'
     },
     {
@@ -200,7 +199,7 @@ export const INPUT_HELPERS = [
         returns: { type: 'unsigned' },
         parameters: [],
         summary:
-            'Returns how many events wait in the queue, from the Status register. Reading it takes nothing.',
+            'Returns the number of queued events from the Status register. Does not remove events.',
         body: () => 'return SIM_INPUT_STATUS & 0x7fu;'
     },
     {
@@ -208,14 +207,15 @@ export const INPUT_HELPERS = [
         returns: { type: 'unsigned' },
         parameters: [],
         summary:
-            'Takes the oldest event out of the queue and returns it, or 0 when the queue is empty. Read its fields with SIM_INPUT_KIND and SIM_INPUT_CODE.',
+            'Removes and returns the oldest queued event, or 0 if the queue is empty. Decode it with SIM_INPUT_KIND and SIM_INPUT_CODE.',
         body: () => 'return SIM_INPUT_EVENT;'
     },
     {
         name: 'sim_input_key_down',
         returns: { type: 'int' },
         parameters: [{ type: 'unsigned', name: 'usage' }],
-        summary: 'Returns nonzero if the key with this HID usage, a SIM_KEY_ name, is held now.',
+        summary:
+            'Returns nonzero if the key is held. Pass its HID usage code, such as SIM_KEY_ARROW_LEFT.',
         body: () => 'return (int)((SIM_INPUT_KEYS[(usage & 0xffu) >> 3] >> (usage & 7u)) & 1u);'
     },
     {
@@ -223,7 +223,7 @@ export const INPUT_HELPERS = [
         returns: { type: 'unsigned' },
         parameters: [],
         summary:
-            'Returns the pointer register: read it with SIM_INPUT_X, SIM_INPUT_Y and SIM_INPUT_BUTTONS.',
+            'Returns the pointer position and held mouse buttons. Decode the value with SIM_INPUT_X, SIM_INPUT_Y and SIM_INPUT_BUTTONS.',
         body: () => 'return SIM_INPUT_POINTER;'
     }
 ]
@@ -238,7 +238,7 @@ export const MIDI_HELPERS = [
         returns: { type: 'int' },
         parameters: [],
         summary:
-            'Returns nonzero if the MIDI port is there: bit 7 of its Status register is always set. In MARS and RARS it reads 0.',
+            'Returns nonzero if the MIDI port is available, detected by bit 7 of Status. Returns 0 in MARS and RARS.',
         body: () => 'return (SIM_MIDI_STATUS & SIM_MIDI_NO_INPUT) != 0;'
     },
     {
@@ -246,7 +246,7 @@ export const MIDI_HELPERS = [
         returns: { type: 'void' },
         parameters: [{ type: 'unsigned', name: 'byte' }],
         summary:
-            'Sends one MIDI byte, once the port can take it: waits while bit 6 of Status says the port is busy, as a byte written then would be dropped.',
+            'Waits until the MIDI port has room, then sends one byte. Checks bit 6 of Status to avoid dropping the byte.',
         body: () =>
             'while (SIM_MIDI_STATUS & SIM_MIDI_BUSY) {\n    }\n    SIM_MIDI_DATA = byte & 0xffu;'
     }
@@ -262,7 +262,7 @@ export const PCM_HELPERS = [
         returns: { type: 'int' },
         parameters: [],
         summary:
-            'Returns nonzero if the sampled-audio output is there: its Rate register is never 0. In MARS and RARS it reads 0.',
+            'Returns nonzero if the sampled-audio output is available, detected by a nonzero Rate register. Returns 0 in MARS and RARS.',
         body: () => 'return SIM_PCM_RATE != 0;'
     },
     {
@@ -273,7 +273,7 @@ export const PCM_HELPERS = [
             { type: 'int', name: 'stereo' }
         ],
         summary:
-            'Sets the rate in samples a second, 4,000 to 48,000, and turns the output on, in stereo or in mono. Changing either while samples wait drops them.',
+            'Sets the rate to 4,000–48,000 frames per second and enables mono or stereo output. Changing the rate or stereo setting discards queued samples.',
         body: () =>
             'SIM_PCM_RATE = rate;\n    SIM_PCM_CONTROL = SIM_PCM_ON | (stereo ? SIM_PCM_STEREO : 0u);'
     },
@@ -282,7 +282,7 @@ export const PCM_HELPERS = [
         returns: { type: 'unsigned' },
         parameters: [],
         summary:
-            'Returns how many frames the FIFO can take now, from the Free register; in mono always even, as a word holds two.',
+            'Returns the number of frames the audio buffer can accept, from the Free register. Always even in mono, where each word holds two frames.',
         body: () => 'return SIM_PCM_FREE;'
     },
     {
@@ -293,7 +293,7 @@ export const PCM_HELPERS = [
             { type: 'int', name: 'second' }
         ],
         summary:
-            'Writes two samples, -32768 to 32767, once the FIFO has room for them: in mono two in a row, in stereo the left and the right of one frame.',
+            'Waits for buffer space, then writes two signed 16-bit samples (-32768 to 32767). In mono they play in sequence. In stereo they form one frame, left then right.',
         body: () =>
             'while (SIM_PCM_FREE == 0) {\n    }\n    SIM_PCM_DATA = ((unsigned)first & 0xffffu) | ((unsigned)second << 16);'
     }

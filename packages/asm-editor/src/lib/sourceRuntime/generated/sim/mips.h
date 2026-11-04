@@ -112,7 +112,7 @@ static inline int sim_read_char(void) {
     return v0;
 }
 
-/** Open file, service 13. Takes $a0, address of NUL-terminated UTF-8 path; $a1, flags; $a2, mode. Returns $v0, contains file descriptor (-1 if error). */
+/** Open file, service 13. Takes $a0, address of NUL-terminated UTF-8 path; $a1, flags; $a2, mode (ignored, pass 0). Returns $v0, file or folder descriptor, or -1 on failure. */
 static inline int sim_open(const char *path, int flags, int mode) {
     register int v0 __asm__("$2") = 13;
     register const char *a0 __asm__("$4") = path;
@@ -122,7 +122,7 @@ static inline int sim_open(const char *path, int flags, int mode) {
     return v0;
 }
 
-/** Read from file, service 14. Takes $a0, file descriptor; $a1, address of input buffer; $a2, maximum number of bytes to read. Returns $v0, contains number of bytes read (0 if end-of-file, -1 if error). */
+/** Read from file, service 14. Takes $a0, file descriptor; $a1, address of the buffer to fill; $a2, maximum number of bytes to read. Returns $v0, number of bytes read, 0 at end of file or input, or -1 on failure. */
 static inline int sim_read(int fd, void *buffer, int length) {
     register int v0 __asm__("$2") = 14;
     register int a0 __asm__("$4") = fd;
@@ -132,7 +132,7 @@ static inline int sim_read(int fd, void *buffer, int length) {
     return v0;
 }
 
-/** Write to file, service 15. Takes $a0, file descriptor; $a1, address of output buffer; $a2, number of bytes to write. Returns $v0, contains number of bytes written (-1 if error). */
+/** Write to file, service 15. Takes $a0, file descriptor; $a1, address of the bytes to write; $a2, number of bytes to write. Returns $v0, number of bytes written, or -1 on failure. */
 static inline int sim_write(int fd, const void *buffer, int length) {
     register int v0 __asm__("$2") = 15;
     register int a0 __asm__("$4") = fd;
@@ -142,7 +142,7 @@ static inline int sim_write(int fd, const void *buffer, int length) {
     return v0;
 }
 
-/** Close file, service 16. Takes $a0, file descriptor. */
+/** Close file, service 16. Takes $a0, file or folder descriptor to close. */
 static inline void sim_close(int fd) {
     register int v0 __asm__("$2") = 16;
     register int a0 __asm__("$4") = fd;
@@ -360,7 +360,7 @@ static inline int sim_lseek(int fd, int offset, int whence) {
     return v0;
 }
 
-/** Unlink (delete a file), service 1026. Takes $a0, address of NUL-terminated UTF-8 path of the file to delete. Returns $v0, contains 0 if the file was deleted, or a negative error number. */
+/** Unlink (delete a file), service 1026. Takes $a0, address of NUL-terminated UTF-8 path of the file to delete. Returns $v0, 0 on success, or a negative error number. */
 static inline int sim_unlink(const char *path) {
     register int v0 __asm__("$2") = 1026;
     register const char *a0 __asm__("$4") = path;
@@ -368,7 +368,7 @@ static inline int sim_unlink(const char *path) {
     return v0;
 }
 
-/** Mkdir (make a folder), service 1030. Takes $a0, address of NUL-terminated UTF-8 path of the new folder. Returns $v0, contains 0 if the folder was made, or a negative error number. */
+/** Mkdir (make a folder), service 1030. Takes $a0, address of NUL-terminated UTF-8 path of the new folder. Returns $v0, 0 on success, or a negative error number. */
 static inline int sim_mkdir(const char *path) {
     register int v0 __asm__("$2") = 1030;
     register const char *a0 __asm__("$4") = path;
@@ -376,7 +376,7 @@ static inline int sim_mkdir(const char *path) {
     return v0;
 }
 
-/** Rmdir (delete an empty folder), service 1031. Takes $a0, address of NUL-terminated UTF-8 path of the folder to delete. Returns $v0, contains 0 if the folder was deleted, or a negative error number. */
+/** Rmdir (delete an empty folder), service 1031. Takes $a0, address of NUL-terminated UTF-8 path of the folder to delete. Returns $v0, 0 on success, or a negative error number. */
 static inline int sim_rmdir(const char *path) {
     register int v0 __asm__("$2") = 1031;
     register const char *a0 __asm__("$4") = path;
@@ -384,7 +384,7 @@ static inline int sim_rmdir(const char *path) {
     return v0;
 }
 
-/** Rename (rename or move a file), service 1034. Takes $a0, address of NUL-terminated UTF-8 path of the file; $a1, address of NUL-terminated UTF-8 path it moves to. Returns $v0, contains 0 if the file was renamed, or a negative error number. */
+/** Rename (rename or move a file), service 1034. Takes $a0, address of NUL-terminated UTF-8 path of the file; $a1, address of the NUL-terminated UTF-8 destination path. Returns $v0, 0 on success, or a negative error number. */
 static inline int sim_rename(const char *from, const char *to) {
     register int v0 __asm__("$2") = 1034;
     register const char *a0 __asm__("$4") = from;
@@ -393,7 +393,7 @@ static inline int sim_rename(const char *from, const char *to) {
     return v0;
 }
 
-/** Stat (describe a path), service 1038. Takes $a0, address of NUL-terminated UTF-8 path; $a1, address of a buffer of 104 bytes, which the service fills. Returns $v0, contains 0 if the buffer was filled, or a negative error number. */
+/** Stat (describe a path), service 1038. Takes $a0, address of NUL-terminated UTF-8 path; $a1, address of a buffer of 104 bytes, which the service fills. Returns $v0, 0 on success, or a negative error number. */
 static inline int sim_stat(const char *path, void *buffer) {
     register int v0 __asm__("$2") = 1038;
     register const char *a0 __asm__("$4") = path;
@@ -402,7 +402,7 @@ static inline int sim_stat(const char *path, void *buffer) {
     return v0;
 }
 
-/** Getdents (list a folder), service 1065. Takes $a0, file descriptor of a folder, opened with service 13 and flag 0; $a1, address of the buffer to fill; $a2, size of the buffer in bytes. Returns $v0, contains the number of bytes stored, 0 once every entry has been listed, or a negative error number. */
+/** Getdents (list a folder), service 1065. Takes $a0, file descriptor of a folder, opened with service 13 and flag 0; $a1, address of the buffer to fill; $a2, size of the buffer in bytes. Returns $v0, number of bytes stored, 0 at the end of the listing, or a negative error number. */
 static inline int sim_getdents(int fd, void *buffer, int length) {
     register int v0 __asm__("$2") = 1065;
     register int a0 __asm__("$4") = fd;
@@ -445,14 +445,14 @@ static inline void sim_display_write(int character) {
  * assembly in .ktext, at 0x80000180; see the Documentation's "Interrupts and the timer" chapter.
  * MARS 4.5 has neither register: they are MIPS32's.
  */
-/** Returns CP0 Count ($9), which goes up once every two instructions the program runs. */
+/** Returns CP0 Count ($9), which increases by one every two instructions. */
 static inline unsigned sim_cp0_count(void) {
     unsigned value;
     __asm__ volatile("mfc0 %0, $9" : "=r"(value));
     return value;
 }
 
-/** Sets CP0 Count ($9), which counts on from value. */
+/** Sets CP0 Count ($9) to value. Counting continues from that value. */
 static inline void sim_cp0_set_count(unsigned value) {
     __asm__ volatile("mtc0 %0, $9" : : "r"(value));
 }
@@ -464,7 +464,7 @@ static inline unsigned sim_cp0_compare(void) {
     return value;
 }
 
-/** Sets CP0 Compare ($11): the timer interrupt (Cause bit 15) is requested when Count becomes value. Writing it also clears a pending timer interrupt, and the first write turns the timer on. */
+/** Sets CP0 Compare ($11). The timer requests an interrupt (Cause bit 15) when Count reaches value. Writing Compare clears a pending timer interrupt. The first write enables the timer. */
 static inline void sim_cp0_set_compare(unsigned value) {
     __asm__ volatile("mtc0 %0, $11" : : "r"(value));
 }
@@ -672,27 +672,27 @@ static inline void sim_synth_upload(const void *source, unsigned length, unsigne
 #define SIM_INPUT_HELD_RIGHT 0x2u
 #define SIM_INPUT_HELD_MIDDLE 0x4u
 
-/** Returns nonzero if the Input controller is there: its ID register reads "INP". In MARS and RARS it reads 0. */
+/** Returns nonzero if the Input controller is available, identified by "INP" in its ID register. Returns 0 in MARS and RARS. */
 static inline int sim_input_present(void) {
     return (SIM_INPUT_ID >> 8) == 0x494e50u;
 }
 
-/** Returns how many events wait in the queue, from the Status register. Reading it takes nothing. */
+/** Returns the number of queued events from the Status register. Does not remove events. */
 static inline unsigned sim_input_pending(void) {
     return SIM_INPUT_STATUS & 0x7fu;
 }
 
-/** Takes the oldest event out of the queue and returns it, or 0 when the queue is empty. Read its fields with SIM_INPUT_KIND and SIM_INPUT_CODE. */
+/** Removes and returns the oldest queued event, or 0 if the queue is empty. Decode it with SIM_INPUT_KIND and SIM_INPUT_CODE. */
 static inline unsigned sim_input_event(void) {
     return SIM_INPUT_EVENT;
 }
 
-/** Returns nonzero if the key with this HID usage, a SIM_KEY_ name, is held now. */
+/** Returns nonzero if the key is held. Pass its HID usage code, such as SIM_KEY_ARROW_LEFT. */
 static inline int sim_input_key_down(unsigned usage) {
     return (int)((SIM_INPUT_KEYS[(usage & 0xffu) >> 3] >> (usage & 7u)) & 1u);
 }
 
-/** Returns the pointer register: read it with SIM_INPUT_X, SIM_INPUT_Y and SIM_INPUT_BUTTONS. */
+/** Returns the pointer position and held mouse buttons. Decode the value with SIM_INPUT_X, SIM_INPUT_Y and SIM_INPUT_BUTTONS. */
 static inline unsigned sim_input_pointer(void) {
     return SIM_INPUT_POINTER;
 }
@@ -861,12 +861,12 @@ static inline unsigned sim_input_pointer(void) {
 #define SIM_MIDI_RESET 0xffu /* empties the buffer and ends every note */
 #define SIM_MIDI_UART_MODE 0x3fu /* accepted, and does nothing */
 
-/** Returns nonzero if the MIDI port is there: bit 7 of its Status register is always set. In MARS and RARS it reads 0. */
+/** Returns nonzero if the MIDI port is available, detected by bit 7 of Status. Returns 0 in MARS and RARS. */
 static inline int sim_midi_present(void) {
     return (SIM_MIDI_STATUS & SIM_MIDI_NO_INPUT) != 0;
 }
 
-/** Sends one MIDI byte, once the port can take it: waits while bit 6 of Status says the port is busy, as a byte written then would be dropped. */
+/** Waits until the MIDI port has room, then sends one byte. Checks bit 6 of Status to avoid dropping the byte. */
 static inline void sim_midi_write(unsigned byte) {
     while (SIM_MIDI_STATUS & SIM_MIDI_BUSY) {
     }
@@ -901,23 +901,23 @@ static inline void sim_midi_write(unsigned byte) {
 #define SIM_PCM_RATE_MAX 48000u
 #define SIM_PCM_FIFO_FRAMES 8192u
 
-/** Returns nonzero if the sampled-audio output is there: its Rate register is never 0. In MARS and RARS it reads 0. */
+/** Returns nonzero if the sampled-audio output is available, detected by a nonzero Rate register. Returns 0 in MARS and RARS. */
 static inline int sim_pcm_present(void) {
     return SIM_PCM_RATE != 0;
 }
 
-/** Sets the rate in samples a second, 4,000 to 48,000, and turns the output on, in stereo or in mono. Changing either while samples wait drops them. */
+/** Sets the rate to 4,000–48,000 frames per second and enables mono or stereo output. Changing the rate or stereo setting discards queued samples. */
 static inline void sim_pcm_start(unsigned rate, int stereo) {
     SIM_PCM_RATE = rate;
     SIM_PCM_CONTROL = SIM_PCM_ON | (stereo ? SIM_PCM_STEREO : 0u);
 }
 
-/** Returns how many frames the FIFO can take now, from the Free register; in mono always even, as a word holds two. */
+/** Returns the number of frames the audio buffer can accept, from the Free register. Always even in mono, where each word holds two frames. */
 static inline unsigned sim_pcm_free(void) {
     return SIM_PCM_FREE;
 }
 
-/** Writes two samples, -32768 to 32767, once the FIFO has room for them: in mono two in a row, in stereo the left and the right of one frame. */
+/** Waits for buffer space, then writes two signed 16-bit samples (-32768 to 32767). In mono they play in sequence. In stereo they form one frame, left then right. */
 static inline void sim_pcm_write(int first, int second) {
     while (SIM_PCM_FREE == 0) {
     }

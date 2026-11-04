@@ -43,12 +43,16 @@ Four words carry one character each way. What the program transmits is appended 
 
 {keyboardExample}
 
-The receiver accepts typed keys and scripted Testcase input. It never loses a keystroke: what does not fit in the data register waits in a queue behind it, and Ready ({readyBit}) stays set until that queue is empty. Click the screen panel to send keyboard input to the program; its focus ring shows that the editor's own shortcuts are paused. Every key then goes to the program, Escape included, which arrives as character 27. Press Shift+Tab, or click outside the screen panel, to give the keyboard back to the editor.
+The receiver queues typed characters and scripted Testcase input without dropping characters. Reading receiver data removes one character. Ready ({readyBit}) stays set while more are waiting. Click the Screen panel to send keyboard input to the program. Its focus ring shows that the editor's shortcuts are paused. Escape reaches the receiver as character 27. Press Shift+Tab, or click outside the Screen, to return keyboard control to the editor.
 
-Bit 1 of either control register ({interruptBit}) is its **interrupt enable**. With it set, the device interrupts the program instead of being polled: the receiver for as long as a character waits, and the transmitter once after each character it takes, as it becomes Ready for the next. [Interrupts and the timer](/documentation/{route}/interrupts#keyboard) shows a handler that echoes every key.
+Bit 1 of either control register ({interruptBit}) enables its **interrupt requests**. The receiver requests an interrupt while any character is waiting. The transmitter requests one after accepting each character. The processor must also have interrupts enabled for the request to enter a handler. See [Interrupts and the timer](/documentation/{route}/interrupts#keyboard) for an echo handler.
 
-The receiver only gives characters: keys that type nothing, such as the arrows and Shift, and keys coming up never reach it. For those, and for the mouse, this editor adds the [Input controller](/documentation/{route}/input-controller).
+The receiver gives characters only. Non-character keys such as arrows and Shift, and key releases, go to the [Input controller](/documentation/{route}/input-controller), which also reports the mouse. Losing focus on the Screen or browser window releases held keys and buttons in that controller. Already queued characters remain in the receiver.
 
 ## Program time
 
-Service `30` (`{service}` before a `{call}`) answers with the time in milliseconds, low word in `{argument}` and high word in `{highArgument}`, and service `32` waits for the milliseconds in `{argument}`. Time is measured in milliseconds since 1970-01-01 UTC; subtract two readings to measure elapsed time. A wait costs no instructions, which lets a program idle for keyboard input without reaching the execution limit. For a timer that interrupts the program, see [Interrupts and the timer](/documentation/{route}/interrupts#timer). In a Testcase the virtual clock starts at 2000-01-01 UTC and advances only through the program's waits: a five-second wait finishes immediately, and elapsed-time output is repeatable. {simulator} has no mouse device; this editor's [Input controller](/documentation/{route}/input-controller) reads the mouse.
+Service `30` (`{service}` before a `{call}`) returns calendar milliseconds since 1970-01-01 UTC: low word in `{argument}`, high word in `{highArgument}`. Subtract two readings to measure elapsed time. In interactive use, this clock continues while paused.
+
+Service `32` waits for the milliseconds in `{argument}`. Waiting uses no instructions, so a program can sleep between keyboard polls without reaching the execution limit. In a Testcase, the calendar clock starts at 2000-01-01 UTC and advances through virtual waits: a five-second wait finishes immediately and gives repeatable elapsed-time output.
+
+For a separate timer that requests interrupts, see [Interrupts and the timer](/documentation/{route}/interrupts#timer). {simulator} has no mouse device. This editor's [Input controller](/documentation/{route}/input-controller) reads the mouse.

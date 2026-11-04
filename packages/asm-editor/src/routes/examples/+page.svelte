@@ -49,7 +49,7 @@
         }))
     )
     const isas = $derived([
-        { key: 'All ISAs', value: '' },
+        { key: 'All instruction sets', value: '' },
         ...[...new Set(examples.map((e) => e.language))].sort().map((language) => ({
             key: languageLabel(language),
             value: language
@@ -156,7 +156,7 @@
                         <Select
                             options={isas}
                             bind:value={isa}
-                            ariaLabel="Filter by ISA"
+                            ariaLabel="Filter by instruction set"
                             disabled={status !== 'loaded'}
                             wrapperStyle="width: 100%;"
                         />

@@ -125,7 +125,7 @@ describe('writing samples', () => {
         start()
         store(DATA, 0x1234, 2)
         expect(output.queued).toBe(0)
-        expect(notes).toEqual([expect.stringContaining('takes whole words')])
+        expect(notes).toEqual([expect.stringContaining('requires a whole word')])
     })
 })
 
@@ -161,7 +161,7 @@ describe('Free and the FIFO', () => {
         expect(readFree()).toBe(0)
         store(DATA, mono(1, 1))
         expect(output.queued).toBe(PCM_FIFO_FRAMES)
-        expect(notes).toEqual([expect.stringContaining('FIFO was full')])
+        expect(notes).toEqual([expect.stringContaining('sampled-audio buffer was full')])
         const frames = chunks().reduce((sum, chunk) => sum + chunk.frames.length / 2, 0)
         expect(frames).toBe(PCM_FIFO_FRAMES)
     })

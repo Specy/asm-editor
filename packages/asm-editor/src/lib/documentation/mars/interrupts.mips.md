@@ -1,6 +1,6 @@
 ## Interrupts and the timer
 
-An **interrupt** makes the processor stop what the program is doing, between two instructions, and run a **handler** instead: a piece of code that deals with something that happened outside the program's own flow, such as a key being typed or a timer running out. When the handler is done, the program carries on from the instruction it was stopped at, as if nothing had happened.
+An **interrupt** makes the processor run a **handler** between two program instructions. The handler deals with a request, such as a typed character or a timer reaching its target. It then returns so the next program instruction can run.
 
 Three things can interrupt a MIPS program here:
 
@@ -10,20 +10,22 @@ Three things can interrupt a MIPS program here:
 | The keyboard | bit 1 of the receiver control register, `0xffff0000`    | 8         |
 | The display  | bit 1 of the transmitter control register, `0xffff0008` | 9         |
 
-A program that turns none of them on is never interrupted, so everything else on this page only matters once it does.
+A program that enables none of these sources receives no interrupts.
 
 ## The handler {#handler}
 
-Coprocessor 0 runs the handler, and its registers say what happened (see [Registers](/documentation/mips/registers#cp0)). The handler is the code at address `0x80000180`, which a program places there with `.ktext 0x80000180`. When an interrupt is taken, the processor:
+The processor runs the handler and records what happened in coprocessor 0's registers (see [Registers](/documentation/mips/registers#cp0)). Place the handler at `0x80000180` with `.ktext 0x80000180`. All interrupt sources and exceptions share this address. The examples below each handle one cause. A program using several must inspect Cause and branch to the appropriate code.
+
+When an interrupt is taken, the processor:
 
 1. puts the address of the instruction it stopped at in **EPC** (`$14`); that instruction has not run yet;
 2. writes **Cause** (`$13`): exception code 0, which means "an interrupt", in bits 2 to 6, and the sources asking in bits 8 to 15;
 3. sets the exception level bit, **EXL**, bit 1 of **Status** (`$12`), which holds every other interrupt back while the handler runs;
 4. jumps to `0x80000180`.
 
-The handler ends with `eret`, which clears EXL and jumps back to the address in EPC, so the stopped instruction runs next. The same handler also receives the program's **exceptions**, such as a misaligned `lw`, a `break` or a `teq` trap, as [Exceptions](#exceptions) below shows.
+End the handler with `eret`. It clears EXL and returns to EPC. **Leave EPC unchanged after an interrupt:** it points to the next instruction, which has not run. [Exceptions](#exceptions), such as a misaligned `lw`, a `break` or a `teq` trap, also enter this handler but save the instruction that failed.
 
-An interrupt can arrive between any two instructions, so the handler must leave every register the program uses as it found it. MIPS keeps `$k0` and `$k1` for the handler, and the examples here use only those. Do not use a pseudo-instruction such as `lw $k0, label` there: it is two instructions joined through `$at`, and the program could have been stopped between two instructions that use `$at` themselves.
+The handler must restore every register the interrupted program uses. MIPS reserves `$k0` and `$k1` for handlers. These examples use only those. Avoid pseudo-instructions that use `$at`, such as `lw $k0, label`. An interrupt can arrive between the instructions of a main-program pseudo-instruction, while its temporary value is still in `$at`.
 
 ## When an interrupt is taken {#enabling}
 
@@ -37,35 +39,39 @@ Status starts at `0x0000FF11`, which enables every source, so a program only has
 
 ## The timer {#timer}
 
-**Count** (`$9`) goes up by one every two instructions the program runs. When Count becomes equal to **Compare** (`$11`), the timer asks for an interrupt: Cause bit 15. Writing Compare clears the request, so a handler acknowledges the timer by setting Compare to the next moment it wants an interrupt. Set it ahead of Count, as Count plus a number of ticks: a write that makes Count equal Compare at once asks for the interrupt only on every other instruction of the run, since Count moves on every second one.
+**Count** (`$9`) increases by one every two instructions. Set **Compare** (`$11`) ahead of Count, for example to Count + 1000. When Count reaches Compare, the timer sets Cause bit 15 to request an interrupt. Writing Compare clears the request, so the handler schedules the next interrupt by writing a new future value.
+
+Do not rely on setting Compare equal to the current Count for an immediate request. The match point is at the end of an even-numbered instruction, when Count advances. If that point has passed, the request waits until Count wraps around.
 
 The timer stays off until the program first writes Compare, so a program that does not use it is never interrupted by it.
 
-Count counts instructions, not seconds: a program reaches the same Count at the same instruction on every run, and a timer interrupt lands on the same instruction every time. This program asks for an interrupt every 1,000 Counts, which is every 2,000 instructions, counts five of them in its handler, and prints 5:
+Count measures instructions rather than seconds. With the same instruction sequence, it reaches each value at the same place on every run. This program requests an interrupt every 1,000 Count ticks, or 2,000 instructions. Its handler counts five interrupts, then the main program prints 5:
 
 {timerExample}
 
 The main program spins until the handler has counted five ticks. The handler uses `lui $k1, 0x9000` to reach `ticks`, the first word of `.kdata` at `0x90000000`, without `$at`.
 
-To turn Count into time, measure it against [service 30](/documentation/mips/syscall#service-30): read both, let the program run for a moment, read both again, and divide.
+To estimate elapsed time from Count, compare changes in Count and [service 30](/documentation/mips/syscall#service-30). Read both before and after a run interval, then divide elapsed milliseconds by Count ticks. The result depends on the simulator's execution speed.
 
 ## Keyboard interrupts {#keyboard}
 
-Setting bit 1 of the receiver control register makes the keyboard ask for an interrupt whenever a typed character is waiting. The request stays for as long as a character waits, so the handler runs once for every key, including keys typed before the program turned the interrupt on. Reading the receiver data register takes the character and withdraws the request, if no other key is waiting.
+Set bit 1 of receiver control to request interrupts while typed characters are waiting. This includes characters queued before interrupts were enabled. Reading receiver data takes one character. The request clears only when no characters remain. A handler that reads one character per interrupt therefore runs once per queued character. Keys that type no character do not reach this receiver.
 
 This program echoes every key it is given, without polling, and ends at Enter. Click the Screen panel and type, or type in the Terminal, or run it as a Testcase whose input is a line of text:
 
 {keyboardExample}
 
-The display's interrupt works another way, as in MARS. With bit 1 of the transmitter control register set, the display asks for one interrupt each time it has taken a character and is ready for the next, which on this console is at once. Setting the bit asks for nothing by itself: the program prints the first character, and the handler prints each next one. Once the handler prints nothing more, no more interrupts come, so the bit can stay set. Clearing it withdraws a request the handler has not taken yet.
+For display interrupts, set bit 1 of transmitter control. The display requests one interrupt after accepting each character, as in MARS. This console accepts characters immediately. Enabling the bit alone requests nothing: the main program prints the first character, then the handler can print the next one. When the handler stops printing, the interrupts stop. Clearing the enable bit withdraws any request still pending.
 
 ## Exceptions {#exceptions}
 
-Once a handler is assembled at `0x80000180`, every exception the program causes goes to it instead of stopping the program: an address error, an overflow on `add`, a `break`, or a `teq` trap, which is how compiled C checks for a division by zero. The exception code in Cause says which; EPC is the instruction that failed. This handler reports the code and ends the program, and prints 4, an address error on a load:
+With a handler at `0x80000180`, exceptions enter it instead of stopping the program. These include address errors, `add` overflow, `break` and `teq` traps. Compiled C uses `teq` to check division by zero. Cause holds the exception code and EPC points to the failed instruction. This handler prints code 4, an address error on a load, then ends the program:
 
 {exceptionExample}
 
-A handler that lets the program go on instead adds 4 to EPC before `eret`, or the failing instruction would run, and fail, again. A `syscall` is not an exception here: the service runs, and the handler is not entered.
+After repairing the cause, leave EPC unchanged to retry the instruction with `eret`. To deliberately skip the failed instruction, add 4 to EPC before returning. Returning unchanged without repairing the cause usually repeats the same exception. After an interrupt, leave EPC unchanged so the pending program instruction runs.
+
+A `syscall` runs its service directly here and does not enter the exception handler.
 
 ## Debugging a handler {#debugging}
 
@@ -78,7 +84,9 @@ To step through the main program without landing in the handler, turn the source
 
 ## From C {#from-c}
 
-`<sim.h>` reads and writes the timer with `sim_cp0_count()`, `sim_cp0_set_count()`, `sim_cp0_compare()` and `sim_cp0_set_compare()`. The handler itself is assembly: put it in a `.s` file in `.ktext`, which the GNU syntax places at `0x80000180` too. Nothing in the C program calls the handler, since the processor enters it by its address, and Build links only the assembly Files the program uses (see [Linking assembly Files](/documentation/mips/using-c#linking-project-files)). So give the handler a name with `.globl`, and name it once in the C program, outside any function, with `<sim.h>`'s `SIM_LINK`:
+`<sim.h>` provides `sim_cp0_count()`, `sim_cp0_set_count()`, `sim_cp0_compare()` and `sim_cp0_set_compare()` for the timer. Write the handler in an assembly `.s` file at `.ktext 0x80000180`. Linked assembly uses GNU syntax, which supports this address too.
+
+The processor enters the handler directly, so C never calls it. Build links only assembly Files whose globals the program uses (see [Linking assembly Files](/documentation/mips/using-c#linking-project-files)). Declare the handler with `.globl`, then use `SIM_LINK` once outside any C function to include its File:
 
 ```c
 #include <sim.h>
@@ -95,7 +103,9 @@ handler:
         eret
 ```
 
-A program has room for one handler, so two linked Files holding `.ktext` fail the Build. A `j` or `jal` cannot reach from user code at `0x00400000` into `.ktext`, which is in another 256 MB region: load the address into a register and use `jalr` instead.
+A program has one handler location. Two linked Files holding `.ktext` fail the Build. The handler must dispatch all enabled sources and exceptions, and preserve the interrupted C code's registers.
+
+To call a separate routine in `.ktext` from user code at `0x00400000`, load its address and use `jalr`. A `j` or `jal` cannot cross into that 256 MB region. The processor's interrupt entry does not need such a call.
 
 ## Compared with MARS {#compatibility}
 

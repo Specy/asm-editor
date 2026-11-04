@@ -100,7 +100,11 @@ Compile again after reopening a saved project to restore source highlights and b
 
 ## Linking assembly Files {#linking-project-files}
 
-Only the selected C or C++ source is compiled. Assembly Files beside it can supply functions or data the program uses. Build links a File when the program uses a **global** it defines: a name the File declares with `.globl` and defines with a label. For example, this program calls `triple`, which `triple.riscv` defines:
+Only the selected C or C++ source is compiled. Other assembly files in the same project can provide functions or data, even from a different folder. Files used as another program's entry or included by it are not searched for this Build.
+
+Build links an assembly file when it supplies a **symbol** the program references: an exported name for a function or data. `.globl triple` exports `triple`, and the label `triple:` defines its address. References from a linked file can bring in further assembly files.
+
+The C program below calls `triple`, defined in `triple.riscv`. In C++, replace the first declaration with `extern "C" int triple(int value);` so the compiler uses the exact name `triple`:
 
 ```c
 int triple(int value);
@@ -120,13 +124,13 @@ triple:
         ret
 ```
 
-The function must follow the [calling convention](/documentation/risc-v/runtime-library#from-assembly) compiled code uses, with its arguments in `a0` to `a7` and its result in `a0`.
+The assembly function must follow the [calling convention](/documentation/risc-v/runtime-library#from-assembly) used by compiled code, including register preservation and the rules for its argument and result types. In this integer example, `value` arrives in `a0` and the result returns in `a0`.
 
-A File the program does not use is left out, and is not even assembled, so an exercise in RARS's own syntax, or a File with mistakes, beside the program never breaks it. The **Problems** panel gives such a File a Hint: "This File is not part of the program: the program uses nothing it defines."
+Build leaves out assembly files the program does not need, without assembling them. Errors in those files do not affect the Build. The **Problems** panel marks each with the Hint: "This File is not part of the program: the program uses nothing it defines."
 
-A File the program uses is assembled as GNU assembly, the syntax C compiles to. Most of RARS's own syntax reads the same, but not all of it: GNU names the CSR first, `csrw utvec, t0`, where RARS writes `csrw t0, utvec`, and it has no `.eqv` and no `.macro`. When such a File does not assemble, the first error says why it was linked and that it must be written in GNU syntax.
+Linked files use this editor's GNU assembly subset, which accepts the compiler's output. For a CSR write, put the CSR first: `csrw utvec, t0`, rather than RARS's `csrw t0, utvec`. The subset does not accept `.eqv` or `.macro`; use `.equ NAME, value` for a numeric constant. If a linked file fails to assemble, its first error explains why it was included and identifies the required syntax.
 
-A trap handler is linked like any other function: the program stores its address in `utvec`, which uses its name. [Interrupts and the timer](/documentation/risc-v/interrupts) shows one. To link a File the program never names, such as one whose only work is a constructor that runs before `main`, ask for one of its globals with `SIM_LINK` from `<sim.h>`, once, outside any function:
+A trap handler is linked when the program references its name to store its address in `utvec`. [Interrupts and the timer](/documentation/risc-v/interrupts) shows an example. A file containing only a global constructor, which initializes global objects before `main`, may have no references that cause Build to include it. To include such a file, request one of its exported names with `SIM_LINK` from `<sim.h>`, once, outside any function:
 
 ```c
 #include <sim.h>
@@ -134,4 +138,4 @@ A trap handler is linked like any other function: the program stores its address
 SIM_LINK(install_handler);
 ```
 
-`SIM_LINK` counts as a use of the name, as if the program called it, and Build fails when no File defines the name.
+`SIM_LINK` requests the file that defines the name without calling the function. Build fails if no file defines that name.

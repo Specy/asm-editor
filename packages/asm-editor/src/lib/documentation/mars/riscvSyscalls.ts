@@ -221,11 +221,11 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         arguments: [
             { name: 'a0', description: 'address of NUL-terminated UTF-8 path' },
             { name: 'a1', description: 'flags' },
-            { name: 'a2', description: 'mode' }
+            { name: 'a2', description: 'mode (ignored, pass 0)' }
         ],
         result: {
-            arguments: [{ name: 'a0', description: 'contains file descriptor (-1 if error)' }],
-            other: 'Opens a file. Use flag 0 to open for reading, 1 to open for writing (creating the file if needed), or 9 to open for writing and append (creating the file if needed). Editor extensions 2, 3, and 10 open for reading and writing: 2 requires an existing file, 3 creates or truncates, and 10 creates and appends writes. They share one file position. A folder opened with flag 0 gives a descriptor that service 1065 lists; opening a folder for writing fails. The mode argument is ignored. Failure returns -1. Descriptors 0, 1, and 2 are reserved for standard input, standard output, and standard error; the files a program opens receive descriptors starting at 3. Undo restores file changes; each Testcase starts with its own copy of the files.'
+            arguments: [{ name: 'a0', description: 'file or folder descriptor, or -1 on failure' }],
+            other: 'Opens a file and returns its descriptor, the number used by later read, write and close calls.\n\n| Flag | Access | Effect on the file |\n| ---- | ------ | ------------------ |\n| 0 | Read | Requires an existing file. |\n| 1 | Write | Creates a file or empties an existing one. |\n| 9 | Write, append | Creates a file if needed. Writes go to its end. |\n| 2 | Read and write | Requires an existing file. |\n| 3 | Read and write | Creates a file or empties an existing one. |\n| 10 | Read and write, append | Creates a file if needed. Writes go to its end. |\n\nFlags 2, 3 and 10 are editor extensions. Reads and writes on the same descriptor share one file position. Flag 0 can also open a folder for listing with service 1065; folders cannot be opened for writing. The mode argument is ignored.\n\nDescriptors 0, 1 and 2 are reserved for standard input, standard output and standard error. Opened files and folders receive descriptors starting at 3. Failure returns -1. See [Files and folders](#folders) for paths, persistence, Undo and Testcase behavior.'
         },
         implemented: true,
         binding: {
@@ -243,17 +243,17 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         code: 63,
         arguments: [
             { name: 'a0', description: 'file descriptor' },
-            { name: 'a1', description: 'address of input buffer' },
+            { name: 'a1', description: 'address of the buffer to fill' },
             { name: 'a2', description: 'maximum number of bytes to read' }
         ],
         result: {
             arguments: [
                 {
                     name: 'a0',
-                    description: 'contains number of bytes read (0 if end-of-file, -1 if error)'
+                    description: 'number of bytes read, 0 at end of file or input, or -1 on failure'
                 }
             ],
-            other: 'Reads bytes from an open file. Descriptor 0 reads standard input from the Terminal: enter a line and press Enter. Ctrl+D or End of input on an empty line ends standard input; a Testcase uses scripted input and reaches end of input when its answers run out. Returns 0 at end of input or file, and -1 on failure. Undo restores file state; each Testcase uses its own copy of the files.'
+            other: 'Reads up to the requested number of bytes into the buffer, without adding a string terminator. Returns the byte count, 0 at the end of the file or input, or -1 on failure.\n\nDescriptor 0 reads standard input from the Terminal. Enter a line and press Enter. Ctrl+D or End of input on an empty line ends standard input. In a Testcase, input ends when the scripted answers run out. See [Files and folders](#folders) for Undo and Testcase behavior.'
         },
         implemented: true,
         binding: {
@@ -271,17 +271,17 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         code: 64,
         arguments: [
             { name: 'a0', description: 'file descriptor' },
-            { name: 'a1', description: 'address of output buffer' },
+            { name: 'a1', description: 'address of the bytes to write' },
             { name: 'a2', description: 'number of bytes to write' }
         ],
         result: {
             arguments: [
                 {
                     name: 'a0',
-                    description: 'contains number of bytes written (-1 if error)'
+                    description: 'number of bytes written, or -1 on failure'
                 }
             ],
-            other: 'Writes bytes to an open file; descriptors 1 and 2 write to the Terminal as standard output and standard error. Returns the number of bytes written, or -1 on failure. Undo restores file changes; each Testcase uses its own copy of the files.'
+            other: 'Writes the requested bytes to an open file. Descriptors 1 and 2 write to the Terminal as standard output and standard error. Returns the number of bytes written or -1 on failure. See [Files and folders](#folders) for Undo and Testcase behavior.'
         },
         implemented: true,
         binding: {
@@ -297,7 +297,7 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
     [57]: {
         name: 'close file',
         code: 57,
-        arguments: [{ name: 'a0', description: 'file descriptor' }],
+        arguments: [{ name: 'a0', description: 'file or folder descriptor to close' }],
         result: {},
         implemented: true,
         binding: {
@@ -916,10 +916,10 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             arguments: [
                 {
                     name: 'a0',
-                    description: 'contains 0 if the file was deleted, or a negative error number'
+                    description: '0 on success, or a negative error number'
                 }
             ],
-            other: 'Deletes a file. Fails with -2 when nothing is at the path, and with -21 when the path is a folder, which service 1031 deletes instead. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the files.'
+            other: 'Deletes the file at the path. Returns -2 if the path does not exist or -21 if it names a folder. To delete an empty folder, use [rmdir](#service-1031). The [shared file rules](#folders) describe errors, Undo and Testcases.'
         },
         implemented: true,
         binding: {
@@ -938,10 +938,10 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             arguments: [
                 {
                     name: 'a0',
-                    description: 'contains 0 if the folder was made, or a negative error number'
+                    description: '0 on success, or a negative error number'
                 }
             ],
-            other: 'Makes a folder. The folder that holds it must exist already (-2 if it does not, -20 if that path is a file), and nothing may be at the path yet: -17 means it already exists, which a program run a second time should treat as success. A folder made this way lasts until the run ends, and stays after it only once a file is written inside it, so a program that wants to keep an empty folder writes a small hidden file such as `.keep` into it. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the files.'
+            other: 'Creates an empty folder. Its parent must already exist: -2 means a missing parent and -20 means a file was used as a folder. Returns -17 if a file or folder already occupies the requested path. Before treating -17 as success, use stat to confirm that the existing path is a folder.\n\nThe new folder lasts for the current run. It remains afterward only if a file still exists inside it, directly or in a subfolder. An empty `.keep` file is enough. See [Files and folders](#folders) for the full lifetime, Undo and Testcase rules.'
         },
         implemented: true,
         binding: {
@@ -963,10 +963,10 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             arguments: [
                 {
                     name: 'a0',
-                    description: 'contains 0 if the folder was deleted, or a negative error number'
+                    description: '0 on success, or a negative error number'
                 }
             ],
-            other: 'Deletes a folder, but only an empty one: -39 means it still holds a file or a folder, -20 that the path is a file, and -2 that nothing is there. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the files.'
+            other: 'Deletes an empty folder. Returns -39 if it contains a file or subfolder, -20 if the path names a file, or -2 if it does not exist. The top folder cannot be deleted (-16). See the [shared file rules](#folders) for folder lifetime, Undo and Testcases.'
         },
         implemented: true,
         binding: {
@@ -980,16 +980,16 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
         code: 1034,
         arguments: [
             { name: 'a0', description: 'address of NUL-terminated UTF-8 path of the file' },
-            { name: 'a1', description: 'address of NUL-terminated UTF-8 path it moves to' }
+            { name: 'a1', description: 'address of the NUL-terminated UTF-8 destination path' }
         ],
         result: {
             arguments: [
                 {
                     name: 'a0',
-                    description: 'contains 0 if the file was renamed, or a negative error number'
+                    description: '0 on success, or a negative error number'
                 }
             ],
-            other: 'Renames a file, or moves it into another folder, which must exist already (-2 if it does not). Only files move: a folder gives -21, and so does a new name that is a folder, while a folder renamed onto a file gives -20. A file that already has the new name is replaced by the one moved there, as on Linux, and renaming a file to its own name does nothing. Like every folder service, it reports a failure as minus an error number, as Linux does, where the older file services return -1. Undo takes the change back, and each Testcase works on its own copy of the files.'
+            other: 'Renames a file or moves it into another folder. The destination folder must exist (-2 if missing, -20 if a file is used as a folder). An existing destination file is replaced. Renaming a file to its own path does nothing.\n\nFolders cannot be moved: a folder as the source or destination returns -21, except that a folder onto an existing file returns -20. Renaming a folder to itself does nothing. The top folder cannot be renamed. See the [shared file rules](#folders) for Undo and Testcases.'
         },
         implemented: true,
         binding: {
@@ -1016,10 +1016,10 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
             arguments: [
                 {
                     name: 'a0',
-                    description: 'contains 0 if the buffer was filled, or a negative error number'
+                    description: '0 on success, or a negative error number'
                 }
             ],
-            other: 'Tells what is at a path. The buffer receives Linux’s `struct stat` for this machine. Its useful fields are the same in RV32 and RV64: the inode number (8 bytes) at offset 8, the mode word at 16, the link count at 20 and the size (8 bytes) at 48. In the mode word, the bits that `0xF000` selects are `0x4000` for a folder and `0x8000` for a file. A folder’s size is 0. The inode number identifies a file or folder for the whole run, and the link count is 1; every other field, the times and owners included, is 0. Fails with -2 when nothing is at the path, and with -20 when the path runs through a file. From C, `stat()` in `<sys/stat.h>` reads the same buffer by field name. Like every folder service, it reports a failure as minus an error number.'
+            other: 'Reports the type and size of the path in the Linux `struct stat` layout for this target. The buffer must hold 104 bytes in RV32 or 128 in RV64. Fields are little-endian:\n\n| Field | Byte offset in RV32 and RV64 | Size in bytes |\n| ----- | --------------------------- | ------------- |\n| Inode number | 8 | 8 |\n| Mode | 16 | 4 |\n| Link count | 20 | 4 |\n| File size | 48 | 8 |\n\nThe type bits `mode & 0xF000` are `0x4000` for a folder or `0x8000` for a file. File size counts bytes. A folder has size 0. The inode number identifies the entry throughout the run. Link count is 1, and all other fields, including times and owners, are 0.\n\nReturns -2 for a missing path or -20 if the path uses a file as a folder. From C, `stat()` in `<sys/stat.h>` accesses these fields by name.'
         },
         implemented: true,
         binding: {
@@ -1047,10 +1047,10 @@ export const riscvSyscalls: Record<number, MarsSyscall> = {
                 {
                     name: 'a0',
                     description:
-                        'contains the number of bytes stored, 0 once every entry has been listed, or a negative error number'
+                        'number of bytes stored, 0 at the end of the listing, or a negative error number'
                 }
             ],
-            other: 'Lists a folder, filling the buffer with one record per entry: `.` (the folder itself) and `..` (the folder that holds it) first, then its files and folders in name order. Each record holds the entry’s inode number at offset 0, the position of the next entry, the record’s own length (2 bytes) and the name, ending with a NUL. The first two fields are 4 bytes each in RV32, so the length is at 8 and the name at 10, and 8 bytes each in RV64, so the length is at 16 and the name at 18. The record’s last byte is the entry’s type: 4 for a folder, 8 for a file. Add a record’s length to its address to reach the next one, and call the service again for more until it returns 0. Fails with -22 when the buffer is too small for the next record, -9 when the descriptor is not open, and -20 when it is a file’s. Reading a folder’s descriptor with service 63 fails with -1; close it with service 57. From C, `opendir()` and `readdir()` in `<dirent.h>` walk the records for you.'
+            other: 'Lists the entries present when the folder was opened: `.` and `..` first, then files and subfolders in name order. It fills the buffer with complete records and returns their total byte count. Call again to continue. A return value of 0 means every entry has been listed.\n\nEach record has this little-endian layout:\n\n| Field | RV32 byte offset | RV64 byte offset | Size in bytes |\n| ----- | ---------------- | ---------------- | ------------- |\n| Inode number | 0 | 0 | 4 in RV32, 8 in RV64 |\n| Position of next entry | 4 | 8 | 4 in RV32, 8 in RV64 |\n| Record length | 8 | 16 | 2 |\n| NUL-terminated UTF-8 name | 10 | 18 | Variable |\n\nThe record length includes padding and a final type byte: 4 for a folder, 8 for a file. Add that length to the record address to find the next record. The next-entry position counts entries, not bytes.\n\nReturns -22 if the buffer cannot hold the next record, -9 if the descriptor is not open, or -20 if it belongs to a file. Reading a folder with service 63 returns -1. Close it with service 57. From C, `opendir()` and `readdir()` in `<dirent.h>` handle these records for you.'
         },
         implemented: true,
         binding: {

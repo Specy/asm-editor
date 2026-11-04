@@ -361,8 +361,8 @@ const STATUS_READY = MIDI_PORT_NO_INPUT_BIT
 const STATUS_BUSY = MIDI_PORT_NO_INPUT_BIT | MIDI_PORT_BUSY_BIT
 
 const BUSY_NOTE =
-    `A MIDI byte was dropped: the MIDI port was busy, its buffer full. ` +
-    `Wait until bit 6 of its Status register, 0x${(MIDI_PORT_BASE + MIDI_PORT_STATUS).toString(16)}, is clear before writing a byte.`
+    `A MIDI byte was dropped because the port's buffer was full. ` +
+    `Wait until bit 6 of the Status register at 0x${(MIDI_PORT_BASE + MIDI_PORT_STATUS).toString(16)} is clear before writing each byte.`
 
 export class MidiPortDevice {
     private readonly host: SoundDeviceHost

@@ -52,42 +52,42 @@ export const INPUT_REGISTERS = [
         offset: INPUT_ID,
         access: 'read',
         description:
-            '`0x494E5001`, "INP" and version 1, while the Input controller is there; 0 in MARS and RARS, which do not have it'
+            'Reads `0x494E5001` ("INP", version 1) when the Input controller is available. Reads 0 in MARS and RARS, which do not provide this device'
     },
     {
         name: 'CONTROL',
         offset: INPUT_CONTROL,
         access: 'write',
         description:
-            'Reads 0. Bit 1 is reserved for an interrupt-enable bit: storing a value with it set stops the program, as the Input controller raises no interrupt; poll Status instead. Other bits are ignored'
+            'Reads 0. Bit 1 is reserved: setting it stops the program because the Input controller does not support interrupts. Leave it clear and poll Status for events. Other bits are ignored'
     },
     {
         name: 'STATUS',
         offset: INPUT_STATUS,
         access: 'read',
         description:
-            'Bits 6–0: how many events wait in the queue, 0 to 127. Reading it takes nothing'
+            'Bits 6–0 hold the number of queued events, 0 to 127. Reading Status does not remove events'
     },
     {
         name: 'EVENT',
         offset: INPUT_EVENT,
         access: 'pop',
         description:
-            'The oldest event in the queue, which reading takes out; 0 when the queue is empty. Read it with `lw`'
+            'Reading removes and returns the oldest queued event, or 0 if the queue is empty. Read once with `lw` and keep the result'
     },
     {
         name: 'POINTER',
         offset: INPUT_POINTER,
         access: 'read',
         description:
-            'Where the pointer is and which buttons are held: y in bits 30–21, x in bits 20–11, buttons in bits 2–0'
+            'Pointer position and held mouse buttons: y in bits 30–21, x in bits 20–11, buttons in bits 2–0'
     },
     {
         name: 'KEYS',
         offset: INPUT_KEYS,
         access: 'read',
         description:
-            'The keys held now, 256 bits, one per HID usage: key `u` is bit `u & 7` of the byte at `KEYS + (u >> 3)`'
+            '256 bits indicating held keys, one per HID usage code. For code `u`, test bit `u & 7` of the byte at `KEYS + (u >> 3)`'
     }
 ] as const satisfies readonly InputRegister[]
 

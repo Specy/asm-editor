@@ -1596,13 +1596,13 @@ second: wfi
             await stepTo(emulator, 'first:', code)
             const step = emulator.step()
             expect(await settled(step)).toBe(false)
-            expect(emulator.runStatus).toBe(
-                'Waiting for an interrupt that cannot come: Pause or Stop ends this wfi'
-            )
+            expect(emulator.runStatus).toBe('No interrupt can end this wfi. Press Pause or Stop.')
             expect(emulator.stepWaiting).toBe(true)
             const warnings = () => emulator.notes.filter((note) => note.tone === 'warning')
             expect(warnings().map((note) => note.text)).toEqual([
-                expect.stringContaining('wfi is waiting for an interrupt that cannot come')
+                expect.stringContaining(
+                    'wfi cannot resume because no enabled interrupt source can wake it'
+                )
             ])
             //a key is no interrupt this program turned on
             keyboard.typeText('a')
@@ -1617,7 +1617,7 @@ second: wfi
             //the second wait says so again on the status line, but the Log only once a run
             const again = emulator.step()
             expect(await settled(again)).toBe(false)
-            expect(emulator.runStatus).toContain('cannot come')
+            expect(emulator.runStatus).toContain('No interrupt can end this wfi')
             expect(warnings()).toHaveLength(1)
             emulator.pause()
             await again
@@ -1638,7 +1638,7 @@ main:   li      t0, 0x100       # uie bit 8: external interrupts
             await stepTo(emulator, 'wfi', code)
             const step = emulator.step()
             expect(await settled(step)).toBe(false)
-            expect(emulator.runStatus).toBe('Waiting for an interrupt: wfi waits for a key')
+            expect(emulator.runStatus).toBe('Waiting for a keyboard interrupt (wfi)')
             expect(emulator.notes.filter((note) => note.tone === 'warning')).toEqual([])
             keyboard.typeText('a')
             await step
@@ -1666,7 +1666,7 @@ main:   li      t0, 0x10        # uie bit 4 only: the timer, not external interr
             await stepTo(emulator, 'wfi', code)
             const step = emulator.step()
             expect(await settled(step)).toBe(false)
-            expect(emulator.runStatus).toBe('Waiting for an interrupt: wfi waits for the timer')
+            expect(emulator.runStatus).toBe('Waiting for a timer interrupt (wfi)')
             keyboard.typeText('a')
             expect(await settled(step)).toBe(false)
             //Stop, which clears the execution, ends it too

@@ -50,28 +50,28 @@ export const PCM_REGISTERS = [
         offset: PCM_CONTROL,
         access: 'read and write',
         description:
-            'Bit 0 turns the output on; turning it off empties the FIFO. Bit 1 selects stereo. Reads back those two bits; 0 at every Build'
+            'Bit 0 enables output. Clearing it empties the audio buffer. Bit 1 selects stereo. Reads back these two bits. Resets to 0 at Build'
     },
     {
         name: 'RATE',
         offset: PCM_RATE,
         access: 'read and write',
         description:
-            'Frames a second, 4,000 to 48,000; a value outside is clamped, and the register reads back the rate used. 8,000 at every Build'
+            'Frames per second, from 4,000 to 48,000. Values outside this range are clamped. Reads back the rate in use. Resets to 8,000 at Build'
     },
     {
         name: 'FREE',
         offset: PCM_FREE,
         access: 'read',
         description:
-            'How many frames the FIFO can take now, 0 to 8,192; in mono always even, as a word holds two'
+            'Number of frames the audio buffer can accept, 0 to 8,192. Always even in mono, where each word holds two frames'
     },
     {
         name: 'DATA',
         offset: PCM_DATA,
         access: 'write',
         description:
-            'Samples to play, a whole word (`sw`) at a time: in mono two signed 16-bit samples, the low half first; in stereo one frame, left in the low half and right in the high half. Reads 0. A word written when it does not fit, or while the output is off, is dropped'
+            'Write a whole word with `sw`. In mono, it holds two signed 16-bit samples, the low half first. In stereo, it holds one frame, left in the low half and right in the high half. Reads 0. Writes are dropped if the buffer has no room or output is off'
     }
 ] as const satisfies readonly PcmRegister[]
 

@@ -58,21 +58,21 @@ export const MIDI_PORT_REGISTERS = [
         offset: MIDI_PORT_DATA,
         access: 'write',
         description:
-            'A MIDI byte to send, in the low byte of the store (`sb` or `sw`); reads 0. A byte written while the port is busy is dropped'
+            'Sends the low byte written with `sb` or `sw`. Reads 0. Bytes written while the port is busy are dropped'
     },
     {
         name: 'STATUS',
         offset: MIDI_PORT_STATUS,
         access: 'read',
         description:
-            'Bit 6 is set while the port is busy, its buffer full; bit 7 is always set, as the port has no MIDI in. Reads `0x80` when a byte can be sent'
+            'Bit 6 is set while the buffer is full. Bit 7 is always set because the port has no MIDI input. Reads `0x80` when ready to accept a byte'
     },
     {
         name: 'COMMAND',
         offset: MIDI_PORT_COMMAND,
         access: 'write',
         description:
-            'The same address as Status. `0xFF` resets the port: its buffer is emptied and every note ends. `0x3F` is accepted and does nothing; other values are ignored'
+            'Shares its address with Status. Writing `0xFF` empties the buffer and ends all notes. Writing `0x3F` has no effect. Other values are ignored'
     }
 ] as const satisfies readonly MidiPortRegister[]
 
