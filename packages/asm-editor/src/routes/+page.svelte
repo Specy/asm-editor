@@ -10,6 +10,7 @@
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import FaGraduationCap from '~icons/fa-solid/graduation-cap'
     import MainPageSection from '#cmp/specific/landing/HeroSection.svelte'
+    import AgentDocs from '#cmp/documentation/site/AgentDocs.svelte'
     import RgbLine from '#cmp/shared/misc/RgbLine.svelte'
     import GoLinkExternal from '~icons/octicon/link-external-16'
     import { ThemeStore } from '#stores/themeStore.svelte.ts'
@@ -268,6 +269,7 @@
                     </div>
                 </a>
             </div>
+            <AgentDocs level={3} style="margin-top: 1.5rem;" />
         </MainPageSection>
         <MainPageSection id="codeCompletion" imageUrl="/images/ASM-CodeCompletion.webp" reverse>
             {#snippet title()}

@@ -11,11 +11,7 @@
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { DOCUMENTATION_ABOUT, DOCUMENTATION_INTRO } from '#lib/documentation/site.ts'
     import InlineMarkdown from '#cmp/documentation/entries/InlineMarkdown.svelte'
-    import Button from '#cmp/shared/button/Button.svelte'
-    import FaCopy from '~icons/fa-solid/copy'
-    import Icon from '#cmp/shared/layout/Icon.svelte'
-    import { copyText } from '#lib/utils.ts'
-    import { AGENT_MESSAGE } from '#lib/twins/agentMessage.ts'
+    import AgentDocs from '#cmp/documentation/site/AgentDocs.svelte'
 
     // What each language is and what its reference covers (`DOCUMENTATION_ABOUT`, which the
     // Markdown twins read too), with the Course that teaches it.
@@ -80,72 +76,13 @@
             />
         {/each}
     </div>
-    <section class="agents" aria-labelledby="agents-title">
-        <div class="agents-heading">
-            <div>
-                <h2 id="agents-title">Documentation for agents</h2>
-                <p>
-                    Send this message to an AI assistant that can open web pages, so it answers from
-                    this Documentation and the Courses. It points the assistant to a markdown
-                    version of every page.
-                </p>
-            </div>
-            <Button
-                cssVar="secondary"
-                hasIcon
-                style="padding: 0.35rem 0.65rem; font-size: 0.78rem; gap: 0.4rem; flex-shrink: 0;"
-                onClick={() => void copyText(AGENT_MESSAGE, 'Message')}
-            >
-                <Icon size={0.9}><FaCopy /></Icon>
-                Copy
-            </Button>
-        </div>
-        <pre class="agent-message">{AGENT_MESSAGE}</pre>
-    </section>
+    <AgentDocs style="margin-top: 4rem;" />
 </Page>
 
 <style lang="scss">
     .intro {
         margin: 0;
         color: var(--background-text-muted);
-    }
-    .agents {
-        display: flex;
-        flex-direction: column;
-        gap: 0.8rem;
-        margin-top: 2rem;
-        padding: 1.2rem;
-        border: 1px solid var(--tertiary);
-        border-radius: 0.75rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-    }
-    .agents-heading {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 1rem;
-    }
-    .agents h2 {
-        margin: 0 0 0.3rem;
-        font-size: 1.3rem;
-    }
-    .agents p {
-        margin: 0;
-        max-width: 60ch;
-        color: var(--background-text-muted);
-    }
-    .agent-message {
-        margin: 0;
-        padding: 0.8rem 1rem;
-        border-radius: 0.5rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
-        line-height: 1.5;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
     }
     .langs {
         display: grid;
