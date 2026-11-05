@@ -100,7 +100,9 @@ Compile again after reopening a saved project to restore source highlights and b
 
 ## Linking assembly Files {#linking-project-files}
 
-Only the selected C or C++ source is compiled. Other assembly files in the same project can provide functions or data, even from a different folder. Files used as another program's entry or included by it are not searched for this Build.
+Only the selected C or C++ source is compiled. Other assembly files in the same project can provide functions or data, even from a different folder.
+
+A program's **entry file** is the assembly file Build starts from. The Explorer action **New program from this file** creates a program with that entry. Build excludes other programs' entry files and the files they include from this search.
 
 Build links an assembly file when it supplies a **symbol** the program references: an exported name for a function or data. `.globl triple` exports `triple`, and the label `triple:` defines its address. References from a linked file can bring in further assembly files.
 

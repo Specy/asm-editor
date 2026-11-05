@@ -40,7 +40,7 @@ Bit 31 of an Event word is always 0. Logical and arithmetic right shifts therefo
 
 {kindTable}
 
-- **A key's code** is its USB HID number. It identifies a keyboard position rather than a character: the key left of D is `KeyS` (`0x16`) on every layout. The table [at the end](#key-codes) lists the supported keys.
+- **A key's code** is its USB HID number. It identifies a physical key position rather than its printed character. For example, the position labelled S on a US keyboard is `KeyS` (`0x16`), regardless of the active layout. The table [at the end](#key-codes) lists the supported keys.
 - **Holding a key** sends one key-down event, then repeats at the keyboard's typing repeat rate, then one key-up event on release. To move something while a key is held, read the [keys held now](#key-state) instead of counting repeats.
 - **A button's code** is 1 for the left button, 2 for the right and 3 for the middle one.
 - **The wheel's code** is a signed number of notches: positive away from you, negative towards you. Consecutive unread wheel turns in the same direction merge into one event while their sum fits from −127 to 127. The merged event uses the latest pointer position.
@@ -93,7 +93,7 @@ Escape types character 27 at the keyboard registers.
 
 - **Before the program starts and after it ends.** Input is accepted from the program's first instruction until it ends. A click that focuses the Screen before Run is not queued. A key already held when the program starts appears at its next repeat as a key-down event.
 - **In a Testcase.** A Testcase has no keyboard and no mouse: no events, no keys held, and the pointer at 0, 0. A Testcase's input still reaches the keyboard registers as typed lines.
-- **Under the bitmap display.** A display whose base address is `0xffff0000`, MARS's "memory map" base, can cover the Input controller's addresses. Its words are then pixels, and the Input controller writes none of them. Move the display, or make it smaller, to use both.
+- **Under the bitmap display.** A display whose base address is `0xffff0000`, {simulator}'s "memory map" base, can cover the Input controller's addresses. Its words are then pixels, and the Input controller writes none of them. Move the display, or make it smaller, to use both.
 
 ## Undo {#undo}
 

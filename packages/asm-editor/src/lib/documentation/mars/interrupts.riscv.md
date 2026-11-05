@@ -59,7 +59,7 @@ The main program leaves `t1`, `s0` and `s1` to the handler. The handler sets the
 
 `wfi`, wait for interrupt, waits for an enabled source: the timer with `uie` bit 4 set, or a typed character with `uie` bit 8 and receiver interrupts enabled. If a request is already pending, it returns immediately. `wfi` does not enter the handler itself. With UIE set, the processor takes the interrupt after `wfi`. With UIE clear, execution continues after it.
 
-The status line beside the Terminal shows what can end the wait: "wfi waits for the timer", "for a key" or both. If no enabled source can end it, the status line says so and the Log explains what to enable. Pause or Stop also ends the wait, during Step or Run. Resuming after Pause continues after `wfi`.
+The status line beside the Terminal shows whether `wfi` is waiting for a timer interrupt, a keyboard interrupt or either. If no enabled source can end it, the status line says so and the Log explains what to enable. Pause or Stop also ends the wait, during Step or Run. Resuming after Pause continues after `wfi`.
 
 Waiting in `wfi` uses no additional instructions. Polling memory-mapped `time` continuously uses instructions and can reach the instruction limit.
 
@@ -86,7 +86,7 @@ After repairing the cause, leave `uepc` unchanged to retry the instruction with 
 ## Debugging a handler {#debugging}
 
 - **Step** runs one instruction, and when an interrupt is waiting that instruction is the handler's first: the Step lands on the handler. The Log says which interrupt it took, for example "Timer interrupt at 0x00400038 → handler at 0x00400054 (handler)" in the timer program above, and the History lists the interrupt as a row of its own, above the handler's first instruction.
-- A Step on a `wfi` that waits waits as a Run does, until the timer or a key, and the Run button becomes Pause meanwhile: Pause ends the wait, and the Step ends after `wfi`.
+- When **Step** executes a waiting `wfi`, the Run button becomes **Pause**. An enabled interrupt or Pause ends the wait. After Pause, the Step completes after `wfi`.
 - **Breakpoints** and **Run to cursor** work inside the handler as anywhere else.
 - **Undo** steps back out of the handler to the instruction it interrupted, with `uepc`, `ucause`, `utval`, `ustatus` and `uip` as they were.
 - Memory-mapped `time` does not advance between Steps, so a timer set for 10 milliseconds does not interrupt at every Step. The calendar clock read by the `time` CSR continues to advance in interactive use.

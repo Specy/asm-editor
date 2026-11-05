@@ -2,8 +2,39 @@
 
 Updated: 2026-11-04. Working branch: `feat/asmos-doom-bad-apple`.
 PR: https://github.com/Specy/asm-editor/pull/108
-Reviewed head: `9b35da73939f9f7281c19d85358f12d3a358257a`.
+Original reviewed head: `9b35da73939f9f7281c19d85358f12d3a358257a`.
+Resumed review head: `a5138d586767e6e874ffa62261d53b31b5d54eb2`.
 Base: `origin/main`, `1c6f2915fc16b91a6673abd912e0951bb4ad3641`.
+
+## Resumption after the usage-limit pause
+
+The user completed and committed additional work while this review was paused. The wording drafts
+are committed in `ae46d4fa`; `a5138d58` further corrects MIPS Cause/Status and the GNU CSR syntax
+explanation. The project file limit is now 64 MiB (`5cdf9297`). The examples submodule is clean at
+`94d1acb5a119ab30f5e33cd1b3270a630c42403a`, following the added beginner examples in `d65c697`.
+**MIPS asmOS now includes its video.** Historical findings below about omitting it are superseded.
+
+The independent reference rereads did not finish before quota exhaustion. Both original readers
+have now reread fresh public snapshots from the current checkout. Both returned **READY WITH MINOR
+NITS**, with every original blocker resolved. The small nits were addressed locally: current wfi
+status wording, physical-key position wording, the MARS/RARS placeholder, a definition of program
+entry files and the older x86 folder-persistence sentence. Their saved reports are
+`/tmp/pr108-device-reread.md` and `/tmp/pr108-file-reread.md`. These final small wording fixes do
+not require another substantive reader cycle.
+
+Validation on resumption: all **53 focused documentation tests** passed across the documentation
+model, MIPS register reference and syscall bindings. Both generated-help checks passed. The
+preservation check confirmed all **93 reference Markdown fences**, both syscall contracts and
+**2,041 rendered entry identities, links, signatures and examples**. The current examples build
+and packaging check passed for **30 examples / 103 archives**. No browser or emulator run was
+performed for these prose-only fixes.
+
+The only pre-existing dirty editor file on resumption was
+`packages/asm-editor/src/routes/projects/[project]/+page.svelte`; its current hash is saved in
+`/tmp/pr108-resume-user-work.json`. Preserve that user edit. The resumed pass found stale video
+availability text in asmOS's shared welcome and application table and corrected those two places.
+Additional user screen/window/workbench layout edits appeared during review; those were also
+left untouched. The original dirty project-page file still matches its resumption hash.
 
 ## Authorization and scope
 
@@ -26,7 +57,7 @@ test suite is needed for prose-only changes. Preserve unrelated dirty work.
 - The current PR adds MIPS/RISC-V input-controller, folder/linking, interrupt/timer and streaming
   sound documentation, and moves bundled examples into the `packages/examples` submodule.
 
-## Short-text batch completed in the working tree
+## Short-text batch completed (committed in ae46d4fa)
 
 Changed share labels to explain build/run on opening a link; expanded the Examples ISA filter;
 shortened `wfi` statuses and clarified recovery steps in input/audio warnings; revised helper and
@@ -49,7 +80,7 @@ installed `node_modules/.bin/vp` directly. From `packages/asm-editor`, use
 `node scripts/sim-header/generate.mjs [--check]` and
 `node scripts/source-language-help/generate.mjs [--check]`.
 
-## Examples and courses batch: completed in the working tree
+## Examples and courses batch: historical completion record
 
 Examples are a separate git repository at `packages/examples`, initially clean at
 `21d297367cc95ce620e578efd2e4a42bdc3dd5d0`. Learner-facing sources include twelve bundled READMEs,
@@ -117,7 +148,7 @@ A requested memory pointer was saved to
 `/home/dev/.codex/memories/extensions/ad_hoc/notes/20261104T175128Z-pr108-public-copy-review.md`.
 It points here for up-to-date status, research and remaining work.
 
-## Reference documentation batch: authorized and in progress
+## Reference documentation batch: completed
 
 Priorities: `inputController.md`, `soundDevices.md`, `mars/interrupts.{mips,riscv}.md`, new file/folder
 sections of MIPS/RISC-V Syscalls/Runtime pages, new Using C linking sections, and changed x86
@@ -130,15 +161,15 @@ and C/linking/file services. Consumer-visible snapshots are generated from actua
 chapters into `/tmp/pr108-reference`, including appended tables and API entries. Baseline hashes of
 all earlier modified files are saved in `/tmp/pr108-before-reference-hashes.json`.
 
-Fresh reader reports are saved at `/tmp/pr108-device-reader.md` and
-`/tmp/pr108-file-reader.md`. The separate active writers are `/root/device_reference_writer` and
-`/root/file_reference_writer`; their original readers are `/root/device_reference_reader` and
-`/root/file_reference_reader`. Source and complete rendered-model baselines are in
+Initial reader reports are saved at `/tmp/pr108-device-reader.md` and
+`/tmp/pr108-file-reader.md`. The separate writers were `/root/device_reference_writer` and
+`/root/file_reference_writer`; their original readers `/root/device_reference_reader` and
+`/root/file_reference_reader` completed the rereads after resumption. Source and complete rendered-model baselines are in
 `/tmp/pr108-reference/source-baseline.json` and its original `{mips,risc-v,x86}.json` files.
 `/tmp/pr108-refresh-reference.mjs` refreshes consumer snapshots and writes revised models under
 `latest/`; run it from `packages/asm-editor` after the writers stabilize and again after revisions.
 
-Important findings being addressed: EPC must distinguish resuming interrupts from skipping or
+Important findings addressed: EPC must distinguish resuming interrupts from skipping or
 retrying faults; the RV32 wheel sign-extension example needs explicit RV64 guidance; CSR
 `time/timeh` uses Unix milliseconds (`calendarNow`, service 30), unlike MMIO `time`'s active
 milliseconds from zero. Input Undo can restore more than 64 events, while Status saturates at
@@ -151,5 +182,68 @@ executable fences unchanged and state their preconditions/variant-specific adjus
 
 Unrelated existing untracked file: `docs/research/project-size-limit.md`. Do not change it.
 The completed short-text diff is saved at `/tmp/pr108-short-text-baseline.patch`; its modified-file
-SHA-256 baseline is `/tmp/pr108-short-text-baseline.json`. Course/example edits should not alter
-those files. Update this note with results and remaining work before handing off.
+SHA-256 baseline is `/tmp/pr108-short-text-baseline.json`. Those are historical baselines; user
+commits after the quota pause supersede them. The current working branch contains the completed
+rewrite. No requested wording batch remains pending, and no commit or push was requested.
+
+## Follow-up inventory of newer content
+
+The user's next request was to check newer changes for text outside the completed review. This
+is an inventory, with no additional public-copy rewrite authorized by that request. Compared
+`ae46d4fa..a5138d58`, the AI feature-switch commit `181f89f2`, examples
+`21d2973..94d1acb`, and the current working changes. No user-facing text changed during this audit.
+
+- `d65c697` added 18 beginner example READMEs and their descriptions beyond the original twelve
+  reviewed examples. Most prose needs only a light pass, but the shared introductions sometimes
+  describe one target as though all ports do the same thing. Source-verified examples:
+  `binary-search` says 91 in twelve numbers while x86 searches for 23 in six;
+  `factorial-and-fibonacci` says factorial(8) while x86 calls fact(10);
+  `subroutine-with-stack-arguments` describes sum_of_squares while x86 calls sum7;
+  `sum-of-an-array` directs x86 readers to rax, which is overwritten for exit, while the program
+  explicitly preserves the result in r8. Check shared descriptions and target tables together.
+- New ports of previously reviewed examples also need a consistency pass. Flappy Bird's README
+  still says "Both versions" above five variants. Its current C compilation instructions have
+  awkward wording about running "slower than its 20 millisecond frames."
+- Current uncommitted MIPS Flappy Bird, RISC-V Flappy Bird, and RISC-V Flappy Bird in C lessons and
+  metadata contain substantial new prose outside the original nine-page course batch. Priorities
+  are the long RISC-V description, dense drawing explanations, the blanket -O0 variable-storage
+  explanation, and absolute claims about unseen partial frames and 20 ms timing. The latter
+  claims were identified for verification, not established as runtime defects by this audit.
+- The new Projects loading message and MIPS unused-handler/linking hints are clear enough to
+  keep. Many added-looking import/limit diagnostics were existing strings moved by the refactor,
+  rather than new unreviewed wording. The AI switch and current floating-screen/share changes
+  primarily change behavior and visibility, with no substantial new copy batch found.
+
+Recommended next scope: beginner README/description and port-consistency fixes first, then a
+bounded review of the three Flappy Bird lessons once their current changes settle. This audit
+used source comparison only, with no browser or emulator validation and no commit or push.
+
+## Follow-up rewrite: non-README content first
+
+The user authorized the follow-up inventory and requested non-README content before READMEs.
+The current-worktree baseline is saved at `/tmp/pr108-followup/source-baseline.json`; dirty-file
+hashes are at `/tmp/pr108-followup/dirty-baseline.json`. Preserve concurrent screen, sharing,
+startup-flag, compilation-record and example-code changes. Do not commit or push.
+
+The three Flappy Bird lessons and their metadata received a local wording and accuracy pass.
+Teaching order, all headings, routes, exercises and all twelve fenced blocks are preserved.
+No course restructuring or substantive learner rewrite was performed, so the sequential-course
+orchestrator was not needed. Drawing explanations now describe copying scenery and skipping
+unchanged stores directly. Timing targets 20 ms without promising exact browser timing or hidden
+partial frames. The C lesson explains -O2 without claiming -O0 keeps every variable in memory,
+and its final edit instructions include Compile before Build and Run. All three course
+descriptions are shorter, and their titles use Flappy Bird consistently.
+
+Nine new example descriptions were clarified before starting the README batch. In particular,
+Factorial and Fibonacci no longer promises factorial(8) for every target, Hello world no longer
+claims to be the shortest program with output, and Chiptune describes its three sound channels
+without a broad claim about game-console music. Structured metadata is preserved.
+
+Source evidence: `mars/marsHandlers.ts` flushes devices before service 32 waits, while
+`ScreenRenderer.svelte` paints on its own animation loop. Sleep is therefore useful for displaying
+a frame, but does not guarantee that no partial drawing is visible. The three games' `wait_frame`
+implementations target deadlines, reset when late and always wait at least 1 ms.
+
+The README batch uses `docs-rewrite-orchestrator`: fresh reader, separate writer, then same-reader
+reread. Its bounded scope is the eighteen new example folders plus Flappy Bird, Bouncing ball
+and Mouse paint, whose new target variants need a consistency check.

@@ -81,7 +81,7 @@ int main(void) {
 
 Device programs can use the POSIX functions `open`, `read`, `write`, `close`, `ioctl`, `mmap`, `poll`, `select`, `tcgetattr`, `tcsetattr`, `usleep`, `nanosleep` and `clock_gettime`. Their declarations come from `<fcntl.h>`, `<unistd.h>`, `<sys/ioctl.h>`, `<sys/mman.h>`, `<poll.h>`, `<sys/select.h>`, `<termios.h>` and `<time.h>`. Device constants and structures come from `<linux/fb.h>`, `<linux/input.h>`, `<sys/soundcard.h>`, `<sound/asound.h>` and `<linux/kd.h>`.
 
-A program can manage files and folders with `rename` and `remove` from `<stdio.h>`, `unlink` and `rmdir` from `<unistd.h>`, and `mkdir` from `<sys/stat.h>`. A folder made with `mkdir` stays after the program ends once a file is put in it. `setitimer` from `<sys/time.h>` sends `SIGALRM` again and again, for a handler that `signal` from `<signal.h>` installs: `struct itimerval timer = { { 0, 10000 }, { 0, 10000 } };` then `setitimer(ITIMER_REAL, &timer, NULL);` calls it every 10 milliseconds.
+A program can manage files and folders with `rename` and `remove` from `<stdio.h>`, `unlink` and `rmdir` from `<unistd.h>`, and `mkdir` from `<sys/stat.h>`. A folder created with `mkdir` remains after the program ends only if a file is still inside it, directly or in a subfolder. `setitimer` from `<sys/time.h>` sends `SIGALRM` again and again, for a handler that `signal` from `<signal.h>` installs: `struct itimerval timer = { { 0, 10000 }, { 0, 10000 } };` then `setitimer(ITIMER_REAL, &timer, NULL);` calls it every 10 milliseconds.
 
 These functions use C error conventions. Calls such as `open`, `read`, `write` and `ioctl` return -1 on failure and set `errno`; `mmap` returns `MAP_FAILED` instead. Include `<errno.h>` to inspect the error number. A successful `read` or `write` returns a byte count, which may be smaller than requested. After a short write, submit the remaining bytes. [The Screen](/documentation/x86/screen), [Keys and the pointer](/documentation/x86/input) and [Sound](/documentation/x86/sound) show these interfaces in use.
 
@@ -115,7 +115,9 @@ Compile again after reopening a saved project to restore source highlights and b
 
 ## Linking project Files {#linking-project-files}
 
-Only the selected C or C++ source is compiled automatically. Other assembly files in the same project can provide functions or data, even from a different folder. Files used as another program's entry or included by it are not searched for this Build.
+Only the selected C or C++ source is compiled automatically. Other assembly files in the same project can provide functions or data, even from a different folder.
+
+A program's **entry file** is the assembly file Build starts from. The Explorer action **New program from this file** creates a program with that entry. Build excludes other programs' entry files and the files they include from this search.
 
 Build includes an assembly file when it supplies a **symbol** the program references: an exported name for a function or data. In NASM, `global add_one` exports `add_one`, and the label `add_one:` defines its address. References from a linked file can bring in further assembly files.
 
