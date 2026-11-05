@@ -9,3 +9,6 @@ yarn-debug.log*
 yarn-error.log*
 .cache
 .vitest/
+
+# Claude Code local settings and skill links; shared skills live in .agents/
+.claude/
