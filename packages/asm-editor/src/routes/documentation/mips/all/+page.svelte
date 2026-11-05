@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-    <title>MIPS Complete Documentation</title>
+    <title>MIPS Complete Documentation - ASM Editor</title>
     <meta
         name="description"
         content="Complete MIPS documentation in a single page. Includes all instructions, directives, and syscalls."

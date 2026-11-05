@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 registers & flags"
-    title="x86-64 Registers & Flags"
+    title="x86-64 Registers & Flags - ASM Editor"
     description="The x86-64 registers, the four widths each one can be used at, the flags arithmetic writes, the condition codes the conditional instructions read, and the SSE and x87 floating point registers."
 />

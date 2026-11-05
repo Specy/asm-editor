@@ -220,9 +220,9 @@
 </script>
 
 <svelte:head>
-    <title>Embed - Assembly Emulator</title>
+    <title>Embed - ASM Editor</title>
     <meta name="description" content="Embed an assembly emulator in your website" />
-    <meta property="og:title" content="Embed - Asm Editor" />
+    <meta property="og:title" content="Embed - ASM Editor" />
     <meta property="og:description" content="Embed an assembly emulator in your website" />
 </svelte:head>
 

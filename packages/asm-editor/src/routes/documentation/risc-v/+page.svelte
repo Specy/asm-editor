@@ -5,7 +5,7 @@
 
 <DocumentationHome
     language="risc-v"
-    title="RISC-V assembly reference - instructions, registers and ecall syscalls | Asm Editor"
+    title="RISC-V assembly reference: instructions, registers and ecall syscalls - ASM Editor"
     description="RISC-V assembly reference for RV32 and RV64 instructions, directives, simulator services, registers, and C/C++ programs."
 >
     {#snippet intro()}

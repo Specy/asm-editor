@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 Sound"
-    title="x86-64 Sound: /dev/dsp, MIDI and the PC speaker"
+    title="x86-64 Sound: /dev/dsp, MIDI and the PC speaker - ASM Editor"
     description="Play PC speaker tones, MIDI notes or audio samples from x86. Configure playback buffering and volume through /dev/dsp and /dev/mixer."
 />

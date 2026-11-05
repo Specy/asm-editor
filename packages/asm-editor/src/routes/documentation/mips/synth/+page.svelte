@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="MIPS Synth"
-    title="MIPS Synth: waveform sound chip | Asm Editor"
+    title="MIPS Synth: waveform sound chip - ASM Editor"
     description="Program the MIPS Synth at 0xFFFF0100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback."
 />

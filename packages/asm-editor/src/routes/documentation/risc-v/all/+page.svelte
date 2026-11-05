@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-    <title>RISC-V Complete Documentation</title>
+    <title>RISC-V Complete Documentation - ASM Editor</title>
     <meta
         name="description"
         content="Complete RISC-V documentation in a single page. Includes all instructions, directives, and syscalls."

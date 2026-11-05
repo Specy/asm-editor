@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="RISC-V Syscalls"
-    title="RISC-V ecall syscall reference (RARS) | Asm Editor"
+    title="RISC-V ecall syscall reference (RARS) - ASM Editor"
     description="Syscalls in RISC-V are used to make requests to the operating system. Learn how to use them and the available syscalls."
 />

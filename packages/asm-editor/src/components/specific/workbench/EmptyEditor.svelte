@@ -92,7 +92,7 @@
     <div class="content">
         {#if !compact}
             <header>
-                <h1>Asm Editor</h1>
+                <h1>ASM Editor</h1>
                 <p class="tagline">
                     {languageLabel(project.language)} · {project.name || 'Project'}
                 </p>

@@ -2,6 +2,7 @@ export const BLOG_TAG_IDS = [
     'guide',
     'use-case',
     'behind-the-scenes',
+    'release',
     'mips',
     'risc-v',
     'x86',
@@ -26,6 +27,10 @@ export const BLOG_TAGS: Record<BlogTagId, { label: string; description: string }
         label: 'behind the scenes',
         description:
             'How ASM Editor loads programs, simulates instructions, and displays machine state.'
+    },
+    release: {
+        label: 'release',
+        description: 'What each version of ASM Editor added and changed, and how to use it.'
     },
     mips: {
         label: 'MIPS',

@@ -47,6 +47,8 @@ const metadataSchema = z
     })
 
 export type BlogPost = Omit<z.infer<typeof metadataSchema>, 'status' | 'datePublished'> & {
+    /** Only ever true when the catalog was made with `includeDrafts`, as the dev server does. */
+    draft: boolean
     slug: string
     pathname: string
     datePublished: string
@@ -59,8 +61,17 @@ export function summarizePost({ content: _content, ...summary }: BlogPost): Blog
     return summary
 }
 
-/** The only public view of the sources. Draft text never leaves this catalog. */
-export function createBlogCatalog(sources: BlogSource[], startHere: readonly string[] = []) {
+/**
+ * The only public view of the sources. Draft text never leaves this catalog unless
+ * `includeDrafts` is set, which the dev server does so that a draft can be read as it will
+ * look; a build leaves drafts out of every page, listing, tag and the sitemap. A draft
+ * without a `datePublished` is dated today.
+ */
+export function createBlogCatalog(
+    sources: BlogSource[],
+    startHere: readonly string[] = [],
+    { includeDrafts = false }: { includeDrafts?: boolean } = {}
+) {
     const seen = new Set<string>()
     const posts: BlogPost[] = []
     for (const source of sources) {
@@ -71,12 +82,14 @@ export function createBlogCatalog(sources: BlogSource[], startHere: readonly str
         const result = metadataSchema.safeParse(source.metadata)
         if (!result.success) throw new Error(`${source.path}: ${result.error.message}`)
         const { status, ...metadata } = result.data
-        if (status === 'draft') continue
+        const draft = status === 'draft'
+        if (draft && (!includeDrafts || !source.content?.trim())) continue
         if (!source.content?.trim())
             throw new Error(`${source.path}: published post has no content`)
         posts.push({
             ...metadata,
-            datePublished: metadata.datePublished!,
+            draft,
+            datePublished: metadata.datePublished ?? new Date().toISOString().slice(0, 10),
             slug: source.slug,
             pathname: `/blog/posts/${source.slug}`,
             content: source.content

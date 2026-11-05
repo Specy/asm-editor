@@ -8,7 +8,7 @@
 </script>
 
 <PageMeta
-    title={`${data.tag.label} guides and articles | ASM Editor`}
+    title={`${data.tag.label} guides and articles - ASM Editor`}
     description={data.tag.description}
 />
 <header class="blog-intro">

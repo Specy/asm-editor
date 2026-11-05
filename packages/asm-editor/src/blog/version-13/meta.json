@@ -1,0 +1,11 @@
+{
+    "title": "Version 13: reverse engineering and sound",
+    "description": "Import, decompile and debug x86-64 executables, keep several programs in one project, and play MIDI notes, sound files and waveform audio.",
+    "tags": ["release", "x86", "reverse-engineering"],
+    "status": "published",
+    "datePublished": "2026-10-24",
+    "image": {
+        "src": "/images/blog/version-13/listing-pseudocode.webp",
+        "alt": "An x86-64 executable paused at a breakpoint, with its Listing and matching Pseudocode side by side."
+    }
+}

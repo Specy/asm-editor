@@ -128,7 +128,7 @@
 </script>
 
 <svelte:head>
-    <title>Create Project</title>
+    <title>Create project - ASM Editor</title>
     <meta name="description" content="Create a new project" />
     <meta property="og:description" content="Create a new project" />
     <meta property="og:title" content="Create Project" />

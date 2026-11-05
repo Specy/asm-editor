@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-    <title>M68K Complete Documentation</title>
+    <title>M68K Complete Documentation - ASM Editor</title>
     <meta
         name="description"
         content="Complete M68K documentation in a single page. Includes all instructions, addressing modes, condition codes, directives, and assembler features."

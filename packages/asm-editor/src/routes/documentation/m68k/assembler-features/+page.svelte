@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="Assembler features"
-    title="M68K Assembler Features"
+    title="M68K Assembler Features - ASM Editor"
     description="M68K assembler features. Learn how to use these features to enhance your assembly code."
 />

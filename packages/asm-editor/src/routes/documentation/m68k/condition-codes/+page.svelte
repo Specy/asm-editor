@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="Condition Codes"
-    title="M68K Condition Codes"
+    title="M68K Condition Codes - ASM Editor"
     description="M68K condition codes are used to determine the result of an operation and control the flow of the program."
 />

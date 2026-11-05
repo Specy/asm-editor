@@ -26,7 +26,7 @@ afterEach(() => vi.restoreAllMocks())
 
 it('gives every port a unique ISA-prefixed id, independent of its display name or source folder', () => {
     expect(new Set(examples.map((e) => e.id)).size).toBe(examples.length)
-    expect(examples.find((e) => e.id === 'risc-v-pacman')?.label).toBe('RISC-V - Pac-Man')
+    expect(examples.find((e) => e.id === 'risc-v-pacman')?.label).toBe('RISC-V: Pac-Man')
     const renamed = structuredClone(index)
     renamed.examples.pacman.name = 'A different title'
     renamed.examples.pacman.path = 'shared/pacman'

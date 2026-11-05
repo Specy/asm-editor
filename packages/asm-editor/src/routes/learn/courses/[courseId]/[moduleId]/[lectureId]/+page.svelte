@@ -109,7 +109,7 @@
 </script>
 
 <PageMeta
-    title="{data.lecture.name} - {data.course.name}"
+    title="{data.lecture.name} - {data.course.name} - ASM Editor"
     description={data.lecture.description}
     type="article"
     {jsonLd}

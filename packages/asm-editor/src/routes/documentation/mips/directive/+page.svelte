@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="MIPS directives"
-    title="MIPS Directives"
+    title="MIPS Directives - ASM Editor"
     description="MIPS directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
 />

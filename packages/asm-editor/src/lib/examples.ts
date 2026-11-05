@@ -77,7 +77,7 @@ export function parseExamplesIndex(input: unknown): Example[] {
                     {
                         id,
                         name,
-                        label: `${languageLabel(port.target)} - ${name}${port.variant ? ` (${port.variant})` : ''}`,
+                        label: `${languageLabel(port.target)}: ${name}${port.variant ? ` (${port.variant})` : ''}`,
                         description: port.description ?? example.description,
                         language: port.target,
                         variant: port.variant,

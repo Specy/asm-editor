@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="Z80 Registers & Flags"
-    title="Z80 Registers & Flags"
+    title="Z80 Registers & Flags - ASM Editor"
     description="The Z80 registers and flags: the accumulator, the general purpose pairs, the index registers, the alternate set, and the six flags of the F register."
 />

@@ -40,10 +40,10 @@
     let architecture = $derived(DOCUMENTATION_SITES[documentationLanguageOf(language)].label)
     // The language's documentation root, for the breadcrumb: `/documentation/x86`.
     let root = $derived(`/documentation/${documentationLanguageOf(language)}`)
-    // "Docs - move" matched no query anyone types; "MOVE - M68K instruction reference" matches how
+    // "Docs - move" matched no query anyone types; "MOVE: M68K instruction reference" matches how
     // these are actually searched for.
     let pageTitle = $derived(
-        `${document.name.toUpperCase()} - ${architecture} instruction reference`
+        `${document.name.toUpperCase()}: ${architecture} instruction reference - ASM Editor`
     )
     let description = $derived(`${document.name}: ${document.longName}. ${document.summary}`)
     let metaDescription = $derived(toMetaDescription(description))

@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="MIPS Syscalls"
-    title="MIPS syscall reference (MARS) | Asm Editor"
+    title="MIPS syscall reference (MARS) - ASM Editor"
     description="Syscalls in MIPS are used to make requests to the operating system. Learn how to use them and the available syscalls."
 />

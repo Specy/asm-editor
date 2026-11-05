@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="Shift Directions"
-    title="M68K Shift Directions"
+    title="M68K Shift Directions - ASM Editor"
     description="Shift directions in M68K specify the direction in which bits are shifted. Learn about the shift logical, shift arithmetical, and rotate directions."
 />

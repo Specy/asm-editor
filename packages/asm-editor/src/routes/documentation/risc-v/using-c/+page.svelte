@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="RISC-V Using C and C++"
-    title="RISC-V Using C and C++"
+    title="RISC-V Using C and C++ - ASM Editor"
     description="Write, run and debug C or C++ for RV32 or RV64, with examples, supported libraries and simulator functions."
 />

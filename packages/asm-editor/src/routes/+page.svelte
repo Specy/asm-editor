@@ -29,7 +29,7 @@
     import { resolve } from '$app/paths'
     import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import { jsonLdScriptTag, softwareApplicationLd } from '#lib/seo.ts'
+    import { jsonLdScriptTag, softwareApplicationLd, websiteLd } from '#lib/seo.ts'
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>
@@ -62,7 +62,7 @@
 </script>
 
 <svelte:head>
-    <title>Asm Editor - online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80</title>
+    <title>ASM Editor: online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80</title>
     <meta
         name="description"
         content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
@@ -73,7 +73,7 @@
     />
     <meta
         property="og:title"
-        content="Asm Editor - online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80"
+        content="ASM Editor: online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80"
     />
     <!-- The page's schema.org description. {@html} is the only way to emit a <script>
          from a component: <svelte:element this="script"> renders nothing in Svelte, and a
@@ -82,6 +82,8 @@
          so nothing interpolated can close the tag. -->
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     {@html jsonLdScriptTag(softwareApplicationLd())}
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+    {@html jsonLdScriptTag(websiteLd())}
 </svelte:head>
 <DefaultNavbar />
 <Page>
@@ -373,11 +375,15 @@
                 </div>
             </MainPageSection>
         {/if}
-        <MainPageSection id="embed">
+        <!-- Without the AI Chat section, Embed follows Exam and takes the alternate side and colour. -->
+        <MainPageSection id="embed" reverse={!AI_FEATURES_ENABLED}>
             {#snippet title()}
                 Embed
             {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
+            <div
+                class="description"
+                class:textShadow={AI_FEATURES_ENABLED ? textShadowPrimary : textShadowSecondary}
+            >
                 Embed the editor in your website to show and teach how assembly works using the <a
                     href={resolve('/embed')}
                     title="Embedder tool"

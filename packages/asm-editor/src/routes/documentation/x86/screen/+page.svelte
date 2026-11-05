@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 Screen"
-    title="x86-64 Screen and /dev/fb0"
+    title="x86-64 Screen and /dev/fb0 - ASM Editor"
     description="Draw pixels and switch framebuffer pages through /dev/fb0. Configure the x86 Screen size with Display or @screen."
 />

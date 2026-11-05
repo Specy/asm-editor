@@ -57,7 +57,7 @@
 <svelte:head>
     <link rel="canonical" href={canonicalUrl} />
     <meta property="og:url" content={canonicalUrl} />
-    <meta property="og:site_name" content="Asm Editor" />
+    <meta property="og:site_name" content="ASM Editor" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta property="og:image" content={toAbsoluteUrl(socialImage.src)} />
     <meta property="og:image:alt" content={socialImage.alt} />

@@ -11,6 +11,7 @@
             <img src={post.image.src} alt="" loading="lazy" width="1440" height="1000" />
         </div>{/if}
     <div class="blog-card-body">
+        {#if post.draft}<span class="blog-draft">Draft</span>{/if}
         <h3><a href={resolve('/blog/posts/[slug]', { slug: post.slug })}>{post.title}</a></h3>
         <p>{post.description}</p>
         <div class="blog-tags blog-card-footer">

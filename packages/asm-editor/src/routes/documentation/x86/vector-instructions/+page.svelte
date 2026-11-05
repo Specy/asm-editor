@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 Vector instructions"
-    title="x86-64 Vector instructions"
+    title="x86-64 Vector instructions - ASM Editor"
     description="The ymm registers and the AVX, AVX2, FMA and BMI instructions: which run in the editor, how they treat the upper half of a register, which cross between 128-bit lanes, and how memory operands are sized and aligned."
 />

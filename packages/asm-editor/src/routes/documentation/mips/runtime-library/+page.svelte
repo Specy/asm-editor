@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="MIPS Runtime library"
-    title="MIPS Runtime library"
+    title="MIPS Runtime library - ASM Editor"
     description="The C standard library that compiled MIPS programs use, and how hand-written assembly calls printf, scanf, malloc and the other functions."
 />

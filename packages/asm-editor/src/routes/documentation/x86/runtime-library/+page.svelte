@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 Runtime library"
-    title="x86-64 Runtime library"
+    title="x86-64 Runtime library - ASM Editor"
     description="The C standard library that compiled x86-64 programs use, and how hand-written assembly calls printf, scanf, malloc and the other functions."
 />

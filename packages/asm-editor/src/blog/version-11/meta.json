@@ -1,0 +1,11 @@
+{
+    "title": "Version 11: a new editor layout",
+    "description": "Version 11 adds the Workbench layout, Testcases you can edit in place, and Documentation search that understands questions.",
+    "tags": ["release"],
+    "status": "published",
+    "datePublished": "2026-09-30",
+    "image": {
+        "src": "/images/blog/version-11/workbench.webp",
+        "alt": "A MIPS Project paused in the Workbench, with Explorer, the editor, registers, memory and the Screen"
+    }
+}

@@ -5,7 +5,7 @@
 
 <DocumentationHome
     language="mips"
-    title="MIPS assembly reference - instructions, registers and syscalls | Asm Editor"
+    title="MIPS assembly reference: instructions, registers and syscalls - ASM Editor"
     description="MIPS assembly reference for instructions, directives, simulator services, registers, and C/C++ programs."
 >
     {#snippet intro()}

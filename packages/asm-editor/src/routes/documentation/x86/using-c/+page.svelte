@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 Using C and C++"
-    title="x86-64 Using C and C++"
+    title="x86-64 Using C and C++ - ASM Editor"
     description="Write, run and debug C or C++ for x86-64, with examples, simulator functions and supported language features."
 />

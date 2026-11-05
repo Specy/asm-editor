@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-    <title>Changelog | Asm Editor</title>
+    <title>Changelog - ASM Editor</title>
     <meta
         name="description"
         content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
@@ -17,7 +17,7 @@
         property="og:description"
         content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
     />
-    <meta property="og:title" content="Asm Editor" />
+    <meta property="og:title" content="Changelog - ASM Editor" />
 </svelte:head>
 
 <DefaultNavbar />

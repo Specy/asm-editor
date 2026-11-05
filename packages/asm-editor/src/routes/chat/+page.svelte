@@ -66,7 +66,7 @@
 </script>
 
 <svelte:head>
-    <title>AI Chat</title>
+    <title>AI Chat - ASM Editor</title>
     <meta name="description" content="Chat with the AI assistant" />
 </svelte:head>
 

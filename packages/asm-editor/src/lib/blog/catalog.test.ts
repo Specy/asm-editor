@@ -29,6 +29,27 @@ describe('blog publication', () => {
         expect(catalog.tags.map((tag) => tag.id)).toEqual(['guide'])
         expect(catalog.featured).toEqual([])
     })
+    it('includes drafts, marked as such, only when asked to, as the dev server does', () => {
+        const catalog = createBlogCatalog(
+            [
+                post('public'),
+                post('dated', { status: 'draft', datePublished: '2026-09-30', tags: ['x86'] }),
+                post('undated', { status: 'draft', datePublished: undefined }),
+                { ...post('empty', { status: 'draft' }), content: '' }
+            ],
+            [],
+            { includeDrafts: true }
+        )
+        expect(catalog.posts.map((post) => [post.slug, post.draft])).toEqual([
+            ['undated', true],
+            ['public', false],
+            ['dated', true]
+        ])
+        expect(catalog.getPost('dated')?.content).toContain('Useful content.')
+        expect(catalog.getPost('undated')?.datePublished).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+        expect(catalog.getPost('empty')).toBeUndefined()
+        expect(catalog.tags.map((tag) => tag.id)).toEqual(['guide', 'x86'])
+    })
     it('sorts by editorial publication date and keeps curated order without repeated cards', () => {
         const catalog = createBlogCatalog(
             [

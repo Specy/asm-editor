@@ -47,9 +47,9 @@ export const PAPER = {
  * page sets once it runs. A page rendered on the server writes its own title and needs none here.
  */
 export const NOINDEX_PAGES: ReadonlyMap<string, { title?: string }> = new Map([
-    ['/chat', { title: 'AI Chat' }],
-    ['/exam', { title: 'Exam Builder - Asm Editor' }],
-    ['/exam/session', { title: 'Exam Session - Asm Editor' }]
+    ['/chat', { title: 'AI Chat - ASM Editor' }],
+    ['/exam', { title: 'Exam builder - ASM Editor' }],
+    ['/exam/session', { title: 'Exam Session - ASM Editor' }]
 ])
 
 export function toAbsoluteUrl(pathname: string) {
@@ -100,11 +100,22 @@ export function jsonLdScriptTag(value: unknown) {
     return `<script type="application/ld+json">${serializeJsonLd(value)}</` + `script>`
 }
 
+/** The site's name for Google, which shows it above every result instead of guessing it from
+ *  `og:site_name` and the home page's title. Only read on the home page. */
+export function websiteLd() {
+    return {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'ASM Editor',
+        url: `${SITE_URL}/`
+    }
+}
+
 export function softwareApplicationLd() {
     return {
         '@context': 'https://schema.org',
         '@type': 'SoftwareApplication',
-        name: 'Asm Editor',
+        name: 'ASM Editor',
         description:
             'Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution.',
         url: SITE_URL,

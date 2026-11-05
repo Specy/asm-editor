@@ -2,6 +2,7 @@
     import { page } from '$app/state'
     import { beforeNavigate, goto } from '$app/navigation'
     import { onMount } from 'svelte'
+    import { MediaQuery } from 'svelte/reactivity'
     import { browser } from '$app/env'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
@@ -59,8 +60,10 @@
             searchText: `${exampleName(e)} ${languageLabel(e.language)}`
         }))
     )
+    //phones fit both pickers on one line with the shorter label
+    const narrow = new MediaQuery('max-width: 600px', false)
     const isas = $derived([
-        { key: 'All instruction sets', value: '' },
+        { key: narrow.current ? 'All ISAs' : 'All instruction sets', value: '' },
         ...[...new Set(examples.map((e) => e.language))].sort().map((language) => ({
             key: languageLabel(language),
             value: language
@@ -163,38 +166,40 @@
         <DefaultNavbar compact style="position: static; align-items: center;">
             {#snippet toolbar()}
                 <nav class="examples-toolbar" aria-label="Examples">
-                    <div class="isa-picker">
-                        <Select
-                            options={isas}
-                            bind:value={isa}
-                            ariaLabel="Filter by instruction set"
-                            disabled={status !== 'loaded'}
-                            wrapperStyle="width: 100%;"
-                        />
-                    </div>
-                    <div class="example-picker">
-                        <Select
-                            {options}
-                            bind:value={pickerValue}
-                            ariaLabel="Example"
-                            onChange={(id) => {
-                                void choose(id).catch(() => undefined)
-                            }}
-                            disabled={!options.length}
-                            wrapperStyle="width: 100%;"
-                        >
-                            {#snippet trigger()}
-                                {#if selected && filtered.some((e) => e.id === selected.id)}
-                                    {@render exampleOption(selected)}
-                                {:else}
-                                    Choose an example
-                                {/if}
-                            {/snippet}
-                            {#snippet item(option)}
-                                {@const example = filtered.find((e) => e.id === option.value)}
-                                {#if example}{@render exampleOption(example)}{/if}
-                            {/snippet}
-                        </Select>
+                    <div class="pickers">
+                        <div class="isa-picker">
+                            <Select
+                                options={isas}
+                                bind:value={isa}
+                                ariaLabel="Filter by instruction set"
+                                disabled={status !== 'loaded'}
+                                wrapperStyle="width: 100%;"
+                            />
+                        </div>
+                        <div class="example-picker">
+                            <Select
+                                {options}
+                                bind:value={pickerValue}
+                                ariaLabel="Example"
+                                onChange={(id) => {
+                                    void choose(id).catch(() => undefined)
+                                }}
+                                disabled={!options.length}
+                                wrapperStyle="width: 100%;"
+                            >
+                                {#snippet trigger()}
+                                    {#if selected && filtered.some((e) => e.id === selected.id)}
+                                        {@render exampleOption(selected)}
+                                    {:else}
+                                        Choose an example
+                                    {/if}
+                                {/snippet}
+                                {#snippet item(option)}
+                                    {@const example = filtered.find((e) => e.id === option.value)}
+                                    {#if example}{@render exampleOption(example)}{/if}
+                                {/snippet}
+                            </Select>
+                        </div>
                     </div>
                     <div class="actions">
                         <ShareMenu
@@ -207,7 +212,7 @@
                                     cssVar="secondary"
                                     onClick={open}
                                     disabled={!selected}
-                                    aria-haspopup="menu"
+                                    aria-haspopup="dialog"
                                     aria-expanded={expanded}>Share example</Button
                                 >
                             {/snippet}
@@ -268,6 +273,7 @@
         flex: 1 1 40rem;
         min-width: 0;
         flex-wrap: wrap;
+        justify-content: flex-end;
         align-items: center;
         gap: 0.5rem;
     }
@@ -282,13 +288,17 @@
         background-color: var(--accent2);
         color: var(--accent2-text);
     }
+    /* only a layout box on phones, where the two pickers share one line */
+    .pickers {
+        display: contents;
+    }
     .isa-picker {
-        width: 9rem;
+        width: 14rem;
     }
     .example-picker {
         flex: 1;
         min-width: 12rem;
-        max-width: 30rem;
+        max-width: 26rem;
     }
     .example-picker :global(.control > .label) {
         flex: 1;
@@ -317,7 +327,6 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
-        margin-left: auto;
     }
     iframe {
         display: block;
@@ -331,17 +340,20 @@
         padding: 1rem;
     }
     @media (max-width: 600px) {
+        .pickers {
+            display: flex;
+            gap: 0.5rem;
+            width: 100%;
+        }
         .isa-picker {
-            flex: 1;
-            width: auto;
+            flex: none;
+            width: 7rem;
         }
         .example-picker {
-            order: 2;
-            flex-basis: 100%;
+            min-width: 0;
             max-width: none;
         }
         .actions {
-            order: 3;
             width: 100%;
             margin: 0;
         }

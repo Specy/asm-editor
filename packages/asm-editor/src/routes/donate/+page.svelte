@@ -48,16 +48,16 @@
 
 <DefaultNavbar />
 <PageMeta
-    title="Donate | Asm Editor"
-    description="Support the development of Asm Editor, the free web IDE for assembly, with GitHub Sponsors, Ko-fi or PayPal."
+    title="Donate - ASM Editor"
+    description="Support the development of ASM Editor, the free web IDE for assembly, with GitHub Sponsors, Ko-fi or PayPal."
 />
 
 <div class="content-pages">
     <Page cropped="70rem" hasNavbar contentStyle="padding: 1rem">
-        <Header>Support Asm Editor</Header>
+        <Header>Support ASM Editor</Header>
         <div class="intro">
             <p>
-                Thanks for using Asm Editor! It is free and open source. If it helped you, you can
+                Thanks for using ASM Editor! It is free and open source. If it helped you, you can
                 support the development of new features and ISAs with a monthly sponsorship or a
                 one-time donation.
             </p>

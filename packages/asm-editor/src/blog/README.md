@@ -22,9 +22,11 @@ Choose tags from `src/lib/blog/tags.ts`. A new tag needs a stable ID, display la
 and collection introduction there. Start Here is curated in
 `src/lib/blog/catalog.server.ts`; other posts are sorted by publication date.
 
-Keep unfinished posts as drafts. The server catalog excludes drafts from article
-lookup, listings, prerender entries, tag collections, and the sitemap. The build
-validates metadata, registered tags, dates, and published content.
+Keep unfinished posts as drafts. The dev server shows drafts like published posts,
+with a Draft badge, so you can read one as it will look; a draft without
+`datePublished` is dated today there. A build excludes drafts from article lookup,
+listings, prerender entries, tag collections, and the sitemap, and validates
+metadata, registered tags, dates, and published content.
 
 When a post is ready, set `status` to `published` and add `datePublished` in
 `YYYY-MM-DD` form. Add `dateUpdated` for substantive changes; retain the original

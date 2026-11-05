@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="Addressing modes"
-    title="M68K Addressing Modes"
+    title="M68K Addressing Modes - ASM Editor"
     description="M68K addressing modes are used to access data in different ways. Learn how to use them and the available addressing modes."
 />

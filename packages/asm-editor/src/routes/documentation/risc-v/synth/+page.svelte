@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="RISC-V Synth"
-    title="RISC-V Synth: waveform sound chip | Asm Editor"
+    title="RISC-V Synth: waveform sound chip - ASM Editor"
     description="Program the RISC-V Synth at 0xFFFF0100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback."
 />

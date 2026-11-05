@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 syscalls"
-    title="x86-64 Linux syscall reference | Asm Editor"
+    title="x86-64 Linux syscall reference - ASM Editor"
     description="The Linux syscalls an x86-64 program can make in this emulator: their numbers, the registers they read their arguments from, and what each one does."
 />

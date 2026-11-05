@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="RISC-V Runtime library"
-    title="RISC-V Runtime library"
+    title="RISC-V Runtime library - ASM Editor"
     description="The C standard library that compiled RISC-V programs use, and how hand-written assembly calls printf, scanf, malloc and the other functions."
 />

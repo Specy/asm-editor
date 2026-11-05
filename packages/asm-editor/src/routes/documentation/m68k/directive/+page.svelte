@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="Directives"
-    title="M68K Directives"
+    title="M68K Directives - ASM Editor"
     description="M68K directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
 />

@@ -36,6 +36,20 @@
     color: var(--background-text);
     text-decoration: none;
 }
+.blog-draft {
+    display: block;
+    width: fit-content;
+    margin-bottom: 0.6rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 1.2rem;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+.blog-article-header .blog-draft {
+    margin-top: 0.6rem;
+}
 .blog-tag:hover {
     color: var(--accent);
     border-color: var(--accent);

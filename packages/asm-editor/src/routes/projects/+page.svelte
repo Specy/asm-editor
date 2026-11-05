@@ -114,7 +114,7 @@
 </script>
 
 <svelte:head>
-    <title>Projects</title>
+    <title>Projects - ASM Editor</title>
     <meta name="description" content="Create, edit or delete your projects" />
     <meta property="og:description" content="Create, edit or delete your projects" />
     <meta property="og:title" content="Projects" />

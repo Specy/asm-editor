@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-    <title>x86-64 Complete Documentation</title>
+    <title>x86-64 Complete Documentation - ASM Editor</title>
     <meta
         name="description"
         content="Complete x86-64 documentation in a single page. Includes the integer instruction set, every mnemonic the assembler accepts, the directives, the registers and flags, the SSE, AVX and x87 registers, the vector instructions the emulator runs, and the syscalls."

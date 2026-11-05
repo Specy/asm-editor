@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-    <title>Z80 Complete Documentation</title>
+    <title>Z80 Complete Documentation - ASM Editor</title>
     <meta
         name="description"
         content="Complete Z80 documentation in a single page. Includes all instructions, assembler directives, registers and flags, and the console ports."

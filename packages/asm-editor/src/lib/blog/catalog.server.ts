@@ -1,3 +1,4 @@
+import { dev } from '$app/env'
 import { createBlogCatalog } from './catalog.ts'
 
 const metadata = import.meta.glob('/src/blog/*/meta.json', { eager: true, import: 'default' })
@@ -14,5 +15,6 @@ export const blogCatalog = createBlogCatalog(
         metadata: meta,
         content: content[path.replace(/meta\.json$/, 'index.md')]
     })),
-    ['getting-started', 'mips-mars-browser', 'riscv-rars-browser']
+    ['getting-started', 'mips-mars-browser', 'riscv-rars-browser'],
+    { includeDrafts: dev }
 )

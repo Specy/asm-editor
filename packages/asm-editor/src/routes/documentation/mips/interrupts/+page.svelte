@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="MIPS interrupts and the timer"
-    title="MIPS interrupts and the timer: Count, Compare and handlers | Asm Editor"
+    title="MIPS interrupts and the timer: Count, Compare and handlers - ASM Editor"
     description="Set up timer and keyboard interrupts in MIPS, write a handler and step through it in the debugger."
 />

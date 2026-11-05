@@ -37,7 +37,7 @@
     )
 </script>
 
-<PageMeta title={`${label} Instructions`} {description} />
+<PageMeta title={`${label} Instructions - ASM Editor`} {description} />
 <Page contentStyle="padding-top: 4rem; gap: 1rem; padding: 1rem">
     <h1>{label} Instructions</h1>
     {@render children?.()}

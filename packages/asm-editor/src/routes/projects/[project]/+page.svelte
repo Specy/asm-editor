@@ -493,9 +493,7 @@
 </script>
 
 <svelte:head>
-    <title>
-        {project?.name || 'Unnamed'}
-    </title>
+    <title>{project?.name || 'Unnamed'} - ASM Editor</title>
 
     <meta
         name="description"

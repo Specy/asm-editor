@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="M68K Synth"
-    title="M68K Synth: waveform sound chip | Asm Editor"
+    title="M68K Synth: waveform sound chip - ASM Editor"
     description="Program the M68K Synth at $E00100: eight sound channels controlled through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback."
 />

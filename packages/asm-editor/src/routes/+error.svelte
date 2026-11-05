@@ -11,7 +11,7 @@
 </script>
 
 <svelte:head>
-    <title>{missing ? 'Page not found' : 'Something went wrong'}</title>
+    <title>{missing ? 'Page not found' : 'Something went wrong'} - ASM Editor</title>
 </svelte:head>
 
 <DefaultNavbar />

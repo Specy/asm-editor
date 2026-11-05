@@ -15,7 +15,7 @@
 </script>
 
 <PageMeta
-    title={`${post.title} | ASM Editor`}
+    title={`${post.title} - ASM Editor`}
     description={post.description}
     type="article"
     jsonLd={[
@@ -41,6 +41,7 @@
                 <span class="blog-link-icon" aria-hidden="true"><FaArrowLeft /></span>
                 All articles
             </a>
+            {#if post.draft}<span class="blog-draft">Draft: shown by the dev server only</span>{/if}
             <h1>{post.title}</h1>
             <p class="blog-lead">{post.description}</p>
             <div class="blog-byline">

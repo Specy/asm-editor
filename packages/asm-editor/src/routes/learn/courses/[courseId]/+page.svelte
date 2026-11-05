@@ -40,7 +40,7 @@
 </script>
 
 <PageMeta
-    title="{data.course.name} course - free interactive lessons | Asm Editor"
+    title="{data.course.name} course: free interactive lessons - ASM Editor"
     description={data.course.description}
     type="article"
     {jsonLd}

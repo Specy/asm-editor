@@ -53,14 +53,14 @@
 
 <DefaultNavbar />
 <PageMeta
-    title="Documentation - M68K, MIPS, RISC-V, x86-64 and Z80 assembly reference | Asm Editor"
-    description="Instruction references, registers, directives, syscalls and runtime library docs for M68K, MIPS, RISC-V, x86-64 and Z80 assembly in the Asm Editor."
+    title="Documentation: M68K, MIPS, RISC-V, x86-64 and Z80 assembly reference - ASM Editor"
+    description="Instruction references, registers, directives, syscalls and runtime library docs for M68K, MIPS, RISC-V, x86-64 and Z80 assembly in the ASM Editor."
 />
 
 <Page cropped="70rem" hasNavbar contentStyle="padding: 1rem">
     <Header>Instruction Sets</Header>
     <p class="intro">
-        Reference documentation for the assembly languages supported by Asm Editor, including
+        Reference documentation for the assembly languages supported by ASM Editor, including
         instructions, operand forms, directives, registers and input/output. You can also open this
         reference in the editor's Documentation panel. If you are new to assembly, start with the
         <a href={resolve('/learn/courses/[courseId]', { courseId: 'assembly-basics' })}

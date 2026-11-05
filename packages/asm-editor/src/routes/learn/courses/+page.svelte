@@ -28,7 +28,7 @@
 <DefaultNavbar />
 
 <PageMeta
-    title="Assembly courses - M68K, MIPS, RISC-V, x86-64, Z80 | Asm Editor"
+    title="Assembly courses: M68K, MIPS, RISC-V, x86-64, Z80 - ASM Editor"
     description="Free interactive courses for M68K, MIPS, RISC-V, x86-64 and Z80 assembly. Learn the basics, run code in your browser and practice with exercises."
 />
 

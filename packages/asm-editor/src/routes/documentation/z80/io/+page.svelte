@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="Z80 Input/Output"
-    title="Z80 Input/Output"
+    title="Z80 Input/Output - ASM Editor"
     description="The Z80 has no syscalls: programs print and read through the in and out instructions. Learn the console ports of the emulator, with runnable examples."
 />

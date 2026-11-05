@@ -5,7 +5,7 @@
 
 <DocumentationHome
     language="m68k"
-    title="M68K assembly reference - instructions, addressing modes and traps | Asm Editor"
+    title="M68K assembly reference: instructions, addressing modes and traps - ASM Editor"
     description="Read the M68K Documentation, including all the instructions with addressing modes and the assembler features"
 />
 

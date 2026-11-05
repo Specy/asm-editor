@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="RISC-V Registers"
-    title="RISC-V Registers"
+    title="RISC-V Registers - ASM Editor"
     description="RISC-V registers reference: the 32 general purpose registers with their ABI names, the floating point registers, and the control and status registers the simulator implements."
 />

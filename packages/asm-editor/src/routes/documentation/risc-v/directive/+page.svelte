@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="RISC-V directives"
-    title="RISC-V Directives"
+    title="RISC-V Directives - ASM Editor"
     description="RISC-V directives are used by the assembler to execute operations at assembly time. Learn how to use them and the available directives."
 />

@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 Executables"
-    title="x86-64 Executables"
+    title="x86-64 Executables - ASM Editor"
     description="Run and debug a compiled x86-64 Linux program: what runs, the bundled libraries, editing bytes in the Hex editor, the Listing and its names, Breakpoints, Arguments, Testcases, patching an instruction and the Build output."
 />

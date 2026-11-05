@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="MIPS Registers"
-    title="MIPS Registers"
+    title="MIPS Registers - ASM Editor"
     description="MIPS registers reference: the 32 general purpose registers, the floating point registers of coprocessor 1 with their condition flags, and the coprocessor 0 exception registers."
 />

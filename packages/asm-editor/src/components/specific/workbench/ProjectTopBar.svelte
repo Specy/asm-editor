@@ -79,7 +79,7 @@
                 type="button"
                 class="action share"
                 onclick={open}
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 aria-expanded={expanded}
             >
                 <Icon size={0.75}><FaShareAlt /></Icon>

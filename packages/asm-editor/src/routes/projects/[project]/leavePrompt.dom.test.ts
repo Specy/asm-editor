@@ -86,10 +86,18 @@ async function open(id: string, search = '') {
     await vi.waitFor(() => expect(button('Change')).toBeDefined())
     return {
         button,
-        copyLink(label = 'Copy link') {
+        /** Copies the Share link with the switches named turned on. */
+        copyLink(...switches: string[]) {
             button('Share').click()
             flushSync()
-            button(label).click()
+            for (const name of switches) {
+                ;[...target.ownerDocument.querySelectorAll('label')]
+                    .find((label) => label.textContent?.trim() === name)!
+                    .querySelector<HTMLButtonElement>('[role=switch]')!
+                    .click()
+                flushSync()
+            }
+            button('Copy link').click()
         },
         /** Whether leaving now would be asked about, as a browser asks for a cancelled unload. */
         asks() {
@@ -280,21 +288,22 @@ it('reports an unknown example instead of falling back to a project payload', as
 })
 
 it.each([
-    ['Copy link to build on open', 'build'],
-    ['Copy link to build and run on open', 'buildAndRun']
-])('copies example links with the startup option %s', async (label, flag) => {
+    [['Build on open'], 'build'],
+    [['Run after building'], 'buildAndRun']
+])('copies example links with the switches %j on', async (switches, flag) => {
     await serveExample()
     const copy = vi.spyOn(utilities, 'copyText').mockResolvedValue(true)
     const project = await open('share', '?example=mips-bouncing-ball')
     try {
-        project.copyLink(label)
+        project.copyLink(...switches)
         await vi.waitFor(() => expect(copy).toHaveBeenCalledOnce())
         const url = new URL(copy.mock.calls[0][0])
         expect(url.searchParams.get('example')).toBe('mips-bouncing-ball')
         expect(url.searchParams.get(flag)).toBe('true')
         project.button('Change').click()
         flushSync()
-        project.copyLink(label)
+        //the switches stay as they were left
+        project.copyLink()
         await vi.waitFor(() => expect(copy).toHaveBeenCalledTimes(2))
         const edited = new URL(copy.mock.calls[1][0])
         expect(edited.searchParams.get('project')).toBeTruthy()

@@ -201,10 +201,10 @@
 </script>
 
 <svelte:head>
-    <title>Exam Builder - Asm Editor</title>
-    <meta name="description" content="Create multi-section exams for Asm Editor" />
-    <meta property="og:title" content="Exam Builder - Asm Editor" />
-    <meta property="og:description" content="Create multi-section exams for Asm Editor" />
+    <title>Exam builder - ASM Editor</title>
+    <meta name="description" content="Create multi-section exams for ASM Editor" />
+    <meta property="og:title" content="Exam builder - ASM Editor" />
+    <meta property="og:description" content="Create multi-section exams for ASM Editor" />
 </svelte:head>
 
 <DefaultNavbar />

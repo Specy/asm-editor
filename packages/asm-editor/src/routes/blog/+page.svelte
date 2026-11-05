@@ -8,7 +8,7 @@
 </script>
 
 <PageMeta
-    title="ASM Editor guides and use cases"
+    title="Guides and use cases - ASM Editor"
     description="ASM Editor guides for MIPS/MARS, RISC-V/RARS, C/C++ compilation, teaching, and reverse engineering."
 />
 

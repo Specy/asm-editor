@@ -698,7 +698,7 @@
 </script>
 
 <svelte:head>
-    <title>{exam?.title || 'Exam Session'} - Asm Editor</title>
+    <title>{exam?.title || 'Exam Session'} - ASM Editor</title>
     <meta name="description" content="Take and review multi-section exams" />
 </svelte:head>
 

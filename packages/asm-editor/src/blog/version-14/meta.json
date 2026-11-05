@@ -1,0 +1,11 @@
+{
+    "title": "Version 14: x86-64 graphics, sound and a real 68000",
+    "description": "Use Linux graphics, input and sound on x86-64, explore 68000 exceptions and interrupts, draw sprites, and start from ready-made examples.",
+    "tags": ["release", "x86", "teaching"],
+    "status": "published",
+    "datePublished": "2026-11-01",
+    "image": {
+        "src": "/images/blog/version-14/x86-mouse-paint.webp",
+        "alt": "An x86-64 assembly program drawing coloured strokes on the Screen through Linux device files"
+    }
+}

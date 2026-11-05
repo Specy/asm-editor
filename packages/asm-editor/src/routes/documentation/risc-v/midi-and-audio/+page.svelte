@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="RISC-V MIDI and sampled audio"
-    title="RISC-V MIDI port and sampled-audio output | Asm Editor"
+    title="RISC-V MIDI port and sampled-audio output - ASM Editor"
     description="Play MIDI notes and stream audio samples from RISC-V programs, with examples in assembly and C."
 />

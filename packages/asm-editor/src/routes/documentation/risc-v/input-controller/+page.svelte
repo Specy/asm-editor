@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="RISC-V Input controller"
-    title="RISC-V Input controller: keyboard and mouse registers | Asm Editor"
+    title="RISC-V Input controller: keyboard and mouse registers - ASM Editor"
     description="Read held keys, key presses and releases, mouse buttons, pointer position and wheel events in RISC-V assembly and C."
 />

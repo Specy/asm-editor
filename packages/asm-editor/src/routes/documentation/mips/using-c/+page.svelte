@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="MIPS Using C and C++"
-    title="MIPS Using C and C++"
+    title="MIPS Using C and C++ - ASM Editor"
     description="Write, run and debug C or C++ for MIPS, with examples, supported libraries and simulator functions."
 />

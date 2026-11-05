@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="x86-64 extensions"
-    title="x86-64 Extensions"
+    title="x86-64 Extensions - ASM Editor"
     description="Every x86-64 instruction NASM accepts beyond the integer instruction set: the SSE, AVX and AVX-512 vector extensions, the x87 floating point unit and the system instructions, under the headings NASM files them under, each with its one line summary."
 />

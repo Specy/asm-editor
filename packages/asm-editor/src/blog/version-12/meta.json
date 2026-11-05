@@ -1,0 +1,11 @@
+{
+    "title": "Version 12: compile from C/C++",
+    "description": "Version 12.0.0 adds C/C++ compilation, source-to-assembly highlighting, source breakpoints, and libraries for compiled programs.",
+    "tags": ["release", "c-cpp"],
+    "status": "published",
+    "datePublished": "2026-10-05",
+    "image": {
+        "src": "/images/blog/version-12/source-and-assembly.webp",
+        "alt": "A C loop beside its generated RISC-V assembly, with matching colors and a selected addition"
+    }
+}

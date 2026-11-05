@@ -8,6 +8,6 @@
 <ChapterView
     {chapter}
     heading="MIPS MIDI and sampled audio"
-    title="MIPS MIDI port and sampled-audio output | Asm Editor"
+    title="MIPS MIDI port and sampled-audio output - ASM Editor"
     description="Play MIDI notes and stream audio samples from MIPS programs, with examples in assembly and C."
 />
