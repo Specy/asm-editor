@@ -29,8 +29,9 @@ export default defineConfig({
                 cache: false
             },
             build: {
+                //then checks the Markdown twins the prerender wrote (ADR 0077)
                 command:
-                    'node scripts/search-model.mjs && cross-env NODE_OPTIONS=--max_old_space_size=6000 vp build',
+                    'node scripts/search-model.mjs && cross-env NODE_OPTIONS=--max_old_space_size=6000 vp build && node scripts/twins-check.mjs',
                 dependsOn: [...BUILD_DEPENDENCIES, 'build:example-outputs'],
                 cache: false
             },

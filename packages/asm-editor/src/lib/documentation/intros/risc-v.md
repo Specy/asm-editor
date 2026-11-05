@@ -1,0 +1,1 @@
+This reference covers RV32 and RV64 assembly for the RARS simulator. For a service call, put its number in `a7` and use the listed registers for its arguments and result; see [Syscalls](/documentation/risc-v/syscall).

@@ -9,38 +9,45 @@
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { languageAccent } from '#lib/languages/languageColors.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import { DOCUMENTATION_ABOUT, DOCUMENTATION_INTRO } from '#lib/documentation/site.ts'
+    import InlineMarkdown from '#cmp/documentation/entries/InlineMarkdown.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import FaCopy from '~icons/fa-solid/copy'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import { copyText } from '#lib/utils.ts'
+    import { AGENT_MESSAGE } from '#lib/twins/agentMessage.ts'
 
-    // What each language is and what its reference covers, in a sentence or two, with the Course
-    // that teaches it: the hub is the one page that tells the five apart.
+    // What each language is and what its reference covers (`DOCUMENTATION_ABOUT`, which the
+    // Markdown twins read too), with the Course that teaches it.
     const langs = [
         {
             lang: 'M68K',
             href: resolve('/documentation/m68k'),
-            about: 'The Motorola 68000, with eight data registers and eight address registers. Covers instructions, addressing modes, condition codes, directives and trap tasks for input, output and graphics.',
+            about: DOCUMENTATION_ABOUT.m68k,
             courseHref: resolve('/learn/courses/[courseId]', { courseId: 'm68k' })
         },
         {
             lang: 'MIPS',
             href: resolve('/documentation/mips'),
-            about: 'MIPS assembly for the MARS simulator. Covers instructions and pseudo-instructions, directives, registers, syscalls, screen and keyboard access, and using C and C++.',
+            about: DOCUMENTATION_ABOUT.mips,
             courseHref: resolve('/learn/courses/[courseId]', { courseId: 'mips' })
         },
         {
             lang: 'RISC-V',
             href: resolve('/documentation/risc-v'),
-            about: 'RV32 and RV64 assembly for the RARS simulator. Covers instructions, directives, registers, syscalls, screen and keyboard access, and using C and C++.',
+            about: DOCUMENTATION_ABOUT['risc-v'],
             courseHref: resolve('/learn/courses/[courseId]', { courseId: 'risc-v' })
         },
         {
             lang: 'X86',
             href: resolve('/documentation/x86'),
-            about: 'x86-64 assembly in NASM syntax, running as a Linux program. Covers instructions, vector extensions, directives, registers and flags, Linux syscalls, and using C and C++.',
+            about: DOCUMENTATION_ABOUT.x86,
             courseHref: resolve('/learn/courses/[courseId]', { courseId: 'x86' })
         },
         {
             lang: 'Z80',
             href: resolve('/documentation/z80'),
-            about: 'The Zilog Z80, an 8 bit CPU with 64 KB of memory. Covers instructions, flags, cycle counts, directives, registers and I/O ports for the terminal, screen, keyboard, mouse and sound.',
+            about: DOCUMENTATION_ABOUT.z80,
             courseHref: resolve('/learn/courses/[courseId]', { courseId: 'z80' })
         }
     ] satisfies {
@@ -59,14 +66,7 @@
 
 <Page cropped="70rem" hasNavbar contentStyle="padding: 1rem">
     <Header>Instruction Sets</Header>
-    <p class="intro">
-        Reference documentation for the assembly languages supported by Asm Editor, including
-        instructions, operand forms, directives, registers and input/output. You can also open this
-        reference in the editor's Documentation panel. If you are new to assembly, start with the
-        <a href={resolve('/learn/courses/[courseId]', { courseId: 'assembly-basics' })}
-            >Assembly basics</a
-        > course.
-    </p>
+    <p class="intro"><InlineMarkdown source={DOCUMENTATION_INTRO.trim()} /></p>
     <div class="langs">
         {#each langs as { lang, href, about, courseHref } (lang)}
             {@const label = languageLabel(lang)}
@@ -80,6 +80,28 @@
             />
         {/each}
     </div>
+    <section class="agents" aria-labelledby="agents-title">
+        <div class="agents-heading">
+            <div>
+                <h2 id="agents-title">Documentation for agents</h2>
+                <p>
+                    Send this message to an AI assistant that can open web pages, so it answers from
+                    this Documentation and the Courses. It points the assistant to a markdown
+                    version of every page.
+                </p>
+            </div>
+            <Button
+                cssVar="secondary"
+                hasIcon
+                style="padding: 0.35rem 0.65rem; font-size: 0.78rem; gap: 0.4rem; flex-shrink: 0;"
+                onClick={() => void copyText(AGENT_MESSAGE, 'Message')}
+            >
+                <Icon size={0.9}><FaCopy /></Icon>
+                Copy
+            </Button>
+        </div>
+        <pre class="agent-message">{AGENT_MESSAGE}</pre>
+    </section>
 </Page>
 
 <style lang="scss">
@@ -87,9 +109,43 @@
         margin: 0;
         color: var(--background-text-muted);
     }
-    a {
-        color: var(--accent);
-        text-decoration: underline;
+    .agents {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        margin-top: 2rem;
+        padding: 1.2rem;
+        border: 1px solid var(--tertiary);
+        border-radius: 0.75rem;
+        background-color: var(--secondary);
+        color: var(--secondary-text);
+    }
+    .agents-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    .agents h2 {
+        margin: 0 0 0.3rem;
+        font-size: 1.3rem;
+    }
+    .agents p {
+        margin: 0;
+        max-width: 60ch;
+        color: var(--background-text-muted);
+    }
+    .agent-message {
+        margin: 0;
+        padding: 0.8rem 1rem;
+        border-radius: 0.5rem;
+        background-color: var(--tertiary);
+        color: var(--tertiary-text);
+        font-family: 'Fira Code', monospace;
+        font-size: 0.85rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
     }
     .langs {
         display: grid;

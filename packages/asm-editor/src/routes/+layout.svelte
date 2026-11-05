@@ -11,6 +11,7 @@
     import { beforeNavigate } from '$app/navigation'
     import { navigationStore } from '#stores/navigationStore.ts'
     import { toAbsoluteUrl } from '#lib/seo.ts'
+    import { twinPathname } from '#lib/twins/urls.ts'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -24,6 +25,12 @@
     // exception is a page that duplicates another, such as an instruction's other
     // spelling, which names the page it duplicates as `canonicalPath`.
     let canonicalUrl = $derived(toAbsoluteUrl(page.data.canonicalPath ?? page.url.pathname))
+    // The page's Markdown twin, for an agent that fetched the HTML (ADR 0077). An error page has none.
+    let twinUrl = $derived.by(() => {
+        if (page.error) return undefined
+        const twin = twinPathname(page.url.pathname)
+        return twin ? toAbsoluteUrl(twin) : undefined
+    })
     let socialImage = $derived(
         page.data.socialImage ?? {
             src: '/images/ASM-editor.webp',
@@ -56,6 +63,9 @@
 
 <svelte:head>
     <link rel="canonical" href={canonicalUrl} />
+    {#if twinUrl}
+        <link rel="alternate" type="text/markdown" href={twinUrl} />
+    {/if}
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:site_name" content="Asm Editor" />
     <meta name="twitter:card" content="summary_large_image" />

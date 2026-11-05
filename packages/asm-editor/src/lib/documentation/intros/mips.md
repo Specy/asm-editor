@@ -1,0 +1,1 @@
+This reference covers the MIPS simulator’s instructions, assembler directives, registers, and services. For a service call, put its number in `$v0` and use the listed registers for its arguments and result; see [Syscalls](/documentation/mips/syscall).

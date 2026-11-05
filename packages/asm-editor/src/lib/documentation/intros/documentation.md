@@ -1,0 +1,1 @@
+Reference documentation for the assembly languages supported by ASM Editor, including instructions, operand forms, directives, registers and input/output. You can also open this reference in the editor's Documentation panel. If you are new to assembly, start with the [Assembly basics](/learn/courses/assembly-basics) course.

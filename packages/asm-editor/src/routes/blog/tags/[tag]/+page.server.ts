@@ -5,7 +5,7 @@ import type { EntryGenerator, PageServerLoad } from './$types'
 
 export const prerender = blogCatalog.tags.length > 0
 export const entries: EntryGenerator = () => blogCatalog.tags.map(({ id }) => ({ tag: id }))
-export const load: PageServerLoad = ({ params }) => {
+export const load = (({ params }) => {
     if (!isBlogTag(params.tag)) error(404, 'Tag not found')
     const posts = blogCatalog.forTag(params.tag)
     if (!posts.length) error(404, 'Tag not found')
@@ -14,4 +14,4 @@ export const load: PageServerLoad = ({ params }) => {
         posts,
         socialImage: posts.find((post) => post.image)?.image
     }
-}
+}) satisfies PageServerLoad

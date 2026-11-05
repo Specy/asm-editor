@@ -1,16 +1,21 @@
 <script lang="ts">
     /**
      * A language's documentation hub, `/documentation/<language>`: its search box, the language's own
-     * introduction and a button for every page in its `DOCUMENTATION_SITES` table.
+     * introduction and a button for every page in its `DOCUMENTATION_SITES` table. The introduction
+     * is markdown in `DOCUMENTATION_INTROS`, which the hub's **Markdown twin** reads too.
      */
-    import type { Snippet } from 'svelte'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { breadcrumbLd } from '#lib/seo.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import type { DocumentationLanguage } from '#lib/search/scope.ts'
-    import { DOCUMENTATION_SITES } from '#lib/documentation/site.ts'
+    import {
+        DOCUMENTATION_INTROS,
+        DOCUMENTATION_SITES,
+        markdownParagraphs
+    } from '#lib/documentation/site.ts'
+    import InlineMarkdown from '#cmp/documentation/entries/InlineMarkdown.svelte'
     import { resolveHref } from '#lib/hrefs.ts'
 
     interface Props {
@@ -18,13 +23,12 @@
         /** The page's <title>. */
         title: string
         description: string
-        /** What comes between the search box and the buttons, styled by the page that writes it. */
-        intro?: Snippet
     }
 
-    let { language, title, description, intro }: Props = $props()
+    let { language, title, description }: Props = $props()
 
     const site = $derived(DOCUMENTATION_SITES[language])
+    const intro = $derived(markdownParagraphs(DOCUMENTATION_INTROS[language] ?? ''))
     let jsonLd = $derived([
         breadcrumbLd([
             { name: 'Documentation', pathname: '/documentation' },
@@ -39,7 +43,9 @@
         {site.label} Documentation
     </h1>
     <SearchLauncher size="full" placeholder={`Search the ${site.label} docs and courses`} />
-    {@render intro?.()}
+    {#each intro as paragraph, index (index)}
+        <p class="intro"><InlineMarkdown source={paragraph} /></p>
+    {/each}
     <div class="links">
         {#each site.pages as link (link.id)}
             <NavigationLinkButton href={resolveHref(link.href)}>
@@ -50,6 +56,16 @@
 </Page>
 
 <style lang="scss">
+    .intro {
+        line-height: 1.5;
+        max-width: 60rem;
+        margin: 0;
+        color: var(--background-text-muted);
+    }
+    .intro :global(code) {
+        background-color: var(--secondary);
+        color: var(--accent);
+    }
     .links {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
