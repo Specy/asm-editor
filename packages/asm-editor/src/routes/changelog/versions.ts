@@ -4,10 +4,13 @@ type Version = {
     date: Date
     changes: string[]
     notes?: string[]
+    /** Slug of the blog post about this version, under `src/blog/<slug>/`. */
+    blogPost?: string
 }
 export const versions: Version[] = [
     {
         version: '14.0.0',
+        blogPost: 'version-14',
         title: 'x86-64 graphics and sound & a real 68000',
         date: new Date('2026-11-01'),
         changes: [
@@ -23,6 +26,7 @@ export const versions: Version[] = [
     },
     {
         version: '13.0.0',
+        blogPost: 'version-13',
         title: 'Decompile and disassemble ELF files & Audio',
         date: new Date('2026-10-24'),
         changes: [
@@ -39,6 +43,7 @@ export const versions: Version[] = [
     },
     {
         version: '12.0.0',
+        blogPost: 'version-12',
         title: 'Compile from C/C++',
         date: new Date('2026-10-05'),
         changes: [
@@ -50,6 +55,7 @@ export const versions: Version[] = [
     },
     {
         version: '11.0.0',
+        blogPost: 'version-11',
         title: 'New editor layout',
         date: new Date('2026-09-30'),
         changes: [

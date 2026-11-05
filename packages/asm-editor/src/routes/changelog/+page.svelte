@@ -5,6 +5,10 @@
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
+    import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import FaBookOpen from '~icons/fa-solid/book-open'
+    import { resolve } from '$app/paths'
 </script>
 
 <svelte:head>
@@ -34,6 +38,17 @@
                     <p class="date">
                         {version.date.toISOString().split('T')[0].replace(/-/g, '/')}
                     </p>
+                    {#if version.blogPost}
+                        <ButtonLink
+                            cssVar="tertiary"
+                            hasIcon
+                            style="gap: 0.5rem; margin-left: auto; white-space: nowrap"
+                            href={resolve('/blog/posts/[slug]', { slug: version.blogPost })}
+                        >
+                            <Icon><FaBookOpen /></Icon>
+                            Blog post
+                        </ButtonLink>
+                    {/if}
                 </Row>
 
                 <div class="version-content">

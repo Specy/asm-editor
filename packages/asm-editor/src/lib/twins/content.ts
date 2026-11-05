@@ -245,7 +245,13 @@ export function examplesTwin(examples: Example[]): string {
 
 /** `/changelog.md`: every version, newest first. */
 export function changelogTwin(
-    versions: { version: string; title?: string; date: Date; changes: string[] }[]
+    versions: {
+        version: string
+        title?: string
+        date: Date
+        changes: string[]
+        blogPost?: string
+    }[]
 ): string {
     return blocks(
         '# Changelog',
@@ -254,6 +260,7 @@ export function changelogTwin(
             blocks(
                 `## ${version.version}${version.title ? `: ${version.title}` : ''}`,
                 version.date.toISOString().slice(0, 10),
+                version.blogPost ? `Blog post: ${twinUrl(`/blog/posts/${version.blogPost}`)}` : '',
                 version.changes.map((change) => `- ${oneLine(change)}`).join('\n')
             )
         )
