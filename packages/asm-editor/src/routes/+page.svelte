@@ -4,8 +4,6 @@
     import MainPageLinkPreview from '#cmp/specific/landing/HeroLink.svelte'
     import FaGithub from '~icons/fa-brands/github'
     import FaBook from '~icons/fa-solid/book'
-    import FaSearch from '~icons/fa-solid/search'
-    import FaTools from '~icons/fa-solid/tools'
     import FaCode from '~icons/fa-solid/code'
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import FaGraduationCap from '~icons/fa-solid/graduation-cap'
@@ -198,20 +196,24 @@
                         Examples
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/#codeCompletion')}>
-                    {#snippet icon()}
-                        <div><FaSearch /></div>
-                    {/snippet}
-                    {#snippet description()}Code completion{/snippet}
-                </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/#tools')}>
+                <MainPageLinkPreview href={resolve('/learn/courses')}>
                     {#snippet icon()}
                         <div>
-                            <FaTools />
+                            <FaGraduationCap />
                         </div>
                     {/snippet}
                     {#snippet description()}
-                        <div>Tools</div>
+                        Courses
+                    {/snippet}
+                </MainPageLinkPreview>
+                <MainPageLinkPreview href={resolve('/donate')}>
+                    {#snippet icon()}
+                        <div>
+                            <FaDonate />
+                        </div>
+                    {/snippet}
+                    {#snippet description()}
+                        Donate
                     {/snippet}
                 </MainPageLinkPreview>
                 <MainPageLinkPreview href={resolve('/embed')} title="Embed the app in your website">
