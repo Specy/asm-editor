@@ -8,8 +8,8 @@ For the same game written with the simulator's C API, see [Flappy Bird in C](/le
 
 This example combines the frame loop, keyboard input, screen addresses, and supplied xorshift
 helper from The snake game. It adds three game states, fractional movement, pipe records and
-collision checks with half-open ranges. The drawing routines use pictures stored as text and
-update only the pixels that change.
+collision checks with half-open ranges. The bird and the score's digits are sprites, and every
+frame paints only the pixels that change, each one once, with the colour it ends the frame in.
 
 The Screen is a grid of 192 × 256 words. The `@screen` line asks for a 384 × 512 pixel display with
 `unit=2`, so each word is drawn as a 2 × 2 square. Word `(x, y)` is at
@@ -29,8 +29,8 @@ calls to other routines.
 | `s5`     | score for this run                                         |
 | `s6`     | best score in this execution                               |
 | `s7`     | keyboard MMIO base address                                 |
-| `s8`     | pipe pointer or column counter inside a helper             |
-| `s9`     | column within a pipe, or the score's left edge             |
+| `s8`     | pipe pointer, row or column counter inside a helper        |
+| `s9`     | column within a pipe, digit, or row inside a helper        |
 | `s10`    | whether this frame received at least one accepted flap key |
 | `s11`    | frames since the program started                           |
 
@@ -58,12 +58,14 @@ READY --accepted key--> PLAYING --collision--> DEAD
 One frame does the following:
 
 1. Read all queued characters and remember whether any is a flap key.
-2. Run the update for the current state. While playing, this moves the pipes.
-3. Unless the bird is dead, count the frame and slide the grass stripes one column.
-4. Repaint the world where the bird was, draw the bird at its new row, and draw the score.
+2. Run the update for the current state. While playing, this moves the pipe records and can add
+   a point; nothing is drawn yet.
+3. Unless the bird is dead, count the frame.
+4. Paint what changed: the pipe columns the move changed, the grass stripes, the bird, and the
+   score. No pixel is painted twice.
 5. Sleep until the next frame is due, `FRAME` milliseconds after the last one started.
 
-The colour tables and the pictures are at the end of the listing, in a second `.data` section.
+The colour tables and the sprites are at the end of the listing, in a second `.data` section.
 
 ```riscv|playground|open-screen|console|no-registers|allow-open
 # @screen unit=2 width=384 height=512 base=display
@@ -86,28 +88,33 @@ The colour tables and the pictures are at the end of the listing, in a second `.
 .eqv BIRDW, 17
 .eqv BIRDH, 12
 .eqv BIRDR, 65              # BIRDX + BIRDW, the column after the bird
-.eqv BIRDBYTES, 204         # BIRDW * BIRDH, one picture of it
+.eqv HITX, 50               # the box the pipes test, 2 inside the picture:
+.eqv HITR, 63               # its columns [HITX, HITR)
+.eqv HITIN, 2               # and its rows, HITIN inside the picture's
+.eqv BIRDSTRIDE, 68         # BIRDW * 4, from one row of its sprite to the next
+.eqv BIRDBYTES, 816         # BIRDW * BIRDH * 4, one picture of it
 # Pipes and gaps
 .eqv PIPEW, 30              # the cap's width; the body is 2 narrower each side
 .eqv CAPH, 12
 .eqv CAPLAST, 11            # CAPH - 1, the cap's bottom edge row
-.eqv HALFGAP, 34
+.eqv HALFGAP, 40
 .eqv SPACING, 104           # between one pipe and the next
 .eqv CYCLE, 312             # SPACING * 3, what a recycled pipe jumps by
 .eqv FIRSTX, 216            # WIDTH + 24, just off the right edge
-.eqv GAPMIN, 86             # the highest the middle of a gap goes
-.eqv GAPSPAN, 61            # and how far below that it can be
+.eqv GAPMIN, 92             # the highest the middle of a gap goes
+.eqv GAPSPAN, 49            # and how far below that it can be
 # Physics and timing
-.eqv GRAV, 6                # add this many sixteenths to velocity each frame
-.eqv FLAPV, -88             # the speed one flap gives, upwards
-.eqv MAXFALL, 120
+.eqv GRAV, 5                # add this many sixteenths to velocity each frame
+.eqv FLAPV, -80             # the speed one flap gives, upwards
+.eqv MAXFALL, 112
 .eqv STARTY, 1600           # 100 * 16, where the bird waits
 .eqv RESTY, 3264            # (GROUNDY - BIRDH) * 16, where a dead bird lands
 .eqv FRAME, 20              # milliseconds a frame
 # The score
 .eqv DIGITW, 12
 .eqv DIGITH, 16
-.eqv DIGITBYTES, 192        # DIGITW * DIGITH
+.eqv DIGITSTRIDE, 48        # DIGITW * 4
+.eqv DIGITBYTES, 768        # DIGITW * DIGITH * 4, one digit
 .eqv SCOREY, 20
 .eqv SCOREEND, 36           # SCOREY + DIGITH
 # Game states
@@ -115,14 +122,14 @@ The colour tables and the pictures are at the end of the listing, in a second `.
 .eqv PLAYING, 1
 .eqv DEAD, 2
 # Colours
-.eqv NONE, 0                # in a pipe's shading: no body in this column
+.eqv NONE, 0                # no body in a pipe column; see-through in a sprite
 .eqv SKY, 0x004EC0CA
 .eqv CLOUD, 0x00E9FCD9
 .eqv CITY, 0x00A8DFB5
 .eqv WINDOW, 0x00D2F3DC
 .eqv BUSH, 0x005EE270
 .eqv BUSHEDGE, 0x0047BF5A
-.eqv EDGE, 0x00543847       # the dark outline of pipes, ground and pictures
+.eqv EDGE, 0x00543847       # the dark outline of pipes and ground
 .eqv PIPEHI, 0x00E4FD8B
 .eqv PIPELIGHT, 0x009CE659
 .eqv PIPEMID, 0x0073BF2E
@@ -136,11 +143,15 @@ pipes:    .word 0, 0, 0     # three records: cap's left x, gap middle, counted
           .word 0, 0, 0
           .word 0, 0, 0
 pipes_end:
-seed:        .word 0x1F123BB5
-shown_y:     .word 100      # the bird's top row on the Screen
-shown_score: .word -1       # and the score shown, -1 for none yet
-next_frame:  .word 0        # the time the next frame starts at
-digit_buf:   .space 12      # the score's digits, lowest first
+seed:          .word 0x1F123BB5
+next_frame:    .word 0      # the time the next frame starts at
+pipes_moved:   .word 0      # this frame, so their changed columns need painting
+shown_y:       .word 100    # the bird's top row on the Screen
+shown_score:   .word -1     # the score on the Screen, -1 for none yet
+score_left:    .word 0      # the columns the score takes this frame
+score_right:   .word 0
+score_covered: .word 0      # a pipe column went around the score this frame
+digit_buf:     .space 12    # the score's digits, lowest first
 over:    .asciz "Game over. Score: "
 bestmsg: .asciz ", best: "
 
@@ -161,6 +172,7 @@ main:
     sw a0, 0(t0)            # the first frame starts now
 
 frame:
+    sw zero, pipes_moved, t0
 # --- every character typed since the last frame, and only the flaps count ----
     li s10, 0
 read_key:
@@ -264,17 +276,21 @@ dcapped:
     mv s2, t0
     li s3, 0
 
-# --- the frame: everything that moved, drawn over what was there -------------
+# --- the frame: everything that changed, each word painted once --------------
 draw:
     li t0, DEAD
-    beq s4, t0, still       # a dead bird's world stands still
+    beq s4, t0, counted     # a dead bird's world stands still
     addi s11, s11, 1
-    jal erase_bird
-    jal paint_stripes
-    j drawn
-still:
-    jal erase_bird
-drawn:
+counted:
+    jal place_score
+    lw t0, pipes_moved
+    beqz t0, pipes_painted
+    jal repaint_pipes
+pipes_painted:
+    li t0, DEAD
+    beq s4, t0, ground_painted
+    jal slide_stripes
+ground_painted:
     jal draw_bird
     jal draw_score
     jal wait_frame
@@ -319,18 +335,11 @@ np_next:
 
 # move_pipes(): everything scrolls one column to the left. A pipe that has left
 # the grid jumps a whole cycle to the right with a new gap, which is why three
-# pipes are an endless course.
-#
-# Moving a pipe one column changes a column of the Screen only where the
-# pipe's shading changes from one column to the next, plus the column just
-# past its right edge, which goes back to backdrop. Those few columns are the
-# ones repainted, and in each only the rows above and below the gap: the gap
-# shows the backdrop before and after the move.
+# pipes are an endless course. The Screen catches up later, in repaint_pipes.
 move_pipes:
     addi sp, sp, -16
     sw ra, 0(sp)
     sw s8, 4(sp)
-    sw s9, 8(sp)
     la s8, pipes
 mp_next:
     lw t0, 0(s8)
@@ -343,7 +352,6 @@ mp_next:
     sw zero, 8(s8)
 mp_moved:
     sw t0, 0(s8)
-
     lw t1, 8(s8)            # already counted?
     bnez t1, mp_counted
     addi t1, t0, PIPEW
@@ -353,45 +361,19 @@ mp_moved:
     sw t1, 8(s8)
     addi s5, s5, 1          # its right edge has passed the bird
 mp_counted:
-    li s9, 0                # the column within the pipe, 0 to PIPEW
-mp_column:
-    slli t1, s9, 2
-    la t0, body_shade
-    add t0, t0, t1
-    lw t2, 0(t0)            # this column's body colour
-    lw t0, -4(t0)           # and the one left of it
-    bne t2, t0, mp_paint
-    la t0, cap_shade
-    add t0, t0, t1
-    lw t2, 0(t0)            # the same for the cap
-    lw t0, -4(t0)
-    beq t2, t0, mp_same
-mp_paint:
-    lw a0, 0(s8)
-    add a0, a0, s9          # the Screen column
-    lw t1, 4(s8)
-    li t3, 0
-    addi t4, t1, -HALFGAP
-    jal world_column        # above the gap, which leaves a0 alone
-    lw t1, 4(s8)
-    addi t3, t1, HALFGAP
-    li t4, GROUNDY
-    jal world_column        # and below it
-mp_same:
-    addi s9, s9, 1
-    li t0, PIPEW
-    ble s9, t0, mp_column
-
     addi s8, s8, 12
     la t0, pipes_end
     blt s8, t0, mp_next
-    lw s9, 8(sp)
+    li t0, 1
+    sw t0, pipes_moved, t1
     lw s8, 4(sp)
     lw ra, 0(sp)
     addi sp, sp, 16
     ret
 
-# hit_test(): 1 in a0 when the bird is touching a pipe or the ground
+# hit_test(): 1 in a0 when the bird is touching a pipe or the ground. The
+# ground stops the bird's picture; the pipes stop a box 2 pixels inside it,
+# which leaves out its see-through corners and forgives a near miss.
 hit_test:
     srai t0, s2, 4          # the bird's top row
     addi t1, t0, BIRDH      # and one past its bottom one
@@ -400,14 +382,16 @@ hit_test:
     li a0, 1
     ret
 ht_sky:
+    addi t0, t0, HITIN      # the box's top row
+    addi t1, t1, -HITIN     # and one past its bottom one
     la t2, pipes
     la t3, pipes_end
 ht_next:
     lw t4, 0(t2)
-    li t5, BIRDR
+    li t5, HITR
     bge t4, t5, ht_skip     # this pipe is still to the right of the bird
     addi t5, t4, PIPEW
-    li t6, BIRDX
+    li t6, HITX
     ble t5, t6, ht_skip     # and this one is already behind it
     lw t5, 4(t2)
     addi t6, t5, -HALFGAP
@@ -462,8 +446,9 @@ wf_sleep:
     ret
 
 #-----------------------------------------------------------------------------
-# Drawing. Every routine stores a word only when its colour changes: the
-# Screen's work, and so most of a frame's, is in the stores.
+# Drawing. Every routine stores a word only when its colour changes, and each
+# frame paints every word at most once, with the colour it ends the frame in:
+# a frame shown before it is finished never shows a bird or a score missing.
 #-----------------------------------------------------------------------------
 # make_backdrop(): the scenery, into backdrop: sky, clouds, buildings with
 # windows and bushes, from the top of each column down to the ground.
@@ -539,21 +524,23 @@ fs_top:
     ble a2, t4, fs_rows
     mv a2, t4
 fs_rows:
-    sub t1, a2, a1
-    blez t1, fs_done        # a span the window has closed draws nothing
+    bge a1, a2, fs_done     # a span the window has closed draws nothing
     li t0, WIDTH
+    mul t1, a2, t0
     mul t0, a1, t0          # row * WIDTH
     add t0, t0, a0          # + col
     slli t0, t0, 2          # four bytes a word
     add t0, t0, s0
+    add t1, t1, a0
+    slli t1, t1, 2
+    add t1, t1, s0          # and the word just past the last row
 fs_next:
     lw t2, 0(t0)
     beq t2, a3, fs_same     # already that colour: no store
     sw a3, 0(t0)
 fs_same:
     addi t0, t0, ROWBYTES   # straight down to the next row
-    addi t1, t1, -1
-    bnez t1, fs_next
+    bne t0, t1, fs_next
 fs_done:
     ret
 
@@ -594,11 +581,17 @@ bs_done:
     ret
 
 # cap_span(a0=col, a1=first row, a5=colour): a cap's column, an edge row, ten
-# shaded rows and another edge row. It changes a1 to a3, t0 to t2 and t5.
+# shaded rows and another edge row, or the backdrop for a NONE colour, just
+# past the pipe's right edge. It changes a1 to a3, t0 to t2, t5 and t6.
 cap_span:
     addi sp, sp, -16
     sw ra, 0(sp)
     mv t5, a1
+    bnez a5, cs_cap
+    addi a2, t5, CAPH
+    jal backdrop_span
+    j cs_done
+cs_cap:
     li a3, EDGE
     addi a2, t5, 1
     jal fill_span
@@ -610,15 +603,17 @@ cap_span:
     addi a1, t5, CAPLAST
     addi a2, t5, CAPH
     jal fill_span
+cs_done:
     lw ra, 0(sp)
     addi sp, sp, 16
     ret
 
 # world_column(a0=col, t3=window start, t4=window end): paint the backdrop and
 # any pipe standing in this column, above the ground and within [t3, t4). A
-# column outside the grid draws nothing. It changes a1 to a7, t0 to t2, t5 and
-# t6, and leaves a0, t3 and t4 alone.
+# column outside the grid, or an empty window, draws nothing. It changes a1 to
+# a7, t0 to t2, t5 and t6, and leaves a0, t3 and t4 alone.
 world_column:
+    bge t3, t4, wc_done
     bltz a0, wc_done
     li t0, WIDTH
     bge a0, t0, wc_done
@@ -674,7 +669,7 @@ wc_done:
     ret
 
 # paint_world(): every column, then the ground, which is the one full repaint
-# a game has
+# a game has. The score has to be drawn again after it.
 paint_world:
     addi sp, sp, -16
     sw ra, 0(sp)
@@ -714,13 +709,15 @@ pw_ground:
     li t0, WIDTH
     blt s8, t0, pw_ground
     jal paint_stripes       # and the grass between them
+    li t0, -1
+    sw t0, shown_score, t1
     lw s8, 4(sp)
     lw ra, 0(sp)
     addi sp, sp, 16
     ret
 
-# paint_stripes(): the grass, diagonal stripes four columns wide, which slide
-# one column to the left each frame along with the pipes
+# paint_stripes(): the grass, diagonal stripes four columns wide: bit 2 of
+# x + row + frames picks the light or the dark green
 paint_stripes:
     li t1, STRIPEY          # the row
 ps_row:
@@ -748,65 +745,228 @@ ps_same:
     blt t1, t0, ps_row
     ret
 
-# draw_art(a0=x, a1=y, a2=width, a3=height, a4=picture): a picture's opaque
-# characters, row by row. It changes a1, a3 to a6, t0 to t2, t5 and t6.
-draw_art:
-da_row:
+# slide_stripes(): one frame later, a stripe's colour has changed only in every
+# fourth column, where x + row + frames is a multiple of 4: the light green
+# becomes dark there, and the dark green light. Only those words are stored.
+slide_stripes:
+    li t1, STRIPEY          # the row
+ss_row:
+    add t2, t1, s11
+    sub t2, zero, t2
+    andi t2, t2, 3          # the first such column
     li t0, WIDTH
-    mul t0, a1, t0
-    add t0, t0, a0
-    slli t0, t0, 2
-    add t0, t0, s0          # the row's first word
-    mv t1, a2               # the characters left in the row
-da_char:
-    lbu t5, 0(a4)
-    addi a4, a4, 1
-    li t6, '.'
-    beq t5, t6, da_same     # see-through
-    la a5, palette_keys
-    la a6, palette
-da_find:
-    lbu t6, 0(a5)
-    beq t6, t5, da_found
-    addi a5, a5, 1          # the next key,
-    addi a6, a6, 4          # and its colour
-    j da_find
-da_found:
-    lw t6, 0(a6)
-    lw t2, 0(t0)
-    beq t2, t6, da_same
-    sw t6, 0(t0)
-da_same:
-    addi t0, t0, 4
-    addi t1, t1, -1
-    bnez t1, da_char
-    addi a1, a1, 1
-    addi a3, a3, -1
-    bnez a3, da_row
+    mul t3, t1, t0
+    add t3, t3, t2
+    slli t3, t3, 2
+    add t3, t3, s0          # its word
+    mul t4, t1, t0
+    slli t4, t4, 2
+    add t4, t4, s0
+    addi t4, t4, ROWBYTES   # the end of the row
+    add t5, t1, s11
+    add t5, t5, t2          # x + row + frames there
+ss_word:
+    andi t2, t5, 4
+    li a3, PIPELIGHT
+    beqz t2, ss_put
+    li a3, PIPEMID
+ss_put:
+    sw a3, 0(t3)
+    addi t3, t3, 16         # four columns on
+    addi t5, t5, 4
+    blt t3, t4, ss_word
+    addi t1, t1, 1
+    li t0, STRIPEEND
+    blt t1, t0, ss_row
     ret
 
-# erase_bird(): the world where the bird was last drawn
-erase_bird:
+# repaint_pipes(): the columns the pipes' move changed. A pipe moved one column
+# left changes its column k only where its shading differs from column k - 1:
+# the body rows where body_shade does, the cap rows where cap_shade does. The
+# NONE words around the tables are the columns just outside the pipe, so k
+# runs from 0 to PIPEW, the column just past its right edge. The rows the
+# bird or the score takes this frame are left for draw_bird and draw_score.
+repaint_pipes:
     addi sp, sp, -16
     sw ra, 0(sp)
     sw s8, 4(sp)
-    lw t3, shown_y
-    addi t4, t3, BIRDH
-    li s8, BIRDX
-eb_next:
-    mv a0, s8
-    jal world_column        # which leaves t3 and t4 alone
-    addi s8, s8, 1
+    sw s9, 8(sp)
+    la s8, pipes
+rp_pipe:
+    li s9, 0                # the column within the pipe, 0 to PIPEW
+rp_column:
+    lw a0, 0(s8)
+    add a0, a0, s9          # the Screen column
+    bltz a0, rp_next
+    li t0, WIDTH
+    bge a0, t0, rp_next
+    slli t1, s9, 2
+    la t0, body_shade
+    add t0, t0, t1
+    lw t2, 0(t0)
+    lw t0, -4(t0)
+    sub a4, t2, t0          # a4 = nonzero when the body's colour changed
+    la t0, cap_shade
+    add t0, t0, t1
+    lw t2, 0(t0)
+    lw t0, -4(t0)
+    sub a5, t2, t0          # a5 = nonzero when the caps' colour changed
+    or t0, a4, a5
+    beqz t0, rp_next
+    li t3, GROUNDY          # t3 to t4: the rows to leave alone, none so far
+    li t4, GROUNDY
+    li t0, BIRDX
+    blt a0, t0, rp_score
     li t0, BIRDR
-    blt s8, t0, eb_next
+    bge a0, t0, rp_score
+    srai t3, s2, 4          # the bird's rows
+    addi t4, t3, BIRDH
+    j rp_paint
+rp_score:
+    lw t0, score_left
+    blt a0, t0, rp_paint
+    lw t0, score_right
+    bge a0, t0, rp_paint
+    li t3, SCOREY           # the score's rows
+    li t4, SCOREEND
+    li t0, 1
+    sw t0, score_covered, t1
+rp_paint:
+    sw t4, 12(sp)
+    mv t4, t3
+    li t3, 0
+    jal pipe_rows           # above the rows left alone
+    lw t3, 12(sp)
+    li t4, GROUNDY
+    bge t3, t4, rp_next
+    jal pipe_rows           # and below them
+rp_next:
+    addi s9, s9, 1
+    li t0, PIPEW
+    ble s9, t0, rp_column
+    addi s8, s8, 12
+    la t0, pipes_end
+    blt s8, t0, rp_pipe
+    lw s9, 8(sp)
     lw s8, 4(sp)
     lw ra, 0(sp)
     addi sp, sp, 16
     ret
 
-# draw_bird(): the bird at its row, its wing beating while it is alive: up,
-# level, down, level, four frames each
+# pipe_rows(a0=col, s8=pipe, s9=column within it, a4 and a5 nonzero when the
+# body's and the caps' colour changed): those rows of the column, within the
+# window [t3, t4). It leaves a0, a4, a5, t3 and t4 as they were.
+pipe_rows:
+    addi sp, sp, -16
+    sw ra, 0(sp)
+    sw a4, 4(sp)
+    sw a5, 8(sp)
+    lw t0, 4(s8)
+    addi a6, t0, -HALFGAP   # a6 = the gap's top row
+    addi a7, t0, HALFGAP    # a7 = one past its bottom row
+    beqz a4, pr_caps
+    slli t1, s9, 2
+    la t0, body_shade
+    add t0, t0, t1
+    lw a3, 0(t0)
+    sw a3, 12(sp)
+    li a1, 0
+    addi a2, a6, -CAPH
+    jal body_span           # above the upper cap
+    lw a3, 12(sp)
+    addi a1, a7, CAPH
+    li a2, GROUNDY
+    jal body_span           # below the lower cap
+pr_caps:
+    lw t0, 8(sp)
+    beqz t0, pr_done
+    slli t1, s9, 2
+    la t0, cap_shade
+    add t0, t0, t1
+    lw a5, 0(t0)
+    addi a1, a6, -CAPH
+    jal cap_span
+    mv a1, a7
+    jal cap_span
+pr_done:
+    lw a5, 8(sp)
+    lw a4, 4(sp)
+    lw ra, 0(sp)
+    addi sp, sp, 16
+    ret
+
+# sprite_column(a0=col, a1=from, a2=to, a3=the sprite's word for this column
+# in its top row, a4=the sprite's top row, a5=its height, a6=bytes a row of
+# it): rows [from, to) of the column, the sprite's colour where it is drawn
+# and not see-through, the world everywhere else. It leaves a0 alone.
+sprite_column:
+    addi sp, sp, -32
+    sw ra, 0(sp)
+    sw s8, 4(sp)
+    sw s9, 8(sp)
+    sw a2, 12(sp)
+    sw a3, 16(sp)
+    sw a4, 20(sp)
+    sw a5, 24(sp)
+    sw a6, 28(sp)
+    mv s8, a1               # s8 = the row
+    mv s9, a1               # s9 = the first row the world still has to paint
+sc_row:
+    lw t0, 12(sp)
+    bge s8, t0, sc_done
+    lw t1, 20(sp)
+    sub t1, s8, t1          # the row within the sprite
+    bltz t1, sc_next
+    lw t0, 24(sp)
+    bge t1, t0, sc_next
+    lw t0, 28(sp)
+    mul t1, t1, t0
+    lw t0, 16(sp)
+    add t1, t1, t0
+    lw t2, 0(t1)            # its colour
+    beqz t2, sc_next        # see-through
+    bge s9, s8, sc_put
+    mv t3, s9
+    mv t4, s8
+    jal world_column        # the world above it, down to this row
+    lw t0, 20(sp)           # find the colour again: world_column changed t2
+    sub t1, s8, t0
+    lw t0, 28(sp)
+    mul t1, t1, t0
+    lw t0, 16(sp)
+    add t1, t1, t0
+    lw t2, 0(t1)
+sc_put:
+    li t0, WIDTH
+    mul t0, s8, t0
+    add t0, t0, a0
+    slli t0, t0, 2
+    add t0, t0, s0
+    lw t1, 0(t0)
+    beq t1, t2, sc_same
+    sw t2, 0(t0)
+sc_same:
+    addi s9, s8, 1
+sc_next:
+    addi s8, s8, 1
+    j sc_row
+sc_done:
+    mv t3, s9
+    lw t4, 12(sp)
+    jal world_column        # the world below the sprite's last row
+    lw s9, 8(sp)
+    lw s8, 4(sp)
+    lw ra, 0(sp)
+    addi sp, sp, 32
+    ret
+
+# draw_bird(): the bird's columns, from the higher of its old and new top rows
+# to the lower of their bottoms: the bird where it is now, with its wing up,
+# level, down, level, four frames each, and the world where it was.
 draw_bird:
+    addi sp, sp, -32
+    sw ra, 0(sp)
+    sw s8, 4(sp)
     li t0, 1                # the level wing, once it is dead
     li t1, DEAD
     beq s4, t1, db_frame
@@ -818,74 +978,129 @@ draw_bird:
 db_frame:
     li t1, BIRDBYTES
     mul t0, t0, t1
-    la a4, bird_art
-    add a4, a4, t0
-    srai a1, s2, 4          # sixteenths of a row to rows
-    sw a1, shown_y, t0
-    li a0, BIRDX
-    li a2, BIRDW
-    li a3, BIRDH
-    j draw_art
+    la t1, bird_sprites
+    add t0, t0, t1
+    sw t0, 8(sp)            # the picture
+    srai t0, s2, 4
+    sw t0, 12(sp)           # its top row now
+    lw t1, shown_y
+    mv t2, t0               # from the higher top
+    ble t0, t1, db_from
+    mv t2, t1
+db_from:
+    sw t2, 16(sp)
+    bge t0, t1, db_to       # to the lower bottom
+    mv t0, t1
+db_to:
+    addi t0, t0, BIRDH
+    sw t0, 20(sp)
+    li s8, BIRDX
+db_column:
+    mv a0, s8
+    lw a1, 16(sp)
+    lw a2, 20(sp)
+    addi t0, s8, -BIRDX
+    slli t0, t0, 2
+    lw a3, 8(sp)
+    add a3, a3, t0
+    lw a4, 12(sp)
+    li a5, BIRDH
+    li a6, BIRDSTRIDE
+    jal sprite_column
+    addi s8, s8, 1
+    li t0, BIRDR
+    blt s8, t0, db_column
+    lw t0, 12(sp)
+    sw t0, shown_y, t1
+    lw s8, 4(sp)
+    lw ra, 0(sp)
+    addi sp, sp, 32
+    ret
 
-# draw_score(): the score in the middle of the top. A pipe column repainted
-# under it paints over it, so it is drawn every frame; when the number
-# changes, the world is repainted under the old one first.
+# place_score(): the score's digits, highest first, into digit_buf, and the
+# columns they take this frame, centred at the top. A score only grows during
+# a game, so it always covers the columns of the one before it.
+place_score:
+    mv t0, s5
+    la t1, digit_buf
+    li t2, 10
+    li t3, 0                # how many digits
+ps_split:
+    remu t4, t0, t2
+    addi sp, sp, -4
+    sw t4, 0(sp)            # lowest first onto the stack,
+    addi t3, t3, 1
+    divu t0, t0, t2
+    bnez t0, ps_split
+    mv t4, t3
+ps_order:
+    lw t0, 0(sp)            # and off it highest first
+    addi sp, sp, 4
+    sb t0, 0(t1)
+    addi t1, t1, 1
+    addi t4, t4, -1
+    bnez t4, ps_order
+    li t0, -1
+    sb t0, 0(t1)            # the end of the digits
+    li t0, DIGITW
+    mul t0, t3, t0
+    li t1, WIDTH
+    sub t1, t1, t0
+    srai t1, t1, 1
+    sw t1, score_left, t2
+    add t1, t1, t0
+    sw t1, score_right, t2
+    sw zero, score_covered, t2
+    ret
+
+# draw_score(): the score, when it has changed or a pipe column went around it
 draw_score:
+    lw t0, shown_score
+    bne t0, s5, ds_draw
+    lw t0, score_covered
+    bnez t0, ds_draw
+    ret
+ds_draw:
     addi sp, sp, -16
     sw ra, 0(sp)
     sw s8, 4(sp)
     sw s9, 8(sp)
-    mv t0, s5
-    la t1, digit_buf
-    li s8, 0                # s8 = how many digits
-    li t2, 10
-ds_split:
-    remu t3, t0, t2
-    add t4, t1, s8
-    sb t3, 0(t4)            # the lowest digit left
-    addi s8, s8, 1
-    divu t0, t0, t2
-    bnez t0, ds_split
-
-    li t0, DIGITW
-    mul t0, s8, t0
-    li t1, WIDTH
-    sub t0, t1, t0
-    srai s9, t0, 1          # s9 = the left edge, to centre the digits
-
-    lw t0, shown_score
-    beq t0, s5, ds_draw
-    sw s5, shown_score, t0
-    addi t0, s8, 1
-    li t1, DIGITW
-    mul t0, t0, t1
-    add t0, t0, s9
-    sw t0, 12(sp)           # one digit's width past the right edge
-    li t3, SCOREY
-    li t4, SCOREEND
-    addi a0, s9, -DIGITW    # from one digit's width before the left edge
-ds_wipe:
-    jal world_column        # which leaves a0, t3 and t4 alone
-    addi a0, a0, 1
-    lw t0, 12(sp)
-    blt a0, t0, ds_wipe
-
-ds_draw:
-    addi s8, s8, -1         # the highest digit first
-    la t0, digit_buf
-    add t0, t0, s8
-    lbu t0, 0(t0)
+    la s9, digit_buf        # s9 = the next digit
+    lw s8, score_left       # s8 = the column
+ds_column:
+    lbu t0, 0(s9)
+    li t1, 255
+    beq t0, t1, ds_done     # past the last digit
     li t1, DIGITBYTES
     mul t0, t0, t1
-    la a4, digit_art
-    add a4, a4, t0
-    mv a0, s9
+    la t1, digit_sprites
+    add t0, t0, t1          # that digit's picture
+    la t1, digit_buf
+    sub t1, s9, t1
+    li t2, DIGITW
+    mul t1, t1, t2
+    lw t2, score_left
+    add t1, t1, t2          # its left column
+    sub t1, s8, t1
+    slli t1, t1, 2
+    add a3, t0, t1          # its word for this column
+    mv a0, s8
     li a1, SCOREY
-    li a2, DIGITW
-    li a3, DIGITH
-    jal draw_art
-    addi s9, s9, DIGITW
-    bnez s8, ds_draw
+    li a2, SCOREEND
+    li a4, SCOREY
+    li a5, DIGITH
+    li a6, DIGITSTRIDE
+    jal sprite_column
+    addi s8, s8, 1
+    lw t0, score_left
+    sub t0, s8, t0
+    li t1, DIGITW
+    remu t0, t0, t1
+    bnez t0, ds_column
+    addi s9, s9, 1          # the next digit starts here
+    j ds_column
+ds_done:
+    sw s5, shown_score, t0
     lw s9, 8(sp)
     lw s8, 4(sp)
     lw ra, 0(sp)
@@ -902,15 +1117,15 @@ ds_draw:
 # words around the tables are the columns just left and right of the pipe.
           .word NONE
 body_shade:
-          .word NONE, NONE, EDGE, PIPELIGHT, PIPEHI, PIPEHI, PIPELIGHT, PIPELIGHT
+          .word NONE, NONE, EDGE, PIPELIGHT, PIPELIGHT, PIPELIGHT, PIPELIGHT, PIPEMID
           .word PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEMID
-          .word PIPEMID, PIPEMID, PIPEDARK, PIPEMID, PIPEDARK, PIPEDARK, PIPEDARK, PIPEDARK
+          .word PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEDARK, PIPEDARK, PIPEDARK, PIPEDARK
           .word PIPEDARK, PIPEDARK, PIPEDARK, EDGE, NONE, NONE
           .word NONE
 cap_shade:
           .word EDGE, PIPELIGHT, PIPELIGHT, PIPEHI, PIPEHI, PIPEHI, PIPELIGHT, PIPELIGHT
           .word PIPELIGHT, PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEMID
-          .word PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEDARK, PIPEMID, PIPEDARK, PIPEDARK
+          .word PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEMID, PIPEDARK, PIPEDARK, PIPEDARK
           .word PIPEDARK, PIPEDARK, PIPEDARK, PIPEDARK, PIPEDARK, EDGE
           .word NONE
 
@@ -926,222 +1141,256 @@ bush_rise:
           .byte 6, 6, 6, 6, 5, 4, 4, 5, 5, 5, 5, 5, 4, 4, 3, 0
 towers:   .byte 26, 40, 32, 48, 22, 36, 44, 30, 52, 28, 38, 24
 
-# Pictures, one character a pixel: '.' shows what is behind, and any other
-# character is the colour at its place in palette_keys.
-palette_keys: .ascii "Xywrol"
+# The sprites: three pictures of the bird, its wing up, level and down, and the
+# ten digits, one 0x00RRGGBB word a pixel, row by row. Black (0) is see-through.
           .align 2
-palette:  .word EDGE, 0x00F8C82A, 0x00FFFFFF, 0x00F25C3C, 0x00F09A2C, 0x00FAEE9C
-bird_art:
+bird_sprites:
 # wing up
-          .ascii "......XXXXXX....."
-          .ascii "....XXyyyXwwX...."
-          .ascii "...XyyyyXwwwwX..."
-          .ascii ".XXXyyyyXwwwXwX.."
-          .ascii "XlllXyyyXwwwXwX.."
-          .ascii "XllllXyyyXwwwwX.."
-          .ascii "XllllXyyyyXXXXXX."
-          .ascii ".XXXXyyyyXrrrrrX."
-          .ascii "..XooooooXrXXXXX."
-          .ascii "..XoooooooXrrrrX."
-          .ascii "...XXoooooXXXXX.."
-          .ascii ".....XXXXX......."
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0
+          .word 0, 0x543847, 0x543847, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A
+          .word 0xF8C82A, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0
+          .word 0, 0x543847, 0x543847, 0x543847, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A
+          .word 0x543847, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0x543847, 0
+          .word 0, 0, 0x543847, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C
+          .word 0x543847, 0xF25C3C, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0
+          .word 0, 0, 0x543847, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C
+          .word 0xF09A2C, 0x543847, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0x543847, 0
+          .word 0, 0, 0, 0x543847, 0x543847, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C
+          .word 0xF09A2C, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0, 0, 0, 0, 0, 0, 0
 # wing level
-          .ascii "......XXXXXX....."
-          .ascii "....XXyyyXwwX...."
-          .ascii "...XyyyyXwwwwX..."
-          .ascii ".XXXXyyyXwwwXwX.."
-          .ascii "XllllXyyXwwwXwX.."
-          .ascii "XlllllXyyXwwwwX.."
-          .ascii "XylllyXyyyXXXXXX."
-          .ascii ".XyyyXyyyyXrrrrrX"
-          .ascii "..XXXooooXrXXXXX."
-          .ascii "..XoooooooXrrrrX."
-          .ascii "...XXoooooXXXXX.."
-          .ascii ".....XXXXX......."
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0
+          .word 0, 0x543847, 0x543847, 0x543847, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0x543847, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0x543847, 0xF8C82A, 0xF8C82A
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xF8C82A, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xF8C82A, 0x543847, 0xF8C82A, 0xF8C82A
+          .word 0xF8C82A, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0
+          .word 0, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A
+          .word 0xF8C82A, 0x543847, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0x543847
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C
+          .word 0x543847, 0xF25C3C, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0
+          .word 0, 0, 0x543847, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C
+          .word 0xF09A2C, 0x543847, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0x543847, 0
+          .word 0, 0, 0, 0x543847, 0x543847, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C
+          .word 0xF09A2C, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0, 0, 0, 0, 0, 0, 0
 # wing down
-          .ascii "......XXXXXX....."
-          .ascii "....XXyyyXwwX...."
-          .ascii "...XyyyyXwwwwX..."
-          .ascii "..XyyyyyXwwwXwX.."
-          .ascii ".XyyyyyyXwwwXwX.."
-          .ascii ".XXXXXyyyXwwwwX.."
-          .ascii "XlllllXyyyXXXXXX."
-          .ascii "XlllllXyyXrrrrrX."
-          .ascii ".XllllXooXrXXXXX."
-          .ascii "..XXXXooooXrrrrX."
-          .ascii "...XXoooooXXXXX.."
-          .ascii ".....XXXXX......."
-digit_art:
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0
+          .word 0, 0, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0xF8C82A, 0x543847
+          .word 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xF8C82A, 0xF8C82A, 0xF8C82A
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0x543847, 0xF8C82A, 0xF8C82A
+          .word 0xF8C82A, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0
+          .word 0x543847, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0x543847, 0xF8C82A, 0xF8C82A
+          .word 0x543847, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0x543847, 0
+          .word 0, 0x543847, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0xFAEE9C, 0x543847, 0xF09A2C, 0xF09A2C
+          .word 0x543847, 0xF25C3C, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0xF09A2C, 0xF09A2C, 0xF09A2C
+          .word 0xF09A2C, 0x543847, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0xF25C3C, 0x543847, 0
+          .word 0, 0, 0, 0x543847, 0x543847, 0xF09A2C, 0xF09A2C, 0xF09A2C, 0xF09A2C
+          .word 0xF09A2C, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0, 0, 0, 0, 0, 0, 0
+digit_sprites:
 # 0
-          .ascii "..XXXXXXXX.."
-          .ascii "..XwwwwwwX.."
-          .ascii "XXXwwwwwwXXX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XXXwwwwwwXXX"
-          .ascii "..XwwwwwwX.."
-          .ascii "..XXXXXXXX.."
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
 # 1
-          .ascii "....XXXX...."
-          .ascii "....XwwX...."
-          .ascii "..XXXwwX...."
-          .ascii "..XwwwwX...."
-          .ascii "..XwwwwX...."
-          .ascii "..XXXwwX...."
-          .ascii "....XwwX...."
-          .ascii "....XwwX...."
-          .ascii "....XwwX...."
-          .ascii "....XwwX...."
-          .ascii "....XwwX...."
-          .ascii "....XwwX...."
-          .ascii "..XXXwwXXX.."
-          .ascii "..XwwwwwwX.."
-          .ascii "..XwwwwwwX.."
-          .ascii "..XXXXXXXX.."
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
 # 2
-          .ascii "..XXXXXXXX.."
-          .ascii "..XwwwwwwX.."
-          .ascii "XXXwwwwwwXXX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XXXX....XwwX"
-          .ascii "......XXXwwX"
-          .ascii "......XwwXXX"
-          .ascii "....XXXwwX.."
-          .ascii "....XwwXXX.."
-          .ascii "..XXXwwX...."
-          .ascii "..XwwXXX...."
-          .ascii "XXXwwXXXXXXX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XXXXXXXXXXXX"
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847
 # 3
-          .ascii "XXXXXXXXXXXX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XXXXXXXwwXXX"
-          .ascii "....XXXwwX.."
-          .ascii "....XwwXXX.."
-          .ascii "....XwwXXX.."
-          .ascii "....XXXwwX.."
-          .ascii "......XwwXXX"
-          .ascii "......XXXwwX"
-          .ascii "XXXX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XXXwwwwwwXXX"
-          .ascii "..XwwwwwwX.."
-          .ascii "..XXXXXXXX.."
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
 # 4
-          .ascii "......XXXX.."
-          .ascii "......XwwX.."
-          .ascii "....XXXwwX.."
-          .ascii "....XwwwwX.."
-          .ascii "..XXXwwwwX.."
-          .ascii "..XwwXXwwX.."
-          .ascii "XXXwwXXwwX.."
-          .ascii "XwwXXXXwwX.."
-          .ascii "XwwXXXXwwXXX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XXXXXXXwwXXX"
-          .ascii "......XwwX.."
-          .ascii "......XwwX.."
-          .ascii "......XwwX.."
-          .ascii "......XXXX.."
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
 # 5
-          .ascii "XXXXXXXXXXXX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XwwXXXXXXXXX"
-          .ascii "XwwXXXXXXX.."
-          .ascii "XwwwwwwwwX.."
-          .ascii "XwwwwwwwwXXX"
-          .ascii "XXXXXXXXXwwX"
-          .ascii "........XwwX"
-          .ascii "........XwwX"
-          .ascii "XXXX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XXXwwwwwwXXX"
-          .ascii "..XwwwwwwX.."
-          .ascii "..XXXXXXXX.."
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
 # 6
-          .ascii "....XXXXXX.."
-          .ascii "....XwwwwX.."
-          .ascii "..XXXwwwwX.."
-          .ascii "..XwwXXXXX.."
-          .ascii "XXXwwX......"
-          .ascii "XwwXXX......"
-          .ascii "XwwXXXXXXX.."
-          .ascii "XwwwwwwwwX.."
-          .ascii "XwwwwwwwwXXX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XXXwwwwwwXXX"
-          .ascii "..XwwwwwwX.."
-          .ascii "..XXXXXXXX.."
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0, 0
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0, 0, 0
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
 # 7
-          .ascii "XXXXXXXXXXXX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XwwwwwwwwwwX"
-          .ascii "XXXXXXXXXwwX"
-          .ascii "......XXXwwX"
-          .ascii "......XwwXXX"
-          .ascii "....XXXwwX.."
-          .ascii "....XwwXXX.."
-          .ascii "..XXXwwX...."
-          .ascii "..XwwXXX...."
-          .ascii "..XwwX......"
-          .ascii "..XwwX......"
-          .ascii "..XwwX......"
-          .ascii "..XwwX......"
-          .ascii "..XwwX......"
-          .ascii "..XXXX......"
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0, 0, 0
 # 8
-          .ascii "..XXXXXXXX.."
-          .ascii "..XwwwwwwX.."
-          .ascii "XXXwwwwwwXXX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XXXwwwwwwXXX"
-          .ascii "XXXwwwwwwXXX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XXXwwwwwwXXX"
-          .ascii "..XwwwwwwX.."
-          .ascii "..XXXXXXXX.."
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
 # 9
-          .ascii "..XXXXXXXX.."
-          .ascii "..XwwwwwwX.."
-          .ascii "XXXwwwwwwXXX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwX....XwwX"
-          .ascii "XwwXXXXXXwwX"
-          .ascii "XXXwwwwwwwwX"
-          .ascii "..XwwwwwwwwX"
-          .ascii "..XXXXXXXwwX"
-          .ascii "......XXXwwX"
-          .ascii "......XwwXXX"
-          .ascii "..XXXXXwwX.."
-          .ascii "..XwwwwXXX.."
-          .ascii "..XwwwwX...."
-          .ascii "..XXXXXX...."
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847
+          .word 0, 0, 0, 0, 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0x543847, 0x543847, 0, 0
+          .word 0, 0, 0x543847, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x543847, 0, 0, 0, 0
+          .word 0, 0, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0x543847, 0, 0, 0, 0
 ```
 
 ```testcase
@@ -1176,7 +1425,7 @@ which it must restore the 12 bytes.
 ## Bird physics
 
 `s2` stores the bird's top position in **sixteenths of a row**, and `s3` stores its velocity in the
-same units per frame. Gravity adds 6 to the velocity. A flap replaces the velocity with -88, where a
+same units per frame. Gravity adds 5 to the velocity. A flap replaces the velocity with -80, where a
 negative value means upward movement. `MAXFALL` limits the downward velocity.
 
 The position can retain a fraction even though the screen uses whole rows. For example, starting
@@ -1184,9 +1433,9 @@ from 1600 with velocity 0, three frames without a flap give these values:
 
 | Frame | velocity after gravity | position | displayed row (`position >> 4`) |
 | ----: | ---------------------: | -------: | ------------------------------: |
-|     1 |                      6 |     1606 |                             100 |
-|     2 |                     12 |     1618 |                             101 |
-|     3 |                     18 |     1636 |                             102 |
+|     1 |                      5 |     1605 |                             100 |
+|     2 |                     10 |     1615 |                             100 |
+|     3 |                     15 |     1630 |                             101 |
 
 The low four bits remain in `s2` for the next update. Drawing discards them with a shift.
 
@@ -1201,7 +1450,7 @@ The score increases after a pipe's right edge passes the bird's left edge. Setti
 ensures that later frames do not score the same pipe again.
 
 Treat `random_gap` as a supplied helper, as in the Snake game. Its useful contract is: it returns a
-gap middle from 86 to 146 in `a0`, and, besides the link address created by `jal`, it changes only
+gap middle from 92 to 140 in `a0`, and, besides the link address created by `jal`, it changes only
 `a0` and `t6`. Service 30 supplies a seed when play begins, while xorshift deterministically
 produces the following values. A seed of zero would stay zero through every shift and `xor`, so
 `start` replaces it with a fixed nonzero one.
@@ -1209,25 +1458,27 @@ produces the following values. A seed of zero would stay zero through every shif
 ## Collision ranges
 
 The hit test uses **half-open intervals**: the first position belongs to the object and the position
-after the end does not. Horizontally, the bird occupies `[BIRDX, BIRDR)`, which is `[48, 65)`, and a
-pipe occupies `[left, left + PIPEW)`. The test uses the cap's width for the whole pipe, two columns
-wider on each side than the body.
+after the end does not. The pipes test a box `HITIN`, 2 pixels, inside the bird's picture, which
+leaves out its see-through corners and forgives a near miss. Horizontally, that box occupies
+`[HITX, HITR)`, which is `[50, 63)`, and a pipe occupies `[left, left + PIPEW)`. The test uses the
+cap's width for the whole pipe, two columns wider on each side than the body.
 
 ```text
 no overlap                 overlap
-bird [48,65) pipe [65,95)  bird [48,65)
-             ^ touching        pipe [64,94)
-             edges only             ^ shared column 64
+box [50,63) pipe [63,93)   box [50,63)
+            ^ touching         pipe [62,92)
+            edges only              ^ shared column 62
 ```
 
-There is no horizontal overlap when the pipe starts at or beyond `BIRDR`, or when its right edge is
-at or before `BIRDX`. That explains the `bge` and `ble` branches in `hit_test`.
+There is no horizontal overlap when the pipe starts at or beyond `HITR`, or when its right edge is
+at or before `HITX`. That explains the `bge` and `ble` branches in `hit_test`.
 
-The same convention applies vertically. If the top row is 100 and `BIRDH` is 12, the bird occupies
-`[100, 112)`. A gap with middle 100 and `HALFGAP` 34 occupies `[66, 134)`, so the bird fits. The
-test uses strict `blt` and `bgt` for the pipe edges: equality means the bird still fits exactly. The
-ground starts at `GROUNDY`, row 216. A bird whose excluded bottom edge equals `GROUNDY` is still
-clear of the ground, which is why the ground test branches with `ble`.
+The same convention applies vertically. If the top row is 100 and `BIRDH` is 12, the bird's picture
+occupies `[100, 112)` and its box `[102, 110)`. A gap with middle 100 and `HALFGAP` 40 occupies
+`[60, 140)`, so the bird fits. The test uses strict `blt` and `bgt` for the pipe edges: equality
+means the box still fits exactly. The ground stops the whole picture: it starts at `GROUNDY`, row
+216, and a bird whose excluded bottom edge equals `GROUNDY` is still clear of it, which is why the
+ground test branches with `ble`.
 
 ## The backdrop
 
@@ -1273,8 +1524,9 @@ window in `t3` and `t4` survives, which is why `world_column` can call several o
 
 ## Store only what changes
 
-Stores to display memory trigger Screen updates. To avoid unnecessary updates, every drawing
-routine loads the current colour and skips the store if it already matches, as in `fill_span`:
+Stores to display memory trigger Screen updates, and a frame of this game has only about 20
+milliseconds for all of its work. Every drawing routine therefore loads the current colour and
+skips the store if it already matches, as in `fill_span`:
 
 ```text
 lw   t2, 0(t0)
@@ -1282,39 +1534,61 @@ beq  t2, a3, fs_same     # already that colour: no store
 sw   a3, 0(t0)
 ```
 
-The pipe routine also skips columns whose colours stay the same as the pipe moves left. A column
-needs repainting where the pipe's shading differs from the column to its left, or where its right
-edge uncovers the backdrop. The `NONE` words just before and after the shading tables represent
-the columns outside the pipe, so `mp_column` can compare entry `k` with entry `k - 1` for every
-`k` from 0 to `PIPEW`. With these tables, 17 of those 31 columns change. In each changed column,
-only the rows above and below the gap need repainting. The gap continues to show the same backdrop.
+`move_pipes` only changes the pipe records; `repaint_pipes` then paints what the move changed.
+When a pipe moves one column left, its column `k` shows what column `k - 1` showed before, so a
+Screen column changes only where the pipe's shading differs from the column to its left, or where
+its right edge uncovers the backdrop. The `NONE` words just before and after the shading tables
+represent the columns outside the pipe, so `repaint_pipes` can compare entry `k` with entry
+`k - 1` for every `k` from 0 to `PIPEW`. With these tables, 13 of those 31 columns change, and
+`pipe_rows` repaints only what changed in each: the body rows where `body_shade` changes, the cap
+rows where `cap_shade` does. The body has few colour changes because each one repaints about 110
+rows; the caps have more, because each of theirs repaints only 24.
 
-The grass stripes slide too. `paint_stripes` recomputes each grass word from `x + row + frames`:
-bit 2 of that sum picks the light or the dark green, which makes diagonal stripes four columns wide
-that move one column per frame.
+The grass stripes slide too. `paint_stripes` paints each grass word from `x + row + frames`: bit 2
+of that sum picks the light or the dark green, which makes diagonal stripes four columns wide. One
+frame later only the words where that sum is a multiple of 4 have changed colour, so
+`slide_stripes` stores just every fourth word of each stripe row.
 
-## Pictures
+## Painting each pixel once
 
-The bird and the digits are pictures stored as text, one character per cell. `.` leaves the
-existing colour unchanged. Each other character selects a colour at the same index in
-`palette_keys` and `palette`: `X` is the outline, `y` the yellow body, `w` white, `r` the red beak,
-`o` orange and `l` the pale wing. `draw_art` reads a picture row by row, looks up each character
-and stores its colour.
+The Screen can show a frame before the program has finished drawing it, for example when a frame
+takes longer than usual. If the program first painted the world over the bird and then drew the
+bird again, such a frame would show the bird missing, and the bird would flicker. So in each frame
+every pixel is painted at most once, with the colour it ends the frame in.
 
-There are three bird pictures, for the wing up, level and down. `draw_bird` picks one from the
-frame count, `(s11 >> 2) & 3`, with 3 shown as level: up, level, down, level, four frames each.
+The bird and the score are the parts drawn over the world. `repaint_pipes` leaves out the rows the
+bird takes this frame, in the bird's columns, and the score's rows in the score's columns, and
+notes in `score_covered` that the score needs drawing again. `sprite_column` then paints one column
+of a sprite and the world around it: walking down the rows, it paints the world with `world_column`
+up to each pixel of the sprite that is not see-through, then that pixel. `draw_bird` calls it for
+the bird's 17 columns, over the rows from the higher of the bird's old and new top rows to the
+lower of their bottoms, so the world is painted where the bird was and the bird where it is.
 
-The bird is drawn in two steps. `erase_bird` repaints the world over the twelve rows where it was
-last drawn, recorded in `shown_y`. Then `draw_bird` draws it at its new row. The Screen can refresh
-while the program is drawing, so a partial update may be visible.
+## Sprites
+
+The bird and the digits are sprites: blocks of words in the Screen's own `0x00RRGGBB` format, one
+per pixel, row after row. `bird_sprites` holds three pictures of 17 × 12 words, for the wing up,
+level and down, and `digit_sprites` ten digits of 12 × 16. A word of 0, black, is see-through:
+`sprite_column` paints the world there instead. Drawing a sprite pixel is therefore one load and,
+when the colour changes, one store.
+
+`draw_bird` picks a picture from the frame count, `(s11 >> 2) & 3`, with 3 shown as level: up,
+level, down, level, four frames each. `shown_y` records where the bird was last drawn.
+
+In the Flappy Bird example Project, the sprites are not in the source: they are the BMP pictures
+`assets/bird.bmp` and `assets/digits.bmp`, which the program reads with the file services when it
+starts, and which you can edit in the Pixels view.
 
 ## The score
 
-`draw_score` splits the score into decimal digits with `remu` and `divu`, lowest first, into
-`digit_buf`, then draws them highest first, centred at the top. The digits are redrawn every frame
-to restore any covered by a moving pipe. Unchanged pixels skip the store. When the number changes,
-the scene is repainted under the old digits first, from one digit's width before the new left edge
-to one after the new right edge.
+`place_score` splits the score into decimal digits with `remu` and `divu`, lowest first onto the
+stack, and takes them off highest first into `digit_buf`, ending with 255. It also works out the
+columns the digits take this frame, `score_left` to `score_right`, centred at the top. It runs
+before `repaint_pipes`, which needs those columns. A score only grows during a game, so its
+columns always include the ones the previous score took.
+
+`draw_score` draws the digits with `sprite_column` when the score has changed or a pipe column went
+around it; in other frames it returns at once.
 
 ## Frame timing
 
@@ -1324,33 +1598,37 @@ to one after the new right edge.
 schedule from the current time.
 
 The routine always sleeps for at least a millisecond, giving the Screen time to show the drawing.
-The Screen can also refresh between sleeps. Drawing time and browser scheduling affect the actual
-time between frames.
+The Screen can also refresh between sleeps, while a frame is still being drawn; because each pixel
+is painted once, such a frame is only an earlier version of the picture. Drawing time and browser
+scheduling affect the actual time between frames.
 
 ## Saved registers across calls
 
 A value needed after a helper call cannot be left in a temporary register that the helper changes.
 This program uses saved registers for those longer-lived values. The frame loop keeps input state
-in `s10` and the frame count in `s11`, so every called helper must preserve them. `paint_world` and
-`erase_bird` borrow `s8` and save it in their stack frames. `move_pipes` and `draw_score` borrow
-both `s8` and `s9` and save both. A helper also saves `ra` when it calls another routine.
+in `s10` and the frame count in `s11`, so every called helper must preserve them. `move_pipes`,
+`paint_world` and `draw_bird` borrow `s8` and save it in their stack frames. `repaint_pipes`,
+`sprite_column` and `draw_score` borrow both `s8` and `s9` and save both. A helper also saves `ra`
+when it calls another routine. `sprite_column` keeps its other arguments in its stack frame,
+because `world_column` changes the registers they arrived in.
 
 `world_column` changes `a1` to `a7`, `t0` to `t2`, `t5` and `t6`, and leaves `a0`, `t3` and `t4`
-alone. That is what lets `erase_bird` and the score wipe call it in a loop with one window, and
-what lets `move_pipes` call it twice for the same column with two windows.
+alone. That is what lets `paint_world` call it in a loop with one window, and what lets
+`repaint_pipes` paint the same column twice, above and below the rows it leaves alone.
 
 ## Try it
 
 1. Change `FRAME` or `GRAV`. Before running the program, calculate the first three velocities,
    positions, and displayed rows for a bird starting at `STARTY` with velocity zero.
-2. Change `HALFGAP` to 24. Calculate the resulting gap height and check that drawing and collision
-   use the same two boundaries.
+2. Make the game harder: change `HALFGAP` to 30, or `HITIN` to 0 with `HITX` 48 and `HITR` 65.
+   Calculate the resulting gap height and check that drawing and collision use the same two
+   boundaries.
 3. Remove `w` as a flap key, or replace it with another character. Space and Enter should continue
    to work.
 4. Trace a pipe whose left edge is `-PIPEW - 1`. After recycling, what left edge does it receive?
    Then trace its `counted` word.
-5. Change some characters of the first bird picture, for example its `r` beak into `o`. Then add a
-   colour: append a key to `palette_keys` and a word to `palette`, and use the key in a picture.
+5. Change the bird's beak colour: in `bird_sprites`, replace every `0xF25C3C` with another colour,
+   such as `0xF09A2C`. Then make one of its pixels see-through by changing it to 0.
 6. Change `towers` or `cloud_rise` to make a different skyline.
 7. Harder: make every `PIPEMID` in `body_shade` and `cap_shade` a `PIPEDARK`. Work out which
-   columns now change when a pipe moves, and check the count against 17.
+   columns now change when a pipe moves, and check the count against 13.
