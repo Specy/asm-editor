@@ -277,6 +277,11 @@
         border: 1px solid var(--tertiary);
         padding-block: 0.35rem;
     }
+    /* the chosen row reads as the workbench's active items do */
+    .examples-toolbar :global(.option[aria-selected='true']) {
+        background-color: var(--accent2);
+        color: var(--accent2-text);
+    }
     .isa-picker {
         width: 9rem;
     }
