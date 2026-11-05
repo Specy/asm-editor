@@ -1,0 +1,6 @@
+interface:
+    display_name: 'Grill'
+    short_description: 'Grill a design and write its docs'
+    default_prompt: 'Use $grill to stress-test this plan, one question at a time, and capture the vocabulary and decisions as we go.'
+policy:
+    allow_implicit_invocation: false
