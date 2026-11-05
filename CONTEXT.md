@@ -522,6 +522,11 @@ _Avoid_: category, flag (a **Status flag** is a CPU bit), badge, attribute
 
 A small runnable program attached to an instruction's **Documentation entry**, focused on that instruction with only the supporting code needed to demonstrate it and all register and memory setup visible in its source. It can show variations and quirks within the same program, with faulting variations commented out for the reader to enable; distinct from a **Language course**'s **Example**.
 
+## Markdown twin
+
+The markdown form of a site page, served at the page's URL with `.md` appended and rendered from the sources the page renders: what a language-model agent reads instead of the page. A **Documentation entry** that has no page of its own has a twin at its Chapter page's URL followed by its anchor. See [ADR 0077](./docs/adr/0077-agents-read-markdown-twins-derived-from-the-pages-sources.md).
+_Avoid_: mirror, markdown version, llms page, listing (a **Listing** is an Executable's disassembly)
+
 ## Lecture section
 
 The part of a **Lecture** under one second-level heading, with any third-level headings inside it, or the opening text before the first one: the unit a search finds in a **Course** and opens the Lecture at.

@@ -9,7 +9,7 @@ export const entries: EntryGenerator = () =>
         .filter((slugs) => slugs.length === 3)
         .map(([courseId, moduleId, lectureId]) => ({ courseId, moduleId, lectureId }))
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load = (async ({ params }) => {
     redirectRetiredPage(params.courseId, params.moduleId, params.lectureId)
     const content = await getLectureContent(params.courseId, params.moduleId, params.lectureId)
     return {
@@ -19,4 +19,4 @@ export const load: PageServerLoad = async ({ params }) => {
         topicLinks: await getTopicLinks(params.courseId, params.moduleId, params.lectureId),
         instructions: lectureInstructions(content)
     }
-}
+}) satisfies PageServerLoad

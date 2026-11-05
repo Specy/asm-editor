@@ -1,5 +1,45 @@
 import { LANGUAGE_THEMES } from '#lib/Config.ts'
 import type { DocumentationLanguage } from '#lib/search/scope.ts'
+import documentationIntro from './intros/documentation.md?raw'
+import mipsIntro from './intros/mips.md?raw'
+import riscvIntro from './intros/risc-v.md?raw'
+import x86Intro from './intros/x86.md?raw'
+import z80Intro from './intros/z80.md?raw'
+
+/**
+ * The opening of `/documentation`, and of each language's hub where it has one: markdown that the
+ * pages and their **Markdown twins** both render
+ * ([ADR 0077](../../../../../docs/adr/0077-agents-read-markdown-twins-derived-from-the-pages-sources.md)).
+ */
+export const DOCUMENTATION_INTRO: string = documentationIntro
+
+export const DOCUMENTATION_INTROS: Partial<Record<DocumentationLanguage, string>> = {
+    mips: mipsIntro,
+    'risc-v': riscvIntro,
+    x86: x86Intro,
+    z80: z80Intro
+}
+
+/**
+ * What each language is and what its reference covers, in a sentence or two: the `/documentation`
+ * hub is the one page that tells the five apart, and `/llms.txt` describes them with the same words.
+ */
+export const DOCUMENTATION_ABOUT: Record<DocumentationLanguage, string> = {
+    m68k: 'The Motorola 68000, with eight data registers and eight address registers. Covers instructions, addressing modes, condition codes, directives and trap tasks for input, output and graphics.',
+    mips: 'MIPS assembly for the MARS simulator. Covers instructions and pseudo-instructions, directives, registers, syscalls, screen and keyboard access, and using C and C++.',
+    'risc-v':
+        'RV32 and RV64 assembly for the RARS simulator. Covers instructions, directives, registers, syscalls, screen and keyboard access, and using C and C++.',
+    x86: 'x86-64 assembly in NASM syntax, running as a Linux program. Covers instructions, vector extensions, directives, registers and flags, Linux syscalls, and using C and C++.',
+    z80: 'The Zilog Z80, an 8 bit CPU with 64 KB of memory. Covers instructions, flags, cycle counts, directives, registers and I/O ports for the terminal, screen, keyboard, mouse and sound.'
+}
+
+/** A short markdown text's paragraphs, for a page that sets each in its own `<p>`. */
+export function markdownParagraphs(markdown: string): string[] {
+    return markdown
+        .split(/\n\s*\n/)
+        .map((paragraph) => paragraph.replace(/\s*\n\s*/g, ' ').trim())
+        .filter(Boolean)
+}
 
 /** A page the documentation site's sidebar and hub link to. */
 export type DocumentationPage = { id: string; title: string; href: string }

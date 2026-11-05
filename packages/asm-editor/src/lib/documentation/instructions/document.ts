@@ -128,6 +128,21 @@ export type OperandSymbol = {
     href?: string
 }
 
+/** A section's heading: its tags, as plural nouns where they name forms. */
+const SECTION_LABELS: Record<InstructionTag, string> = {
+    pseudo: 'Pseudo-instructions',
+    'rv64-only': 'RV64 only',
+    undocumented: 'Undocumented',
+    privileged: 'Privileged',
+    '68010': '68010 and later',
+    '68020': '68020 only',
+    'opt-bit': '68000/68010 with opt bit'
+}
+
+export function sectionHeading(tags: readonly InstructionTag[]): string {
+    return tags.length === 0 ? 'Forms' : tags.map((tag) => SECTION_LABELS[tag]).join(' · ')
+}
+
 /** What each flag mark means, for the strip's legend. */
 export const FLAG_MARK_MEANINGS: Record<FlagMarkKind, string> = {
     changed: 'set from the result',

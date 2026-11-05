@@ -3,3 +3,6 @@ User-agent: *
 Disallow:
 
 Sitemap: https://asm-editor.specy.app/sitemap.xml
+
+# For language-model agents: an index of the site in markdown (https://llmstxt.org/)
+# https://asm-editor.specy.app/llms.txt

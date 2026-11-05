@@ -1,21 +1,4 @@
 <script lang="ts" module>
-    import type { InstructionTag } from '#lib/documentation/instructions/categories.ts'
-
-    /** A section's heading: its tags, as plural nouns where they name forms. */
-    const SECTION_LABELS: Record<InstructionTag, string> = {
-        pseudo: 'Pseudo-instructions',
-        'rv64-only': 'RV64 only',
-        undocumented: 'Undocumented',
-        privileged: 'Privileged',
-        '68010': '68010 and later',
-        '68020': '68020 only',
-        'opt-bit': '68000/68010 with opt bit'
-    }
-
-    export function sectionHeading(tags: readonly InstructionTag[]): string {
-        return tags.length === 0 ? 'Forms' : tags.map((tag) => SECTION_LABELS[tag]).join(' · ')
-    }
-
     /** How many rows the panel shows of a section before "Show all". */
     export const PANEL_ROWS = 6
 
@@ -41,6 +24,7 @@
     import { plainText } from '#lib/documentation/entries.ts'
     import {
         patternOpens,
+        sectionHeading,
         type FormPattern,
         type InstructionDocument
     } from '#lib/documentation/instructions/document.ts'
