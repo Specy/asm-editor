@@ -26,7 +26,6 @@
     import { registerColumnWidth } from '#lib/languages/registerFormats.ts'
     import { resolveProjectSettings, undoHistorySize } from '#lib/projectSettings.ts'
     import {
-        displayActualSizeZoom,
         isMarsDisplay,
         programDisplay,
         rewriteProgramScreenDirective,
@@ -820,7 +819,6 @@
         waitingFor={emulator.interrupt?.type === X86_INPUT_INTERRUPT
             ? emulator.interrupt.message
             : undefined}
-        actualSizeZoom={configurableDisplay ? displayActualSizeZoom(display) : 1}
         style={`height: ${height}; flex: none;${headerless ? ' border-radius: 0;' : ''}`}
         {headerless}
         onHeader={headerless ? (header) => (screenHeader = header) : undefined}

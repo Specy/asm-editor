@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
 import {
-    displayActualSizeZoom,
     isMarsDisplay,
     programDisplay,
     programDisplayEquals,
@@ -32,11 +31,6 @@ describe("a Program's display in its Target's shape", () => {
         expect(programDisplayEquals(DEFAULT_PROJECT_DISPLAY, { ...DEFAULT_PROJECT_DISPLAY })).toBe(
             true
         )
-    })
-
-    it("shows x86 at one Screen pixel a framebuffer pixel, and MARS at its unit's", () => {
-        expect(displayActualSizeZoom({ width: 320, height: 240 })).toBe(1)
-        expect(displayActualSizeZoom({ ...DEFAULT_PROJECT_DISPLAY, unitWidth: 4 })).toBe(4)
     })
 })
 

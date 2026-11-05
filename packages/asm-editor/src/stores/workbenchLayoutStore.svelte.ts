@@ -25,6 +25,11 @@ export type WorkbenchLayout = {
     debugCollapsed: boolean
     /** Height of the registers and memory above the Screen and the Debug tools; `null` is automatic. */
     debugTopHeight: number | null
+    /**
+     * Height of the Screen in its folding section, the Sections arrangement's and a tablet's or a
+     * phone's, dragged by the handle under it; `null` is the section's own default.
+     */
+    screenHeight: number | null
     /** Whether each collapsible section is collapsed, by section id; missing ones use their default. */
     collapsed: Record<string, boolean>
     /** Each floating Debug tool's window, by tool id. */
@@ -46,7 +51,8 @@ export const LAYOUT_LIMITS = {
     panelWidth: { min: 180, max: 1200 },
     bottomHeight: { min: 72, max: 1600 },
     debugWidth: { min: 320, max: 2400 },
-    debugTopHeight: { min: 120, max: 2400 }
+    debugTopHeight: { min: 120, max: 2400 },
+    screenHeight: { min: 120, max: 2400 }
 } as const
 
 /** A side panel's width before it is dragged, in pixels (the rem sizes of the plan at 16px). */
@@ -75,6 +81,7 @@ export function defaultLayout(): WorkbenchLayout {
         debugWidth: null,
         debugCollapsed: false,
         debugTopHeight: null,
+        screenHeight: null,
         collapsed: {},
         floating: {},
         searchLookIn: { files: true, listings: true, pseudocode: true }
@@ -130,6 +137,7 @@ export function readStoredLayout(json: string | null): WorkbenchLayout {
     //a layout stored before the column could collapse has no flag, and opens expanded
     if (typeof stored.debugCollapsed === 'boolean') layout.debugCollapsed = stored.debugCollapsed
     layout.debugTopHeight = readOptionalSize(stored.debugTopHeight, LAYOUT_LIMITS.debugTopHeight)
+    layout.screenHeight = readOptionalSize(stored.screenHeight, LAYOUT_LIMITS.screenHeight)
     if (isRecord(stored.collapsed)) {
         for (const [id, collapsed] of Object.entries(stored.collapsed)) {
             if (typeof collapsed === 'boolean') layout.collapsed[id] = collapsed
@@ -211,6 +219,10 @@ function createWorkbenchLayoutStore() {
         setDebugTopHeight(height: number | null) {
             data.debugTopHeight =
                 height === null ? null : clamp(height, LAYOUT_LIMITS.debugTopHeight)
+            store()
+        },
+        setScreenHeight(height: number | null) {
+            data.screenHeight = height === null ? null : clamp(height, LAYOUT_LIMITS.screenHeight)
             store()
         },
         /** Whether a section is collapsed, or `fallback` for one the person never touched. */

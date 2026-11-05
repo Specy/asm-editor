@@ -240,10 +240,11 @@
             display: none;
         }
 
-        /* still joined to the rail, running on over the rest of the Workbench */
+        /* still joined to the rail, running on over the rest of the Workbench, the Screen's
+           floating window at 11 included */
         &.maximized {
             position: absolute;
-            z-index: 11;
+            z-index: 12;
             top: var(--wb-gap);
             bottom: var(--wb-gap);
             left: calc(var(--wb-gap) + var(--wb-card-inset) + var(--wb-rail-width));

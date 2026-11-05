@@ -33,13 +33,12 @@
     import ExecutionControls from './ExecutionControls.svelte'
     import RegistersArea from './RegistersArea.svelte'
     import MemoryStrip from './MemoryStrip.svelte'
-    import ScreenArea from './ScreenArea.svelte'
+    import SectionScreen from './SectionScreen.svelte'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
     import { debugTools, toolBodyStyle } from './debugTools'
     import { markedMemoryAddress, memoryCellMenu, moveMemoryView } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
-    import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
 
     interface Props {
         externalMenu?: boolean
@@ -108,9 +107,12 @@
         else if (wasMaximized) restoring = true
         wasMaximized = maximized
     })
-    //the Screen's size and controls, which its section shows in its own header while it is open
-    let screenHeader: ScreenHeader | undefined = $state()
     const screenOpen = $derived(!workbenchLayout.isCollapsed('compact:screen', true))
+    //as in the Debug column: a request for the Screen's window unfolds its section, so it is built
+    $effect(() => {
+        if (ui.screenWindowRequested && hasScreen && !screenOpen)
+            workbenchLayout.setCollapsed('compact:screen', false)
+    })
     //the bar builds the controls group's Program (programs-plan.md, decision 8), so it is there
     //while that pane shows an Entry file that is no C or C++, whose pane has Compile instead
     const executionBar = $derived(
@@ -251,19 +253,7 @@
                         </div>
                     </CollapsibleSection>
                     {#if hasScreen}
-                        <CollapsibleSection
-                            id="compact:screen"
-                            title="Screen"
-                            defaultCollapsed
-                            info={screenOpen ? screenHeader?.info : undefined}
-                            actions={screenOpen ? screenHeader?.actions : undefined}
-                        >
-                            <ScreenArea
-                                style="height: 22rem; flex: none; border-radius: 0;"
-                                headerless
-                                onHeader={(header) => (screenHeader = header)}
-                            />
-                        </CollapsibleSection>
+                        <SectionScreen id="compact:screen" defaultHeight="22rem" />
                     {/if}
                     <div class="tools-row">
                         {#each tools as tool (tool.id)}

@@ -38,6 +38,9 @@ it('gives every port a unique ISA-prefixed id, independent of its display name o
     expect(exampleSharePath('mips-bouncing-ball', 'build')).toBe(
         '/projects/share?example=mips-bouncing-ball&build=true'
     )
+    expect(exampleSharePath('mips-snake', 'buildAndRun', true)).toBe(
+        '/projects/share?example=mips-snake&buildAndRun=true&fullscreenDisplay=true'
+    )
     expect(examplesPath('mips-bouncing-ball', 'buildAndRun')).toBe(
         '/examples?example=mips-bouncing-ball&buildAndRun=true'
     )
@@ -90,6 +93,17 @@ it('opens a small example when the link names none, and says each port as the in
     expect(asmos.find((e) => e.language === 'X86')?.description).toContain('x86 assembly')
 })
 
+it('starts the games and asmOS running on a display that fills the page, and nothing else', () => {
+    const starting = examples.filter((e) => e.startup).map((e) => e.id)
+    for (const id of ['risc-v-pacman', 'mips-snake', 'z80-flappy-bird', 'x86-asmos'])
+        expect(starting).toContain(id)
+    expect(examples.find((e) => e.id === 'x86-asmos')?.startup).toEqual({
+        buildAndRun: true,
+        fullscreenDisplay: true
+    })
+    expect(examples.find((e) => e.id === 'mips-hello-world')?.startup).toBeUndefined()
+})
+
 it('sends a framed Project page only where the site goes on its own', () => {
     expect(destinationPath({ to: 'home' })).toBe('/')
     expect(destinationPath({ to: 'projects' })).toBe('/projects')
@@ -114,7 +128,7 @@ it('loads a fresh unsaved copy from a short link', async () => {
         .fn()
         .mockResolvedValueOnce(new Response(JSON.stringify(index)))
         .mockResolvedValueOnce(new Response(bytes))
-    const project = await loadExample('mips-bouncing-ball', fetcher)
+    const { project } = await loadExample('mips-bouncing-ball', fetcher)
     expect(project.id).toBe(SHARE_ID)
     expect(project.language).toBe('MIPS')
     expect(project.files['bouncing-ball.asm']).toBeDefined()

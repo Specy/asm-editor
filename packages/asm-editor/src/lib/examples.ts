@@ -5,7 +5,7 @@ import { SHARE_ID } from './shareId.ts'
 import { languageLabel } from './languages/languageLabel.ts'
 import { resolve } from '$app/paths'
 import type { ResolvedPathname } from '$app/types'
-import { shareStartQuery, type ShareStartAction } from './shareStart.ts'
+import { shareStartQuery, type ShareStartAction, type ShareStartup } from './shareStart.ts'
 
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
 const indexSchema = z.object({
@@ -25,7 +25,14 @@ const indexSchema = z.object({
                         variant: slug.optional(),
                         bytes: z.number().int().nonnegative().optional(),
                         name: z.string().optional(),
-                        description: z.string().optional()
+                        description: z.string().optional(),
+                        startup: z
+                            .object({
+                                build: z.boolean().optional(),
+                                buildAndRun: z.boolean().optional(),
+                                fullscreenDisplay: z.boolean().optional()
+                            })
+                            .optional()
                     })
                 )
                 .min(1)
@@ -44,6 +51,8 @@ export type Example = {
     archive: string
     /** The archive's size, when the index gives it. */
     bytes?: number
+    /** What the Examples page opens it with when its link gives no flags, as a game's runs it. */
+    startup?: ShareStartup
 }
 
 /**
@@ -73,7 +82,8 @@ export function parseExamplesIndex(input: unknown): Example[] {
                         language: port.target,
                         variant: port.variant,
                         archive: port.archive,
-                        bytes: port.bytes
+                        bytes: port.bytes,
+                        startup: port.startup
                     }
                 ]
             })
@@ -110,6 +120,7 @@ export class ExampleNotFoundError extends Error {
     }
 }
 
+/** The example `id` names, and a fresh unsaved copy of its Project. */
 export async function loadExample(id: string, fetcher: typeof fetch = fetch) {
     const example = (await loadExamples(fetcher)).find((example) => example.id === id)
     if (!example) throw new ExampleNotFoundError()
@@ -118,12 +129,19 @@ export async function loadExample(id: string, fetcher: typeof fetch = fetch) {
     const { project } = await makeProjectFromArchive(await response.arrayBuffer())
     if (project.language !== example.language) throw new Error('The example has the wrong ISA')
     project.id = SHARE_ID
-    return project
+    return { example, project }
 }
 
-/** A short share link opens a fresh copy, just as a project payload does. */
-export function exampleSharePath(id: string, action?: ShareStartAction): string {
-    return `${resolve('/projects/[project]', { project: 'share' })}?example=${encodeURIComponent(id)}${shareStartQuery(action)}`
+/**
+ * A short share link opens a fresh copy, just as a project payload does, starting as its flags say:
+ * `action`, and `fullscreenDisplay` for the Screen in its floating window.
+ */
+export function exampleSharePath(
+    id: string,
+    action?: ShareStartAction,
+    fullscreenDisplay = false
+): string {
+    return `${resolve('/projects/[project]', { project: 'share' })}?example=${encodeURIComponent(id)}${shareStartQuery(action)}${fullscreenDisplay ? '&fullscreenDisplay=true' : ''}`
 }
 
 export function examplesPath(id?: string, action?: ShareStartAction): ResolvedPathname {

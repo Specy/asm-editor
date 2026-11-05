@@ -177,7 +177,7 @@ The owner's second review asked for:
 - **Top bar:** the execution controls sit as far from the bar's right end as from its top.
 - **Debug column height:** the column scrolls instead of squeezing what is under registers and memory into the height left. With the Debug tools as sections it is 170vh tall from the start, so sections open into room without the split being dragged. With floating Debug tools, only the Screen is under registers and memory, and it is as tall as it needs to fill the column's width, because 170vh would only leave it floating in empty space.
 - **Register rules:** the rules between the Status flags, the PC and the Register files run from edge to edge of the card.
-- **Screen section:** the Screen's size and controls (Display, the drawing buffer, the zoom and the floating window) are in its folding section's header, which replaces the Screen's own header there.
+- **Screen section:** the Screen's size and controls (Display, the drawing buffer, the zoom and the floating window) are in its folding section's header, which replaces the Screen's own header there. A handle under the Screen drags its height, from the section's 26 rem (22 rem on tablets and phones), kept per person with the panel sizes; a double click gives the section its default height back. Added on 2026-11-05 at the user's request.
 - **Scrollbar room:** side panels, the bottom panel's tabs and the debug column keep room for their scrollbar, so content that starts to scroll does not shift sideways.
 
 A request to limit how tall registers and memory can be dragged was withdrawn.

@@ -44,6 +44,11 @@ export class WorkbenchUi {
      * next Build's memory belongs to another run (`markedMemoryAddress` in `pointerMenu.ts`).
      */
     memoryMark = $state.raw<{ address: bigint; build: unknown } | null>(null)
+    /**
+     * A request for the Screen to open in its floating window as soon as it is shown, which the
+     * Screen answers once: closing the window, or a later Build, does not bring it back.
+     */
+    screenWindowRequested = $state(false)
 
     constructor(viewport: Viewport, access: ActivePanelAccess) {
         this.viewport = viewport

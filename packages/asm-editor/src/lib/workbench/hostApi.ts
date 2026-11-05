@@ -89,6 +89,11 @@ export interface WorkbenchProps {
     hostLinks?: WorkbenchHostLink[]
     /** The panel open beside the rail, by id; bindable so the host's chrome can open one. */
     activePanel?: string | null
+    /**
+     * Opens the Screen in its floating window the first time it is shown, a link's
+     * `fullscreenDisplay`. Read once, when the Workbench is made.
+     */
+    screenWindow?: boolean
     /** Host actions above the workspace, with access to its responsive menu state. */
     header?: Snippet<[WorkbenchUi]>
     loading?: Snippet

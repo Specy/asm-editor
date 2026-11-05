@@ -35,8 +35,28 @@
         closeTitle?: string
         /** The key that closes it too, shown in the close button's Tooltip. */
         closeShortcut?: string
+        /**
+         * Whether the window is resized by dragging its bottom corners, as a desktop window is: the
+         * right one moves the right edge, the left one the left edge. Off unless asked for: the
+         * Debug tools are as large as what they show. A resizable window takes its body's size from
+         * `width` and `height`, which the corners change, kept inside the viewport and no smaller
+         * than `minWidth` by `minHeight`.
+         */
+        resizable?: boolean
+        width?: number
+        height?: number
+        minWidth?: number
+        minHeight?: number
+        /**
+         * Called when a corner is let go, with the corner: the body follows the pointer freely
+         * while it is dragged, and a caller whose content only comes in some sizes snaps it to
+         * one here, keeping the edge the corner did not move.
+         */
+        onResizeEnd?: (corner: 'start' | 'end') => void
         children?: import('svelte').Snippet
     }
+
+    type Size = { width: number; height: number }
 
     let {
         hidden = $bindable(true),
@@ -49,8 +69,72 @@
         onClose,
         closeTitle = 'Close',
         closeShortcut,
+        resizable = false,
+        width = $bindable(0),
+        height = $bindable(0),
+        minWidth = 160,
+        minHeight = 120,
+        onResizeEnd,
         children
     }: Props = $props()
+
+    /** The room the corner leaves between the window and the viewport's edges, as a drag does. */
+    const EDGE = 6
+    /** The bottom corners, by the edge each moves: the left edge, and the right. */
+    const CORNERS = ['start', 'end'] as const
+    let content: HTMLElement | undefined = $state()
+    let resizing = $state<'start' | 'end' | null>(null)
+    let resizeStartX = 0
+    let resizeStartY = 0
+    let resizeStart: Size = { width: 0, height: 0 }
+    let resizeStartLeft = 0
+    let resizeMax: Size = { width: 0, height: 0 }
+
+    function onResizeDown(e: PointerEvent, corner: 'start' | 'end') {
+        if (e.button !== 0 || !content) return
+        //the corner is inside the window, which must not take the press as the start of a drag
+        e.preventDefault()
+        e.stopPropagation()
+        resizing = corner
+        resizeStartX = e.clientX
+        resizeStartY = e.clientY
+        resizeStart = { width, height }
+        resizeStartLeft = left
+        //the body grows down and away from the corner's opposite edge, which stays where it is, so
+        //the viewport past that edge is the most it can take; a window that already reached the
+        //viewport's edge, as a phone's does, may stay there rather than being pulled off it
+        const box = content.getBoundingClientRect()
+        const roomX = corner === 'end' ? window.innerWidth - box.left : box.right
+        const roomY = window.innerHeight - box.top
+        resizeMax = {
+            width: Math.max(0, roomX - EDGE, Math.min(width, roomX)),
+            height: Math.max(0, roomY - EDGE, Math.min(height, roomY))
+        }
+        ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    }
+
+    function onResizeMove(e: PointerEvent) {
+        if (!resizing) return
+        const across = e.clientX - resizeStartX
+        const proposed = {
+            width: resizeStart.width + (resizing === 'end' ? across : -across),
+            height: resizeStart.height + e.clientY - resizeStartY
+        }
+        const nextWidth = Math.round(Math.min(resizeMax.width, Math.max(minWidth, proposed.width)))
+        //the left corner moves the left edge, so the right one stays put
+        if (resizing === 'start') left = resizeStartLeft + resizeStart.width - nextWidth
+        width = nextWidth
+        height = Math.round(Math.min(resizeMax.height, Math.max(minHeight, proposed.height)))
+    }
+
+    function onResizeUp(e: PointerEvent) {
+        if (!resizing) return
+        const corner = resizing
+        resizing = null
+        const target = e.currentTarget as HTMLElement
+        if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId)
+        onResizeEnd?.(corner)
+    }
 
     //a window the caller can take away has no collapsed state: its bar goes with its body
     const collapsed = $derived(onClose ? false : hidden)
@@ -139,11 +223,32 @@
             </button>
         {/if}
     {/snippet}
-    <div class="draggable-container-content" class:hidden={collapsed}>
+    <div
+        class="draggable-container-content"
+        class:hidden={collapsed}
+        class:resizing={resizing !== null}
+        class:sized={resizable && !collapsed}
+        style={resizable && !collapsed ? `width: ${width}px; height: ${height}px;` : ''}
+        bind:this={content}
+    >
         {#if mounted}
             {@render children?.()}
         {/if}
     </div>
+    {#if resizable && !collapsed}
+        <!-- outside the body, which clips its rounded corners: a handle inside it would lose the
+             corner it sits in to the clipping, for the pointer as much as for the eye -->
+        {#each CORNERS as corner (corner)}
+            <div
+                class="resize-corner {corner}"
+                aria-hidden="true"
+                onpointerdown={(e) => onResizeDown(e, corner)}
+                onpointermove={onResizeMove}
+                onpointerup={onResizeUp}
+                onpointercancel={onResizeUp}
+            ></div>
+        {/each}
+    {/if}
 </Draggable>
 
 <style lang="scss">
@@ -206,5 +311,49 @@
             height: 0;
             transition: all 0s;
         }
+        /* the body follows the pointer, not the pointer's position a fifth of a second ago */
+        &.resizing {
+            transition: none;
+        }
+        /* a body sized by its caller is still never narrower than the bar above it, whose
+           controls would otherwise stick out past it */
+        &.sized {
+            min-width: 100%;
+        }
+    }
+
+    /* two short diagonal strokes in each bottom corner, the mark a desktop window's resizable
+       corner has, set a little outside the body so that they fall on its frame rather than on
+       what a body that fills itself shows. `touch-action: none` keeps a finger's drag from
+       scrolling the page instead */
+    .resize-corner {
+        --strokes:
+            transparent 0 50%, currentColor 50% 57%, transparent 57% 70%, currentColor 70% 77%,
+            transparent 77%;
+        position: absolute;
+        bottom: -0.3rem;
+        width: 1rem;
+        height: 1rem;
+        touch-action: none;
+        color: var(--secondary-text);
+        opacity: 0.6;
+
+        &:hover {
+            opacity: 1;
+        }
+    }
+
+    .resize-corner.end {
+        right: -0.3rem;
+        cursor: nwse-resize;
+        background: linear-gradient(135deg, var(--strokes));
+        border-bottom-right-radius: 0.4rem;
+    }
+
+    .resize-corner.start {
+        left: -0.3rem;
+        cursor: nesw-resize;
+        background: linear-gradient(225deg, var(--strokes));
+        border-bottom-left-radius: 0.4rem;
     }
 </style>

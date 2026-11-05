@@ -24,7 +24,7 @@
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import '#cmp/specific/workbench/workbench.css'
     import ShareMenu from '#cmp/shared/menu/ShareMenu.svelte'
-    import { readShareStart, type ShareStartAction } from '#lib/shareStart.ts'
+    import { readShareStart, resolveShareStartup, type ShareStartAction } from '#lib/shareStart.ts'
 
     let examples = $state<Example[]>([])
     let status = $state<'loading' | 'loaded' | 'error'>('loading')
@@ -37,6 +37,17 @@
     const selected = $derived(
         requested === null ? defaultExample(examples) : examples.find((e) => e.id === requested)
     )
+    //the editor's link for the selected example, in the frame and behind Open in editor: with the
+    //flags this page's own link gives, and the example's own startup for those it leaves out. This
+    //page is the one place that puts an example's startup in a link, so a link to the editor that
+    //was sent on its own starts as it says and no other way
+    const editorPath = $derived.by(() => {
+        if (!selected) return undefined
+        const { action, fullscreenDisplay } = browser
+            ? resolveShareStartup(page.url.searchParams, selected.startup)
+            : { action: undefined, fullscreenDisplay: false }
+        return exampleSharePath(selected.id, action, fullscreenDisplay)
+    })
     const filtered = $derived(examples.filter((e) => !isa || e.language === isa))
     let pickerValue = $derived(
         filtered.some((e) => e.id === selected?.id) ? (selected?.id ?? '') : ''
@@ -201,10 +212,10 @@
                                 >
                             {/snippet}
                         </ShareMenu>
-                        {#if selected}
+                        {#if editorPath}
                             <ButtonLink
                                 cssVar="secondary"
-                                href={exampleSharePath(selected.id, startAction)}
+                                href={editorPath}
                                 target="_blank"
                                 rel="noopener">Open in editor</ButtonLink
                             >
@@ -231,10 +242,10 @@
                     : 'Choose an example from the picker above.'}
             </ErrorState>
         {:else}
-            {#key `${selected.id}:${startAction ?? ''}`}
+            {#key editorPath}
                 <iframe
                     bind:this={frame}
-                    src={exampleSharePath(selected.id, startAction)}
+                    src={editorPath}
                     title={selected.label}
                     allow="clipboard-write; fullscreen"
                     allowfullscreen

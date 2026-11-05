@@ -55,14 +55,6 @@ export function programDisplayEquals(a: ProgramDisplay, b: ProgramDisplay): bool
 }
 
 /**
- * What the Screen's actual size means: MARS's unit width, how many screen pixels one memory word
- * covered there; on x86 one framebuffer pixel, since fbdev has no unit size.
- */
-export function displayActualSizeZoom(display: ProgramDisplay): number {
-    return isMarsDisplay(display) ? display.unitWidth : 1
-}
-
-/**
  * The File whose `@screen` comment states a Program's display: its Entry file, except on x86, where
  * a Generated assembly Entry's comments are its C or C++ source's, which the compiler drops.
  * `entrySource` is that source's path, from the Entry's Compilation record.

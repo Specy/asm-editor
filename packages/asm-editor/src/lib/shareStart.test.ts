@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vite-plus/test'
-import { readShareStart, shareStartQuery, startSharedProject } from './shareStart.ts'
+import {
+    readFullscreenDisplay,
+    readShareStart,
+    resolveShareStartup,
+    shareStartQuery,
+    startSharedProject
+} from './shareStart.ts'
 
 it.each([
     ['', undefined],
@@ -13,6 +19,41 @@ it.each([
     ['build=no&buildAndRun=no', undefined]
 ])('reads startup flags from %s', (query, action) => {
     expect(readShareStart(new URLSearchParams(query))).toBe(action)
+})
+
+it.each([
+    ['', false],
+    ['fullscreenDisplay', true],
+    ['fullscreenDisplay=true', true],
+    ['fullscreenDisplay=false', false],
+    ['fullscreenDisplay=1', false],
+    ['buildAndRun=true&fullscreenDisplay=true', true]
+])('reads the fullscreen display flag from %s', (query, open) => {
+    expect(readFullscreenDisplay(new URLSearchParams(query))).toBe(open)
+})
+
+it.each([
+    ['', {}, { action: undefined, fullscreenDisplay: false }],
+    [
+        '',
+        { buildAndRun: true, fullscreenDisplay: true },
+        { action: 'buildAndRun', fullscreenDisplay: true }
+    ],
+    ['', { build: true }, { action: 'build', fullscreenDisplay: false }],
+    ['build=true', { buildAndRun: true }, { action: 'build', fullscreenDisplay: false }],
+    [
+        'buildAndRun=false',
+        { buildAndRun: true, fullscreenDisplay: true },
+        { action: undefined, fullscreenDisplay: true }
+    ],
+    [
+        'fullscreenDisplay=false',
+        { buildAndRun: true, fullscreenDisplay: true },
+        { action: 'buildAndRun', fullscreenDisplay: false }
+    ],
+    ['buildAndRun&fullscreenDisplay', {}, { action: 'buildAndRun', fullscreenDisplay: true }]
+] as const)('starts %s with an example startup of %j as %j', (query, startup, expected) => {
+    expect(resolveShareStartup(new URLSearchParams(query), startup)).toEqual(expected)
 })
 
 it('writes one enabled startup flag or none', () => {

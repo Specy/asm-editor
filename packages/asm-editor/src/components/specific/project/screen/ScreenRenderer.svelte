@@ -2,15 +2,14 @@
     import { onMount, tick, untrack, type Snippet } from 'svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaDesktop from '~icons/fa-solid/desktop'
-    import FaExpand from '~icons/fa-solid/expand'
-    import FaCompress from '~icons/fa-solid/compress'
+    import FaTh from '~icons/fa-solid/th'
     import FaWindowMaximize from '~icons/fa-solid/window-maximize'
     import FaLayerGroup from '~icons/fa-solid/layer-group'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import ToggleableDraggable from '#cmp/shared/draggable/DraggableContainer.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import { screenZoom, screenZoomLabel } from './screenZoom'
-    import { screenWindowGeometry } from './screenWindow'
+    import { screenZoom, screenZoomLabel, snapZoom } from './screenZoom'
+    import { bodyZoom, screenWindowGeometry } from './screenWindow'
     import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
     import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
     import type { Mouse, MouseButton } from '#lib/languages/peripherals/Mouse.ts'
@@ -62,13 +61,6 @@
         /** The MIPS and RISC-V display configuration popover, rendered in the header. */
         configuration?: Snippet
         /**
-         * What the zoom toggle's actual-size position means. MIPS and RISC-V pass MARS's unit
-         * width, whose whole point is how many screen pixels one memory word covered there, so
-         * turning the fit off reproduces the tool's own geometry; everything else draws in Screen
-         * pixels and leaves it at 1.
-         */
-        actualSizeZoom?: number
-        /**
          * The container draws the header, a folding section that already has a title bar: the
          * panel then draws none of its own and hands the size and the controls to `onHeader`.
          */
@@ -84,6 +76,12 @@
          * container that scrolls rather than squeezing the Screen into the height it has left.
          */
         heightFromWidth?: boolean
+        /**
+         * Opens the floating window as soon as the panel is shown, then calls
+         * `onWindowRequestAnswered` so that the host asks only once.
+         */
+        windowRequested?: boolean
+        onWindowRequestAnswered?: () => void
     }
 
     let {
@@ -95,10 +93,11 @@
         name = 'Screen',
         style = '',
         configuration,
-        actualSizeZoom = 1,
         headerless = false,
         onHeader,
-        heightFromWidth = false
+        heightFromWidth = false,
+        windowRequested = false,
+        onWindowRequestAnswered
     }: Props = $props()
 
     const MOUSE_BUTTONS: Record<number, MouseButton> = { 0: 'left', 1: 'middle', 2: 'right' }
@@ -142,7 +141,12 @@
     //here are only the seed for the first frame
     let logicalWidth = $state(untrack(() => screen.width))
     let logicalHeight = $state(untrack(() => screen.height))
-    let fitToPanel = $state(true)
+    //Integer scaling: every Screen pixel the same whole number of the display's pixels, for crisp
+    //text and lines, where it is otherwise fitted to fill the room it has (`screenZoom.ts`)
+    let integerScaling = $state(false)
+    //the display's pixels in a CSS pixel, which Integer scaling counts in; a page zoom or a move to
+    //another monitor changes it, and fires the window's resize
+    let devicePixelRatio = $state(typeof window === 'undefined' ? 1 : window.devicePixelRatio)
     //the Screen has no runes here either, so what the frame loop last read from it is what decides
     //whether the panel offers the drawing buffer at all
     let doubleBuffering = $state(untrack(() => screen.doubleBuffering))
@@ -158,32 +162,44 @@
     let windowTop = $state(0)
     let windowWidth = $state(0)
     let windowHeight = $state(0)
+    let windowMinWidth = $state(0)
+    let windowMinHeight = $state(0)
+    //the zoom the size the user resized the window to allows, since it opened: until then it is
+    //the largest the viewport allows, through any resize of the browser or the Screen
+    let windowZoom: number | undefined
 
     let context: CanvasRenderingContext2D | null = null
     let image: ImageData | null = null
     //-1 rather than 0: a Screen that has never changed is still at version 0 and must be painted once
     let paintedVersion = -1
 
+    //the page's panel is the size its layout gives it, which the Screen fills exactly; the window
+    //picks its own size, so it can pick one with evenly sized pixels
+    const pageSnap = $derived(integerScaling ? 'integer' : 'exact')
+    const windowSnap = $derived(integerScaling ? 'integer' : 'fine')
+
     let zoom = $derived(
         screenZoom({
-            fit: fitToPanel,
+            snap: expanded ? windowSnap : pageSnap,
             viewportWidth,
             viewportHeight,
             logicalWidth,
             logicalHeight,
-            actualSizeZoom
+            devicePixelRatio
         })
     )
 
-    let zoomLabel = $derived(screenZoomLabel(fitToPanel, zoom))
+    let zoomLabel = $derived(screenZoomLabel(integerScaling, zoom, devicePixelRatio))
 
     //the stage's width is the one measurement that does not depend on its height, so the height a
     //fitted Screen needs to fill it comes from it alone. It belongs to the page's container: the
     //floating window has a box of its own, and a stage held taller than it would fit the width
     //alone and push the bottom of a tall Screen out of the window
     let widthFitHeight = $derived(
-        heightFromWidth && !expanded && fitToPanel && viewportWidth > 0 && logicalWidth > 0
-            ? Math.floor((viewportWidth * logicalHeight) / logicalWidth)
+        heightFromWidth && !expanded && viewportWidth > 0 && logicalWidth > 0
+            ? Math.floor(
+                  logicalHeight * snapZoom(viewportWidth / logicalWidth, pageSnap, devicePixelRatio)
+              )
             : 0
     )
 
@@ -196,29 +212,62 @@
     let showDrawingBuffer = $derived(preferencesStore.values.showDrawingBuffer.value)
     let showingDrawingBuffer = $derived(showDrawingBuffer && doubleBuffering)
 
+    const rootFontSize = () => parseFloat(getComputedStyle(document.documentElement).fontSize)
+
     /**
-     * The window's box comes from the viewport (`screenWindow.ts`), because a box the user drags
-     * cannot be written as CSS insets the way the in-page panel's height is.
+     * The window's box comes from the viewport and the Screen (`screenWindow.ts`): it hugs the
+     * Screen at its zoom, so a box the user drags cannot be written as CSS insets the way the
+     * in-page panel's height is. It opens at the top right, and otherwise keeps its top and the
+     * edge named, which a corner drag left where it was.
      */
-    function fitWindowToViewport(place: 'keep' | 'top right') {
-        const root = parseFloat(getComputedStyle(document.documentElement).fontSize)
+    function placeWindow(place: 'open' | 'left' | 'right') {
         const box = screenWindowGeometry({
             viewportWidth: window.innerWidth,
             viewportHeight: window.innerHeight,
-            rootFontSize: root,
-            left: place === 'keep' ? windowLeft : undefined,
-            top: place === 'keep' ? windowTop : undefined
+            rootFontSize: rootFontSize(),
+            devicePixelRatio,
+            screenWidth: logicalWidth,
+            screenHeight: logicalHeight,
+            snap: windowSnap,
+            zoom: windowZoom,
+            left: place === 'left' ? windowLeft : undefined,
+            right: place === 'right' ? windowLeft + windowWidth : undefined,
+            top: place === 'open' ? undefined : windowTop
         })
         windowLeft = box.left
         windowTop = box.top
         windowWidth = box.width
         windowHeight = box.height
+        windowMinWidth = box.minWidth
+        windowMinHeight = box.minHeight
+    }
+
+    /**
+     * A corner let go: the window followed the pointer while it was dragged, the Screen inside it
+     * at the largest zoom its scaling allows there, and it now hugs the Screen at that zoom,
+     * keeping the edge the corner did not move.
+     */
+    function snapResizedWindow(corner: 'start' | 'end') {
+        windowZoom = bodyZoom({
+            size: { width: windowWidth, height: windowHeight },
+            screenWidth: logicalWidth,
+            screenHeight: logicalHeight,
+            rootFontSize: rootFontSize(),
+            devicePixelRatio,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight
+        })
+        placeWindow(corner === 'end' ? 'left' : 'right')
     }
 
     async function toggleWindow() {
         const wasFocused = focused
-        //opening always starts at the top right, whatever the last drag left behind
-        if (!expanded) fitWindowToViewport('top right')
+        //opening always starts at the top right, hugging the Screen at the largest zoom there is
+        //room for, whatever the last drag or resize left behind
+        if (!expanded) {
+            windowZoom = undefined
+            placeWindow('open')
+        }
         expanded = !expanded
         //the canvas is a new element in the other container, so the program's input follows it
         await tick()
@@ -432,6 +481,14 @@
     }
 
     $effect(() => {
+        if (!windowRequested) return
+        untrack(() => {
+            if (!expanded) void toggleWindow()
+            onWindowRequestAnswered?.()
+        })
+    })
+
+    $effect(() => {
         if (!headerless || expanded || !onHeader) return
         const handTo = onHeader
         handTo({ info: windowInfo, actions: pageActions })
@@ -468,9 +525,18 @@
     $effect(() => {
         if (!expanded) return
         //the window's size comes from the viewport, so a resize has to give it back a place inside
-        const onResize = () => fitWindowToViewport('keep')
+        const onResize = () => placeWindow('right')
         window.addEventListener('resize', onResize)
         return () => window.removeEventListener('resize', onResize)
+    })
+
+    $effect(() => {
+        if (!expanded) return
+        //a Screen of another size, from a Build or the program itself, Integer scaling turned on
+        //or off, or another device pixel ratio, and the window hugs the Screen anew, its top right
+        //corner where it was
+        void [logicalWidth, logicalHeight, integerScaling, devicePixelRatio]
+        untrack(() => placeWindow('right'))
     })
 
     $effect(() => {
@@ -493,9 +559,12 @@
         })
         //the element keeps focus when the browser window loses it, so its own blur never fires
         window.addEventListener('blur', releaseInput)
+        const readPixelRatio = () => (devicePixelRatio = window.devicePixelRatio)
+        window.addEventListener('resize', readPixelRatio)
         return () => {
             cancelAnimationFrame(frame)
             window.removeEventListener('blur', releaseInput)
+            window.removeEventListener('resize', readPixelRatio)
         }
     })
 </script>
@@ -521,15 +590,17 @@
     {/if}
     <button
         class="screen-action"
-        {@attach tooltip(fitToPanel ? 'Show at actual size' : 'Zoom to fit the panel')}
-        onclick={() => (fitToPanel = !fitToPanel)}
+        class:active={integerScaling}
+        aria-pressed={integerScaling}
+        {@attach tooltip(
+            integerScaling
+                ? 'Integer scaling is on. Click to turn it off and fill the available space.'
+                : 'Turn on integer scaling which improves text and line crispness.'
+        )}
+        onclick={() => (integerScaling = !integerScaling)}
     >
         <Icon size={0.8}>
-            {#if fitToPanel}
-                <FaExpand />
-            {:else}
-                <FaCompress />
-            {/if}
+            <FaTh />
         </Icon>
         {zoomLabel}
     </button>
@@ -568,7 +639,6 @@
     <div class="screen-viewport">
         <div
             class="screen-stage"
-            class:fitting={fitToPanel}
             style={widthFitHeight > 0
                 ? `min-height: calc(${widthFitHeight}px + 2 * var(--focus-ring));`
                 : ''}
@@ -606,10 +676,12 @@
 {#if expanded}
     <!-- a zero-sized fixed layer, so the window inside it is placed in viewport coordinates (which
          is what the draggable's own clamping assumes) without ever covering the page it floats on.
-         Its z-index puts it over the page — the editor is 2 and the sidebars are 3 — and under
-         everything the app opens *over* a page: the Settings, Documentation and Share drawers at 5,
-         the input prompt and the toasts at 20. The window has no backdrop and leaves the page
-         interactive on purpose, so a drawer the user just opened has to come out in front of it -->
+         Its z-index puts it over the page and over the floating Debug tools at 10, the window the
+         program draws in being the one worth keeping in sight, and under everything the app opens
+         *over* a page: a maximized side panel at 12, a tablet's backdrop at 11 (after it in the
+         page, so in front) and its drawer at 12, the input prompt and the toasts at 20. The window
+         has no backdrop and leaves the page interactive on purpose, so a panel the user just
+         opened has to come out in front of it -->
     <div class="screen-window-layer">
         <ToggleableDraggable
             title={name}
@@ -619,13 +691,16 @@
             closeTitle="Put the screen back in the page"
             closeShortcut="Escape"
             onClose={toggleWindow}
+            resizable
+            minWidth={windowMinWidth}
+            minHeight={windowMinHeight}
+            onResizeEnd={snapResizedWindow}
             bind:left={windowLeft}
             bind:top={windowTop}
+            bind:width={windowWidth}
+            bind:height={windowHeight}
         >
-            <div
-                class="screen-panel screen-window"
-                style="width: {windowWidth}px; height: {windowHeight}px;"
-            >
+            <div class="screen-panel screen-window">
                 {@render stage()}
             </div>
         </ToggleableDraggable>
@@ -726,20 +801,14 @@
         padding: calc(0.3rem - var(--focus-ring));
     }
 
-    /* a scroll container, so the canvas never widens the column it sits in and an actual-size
-       Screen larger than the panel can be reached by scrolling */
+    /* the box the canvas is fitted to, never wider than the column it sits in: the Screen always
+       fits it, so it clips, which also keeps a sub-pixel rounding from putting a scrollbar on it */
     .screen-stage {
         display: flex;
         flex: 1;
         min-width: 0;
         min-height: 0;
         padding: var(--focus-ring);
-        overflow: auto;
-    }
-
-    /* a fitted Screen is exactly as large as this box, so there is nothing to scroll to; hiding it
-       also keeps a sub-pixel rounding from putting a scrollbar on a panel that fits */
-    .screen-stage.fitting {
         overflow: hidden;
     }
 
@@ -752,12 +821,13 @@
         left: 0;
         width: 0;
         height: 0;
-        z-index: 4;
+        z-index: 11;
     }
 
     /* the window's body: the draggable's own bar carries the title and the controls, so this is
-       the stage alone, and its size is set from the viewport when the window opens */
+       the stage alone, filling the box the container sizes from the viewport and its corner */
     .screen-panel.screen-window {
+        height: 100%;
         border-radius: 0 0 0.4rem 0.4rem;
         box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.45);
     }
@@ -773,9 +843,8 @@
     /* The ring follows focus itself, not :focus-visible: a click is how most users hand the
        keyboard to the program, and they have to see that the editor's shortcuts are now off. It is
        drawn outside the canvas so it never covers a pixel, in the stage's padding: the stage clips
-       in both containers — hidden while fitting, a scroll container at actual size — so that
-       padding is the only room it has, and it is there whether the canvas has focus or not, so
-       focusing it moves nothing. */
+       in both containers, so that padding is the only room it has, and it is there whether the
+       canvas has focus or not, so focusing it moves nothing. */
     canvas.focused {
         outline: var(--focus-ring) solid var(--accent);
     }

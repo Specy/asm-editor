@@ -13,6 +13,7 @@ describe('readStoredLayout', () => {
             debugWidth: 900,
             debugCollapsed: true,
             debugTopHeight: 480,
+            screenHeight: 520,
             collapsed: { screen: true, history: false },
             floating: { history: { open: true, left: 420, top: 60 } },
             searchLookIn: { files: true, listings: false, pseudocode: false }

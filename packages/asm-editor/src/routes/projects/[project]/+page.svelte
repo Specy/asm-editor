@@ -43,12 +43,14 @@
         type ExampleDestination
     } from '#lib/examples.ts'
     import {
+        readFullscreenDisplay,
         readShareStart,
         shareStartQuery,
         startSharedProject,
         type ShareStartAction
     } from '#lib/shareStart.ts'
     import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
+    import type { WorkbenchUi } from '#lib/workbench/WorkbenchUi.svelte.ts'
 
     let project = $state(makeProject())
     let status: 'loading' | 'loaded' | 'error' = $state('loading')
@@ -240,8 +242,8 @@
             if (id === 'share') {
                 exampleId = page.url.searchParams.get('example')
                 if (exampleId !== null) {
-                    const example = await loadExample(exampleId)
-                    exampleSnapshot = example.toObject()
+                    const { project: copy } = await loadExample(exampleId)
+                    exampleSnapshot = copy.toObject()
                     project.set(exampleSnapshot)
                     status = 'loaded'
                     return
@@ -296,7 +298,11 @@
         }
     }
 
+    /** Whether another page shows this one in a frame, which has its own chrome: no top bar then. */
+    let framed = $state(false)
+
     onMount(() => {
+        framed = window.self !== window.top
         void loadProject()
         //started early; an editor that asks for Monaco loads it again if this fails
         Monaco.load().catch(() => undefined)
@@ -520,6 +526,19 @@
         <h1 class="loading">Loading...</h1>
     </div>
 {/snippet}
+{#snippet projectTopBar(ui: WorkbenchUi)}
+    <ProjectTopBar
+        phone={ui.deviceClass === 'phone'}
+        drawerOpen={ui.drawerOpen}
+        onToggleMenu={() => (ui.drawerOpen = !ui.drawerOpen)}
+        onHome={() => changePage({ to: 'home' })}
+        onBack={() => changePage({ to: 'projects' })}
+        onDonate={() => changePage({ to: 'donate' })}
+        onShare={(action) => {
+            void share(project, action)
+        }}
+    />
+{/snippet}
 <Page fillsScreen>
     <div class="workbench-page">
         <ThemeScope theme={LANGUAGE_THEMES[project.language]}>
@@ -530,6 +549,9 @@
                         {unsaved}
                         editJournals={journals}
                         onReady={startOnOpen}
+                        header={framed ? undefined : projectTopBar}
+                        screenWindow={page.params.project === 'share' &&
+                            readFullscreenDisplay(page.url.searchParams)}
                         onSave={async ({ silent }) => {
                             const saved = await saveChanges(silent)
                             if (saved && !silent) toast.logPill('Project saved')
@@ -540,19 +562,6 @@
                             if (openExample) checkExampleSoon()
                         }}
                     >
-                        {#snippet header(ui)}
-                            <ProjectTopBar
-                                phone={ui.deviceClass === 'phone'}
-                                drawerOpen={ui.drawerOpen}
-                                onToggleMenu={() => (ui.drawerOpen = !ui.drawerOpen)}
-                                onHome={() => changePage({ to: 'home' })}
-                                onBack={() => changePage({ to: 'projects' })}
-                                onDonate={() => changePage({ to: 'donate' })}
-                                onShare={(action) => {
-                                    void share(project, action)
-                                }}
-                            />
-                        {/snippet}
                         {#snippet loading()}
                             {@render loadingScreen()}
                         {/snippet}
