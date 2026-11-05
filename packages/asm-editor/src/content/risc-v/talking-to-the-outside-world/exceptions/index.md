@@ -116,8 +116,9 @@ work, this Playground produces `-1` for division by zero.
 ## Polling still handles input
 
 An interrupt is a device asking for attention between instructions; it is different from the
-instruction-caused faults above. This Playground does not deliver device interrupts. Its keyboard
-model remains polling: read the ready status, then read a character when it is ready.
+instruction-caused faults above. The same handler can receive timer and keyboard interrupts; see
+[Interrupts and the timer](/documentation/risc-v/interrupts) for examples. This lesson uses polling:
+read the ready status, then read a character when one is available.
 
 ## Your turn
 

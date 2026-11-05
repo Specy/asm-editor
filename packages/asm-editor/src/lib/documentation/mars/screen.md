@@ -16,9 +16,9 @@ The bitmap example configures its own 256 by 256 word grid with `@screen`, so it
 
 Reserve the memory the grid covers, with `.space` or a label of your own. The example reserves 256 × 256 words, or 262,144 bytes; the screen shows whatever those words hold, and writing past the reserved range overwrites other memory. Undo walks the picture back with the code, because the picture _is_ the memory the emulator rolled back.
 
-## Pictures in Files {#pictures}
+## Pictures in files {#pictures}
 
-A program can draw a picture it reads from a File of the project, such as a sprite sheet. Open a BMP File and choose **Pixels** under the editor to draw in it, or make one with **New picture** in the Explorer. A new picture is 32-bit and stored top-down, the layout of this screen: the pixel at column x and row y is the word at `pixels + 4 × (y × width + x)`, and that word is already the screen's color, so drawing the picture is a copy. Read the File into memory with the file services; its pixels start at the offset held in its bytes 10 to 13, which is 54 in the 32-bit picture **New picture** makes unless told otherwise.
+A program can draw a picture it reads from a file, such as a sprite sheet. Open a BMP File and choose **Pixels** under the editor to draw in it, or make one with **New picture** in the Explorer. A new picture is 32-bit and stored top-down, the layout of this screen: the pixel at column x and row y is the word at `pixels + 4 × (y × width + x)`, and that word is already the screen's color, so drawing the picture is a copy. Read the file into memory with the file services; its pixels start at the offset held in its bytes 10 to 13, which is 54 in the 32-bit picture **New picture** makes unless told otherwise.
 
 Each stroke updates the picture in your project when you release the mouse button or lift your finger. With autosave on, the change is saved immediately. With autosave off, save the project manually to keep your changes. Use **Undo** in the Pixel editor to undo a stroke. The program reads the picture as you last drew it at its next run. Other BMP layouts open in **Pixels** too, and keep their layout: a 24-bit picture keeps its three bytes a pixel and its rows stored bottom-up, which the program then has to convert.
 
@@ -43,8 +43,16 @@ Four words carry one character each way. What the program transmits is appended 
 
 {keyboardExample}
 
-The receiver accepts typed keys and scripted Testcase input. It never loses a keystroke: what does not fit in the data register waits in a queue behind it, and Ready ({readyBit}) stays set until that queue is empty. Click the screen panel to send keyboard input to the program; its focus ring shows that the editor's own shortcuts are paused. This simulator polls the devices and does not deliver device interrupts, so setting bit 1 of either control register ({interruptBit}) stops the program with an error. Poll Ready instead.
+The receiver queues typed characters and scripted Testcase input without dropping characters. Reading receiver data removes one character. Ready ({readyBit}) stays set while more are waiting. Click the Screen panel to send keyboard input to the program. Its focus ring shows that the editor's shortcuts are paused. Escape reaches the receiver as character 27. Press Shift+Tab, or click outside the Screen, to return keyboard control to the editor.
+
+Bit 1 of either control register ({interruptBit}) enables its **interrupt requests**. The receiver requests an interrupt while any character is waiting. The transmitter requests one after accepting each character. The processor must also have interrupts enabled for the request to enter a handler. See [Interrupts and the timer](/documentation/{route}/interrupts#keyboard) for an echo handler.
+
+The receiver gives characters only. Non-character keys such as arrows and Shift, and key releases, go to the [Input controller](/documentation/{route}/input-controller), which also reports the mouse. Losing focus on the Screen or browser window releases held keys and buttons in that controller. Already queued characters remain in the receiver.
 
 ## Program time
 
-Service `30` (`{service}` before a `{call}`) answers with the time in milliseconds, low word in `{argument}` and high word in `{highArgument}`, and service `32` waits for the milliseconds in `{argument}`. Time is measured in milliseconds since 1970-01-01 UTC; subtract two readings to measure elapsed time. A wait costs no instructions, which lets a program idle for keyboard input without reaching the execution limit. In a Testcase the virtual clock starts at 2000-01-01 UTC and advances only through the program's waits: a five-second wait finishes immediately, and elapsed-time output is repeatable. There is no mouse device in this simulator.
+Service `30` (`{service}` before a `{call}`) returns calendar milliseconds since 1970-01-01 UTC: low word in `{argument}`, high word in `{highArgument}`. Subtract two readings to measure elapsed time. In interactive use, this clock continues while paused.
+
+Service `32` waits for the milliseconds in `{argument}`. Waiting uses no instructions, so a program can sleep between keyboard polls without reaching the execution limit. In a Testcase, the calendar clock starts at 2000-01-01 UTC and advances through virtual waits: a five-second wait finishes immediately and gives repeatable elapsed-time output.
+
+For a separate timer that requests interrupts, see [Interrupts and the timer](/documentation/{route}/interrupts#timer). {simulator} has no mouse device. This editor's [Input controller](/documentation/{route}/input-controller) reads the mouse.

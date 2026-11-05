@@ -168,9 +168,9 @@ describe('x86 Project analysis adapter', () => {
         ])
     })
 
-    it('has nothing to say of a hand-written _start beside compiled code', async () => {
-        // The archive linker leaves main.asm out of a Build of compiled code;
-        // checking only assembles the units and does not link them.
+    it('says only that a hand-written _start beside compiled code is not part of the program', async () => {
+        // The archive linker leaves main.asm out of a Build of compiled code, and the check,
+        // which finds what the program needs before assembling, never assembles it.
         const snapshot = await analyzeX86Project(
             normalizeBuildInput({
                 entry: 'main.c.asm',
@@ -189,7 +189,15 @@ describe('x86 Project analysis adapter', () => {
             'start-beside-compiled',
             1
         )
-        expect(snapshot.diagnostics).toEqual([])
+        expect(snapshot.diagnostics).toEqual([
+            expect.objectContaining({
+                severity: 'suggestion',
+                location: expect.objectContaining({ path: 'main.asm' }),
+                message: "The program doesn't use this File, so it is left out."
+            })
+        ])
+        expect(snapshot.fileStatus['main.asm']).toBe('not-reachable')
+        expect(snapshot.fileStatus['main.c.asm']).toBe('assembled')
     })
 
     it('reports sources that cannot be resolved as the one error, as Build does', async () => {

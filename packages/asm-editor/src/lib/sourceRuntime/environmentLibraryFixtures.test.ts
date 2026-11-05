@@ -7,6 +7,7 @@ import type { ProjectFiles } from '#lib/projectFiles.ts'
 import {
     compileSource,
     createCompilerRequest,
+    POSIX_SYSROOT_INCLUDE,
     SourceCompilationError,
     type CompilationRequest
 } from '#lib/sourceCompilation/compilerExplorer.ts'
@@ -20,6 +21,7 @@ import {
 import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
 import { loadRuntimeHeaders } from './runtimeLibrary'
 import { ENVIRONMENT_HEADER_PATH } from './environmentLibrary'
+import { MARS_DATA_SEGMENT_END } from '#lib/languages/mars/marsDisplay.ts'
 
 /**
  * `<sim.h>` as the editor compiles it: programs captured from Compiler Explorer by
@@ -29,7 +31,7 @@ import { ENVIRONMENT_HEADER_PATH } from './environmentLibrary'
  */
 
 type Fixture = {
-    program: 'services' | 'screen' | 'screen-large' | 'screen-too-large' | 'header-diagnostic'
+    program: 'services' | 'screen' | 'screen-large' | 'screen-largest' | 'header-diagnostic'
     target: CompilationTarget
     compiler: SourceCompiler
     optimization: Optimization
@@ -189,12 +191,18 @@ describe('the captured <sim.h> compiles', () => {
                 `-iquote 'project/src' -iquote project -include 'project/${fixture.sourcePath}'`
             )
             expect(prepared.body.options.userArguments).toBe(expectedArguments)
-            //and what compileSource sends is that request, `<sim.h>` included
+            //and what compileSource sends is that request, `<sim.h>` included, with MIPS and
+            //RISC-V's own headers searched first (ADR 0072), which these programs never include
             const { fetcher, result } = compile(fixture)
             await result.catch(() => undefined)
             const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
             const body = JSON.parse(String(init.body))
-            expect(body.options.userArguments).toBe(expectedArguments)
+            expect(body.options.userArguments).toBe(
+                expectedArguments.replace(
+                    '-isystem sysroot/include',
+                    `-isystem ${POSIX_SYSROOT_INCLUDE} -isystem sysroot/include`
+                )
+            )
             expect(
                 body.files.find(
                     (file: { filename: string }) => file.filename === 'sysroot/include/sim.h'
@@ -303,24 +311,50 @@ describe('SIM_SCREEN', () => {
         30_000
     )
 
+    //1024 by 1024 words, 4 MiB: MARS's and RARS's own 4 MB of static data would not hold it, the
+    //64 MB these Targets give a program does (asmos-stage2.md, decision 7)
     it.each(
         fixtures
-            .filter((fixture) => fixture.program === 'screen-too-large')
+            .filter((fixture) => fixture.program === 'screen-largest')
             .map((fixture) => [fixture.name, fixture] as const)
-    )('%s fails to compile on the static-data assertion', async (_, fixture) => {
-        const error = await compile(fixture).result.catch((caught: unknown) => caught)
-        expect(error).toBeInstanceOf(SourceCompilationError)
-        const diagnostics = (error as SourceCompilationError).diagnostics
-        const failure = diagnostics.find((item) => item.severity === 'error')
-        //on the line that wrote SIM_SCREEN, saying why
-        expect(failure?.file).toBe(fixture.sourcePath)
-        expect(failure?.lineIndex).toBe(2)
-        expect(fixture.source.split(/\r?\n/)[2]).toBe('SIM_SCREEN(screen, 1024, 1024, 1);')
-        expect(failure?.message).toContain('4128768 bytes of static data')
-        expect(failure?.message).toContain('other global variables and constants share')
-        if (fixture.compiler === 'clang')
-            expect(failure?.related?.map((note) => note.file)).toContain(ENVIRONMENT_HEADER_PATH)
-    })
+    )(
+        '%s, the largest grid, builds and shows',
+        async (_, fixture) => {
+            const { emulator, sources, compiled } = await built(fixture)
+            try {
+                expect(
+                    compiled.assembly
+                        .split('\n')
+                        .filter((line) => line.includes('@screen'))
+                        .map((line) => line.trim())
+                ).toEqual(['# @screen width=1024 height=1024 unit=1 base=screen'])
+                await emulator.compile(128, sources)
+                expect(emulator.compilerErrors).toEqual([])
+                const display = emulator.getDisplay?.()
+                expect(display?.display).toMatchObject({
+                    unitWidth: 1,
+                    unitHeight: 1,
+                    width: 1024,
+                    height: 1024
+                })
+                const base = display!.display.baseAddress
+                expect(base % 4).toBe(0)
+                expect(base).toBeGreaterThanOrEqual(0x10010000)
+                expect(base + 1024 * 1024 * 4).toBeLessThanOrEqual(MARS_DATA_SEGMENT_END)
+                await emulator.run(100_000)
+                expect(emulator.errors).toEqual([])
+                expect(emulator.terminated).toBe(true)
+                const screen = emulator.peripherals.screen
+                expect([screen.width, screen.height]).toEqual([1024, 1024])
+                const pixels = screen.visiblePixels
+                expect([pixels[0], pixels[1], pixels[2]]).toEqual([255, 255, 255])
+                expect([pixels[4], pixels[5], pixels[6]]).toEqual([0, 0, 0])
+            } finally {
+                emulator.dispose()
+            }
+        },
+        30_000
+    )
 })
 
 describe('a diagnostic located in <sim.h>', () => {

@@ -18,6 +18,10 @@
         "fix": "vp run asm-editor#sync && vp lint --fix && vp run asm-editor#lint:svelte --fix && vp fmt",
         "format": "vp fmt",
         "format:check": "vp fmt --check",
+        "changed": "node scripts/changed.mjs",
+        "format:changed": "node scripts/changed.mjs format",
+        "lint:changed": "node scripts/changed.mjs lint",
+        "test:changed": "node scripts/changed.mjs test",
         "cores:build": "vp run build:cores"
     },
     "devDependencies": {

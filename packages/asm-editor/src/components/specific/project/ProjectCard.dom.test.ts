@@ -3,7 +3,7 @@
  * when they lose the focus.
  */
 import 'fake-indexeddb/auto'
-import { afterEach, expect, it, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import ProjectCard from './ProjectCard.svelte'
 import { makeProject, type Project } from '#lib/Project.svelte.ts'
@@ -12,9 +12,13 @@ import { ProjectStore } from '#stores/projectsStore.svelte.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 
+//the projects page reads the list as it opens, which the cards are of
+beforeEach(() => ProjectStore.load())
+
 afterEach(async () => {
     vi.restoreAllMocks()
     for (const project of [...ProjectStore.projects]) await ProjectStore.deleteProject(project)
+    ProjectStore.unload()
     document.body.replaceChildren()
 })
 

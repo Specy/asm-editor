@@ -5,6 +5,8 @@ date: 2026-10-08
 
 # Programs see calendar, elapsed and CPU clocks
 
+Update 2026-11-04: two timers read these clocks on MIPS and RISC-V ([ADR 0074](./0074-mips-and-risc-v-timers-count-what-their-references-count.md)). MIPS's CP0 Count counts **CPU time**: one tick every two instructions, from the same rewindable instruction count service 1101 reads, so it rewinds with Undo and a Testcase sees the same Count as a Run. RISC-V's Timer Tool registers, `time` and `timecmp`, count **running Program time**, a fourth reading: the elapsed clock since the run began, counting only while the program runs, so it stops at Pause, at Breakpoints and between Steps, and in a Testcase the virtual elapsed clock, which `wfi` moves to `timecmp`. Syscall 30 and RISC-V's `time` CSR keep reading calendar time.
+
 Amends the time semantics of [ADR 0010](./0010-program-time-without-clock-pacing.md) and [ADR 0037](./0037-testcases-run-on-a-seeded-random-source.md). Clock values follow their reference environment rather than sharing one elapsed counter.
 
 | Clock    | Interactive                              | Testcase                                         |

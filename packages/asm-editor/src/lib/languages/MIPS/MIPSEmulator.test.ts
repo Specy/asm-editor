@@ -1,7 +1,9 @@
-import { readFileSync } from 'node:fs'
+import { readExample } from '#lib/examples.server.ts'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
+import { inputControllerEntries } from '#lib/documentation/inputController.ts'
+import { soundDeviceExamples } from '#lib/documentation/soundDevices.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { MIPS } from '@specy/mips'
 import { MIPSEmulator } from '#lib/languages/MIPS/MIPSEmulator.svelte.ts'
@@ -15,8 +17,14 @@ import {
     MARS_TRANSMITTER_DATA
 } from '#lib/languages/mars/MarsDevices.ts'
 import type { ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
+import type { MarsCore } from '#lib/languages/mars/MarsDevices.ts'
 import type { Testcase } from '#lib/Project.svelte.ts'
 import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import {
+    EXCEPTION_EXAMPLE,
+    KEYBOARD_EXAMPLE,
+    TIMER_EXAMPLE
+} from '#lib/documentation/mars/interrupts.ts'
 import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import { InterpreterStatus, RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
@@ -457,6 +465,28 @@ describe('MIPS bitmap display', () => {
         expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
     })
 
+    it('reads back only the block an Undo restored, not the whole grid', async () => {
+        //a 64 by 16 grid is four of the Core's 1 KB blocks; the program draws in the first two
+        const display = { ...SMALL, unitWidth: 1, unitHeight: 1, width: 64, height: 16 }
+        const emulator = await run(
+            DATA + storePixel(0, '0x00ff0000') + storePixel(511, '0x0000ff00') + EXIT,
+            { display }
+        )
+        expect(pixelAt(emulator, 63, 7)).toBe(0x00ff00)
+        const core = (emulator as unknown as { core: Pick<MarsCore, 'readMemoryWords'> }).core
+        const read = core.readMemoryWords.bind(core)
+        const counts: number[] = []
+        core.readMemoryWords = (address, count) => {
+            counts.push(count)
+            return read(address, count)
+        }
+        for (let step = 0; step < 8 && pixelAt(emulator, 63, 7) !== 0; step++) emulator.undo(1)
+        expect(pixelAt(emulator, 63, 7)).toBe(0x000000)
+        expect(pixelAt(emulator, 0, 0)).toBe(0xff0000)
+        //the second block's 256 words, which the undone store had written, and nothing else
+        expect(counts).toEqual([256])
+    })
+
     it('comes back blank in the configured geometry after Build and after Stop', async () => {
         const emulator = await run(DATA + storePixel(0, '0x00ffffff') + EXIT)
         expect(pixelAt(emulator, 0, 0)).toBe(0xffffff)
@@ -625,17 +655,21 @@ describe('MIPS memory-mapped keyboard and display', () => {
         expect(emulator.readMemoryBytes(control, 4)[0]).toBe(MARS_READY_BIT)
     })
 
-    it('stops with an error naming the feature when a program enables interrupts', async () => {
+    it('keeps the interrupt-enable bit a program stores, beside the Ready bit the device states', async () => {
         const emulator = await run(
             DATA +
                 `        li      $s0, ${MARS_RECEIVER_CONTROL | 0}
-        li      $t1, ${MARS_INTERRUPT_ENABLE_BIT}
+        li      $t1, ${MARS_INTERRUPT_ENABLE_BIT | MARS_READY_BIT}
         sw      $t1, 0($s0)
+        lw      $s1, 0($s0)
 ` +
                 EXIT
         )
-        expect(emulator.errors.join('\n')).toContain('Interrupt-driven I/O is not supported')
-        expect(emulator.errors.join('\n')).toContain('receiver control register')
+        expect(emulator.errors).toEqual([])
+        //no key waits, so Ready is the device's 0 and the enable bit the program's 1; no handler
+        //is needed while nothing asks
+        const s1 = emulator.registers.find((register) => register.name === '$s1')!
+        expect(Number(s1.value)).toBe(MARS_INTERRUPT_ENABLE_BIT)
     })
 
     it('does not consume pending input when the memory viewer reads the data register', async () => {
@@ -1158,7 +1192,7 @@ main:
 
 describe('the MIPS examples', () => {
     it('draws the bitmap tour', async () => {
-        const code = readFileSync('examples/mips/bitmap-tour.asm', 'utf8')
+        const code = readExample('mips/bitmap-tour.asm')
         //no display is passed: the example's own `@screen` comment is what configures the Screen
         const emulator = await run(code)
         expect(emulator.errors).toEqual([])
@@ -1172,7 +1206,7 @@ describe('the MIPS examples', () => {
     })
 
     it('animates the bouncing ball and lets program time pass', async () => {
-        const code = readFileSync('examples/mips/bouncing-ball.asm', 'utf8')
+        const code = readExample('mips/bouncing-ball.asm')
         const emulator = await run(code, { virtualClock: true, limit: 400_000 })
         expect(emulator.peripherals.screen.width).toBe(128)
         //the ball is somewhere on the background it painted. The run is cut off at its instruction
@@ -1191,7 +1225,7 @@ describe('the MIPS examples', () => {
     })
 
     it('echoes typed characters through the keyboard and display example', async () => {
-        const code = readFileSync('examples/mips/keyboard-display.asm', 'utf8')
+        const code = readExample('mips/keyboard-display.asm')
         const emulator = await run(code, { typed: 'abq' })
         expect(emulator.errors).toEqual([])
         expect(emulator.stdOut.endsWith('abq')).toBe(true)
@@ -1929,17 +1963,24 @@ main:
         expect(fpu.flags.map((flag) => flag.value)).toEqual([1, 0, 0, 0, 0, 0, 0, 0])
     })
 
-    it('reads the four coprocessor 0 registers MARS implements', async () => {
+    it("reads the six coprocessor 0 registers, MARS's and the timer's", async () => {
         const emulator = await run(FLOATS)
         const cp0 = fileOf(emulator, 'cp0')
         expect(cp0.registers.map((register) => register.name)).toEqual([
             '$8 (vaddr)',
+            '$9 (count)',
+            '$11 (compare)',
             '$12 (status)',
             '$13 (cause)',
             '$14 (epc)'
         ])
-        //status holds MARS's reset value until an exception changes it, the other three stay at 0
-        expect(cp0.registers.map((register) => register.value)).toEqual([0n, 0x0000ff11n, 0n, 0n])
+        //status holds MARS's reset value until an exception changes it; Count went up once every
+        //two instructions the program ran; the others stay at 0
+        const executed = Number(emulator._getInstructionsExecuted())
+        const values = cp0.registers.map((register) => register.value)
+        expect(values[1]).toBeGreaterThan(0n)
+        expect(values.filter((_, index) => index !== 1)).toEqual([0n, 0n, 0x0000ff11n, 0n, 0n])
+        expect(Number(values[1])).toBeLessThanOrEqual(executed / 2)
     })
 
     it('leaves a $f register to highlight after the step that wrote it', async () => {
@@ -1997,9 +2038,12 @@ main:
         //vaddr is the address the load asked for, cause holds exception code 4 (address error on
         //load) in bits 2 to 6, status has the exception level bit set over MARS's reset value of
         //0x0000ff11, and epc is the address of the load, which the handler has just stepped past
+        //and Count is 2: four instructions, the faulting load included
         const cp0 = fileOf(emulator, 'cp0')
         expect(cp0.registers.map((register) => register.value)).toEqual([
             0x00000001n,
+            2n,
+            0n,
             0x0000ff13n,
             0x00000010n,
             0x00400004n
@@ -2009,7 +2053,7 @@ main:
     it('shows zeros for both files before a Build and refuses an unknown file', () => {
         const emulator = MIPSEmulator('')
         expect(emulator._getRegisterFileValues('fpu')).toEqual(new Array(32).fill(0n))
-        expect(emulator._getRegisterFileValues('cp0')).toEqual([0n, 0n, 0n, 0n])
+        expect(emulator._getRegisterFileValues('cp0')).toEqual([0n, 0n, 0n, 0n, 0n, 0n])
         expect(() => emulator._getRegisterFileValues('cp1')).toThrow('Unknown register file: cp1')
     })
 
@@ -2020,7 +2064,210 @@ main:
         //the setters bypass the backstepper, so a preset is visible at the next refresh and is not
         //an entry the simulation can step back over
         expect(emulator._getRegisterFileValues('fpu')[6]).toBe(0xffffffffn)
-        expect(emulator._getRegisterFileValues('cp0')[2]).toBe(0x8000000fn)
+        expect(emulator._getRegisterFileValues('cp0')[4]).toBe(0x8000000fn)
+    })
+})
+
+/**
+ * Interrupts and MIPS32's timer against the real Core ([ADR 0074](../../../../../../docs/adr/0074-mips-and-risc-v-timers-count-what-their-references-count.md)):
+ * the "Interrupts and the timer" chapter's two programs, the keyboard's level-triggered requests,
+ * a Step landing on the handler at 0x80000180 with the Log saying why, and Undo back out of it,
+ * the timer taking the interrupt at the same instruction again since Count counts instructions.
+ */
+describe('MIPS interrupts and the timer', () => {
+    const HANDLER = 0x80000180
+    const cp0 = (emulator: Emulator, name: string) =>
+        Number(
+            emulator.registerFiles
+                .find((file) => file.id === 'cp0')!
+                .registers.find((register) => register.name === name)!.value
+        )
+
+    it('runs the chapter’s timer program, the same instructions every run and in a Testcase', async () => {
+        //the Core counts every instruction since it loaded, so a run's own is the difference
+        const executedBy = async () => {
+            const emulator = await build(TIMER_EXAMPLE.MIPS)
+            const before = emulator._getInstructionsExecuted()
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.errors).toEqual([])
+            expect(emulator.stdOut).toBe('5')
+            expect(emulator.terminated).toBe(true)
+            return emulator._getInstructionsExecuted() - before
+        }
+        const executed = await executedBy()
+        //Count counts instructions, so a second run takes exactly as many
+        expect(await executedBy()).toBe(executed)
+        //five ticks of 2,000 instructions each
+        expect(Number(executed)).toBeGreaterThan(10_000)
+        expect(Number(executed)).toBeLessThan(10_200)
+        const testcase = await build(TIMER_EXAMPLE.MIPS)
+        await testcase.runTestcase(SCREEN_TESTCASE, INSTRUCTION_LIMIT)
+        expect(testcase.errors).toEqual([])
+        expect(testcase.stdOut).toBe('5')
+    })
+
+    it('echoes every key through the receiver’s interrupt, keys typed before it was enabled included', async () => {
+        const emulator = await run(KEYBOARD_EXAMPLE.MIPS, { typed: 'ab\n' })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('ab\n')
+        expect(emulator.terminated).toBe(true)
+    })
+
+    it('runs the chapter’s exception handler, which reports the exception and ends the program', async () => {
+        const emulator = await run(EXCEPTION_EXAMPLE.MIPS)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('4')
+        expect(emulator.terminated).toBe(true)
+    })
+
+    it('echoes a Testcase’s scripted input through the same interrupts', async () => {
+        const emulator = await build(KEYBOARD_EXAMPLE.MIPS)
+        await emulator.runTestcase({ ...SCREEN_TESTCASE, input: ['hi'] }, INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('hi\n')
+    })
+
+    it('steps into the timer handler, says so in the Log, and Undo steps back out', async () => {
+        const emulator = await build(TIMER_EXAMPLE.MIPS)
+        let steps = 0
+        const pc = () => Number(emulator.pc) >>> 0
+        while (pc() !== HANDLER && steps++ < 3000) await emulator.step()
+        expect(pc()).toBe(HANDLER)
+        const epc = cp0(emulator, '$14 (epc)')
+        //the line the chapter quotes for this program
+        expect(emulator.notes.map((note) => note.text)).toEqual([
+            'Timer interrupt at 0x00400010 → handler at 0x80000180'
+        ])
+        expect(epc).toBe(0x00400010)
+        expect(cp0(emulator, '$13 (cause)') & 0x807c).toBe(0x8000)
+        expect(cp0(emulator, '$12 (status)') & 2).toBe(2)
+
+        expect(emulator.undo(1)).toBe(1)
+        expect(pc()).toBe(epc)
+        expect(cp0(emulator, '$12 (status)') & 2).toBe(0)
+        //the timer counts instructions, so the next Step takes it at the same place
+        await emulator.step()
+        expect(pc()).toBe(HANDLER)
+        expect(cp0(emulator, '$14 (epc)')).toBe(epc)
+    })
+
+    //a display lab written for MARS: the transmitter's interrupt is turned on once and never off,
+    //the handler prints the next character of a string at each one and, once the string is done,
+    //just returns. MARS asks once per character taken, so this ends; asking for as long as the
+    //console was ready re-entered the handler for ever
+    it('runs a MARS display lab that never turns the transmitter’s interrupt off', async () => {
+        const lab = `        .text
+main:   li      $t0, 0xffff0000
+        li      $t1, 2
+        sw      $t1, 8($t0)     # transmitter control bit 1: interrupts on, for good
+        la      $s0, message
+        lb      $t2, 0($s0)     # print the first character: each one taken asks for the next
+        addiu   $s0, $s0, 1
+        sw      $t2, 12($t0)
+wait:   lw      $t3, done
+        beqz    $t3, wait
+        li      $v0, 10
+        syscall
+
+        .data
+message: .asciiz "hi"
+done:   .word   0
+
+        .ktext  0x80000180
+        mfc0    $k0, $13        # Cause: bit 9 is the display
+        andi    $k0, $k0, 0x200
+        beqz    $k0, back
+        lb      $k0, 0($s0)     # main left s0 to the handler: the next character
+        beqz    $k0, finished
+        lui     $k1, 0xffff
+        sw      $k0, 12($k1)
+        addiu   $s0, $s0, 1
+back:   eret
+finished:
+        lui     $k1, 0x1001     # done, the word after the message
+        li      $k0, 1
+        sw      $k0, 4($k1)
+        eret`
+        const emulator = await build(lab)
+        //the Core counts every instruction since it loaded, so the run's own are the difference
+        const before = emulator._getInstructionsExecuted()
+        await emulator.run(200_000)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('hi')
+        expect(emulator.terminated).toBe(true)
+        //one interrupt for each of the two characters: the handler ran three times in all
+        expect(Number(emulator._getInstructionsExecuted() - before)).toBeLessThan(1_000)
+    })
+
+    it('names the interrupt in its History row, and reads the handler’s addresses unsigned', async () => {
+        const emulator = await build(TIMER_EXAMPLE.MIPS)
+        let steps = 0
+        while (emulator.pc !== BigInt(HANDLER) && steps++ < 3000) await emulator.step()
+        //0x80000180, never the signed word -0x7ffffe80 the Core holds it as
+        expect(emulator.pc).toBe(BigInt(HANDLER))
+        //taking the interrupt ran no instruction: its row says what was taken and where it went,
+        //and lists what taking it wrote, rather than reading as the interrupted instruction's
+        const [entry] = emulator._getUndoHistory(1)
+        expect(entry.kind).toBe('irq')
+        expect(entry.pc).toBe(0x00400010)
+        expect(entry.line).toBe(-1)
+        expect(entry.mutations[0]).toEqual({
+            type: 'TakeException',
+            value: { vector: 0, name: 'Timer interrupt', from: 0x00400010n, handler: 0x80000180n }
+        })
+        expect(entry.mutations.map((mutation) => mutation.type)).toContain('WriteRegister')
+        //the handler's instructions are rows of their own, at their unsigned addresses and lines
+        await emulator.step()
+        const [first] = emulator._getUndoHistory(1)
+        const lines = TIMER_EXAMPLE.MIPS.split('\n')
+        const lui = lines.findIndex((line) => line.includes('lui     $k1, 0x9000'))
+        expect(first).toMatchObject({ kind: 'instruction', pc: HANDLER, line: lui })
+        expect(emulator.getSourceLocationFromAddress(BigInt(HANDLER))?.line).toBe(lui)
+        //and the decorations and the instruction it is on agree with the PC
+        expect(emulator._getNextInstruction()?.address).toBe(BigInt(HANDLER + 4))
+    })
+
+    it('shows a call inside the handler at its unsigned addresses, in the Call stack and Symbols', async () => {
+        const program = `        .text
+main:   li      $t0, 50
+        mtc0    $t0, $11
+loop:   j       loop
+
+        .ktext  0x80000180
+        jal     tick            # a call inside the handler
+        mfc0    $k0, $11
+        addiu   $k0, $k0, 50
+        mtc0    $k0, $11
+        eret
+tick:   jr      $ra
+`
+        const emulator = await build(program)
+        const tick = Number(emulator._resolveMemoryLabel('tick'))
+        expect(tick).toBe(HANDLER + 20)
+        let steps = 0
+        while (emulator.pc !== BigInt(tick) && steps++ < 3000) await emulator.step()
+        expect(emulator.pc).toBe(BigInt(tick))
+        const [frame] = emulator.callStack
+        //where the call returns to, after the `jal` at the handler's first word
+        expect(frame).toMatchObject({
+            address: BigInt(tick),
+            destination: BigInt(HANDLER + 4),
+            name: 'tick'
+        })
+        const lines = program.split('\n')
+        const symbol = emulator.programSymbols?.labels.find((label) => label.name === 'tick')
+        expect(symbol).toMatchObject({ address: BigInt(tick), kind: 'code' })
+        expect(symbol?.definition?.line).toBe(lines.findIndex((line) => line.startsWith('tick:')))
+    })
+
+    it('stops a Run on a breakpoint at the handler’s first instruction', async () => {
+        const emulator = await build(KEYBOARD_EXAMPLE.MIPS, { typed: 'q' })
+        const lines = KEYBOARD_EXAMPLE.MIPS.split('\n')
+        emulator.toggleBreakpoint(lines.findIndex((line) => line.includes('lui     $k1, 0xffff')))
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(Number(emulator.pc) >>> 0).toBe(HANDLER)
+        expect(emulator.terminated).toBe(false)
     })
 })
 
@@ -2477,6 +2724,9 @@ describe('MIPS Synth', () => {
         ).toEqual([
             ['MMIO', 0xffff0000n, 0xffff0010n],
             ['Synth', 0xffff0100n, 0xffff0300n],
+            ['Input controller', 0xffff0300n, 0xffff0340n],
+            ['MIDI port', 0xffff0340n, 0xffff0350n],
+            ['Sampled-audio output', 0xffff0350n, 0xffff0360n],
             ['Bitmap display', 0x10010000n, 0x10010100n]
         ])
     })
@@ -2607,5 +2857,414 @@ main:   li      $t0, 0xffff0100
         expect(results[0]?.errors ?? []).toEqual([])
         expect(results[0]?.passed).toBe(true)
         expect(synthWrites(output)).toEqual([])
+    })
+})
+
+/**
+ * The Input controller at 0xffff0300 against the real Core
+ * ([the design record](../../../../../../docs/design/input-controller.md)): what the program reads
+ * after the Screen's keys and pointer reach the Keyboard and the Mouse, Undo putting back what a
+ * read took, and the gates that keep input away before Run, after the end and in a Testcase.
+ */
+describe('MIPS Input controller', () => {
+    it('runs the chapter’s first program: the arrows pressed, until Escape', async () => {
+        const entry = inputControllerEntries('MIPS', 'mips', '/documentation').find(
+            (candidate) => candidate.anchor === 'first-program'
+        )!
+        const example = /```\w+\n([\s\S]*?)```/.exec(entry.searchText)![1]
+        const keyboard = new Keyboard()
+        const emulator = await build(example, { keyboard, virtualClock: true })
+        await emulator.step()
+        for (const code of ['ArrowLeft', 'ArrowUp', 'KeyA', 'ArrowRight', 'Escape']) {
+            keyboard.keyDown({ code, key: code })
+            keyboard.keyUp({ code, key: code })
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('LUR')
+        expect(emulator.terminated).toBe(true)
+    })
+
+    it('says so when the simulator has no Input controller, as under a covering display', async () => {
+        const entry = inputControllerEntries('MIPS', 'mips', '/documentation').find(
+            (candidate) => candidate.anchor === 'first-program'
+        )!
+        const example = /```\w+\n([\s\S]*?)```/.exec(entry.searchText)![1]
+        const emulator = await run(example, {
+            display: { ...SMALL, baseAddress: 0xffff0000, width: 512, height: 512 }
+        })
+        expect(emulator.stdOut).toBe('This simulator has no Input controller.\n')
+    })
+
+    const READS = `        li      $s0, 0xffff0300
+        lw      $t0, 0($s0)
+        lw      $t1, 8($s0)
+        lw      $t2, 12($s0)
+        lw      $t3, 12($s0)
+        lw      $t4, 16($s0)
+        lw      $t5, 0x28($s0)
+        lw      $t6, 12($s0)
+        lw      $t7, 8($s0)
+`
+    const valueOf = (emulator: Emulator, name: string) =>
+        Number(emulator.registers.find((r) => r.name === name)?.value ?? -1n) >>> 0
+    const record = (kind: number, code: number, x = 0, y = 0) =>
+        ((y << 21) | (x << 11) | (kind << 8) | code) >>> 0
+    const arrowLeft = { code: 'ArrowLeft', key: 'ArrowLeft' }
+
+    it('reads its ID, the queued events in order, the pointer and the key map', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(DATA + READS + EXIT, { keyboard })
+        //the program has started: the first instruction of `li` ran
+        await emulator.step()
+        keyboard.keyDown(arrowLeft)
+        emulator.peripherals.mouse.buttonDown('left', 3, 2)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(valueOf(emulator, '$t0')).toBe(0x494e5001)
+        expect(valueOf(emulator, '$t1')).toBe(2)
+        expect(valueOf(emulator, '$t2')).toBe(record(1, 0x50))
+        expect(valueOf(emulator, '$t3')).toBe(record(4, 1, 3, 2))
+        expect(valueOf(emulator, '$t4')).toBe(((2 << 21) | (3 << 11) | 1) >>> 0)
+        expect(valueOf(emulator, '$t5')).toBe(1 << (0x50 - 64))
+        //an empty queue reads 0
+        expect(valueOf(emulator, '$t6')).toBe(0)
+        expect(valueOf(emulator, '$t7')).toBe(0)
+    })
+
+    it('hears nothing before the program starts, such as the click that focused the Screen', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(DATA + READS + EXIT, { keyboard })
+        emulator.peripherals.mouse.buttonDown('left', 1, 1)
+        emulator.peripherals.mouse.buttonUp('left', 1, 1)
+        keyboard.keyDown(arrowLeft)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(valueOf(emulator, '$t1')).toBe(0)
+        expect(valueOf(emulator, '$t4')).toBe(0)
+        expect(valueOf(emulator, '$t5')).toBe(0)
+    })
+
+    it('puts back an event a read took when Undo rewinds past the read', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(DATA + READS + EXIT, { keyboard })
+        await emulator.step()
+        keyboard.keyDown(arrowLeft)
+        keyboard.keyUp(arrowLeft)
+        await emulator.run(INSTRUCTION_LIMIT)
+        const word = (offset: number) => {
+            const bytes = emulator.readMemoryBytes(BigInt(0xffff0300 + offset), 4)
+            return (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) >>> 0
+        }
+        expect(word(8)).toBe(0)
+        //the exit's two instructions, the reads of $t7, $t6, $t5, $t4 and the second event's read
+        emulator.undo(7)
+        expect(word(8)).toBe(1)
+        expect(word(12)).toBe(record(2, 0x50))
+        //and the first one's: the queue holds both again, in order
+        emulator.undo(1)
+        expect(word(8)).toBe(2)
+        expect(word(12)).toBe(record(1, 0x50))
+        //the key map shows the present: the key is up
+        expect(word(0x28)).toBe(0)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(valueOf(emulator, '$t2')).toBe(record(1, 0x50))
+        expect(valueOf(emulator, '$t3')).toBe(record(2, 0x50))
+    })
+
+    it('ignores program stores and Pokes, and stops a program that enables interrupts', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(
+            DATA +
+                `        li      $s0, 0xffff0300
+        sw      $zero, 0($s0)
+        li      $t0, 77
+        sw      $t0, 8($s0)
+        lw      $t1, 0($s0)
+        lw      $t2, 8($s0)
+        li      $t0, 2
+        sw      $t0, 4($s0)
+` +
+                EXIT,
+            { keyboard }
+        )
+        expect(emulator.pokeMemory(0xffff0308n, new Uint8Array([9, 0, 0, 0]))).toBe(true)
+        expect(emulator.readMemoryBytes(0xffff0308n, 4)[0]).toBe(0)
+        //a Poke setting the interrupt-enable bit stops nothing
+        expect(emulator.pokeMemory(0xffff0304n, new Uint8Array([2, 0, 0, 0]))).toBe(true)
+        expect(emulator.readMemoryBytes(0xffff0304n, 4)[0]).toBe(0)
+        expect(emulator.undo(1)).toBe(1)
+        expect(emulator.readMemoryBytes(0xffff0300n, 4)).toEqual(
+            new Uint8Array([1, 0x50, 0x4e, 0x49])
+        )
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(valueOf(emulator, '$t1')).toBe(0x494e5001)
+        expect(valueOf(emulator, '$t2')).toBe(0)
+        expect(emulator.errors.join('\n')).toContain(
+            'The Input controller does not raise interrupts'
+        )
+        expect(emulator.readMemoryBytes(0xffff0304n, 4)[0]).toBe(0)
+    })
+
+    it('is a device region of the memory view, beside the MMIO words and the Synth', async () => {
+        const emulator = await build(DATA + EXIT, { audio: new Audio() })
+        expect(
+            emulator.memoryRegions
+                .filter((region) => region.kind === 'device')
+                .map((region) => region.name)
+        ).toContain('Input controller')
+    })
+
+    it('is off while a display at the memory map base covers it, and back when it is moved away', async () => {
+        const keyboard = new Keyboard()
+        const covering = { ...SMALL, baseAddress: 0xffff0000, width: 512, height: 512 }
+        const emulator = await build(
+            DATA +
+                `        li      $s0, 0xffff0300
+        lw      $t0, 0($s0)
+        lw      $t1, 12($s0)
+        nop
+        lw      $t2, 0($s0)
+        lw      $t3, 8($s0)
+` +
+                EXIT,
+            { keyboard, display: covering }
+        )
+        expect(emulator.memoryRegions.map((region) => region.name)).not.toContain(
+            'Input controller'
+        )
+        await emulator.step()
+        keyboard.keyDown(arrowLeft)
+        for (let i = 0; i < 4; i++) await emulator.step()
+        //a pixel, not the ID, and no key press wrote one
+        expect(valueOf(emulator, '$t0')).toBe(0)
+        expect(valueOf(emulator, '$t1')).toBe(0)
+        emulator.setDisplay(SMALL)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(valueOf(emulator, '$t2')).toBe(0x494e5001)
+        //the key went down while it was off, and was kept
+        expect(valueOf(emulator, '$t3')).toBe(1)
+    })
+
+    it('is idle in a Testcase, which has no keyboard or mouse', async () => {
+        const keyboard = new Keyboard()
+        const code =
+            DATA +
+            `        li      $s0, 0xffff0000
+        lw      $t0, 4($s0)
+        li      $s0, 0xffff0300
+        lw      $a0, 8($s0)
+        li      $v0, 1
+        syscall
+        lw      $a0, 16($s0)
+        syscall
+` +
+            EXIT
+        const emulator = await build(code, { keyboard })
+        await emulator.step()
+        keyboard.keyDown(arrowLeft)
+        emulator.peripherals.mouse.moveTo(5, 5)
+        //a key pressed while the Testcase runs, when the program reads the receiver
+        const unsubscribe = emulator.peripherals.terminal.onInputChange(() => {
+            keyboard.keyDown({ code: 'KeyQ', key: 'q' })
+            emulator.peripherals.mouse.buttonDown('left', 6, 6)
+        })
+        try {
+            const results = await emulator.test(
+                code,
+                [{ ...SCREEN_TESTCASE, input: ['x'], expectedOutput: '00' }],
+                INSTRUCTION_LIMIT
+            )
+            expect(results[0]?.errors ?? []).toEqual([])
+            expect(results[0]?.passed).toBe(true)
+        } finally {
+            unsubscribe()
+        }
+    })
+})
+
+describe('MIPS MIDI port and sampled-audio output', () => {
+    const examples = soundDeviceExamples('MIPS')
+    const messages = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'midi' ? [[...c.message]] : []))
+    const chunks = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'pcm' ? [c] : []))
+    const frames = (output: RecordingAudioOutput) =>
+        chunks(output).reduce((total, chunk) => total + chunk.frames.length / 2, 0)
+    const SCALE = [60, 62, 64, 65, 67, 69, 71, 72]
+    /**
+     * A sound program runs a hundred thousand instructions or so, each of whose memory accesses the
+     * Core checks against every observer on its memory, which every Emulator of the package shares:
+     * by the end of this file, the earlier tests' Emulators have left about a thousand there.
+     */
+    const HEAVY = 30_000
+    const testcase = (expectedOutput: string): Testcase => ({
+        input: [],
+        expectedOutput,
+        startingRegisters: {},
+        expectedRegisters: {},
+        startingMemory: [],
+        expectedMemory: []
+    })
+
+    it('runs the chapter’s MIDI example, a scale on a piano, each byte once the port can take it', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(examples.midi, {
+            audio: new Audio({ output }),
+            virtualClock: true
+        })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(messages(output)).toEqual([
+            [0xc0, 0],
+            ...SCALE.flatMap((key) => [
+                [0x90, key, 100],
+                [0x80, key, 0]
+            ])
+        ])
+        //each note heard when its last byte has left, 0.32 ms a byte, and held for its 300 ms
+        const at = output.commands.flatMap((c) => (c.type === 'midi' ? [c.at] : []))
+        expect(at[1]).toBeCloseTo(5 * 0.32, 9)
+        //the note off, after the sleep, on a line idle since: three bytes from then
+        expect(at[2]).toBeCloseTo(300 + 3 * 0.32, 9)
+        expect(output.prepared).toContainEqual({ kind: 'midiPort' })
+        //the program's end lets the port's last notes go
+        expect(output.commands.at(-1)).toMatchObject({ type: 'programEnd' })
+    })
+
+    it(
+        'runs the chapter’s sampled-audio example, two seconds of a 400 Hz square wave',
+        async () => {
+            const output = new RecordingAudioOutput()
+            const emulator = await run(examples.pcm, {
+                audio: new Audio({ output }),
+                virtualClock: true
+            })
+            expect(emulator.errors).toEqual([])
+            expect(emulator.terminated).toBe(true)
+            expect(frames(output)).toBe(16_000)
+            const [first, ...rest] = chunks(output)
+            expect(first).toMatchObject({ start: 0, rate: 8000 })
+            //mono frames are heard on both sides: ten samples high, ten low
+            const left = [...first.frames].filter((_, index) => index % 2 === 0).slice(0, 20)
+            expect(left).toEqual([...new Array(10).fill(0.25), ...new Array(10).fill(-0.25)])
+            //one unbroken stream: each chunk starts where the one before it ended
+            let end = first.start + (first.frames.length / 2 / 8000) * 1000
+            for (const chunk of rest) {
+                expect(chunk.start).toBeCloseTo(end, 6)
+                end = chunk.start + (chunk.frames.length / 2 / 8000) * 1000
+            }
+        },
+        HEAVY
+    )
+
+    it(
+        'keeps the timing of both in a Testcase, which waits on its virtual clock instead of spinning',
+        async () => {
+            //5,000 bytes through the port and 8,000 words into the FIFO, waiting on Status and Free
+            //alone: the first 4,096 bytes and 8,192 frames fit at once, the rest drain at their speeds
+            const code = `        .text
+main:   li      $v0, 30
+        syscall
+        move    $s7, $a0
+        li      $s0, 0xffff0340
+        li      $s1, 5000
+byte:   lw      $t0, 4($s0)
+        andi    $t0, $t0, 0x40
+        bnez    $t0, byte
+        li      $t1, 0xfe
+        sb      $t1, 0($s0)
+        addiu   $s1, $s1, -1
+        bnez    $s1, byte
+        li      $v0, 30
+        syscall
+        subu    $a0, $a0, $s7
+        li      $v0, 1
+        syscall
+        li      $a0, 32
+        li      $v0, 11
+        syscall
+        li      $v0, 30
+        syscall
+        move    $s7, $a0
+        li      $s0, 0xffff0350
+        li      $t0, 1
+        sw      $t0, 0($s0)
+        li      $s1, 8000
+word:   lw      $t0, 8($s0)
+        beqz    $t0, word
+        sw      $zero, 12($s0)
+        addiu   $s1, $s1, -1
+        bnez    $s1, word
+        li      $v0, 30
+        syscall
+        subu    $a0, $a0, $s7
+        li      $v0, 1
+        syscall
+        li      $v0, 10
+        syscall
+`
+            const output = new RecordingAudioOutput()
+            const emulator = await build(code, { audio: new Audio({ output }) })
+            //about 90,000 instructions: a program that spun on Status or Free would run into this limit
+            const results = await emulator.test(code, [testcase('289 976')], 200_000)
+            expect(results[0]?.errors ?? []).toEqual([])
+            expect(results[0]?.passed).toBe(true)
+            //a Testcase is silent
+            expect(messages(output)).toEqual([])
+            expect(frames(output)).toBe(0)
+        },
+        HEAVY
+    )
+
+    it(
+        'runs both chapter examples in a Testcase, silent and finished',
+        async () => {
+            for (const code of [examples.midi, examples.pcm]) {
+                const emulator = await build(code, { audio: new Audio() })
+                const results = await emulator.test(code, [testcase('')], INSTRUCTION_LIMIT)
+                expect(results[0]?.errors ?? []).toEqual([])
+                expect(results[0]?.passed).toBe(true)
+            }
+        },
+        HEAVY
+    )
+
+    it('takes back a note on Undo: one not heard yet is cut, one already heard is stopped', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(examples.midi, {
+            audio: new Audio({ output }),
+            virtualClock: true
+        })
+        const heard = (message: number[]) =>
+            messages(output).some((m) => m.join() === message.join())
+        for (let i = 0; i < 200 && !heard([0x90, 60, 100]); i++) await emulator.step()
+        expect(heard([0x90, 60, 100])).toBe(true)
+        //no time has passed on the virtual clock: the velocity byte is still in the port
+        emulator.undo(1)
+        expect(output.commands.at(-1)).toEqual({ type: 'cut', after: 4 * 0.32, device: 'midi' })
+        expect(heard([0x80, 60, 0])).toBe(false)
+        //step on through the 300 ms the note sounds, then back over it: the note it started ends
+        for (let i = 0; i < 200 && emulator.peripherals.clock.now() < 300; i++)
+            await emulator.step()
+        expect(emulator.peripherals.clock.now()).toBe(300)
+        let undone = 0
+        while (!heard([0x80, 60, 0]) && undone < 20) undone += emulator.undo(1)
+        expect(heard([0x80, 60, 0])).toBe(true)
+        expect(messages(output).filter((m) => m[0] === 0x90)).toHaveLength(2)
+    })
+
+    it('is off while the bitmap display covers both blocks at the memory map base', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(examples.midi, {
+            audio: new Audio({ output }),
+            virtualClock: true,
+            display: { ...SMALL, baseAddress: 0xffff0000, width: 128, height: 128 }
+        })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(messages(output)).toEqual([])
+        const names = emulator.memoryRegions.map((region) => region.name)
+        expect(names).not.toContain('MIDI port')
+        expect(names).not.toContain('Sampled-audio output')
     })
 })

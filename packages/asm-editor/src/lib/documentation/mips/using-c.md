@@ -51,7 +51,7 @@ After changing the source or a file it includes, **Compile** again, then **Build
 
 ## Libraries and simulator services {#libraries}
 
-Runtime support is supplied automatically. The library provides functions declared by `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, `fopen` and `fprintf` use the project's files, and `malloc` and `free` manage dynamic memory. The [Runtime library](/documentation/mips/runtime-library) page lists its supported functions with declarations and headers, and explains calling and debugging.
+Runtime support is supplied automatically. The library provides functions declared by `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, `fopen` and `fprintf` read and write files, and `malloc` and `free` manage dynamic memory. The [Runtime library](/documentation/mips/runtime-library) page lists its supported functions with declarations and headers, and explains calling and debugging.
 
 C uses C17 and C++ uses C++17. C++ supports constructors, `new` and `delete`, and the provided compatibility headers `<cassert>`, `<cctype>`, `<cerrno>`, `<cfloat>`, `<cinttypes>`, `<climits>`, `<cmath>`, `<cstdarg>`, `<cstddef>`, `<cstdint>`, `<cstdio>`, `<cstdlib>`, `<cstring>`, `<ctime>` and `<new>`. For example, include `<cstdio>` and use `std::printf("Hello from MIPS\n");`. The full C++ standard library is not provided: `<iostream>` and containers such as `std::vector` are unavailable. Exceptions and runtime type information (RTTI) are disabled, including `typeid` and casts that require RTTI.
 
@@ -90,10 +90,74 @@ int main(void) {
 
 Width and height are display pixels; `unit` is the side length of each colored cell. Each row has `width / unit` cells; select a cell with `y * (width / unit) + x`. Width and height can be any whole number of pixels from 1 to 1024, and unit any from 1 to 32. MARS's own display only offers 64, 128, 256, 512 or 1024 and 1, 2, 4, 8, 16 or 32, so a program that also runs there keeps to those.
 
-For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For programmable waveforms and sample playback, it names the [Synth](/documentation/mips/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`.
+For keyboard and character display input and output, `<sim.h>` also provides `sim_keyboard_ready`, `sim_keyboard_read`, `sim_display_ready` and `sim_display_write`. For programmable waveforms and sample playback, it names the [Synth](/documentation/mips/synth#from-c)'s registers and provides `sim_synth_play`, `sim_synth_gate` and `sim_synth_upload`. For the keys held, key and button events, the mouse pointer and the wheel, it names the [Input controller](/documentation/mips/input-controller#from-c)'s registers and every key, and provides `sim_input_present`, `sim_input_pending`, `sim_input_event`, `sim_input_key_down` and `sim_input_pointer`. For streamed sound, it names the [MIDI port and the sampled-audio output](/documentation/mips/midi-and-audio#from-c)'s registers, and provides `sim_midi_present`, `sim_midi_write`, `sim_pcm_present`, `sim_pcm_start`, `sim_pcm_free` and `sim_pcm_write`.
 
 ## Following execution {#following-execution}
 
 Matching colors connect source lines with their generated assembly. Select a line to highlight its instructions. Use **Step** to follow those instructions, or place a breakpoint beside a source line and choose **Run** to stop at the start of its mapped assembly blocks. One source line can require several steps, especially with optimization. Use **Undo** to move back through recorded execution steps.
 
 Compile again after reopening a saved project to restore source highlights and breakpoints. Editing generated assembly removes that connection; recompilation asks before replacing your manual assembly edits.
+
+## Linking assembly Files {#linking-project-files}
+
+Only the selected C or C++ source is compiled. Other assembly files in the same project can provide functions or data, even from a different folder.
+
+A program's **entry file** is the assembly file Build starts from. The Explorer action **New program from this file** creates a program with that entry. Build excludes other programs' entry files and the files they include from this search.
+
+Build links an assembly file when it supplies a **symbol** the program references: an exported name for a function or data. `.globl triple` exports `triple`, and the label `triple:` defines its address. References from a linked file can bring in further assembly files.
+
+The C program below calls `triple`, defined in `triple.mips`. In C++, replace the first declaration with `extern "C" int triple(int value);` so the compiler uses the exact name `triple`:
+
+```c
+int triple(int value);
+
+int main(void) {
+    return triple(14);
+}
+```
+
+```mips
+# triple.mips
+        .text
+        .globl  triple
+triple:
+        sll     $v0, $a0, 1
+        addu    $v0, $v0, $a0
+        jr      $ra
+```
+
+The assembly function must follow the [calling convention](/documentation/mips/runtime-library#from-assembly) used by compiled code, including register preservation and the rules for its argument and result types. In this integer example, `value` arrives in `$a0` and the result returns in `$v0`.
+
+Build leaves out assembly files the program does not need, without assembling them. Errors in those files do not affect the Build. The **Problems** panel marks each with the Hint: "The program doesn't use this File, so it is left out."
+
+Linked files use this editor's GNU assembly subset, which accepts the compiler's output. Some MARS syntax is unavailable in that subset, including `.eqv` and `.macro`. For a numeric constant, use `.equ NAME, value`. If a linked file fails to assemble, its first error explains why it was included and identifies the required syntax.
+
+### Exception handlers
+
+MIPS enters an exception handler at the fixed address `0x80000180`, the start of `.ktext`. A file containing only a handler can therefore have no references that cause Build to include it. Export a name for the handler and request it with `SIM_LINK` from `<sim.h>`, once, outside any function:
+
+```c
+#include <sim.h>
+
+SIM_LINK(handler);
+
+int main(void) {
+    /* ... */
+    return 0;
+}
+```
+
+```mips
+# handler.mips
+        .globl  handler
+        .ktext
+handler:
+        mfc0    $k0, $14        # EPC: the instruction that faulted
+        addiu   $k0, $k0, 4     # skip it
+        mtc0    $k0, $14
+        eret
+```
+
+`SIM_LINK` requests the file that defines the name without calling the handler. Build fails if no file defines that name. Only one linked file may contain `.ktext`, because handlers share the fixed starting address `0x80000180`. If two do, the error names both files. Files left out of the Build do not count. The Hint on such a file says that its handler never runs, and how to include it.
+
+This minimal handler skips the faulting instruction by advancing EPC by 4. Use it only when skipping that instruction is appropriate. [Interrupts and the timer](/documentation/mips/interrupts) explains exception causes and handler behavior.

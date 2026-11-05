@@ -74,6 +74,8 @@ Update accepted on 2026-09-08: in a multi-file Project, only the Entry file's `@
 
 One rule for every part of a Project (code, Settings, Testcases, Display configuration): a change is saved at once when autosave is on, otherwise it waits for Save, and the unsaved-changes prompt compares the whole Project, not only the code. Consequences: Testcase changes start triggering autosave; the display stops saving on its own when autosave is off, so a Build that reads a directive leaves the Project dirty until saved. A shared Project, which is nobody's yet, keeps its changes in memory until the user chooses to save it, as today.
 
+Update 2026-11-04: "at once" became "once the Project has not changed for 3 seconds", for every part alike ([ADR 0076](../adr/0076-a-project-holds-64-mib-of-files.md)), since a save writes the whole Project. The save waiting starts at once when the page is hidden or closed, when the Workbench goes, on Save, and before the page reads the stored Project, as leaving for another page does. A save clears the unsaved state only when nothing changed after it took its snapshot.
+
 ### The settings panel
 
 One floating panel behind the cog, with a Preferences section and, when a Project is open, a Project section. Playgrounds show only the Preferences section.

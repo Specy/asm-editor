@@ -98,7 +98,8 @@ describe.each(['mips', 'risc-v', 'x86'] as const)('%s C documentation', (languag
                       'compiling',
                       'libraries',
                       'screen-and-devices',
-                      'following-execution'
+                      'following-execution',
+                      'linking-project-files'
                   ]
         )
         expect(chapter?.entries.every((entry) => entry.searchText.length > 0)).toBe(true)

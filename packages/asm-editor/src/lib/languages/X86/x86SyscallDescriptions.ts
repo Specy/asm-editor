@@ -29,7 +29,7 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     exit: 'Ends the program with the status in `rdi`. It never returns, and a program that reaches the end of its code without calling it runs into whatever bytes follow.',
     exit_group:
         'Ends every thread of the program with the status in `rdi`. For a program with one thread it is `exit`.',
-    mmap: 'Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to. A `MAP_PRIVATE` mapping of a Project File copies its bytes into memory; writes to the mapping stay in memory. A `MAP_SHARED` mapping of a Project File returns `-ENODEV`.',
+    mmap: 'Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to. A `MAP_PRIVATE` mapping of a file under `/project` copies its bytes into memory; writes to the mapping stay in memory. A `MAP_SHARED` mapping of such a file returns `-ENODEV`.',
     mprotect:
         'Changes the read, write, or execute permissions of the `rsi` bytes starting at the page-aligned address in `rdi`.',
     munmap: 'Unmaps the mapping of `rsi` bytes at the address in `rdi`.',
@@ -60,16 +60,16 @@ export const X86_SYSCALL_DESCRIPTIONS: Record<string, string> = {
     getcwd: 'Writes the current working directory as a NUL-terminated path to the buffer at `rdi`, up to `rsi` bytes.',
     chdir: 'Changes the program’s current working directory to the path at `rdi`.',
     fchdir: 'Changes the program’s current working directory to the directory referred to by descriptor `rdi`.',
-    rename: 'Renames or moves the path at `rdi` to the path at `rsi`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
+    rename: 'Renames or moves the path at `rdi` to the path at `rsi`. A file already at the destination is replaced, as on Linux, and a descriptor still open on it keeps reading and writing it. Within `/project`, moving a directory returns `-EISDIR`.',
     renameat:
-        'Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`.',
+        'Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. A file already at the destination is replaced, as on Linux. Within `/project`, moving a directory returns `-EISDIR`.',
     renameat2:
-        'Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. `RENAME_NOREPLACE` refuses an existing destination; `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR` and an ordinary rename that would replace an existing File returns `-EEXIST`.',
-    mkdir: 'Makes a directory at the path in `rdi`, with the mode in `rsi`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone.',
+        'Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. Without flags a file already at the destination is replaced, as on Linux; `RENAME_NOREPLACE` refuses an existing destination with `-EEXIST`, and `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR`.',
+    mkdir: 'Makes a directory at the path in `rdi`, with the mode in `rsi`. Under `/project` it lasts for the run, and files can be created in it: the first one keeps it after the run, since directories there exist only as prefixes of file paths. One still empty when the program ends is gone.',
     mkdirat:
-        'Makes a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone.',
-    rmdir: 'Removes the empty directory named by the path at `rdi`. Under `/project`, a directory that holds Files returns `-ENOTEMPTY`, and one that does not disappears by itself when its last File is removed; an empty one made by `mkdir` is removed.',
-    unlink: 'Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. Under `/project`, removing a directory’s last File also removes that implicit directory.',
+        'Makes a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Under `/project` it lasts for the run, and files can be created in it: the first one keeps it after the run, since directories there exist only as prefixes of file paths. One still empty when the program ends is gone.',
+    rmdir: 'Removes the empty directory named by the path at `rdi`. Under `/project`, a directory that holds files returns `-ENOTEMPTY`, and one that does not disappears by itself when its last file is removed; an empty one made by `mkdir` is removed.',
+    unlink: 'Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. Under `/project`, removing a directory’s last file also removes that implicit directory.',
     uname: 'Writes system name and version fields to the Linux `struct utsname` buffer at `rdi`.',
     gettimeofday:
         'Writes calendar time since the Unix epoch, in seconds and microseconds, to the `timeval` structure at `rdi`. Interactive runs use host calendar time; Testcases use 2000-01-01 UTC plus virtual elapsed time.',

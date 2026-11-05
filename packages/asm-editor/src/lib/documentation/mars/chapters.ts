@@ -5,9 +5,12 @@ import type { InstructionContent } from '../instructions/content'
 import { documentSignature, type InstructionDocument } from '../instructions/document'
 import { withInstructionCategory, withInstructionContent } from '../instructions/resolve'
 import { runtimeLibraryChapter } from '../runtimeFunctions'
+import { inputControllerEntries } from '../inputController'
+import { soundDeviceEntries } from '../soundDevices'
 import { synthEntries } from '../synth'
 import type { MarsForm } from './instructionDocument'
 import { screenEntries } from './screen'
+import { interruptsEntries } from './interrupts'
 import { documented, syscallFields, syscallSummary, type MarsSyscall } from './syscalls'
 
 /**
@@ -158,8 +161,9 @@ function syscalls<F extends MarsForm>(documentation: MarsDocumentation<F>): Chap
 
 /**
  * The MIPS or RISC-V Documentation's Chapters, in the order the complete documentation page has
- * them: instructions, directives, services, the language's registers, the Screen, the Synth, the
- * Runtime library and Using C.
+ * them: instructions, directives, services, the language's registers, the Screen, interrupts and
+ * the timer, the Synth, the Input controller, MIDI and sampled audio, the Runtime library and
+ * Using C.
  */
 export function marsChapters<F extends MarsForm>(documentation: MarsDocumentation<F>): Chapter[] {
     const { language, base, variant } = documentation
@@ -178,6 +182,15 @@ export function marsChapters<F extends MarsForm>(documentation: MarsDocumentatio
             entries: screenEntries(variant, language, `${base}/screen`)
         },
         {
+            id: 'interrupts',
+            language,
+            title: 'Interrupts and the timer',
+            href: `${base}/interrupts`,
+            description:
+                'Handle timer and keyboard interrupts, and step through an interrupt handler.',
+            entries: interruptsEntries(variant, language, `${base}/interrupts`)
+        },
+        {
             id: 'synth',
             language,
             title: 'Synth',
@@ -185,6 +198,23 @@ export function marsChapters<F extends MarsForm>(documentation: MarsDocumentatio
             description:
                 'Control eight sound channels through memory registers, with waveforms, volume envelopes, programmable wavetables and sample playback.',
             entries: synthEntries(variant, language, `${base}/synth`)
+        },
+        {
+            id: 'input-controller',
+            language,
+            title: 'Input controller',
+            href: `${base}/input-controller`,
+            description:
+                'Read held keys, key presses and releases, mouse buttons, pointer position and wheel events through memory registers.',
+            entries: inputControllerEntries(variant, language, `${base}/input-controller`)
+        },
+        {
+            id: 'midi-and-audio',
+            language,
+            title: 'MIDI and sampled audio',
+            href: `${base}/midi-and-audio`,
+            description: 'Play MIDI notes and stream audio samples through memory registers.',
+            entries: soundDeviceEntries(variant, language, `${base}/midi-and-audio`)
         },
         runtimeLibraryChapter({
             language,

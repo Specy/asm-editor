@@ -8,7 +8,6 @@
     import ScreenRenderer from '#cmp/specific/project/screen/ScreenRenderer.svelte'
     import ScreenDisplayConfiguration from '#cmp/specific/project/screen/ScreenDisplayConfiguration.svelte'
     import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
-    import { displayActualSizeZoom } from '#lib/languages/programDisplay.ts'
     import { X86_INPUT_INTERRUPT } from '#lib/languages/peripherals/x86Input.ts'
     import { useWorkbench } from './workbenchContext'
 
@@ -50,11 +49,12 @@
     mouse={emulator.peripherals.mouse}
     {x86Input}
     {waitingFor}
-    actualSizeZoom={session.configurableDisplay ? displayActualSizeZoom(session.currentDisplay) : 1}
     {style}
     {headerless}
     {onHeader}
     {heightFromWidth}
+    windowRequested={ui.screenWindowRequested}
+    onWindowRequestAnswered={() => (ui.screenWindowRequested = false)}
 >
     {#snippet configuration()}
         {#if session.configurableDisplay}

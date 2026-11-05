@@ -19,7 +19,7 @@ import {
     type SourceCompiler,
     type SourceLocation
 } from './records'
-import { isValidFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
+import { formatMiB, isValidFilePath, type ProjectFiles } from '#lib/projectFiles.ts'
 import { CURRENT_RUNTIME_ABI } from '#lib/runtimeAbi.ts'
 import { loadRuntimeHeaders } from '#lib/sourceRuntime/runtimeLibrary.ts'
 import {
@@ -42,11 +42,13 @@ export const COMPILE_BYTE_LIMIT = 1024 * 1024
 /**
  * The most Compiler Explorer's answer and the lines of assembly in it may be. The service sets no
  * limit on its output; these keep out an answer nothing here could hold. The answer is JSON of
- * about 70 bytes a line of assembly and more for a line with a source location, so a C program of
- * 4,000 lines is about 4 MiB at -O2. 16 MiB is what one Project File may hold; the Generated
- * assembly made from an answer is a fraction of its size.
+ * about 70 to 120 bytes a line of assembly, more for a line with a source location, so a C
+ * program of 4,000 lines is about 4 MiB at -O2, and a unit of tens of thousands of lines tens of
+ * MiB. The Generated assembly made from an answer is about a quarter of its size. The answer is read whole
+ * before it is measured, so one this size is a string of 32 MiB and its parse for a moment
+ * ([ADR 0076](../../../../../docs/adr/0076-a-project-holds-64-mib-of-files.md)).
  */
-const ASSEMBLY_BYTE_LIMIT = 16 * 1024 * 1024
+const ASSEMBLY_BYTE_LIMIT = 32 * 1024 * 1024
 const ASSEMBLY_LINE_LIMIT = 400_000
 /** What to do about an answer over either limit. */
 const TOO_LARGE_ADVICE =
@@ -60,6 +62,19 @@ export const SYSROOT_INCLUDE = 'sysroot/include'
  * Runtime library's with `#include_next` ([ADR 0070](../../../../../docs/adr/0070-the-x86-runtime-library-offers-the-linux-device-interfaces.md)).
  */
 export const X86_SYSROOT_INCLUDE = 'sysroot/x86_64/include'
+/**
+ * Where MIPS and RISC-V's own system headers are uploaded, searched before the Runtime library's
+ * as x86's are: the folder calls' `<dirent.h>`, `<sys/stat.h>` and `<unistd.h>`, and the `<errno.h>`
+ * and `<stdio.h>` that add to the Runtime library's
+ * ([ADR 0072](../../../../../docs/adr/0072-mips-and-risc-v-folder-calls-continue-rars-s-linux-numbering.md)).
+ * The Runtime library's own build uploads them under the same name.
+ */
+export const POSIX_SYSROOT_INCLUDE = 'sysroot/posix/include'
+
+/** Where a Target's own system headers go: x86's, or MIPS and RISC-V's. */
+export function targetSysrootInclude(target: CompilationTarget): string {
+    return target === 'X86' ? X86_SYSROOT_INCLUDE : POSIX_SYSROOT_INCLUDE
+}
 /**
  * Sources a compilation reads that are no Project File, by the path the editor shows them at:
  * `<sim.h>` as `@runtime/include/sim.h`, x86's `<unistd.h>` as `@runtime/include/unistd.h`. A
@@ -166,12 +181,13 @@ function projectPath(
         readOnly[ENVIRONMENT_HEADER_PATH] !== undefined
     )
         return ENVIRONMENT_HEADER_PATH
-    //any of x86's own headers; of the shared directory only `<sim.h>`, since its `<time.h>` is not
-    //the one shown at `@runtime/include/time.h`
-    if (relative.startsWith(`${X86_SYSROOT_INCLUDE}/`)) {
-        const shown = environmentFilePath(relative.slice(X86_SYSROOT_INCLUDE.length + 1))
-        if (readOnly[shown] !== undefined) return shown
-    }
+    //any of the Target's own headers; of the shared directory only `<sim.h>`, since its `<time.h>`
+    //is not the one shown at `@runtime/include/time.h`
+    for (const directory of [X86_SYSROOT_INCLUDE, POSIX_SYSROOT_INCLUDE])
+        if (relative.startsWith(`${directory}/`)) {
+            const shown = environmentFilePath(relative.slice(directory.length + 1))
+            if (readOnly[shown] !== undefined) return shown
+        }
     return isValidFilePath(relative) && files[relative] ? relative : undefined
 }
 
@@ -288,8 +304,9 @@ function compilerDiagnostics(
  * The Compiler Explorer request. A program is hosted: it compiles with `-nostdinc` against the
  * Runtime library's headers, uploaded as `sysroot/include`, so an unsupported header is a clear
  * error and no toolchain header leaks in, and `main` keeps its name and its implicit `return 0`.
- * The caller adds the Target's `<sim.h>` to the sysroot and gives x86's own headers as
- * `targetSysroot`, uploaded as `sysroot/x86_64/include` and searched first (`compileSource` does).
+ * The caller adds the Target's `<sim.h>` to the sysroot and gives the Target's own headers as
+ * `targetSysroot`, uploaded as `sysroot/x86_64/include` for x86 and `sysroot/posix/include` for
+ * MIPS and RISC-V and searched first (`compileSource` does).
  * Project Files are found by quoted includes only (`-iquote`, from the source's directory and from
  * the Project root), so a Project's `stdio.h` or `sim.h` never shadows `<stdio.h>` or `<sim.h>`.
  * x86 uses the same Runtime ABI headers, translating GCC's output to NASM with its pinned profile.
@@ -334,9 +351,8 @@ export function createCompilerRequest(
         contents: `#line 1 ${JSON.stringify(path)}\n${content}`
     })
     const quoteDirectory = directory === '.' ? projectDirectory : `${projectDirectory}/${directory}`
-    const targetInclude = Object.keys(targetSysroot).length
-        ? `-isystem ${X86_SYSROOT_INCLUDE} `
-        : ''
+    const targetDirectory = targetSysrootInclude(request.target)
+    const targetInclude = Object.keys(targetSysroot).length ? `-isystem ${targetDirectory} ` : ''
     const userArguments = `${common} -nostdinc ${targetInclude}-isystem ${SYSROOT_INCLUDE} ${preset.architecture} -iquote ${quote(quoteDirectory)} -iquote ${projectDirectory} -include ${quote(`${projectDirectory}/${request.sourcePath}`)} ${standard}`
     const body = {
         source: '/* The program is uploaded at its Project path and read through -include. */\n',
@@ -362,7 +378,7 @@ export function createCompilerRequest(
                 contents
             })),
             ...Object.entries(targetSysroot).map(([path, contents]) => ({
-                filename: `${X86_SYSROOT_INCLUDE}/${path}`,
+                filename: `${targetDirectory}/${path}`,
                 contents
             }))
         ]
@@ -657,7 +673,8 @@ export async function compileSource(
         environment === undefined
             ? runtimeHeaders
             : { ...runtimeHeaders, [ENVIRONMENT_HEADER]: environment }
-    //x86's device headers, in a directory of their own searched first; empty for other Targets
+    //the Target's own headers, in a directory of their own searched first: x86's device headers,
+    //or MIPS and RISC-V's folder calls
     const targetHeaders = environmentHeaders(await loadEnvironmentFiles(request.target))
     const readOnly: ReadOnlySources = {
         ...(environment === undefined ? {} : { [ENVIRONMENT_HEADER_PATH]: environment }),
@@ -687,7 +704,7 @@ export async function compileSource(
     const body = await response.text()
     if (body.length > ASSEMBLY_BYTE_LIMIT)
         throw new SourceCompilationError(
-            `Compiler output is ${(body.length / 1024 / 1024).toFixed(1)} MiB. The editor supports up to 16 MiB. ${TOO_LARGE_ADVICE}`
+            `Compiler output is ${(body.length / 1024 / 1024).toFixed(1)} MiB. The editor takes up to ${formatMiB(ASSEMBLY_BYTE_LIMIT)} of it. ${TOO_LARGE_ADVICE}`
         )
     let result: Record<string, unknown>
     try {

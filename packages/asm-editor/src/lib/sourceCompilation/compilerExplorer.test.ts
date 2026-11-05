@@ -267,7 +267,7 @@ describe('Compiler Explorer failures', () => {
             })
         ).toThrow(SourceCompilationError)
     })
-    it('takes an answer up to 16 MiB, and says what to do about a larger one', async () => {
+    it('takes an answer up to 32 MiB, and says what to do about a larger one', async () => {
         const answer =
             (asm: unknown[], padding = '') =>
             async () =>
@@ -279,9 +279,16 @@ describe('Compiler Explorer failures', () => {
             answer(fixtures[0].response.asm, 'x'.repeat(6 * 1024 * 1024))
         )
         expect(large.assembly.length).toBeGreaterThan(0)
+        //over 16 MiB, which asmOS's larger units answer at -O2, and which was the limit once
+        const larger = await compileSource(
+            request(),
+            undefined,
+            answer(fixtures[0].response.asm, 'x'.repeat(20 * 1024 * 1024))
+        )
+        expect(larger.assembly.length).toBeGreaterThan(0)
         await expect(
-            compileSource(request(), undefined, answer([], 'x'.repeat(16 * 1024 * 1024)))
-        ).rejects.toThrow(/16\.0 MiB\. The editor supports up to 16 MiB\. Compile at a lower/)
+            compileSource(request(), undefined, answer([], 'x'.repeat(32 * 1024 * 1024)))
+        ).rejects.toThrow(/32\.0 MiB\. The editor takes up to 32 MiB of it\. Compile at a lower/)
         await expect(
             compileSource(request(), undefined, answer(Array(400_001).fill({ text: '' })))
         ).rejects.toThrow(/400,001 lines of assembly\. The editor supports up to 400,000 lines/)

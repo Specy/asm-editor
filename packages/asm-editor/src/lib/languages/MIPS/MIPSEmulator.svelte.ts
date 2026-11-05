@@ -17,7 +17,7 @@ import {
     RegisterSize
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { MarsTarget } from '#lib/languages/mars/marsCheck.ts'
-import { MarsEmulator } from '#lib/languages/mars/MarsEmulator.svelte.ts'
+import { MarsEmulator, type MarsInterruptEntry } from '#lib/languages/mars/MarsEmulator.svelte.ts'
 import { memoryBackstepMutation, registerBackstepMutation } from '#lib/languages/mars/marsUndo.ts'
 import { exitStepText, randomStreamStepText } from '#lib/languages/mars/marsHandlers.ts'
 import type { BuildInput } from '#lib/projectFiles.ts'
@@ -120,8 +120,9 @@ class AsmEditorMIPSEmulator extends MarsEmulator<JsMips, JsBackStep, MIPSRegiste
         return 'MIPS'
     }
 
+    /** Unsigned, so that a handler's address in `.ktext`, 0x80000180, reads as itself. */
     _getPc(): bigint {
-        return BigInt(this.core?.programCounter ?? 0)
+        return BigInt((this.core?.programCounter ?? 0) >>> 0)
     }
 
     _getSp(): bigint {
@@ -205,6 +206,37 @@ class AsmEditorMIPSEmulator extends MarsEmulator<JsMips, JsBackStep, MIPSRegiste
         return RegisterSize.Long
     }
 
+    /** MARS's pending bits: IP7 the timer, bits 8 and 9 the keyboard and the display. */
+    protected interruptName(pending: number): string {
+        return mipsInterruptName(pending)
+    }
+
+    /**
+     * An interrupt taken is the one step that writes Cause with exception code 0, EPC and Status
+     * with EXL set together, and sends the program counter to the handler. Its name comes from
+     * the pending bits Cause kept: the timer's, and a device's that the Core latched for the
+     * handler. A keyboard's line is not kept in Cause, so such a row says only "Interrupt".
+     */
+    protected interruptEntry(steps: readonly JsBackStep[]): MarsInterruptEntry | null {
+        let cause: number | undefined
+        let status: number | undefined
+        let epc = false
+        let handler: number | undefined
+        const word = (value: string) => Number(BigInt.asUintN(32, BigInt(value)))
+        for (const step of steps) {
+            if (step.action === BackStepAction.PC_RESTORE) handler = word(step.newValue)
+            if (step.action !== BackStepAction.COPROC0_REGISTER_RESTORE) continue
+            if (step.param1 === CP0_CAUSE) cause = word(step.newValue)
+            else if (step.param1 === CP0_STATUS) status = word(step.newValue)
+            else if (step.param1 === CP0_EPC) epc = true
+        }
+        if (cause === undefined || status === undefined || !epc || handler === undefined)
+            return null
+        if ((cause & CAUSE_EXCEPTION_CODE) !== 0 || (status & STATUS_EXL) === 0) return null
+        const pending = cause & CAUSE_PENDING
+        return { name: pending ? mipsInterruptName(pending) : 'Interrupt', code: 0, handler }
+    }
+
     /**
      * One back step as a mutation of its instruction's row, or none for the Core's own bookkeeping.
      * Every action has a case, so a new one is a type error here rather than a row nobody chose.
@@ -250,16 +282,50 @@ class AsmEditorMIPSEmulator extends MarsEmulator<JsMips, JsBackStep, MIPSRegiste
                 return { type: 'Other', value: exitStepText(step.newValue) }
             case BackStepAction.RANDOM_STREAM_RESTORE:
                 return { type: 'Other', value: randomStreamStepText(step.param1) }
+            //the program's first write to Compare turns the timer on
+            case BackStepAction.TIMER_ARMED_RESTORE:
+                return { type: 'Other', value: 'Timer on' }
+            //the display's request, sent by a store and spent by the interrupt that takes it, is
+            //the device's bookkeeping, as its line is: the row of the interrupt says it was taken
+            case BackStepAction.INTERRUPT_PULSES_RESTORE:
+                return null
             //a Poke group is rendered from its `writes`
             //([ADR 0022](../../../../../../docs/adr/0022-core-native-poke-records.md)), so its step never
             //reaches this list; the heap break and stack top restores are the Core's bookkeeping of
-            //its memory layout, which the program did not write
+            //its memory layout, which the program did not write, and the call and return restores
+            //the debugger's of its call stack, which the Call stack panel shows
             case BackStepAction.POKE:
             case BackStepAction.HEAP_RESTORE:
             case BackStepAction.STACK_TOP_RESTORE:
+            case BackStepAction.CALL_RESTORE:
+            case BackStepAction.RETURN_RESTORE:
                 return null
         }
     }
+}
+
+/** Coprocessor 0's registers an interrupt writes, by their MIPS numbers, and their fields. */
+const CP0_STATUS = 12
+const CP0_CAUSE = 13
+const CP0_EPC = 14
+const CAUSE_EXCEPTION_CODE = 0x7c
+const CAUSE_PENDING = 0xff00
+const STATUS_EXL = 0x2
+
+/**
+ * What raised a MIPS interrupt, from the pending bits Status let through: "Timer interrupt", or
+ * "Keyboard and display interrupt" when both devices asked at once.
+ */
+export function mipsInterruptName(pending: number): string {
+    const sources = [
+        ...(pending & 0x8000 ? ['timer'] : []),
+        ...(pending & 0x100 ? ['keyboard'] : []),
+        ...(pending & 0x200 ? ['display'] : [])
+    ]
+    const others = pending & 0x7c00
+    if (others) sources.push(`IP${Math.log2(others & -others) - 8}`)
+    const text = sources.length > 0 ? sources.join(' and ') : 'external'
+    return `${text.charAt(0).toUpperCase()}${text.slice(1)} interrupt`
 }
 
 function isMIPSNumericRegisterName(register: string): register is RegisterName {

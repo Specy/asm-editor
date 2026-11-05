@@ -38,8 +38,7 @@ export function syscallFields(syscall: MarsSyscall): EntryField[] {
                     (result) => `\`${result.name}\` = ${capitalize(result.description)}`
                 ),
                 ...outputMemory.map(
-                    (parameter) =>
-                        `Memory at the address passed in \`${parameter.register}\` is written through the \`${parameter.name}\` pointer.`
+                    (parameter) => `Writes memory at the address in \`${parameter.register}\`.`
                 )
             ].join('; ')
         })

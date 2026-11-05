@@ -3,10 +3,16 @@ import type {
     ExecutionController,
     ExecutionGeneration
 } from '#lib/languages/ExecutionController.ts'
-import { guestFileFailure, type FileSystemSession } from '#lib/languages/peripherals/FileSystem.ts'
+import {
+    guestErrno,
+    guestFileFailure,
+    type FileSystemSession
+} from '#lib/languages/peripherals/FileSystem.ts'
 import type { EmulatorPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
 import type { Note } from '#lib/languages/peripherals/audio/Audio.ts'
 import type { MarsDevices } from './MarsDevices'
+import type { MarsTarget } from './marsCheck'
+import { direntLength, encodeDirents, encodeStat } from './marsFolders'
 
 /**
  * The syscall handlers of the MARS and RARS derived Cores (MIPS and RISC-V): the program's reads,
@@ -50,7 +56,8 @@ type MarsConfirmResult = (typeof CONFIRM_RESULT)[keyof typeof CONFIRM_RESULT]
  * Reads answer with the text typed, which the service parses (an empty answer to read char is the
  * service's own error); an input dialog answers null for Cancel, which the program receives as
  * status -2. Bytes cross as plain arrays of numbers from 0 to 255, a count of -1 being a failed file
- * operation and 0 the end of the input.
+ * operation and 0 the end of the input. The folder calls (unlink to getdents) answer minus a Linux
+ * error number instead, and stat and getdents the bytes of Linux's structures (`marsFolders.ts`).
  */
 export type MarsHandlerMap = {
     readChar: () => Promise<string>
@@ -70,6 +77,12 @@ export type MarsHandlerMap = {
     closeFile: (descriptor: number) => void
     stdIn: (length: number) => Promise<[count: number, buffer: number[]]>
     seekFile: (descriptor: number, offset: number, whence: number) => number
+    unlink: (path: string) => number
+    mkdir: (path: string) => number
+    rmdir: (path: string) => number
+    rename: (from: string, to: string) => number
+    stat: (path: string) => [result: number, buffer: number[]]
+    getdents: (descriptor: number, length: number) => [result: number, buffer: number[]]
     sleep: (milliseconds: number) => Promise<void>
     midiOut: (
         pitch: number,
@@ -79,7 +92,21 @@ export type MarsHandlerMap = {
     ) => Promise<void> | void
     time: () => number
     randomSeed: (generator: number) => number
+    /**
+     * RISC-V's timer registers: the running program's elapsed time in milliseconds. Answered at
+     * once, never awaited, since the Core reads it between run calls too.
+     */
+    elapsedTime: () => number
+    /** RISC-V's `wfi`: until an interrupt, or for at most `milliseconds` (-1: no deadline). */
+    waitForInterrupt: (milliseconds: number) => Promise<void> | void
 }
+
+/**
+ * What can end a RISC-V `wfi` that waits: the timer, armed and enabled in `uie`, and a key, while
+ * the receiver's interrupt is on and `uie` lets external interrupts through. Neither, and only
+ * Pause or Stop can.
+ */
+export type WfiWakers = { timer: boolean; key: boolean }
 
 /** What the handlers read of the adapter that registers them. */
 export type MarsHandlerHost = {
@@ -90,8 +117,30 @@ export type MarsHandlerHost = {
     peripherals: Pick<EmulatorPeripherals, 'terminal' | 'clock' | 'random' | 'audio'>
     /** What ties a wait or a read to the run that asked for it. */
     executionController: ExecutionController
-    /** The bitmap display, whose picture catches up before the program sleeps or waits on the user. */
-    devices: Pick<MarsDevices, 'flush'>
+    /**
+     * The bitmap display, whose picture catches up before the program sleeps or waits on the user,
+     * the devices whose interrupt requests end a `wfi`, and the sound devices, which catch up with
+     * the Program time the wait took.
+     */
+    devices: Pick<
+        MarsDevices,
+        'flush' | 'onInterruptRequest' | 'refreshSound' | 'receiverInterruptsEnabled'
+    >
+    /**
+     * The running program's elapsed time, which RISC-V's timer counts: Program time since the run
+     * began, counting only while the program runs, and the virtual clock in a Testcase.
+     */
+    elapsedTime(): number
+    /**
+     * Whether RISC-V's `uie` lets external interrupts through (bit 8), the receiver's and the
+     * transmitter's: only then can a device end a `wfi`.
+     */
+    externalInterruptsEnabled(): boolean
+    /**
+     * A `wfi` starts waiting, with what can end the wait, or stops, with undefined: what the status
+     * line beside the Terminal says meanwhile.
+     */
+    waitingForInterrupt(wakers: WfiWakers | undefined): void
     /**
      * Ends the Core call at the sleep being served, when a slice is running it: the Core's
      * `pause()`, which ends the slice where the program's frame does (`marsSlice.ts`). A Step or a
@@ -102,6 +151,8 @@ export type MarsHandlerHost = {
     setInterrupt(interrupt: EmulatorInterrupt | undefined): void
     /** The Build's FileSystem session, or null when none is running. */
     fileSystem(): FileSystemSession | null
+    /** The Target the Core runs, whose ABI lays out the structures stat and getdents store. */
+    target(): MarsTarget
     /** The active instruction's Core-owned identity, also attached to its Undo group. */
     instructionSerial(): string | null
 }
@@ -199,7 +250,11 @@ export class MarsHandlers {
             },
             openFile: (path, flags, append) => {
                 try {
-                    return this.requireFileSystem().open(
+                    const files = this.requireFileSystem()
+                    //a folder opened for reading is one getdents lists, as on Linux; opening one for
+                    //writing fails as opening it always has
+                    if (flags === 0 && files.isDirectory(path)) return files.openDirectory(path)
+                    return files.open(
                         path,
                         flags === 2
                             ? { access: 'read-write' }
@@ -243,6 +298,39 @@ export class MarsHandlers {
                 }
             },
 
+            //the folder calls, 1026 to 1065, which answer as Linux does: 0 or a count, or minus the
+            //error number, so a program can tell "already exists" from "not found" (ADR 0072)
+            unlink: (path) => this.folderCall(() => this.requireFileSystem().unlink(path)),
+            mkdir: (path) => this.folderCall(() => this.requireFileSystem().mkdir(path)),
+            rmdir: (path) => this.folderCall(() => this.requireFileSystem().rmdir(path)),
+            rename: (from, to) => this.folderCall(() => this.requireFileSystem().move(from, to)),
+            stat: (path) => {
+                try {
+                    const details = this.requireFileSystem().inspect(path)
+                    return [0, Array.from(encodeStat(this.host.target(), details))]
+                } catch (error) {
+                    return [guestErrno(error), []]
+                }
+            },
+            getdents: (descriptor, length) => {
+                const target = this.host.target()
+                let used = 0
+                let refused = false
+                try {
+                    const records = this.requireFileSystem().readDirectory(descriptor, (record) => {
+                        const next = used + direntLength(target, record.name)
+                        if (next > length) return !(refused = true)
+                        used = next
+                        return true
+                    })
+                    //a buffer too small for the next record is Linux's EINVAL, not the end
+                    if (records.length === 0 && refused) return [-22, []]
+                    return [used, Array.from(encodeDirents(target, records))]
+                } catch (error) {
+                    return [guestErrno(error), []]
+                }
+            },
+
             sleep: (milliseconds) => this.sleep(milliseconds),
             midiOut: (pitch, duration, instrument, volume) =>
                 this.midiOut({ pitch, duration, instrument, volume }),
@@ -252,18 +340,33 @@ export class MarsHandlers {
             //the first seed of a generator the program did not seed with service 40: host randomness
             //interactively and the fixed seed in a Testcase, read at the point of use because a
             //Testcase swaps the Random source in (ADR 0037)
-            randomSeed: (generator) => this.host.peripherals.random.seedFor(generator)
+            randomSeed: (generator) => this.host.peripherals.random.seedFor(generator),
+            elapsedTime: () => this.host.elapsedTime(),
+            waitForInterrupt: (milliseconds) => this.waitForInterrupt(milliseconds)
         }
-        //Multiple handlers of one instruction share its File frame, including empty callbacks.
+        //Multiple handlers of one instruction share its File frame, including empty callbacks. The
+        //timer's clock is read between instructions too, when there is no instruction to frame
         return Object.fromEntries(
             Object.entries(handlers).map(([name, handler]) => [
                 name,
-                (...args: unknown[]) =>
-                    instructionOperation(() =>
-                        (handler as (...parameters: unknown[]) => unknown)(...args)
-                    )
+                name === 'elapsedTime'
+                    ? handler
+                    : (...args: unknown[]) =>
+                          instructionOperation(() =>
+                              (handler as (...parameters: unknown[]) => unknown)(...args)
+                          )
             ])
         ) as MarsHandlerMap
+    }
+
+    /** A folder call that answers nothing but whether it worked: 0, or minus the error number. */
+    private folderCall(operation: () => void): number {
+        try {
+            operation()
+            return 0
+        } catch (error) {
+            return guestErrno(error)
+        }
     }
 
     /** The Build's session, which every handler runs inside: none means no program is running. */
@@ -292,6 +395,57 @@ export class MarsHandlers {
         //read the clock at the point of use: a Testcase swaps a virtual one in and the injected one back
         const clock = this.host.peripherals.clock
         await this.host.executionController.waitFor(execution, () => clock.wait(milliseconds))
+        //what the MIDI port and the sampled-audio output drained meanwhile is what they say next
+        this.host.devices.refreshSound()
+    }
+
+    /**
+     * RISC-V's `wfi`, when no interrupt it waits for is pending yet: the program waits in program
+     * time until the timer reaches `timecmp`, `milliseconds` from now (-1 when no timer is armed),
+     * until a device requests an interrupt while `uie` lets external interrupts through, or until
+     * a Pause or Stop, whichever comes first, a Step's wait included
+     * ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md), decision 12). A device
+     * request `uie` holds back does not end it, as on the hardware. The Screen catches up first
+     * and the slice ends after it, as at a `sleep`.
+     *
+     * A Testcase has no keyboard, so only the timer can end the wait there: the virtual clock moves
+     * to `timecmp` at once, as an M68K `stop` moves it to the next timer firing
+     * ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)). With no timer armed
+     * nothing could, and `wfi` returns at once, as the RISC-V specification allows.
+     */
+    private waitForInterrupt(milliseconds: number): Promise<void> | void {
+        const clock = this.host.peripherals.clock
+        //what the MIDI port and the sampled-audio output drained meanwhile is what they say next
+        if (clock.isVirtual)
+            return milliseconds >= 0
+                ? clock.wait(milliseconds).then(() => this.host.devices.refreshSound())
+                : undefined
+        const execution = this.execution
+        this.host.devices.flush()
+        this.host.peripherals.audio.flush()
+        this.host.pauseAtSleep()
+        const deadline = new AbortController()
+        let unsubscribe = () => {}
+        const timer = milliseconds >= 0
+        //nothing the program runs can change `uie` or a control register while it waits
+        const external = this.host.externalInterruptsEnabled()
+        const woken = new Promise<void>((resolve) => {
+            if (external) unsubscribe = this.host.devices.onInterruptRequest(resolve)
+            //an aborted timer is one the wait no longer needs
+            if (timer) clock.wait(milliseconds, deadline.signal).then(resolve, () => {})
+        })
+        //the transmitter asks only as it takes a character, which no program does while it
+        //waits, so a key is the one device that can end the wait
+        this.host.waitingForInterrupt({
+            timer,
+            key: external && this.host.devices.receiverInterruptsEnabled
+        })
+        return this.host.executionController.whileUnpaused(execution, woken).finally(() => {
+            deadline.abort()
+            unsubscribe()
+            this.host.waitingForInterrupt(undefined)
+            this.host.devices.refreshSound()
+        })
     }
 
     /**
@@ -335,6 +489,7 @@ export class MarsHandlers {
             return await answer(execution)
         } finally {
             this.host.setInterrupt(undefined)
+            this.host.devices.refreshSound()
         }
     }
 }

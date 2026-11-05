@@ -150,7 +150,7 @@ movec d0, vbr
 
 ## On the 68020 {#68020}
 
-Select the 68020 with `opt p=68020` before any code or data. The choice applies to the whole assembled program, including its included Files.
+Select the 68020 with `opt p=68020` before any code or data. The choice applies to the whole assembled program, including its included files.
 
 The 68020 adds scaled indexes, larger displacements, memory indirect addressing and long branches. It also adds instructions that use [register pairs](/documentation/m68k/addressing-mode#register-pairs) and [bit fields](/documentation/m68k/addressing-mode#bit-fields). The instruction pages mark the forms that require a later processor.
 

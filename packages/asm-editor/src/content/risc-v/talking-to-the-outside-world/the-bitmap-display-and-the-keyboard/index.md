@@ -202,6 +202,14 @@ In this Playground, service 32 lets an empty polling loop wait without spending 
 budget. During an interactive run it waits for the requested time; a testcase advances its virtual
 clock immediately. The wait makes the program pleasant to leave idle while it is waiting for a key.
 
+## Arrow keys, held keys and the mouse
+
+The receiver reports typed characters. Arrow keys and Shift do not produce characters, and the
+receiver does not report when a key is released. A game that uses arrow keys or moves only while
+a key is held can read the **Input controller** at `0xffff0300`. It reports key presses and releases,
+held keys, and the mouse position and buttons. See the
+[Input controller reference](/documentation/risc-v/input-controller) for examples.
+
 ## Your turn
 
 The Screen panel is a 16-by-16 word grid whose base label is `display`. Put white at the pixel with

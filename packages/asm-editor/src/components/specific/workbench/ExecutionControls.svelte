@@ -208,7 +208,7 @@
     building={session.building}
     buildProgress={{ phase: session.buildPhase, onCancel: () => session.cancelBuild() }}
     buildButton={loadsExecutable ? DEBUG_BUTTON : undefined}
-    running={session.running}
+    running={session.running || emulator.stepWaiting === true}
     buildDisabled={session.buildDisabledFor(program)}
     executionDisabled={session.executionDisabled}
     ended={emulator.terminated}

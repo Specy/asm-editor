@@ -39,12 +39,12 @@
     import RegistersArea from './RegistersArea.svelte'
     import MemoryStrip from './MemoryStrip.svelte'
     import ScreenArea from './ScreenArea.svelte'
+    import SectionScreen from './SectionScreen.svelte'
     import CollapsibleSection from './CollapsibleSection.svelte'
     import DebugToolContent from './DebugToolContent.svelte'
     import { debugTools, toolBodyStyle, toolSectionStyle } from './debugTools'
     import { markedMemoryAddress, memoryCellMenu, moveMemoryView } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
-    import type { ScreenHeader } from '#cmp/specific/project/screen/screenHeader.ts'
     import FaAngleDoubleLeft from '~icons/fa-solid/angle-double-left'
     import FaAngleDoubleRight from '~icons/fa-solid/angle-double-right'
 
@@ -87,10 +87,13 @@
               ? `min-width: ${registersWidth};`
               : `width: ${registersWidth}; min-width: ${registersWidth};`
     )
-    //the Screen's size and controls, which its section shows in its own header while it is open:
-    //folded, the Screen is still built but has no size to fit and nothing to show
-    let screenHeader: ScreenHeader | undefined = $state()
     const screenOpen = $derived(!workbenchLayout.isCollapsed('debug:screen', true))
+    //a link that opens the Screen in its window (`fullscreenDisplay`) finds it in a folded section,
+    //whose body is not built until it opens: the section unfolds, and the Screen answers from there
+    $effect(() => {
+        if (ui.screenWindowRequested && hasScreen && sectionsMode && !screenOpen)
+            workbenchLayout.setCollapsed('debug:screen', false)
+    })
     let topHeight = $state(0)
     let columnHeight = $state(0)
     //left to itself the top is as tall as a whole page of memory or the registers beside it, so
@@ -223,19 +226,7 @@
             <div class="debug-lower">
                 {#if hasScreen}
                     {#if sectionsMode}
-                        <CollapsibleSection
-                            id="debug:screen"
-                            title="Screen"
-                            defaultCollapsed
-                            info={screenOpen ? screenHeader?.info : undefined}
-                            actions={screenOpen ? screenHeader?.actions : undefined}
-                        >
-                            <ScreenArea
-                                style="height: 26rem; flex: none; border-radius: 0;"
-                                headerless
-                                onHeader={(header) => (screenHeader = header)}
-                            />
-                        </CollapsibleSection>
+                        <SectionScreen id="debug:screen" defaultHeight="26rem" />
                     {:else}
                         <ScreenArea
                             style="flex: 1 0 auto; min-height: 12rem; border: var(--wb-card-edge);"

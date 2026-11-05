@@ -5,11 +5,13 @@ import type {
 } from '#lib/languages/service/sourceModel.ts'
 import {
     buildAssemblerProfile,
+    fileText,
     ProjectFormatError,
     sourceLineText,
     sourceText,
     textAssemblyFiles,
-    type BuildSources
+    type BuildSources,
+    type ProjectFile
 } from '#lib/projectFiles.ts'
 import { CURRENT_RUNTIME_ABI, unsupportedRuntimeAbi } from '#lib/runtimeAbi.ts'
 import {
@@ -35,6 +37,7 @@ import {
     type ScreenLabelTable
 } from './screenDirective'
 import { makeTokenSpanIndex, tokenSpanEnd, type SpanLine, type TokenSpanIndex } from './tokenSpans'
+import { NOT_LINKED_MESSAGE, notLinkedMessage } from './exceptionHandlerScan'
 
 /**
  * How a MIPS or RISC-V program is checked, by the analysis Worker while it is typed
@@ -50,10 +53,15 @@ import { makeTokenSpanIndex, tokenSpanEnd, type SpanLine, type TokenSpanIndex } 
 /** The Targets a MARS-derived Core assembles for. */
 export type MarsTarget = 'MIPS' | 'RISC-V' | 'RISC-V-64'
 
-/** What a Build links besides its Files: the Runtime library and the global execution starts at. */
+/**
+ * What a Build links besides its Entry's unit: the Runtime library, the global execution starts at,
+ * and the Project's other assembly Files, which the Core takes as an archive's members by need
+ * (`BuildConfiguration.linkUnits`).
+ */
 export type MarsLink = {
     library?: ReturnType<typeof coreLibrary>
     entrySymbol?: string
+    units?: readonly string[]
 }
 
 /** A Core of `target` for the Files, assembled from `entry` and linked as `link` says. */
@@ -83,7 +91,14 @@ type MarsAssembleError = MarsSourceLocation & {
 /** The part of a MARS or RARS Core a check reads, which `JsMips` and `JsRiscV` both have. */
 export type MarsCheckCore = ScreenLabelTable & {
     assemble(): { readonly report: string; readonly errors: readonly MarsAssembleError[] }
+    /** The Entry's unit: the Entry and what it includes. */
     getTokenizedLines(): readonly SpanLine[]
+    /** The unit of the Entry or of one of the Build's other units, by its File. */
+    getTokenizedUnit(path: string): readonly SpanLine[]
+    /** Every File the units read: the Entry's, and those of the other units the link took. */
+    getUnitFiles(): readonly string[]
+    /** The Entry, then the other units the link took. */
+    getLinkedUnits(): readonly string[]
     readMemoryBytes(address: number, length: number): ArrayLike<number>
 }
 
@@ -129,7 +144,8 @@ export async function prepareMarsRuntime(sources: BuildSources, target: MarsTarg
 
 /** The library and entry symbol `prepareMarsRuntime` loaded for these sources. */
 export function marsRuntimeLink(sources: BuildSources, target: MarsTarget): MarsLink {
-    if (sources.runtimeAbi === undefined) return {}
+    const units = sources.linkUnits?.length ? { units: sources.linkUnits } : {}
+    if (sources.runtimeAbi === undefined) return units
     //only a Compilation record's requirement starts at the library's _start (resolveRuntimeLink)
     const problem = unsupportedRuntimeAbi(sources.runtimeAbi, sources.entrySymbol !== undefined)
     if (problem) throw new ProjectFormatError(problem)
@@ -138,7 +154,8 @@ export function marsRuntimeLink(sources: BuildSources, target: MarsTarget): Mars
         throw new ProjectFormatError(`The Runtime library ${sources.runtimeAbi} is not loaded`)
     return {
         library: coreLibrary(library),
-        ...(sources.entrySymbol ? { entrySymbol: sources.entrySymbol } : {})
+        ...(sources.entrySymbol ? { entrySymbol: sources.entrySymbol } : {}),
+        ...units
     }
 }
 
@@ -161,15 +178,27 @@ export function checkMarsProgram<C extends MarsCheckCore>(
     let { core, result } = assemble()
     const lines = tokenizedLines(core)
     const spans = makeTokenSpanIndex(lines)
-    const reached = new Set(lines.map((line) => line.sourcePath))
+    //the Entry's unit and the other units the program needs, the only ones the Core read: one it
+    //does not need is never assembled, so it is not reached
+    const reached = new Set([...lines.map((line) => line.sourcePath), ...unitFiles(core)])
     reached.add(sources.entry)
     const source = target === 'MIPS' ? 'mips' : 'risc-v'
     //hand-written assembly links no library by default: say how to get printf
     const functions =
         sources.runtimeAbi === undefined ? loadedRuntimeFunctions(CURRENT_RUNTIME_ABI) : undefined
+    //another unit's tokens are read only for a unit with something to say
+    const unitSpans = new Map<string, TokenSpanIndex>()
+    const spansFor = (path: string) => {
+        if (!sources.linkUnits?.includes(path)) return spans
+        let index = unitSpans.get(path)
+        if (!index) unitSpans.set(path, (index = makeTokenSpanIndex(tokenizedUnit(core, path))))
+        return index
+    }
     const assembled = result.errors.map((error) =>
-        coreDiagnostic(error, sources, source, spans, functions)
+        coreDiagnostic(error, sources, source, spansFor(error.sourcePath), functions, target)
     )
+    if (!result.errors.some((error) => !error.isWarning))
+        assembled.push(...unlinkedUnitHints(sources, core, source, target))
     //read after everything else this check takes from its Core, since a probe assembles another
     let probed = false
     const screen = applyScreenDirective(
@@ -208,6 +237,80 @@ function tokenizedLines(core: MarsCheckCore): readonly SpanLine[] {
     }
 }
 
+function tokenizedUnit(core: MarsCheckCore, path: string): readonly SpanLine[] {
+    try {
+        return core.getTokenizedUnit(path)
+    } catch {
+        return []
+    }
+}
+
+function unitFiles(core: MarsCheckCore): readonly string[] {
+    try {
+        return core.getUnitFiles()
+    } catch {
+        return []
+    }
+}
+
+/**
+ * A Hint on each of the Build's other units the link left out, as x86 gives one
+ * ([ADR 0039](../../../../../../docs/adr/0039-x86-links-start-objects-before-user-and-support-archives.md)):
+ * nothing the program needs is defined there, so the Core never assembled it, and its mistakes, or
+ * MARS's or RARS's own dialect, are no concern of this Build
+ * ([asmos-stage2.md](../../../../../../docs/design/asmos-stage2.md), decision 10). A unit that a
+ * unit the program needs includes is part of that one, and gets none. On MIPS, one that holds an
+ * exception handler is told how to include it (`notLinkedMessage`).
+ */
+function unlinkedUnitHints(
+    sources: BuildSources,
+    core: MarsCheckCore,
+    source: string,
+    target: MarsTarget
+): LanguageDiagnostic[] {
+    if (!sources.linkUnits?.length) return []
+    const read = new Set([...core.getLinkedUnits(), ...unitFiles(core)])
+    const included = new Set(tokenizedLines(core).map((line) => line.sourcePath))
+    return sources.linkUnits
+        .filter((path) => !read.has(path) && !included.has(path))
+        .map((path) => ({
+            severity: 'suggestion' as const,
+            source,
+            code: 'not-linked',
+            message: target === 'MIPS' ? mipsNotLinkedHint(sources, path) : NOT_LINKED_MESSAGE,
+            location: {
+                path,
+                range: {
+                    start: { line: 0, column: 0 },
+                    end: { line: 0, column: sourceLineText(sources, path, 0).length }
+                }
+            }
+        }))
+}
+
+/**
+ * Each unit's Hint on MIPS, by File record: the live check runs at every change to the Files, and
+ * a File's Hint changes only with the File, so its text is scanned once a record.
+ */
+const mipsHints = new WeakMap<ProjectFile, string>()
+
+/** The Hint on a MIPS unit the link left out, which says how to include its exception handler. */
+export function mipsNotLinkedHint(sources: BuildSources, path: string): string {
+    const file = sources.files[path]
+    if (!file) return NOT_LINKED_MESSAGE
+    const kept = mipsHints.get(file)
+    if (kept !== undefined) return kept
+    let text: string | undefined
+    try {
+        text = fileText(file)
+    } catch {
+        text = undefined
+    }
+    const hint = notLinkedMessage(text)
+    if (Object.isFrozen(file)) mipsHints.set(file, hint)
+    return hint
+}
+
 /**
  * The address of a `@screen base=` name the program's symbol table does not hold, such as an
  * `.eqv` name: the program assembled once more with one extra `.word <name>` at a fixed address,
@@ -237,7 +340,8 @@ function coreDiagnostic(
     sources: BuildSources,
     source: string,
     spans: TokenSpanIndex,
-    functions: RuntimeFunctionList | undefined
+    functions: RuntimeFunctionList | undefined,
+    target: MarsTarget
 ): LanguageDiagnostic {
     const line = Math.max(0, error.sourceLine - 1)
     const column = Math.max(0, error.sourceColumn - 1)
@@ -263,7 +367,7 @@ function coreDiagnostic(
             }
         }
     })
-    const hint = error.isWarning ? undefined : runtimeLibraryHint(error.message, functions)
+    const hint = error.isWarning ? undefined : runtimeLibraryHint(error.message, functions, target)
     return {
         severity: error.isWarning ? 'warning' : 'error',
         source,

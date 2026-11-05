@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readExample } from '#lib/examples.server.ts'
 import { describe, expect, it } from 'vite-plus/test'
 import { KEY_CODES } from '#lib/languages/peripherals/keyCodes.ts'
 import { BLACK } from '#lib/languages/peripherals/screen/color.ts'
@@ -48,7 +48,7 @@ describe('Z80 port documentation examples', () => {
 
 describe('examples/z80', () => {
     function load(name: string): string {
-        return readFileSync(new URL(`../../../../examples/z80/${name}`, import.meta.url), 'utf8')
+        return readExample(`z80/${name}`)
     }
 
     it('animates the bouncing ball off screen and presents whole frames', async () => {

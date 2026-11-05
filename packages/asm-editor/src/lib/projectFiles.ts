@@ -53,7 +53,12 @@ export type ProjectFile = Readonly<{
 
 export type ProjectFiles = Readonly<Record<string, ProjectFile>>
 export const FILE_ENCODINGS: readonly FileEncoding[] = ['plain', 'base64']
-export const FILE_BYTE_LIMIT = 16 * 1024 * 1024
+/**
+ * The bytes all a Project's Files may hold together, UTF-8 or binary
+ * ([ADR 0076](../../../../docs/adr/0076-a-project-holds-64-mib-of-files.md)). The FileSystem gives
+ * a running program the same room: one File may take all of it.
+ */
+export const FILE_BYTE_LIMIT = 64 * 1024 * 1024
 export const FILE_COUNT_LIMIT = 4096
 export const PATH_BYTE_LIMIT = 1024
 /**
@@ -67,6 +72,59 @@ const hasOwn = (value: object, key: PropertyKey) => Object.prototype.hasOwnPrope
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
+/** A byte count as the messages that state a limit write it: `64 MiB`. */
+export function formatMiB(bytes: number): string {
+    return `${Number((bytes / (1024 * 1024)).toFixed(1))} MiB`
+}
+
+/** What a Project whose Files pass {@link FILE_BYTE_LIMIT} is refused with. */
+export const FILE_LIMIT_MESSAGE = `Project exceeds the ${formatMiB(FILE_BYTE_LIMIT)} file limit`
+
+/** {@link FILE_COUNT_LIMIT} as the messages write it: `4,096`. */
+export const FILE_COUNT_TEXT = FILE_COUNT_LIMIT.toLocaleString('en-US')
+
+/** {@link ANNOTATIONS_BYTE_LIMIT} as the messages write it: `256 KiB`. */
+export const ANNOTATIONS_LIMIT_TEXT = `${ANNOTATIONS_BYTE_LIMIT / 1024} KiB`
+
+/** What a change that takes the Annotations past {@link ANNOTATIONS_BYTE_LIMIT} is refused with. */
+export const ANNOTATIONS_SAVE_MESSAGE = `This Project could not be saved, as it contains too many renames and comments (at most ${ANNOTATIONS_LIMIT_TEXT}). Delete some and try again.`
+
+/**
+ * The byte length of each File record this module made from checked bytes or text, by the record.
+ * A File's own rules do not depend on the other Files, so a record here is valid in any Project:
+ * `cleanFiles` keeps it without decoding it again and counts it from its stored length, which makes
+ * a change to one File of a large Project cost that File, not the Project. Only records frozen
+ * here are added, never one a caller made, which could be changed afterwards.
+ */
+const checkedRecords = new WeakMap<ProjectFile, number>()
+/** The maps `cleanFiles` returned, frozen and of checked records, which it returns as they are. */
+const checkedMaps = new WeakSet<object>()
+/** The UTF-8 size of each Annotations record `cleanAnnotations` returned, see `annotationsSize`. */
+const annotationSizes = new WeakMap<Annotations, number>()
+
+/** Keeps `file`, frozen here from checked content, as a record `cleanFiles` need not check again. */
+function checkedRecord(file: ProjectFile, bytes: number): ProjectFile {
+    checkedRecords.set(file, bytes)
+    return file
+}
+
+/** Whether `cleanFiles` or another function here made `file`, so its content is known valid. */
+function isChecked(file: ProjectFile): boolean {
+    return checkedRecords.has(file)
+}
+
+const hasWellFormed =
+    typeof (String.prototype as { isWellFormed?: unknown }).isWellFormed === 'function'
+
+/**
+ * Whether text has no unpaired surrogate, which is exactly when its UTF-8 decodes back to it:
+ * `isWellFormed` answers without encoding it, at once for text V8 holds as one byte a character.
+ */
+function isWellFormedText(text: string): boolean {
+    if (hasWellFormed) return (text as string & { isWellFormed(): boolean }).isWellFormed()
+    return decoder.decode(encoder.encode(text)) === text
+}
+
 export class ProjectFormatError extends Error {
     constructor(message: string) {
         super(message)
@@ -74,9 +132,26 @@ export class ProjectFormatError extends Error {
     }
 }
 
+/**
+ * The paths `isValidFilePath` accepted lately, which it accepts again without checking them: every
+ * change to one File checks every path of the Project, thousands in a large one. Emptied past twice
+ * the Files a Project may hold, so that renames cannot grow it without end.
+ */
+const validPaths = new Set<string>()
+
 export function isValidFilePath(path: string): boolean {
+    if (typeof path !== 'string') return false
+    if (validPaths.has(path)) return true
+    const valid = checkFilePath(path)
+    if (valid) {
+        if (validPaths.size >= 2 * FILE_COUNT_LIMIT) validPaths.clear()
+        validPaths.add(path)
+    }
+    return valid
+}
+
+function checkFilePath(path: string): boolean {
     return (
-        typeof path === 'string' &&
         path.length > 0 &&
         encoder.encode(path).length <= PATH_BYTE_LIMIT &&
         decoder.decode(encoder.encode(path)) === path &&
@@ -143,6 +218,11 @@ export function decodeBase64(text: string): Uint8Array {
         throw new ProjectFormatError('Invalid file encoding or base64 content')
     }
     if (btoa(raw) !== text) throw new ProjectFormatError('Noncanonical base64 content')
+    return rawBytes(raw)
+}
+
+/** The bytes of `atob`'s answer, one a character. */
+function rawBytes(raw: string): Uint8Array {
     //a plain loop: `Uint8Array.from` with a mapping function takes about 50 times as long, over a
     //second and a half for 16 MiB, and the Hex editor decodes a File again at every change
     const bytes = new Uint8Array(raw.length)
@@ -160,15 +240,15 @@ export function encodeBase64(bytes: Uint8Array): string {
 /** A File's bytes, decoded from its `content`. */
 export function fileBytes(file: ProjectFile): Uint8Array {
     if (file.encoding === 'plain') {
-        const bytes = encoder.encode(file.content)
-        if (decoder.decode(bytes) !== file.content)
+        if (!isChecked(file) && !isWellFormedText(file.content))
             throw new ProjectFormatError('Text contains an unpaired surrogate')
-        return bytes
+        return encoder.encode(file.content)
     }
     if (file.encoding !== 'base64') {
         throw new ProjectFormatError('Invalid file encoding or base64 content')
     }
-    return decodeBase64(file.content)
+    //a checked record's base64 is canonical already: no need to encode it again to see
+    return isChecked(file) ? rawBytes(atob(file.content)) : decodeBase64(file.content)
 }
 
 /** Whether a Byte edit only overwrites: the File keeps its length, and every offset its byte. */
@@ -228,9 +308,9 @@ export type ByteRun = Readonly<{ offset: number; bytes: Uint8Array }>
  * `file` with `runs` written over its bytes in order, a later run winning where two overlap, and
  * the runs that write back what they replaced, in the order to write them. The File keeps its
  * length, its encoding and its Annotations, since an overwrite moves no address. A File stored as
- * bytes decodes and encodes only the base64 around the runs, so typing into a 16 MiB File costs
- * what the runs do; one stored as text takes them over its UTF-8, and is undefined when they would
- * leave it no longer UTF-8. A run past the end of the File throws.
+ * bytes decodes and encodes only the base64 around the runs, so typing into a File of many MiB
+ * costs what the runs do; one stored as text takes them over its UTF-8, and is undefined when they
+ * would leave it no longer UTF-8. A run past the end of the File throws.
  */
 export function overwriteBytes(
     file: ProjectFile,
@@ -286,38 +366,53 @@ export function overwriteBytes(
         parts.push(file.content.slice(from))
         content = parts.join('')
     }
+    const next: ProjectFile = Object.freeze({
+        encoding: file.encoding,
+        content,
+        ...(file.annotations ? { annotations: file.annotations } : {})
+    })
+    //the bytes are as many as before, and a checked File's Annotations stay checked
     return {
-        file: Object.freeze({
-            encoding: file.encoding,
-            content,
-            ...(file.annotations ? { annotations: file.annotations } : {})
-        }),
+        file: isChecked(file) ? checkedRecord(next, length) : next,
         restore: restore.reverse()
     }
 }
 
-/** How many bytes a File holds, without decoding a byte File. */
+/**
+ * How many bytes a File holds, without decoding a byte File: a checked record's stored length, else
+ * counted from its content.
+ */
 export function fileByteLength(file: ProjectFile): number {
+    const known = checkedRecords.get(file)
+    if (known !== undefined) return known
     return file.encoding === 'base64' ? base64Length(file.content) : utf8Length(file.content)
 }
+
+const NON_ASCII = /[\u0080-\uffff]+/g
 
 /**
  * The UTF-8 length of `text`, without encoding it, for text with no unpaired surrogate, as
  * `cleanFiles` leaves every text File: each half of a pair is two of the character's four bytes.
+ * Every ASCII character is one byte, so only the runs of others are looked at, which a regular
+ * expression finds several times faster than a loop over every character.
  */
 function utf8Length(text: string) {
-    let length = 0
-    for (let index = 0; index < text.length; index++) {
-        const code = text.charCodeAt(index)
-        length += code < 0x80 ? 1 : code < 0x800 || (code >= 0xd800 && code <= 0xdfff) ? 2 : 3
+    let length = text.length
+    NON_ASCII.lastIndex = 0
+    for (let run = NON_ASCII.exec(text); run; run = NON_ASCII.exec(text)) {
+        const characters = run[0]
+        for (let index = 0; index < characters.length; index++) {
+            const code = characters.charCodeAt(index)
+            length += code < 0x800 || (code >= 0xd800 && code <= 0xdfff) ? 1 : 2
+        }
     }
     return length
 }
 
 /**
- * What the Files take of the Project's 16 MiB, as `cleanFiles` counts it: each File's bytes. Read
- * from the stored lengths without decoding a File, for Files `cleanFiles` checked, whose base64 is
- * canonical and whose text has no lone surrogate.
+ * What the Files take of the Project's {@link FILE_BYTE_LIMIT}, as `cleanFiles` counts it: each
+ * File's bytes. Read from the stored lengths without decoding a File, for Files `cleanFiles`
+ * checked, whose base64 is canonical and whose text has no lone surrogate.
  */
 export function storedFilesSize(files: ProjectFiles): number {
     let size = 0
@@ -499,7 +594,11 @@ export function cleanAnnotations(path: string, value: unknown): Annotations | un
     const kinds = { names, comments, functionComments, locals }
     const kept = ANNOTATION_KINDS.filter((kind) => kinds[kind] !== undefined)
     if (!kept.length) return undefined
-    return Object.freeze(Object.fromEntries(kept.map((kind) => [kind, kinds[kind]]))) as Annotations
+    const clean = Object.freeze(
+        Object.fromEntries(kept.map((kind) => [kind, kinds[kind]]))
+    ) as Annotations
+    annotationSizes.set(clean, countAnnotations(clean))
+    return clean
 }
 
 /**
@@ -514,16 +613,25 @@ export function withAnnotations(
     annotations: Annotations | undefined
 ): ProjectFile {
     const clean = cleanAnnotations(path, annotations)
-    return Object.freeze({
+    const next: ProjectFile = Object.freeze({
         encoding: file.encoding,
         content: file.content,
         ...(clean ? { annotations: clean } : {})
     })
+    const bytes = checkedRecords.get(file)
+    return bytes === undefined ? next : checkedRecord(next, bytes)
 }
 
-/** The UTF-8 bytes of a File's Annotations: every key, id, name and comment. */
+/**
+ * The UTF-8 bytes of a File's Annotations: every key, id, name and comment, kept for those
+ * `cleanAnnotations` returned, which are frozen whole.
+ */
 function annotationsSize(annotations: Annotations | undefined): number {
     if (!annotations) return 0
+    return annotationSizes.get(annotations) ?? countAnnotations(annotations)
+}
+
+function countAnnotations(annotations: Annotations): number {
     let size = 0
     const texts = (record: Readonly<Record<string, string>> | undefined) => {
         for (const [key, text] of Object.entries(record ?? {}))
@@ -601,7 +709,7 @@ export function listingAnnotationsKey(file: Pick<ProjectFile, 'annotations'>): s
 
 /**
  * The first `length` bytes of a File, decoding only as much of it as they need: recognising a File
- * by its first bytes runs on every check and must not decode 16 MiB.
+ * by its first bytes runs on every check and must not decode a File of many MiB.
  */
 export function fileHead(file: ProjectFile, length: number): Uint8Array {
     //every character is at least one byte of UTF-8, so `length` characters are enough
@@ -612,11 +720,19 @@ export function fileHead(file: ProjectFile, length: number): Uint8Array {
 }
 
 /**
- * How many bytes the insertions and deletions of a Project's legacy edits may copy as they apply,
- * each copying the File it leaves: none an editor wrote, and enough for a few on the largest File,
- * so a crafted link with thousands of them, over as many Files, cannot hold the page for minutes.
+ * The bytes a Project held when editors still wrote Byte edits, which bounds what its edits put
+ * in: only a Project saved under that 16 MiB limit has any, so raising the limit leaves this where
+ * it was ([ADR 0076](../../../../docs/adr/0076-a-project-holds-64-mib-of-files.md)).
  */
-const EDIT_COPY_LIMIT = 8 * FILE_BYTE_LIMIT
+const LEGACY_EDIT_BYTE_LIMIT = 16 * 1024 * 1024
+
+/**
+ * How many bytes the insertions and deletions of a Project's legacy edits may copy as they apply,
+ * each copying the File it leaves: none an editor wrote, and enough for a few on the largest File
+ * of a Project of their time, so a crafted link with thousands of them, over as many Files, cannot
+ * hold the page for minutes.
+ */
+const EDIT_COPY_LIMIT = 8 * LEGACY_EDIT_BYTE_LIMIT
 
 /** What a Project's legacy edits have put in and copied so far, as `cleanFiles` applies them. */
 type EditWork = { inserted: number; copied: number }
@@ -625,9 +741,9 @@ type EditWork = { inserted: number; copied: number }
  * A File's legacy Byte edits, checked by applying them in order to its original's `length`: each
  * in range of the length the edits before it leave, so a Project is never opened with bytes it
  * would read differently. An insertion or a deletion is as valid as an overwrite (ADR 0047). The
- * Project's edits together, counted in `work`, put in at most 16 MiB, as the Files and edits a
- * Project saved together did, and copy at most {@link EDIT_COPY_LIMIT}. Undefined when there are
- * none.
+ * Project's edits together, counted in `work`, put in at most {@link LEGACY_EDIT_BYTE_LIMIT}, as
+ * the Files and edits a Project saved together did, and copy at most {@link EDIT_COPY_LIMIT}.
+ * Undefined when there are none.
  */
 function cleanByteEdits(
     path: string,
@@ -666,8 +782,10 @@ function cleanByteEdits(
         if (offset + remove > current)
             throw new ProjectFormatError(`A Byte edit is past the end of ${path}`)
         work.inserted += size
-        if (work.inserted > FILE_BYTE_LIMIT)
-            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+        if (work.inserted > LEGACY_EDIT_BYTE_LIMIT)
+            throw new ProjectFormatError(
+                `The Byte edits of this Project put in more than ${formatMiB(LEGACY_EDIT_BYTE_LIMIT)}`
+            )
         current += size - remove
         if (size !== remove) {
             work.copied += current
@@ -694,8 +812,25 @@ function decodedText(bytes: Uint8Array): string | undefined {
  */
 export function bytesFile(bytes: Uint8Array): ProjectFile {
     const text = isBmp(bytes) ? undefined : decodedText(bytes)
-    if (text !== undefined) return Object.freeze({ encoding: 'plain', content: text })
-    return Object.freeze({ encoding: 'base64', content: encodeBase64(bytes) })
+    if (text !== undefined)
+        return checkedRecord(Object.freeze({ encoding: 'plain', content: text }), bytes.length)
+    return checkedRecord(
+        Object.freeze({ encoding: 'base64', content: encodeBase64(bytes) }),
+        bytes.length
+    )
+}
+
+/**
+ * Text as a File, as typing into the editor makes it, without encoding it to check it: text with
+ * no unpaired surrogate is valid UTF-8, and its length is counted rather than encoded. Text that
+ * starts like a BMP is stored as bytes, as `bytesFile` stores it.
+ */
+export function textFile(text: string): ProjectFile {
+    if (!isWellFormedText(text)) throw new ProjectFormatError('Text contains an unpaired surrogate')
+    //a BMP's signature and header size are in its first 18 bytes, which 26 characters cover
+    if (text.startsWith('BM') && isBmp(encoder.encode(text.slice(0, 26))))
+        return bytesFile(encoder.encode(text))
+    return checkedRecord(Object.freeze({ encoding: 'plain', content: text }), utf8Length(text))
 }
 
 /**
@@ -708,14 +843,22 @@ export function projectFileFromBytes(bytes: Uint8Array, encoding: FileEncoding):
         if (text === undefined) {
             throw new ProjectFormatError('A plain File contains invalid UTF-8')
         }
-        return Object.freeze({ encoding: 'plain', content: text })
+        return checkedRecord(Object.freeze({ encoding: 'plain', content: text }), bytes.length)
     }
     if (encoding !== 'base64') throw new ProjectFormatError('Invalid file encoding')
-    return Object.freeze({ encoding: 'base64', content: encodeBase64(bytes) })
+    return checkedRecord(
+        Object.freeze({ encoding: 'base64', content: encodeBase64(bytes) }),
+        bytes.length
+    )
 }
 
-/** A File's text: its bytes as UTF-8, which they must be. */
+/**
+ * A File's text: its bytes as UTF-8, which they must be. A File stored as text is its content,
+ * which decoding its UTF-8 would give back.
+ */
 export function fileText(file: ProjectFile): string {
+    if (file.encoding === 'plain' && (isChecked(file) || isWellFormedText(file.content)))
+        return file.content
     try {
         return decoder.decode(fileBytes(file))
     } catch {
@@ -725,28 +868,30 @@ export function fileText(file: ProjectFile): string {
 
 /**
  * Files as they are saved, each checked and frozen in a frozen map with no prototype, or a
- * `ProjectFormatError`. A record of `checked`, Files this already returned, is kept as it is at
- * whatever path it now has, its bytes and Annotations counted from their stored lengths: a change
- * to one File of a Project leaves the record of every other, which caches keyed by the record keep
- * finding, and decodes none of them again.
+ * `ProjectFormatError`. A record this module made, as this returns and the FileSystem writes them,
+ * is kept as it is at whatever path it now has, its bytes and Annotations counted from their
+ * stored lengths: a change to one File of a Project costs what that File does, leaves the record
+ * of every other, which caches keyed by the record keep finding, and decodes none of them again.
+ * A map this returned is returned as it is, so passing one on checks nothing twice.
  */
-export function cleanFiles(raw: unknown, checked?: ProjectFiles): ProjectFiles {
+export function cleanFiles(raw: unknown): ProjectFiles {
+    if (checkedMaps.has(raw as object)) return raw as ProjectFiles
     if (!raw || typeof raw !== 'object' || Array.isArray(raw))
         throw new ProjectFormatError('Files must be a path-to-file map')
     const entries = Object.entries(raw)
     if (entries.length > FILE_COUNT_LIMIT)
-        throw new ProjectFormatError('Project exceeds the 4,096-file limit')
+        throw new ProjectFormatError(`Project exceeds the ${FILE_COUNT_TEXT}-file limit`)
     const files: Record<string, ProjectFile> = Object.create(null)
-    const kept = new Set<unknown>(checked ? Object.values(checked) : [])
     let size = 0
     let annotated = 0
     const work: EditWork = { inserted: 0, copied: 0 }
     for (const [path, value] of entries) {
         if (!isValidFilePath(path)) throw new ProjectFormatError(`Invalid file path: ${path}`)
         let file: ProjectFile
-        if (kept.has(value)) {
+        const known = checkedRecords.get(value)
+        if (known !== undefined) {
             file = value
-            size += fileByteLength(file)
+            size += known
         } else {
             if (
                 !value ||
@@ -757,7 +902,7 @@ export function cleanFiles(raw: unknown, checked?: ProjectFiles): ProjectFiles {
                 throw new ProjectFormatError(`Invalid contents or encoding for ${path}`)
             }
             if (value.content.length > (FILE_BYTE_LIMIT * 4) / 3 + 4)
-                throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+                throw new ProjectFormatError(FILE_LIMIT_MESSAGE)
             let bytes = fileBytes(value)
             //a Project saved before ADR 0063 may keep Byte edits beside the original: the File is
             //the bytes they leave, and keeps none
@@ -765,19 +910,21 @@ export function cleanFiles(raw: unknown, checked?: ProjectFiles): ProjectFiles {
             if (edits) bytes = applyByteEdits(bytes, edits)
             size += bytes.length
             const annotations = cleanAnnotations(path, value.annotations)
-            file = Object.freeze({
-                encoding: value.encoding,
-                content: edits ? encodeBase64(bytes) : value.content,
-                ...(annotations ? { annotations } : {})
-            })
+            file = checkedRecord(
+                Object.freeze({
+                    encoding: value.encoding,
+                    content: edits ? encodeBase64(bytes) : value.content,
+                    ...(annotations ? { annotations } : {})
+                }),
+                bytes.length
+            )
         }
-        if (size > FILE_BYTE_LIMIT)
-            throw new ProjectFormatError('Project exceeds the 16 MiB file limit')
+        if (size > FILE_BYTE_LIMIT) throw new ProjectFormatError(FILE_LIMIT_MESSAGE)
         annotated += annotationsSize(file.annotations)
         //met when a Project is opened or imported: saving is refused earlier, by the FileSystem
         if (annotated > ANNOTATIONS_BYTE_LIMIT)
             throw new ProjectFormatError(
-                "This Project can't be opened: it has too many renames and comments (at most 256 KiB)."
+                `This Project can't be opened: it has too many renames and comments (at most ${ANNOTATIONS_LIMIT_TEXT}).`
             )
         files[path] = file
     }
@@ -790,7 +937,9 @@ export function cleanFiles(raw: unknown, checked?: ProjectFiles): ProjectFiles {
             parts.pop()
         }
     }
-    return Object.freeze(files)
+    const clean = Object.freeze(files)
+    checkedMaps.add(clean)
+    return clean
 }
 
 export type BuildConfiguration = Readonly<{
@@ -810,6 +959,14 @@ export type BuildConfiguration = Readonly<{
     entrySymbol?: string
     /** x86 compiler support archive; startup is selected only for a compiled Entry. */
     x86Support?: boolean
+    /**
+     * The Project's other assembly Files a Build takes as an archive's members, by path in path
+     * order (`resolveLinkUnits`): the Core assembles and links one only when it defines a global
+     * the program still needs ([ADR 0033](../../../../docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md),
+     * 2026-11-03 and 2026-11-04 notes). On MIPS and RISC-V, absent when there are none; on x86
+     * always given by a Project's Build, since without it the Core takes every source File.
+     */
+    linkUnits?: readonly string[]
     /** Generated assembly path to the source language that produced it. */
     compiledLanguages?: Readonly<
         Record<string, import('./sourceCompilation/records').SourceLanguage>
@@ -830,6 +987,7 @@ const BUILD_CONFIGURATION_KEYS: Record<keyof Required<BuildConfiguration>, true>
     runtimeAbi: true,
     entrySymbol: true,
     x86Support: true,
+    linkUnits: true,
     compiledLanguages: true,
     entrySource: true
 }
@@ -841,11 +999,17 @@ export function buildConfiguration(sources: BuildConfiguration): BuildConfigurat
     }
     if (sources.compiledLanguages)
         configuration.compiledLanguages = Object.freeze({ ...sources.compiledLanguages })
+    if (sources.linkUnits) configuration.linkUnits = Object.freeze([...sources.linkUnits])
     return Object.freeze(configuration) as BuildConfiguration
 }
 
 export function buildConfigurationsEqual(left: BuildConfiguration, right: BuildConfiguration) {
     return (Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]).every((key) => {
+        if (key === 'linkUnits') {
+            const a = left.linkUnits ?? []
+            const b = right.linkUnits ?? []
+            return a.length === b.length && a.every((path, index) => path === b[index])
+        }
         if (key !== 'compiledLanguages') return left[key] === right[key]
         const a = left.compiledLanguages ?? {}
         const b = right.compiledLanguages ?? {}
@@ -861,15 +1025,20 @@ export function buildConfigurationsEqual(left: BuildConfiguration, right: BuildC
  * equal, for a saved record to keep in place of the configuration.
  */
 export function buildConfigurationKey(configuration: BuildConfiguration): string {
-    return JSON.stringify(
-        (Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]).map((key) => {
+    const values: unknown[] = (
+        Object.keys(BUILD_CONFIGURATION_KEYS) as (keyof BuildConfiguration)[]
+    )
+        //named last, and only when there are any, so a key saved before them names the same
+        .filter((key) => key !== 'linkUnits')
+        .map((key) => {
             if (key !== 'compiledLanguages') return configuration[key] ?? null
             const languages = configuration.compiledLanguages ?? {}
             return Object.keys(languages)
                 .sort()
                 .map((path) => [path, languages[path]])
         })
-    )
+    if (configuration.linkUnits?.length) values.push([...configuration.linkUnits])
+    return JSON.stringify(values)
 }
 
 export function buildSourcesEqual(left: BuildSources, right: BuildSources): boolean {
@@ -926,6 +1095,15 @@ export function normalizeBuildInput(input: BuildInput): BuildSources {
         if (hasOwn(input, 'x86Support') && typeof input.x86Support !== 'boolean')
             throw new ProjectFormatError('Invalid x86 compiler support setting')
         if (
+            hasOwn(input, 'linkUnits') &&
+            (!Array.isArray(input.linkUnits) ||
+                input.linkUnits.some(
+                    (path) =>
+                        typeof path !== 'string' || !isValidFilePath(path) || path === input.entry
+                ))
+        )
+            throw new ProjectFormatError('Invalid linked units')
+        if (
             hasOwn(input, 'compiledLanguages') &&
             (!input.compiledLanguages ||
                 typeof input.compiledLanguages !== 'object' ||
@@ -957,10 +1135,7 @@ export function updateEntryText(sources: BuildSources, text: string): BuildSourc
     return Object.freeze({
         ...sources,
         entry: sources.entry,
-        files: cleanFiles({
-            ...sources.files,
-            [sources.entry]: { encoding: 'plain', content: text }
-        })
+        files: cleanFiles({ ...sources.files, [sources.entry]: textFile(text) })
     })
 }
 

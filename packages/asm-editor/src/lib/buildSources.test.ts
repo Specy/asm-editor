@@ -106,9 +106,20 @@ describe('shared build contract', () => {
                 files: project.files,
                 entry: 'main.s',
                 language: 'RISC-V',
-                settings: { riscvAssemblerProfile: 'gnu-compiler-v1' }
+                settings: { riscvAssemblerProfile: 'gnu-compiler-v1' },
+                programs: ['main.s', 'other.s']
             })
         )
+        //other.s is a Program of its own, so no unit of this one; were it none, it would be
+        expect(main.linkUnits).toBeUndefined()
+        expect(
+            projectBuildSources({
+                files: project.files,
+                entry: 'main.s',
+                language: 'RISC-V',
+                settings: { riscvAssemblerProfile: 'gnu-compiler-v1' }
+            }).linkUnits
+        ).toEqual(['other.s'])
         expect(() => programBuildSources(project, 'notes.txt')).toThrow(/Entry of no program/)
         project.removeProgram('main.s')
         project.removeProgram('other.s')

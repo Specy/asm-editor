@@ -59,7 +59,7 @@ Enter **Arguments** on the Terminal's **Command line** or in the project's **Set
 
 ## Libraries and simulator services {#libraries}
 
-Runtime support is supplied automatically. The library provides functions declared by `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, `fopen` and `fprintf` use the project's files, and `malloc` and `free` manage dynamic memory. The [Runtime library](/documentation/x86/runtime-library) page lists its supported functions with declarations and headers, and explains calling and debugging. These functions belong to the editor Runtime; the bundled Linux libraries used by imported [Executables](/documentation/x86/executables#libraries) are separate.
+Runtime support is supplied automatically. The library provides functions declared by `<assert.h>`, `<ctype.h>`, `<inttypes.h>`, `<math.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` and `<time.h>`. For example, `printf` and `scanf` use the Terminal, `fopen` and `fprintf` read and write files, and `malloc` and `free` manage dynamic memory. The [Runtime library](/documentation/x86/runtime-library) page lists its supported functions with declarations and headers, and explains calling and debugging. These functions belong to the editor Runtime; the bundled Linux libraries used by imported [Executables](/documentation/x86/executables#libraries) are separate.
 
 C uses C17 and C++ uses C++17. C++ supports constructors, `new` and `delete`, and the provided compatibility headers `<cassert>`, `<cctype>`, `<cerrno>`, `<cfloat>`, `<cinttypes>`, `<climits>`, `<cmath>`, `<cstdarg>`, `<cstddef>`, `<cstdint>`, `<cstdio>`, `<cstdlib>`, `<cstring>`, `<ctime>` and `<new>`. For example, include `<cstdio>` and use `std::printf("Hello from x86\n");`. The full C++ standard library is not provided: `<iostream>` and containers such as `std::vector` are unavailable. Exceptions and runtime type information (RTTI) are disabled, including `typeid` and casts that require RTTI.
 
@@ -81,7 +81,7 @@ int main(void) {
 
 Device programs can use the POSIX functions `open`, `read`, `write`, `close`, `ioctl`, `mmap`, `poll`, `select`, `tcgetattr`, `tcsetattr`, `usleep`, `nanosleep` and `clock_gettime`. Their declarations come from `<fcntl.h>`, `<unistd.h>`, `<sys/ioctl.h>`, `<sys/mman.h>`, `<poll.h>`, `<sys/select.h>`, `<termios.h>` and `<time.h>`. Device constants and structures come from `<linux/fb.h>`, `<linux/input.h>`, `<sys/soundcard.h>`, `<sound/asound.h>` and `<linux/kd.h>`.
 
-A program can manage the project's files and folders with `rename` and `remove` from `<stdio.h>`, `unlink` and `rmdir` from `<unistd.h>`, and `mkdir` from `<sys/stat.h>`. A folder made with `mkdir` stays in the project once a file is put in it. `setitimer` from `<sys/time.h>` sends `SIGALRM` again and again, for a handler that `signal` from `<signal.h>` installs: `struct itimerval timer = { { 0, 10000 }, { 0, 10000 } };` then `setitimer(ITIMER_REAL, &timer, NULL);` calls it every 10 milliseconds.
+A program can manage files and folders with `rename` and `remove` from `<stdio.h>`, `unlink` and `rmdir` from `<unistd.h>`, and `mkdir` from `<sys/stat.h>`. A folder created with `mkdir` remains after the program ends only if a file is still inside it, directly or in a subfolder. `setitimer` from `<sys/time.h>` sends `SIGALRM` again and again, for a handler that `signal` from `<signal.h>` installs: `struct itimerval timer = { { 0, 10000 }, { 0, 10000 } };` then `setitimer(ITIMER_REAL, &timer, NULL);` calls it every 10 milliseconds.
 
 These functions use C error conventions. Calls such as `open`, `read`, `write` and `ioctl` return -1 on failure and set `errno`; `mmap` returns `MAP_FAILED` instead. Include `<errno.h>` to inspect the error number. A successful `read` or `write` returns a byte count, which may be smaller than requested. After a short write, submit the remaining bytes. [The Screen](/documentation/x86/screen), [Keys and the pointer](/documentation/x86/input) and [Sound](/documentation/x86/sound) show these interfaces in use.
 
@@ -115,10 +115,16 @@ Compile again after reopening a saved project to restore source highlights and b
 
 ## Linking project Files {#linking-project-files}
 
-Only the selected C or C++ source is compiled automatically. Other assembly Files can provide functions or data that the generated program uses. Build includes a File when it supplies a referenced **symbol**: an exported name for a function or data. In NASM, `global add_one` exports the name `add_one`, and the label `add_one:` defines its address.
+Only the selected C or C++ source is compiled automatically. Other assembly files in the same project can provide functions or data, even from a different folder.
 
-For example, a C declaration `extern int add_one(int value);` lets a call such as `add_one(41)` use an assembly function exported as `add_one`. In C++, declare it as `extern "C" int add_one(int value);` so the compiler uses that exact name. The assembly function must follow the [x86-64 function calling convention](/documentation/x86/runtime-library#from-assembly), including preserving the required registers and returning the result in `rax`.
+A program's **entry file** is the assembly file Build starts from. The Explorer action **New program from this file** creates a program with that entry. Build excludes other programs' entry files and the files they include from this search.
 
-Project assembly definitions are considered before Runtime library functions. A File can therefore replace a Runtime support function by exporting its name. Two ordinary exported definitions of the same name cause errors on both Files, even if one File would otherwise be unused.
+Build includes an assembly file when it supplies a **symbol** the program references: an exported name for a function or data. In NASM, `global add_one` exports `add_one`, and the label `add_one:` defines its address. References from a linked file can bring in further assembly files.
 
-The **Problems** panel gives a Hint for each assembly File that was not linked. A File containing only global constructors is not included automatically: it must also supply a name referenced by the program. Other C or C++ Files are not compiled or linked automatically.
+In C, declare `extern int add_one(int value);` before calling `add_one(41)`. In C++, use `extern "C" int add_one(int value);` so the compiler uses the exact name `add_one`. The assembly function must follow the [x86-64 function calling convention](/documentation/x86/runtime-library#from-assembly), including register preservation and returning this integer result in `rax`.
+
+Your assembly files are searched before Runtime library functions, so exporting a Runtime function's name can replace it. Two ordinary exported definitions of one name cause an error when both files are linked. Files the program does not need are left out without being assembled. Separate programs can therefore each define `main` in the same project, provided their files are not linked together.
+
+The **Problems** panel marks each unused assembly file with the Hint: "The program doesn't use this File, so it is left out."
+
+A file containing only global constructors, which initialize global objects before `main`, is not included automatically. To include it, request one of its exported names with `SIM_LINK` from `<sim.h>`, once, outside any function: `SIM_LINK(setup_tables);`. In NASM, `required setup_tables` makes the same request. This includes the file without calling `setup_tables`. Build fails if no file defines the name. Other C or C++ source files are not compiled or linked automatically.

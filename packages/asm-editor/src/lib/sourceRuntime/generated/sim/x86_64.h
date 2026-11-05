@@ -116,7 +116,7 @@ static inline long sim_lseek(long fd, long offset, long whence) {
     return rax;
 }
 
-/** mmap, syscall 9. Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to. A `MAP_PRIVATE` mapping of a Project File copies its bytes into memory; writes to the mapping stay in memory. A `MAP_SHARED` mapping of a Project File returns `-ENODEV`. */
+/** mmap, syscall 9. Maps memory: the length in `rsi`, the protection in `rdx`, the flags in `r10`. An anonymous private mapping is how a program asks for a block of memory it can write to. A `MAP_PRIVATE` mapping of a file under `/project` copies its bytes into memory; writes to the mapping stay in memory. A `MAP_SHARED` mapping of such a file returns `-ENODEV`. */
 static inline long sim_mmap(void *address, long size, long prot, long flags, long fd, long offset) {
     register long rax __asm__("rax") = 9;
     register void *rdi __asm__("rdi") = address;
@@ -490,7 +490,7 @@ static inline long sim_fchdir(long fd) {
     return rax;
 }
 
-/** rename, syscall 82. Renames or moves the path at `rdi` to the path at `rsi`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`. */
+/** rename, syscall 82. Renames or moves the path at `rdi` to the path at `rsi`. A file already at the destination is replaced, as on Linux, and a descriptor still open on it keeps reading and writing it. Within `/project`, moving a directory returns `-EISDIR`. */
 static inline long sim_rename(const void *path1, const void *path2) {
     register long rax __asm__("rax") = 82;
     register const void *rdi __asm__("rdi") = path1;
@@ -499,7 +499,7 @@ static inline long sim_rename(const void *path1, const void *path2) {
     return rax;
 }
 
-/** mkdir, syscall 83. Makes a directory at the path in `rdi`, with the mode in `rsi`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone. */
+/** mkdir, syscall 83. Makes a directory at the path in `rdi`, with the mode in `rsi`. Under `/project` it lasts for the run, and files can be created in it: the first one keeps it after the run, since directories there exist only as prefixes of file paths. One still empty when the program ends is gone. */
 static inline long sim_mkdir(const void *path, long mode) {
     register long rax __asm__("rax") = 83;
     register const void *rdi __asm__("rdi") = path;
@@ -508,7 +508,7 @@ static inline long sim_mkdir(const void *path, long mode) {
     return rax;
 }
 
-/** rmdir, syscall 84. Removes the empty directory named by the path at `rdi`. Under `/project`, a directory that holds Files returns `-ENOTEMPTY`, and one that does not disappears by itself when its last File is removed; an empty one made by `mkdir` is removed. */
+/** rmdir, syscall 84. Removes the empty directory named by the path at `rdi`. Under `/project`, a directory that holds files returns `-ENOTEMPTY`, and one that does not disappears by itself when its last file is removed; an empty one made by `mkdir` is removed. */
 static inline long sim_rmdir(const void *path) {
     register long rax __asm__("rax") = 84;
     register const void *rdi __asm__("rdi") = path;
@@ -534,7 +534,7 @@ static inline long sim_link(const void *path1, const void *path2) {
     return rax;
 }
 
-/** unlink, syscall 87. Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. Under `/project`, removing a directory’s last File also removes that implicit directory. */
+/** unlink, syscall 87. Removes the directory entry named by the path at `rdi`; an open file remains available through its descriptor. Under `/project`, removing a directory’s last file also removes that implicit directory. */
 static inline long sim_unlink(const void *path) {
     register long rax __asm__("rax") = 87;
     register const void *rdi __asm__("rdi") = path;
@@ -1070,7 +1070,7 @@ static inline long sim_openat(long dirfd, const void *string, long flags, long m
     return rax;
 }
 
-/** mkdirat, syscall 258. Makes a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Under `/project` it lasts for the run, and Files can be created in it: the first one keeps it in the Project, since Project directories exist only as prefixes of File paths. One still empty when the program ends is gone. */
+/** mkdirat, syscall 258. Makes a directory at the path in `rsi`, relative to the directory descriptor in `rdi`, with the mode in `rdx`. Under `/project` it lasts for the run, and files can be created in it: the first one keeps it after the run, since directories there exist only as prefixes of file paths. One still empty when the program ends is gone. */
 static inline long sim_mkdirat(long dirfd, const void *path, long mode) {
     register long rax __asm__("rax") = 258;
     register long rdi __asm__("rdi") = dirfd;
@@ -1123,7 +1123,7 @@ static inline long sim_unlinkat(long dirfd, const void *path, long flags) {
     return rax;
 }
 
-/** renameat, syscall 264. Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. Within `/project`, moving a directory returns `-EISDIR` and replacing an existing destination File returns `-EEXIST`. */
+/** renameat, syscall 264. Renames or moves the path at `rsi`, relative to the directory descriptor in `rdi`, to the path at `r10`, relative to the directory descriptor in `rdx`. A file already at the destination is replaced, as on Linux. Within `/project`, moving a directory returns `-EISDIR`. */
 static inline long sim_renameat(long dirfd1, const void *path1, long dirfd2, const void *path2) {
     register long rax __asm__("rax") = 264;
     register long rdi __asm__("rdi") = dirfd1;
@@ -1294,7 +1294,7 @@ static inline long sim_prlimit64(long pid, long resource, const void *rlim1, voi
     return rax;
 }
 
-/** renameat2, syscall 316. Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. `RENAME_NOREPLACE` refuses an existing destination; `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR` and an ordinary rename that would replace an existing File returns `-EEXIST`. */
+/** renameat2, syscall 316. Renames or moves paths relative to the directory descriptors in `rdi` and `rdx`, using the flags in `r8`. Without flags a file already at the destination is replaced, as on Linux; `RENAME_NOREPLACE` refuses an existing destination with `-EEXIST`, and `RENAME_EXCHANGE` swaps two existing names. Within `/project`, directory moves return `-EISDIR`. */
 static inline long sim_renameat2(long dirfd1, const void *path1, long dirfd2, const void *path2, long flags) {
     register long rax __asm__("rax") = 316;
     register long rdi __asm__("rdi") = dirfd1;
@@ -1373,6 +1373,18 @@ static inline long sim_faccessat2(long dirfd, const void *path, long mode, long 
     __asm__ volatile("syscall" : "+r"(rax) : "r"(rdi), "r"(rsi), "r"(rdx), "r"(r10) : "rcx", "r11", "memory");
     return rax;
 }
+
+/*
+ * SIM_LINK(name) makes the Build link the assembly File that defines the global name, though the
+ * program never uses it: a File whose only part in the program is a constructor that runs before
+ * main, say. Name one of the globals it defines. Write it once, outside any function:
+ *
+ *     SIM_LINK(handler);
+ *
+ * A File joins a Build only when the program uses something it defines, and SIM_LINK counts as a
+ * use. The Build fails when no File defines name.
+ */
+#define SIM_LINK(name) __asm__(".globl " #name)
 
 #ifdef __cplusplus
 }

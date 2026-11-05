@@ -17,7 +17,11 @@ import {
     loadedEnvironmentFiles
 } from '#lib/sourceRuntime/environmentLibrary.ts'
 
-/** Converts persisted Project Files into the x86 Core's virtual-Project representation. */
+/**
+ * Converts persisted Project Files into the x86 Core's virtual-Project representation, with the
+ * Files the Build may link besides its Entry (`BuildSources.linkUnits`), which the Core assembles
+ * only once the program needs one.
+ */
 export function toX86Project(sources: BuildSources): X86Project {
     return {
         entry: sources.entry,
@@ -26,7 +30,8 @@ export function toX86Project(sources: BuildSources): X86Project {
                 path,
                 file.encoding === 'plain' ? file.content : fileBytes(file)
             ])
-        )
+        ),
+        ...(sources.linkUnits ? { units: [...sources.linkUnits] } : {})
     }
 }
 
@@ -128,20 +133,23 @@ export function withX86Includes(project: X86Project, sources: BuildSources): X86
 }
 
 /**
- * Extensions that make a File assembler input in its own right, mirroring the rule the Core
- * applies when it decides what to assemble. `.inc` is absent from both: it is what an include
+ * Extensions that make a File assembler input in its own right when a Build names no units,
+ * mirroring the rule the Core then applies. `.inc` is absent from both: it is what an include
  * fragment is conventionally called, and a fragment is assembled as part of whatever includes it.
  */
 const SOURCE_EXTENSIONS = ['.asm', '.s', '.nasm']
 
 /**
- * The Files the Core assembles separately, which is what makes `global` in one File resolve an
- * `extern` in another. The Entry's links into the program, and since `@specy/x86` 4 the others only
- * when it needs a symbol they define ([ADR 0033](../../../../../../docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)).
+ * The Files the Core may take as units of their own, which is what makes `global` in one File
+ * resolve an `extern` in another: the Build's units (`BuildSources.linkUnits`), or every source File
+ * when it names none. The Entry's links into the program, and the others only when it needs a
+ * symbol they define, which is also when they are assembled
+ * ([ADR 0033](../../../../../../docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)).
  * This is the editor's own view of the build, for telling someone which Files are part of their
  * program; NASM still decides what it reads and `ld` still decides what links.
  */
 function x86TranslationUnits(sources: BuildSources): string[] {
+    if (sources.linkUnits) return [sources.entry, ...sources.linkUnits]
     const others = Object.keys(sources.files)
         .filter((path) => path !== sources.entry)
         .filter((path) => sources.files[path]?.encoding === 'plain')
@@ -157,11 +165,14 @@ function x86TranslationUnits(sources: BuildSources): string[] {
  * NASM owns compilation and diagnostics; this walk only supplies editor file-status hints.
  * An incomplete Entry walk makes reachability unknown. Secondary units may still add Files
  * even when their own includes cannot all be resolved. An include file the include path holds,
- * `%include "linux/fb.inc"`, is found, though no File of the Project.
+ * `%include "linux/fb.inc"`, is found, though no File of the Project. `needed` are the units the
+ * program needs, as the Core's check found them (`getProjectUnits`), since a unit it does not
+ * need is never assembled; every unit the Build may take when that is not known.
  */
 export function x86ReachableFiles(
     sources: BuildSources,
-    names: Readonly<Record<string, string>> | undefined = loadedX86Includes()
+    names: Readonly<Record<string, string>> | undefined = loadedX86Includes(),
+    needed?: readonly string[]
 ): Set<string> | undefined {
     const reached = new Set<string>()
     const walk = (path: string, stack: Set<string>): boolean => {
@@ -189,7 +200,7 @@ export function x86ReachableFiles(
     }
     try {
         if (!walk(sources.entry, new Set())) return undefined
-        for (const path of x86TranslationUnits(sources)) {
+        for (const path of needed ?? x86TranslationUnits(sources)) {
             if (!reached.has(path)) walk(path, new Set())
         }
         return reached

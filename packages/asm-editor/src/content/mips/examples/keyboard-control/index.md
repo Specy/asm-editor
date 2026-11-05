@@ -147,8 +147,11 @@ direction. Uppercase `W` does not match lowercase `'w'` in this program.
 
 The receiver supplies typed characters rather than a continuous report of held keys. A key changes
 the stored direction; releasing it does not change the steps, so the square keeps moving. This
-program checks for the four letter characters and does not use arrow-key input. The fixed testcase
-runs the program without typing into the receiver; use the Screen to check the steering yourself.
+program reads the four letter characters. Arrow keys do not produce characters, so the receiver
+does not report them. To read arrow keys or check whether a key is held, use the
+[Input controller](/documentation/mips/input-controller), which also reports key presses and releases.
+The fixed testcase runs the program without typing into the receiver; use the Screen to check the
+steering yourself.
 
 `LAST` is 29 because a 3-cell square whose left edge is at column 29 occupies columns 29–31. If a
 rightward step makes `x` greater than 29, the code sets `x` to 0. A step past the left edge sets

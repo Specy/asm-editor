@@ -7,7 +7,7 @@ import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
 /**
  * The default program of a new project, built and run against the real Cores, the way
- * `content/content.test.ts` gates every program a lecture shows.
+ * `content/contentSuite.ts` gates every program a lecture shows.
  *
  * What this catches is a default that does not assemble, which is the live risk whenever these six
  * programs are edited together: they are the first assembly most readers of this app ever see, and
@@ -29,7 +29,7 @@ const EMULATOR_SETTINGS = {
 const TIMEOUT = 180_000
 
 /** `@specy/x86` wraps a Linux userland rather than a simulator, so it is not run under node —
- *  the same carve-out `content.test.ts` makes for x86 fences. */
+ *  the same carve-out `content/contentSuite.ts` makes for x86 fences. */
 const UNRUNNABLE: AvailableLanguages[] = ['X86']
 
 const languages = Object.keys(BASE_CODE) as AvailableLanguages[]

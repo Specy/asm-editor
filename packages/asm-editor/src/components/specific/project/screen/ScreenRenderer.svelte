@@ -2,19 +2,22 @@
     import { onMount, tick, untrack, type Snippet } from 'svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaDesktop from '~icons/fa-solid/desktop'
-    import FaExpand from '~icons/fa-solid/expand'
-    import FaCompress from '~icons/fa-solid/compress'
+    import FaTh from '~icons/fa-solid/th'
     import FaWindowMaximize from '~icons/fa-solid/window-maximize'
     import FaLayerGroup from '~icons/fa-solid/layer-group'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import ToggleableDraggable from '#cmp/shared/draggable/DraggableContainer.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import { screenZoom, screenZoomLabel } from './screenZoom'
-    import { screenWindowGeometry } from './screenWindow'
+    import { screenZoom, screenZoomLabel, snapZoom } from './screenZoom'
+    import { bodyZoom, screenWindowGeometry } from './screenWindow'
     import type { Screen } from '#lib/languages/peripherals/screen/Screen.ts'
     import type { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
     import type { Mouse, MouseButton } from '#lib/languages/peripherals/Mouse.ts'
-    import type { X86Button, X86Input } from '#lib/languages/peripherals/x86Input.ts'
+    import {
+        wheelNotches,
+        type X86Button,
+        type X86Input
+    } from '#lib/languages/peripherals/x86Input.ts'
     import type { ScreenHeader } from './screenHeader'
 
     /**
@@ -29,10 +32,16 @@
      *
      * On x86 the keys and the pointer go to `x86Input` instead, as the Linux input events the
      * program reads from `/dev/input`: physical keys with the browser's repeats, the pointer on
-     * whole pixels as QEMU reports it, and the wheel, which the focused Screen keeps from scrolling
-     * the page. They never
+     * whole pixels as QEMU reports it, and the wheel. They never
      * reach the program's standard input, whose Terminal is a serial line apart from the Screen
      * ([ADR 0068](../../../../../../../docs/adr/0068-x86-programs-run-on-a-serial-console.md)).
+     * Elsewhere the wheel goes to the Mouse, which MIPS's and RISC-V's Input controller reads; the
+     * focused Screen keeps it from scrolling the page on every Target.
+     *
+     * Every key belongs to the program while the Screen has focus, Escape included, which games and
+     * asmOS read. Shift+Tab gives the keyboard back to the page on every Target, as in the Terminal's
+     * raw mode, and so does a click outside the Screen
+     * ([ADR 0008](../../../../../../../docs/adr/0008-poll-keyboard-and-mouse-input.md), 2026-11-03).
      */
 
     interface Props {
@@ -52,13 +61,6 @@
         /** The MIPS and RISC-V display configuration popover, rendered in the header. */
         configuration?: Snippet
         /**
-         * What the zoom toggle's actual-size position means. MIPS and RISC-V pass MARS's unit
-         * width, whose whole point is how many screen pixels one memory word covered there, so
-         * turning the fit off reproduces the tool's own geometry; everything else draws in Screen
-         * pixels and leaves it at 1.
-         */
-        actualSizeZoom?: number
-        /**
          * The container draws the header, a folding section that already has a title bar: the
          * panel then draws none of its own and hands the size and the controls to `onHeader`.
          */
@@ -74,6 +76,12 @@
          * container that scrolls rather than squeezing the Screen into the height it has left.
          */
         heightFromWidth?: boolean
+        /**
+         * Opens the floating window as soon as the panel is shown, then calls
+         * `onWindowRequestAnswered` so that the host asks only once.
+         */
+        windowRequested?: boolean
+        onWindowRequestAnswered?: () => void
     }
 
     let {
@@ -85,10 +93,11 @@
         name = 'Screen',
         style = '',
         configuration,
-        actualSizeZoom = 1,
         headerless = false,
         onHeader,
-        heightFromWidth = false
+        heightFromWidth = false,
+        windowRequested = false,
+        onWindowRequestAnswered
     }: Props = $props()
 
     const MOUSE_BUTTONS: Record<number, MouseButton> = { 0: 'left', 1: 'middle', 2: 'right' }
@@ -102,9 +111,9 @@
     const keys = $derived(x86Input ?? keyboard)
     const pointer = $derived(x86Input ?? mouse)
     //where a focused Screen's input goes, which a learner who clicks the Screen and then types at a
-    //`scanf` needs to know on x86 (ADR 0068), and how to get it back: an x86 program reads Escape
-    //like any key, so Shift+Tab releases it there, as in the Terminal's raw mode. A program waiting
-    //for the Screen's input says so first
+    //`scanf` needs to know on x86 (ADR 0068), and how to get it back: a program reads Escape like
+    //any key, so Shift+Tab releases it on every Target, as in the Terminal's raw mode. A program
+    //waiting for the Screen's input says so first
     const focusHint = $derived.by(() => {
         const hint = x86Input
             ? {
@@ -113,7 +122,7 @@
               }
             : {
                   label: 'click to send keyboard and mouse input to the program',
-                  title: 'Click to send keyboard and mouse input to the program, Esc to release it'
+                  title: 'Click to send keyboard and mouse input to the program. Press Shift+Tab to return keyboard focus to the page.'
               }
         if (waitingFor === undefined) return hint
         return {
@@ -132,7 +141,12 @@
     //here are only the seed for the first frame
     let logicalWidth = $state(untrack(() => screen.width))
     let logicalHeight = $state(untrack(() => screen.height))
-    let fitToPanel = $state(true)
+    //Integer scaling: every Screen pixel the same whole number of the display's pixels, for crisp
+    //text and lines, where it is otherwise fitted to fill the room it has (`screenZoom.ts`)
+    let integerScaling = $state(false)
+    //the display's pixels in a CSS pixel, which Integer scaling counts in; a page zoom or a move to
+    //another monitor changes it, and fires the window's resize
+    let devicePixelRatio = $state(typeof window === 'undefined' ? 1 : window.devicePixelRatio)
     //the Screen has no runes here either, so what the frame loop last read from it is what decides
     //whether the panel offers the drawing buffer at all
     let doubleBuffering = $state(untrack(() => screen.doubleBuffering))
@@ -148,32 +162,44 @@
     let windowTop = $state(0)
     let windowWidth = $state(0)
     let windowHeight = $state(0)
+    let windowMinWidth = $state(0)
+    let windowMinHeight = $state(0)
+    //the zoom the size the user resized the window to allows, since it opened: until then it is
+    //the largest the viewport allows, through any resize of the browser or the Screen
+    let windowZoom: number | undefined
 
     let context: CanvasRenderingContext2D | null = null
     let image: ImageData | null = null
     //-1 rather than 0: a Screen that has never changed is still at version 0 and must be painted once
     let paintedVersion = -1
 
+    //the page's panel is the size its layout gives it, which the Screen fills exactly; the window
+    //picks its own size, so it can pick one with evenly sized pixels
+    const pageSnap = $derived(integerScaling ? 'integer' : 'exact')
+    const windowSnap = $derived(integerScaling ? 'integer' : 'fine')
+
     let zoom = $derived(
         screenZoom({
-            fit: fitToPanel,
+            snap: expanded ? windowSnap : pageSnap,
             viewportWidth,
             viewportHeight,
             logicalWidth,
             logicalHeight,
-            actualSizeZoom
+            devicePixelRatio
         })
     )
 
-    let zoomLabel = $derived(screenZoomLabel(fitToPanel, zoom))
+    let zoomLabel = $derived(screenZoomLabel(integerScaling, zoom, devicePixelRatio))
 
     //the stage's width is the one measurement that does not depend on its height, so the height a
     //fitted Screen needs to fill it comes from it alone. It belongs to the page's container: the
     //floating window has a box of its own, and a stage held taller than it would fit the width
     //alone and push the bottom of a tall Screen out of the window
     let widthFitHeight = $derived(
-        heightFromWidth && !expanded && fitToPanel && viewportWidth > 0 && logicalWidth > 0
-            ? Math.floor((viewportWidth * logicalHeight) / logicalWidth)
+        heightFromWidth && !expanded && viewportWidth > 0 && logicalWidth > 0
+            ? Math.floor(
+                  logicalHeight * snapZoom(viewportWidth / logicalWidth, pageSnap, devicePixelRatio)
+              )
             : 0
     )
 
@@ -186,29 +212,62 @@
     let showDrawingBuffer = $derived(preferencesStore.values.showDrawingBuffer.value)
     let showingDrawingBuffer = $derived(showDrawingBuffer && doubleBuffering)
 
+    const rootFontSize = () => parseFloat(getComputedStyle(document.documentElement).fontSize)
+
     /**
-     * The window's box comes from the viewport (`screenWindow.ts`), because a box the user drags
-     * cannot be written as CSS insets the way the in-page panel's height is.
+     * The window's box comes from the viewport and the Screen (`screenWindow.ts`): it hugs the
+     * Screen at its zoom, so a box the user drags cannot be written as CSS insets the way the
+     * in-page panel's height is. It opens at the top right, and otherwise keeps its top and the
+     * edge named, which a corner drag left where it was.
      */
-    function fitWindowToViewport(place: 'keep' | 'top right') {
-        const root = parseFloat(getComputedStyle(document.documentElement).fontSize)
+    function placeWindow(place: 'open' | 'left' | 'right') {
         const box = screenWindowGeometry({
             viewportWidth: window.innerWidth,
             viewportHeight: window.innerHeight,
-            rootFontSize: root,
-            left: place === 'keep' ? windowLeft : undefined,
-            top: place === 'keep' ? windowTop : undefined
+            rootFontSize: rootFontSize(),
+            devicePixelRatio,
+            screenWidth: logicalWidth,
+            screenHeight: logicalHeight,
+            snap: windowSnap,
+            zoom: windowZoom,
+            left: place === 'left' ? windowLeft : undefined,
+            right: place === 'right' ? windowLeft + windowWidth : undefined,
+            top: place === 'open' ? undefined : windowTop
         })
         windowLeft = box.left
         windowTop = box.top
         windowWidth = box.width
         windowHeight = box.height
+        windowMinWidth = box.minWidth
+        windowMinHeight = box.minHeight
+    }
+
+    /**
+     * A corner let go: the window followed the pointer while it was dragged, the Screen inside it
+     * at the largest zoom its scaling allows there, and it now hugs the Screen at that zoom,
+     * keeping the edge the corner did not move.
+     */
+    function snapResizedWindow(corner: 'start' | 'end') {
+        windowZoom = bodyZoom({
+            size: { width: windowWidth, height: windowHeight },
+            screenWidth: logicalWidth,
+            screenHeight: logicalHeight,
+            rootFontSize: rootFontSize(),
+            devicePixelRatio,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight
+        })
+        placeWindow(corner === 'end' ? 'left' : 'right')
     }
 
     async function toggleWindow() {
         const wasFocused = focused
-        //opening always starts at the top right, whatever the last drag left behind
-        if (!expanded) fitWindowToViewport('top right')
+        //opening always starts at the top right, hugging the Screen at the largest zoom there is
+        //room for, whatever the last drag or resize left behind
+        if (!expanded) {
+            windowZoom = undefined
+            placeWindow('open')
+        }
         expanded = !expanded
         //the canvas is a new element in the other container, so the program's input follows it
         await tick()
@@ -269,7 +328,7 @@
         if (!drawingView) screen.markPainted()
     }
 
-    function logicalPosition(event: PointerEvent) {
+    function logicalPosition(event: MouseEvent) {
         const rect = canvas?.getBoundingClientRect()
         if (!rect || rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 }
         //logical pixels, independent of the GUI zoom; the Mouse floors and clamps them, which is
@@ -310,9 +369,11 @@
         //keeps the browser's gestures off the Screen: text selection, the drag image, and the
         //middle-click autoscroll that would otherwise steal the button from the program
         event.preventDefault()
+        //where the click landed, before the focus below scrolls a canvas that was partly out of
+        //view, which would move it under the pointer
+        const { x, y } = logicalPosition(event)
         //preventDefault also cancels the focus a pointer down would have given the canvas
         canvas?.focus()
-        const { x, y } = logicalPosition(event)
         //a drag that started inside keeps reporting until the button comes back up, wherever the
         //pointer goes (ADR 0008)
         canvas?.setPointerCapture(event.pointerId)
@@ -343,16 +404,20 @@
     }
 
     /**
-     * x86's wheel, a notch at a time to the program's tablet. The focused Screen keeps it from
-     * scrolling the page, which is why the listener is not passive; unfocused, the wheel scrolls the
-     * page as it always does and the program hears nothing of it, as with keys.
+     * The wheel, in notches: a notch at a time to x86's tablet, and elsewhere to the Mouse, at the
+     * pointer's position. The focused Screen keeps it from scrolling the page, which is why the
+     * listener is not passive; unfocused, the wheel scrolls the page as it always does and the
+     * program hears nothing of it, as with keys.
      */
     function handleWheel(event: WheelEvent) {
-        if (!x86Input || !focused) return
+        if (!focused) return
         event.preventDefault()
         //`deltaMode` before `deltaY`: Firefox reports pixels to a page that reads `deltaY` first
         const deltaMode = event.deltaMode
-        x86Input.wheel({ deltaMode, deltaY: event.deltaY })
+        const delta = { deltaMode, deltaY: event.deltaY }
+        if (x86Input) return x86Input.wheel(delta)
+        const { x, y } = logicalPosition(event)
+        mouse.wheel(wheelNotches(delta), x, y)
     }
 
     /**
@@ -372,30 +437,23 @@
         if (!event.ctrlKey && !event.metaKey) event.preventDefault()
     }
 
-    /** The key that gives the keyboard back to the page: Shift+Tab on x86, Escape elsewhere. */
+    /** The key that gives the keyboard back to the page, on every Target: Shift+Tab. */
     function isReleaseKey(event: KeyboardEvent) {
-        return x86Input ? event.code === 'Tab' && event.shiftKey : event.code === 'Escape'
+        return event.code === 'Tab' && event.shiftKey
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-        //every other key belongs to the program while this panel has focus, so the release key is
-        //the one way back out for someone working without a mouse. Escape is the panel's own
-        //gesture on the Targets whose programs never asked for it, and the page must not see it
-        //either: a user who binds an action to Escape would otherwise trigger it from a focused
-        //Screen, which ADR 0008 forbids. An x86 program reads Escape as KEY_ESC, so there Shift+Tab
-        //is left to the browser, which moves the focus back and so releases the Screen
-        if (isReleaseKey(event)) {
-            if (x86Input) return
-            event.stopPropagation()
-            canvas?.blur()
-            return
-        }
+        //every other key belongs to the program while this panel has focus, Escape included, which
+        //programs read (ADR 0008, 2026-11-03), so the release key is the one way back out for
+        //someone working without a mouse. Shift+Tab is left to the browser, which moves the focus
+        //back and so releases the Screen; the Shift that came first reached the program, and its
+        //release comes with the focus loss, as on x86
+        if (isReleaseKey(event)) return
         keys.keyDown(event)
         routeKey(event, true)
     }
 
     function handleKeyUp(event: KeyboardEvent) {
-        if (!x86Input && event.code === 'Escape') return
         keys.keyUp(event)
         routeKey(event, false)
     }
@@ -421,6 +479,14 @@
         focused = false
         releaseInput()
     }
+
+    $effect(() => {
+        if (!windowRequested) return
+        untrack(() => {
+            if (!expanded) void toggleWindow()
+            onWindowRequestAnswered?.()
+        })
+    })
 
     $effect(() => {
         if (!headerless || expanded || !onHeader) return
@@ -451,7 +517,7 @@
     $effect(() => {
         //added by hand, because only a listener that is not passive may keep the page from scrolling
         const target = canvas
-        if (!target || !x86Input) return
+        if (!target) return
         target.addEventListener('wheel', handleWheel, { passive: false })
         return () => target.removeEventListener('wheel', handleWheel)
     })
@@ -459,17 +525,25 @@
     $effect(() => {
         if (!expanded) return
         //the window's size comes from the viewport, so a resize has to give it back a place inside
-        const onResize = () => fitWindowToViewport('keep')
+        const onResize = () => placeWindow('right')
         window.addEventListener('resize', onResize)
         return () => window.removeEventListener('resize', onResize)
     })
 
     $effect(() => {
         if (!expanded) return
+        //a Screen of another size, from a Build or the program itself, Integer scaling turned on
+        //or off, or another device pixel ratio, and the window hugs the Screen anew, its top right
+        //corner where it was
+        void [logicalWidth, logicalHeight, integerScaling, devicePixelRatio]
+        untrack(() => placeWindow('right'))
+    })
+
+    $effect(() => {
+        if (!expanded) return
         //Escape closes the floating window, but only once the Screen no longer holds the keyboard:
-        //the canvas stops its own Escape from propagating, so the first press releases the input
-        //(ADR 0008's way out of a focused Screen) and the next one reaches this listener. On x86 the
-        //focused canvas hands Escape to the program, stopped the same way, and Shift+Tab releases it
+        //the focused canvas hands Escape to the program and stops it from propagating, so it never
+        //reaches this listener; Shift+Tab releases the Screen first, and the next Escape closes it
         function closeOnEscape(event: KeyboardEvent) {
             if (event.code !== 'Escape') return
             expanded = false
@@ -485,9 +559,12 @@
         })
         //the element keeps focus when the browser window loses it, so its own blur never fires
         window.addEventListener('blur', releaseInput)
+        const readPixelRatio = () => (devicePixelRatio = window.devicePixelRatio)
+        window.addEventListener('resize', readPixelRatio)
         return () => {
             cancelAnimationFrame(frame)
             window.removeEventListener('blur', releaseInput)
+            window.removeEventListener('resize', readPixelRatio)
         }
     })
 </script>
@@ -513,15 +590,17 @@
     {/if}
     <button
         class="screen-action"
-        {@attach tooltip(fitToPanel ? 'Show at actual size' : 'Zoom to fit the panel')}
-        onclick={() => (fitToPanel = !fitToPanel)}
+        class:active={integerScaling}
+        aria-pressed={integerScaling}
+        {@attach tooltip(
+            integerScaling
+                ? 'Integer scaling is on. Click to turn it off and fill the available space.'
+                : 'Turn on integer scaling which improves text and line crispness.'
+        )}
+        onclick={() => (integerScaling = !integerScaling)}
     >
         <Icon size={0.8}>
-            {#if fitToPanel}
-                <FaExpand />
-            {:else}
-                <FaCompress />
-            {/if}
+            <FaTh />
         </Icon>
         {zoomLabel}
     </button>
@@ -560,7 +639,6 @@
     <div class="screen-viewport">
         <div
             class="screen-stage"
-            class:fitting={fitToPanel}
             style={widthFitHeight > 0
                 ? `min-height: calc(${widthFitHeight}px + 2 * var(--focus-ring));`
                 : ''}
@@ -598,10 +676,12 @@
 {#if expanded}
     <!-- a zero-sized fixed layer, so the window inside it is placed in viewport coordinates (which
          is what the draggable's own clamping assumes) without ever covering the page it floats on.
-         Its z-index puts it over the page — the editor is 2 and the sidebars are 3 — and under
-         everything the app opens *over* a page: the Settings, Documentation and Share drawers at 5,
-         the input prompt and the toasts at 20. The window has no backdrop and leaves the page
-         interactive on purpose, so a drawer the user just opened has to come out in front of it -->
+         Its z-index puts it over the page and over the floating Debug tools at 10, the window the
+         program draws in being the one worth keeping in sight, and under everything the app opens
+         *over* a page: a maximized side panel at 12, a tablet's backdrop at 11 (after it in the
+         page, so in front) and its drawer at 12, the input prompt and the toasts at 20. The window
+         has no backdrop and leaves the page interactive on purpose, so a panel the user just
+         opened has to come out in front of it -->
     <div class="screen-window-layer">
         <ToggleableDraggable
             title={name}
@@ -611,13 +691,16 @@
             closeTitle="Put the screen back in the page"
             closeShortcut="Escape"
             onClose={toggleWindow}
+            resizable
+            minWidth={windowMinWidth}
+            minHeight={windowMinHeight}
+            onResizeEnd={snapResizedWindow}
             bind:left={windowLeft}
             bind:top={windowTop}
+            bind:width={windowWidth}
+            bind:height={windowHeight}
         >
-            <div
-                class="screen-panel screen-window"
-                style="width: {windowWidth}px; height: {windowHeight}px;"
-            >
+            <div class="screen-panel screen-window">
                 {@render stage()}
             </div>
         </ToggleableDraggable>
@@ -718,20 +801,14 @@
         padding: calc(0.3rem - var(--focus-ring));
     }
 
-    /* a scroll container, so the canvas never widens the column it sits in and an actual-size
-       Screen larger than the panel can be reached by scrolling */
+    /* the box the canvas is fitted to, never wider than the column it sits in: the Screen always
+       fits it, so it clips, which also keeps a sub-pixel rounding from putting a scrollbar on it */
     .screen-stage {
         display: flex;
         flex: 1;
         min-width: 0;
         min-height: 0;
         padding: var(--focus-ring);
-        overflow: auto;
-    }
-
-    /* a fitted Screen is exactly as large as this box, so there is nothing to scroll to; hiding it
-       also keeps a sub-pixel rounding from putting a scrollbar on a panel that fits */
-    .screen-stage.fitting {
         overflow: hidden;
     }
 
@@ -744,12 +821,13 @@
         left: 0;
         width: 0;
         height: 0;
-        z-index: 4;
+        z-index: 11;
     }
 
     /* the window's body: the draggable's own bar carries the title and the controls, so this is
-       the stage alone, and its size is set from the viewport when the window opens */
+       the stage alone, filling the box the container sizes from the viewport and its corner */
     .screen-panel.screen-window {
+        height: 100%;
         border-radius: 0 0 0.4rem 0.4rem;
         box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.45);
     }
@@ -765,9 +843,8 @@
     /* The ring follows focus itself, not :focus-visible: a click is how most users hand the
        keyboard to the program, and they have to see that the editor's shortcuts are now off. It is
        drawn outside the canvas so it never covers a pixel, in the stage's padding: the stage clips
-       in both containers — hidden while fitting, a scroll container at actual size — so that
-       padding is the only room it has, and it is there whether the canvas has focus or not, so
-       focusing it moves nothing. */
+       in both containers, so that padding is the only room it has, and it is there whether the
+       canvas has focus or not, so focusing it moves nothing. */
     canvas.focused {
         outline: var(--focus-ring) solid var(--accent);
     }

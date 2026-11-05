@@ -441,27 +441,37 @@ export const mipsRegisterFiles: MIPSRegisterFileDoc[] = [
     {
         id: 'cp0',
         title: 'CP0 (coprocessor 0)',
-        intro: 'Coprocessor 0 is the part of the processor that deals with exceptions: a bad memory address, an overflow on `add`, a `break`. The machine writes these registers itself, at the moment it stops what the program was doing and jumps to the handler, which is whatever the program assembled at the exception vector with `.ktext 0x80000180`. A program with no handler there stops instead, with the message the simulator prints. The handler reads these registers with `mfc0`, as in `mfc0 $k0, $13`, to find out what happened and where, and writes them back with `mtc0`, as in `mtc0 $k0, $14`, which is how it steps the return address past the instruction that faulted before `eret` returns to it.\n\nThis simulator implements the four registers below, and it raises exceptions only: nothing in it delivers an interrupt, so the interrupt bits are values to read and write rather than something that changes what runs.',
+        intro: "Coprocessor 0 holds the state used for exceptions and interrupts: their cause, the saved program address, interrupt enables and the timer. The processor records this state before jumping to the handler at `0x80000180`. Place the handler there with `.ktext 0x80000180`. Without a handler, an exception or enabled interrupt stops the program with an error.\n\nUse `mfc0 $k0, $13` to read Cause, or `mtc0 $k0, $14` to write EPC. The processor executes the handler. CP0 records and controls its entry and return. Leave EPC unchanged after an interrupt, or when retrying an instruction after repairing an exception. Add 4 only when deliberately skipping the failed instruction.\n\nThis simulator implements the six registers below: MARS's four plus the MIPS32 Count and Compare timer. See [Interrupts and the timer](/documentation/mips/interrupts) for complete programs.",
         registers: [
             {
                 name: '$8 (vaddr)',
                 description:
-                    'The address that caused the exception, when it was a memory one: the address the `lw` or `sw` failed on. It keeps whatever it held after any other kind of exception, so it is only worth reading once the cause says the exception was an address error.'
+                    'The memory address that caused an address-error exception, such as the address a `lw` or `sw` could not access. Other exceptions leave this register unchanged. Check the exception code in Cause before using it.'
+            },
+            {
+                name: '$9 (count)',
+                description:
+                    'The timer counter. It increases by one every two instructions, starting at 0 before the first instruction. It measures executed instructions rather than elapsed time. The same instruction sequence produces the same Count values on each run. In C, startup code has already increased Count before `main`. Write it with `mtc0` to set a new value. Counting continues from there. This is a MIPS32 register, absent from MARS 4.5.'
+            },
+            {
+                name: '$11 (compare)',
+                description:
+                    'Set this ahead of Count, for example to Count + 1000. When Count reaches it, the timer sets Cause bit 15 to request an interrupt. Writing Compare clears that request. The timer stays off until the first write.\n\nSetting Compare equal to the current Count is not a reliable immediate request: the match point occurs at the end of an even-numbered instruction. If that point has passed, the timer waits until Count wraps around.'
             },
             {
                 name: '$12 (status)',
                 description:
-                    'The interrupt mask and the enable bits. It starts at `0x0000FF11`: every one of the eight interrupt levels unmasked, user mode, and interrupts enabled. The bit this simulator writes itself is bit 1, the exception level, which taking an exception sets and `eret` clears on the way back, so the register reads `0x0000FF13` inside a handler. A handler is free to change the mask and the enable bit with `mtc0`, as it would on a real processor, but since nothing here delivers an interrupt the change is only visible in the register.'
+                    'The interrupt enable bits and source mask. Initially `0x0000FF11`: user mode, interrupts enabled by bit 0, and all eight source mask bits, 8 to 15, set. The processor sets bit 1, EXL (exception level), on entry to a handler, giving `0x0000FF13`. No further interrupt is taken while EXL is set. `eret` clears EXL. To block interrupts, use `mtc0` to clear bit 0 or the required source mask bit.'
             },
             {
                 name: '$13 (cause)',
                 description:
-                    'Why the exception happened. Bits 2 to 6 hold the exception code, the number behind the message the simulator prints, so an address error on a load reads as `0x10`, which is code 4 shifted up by two. The bits above them report pending interrupts on a real processor and stay zero here, because nothing in this simulator raises one. A handler that serves several causes reads this register first and branches on the code.'
+                    'The exception code is in bits 2 to 6. Code 0 means an interrupt. Code 4, an address error on a load, appears as `0x10` after shifting left by two. Pending interrupt sources appear in bits 8 to 15: bit 15 the timer, bit 8 the keyboard and bit 9 the display. `mtc0` cannot set these bits. Writing Compare clears the timer bit. The display bit stays set in the handler until the next exception, or until `mtc0` writes it as 0. A shared handler checks the exception code first, then the source bits for an interrupt.'
             },
             {
                 name: '$14 (epc)',
                 description:
-                    'The address of the instruction that was interrupted. A handler that means to let the program continue returns to it, normally after adding 4 so that the instruction which trapped is not run a second time.'
+                    'The return address used by `eret`. After an interrupt, it points to the next instruction, which has not run: leave EPC unchanged. After an exception, it points to the failed instruction. Leave it unchanged to retry after repairing the cause, or add 4 to deliberately skip that instruction.'
             }
         ]
     }

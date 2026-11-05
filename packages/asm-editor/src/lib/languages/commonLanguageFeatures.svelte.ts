@@ -682,6 +682,12 @@ export type BaseEmulatorState = {
      */
     runStatus?: string
     /**
+     * Whether a Step is waiting inside its instruction for the program's own reason, a RISC-V `wfi`
+     * waiting for an interrupt: the controls offer Pause, which ends the wait as it ends a Run's,
+     * and Stop. False the rest of the time.
+     */
+    stepWaiting?: boolean
+    /**
      * The cycle counter, for a Target that counts the clock cycles its processor takes: the M68K's
      * shows above the PC as "Cycles 12,345 (+8)" and ends the Log's exit line
      * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30). Undefined for

@@ -96,19 +96,32 @@ pnpm dev # builds the emulators, then runs the dev server
 
 The first run builds the emulators from source, which takes a few minutes, they are cached for next builds unless the emulator source is changed.
 
+## Checking a change
+
+While working, check only the files that differ from `main`, committed or not:
+
+```bash
+pnpm changed # formats them, lints them and runs the tests that import them
+pnpm test:changed # one step: format:changed, lint:changed or test:changed
+pnpm changed --since HEAD # only what is not committed yet
+```
+
+Before a change is done, run the whole checks, as CI does: `pnpm format:check`, `pnpm lint`, `pnpm check` and `pnpm test`.
+
 ## Repository layout
 
 The repository is a pnpm workspace:
 
-| Path                  | Contents                                                                                  |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `packages/asm-editor` | The SvelteKit app                                                                         |
-| `packages/runtime`    | The C standard library that programs link                                                 |
-| `packages/m68k`       | [s68k](https://github.com/Specy/s68k), the M68K emulator (Git submodule)                  |
-| `packages/mips`       | [MARS](https://github.com/Specy/mars), the MIPS emulator (Git submodule)                  |
-| `packages/risc-v`     | [RARS](https://github.com/Specy/rars), the RISC-V emulator (Git submodule)                |
-| `packages/x86`        | [x86-js](https://github.com/Specy/x86-js), the X86 assembler and emulator (Git submodule) |
-| `packages/z80`        | [trs80](https://github.com/Specy/trs80), the Z80 assembler and machine (Git submodule)    |
+| Path                  | Contents                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| `packages/asm-editor` | The SvelteKit app                                                                               |
+| `packages/examples`   | [asm-examples](https://github.com/Specy/asm-examples), bundled example projects (Git submodule) |
+| `packages/runtime`    | The C standard library that programs link                                                       |
+| `packages/m68k`       | [s68k](https://github.com/Specy/s68k), the M68K emulator (Git submodule)                        |
+| `packages/mips`       | [MARS](https://github.com/Specy/mars), the MIPS emulator (Git submodule)                        |
+| `packages/risc-v`     | [RARS](https://github.com/Specy/rars), the RISC-V emulator (Git submodule)                      |
+| `packages/x86`        | [x86-js](https://github.com/Specy/x86-js), the X86 assembler and emulator (Git submodule)       |
+| `packages/z80`        | [trs80](https://github.com/Specy/trs80), the Z80 assembler and machine (Git submodule)          |
 
 The app uses the emulators checked out in `packages/`. To rebuild them manually run `pnpm cores:build`.
 

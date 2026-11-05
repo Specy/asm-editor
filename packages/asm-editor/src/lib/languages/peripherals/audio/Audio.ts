@@ -10,7 +10,7 @@ import {
 import { compactSoundChipWrites, SoundChip } from './SoundChip'
 import { inspectSoundFile, type SoundFileInfo } from './soundFiles'
 import { compactSynthWrites, Synth, type ChipHost } from './Synth'
-import { X86Sound } from './X86Sound'
+import { TimelineSound } from './TimelineSound'
 
 /**
  * The **Audio** Peripheral: what a program can observe of its **Notes** and **Sounds**
@@ -34,10 +34,12 @@ import { X86Sound } from './X86Sound'
  *   rather than recordings ([waveform-sound.md](../../../../../../../docs/design/waveform-sound.md)):
  *   their writes go out in the same batches, an Undo leaves them playing whatever their registers
  *   say, and a program's own end releases them in the output only.
- * - x86's devices, `/dev/dsp`, the raw MIDI port, the PC speaker and the mixer, are a timeline on
- *   Program time that Blink keeps ([x86-devices.md](../../../../../../../docs/design/x86-devices.md)):
- *   `x86` passes it on in the same batches, each with the Program time it left at, and leaves Undo
- *   to the Core, which sends a cut and what puts the devices back.
+ * - The streaming devices are a timeline on Program time: x86's `/dev/dsp`, raw MIDI port, PC
+ *   speaker and mixer, which Blink keeps ([x86-devices.md](../../../../../../../docs/design/x86-devices.md)),
+ *   and the **MIDI port** and **Sampled-audio output** of MIPS and RISC-V, which their adapter models
+ *   ([ADR 0075](../../../../../../../docs/adr/0075-mips-and-risc-v-get-a-midi-port-and-a-sampled-audio-output.md)).
+ *   `timeline` passes it on in the same batches, each with the Program time it left at, and leaves
+ *   Undo to the device, which sends a cut and what puts it back.
  *
  * Plain TypeScript with no Svelte runes, like the other peripherals, so it runs under node.
  */
@@ -181,9 +183,12 @@ export class Audio {
     readonly synth: Synth
     /** The Z80's AY-3-8910 behind its ports. */
     readonly soundChip: SoundChip
-    /** x86's sound devices, which the adapter hands the Core's sound events. */
-    readonly x86: X86Sound
-    /** Whether the batch holds x86's timeline, which goes out with the Program time it left at. */
+    /**
+     * The sound streamed on Program time, which the adapter hands its devices' events: x86's from
+     * the Core, MIPS's and RISC-V's MIDI port and sampled-audio output from `MarsDevices`.
+     */
+    readonly timeline: TimelineSound
+    /** Whether the batch holds timeline events, which go out with the Program time they left at. */
     private timelineInBatch = false
     /** Set by a program's own end, which silenced the chips in the output, until they are written again. */
     private chipsReleased = false
@@ -200,7 +205,7 @@ export class Audio {
         }
         this.synth = new Synth(host)
         this.soundChip = new SoundChip(host)
-        this.x86 = new X86Sound({
+        this.timeline = new TimelineSound({
             silent: this.silent,
             now: () => this.clock.now(),
             send: (command) => {
@@ -303,8 +308,8 @@ export class Audio {
     }
 
     /**
-     * What the program has to wait for before `target` can sound, a Note, a Sound or x86's raw MIDI
-     * port: the promise of it, or null when there is nothing to wait for. The promise never rejects:
+     * What the program has to wait for before `target` can sound, a Note, a Sound or a MIDI port:
+     * the promise of it, or null when there is nothing to wait for. The promise never rejects:
      * an output that cannot load leaves the program running in silence, with one note in the Log. A
      * reset, which Stop, Build and dispose make, settles it at once, as the clock lets a sleeping
      * program go, so a download nobody waits for any more never holds the Core.
@@ -527,6 +532,14 @@ export class Audio {
         this.note(`Sound File '${path}' not found`)
     }
 
+    /**
+     * Notes, once a run, what a device wants a learner to know, such as a byte it dropped because
+     * the program did not wait for room; a Testcase's Audio has no Log to note it in.
+     */
+    noteDevice(text: string): void {
+        this.note(text)
+    }
+
     private note(text: string): void {
         if (this.noted.has(text)) return
         this.noted.add(text)
@@ -632,11 +645,11 @@ export class Audio {
     /**
      * The program ended on its own: loops stop, the rest plays out, and the chips are released in
      * the output, Synth gates off and Sound chip volumes to 0, while their registers keep what the
-     * program wrote, so an Undo that takes the end back plays on from them. On x86 the PC speaker
-     * falls silent and the MIDI port's notes are released, while `/dev/dsp` plays out.
+     * program wrote, so an Undo that takes the end back plays on from them. On the timeline the PC
+     * speaker falls silent and a MIDI port's notes are released, while the samples play out.
      */
     stopLoops(): void {
-        this.x86.end()
+        this.timeline.end()
         for (const voice of [...this.voices.values()]) {
             if (voice.loop) this.stopVoice(voice.id)
         }
@@ -667,7 +680,7 @@ export class Audio {
         this.opened.clear()
         this.synth.reset()
         this.soundChip.reset()
-        this.x86.reset()
+        this.timeline.reset()
         this.chipsReleased = false
         for (const release of [...this.holds]) release()
         if (!this.silent) this.output.send([{ type: 'stopAll' }])
@@ -676,7 +689,7 @@ export class Audio {
 
     /**
      * Sends what changed since the last flush. A voice started and stopped within it is never sent,
-     * which is what keeps a runaway loop of Notes to one message per surviving Note. x86's timeline
+     * which is what keeps a runaway loop of Notes to one message per surviving Note. The timeline
      * goes with the Program time the batch leaves at, which the output maps its own clock against.
      */
     flush(): void {
@@ -703,7 +716,7 @@ export class Audio {
         const now = this.clock.now()
         let until = this.chipsSounding ? Infinity : now
         for (const voice of this.voices.values()) until = Math.max(until, voice.endsAt)
-        until = Math.max(until, this.x86.playingUntil())
+        until = Math.max(until, this.timeline.playingUntil())
         return {
             soundsStarted: this.started,
             loading: this.holds.size > 0,

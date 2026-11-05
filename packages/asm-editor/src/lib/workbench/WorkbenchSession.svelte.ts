@@ -245,6 +245,15 @@ export type BottomTab = 'terminal' | 'log' | 'problems'
 export const NO_PROGRAM_MESSAGE =
     'This Project has no program. Right-click an assembly File in the Explorer and choose New program from this file.'
 
+/**
+ * How long autosave waits for the Project to stop changing before it saves: a save writes the
+ * whole Project, a third of a second for a large one, so it waits for a pause in typing rather
+ * than following each key. Nothing waiting is lost: the save starts at once when the page is
+ * hidden or closed, when the Workbench goes, on Save, and before the host reads the stored
+ * Project (`saveNow`) ([ADR 0076](../../../../../docs/adr/0076-a-project-holds-64-mib-of-files.md)).
+ */
+export const AUTOSAVE_DELAY = 3000
+
 /** A Program a picker lists: its Entry path, the label it goes by, and whether its Entry is missing. */
 export type ProgramChoice = { entry: string; label: string; missing: boolean }
 
@@ -638,9 +647,10 @@ export class WorkbenchSession {
 
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Imperative window callbacks consume this accumulator; it has no tracked consumer.
     private readonly pressedKeys = new Map<string, boolean>()
-    /** Autosave's wait for a pause in File changes, as typing makes them, see `filesChanged`. */
-    private readonly fileSaveDebouncer = createDebouncer(250)
-    private fileSavePending = false
+    /** Autosave's wait for a pause in the Project's changes, see `changed`. */
+    private readonly autosaveDebouncer = createDebouncer(AUTOSAVE_DELAY)
+    /** A change autosave has not yet saved. */
+    private autosavePending = false
     private knownTestcases: string | undefined
     /**
      * The Selected program whose Settings and Display configuration the Emulator was last given,
@@ -676,7 +686,8 @@ export class WorkbenchSession {
             resolveProjectSettings(this.project.language, this.project.selected?.settings)
         )
         this.sourceInput = $derived.by<BuildSources>(() => {
-            const files = $state.snapshot(this.project.files)
+            //the frozen map itself, which a change replaces: a snapshot would copy every File
+            const files = this.project.files
             const entry = this.project.selectedProgram
             //the Emulator and live checking always have sources: with no Program, the default
             //Entry path's, and why nothing builds
@@ -1121,13 +1132,10 @@ export class WorkbenchSession {
         })
 
         //a page closed, or hidden as a phone does before closing it, starts the saves it would
-        //otherwise lose while it still can: what a Hex editor holds typed, and the File changes
+        //otherwise lose while it still can: what a Hex editor holds typed, and the changes
         //autosave waits on a pause to save
         $effect(() => {
-            const leave = () => {
-                this.flushTyping()
-                this.saveFileChanges()
-            }
+            const leave = () => this.saveNow()
             const hidden = () => {
                 if (document.visibilityState === 'hidden') leave()
             }
@@ -1305,6 +1313,8 @@ export class WorkbenchSession {
         window.addEventListener('blur', blur)
         for (const type of HISTORY_EVENTS) window.addEventListener(type, history)
         return () => {
+            //the Workbench going, as leaving the page takes it: what autosave waits on is saved now
+            this.saveNow()
             window.removeEventListener('keydown', keydown)
             window.removeEventListener('keydown', commandKey, { capture: true })
             window.removeEventListener('keyup', keyup)
@@ -1382,41 +1392,51 @@ export class WorkbenchSession {
 
     /**
      * The one save rule (docs/design/project-format.md): a change to any part of the Project is
-     * saved at once under autosave and otherwise waits for Save, when the prompt on leaving compares
-     * the whole Project.
+     * saved by autosave and otherwise waits for Save, when the prompt on leaving compares the whole
+     * Project. The host hears of the change at once, so that leaving the page asks about it;
+     * autosave saves once the Project has not changed for {@link AUTOSAVE_DELAY}, or sooner when
+     * `saveNow` is called.
      */
     changed() {
         this.host.onChange?.()
-        if (preferencesStore.values.autoSave.value) this.host.onSave?.({ silent: true })
+        if (!preferencesStore.values.autoSave.value) return
+        this.autosavePending = true
+        this.autosaveDebouncer[0](() => this.saveNow())
     }
 
     /**
-     * Save. It takes what a Hex editor holds typed, and stands in for the autosave a pause in File
-     * changes is waiting for, which would otherwise call the saved Project changed after it.
+     * Save. It takes what a Hex editor holds typed, and stands in for the autosave a pause is
+     * waiting for, which would otherwise call the saved Project changed after it.
      */
     save() {
         this.flushTyping()
-        this.fileSaveDebouncer[1]()
-        this.fileSavePending = false
+        this.autosaveDebouncer[1]()
+        this.autosavePending = false
         this.host.onSave?.({ silent: false })
     }
 
-    /**
-     * A change to the Files, as each key typed makes: the host hears of it at once, so that
-     * leaving the page asks about it, and autosave saves it once the changes pause.
-     */
+    /** A change to the Files, as each key typed makes, which autosave saves as any other change. */
     private filesChanged() {
-        this.host.onChange?.()
-        this.fileSavePending = true
-        this.fileSaveDebouncer[0](() => this.saveFileChanges())
+        this.changed()
     }
 
-    /** Saves at once the File changes autosave is waiting on a pause to save, if any. */
-    private saveFileChanges() {
-        this.fileSaveDebouncer[1]()
-        if (!this.fileSavePending) return
-        this.fileSavePending = false
-        this.changed()
+    /**
+     * Starts at once the save autosave is waiting on a pause to make, if any, with what a Hex
+     * editor holds typed: as the page is hidden or closed, as the Workbench goes, and before the
+     * host reads the stored Project, as leaving for another page does, so that nothing waiting is
+     * lost or reads as unsaved. Under autosave only; without it the changes wait for Save.
+     */
+    saveNow() {
+        const files = this.project.fileSystem.files
+        this.flushTyping()
+        //typing a Hex editor saves as the Workbench goes can reach the Files after the session
+        //stopped listening to them
+        if (this.project.fileSystem.files !== files && preferencesStore.values.autoSave.value)
+            this.autosavePending = true
+        this.autosaveDebouncer[1]()
+        if (!this.autosavePending) return
+        this.autosavePending = false
+        if (preferencesStore.values.autoSave.value) this.host.onSave?.({ silent: true })
     }
 
     /** Gives the Project a new name, which the Explorer shows at the root of its Files. */
@@ -4576,7 +4596,8 @@ export class WorkbenchSession {
             case ShortcutAction.RunCode: {
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                if (this.running) emulator.pause()
+                //a Step waiting at a RISC-V `wfi` takes the Pause too, which ends the wait
+                if (this.running || emulator.stepWaiting) emulator.pause()
                 else void this.run()
                 break
             }
@@ -4590,14 +4611,14 @@ export class WorkbenchSession {
                 break
             }
             case ShortcutAction.Step: {
-                if (this.running || this.building) break
+                if (this.running || this.building || emulator.stepWaiting) break
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
                 void this.step()
                 break
             }
             case ShortcutAction.Undo: {
-                if (this.running || this.building) break
+                if (this.running || this.building || emulator.stepWaiting) break
                 if (emulator.interrupt !== undefined || !emulator.canExecute || !emulator.canUndo)
                     break
                 emulator.undo()

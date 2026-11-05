@@ -15,7 +15,7 @@ import soundProse from './sound.md?raw'
  * [the plan](../../../../../../docs/design/x86-devices-plan.md)): their sections, their tables read
  * from the device table, and their NASM programs, which build with the include files and run to a
  * clean exit on the real Core. The system-call Lecture's device programs are Playgrounds, which
- * `content.test.ts` runs.
+ * `content/contentSuite.ts` runs.
  */
 
 function chapter(id: string): Chapter {

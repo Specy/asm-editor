@@ -48,6 +48,15 @@
         lastY = e.clientY
     }
 
+    /**
+     * The gap a drag keeps between the window and the viewport's edges, for the room the window
+     * leaves across one axis: it shrinks for a window too large to keep it on both sides, so one
+     * as large as the viewport stays inside it rather than being pushed past an edge.
+     */
+    function edge(room: number) {
+        return clamp(room / 2, 0, 6)
+    }
+
     function onMouseMove(e: PointerEvent) {
         if (moving) {
             left += e.clientX - lastX
@@ -55,8 +64,10 @@
             lastX = e.clientX
             lastY = e.clientY
             if (clampPosition) {
-                top = clamp(top, 6, window.innerHeight - bounds.height - 6)
-                left = clamp(left, 6, window.innerWidth - bounds.width - 6)
+                const roomY = window.innerHeight - bounds.height
+                const roomX = window.innerWidth - bounds.width
+                top = clamp(top, edge(roomY), roomY - edge(roomY))
+                left = clamp(left, edge(roomX), roomX - edge(roomX))
             }
         }
     }

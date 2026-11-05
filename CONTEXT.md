@@ -127,7 +127,7 @@ _Avoid_: input block, input registers, HID chip
 
 ## Audio
 
-The Peripheral that plays a program's **Notes** and **Sounds** through its **Reference environment**'s sound services: MARS's and RARS's MIDI services, EASy68K's sound tasks and the **Port map**'s audio group. On x86 it plays what a program writes to Linux's sound devices instead: sampled sound to `/dev/dsp`, MIDI messages to a raw MIDI port, and tones to the PC speaker ([x86 devices](./docs/design/x86-devices.md)). What a program can observe of it, such as whether EASy68K's standard player is busy, follows **Program time**; muting it never changes what a program observes, and in a **Testcase** it is silent and nothing is ever playing.
+The Peripheral that plays a program's **Notes** and **Sounds** through its **Reference environment**'s sound services: MARS's and RARS's MIDI services, EASy68K's sound tasks and the **Port map**'s audio group. On x86 it plays what a program writes to Linux's sound devices instead: sampled sound to `/dev/dsp`, MIDI messages to a raw MIDI port, and tones to the PC speaker ([x86 devices](./docs/design/x86-devices.md)). On MIPS and RISC-V it also plays what a program streams through the **MIDI port** and the **Sampled-audio output**. What a program can observe of it, such as whether EASy68K's standard player is busy, follows **Program time**; muting it never changes what a program observes, and in a **Testcase** it is silent and nothing is ever playing.
 _Avoid_: sound player, speaker, sound device
 
 ## Note
@@ -159,6 +159,16 @@ _Avoid_: voice (the Audio code's word for any Note or Sound that plays), oscilla
 
 The **Synth**'s own 64 KB of 8-bit signed samples, which a program fills by uploading a buffer from its own memory and a **Synth channel** plays at a rate in samples a second, as the SNES's sound chip plays from its own memory. Distinct from a **Sound**, which plays a File.
 _Avoid_: sample buffer, sample RAM (except when comparing with real chips), DMA buffer
+
+## MIDI port
+
+The memory-mapped device at 0xFFFF0340 through which a MIPS or RISC-V program sends MIDI bytes to a General MIDI synthesizer of its own, in the style of the MPU-401's UART mode: a Data register, and a Status register whose bit 6 says it is busy. Bytes leave at 31,250 baud on **Program time** behind a 4 KiB buffer, and one written while it is busy is dropped. Its sixteen channels are its own: a **Note** of MARS's and RARS's MIDI services plays on a channel of its own, so the two never change each other's instruments. x86 has the same port as a Linux raw MIDI device. An extension beyond MARS and RARS. See [ADR 0075](./docs/adr/0075-mips-and-risc-v-get-a-midi-port-and-a-sampled-audio-output.md).
+_Avoid_: MIDI out, MPU (except when naming the chip it is modelled on), MIDI service (that is syscalls 31 and 33)
+
+## Sampled-audio output
+
+The memory-mapped device at 0xFFFF0350 through which a MIPS or RISC-V program plays samples it computes, a DAC with a FIFO of 8,192 frames that drains at its rate, 4,000 to 48,000 frames a second, on **Program time**: a Control register (on, stereo), a Rate, a Free count of the frames the FIFO can take, and a Data register taking two signed 16-bit samples, or one stereo frame, per word. A word written when it does not fit is dropped. x86's counterpart is `/dev/dsp`. Distinct from **Sample memory**, which the **Synth** plays from. An extension beyond MARS and RARS. See [ADR 0075](./docs/adr/0075-mips-and-risc-v-get-a-midi-port-and-a-sampled-audio-output.md).
+_Avoid_: PCM device, DAC (except when describing what it models), sample buffer, audio stream
 
 ## Terminal
 
@@ -324,7 +334,7 @@ The path of a **Program**'s **Entry file**, from which its Build begins; a new P
 
 ## Entry file
 
-The **File** found at a **Program**'s **Entry path**, when it exists, from which that Program's Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). When the Entry file is an **Executable**, a Build loads it and assembles nothing, and the Build button reads Debug.
+The **File** found at a **Program**'s **Entry path**, when it exists, from which that Program's Build begins. Depending on the Target, other Files are reached through includes or linked as separate units. x86 assembles every `.asm`, `.s` and `.nasm` File that another unit does not include, and links with the Entry's unit only those that define a symbol the program needs, as a linker takes members from an archive ([ADR 0033](./docs/adr/0033-x86-links-the-entry-and-takes-other-files-as-needed.md)). MIPS and RISC-V do the same with the Project's other **Generated assembly** when the Build assembles with the GNU profile, as it does for compiled C and C++: each unit is checked, and linked as the program's own code only when it defines a symbol the program needs. A hand-written Entry in the MARS or RARS dialect links its includes alone. When the Entry file is an **Executable**, a Build loads it and assembles nothing, and the Build button reads Debug.
 _Avoid_: main file, active file, selected file, open file
 
 ## Executable

@@ -234,6 +234,7 @@ describe('the saved views', () => {
         onSave.mockClear()
         group.setView('image.png', 'hex')
         expect(project.fileViews).toEqual({ 'image.png': 'hex' })
+        session.saveNow()
         expect(onSave).toHaveBeenCalledWith({ silent: true })
         group.setView('image.png', 'preview')
         expect(project.fileViews).toBeUndefined()

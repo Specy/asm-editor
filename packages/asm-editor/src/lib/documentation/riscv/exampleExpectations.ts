@@ -1635,8 +1635,7 @@ export const riscvExampleExpectations: Record<string, InstructionExampleExpectat
     },
     wfi: {
         registers: {
-            t0: '9',
-            t1: '1'
+            t3: '0'
         }
     },
     xnor: {

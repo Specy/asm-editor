@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import type monaco from 'monaco-editor'
 import { ProjectLanguageSession } from '#lib/languages/service/ProjectLanguageSession.ts'
 import { normalizeBuildInput } from '#lib/projectFiles.ts'
-import { compilerCapabilities, X86_DEVICE_HEADERS } from '#lib/sourceCompilation/capabilities.ts'
+import {
+    compilerCapabilities,
+    POSIX_HEADERS,
+    X86_DEVICE_HEADERS
+} from '#lib/sourceCompilation/capabilities.ts'
 import { helpLanguage, resolveSourceHelpContext, setSourceHelpLanguage } from './context'
 
 vi.mock('#lib/languages/service/LanguageWorkerManager.ts', () => ({
@@ -127,9 +131,11 @@ describe('source help context', () => {
         const x86 = compilerCapabilities('X86')!.headers
         const mips = compilerCapabilities('MIPS')!.headers
         for (const language of ['c', 'cpp'] as const) {
+            //MIPS and RISC-V have the folder calls' POSIX headers instead (ADR 0072)
             expect(
                 x86[language].filter((header) => !X86_DEVICE_HEADERS.includes(header as never))
-            ).toEqual(mips[language])
+            ).toEqual(mips[language].filter((header) => !POSIX_HEADERS.includes(header as never)))
+            expect(mips[language]).toEqual(expect.arrayContaining([...POSIX_HEADERS]))
             expect(x86[language]).toEqual(expect.arrayContaining([...X86_DEVICE_HEADERS]))
             expect(mips[language]).not.toContain('linux/fb.h')
         }

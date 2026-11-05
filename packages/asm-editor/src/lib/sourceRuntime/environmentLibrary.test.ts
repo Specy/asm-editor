@@ -27,12 +27,15 @@ import {
     MARS_RECEIVER_CONTROL,
     MARS_RECEIVER_DATA,
     MARS_TRANSMITTER_CONTROL,
-    MARS_TRANSMITTER_DATA
+    MARS_TRANSMITTER_DATA,
+    RARS_TIME,
+    RARS_TIMECMP
 } from '#lib/languages/mars/MarsDevices.ts'
 import {
     DISPLAY_SIZE_MAX,
     DISPLAY_SIZE_MIN,
     MARS_BASE_ADDRESS_CHOICES,
+    MARS_DATA_SEGMENT_END,
     MARS_DISPLAY_SIZE_CHOICES,
     MARS_UNIT_SIZE_CHOICES,
     UNIT_SIZE_MAX,
@@ -40,7 +43,11 @@ import {
 } from '#lib/languages/mars/marsDisplay.ts'
 import { makeMipsCore } from '#lib/languages/MIPS/MIPS-core.ts'
 import { makeRiscVCore } from '#lib/languages/RISC-V/RISC-V-core.ts'
-import { compileSource, prepareAssembly } from '#lib/sourceCompilation/compilerExplorer.ts'
+import {
+    COMPILE_BYTE_LIMIT,
+    compileSource,
+    prepareAssembly
+} from '#lib/sourceCompilation/compilerExplorer.ts'
 import { fileFingerprint } from '#lib/sourceCompilation/records.ts'
 import {
     ENVIRONMENT_HEADER_PATH,
@@ -68,6 +75,9 @@ import {
     SYNTH_WAVETABLE_SIZE,
     SYNTH_WAVETABLES
 } from '#lib/languages/synthRegisters.ts'
+import { inputHeaderData } from '#lib/languages/inputControllerRegisters.ts'
+import { midiPortHeaderData } from '#lib/languages/midiPortRegisters.ts'
+import { sampledAudioHeaderData } from '#lib/languages/sampledAudioRegisters.ts'
 const address = (label: string) =>
     MARS_BASE_ADDRESS_CHOICES.find((choice) => choice.label === label)!.address
 const DATA: Omit<SimHeaderData, 'syscalls'> = {
@@ -86,7 +96,7 @@ const DATA: Omit<SimHeaderData, 'syscalls'> = {
         unitMin: UNIT_SIZE_MIN,
         unitMax: UNIT_SIZE_MAX,
         staticData: address('static data'),
-        staticDataEnd: 0x10400000
+        staticDataEnd: MARS_DATA_SEGMENT_END
     },
     synth: {
         base: SYNTH_BASES.mips,
@@ -99,7 +109,11 @@ const DATA: Omit<SimHeaderData, 'syscalls'> = {
         wavetableSize: SYNTH_WAVETABLE_SIZE,
         gate: SYNTH_GATE,
         loop: SYNTH_LOOP
-    }
+    },
+    input: inputHeaderData(),
+    timer: { time: RARS_TIME, timecmp: RARS_TIMECMP },
+    midi: midiPortHeaderData(),
+    pcm: sampledAudioHeaderData()
 }
 const TARGETS = Object.keys(SIM_HEADER_TARGETS) as SimHeaderTargetName[]
 const syscallsOf = (target: SimHeaderTargetName): Record<number, MarsSyscall> =>
@@ -112,9 +126,39 @@ describe('the committed headers', () => {
     it.each(TARGETS)('%s.h is what the data generates', (target) => {
         const text = generateSimHeader(target, { ...DATA, syscalls: syscallsOf(target) })
         expect(committed(target), `run node scripts/sim-header/generate.mjs`).toBe(text)
-        //uploaded with every compile, whose request may not pass 1 MiB
-        expect(new TextEncoder().encode(text).length).toBeLessThan(32 * 1024)
+        //its size is checked where it costs something: in the compile request, below
     })
+
+    it.each(['MIPS', 'RISC-V', 'RISC-V-64', 'X86'] as const)(
+        'leave %s programs two thirds of the 1 MiB compile request',
+        async (target) => {
+            //what every compile uploads before the program's own Files, which share the rest of
+            //COMPILE_BYTE_LIMIT: the Runtime library's headers, the Target's own (posix/, or x86's
+            //devices) and <sim.h>. On 2026-11-03 about 107 KiB on MIPS and RISC-V, 247 on x86
+            const fetcher = vi.fn(
+                async () => new Response(JSON.stringify({ code: 1, stderr: [], asm: [] }))
+            )
+            await compileSource(
+                {
+                    sourcePath: 'main.c',
+                    outputPath: 'main.c.asm',
+                    files: {
+                        'main.c': { encoding: 'plain', content: 'int main(void) { return 0; }' }
+                    },
+                    target,
+                    optimization: '0'
+                },
+                undefined,
+                fetcher
+            ).catch(() => undefined)
+            const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit]
+            const size = new TextEncoder().encode(String(init.body)).length
+            expect(
+                size,
+                `an empty program's request is ${size} bytes of the ${COMPILE_BYTE_LIMIT}`
+            ).toBeLessThan(COMPILE_BYTE_LIMIT / 3)
+        }
+    )
 
     it('x86_64.h is what the x86 syscall table generates', () => {
         const text = generateX86SimHeader(x86SimHeaderData())
@@ -210,8 +254,16 @@ describe.each(TARGETS)('<sim.h> for %s', (target) => {
         )
     })
 
+    it("names where static data and the heap end, the editor's own data segment end", () => {
+        expect(text).toContain(
+            `#define SIM_DATA_SEGMENT_END 0x${MARS_DATA_SEGMENT_END.toString(16)}ul\n`
+        )
+        expect(text).toContain('from 0x10010000 to SIM_DATA_SEGMENT_END')
+    })
+
     it('caps SIM_SCREEN at the static data the Cores have room for', () => {
-        expect(text).toContain('* 4 <= 4128768, \\')
+        //64 MB from the data segment's base, where MARS and RARS have 4 MB
+        expect(text).toContain('* 4 <= 67043328, \\')
         //any size the display takes, not only the ones MARS's and RARS's tool lists
         expect(text).toContain('(width) >= 1 && (width) <= 1024')
         expect(text).toContain('(unit) >= 1 && (unit) <= 32')
@@ -476,8 +528,8 @@ describe('the static-data cap', () => {
     })
 
     it.each(TARGETS)('bounds %s GNU-profile static data', (target) => {
-        const limit = 0x10400000 - address('static data')
-        expect(limit).toBe(4128768)
+        const limit = MARS_DATA_SEGMENT_END - address('static data')
+        expect(limit).toBe(67043328)
         expect(errors(target, limit)).toEqual([])
         expect(errors(target, limit + 4).join('\n')).toContain('past the end of the data segment')
     })

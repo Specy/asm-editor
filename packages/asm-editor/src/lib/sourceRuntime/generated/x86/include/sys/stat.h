@@ -129,7 +129,7 @@ static inline int lstat(const char *path, struct stat *buffer) {
  * Makes the folder path, with the permission bits in mode, such as 0755. Its parent must exist.
  * Returns 0, or -1 with errno set: EEXIST if something has the name already, ENOENT if the parent
  * does not exist. Under /project a new folder lasts for the run, and the first file made in it
- * keeps it in the Project.
+ * keeps it after the run.
  */
 static inline int mkdir(const char *path, mode_t mode) {
     register long rax __asm__("rax") = 83; /* mkdir */

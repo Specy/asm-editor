@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readExample } from '#lib/examples.server.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
@@ -3222,7 +3222,7 @@ describe('examples/m68k', () => {
     }
 
     function load(name: string): string {
-        return readFileSync(new URL(`../../../../examples/m68k/${name}`, import.meta.url), 'utf8')
+        return readExample(`m68k/${name}`)
     }
 
     /** Program time on the virtual clock, so a few dozen frames of delays take no real time. */

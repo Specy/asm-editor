@@ -31,6 +31,12 @@ import {
  * adapter, whose program can ask for an IRQ on either ([ADR 0065](../../../../../../docs/adr/0065-m68k-devices-deliver-irqs.md)).
  * The state is changed before the listener hears of it, so a handler reads the key that raised it.
  *
+ * Every key event is also told, by its physical key (`KeyboardEvent.code`), to whoever listens with
+ * `onPhysicalKey`: the **Input controller** of MIPS and RISC-V, which keeps a key state of its own in
+ * USB HID usages, with its own edge rules, beside this one
+ * ([ADR 0071](../../../../../../docs/adr/0071-mips-and-risc-v-read-the-keyboard-and-mouse-through-an-input-controller.md)).
+ * That stream carries every physical key, whether or not EASy68K has a code for it.
+ *
  * Key state is live input: Undo does not replay it (ADR 0008).
  *
  * Plain TypeScript with no Svelte runes and no DOM types, like the other peripherals: a Core reads
@@ -55,6 +61,13 @@ export type LastKeys = {
 /** A key going down or coming up, as a listener of `onKeyEvent` hears it. */
 export type KeyEventKind = 'keyDown' | 'keyUp'
 
+/**
+ * A physical key going down (an auto-repeat included) or coming up, by its `KeyboardEvent.code`, as
+ * a listener of `onPhysicalKey` hears it. A repeat is a key going down again: the listener tells it
+ * from a first press by what it already holds, as x86's input devices do.
+ */
+export type PhysicalKeyListener = (code: string, down: boolean) => void
+
 /** Neither task 19 nor the Z80 key ports have a "no key" code, so both start at zero, as EASy68K's do. */
 const NO_KEY: KeyCode = 0
 
@@ -65,6 +78,9 @@ export class Keyboard {
     private readonly down = new Set<KeyCode>()
     private readonly listeners = new Set<() => void>()
     private readonly keyEventListeners = new Set<(event: KeyEventKind) => void>()
+    /** The physical keys the Screen has reported down and not up, so focus loss can lift each one. */
+    private readonly physicalDown = new Set<string>()
+    private readonly physicalListeners = new Set<PhysicalKeyListener>()
     private _lastKeyDown: KeyCode = NO_KEY
     private _lastKeyUp: KeyCode = NO_KEY
 
@@ -79,16 +95,18 @@ export class Keyboard {
         const character = typedCharacterFromEvent(event)
         if (character !== undefined) this.typeText(character)
         const code = keyCodeFromEvent(event)
-        if (code === undefined) return
-        if (event.repeat) this.repeatKey(code)
-        else this.pressKey(code)
+        if (code !== undefined) {
+            if (event.repeat) this.repeatKey(code)
+            else this.pressKey(code)
+        }
+        this.physicalKey(event.code, true)
     }
 
     /** A key came up. Types nothing: a character is typed when the key goes down. */
     keyUp(event: KeyboardEventLike): void {
         const code = keyCodeFromEvent(event)
-        if (code === undefined) return
-        this.releaseKey(code)
+        if (code !== undefined) this.releaseKey(code)
+        this.physicalKey(event.code, false)
     }
 
     /**
@@ -130,6 +148,7 @@ export class Keyboard {
      */
     releaseAll(): void {
         for (const code of [...this.down]) this.releaseKey(code)
+        for (const code of [...this.physicalDown]) this.physicalKey(code, false)
     }
 
     /**
@@ -211,6 +230,26 @@ export class Keyboard {
         for (const listener of [...this.keyEventListeners]) listener(event)
     }
 
+    /**
+     * Called with every physical key going down or coming up, by its `KeyboardEvent.code`, and with
+     * the release of each one still down when focus is lost. A reset tells nothing. Returns the
+     * unsubscribe.
+     */
+    onPhysicalKey(listener: PhysicalKeyListener): () => void {
+        this.physicalListeners.add(listener)
+        return () => {
+            this.physicalListeners.delete(listener)
+        }
+    }
+
+    private physicalKey(code: string, down: boolean): void {
+        //`Unidentified` and an empty code name no physical key
+        if (!code || code === 'Unidentified') return
+        if (down) this.physicalDown.add(code)
+        else this.physicalDown.delete(code)
+        for (const listener of [...this.physicalListeners]) listener(code, down)
+    }
+
     // ---------------------------------------------------- key-state reads
 
     /** Whether one key is down now. */
@@ -245,6 +284,7 @@ export class Keyboard {
     reset(): void {
         this.typed.length = 0
         this.down.clear()
+        this.physicalDown.clear()
         this._lastKeyDown = NO_KEY
         this._lastKeyUp = NO_KEY
     }

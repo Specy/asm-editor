@@ -4,7 +4,7 @@ import type { ChipNode } from './chips/chipNode'
 import type { PcmNode } from './pcm/pcmNode'
 import { inspectSoundFile } from './soundFiles'
 import type { EngineVoice, MidiPorts, SynthesizerEngine } from './synthesizerEngine'
-import { X86Output } from './x86Output'
+import { TimelineOutput } from './timelineOutput'
 
 /**
  * Where **Audio** becomes sound in a browser ([the plan](../../../../../../../docs/design/audio-plan.md),
@@ -24,9 +24,10 @@ import { X86Output } from './x86Output'
  *   their first command ([the plan](../../../../../../../docs/design/waveform-sound-plan.md),
  *   decisions 5 and 6). A chip is a state, so what is sent before the node runs is kept and played
  *   once it does, and nothing waits for it; Stop, Build and dispose dispose of the node.
- * - **x86's timeline**, `/dev/dsp`, the raw MIDI port and the PC speaker, plays through an
- *   `X86Output` of the output's own (`x86Output.ts`), made on its first command: a PCM worklet node,
- *   a MIDI synthesizer lent by the page's pool of them, and the chip node for the speaker.
+ * - **The timeline**, x86's `/dev/dsp`, raw MIDI port and PC speaker, and the MIDI port and
+ *   Sampled-audio output of MIPS and RISC-V, plays through a `TimelineOutput` of the output's own
+ *   (`timelineOutput.ts`), made on its first command: a PCM worklet node, a MIDI synthesizer lent by
+ *   the page's pool of them, and the chip node for the speaker.
  */
 
 /**
@@ -65,9 +66,9 @@ export type BrowserAudioOptions = {
     engine?: SharedEngine
     /** Makes the chips' node; the worklet's by default. */
     chips?: (route: AudioRoute) => Promise<ChipNode>
-    /** The page's pool of synthesizers for x86's raw MIDI port by default. */
+    /** The page's pool of synthesizers for a MIDI port by default. */
     midiPorts?: SharedEngine<MidiPorts>
-    /** Makes the node x86's `/dev/dsp` plays on; the worklet's by default. */
+    /** Makes the node the timeline's samples play on; the worklet's by default. */
     pcm?: (route: AudioRoute) => Promise<PcmNode>
 }
 
@@ -104,7 +105,7 @@ class BrowserAudioOutput implements AudioOutput {
     /** Decoded WAVs by `SoundData.id`, the least recently used first. */
     private readonly decoded = new Map<number, Decoded>()
     private chips: ChipVoice | null = null
-    private x86: X86Output | null = null
+    private timeline: TimelineOutput | null = null
 
     constructor(
         private readonly page: PageAudio,
@@ -131,8 +132,8 @@ class BrowserAudioOutput implements AudioOutput {
         //the worklet may not answer while the context is suspended for being idle
         this.page.use()
         if (need.kind === 'midiPort') {
-            this.x86 ??= new X86Output(this.midiPorts, this.makePcm)
-            return this.x86.prepareMidi(route)
+            this.timeline ??= new TimelineOutput(this.midiPorts, this.makePcm)
+            return this.timeline.prepareMidi(route)
         }
         const midi = need.kind === 'sound'
         const loading = this.engine.prepare(route)
@@ -155,9 +156,12 @@ class BrowserAudioOutput implements AudioOutput {
                 case 'tone':
                 case 'cut':
                 case 'programEnd': {
-                    const x86 = (this.x86 ??= new X86Output(this.midiPorts, this.makePcm))
-                    timelineAudible ??= this.page.use(x86.sounding)
-                    x86.take(route, command, timelineAudible, chips)
+                    const timeline = (this.timeline ??= new TimelineOutput(
+                        this.midiPorts,
+                        this.makePcm
+                    ))
+                    timelineAudible ??= this.page.use(timeline.sounding)
+                    timeline.take(route, command, timelineAudible, chips)
                     break
                 }
                 case 'note':
@@ -181,13 +185,13 @@ class BrowserAudioOutput implements AudioOutput {
                     chips = []
                     this.chips?.dispose()
                     this.chips = null
-                    this.x86?.stopAll()
+                    this.timeline?.stopAll()
                     break
                 default:
                     chips.push(command)
             }
         }
-        this.x86?.flush()
+        this.timeline?.flush()
         if (chips.length > 0) {
             const voice = (this.chips ??= new ChipVoice(this.makeChips(route)))
             voice.send(chips)

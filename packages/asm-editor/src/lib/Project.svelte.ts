@@ -1,9 +1,11 @@
 import { FileSystem } from './languages/peripherals/FileSystem'
 import {
+    annotationsKey,
     cleanFiles,
     fileText,
     isValidFilePath,
     ProjectFormatError,
+    sameFileContent,
     type ProjectFiles
 } from './projectFiles'
 export { FILE_ENCODINGS, isValidFilePath, ProjectFormatError } from './projectFiles'
@@ -390,7 +392,39 @@ export type LegacyProjectData = Omit<ProjectData, 'programs' | 'selectedProgram'
  * that is the user's, and none of the bookkeeping (id and timestamps).
  */
 export function projectContentEquals(a: ProjectData, b: ProjectData): boolean {
-    return contentKey(a) === contentKey(b)
+    return sameFiles(a.files, b.files) && contentKey(a) === contentKey(b)
+}
+
+/**
+ * Whether two projects hold the same work: their content apart from how it is viewed (the open
+ * tabs, File views and cell grids) and from Build outputs nobody changed, which a Build makes
+ * again. An opened example is edited only once this differs from the archive it came from, so
+ * looking around it or building it is not editing it.
+ */
+export function projectWorkEquals(a: ProjectData, b: ProjectData): boolean {
+    const left = withoutBuildOutputs(a)
+    const right = withoutBuildOutputs(b)
+    return sameFiles(left.files, right.files) && workKey(left) === workKey(right)
+}
+
+/**
+ * Whether two maps hold the same Files at the same paths, with the same Annotations, compared
+ * File by File rather than as text: a map kept from an earlier snapshot shares its records, and
+ * their contents, so comparing them costs nothing for each File that did not change.
+ */
+function sameFiles(a: ProjectFiles, b: ProjectFiles): boolean {
+    if (a === b) return true
+    const paths = Object.keys(a)
+    if (paths.length !== Object.keys(b).length) return false
+    return paths.every((path) => {
+        if (!Object.hasOwn(b, path)) return false
+        const left = a[path]
+        const right = b[path]
+        return (
+            left === right ||
+            (sameFileContent(left, right) && annotationsKey(left) === annotationsKey(right))
+        )
+    })
 }
 
 /**
@@ -407,20 +441,30 @@ export function entryFileContent(
 
 function contentKey(project: ProjectData): string {
     return serializer.stringify({
-        name: project.name,
-        description: project.description,
-        language: project.language,
-        files: project.files,
-        programs: project.programs,
-        selectedProgram: project.selectedProgram,
-        exam: project.exam,
-        compilations: project.compilations,
-        builds: project.builds,
+        ...workParts(project),
         openTabs: project.openTabs,
         activeTab: project.activeTab,
         fileViews: project.fileViews,
         cellGrids: project.cellGrids
     })
+}
+
+function workKey(project: ProjectData): string {
+    return serializer.stringify(workParts(project))
+}
+
+/** What is the user's in a Project, but how it is viewed, and its Files, which `sameFiles` compares. */
+function workParts(project: ProjectData) {
+    return {
+        name: project.name,
+        description: project.description,
+        language: project.language,
+        programs: project.programs,
+        selectedProgram: project.selectedProgram,
+        exam: project.exam,
+        compilations: project.compilations,
+        builds: project.builds
+    }
 }
 
 export type MemoryValue =
@@ -667,9 +711,12 @@ export function makeProject(data?: StoredProject) {
                 Object.entries(state.cellGrids).map(([path, grid]) => [path, { ...grid }])
             )
         //each snapshot is taken where it is returned: the server build of a `.svelte.ts` drops a
-        //`$state.snapshot` that is a declaration's whole value, which would hand out the state
+        //`$state.snapshot` that is a declaration's whole value, which would hand out the state.
+        //The Files are no snapshot: their map and its records are frozen and never changed, a
+        //change replaces the map, so the map itself is handed out. A snapshot would copy every
+        //File's content, since Svelte clones a map without a prototype through `structuredClone`
         return {
-            files: $state.snapshot(state.files),
+            files: state.files,
             programs,
             ...$state.snapshot({
                 ...(state.selectedProgram !== undefined

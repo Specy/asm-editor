@@ -174,7 +174,9 @@ jump to `input_done` skips the other comparisons. An unrecognized character chan
 The receiver hands over **characters that were typed**, one at a time. It cannot tell the program
 that a key is being held down now, or that one has just been released. The key therefore sets a
 direction that persists, and each frame applies it. This Playground receiver supplies typed
-character input, so this example uses ordinary character keys: `w`, `a`, `s`, and `d`.
+character input, so this example uses ordinary character keys: `w`, `a`, `s`, and `d`. To read arrow
+keys or check whether a key is held, use the
+[Input controller](/documentation/risc-v/input-controller), which also reports key presses and releases.
 
 Setting the other step to 0 for every recognized direction keeps movement horizontal or vertical.
 If those assignments were removed, pressing `d` and then `w` would leave both steps nonzero and the

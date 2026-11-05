@@ -98,6 +98,8 @@ jobs:
                   path: packages/asm-editor/.cache/search-vectors
                   key: search-vectors-${{ github.sha }}
                   restore-keys: search-vectors-
+            # The example archives, which tests open: packages/examples keeps only their sources.
+            - run: pnpm exec vp run asm-editor-monorepo#build:examples
             - working-directory: packages/asm-editor
               run: |
                   node scripts/search-model.mjs --optional
@@ -160,6 +162,10 @@ jobs:
                   path: packages/asm-editor/.cache/search-vectors
                   key: search-vectors-${{ github.sha }}
                   restore-keys: search-vectors-
+            # The example archives the site serves, with the programs they carry linked on the
+            # x86 Core from the artifact.
+            - run: pnpm exec vp run asm-editor-monorepo#build:examples
+            - run: pnpm exec vp run --ignore-depends-on asm-editor#build:example-outputs
             - run: pnpm exec vp run --ignore-depends-on asm-editor#build
             - if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
               uses: actions/upload-artifact@v7

@@ -117,6 +117,7 @@ import { readX86ScreenDirective, type X86DisplayConfiguration } from './x86Scree
 import type { MarsDisplayOrigin } from '#lib/languages/mars/marsDisplay.ts'
 import type { ProgramDisplay } from '#lib/languages/programDisplay.ts'
 import type { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
+import { fromNanoseconds } from '#lib/languages/peripherals/audio/TimelineSound.ts'
 import { X86_INPUT_INTERRUPT } from '#lib/languages/peripherals/x86Input.ts'
 
 /**
@@ -444,12 +445,27 @@ export async function X86Emulator(source: BuildInput, options: EmulatorSettings 
                 //call: the Screen shows it at the next catch-up, before anything can paint it
                 framebufferPresent: () => wrapper?.presentFramebuffer(),
                 //the sound devices' timeline, for the Audio of the run in hand: a Testcase's is
-                //silent, so it is read at every event
-                pcm: (event) => wrapper?.peripherals.audio.x86.pcm(event),
+                //silent, so it is read at every event. Blink counts Program time in nanoseconds,
+                //the timeline in milliseconds
+                pcm: (event) =>
+                    wrapper?.peripherals.audio.timeline.pcm({
+                        start: fromNanoseconds(event.start),
+                        rate: event.rate,
+                        frames: event.frames
+                    }),
                 midi: (event) => wrapper?.playMidi(event),
-                tone: (event) => wrapper?.peripherals.audio.x86.tone(event),
-                mixer: (event) => wrapper?.peripherals.audio.x86.mixer(event),
-                soundCut: (event) => wrapper?.peripherals.audio.x86.soundCut(event)
+                tone: (event) =>
+                    wrapper?.peripherals.audio.timeline.tone({
+                        at: fromNanoseconds(event.at),
+                        hz: event.hz
+                    }),
+                mixer: (event) => wrapper?.peripherals.audio.timeline.mixer(event),
+                soundCut: (event) =>
+                    wrapper?.peripherals.audio.timeline.cut(
+                        event.device === undefined
+                            ? { after: fromNanoseconds(event.after) }
+                            : { after: fromNanoseconds(event.after), device: event.device }
+                    )
             }
         }),
         //the Core has loaded the same Zydis module already; without it, an instruction the Core
@@ -760,7 +776,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             this.midiPortAudio = audio
             void audio.prepare('midiPort')
         }
-        audio.x86.midi(event)
+        audio.timeline.midi({ at: fromNanoseconds(event.at), message: event.message })
     }
 
     /** Streaming decoding belongs to the Terminal; native callbacks already exclude tool output. */
@@ -2480,7 +2496,7 @@ function fromDoubleBits(bits: bigint): number {
 }
 
 function mapCoreDiagnosticToProject(sources: BuildSources, error: CoreMonacoError): Diagnostic {
-    const hint = x86DiagnosticHint(error.code)
+    const hint = x86DiagnosticHint(error.code) ?? x86DuplicateHint(error.message, sources)
     return {
         severity: error.severity === 'hint' ? 'suggestion' : (error.severity ?? 'error'),
         file: error.file || sources.entry,
@@ -2532,16 +2548,23 @@ const DUPLICATE_MAIN_HINT =
 /**
  * What a second `_start` or `main` means ([the plan](../../../../../../docs/design/x86-compiler-assembly-translation-plan.md),
  * milestone 3a): a File that defines one too was linked, because the program uses something else it
- * defines. `ld` only says there are two. Matched on the words `ld` and the Core both use, whatever
- * line it lands on.
+ * defines. `ld` only says there are two. Matched on the words `ld`, in a Build, and the Core's check
+ * both use, whatever line it lands on.
  */
-function x86LinkHint(message: string, sources: BuildSources): string | undefined {
+function x86DuplicateHint(message: string, sources: BuildSources): string | undefined {
     if (/multiple definition of [`']main'/.test(message)) return DUPLICATE_MAIN_HINT
     if (/multiple definition of [`']_start'/.test(message) && linksX86StartUnit(sources))
         return DUPLICATE_START_HINT
+    return undefined
+}
+
+/** What a Build's message from `ld` means, where it needs saying. */
+function x86LinkHint(message: string, sources: BuildSources): string | undefined {
+    const duplicate = x86DuplicateHint(message, sources)
+    if (duplicate) return duplicate
     //hand-written assembly links no library by default: say how to get printf
     if (sources.runtimeAbi === undefined)
-        return runtimeLibraryHint(message, loadedRuntimeFunctions(CURRENT_RUNTIME_ABI))
+        return runtimeLibraryHint(message, loadedRuntimeFunctions(CURRENT_RUNTIME_ABI), 'X86')
     return undefined
 }
 

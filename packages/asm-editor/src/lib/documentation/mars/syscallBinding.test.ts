@@ -180,6 +180,30 @@ describe('MIPS and RISC-V', () => {
     })
 })
 
+describe('the folder calls', () => {
+    //Linux 3.10's asm-generic numbers, the block RARS's Open 1024 came from, on both Targets
+    //(ADR 0072)
+    const FOLDER_CALLS = {
+        1026: 'int sim_unlink(const char *path)',
+        1030: 'int sim_mkdir(const char *path)',
+        1031: 'int sim_rmdir(const char *path)',
+        1034: 'int sim_rename(const char *from, const char *to)',
+        1038: 'int sim_stat(const char *path, void *buffer)',
+        1065: 'int sim_getdents(int fd, void *buffer, int length)'
+    }
+
+    it.each(Object.entries(TARGETS))('%s has them at the same numbers as RISC-V', (_, target) => {
+        for (const [code, prototype] of Object.entries(FOLDER_CALLS)) {
+            const syscall = target.syscalls[Number(code)]
+            expect(syscall?.code, code).toBe(Number(code))
+            expect(syscall.implemented).toBe(true)
+            expect(simPrototype(syscall.binding)).toBe(prototype)
+            //their failures are minus Linux's error numbers, which the Documentation says
+            expect(syscall.result.arguments?.[0].description).toContain('negative error number')
+        }
+    })
+})
+
 describe('simPrototype', () => {
     it('writes the declaration the Documentation and the header share', () => {
         expect(simPrototype(mipsSyscalls[9].binding)).toBe('void *sim_sbrk(int bytes)')

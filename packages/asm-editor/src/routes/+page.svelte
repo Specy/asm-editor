@@ -22,11 +22,12 @@
     import Column from '#cmp/shared/layout/Column.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
 
-    import { ProjectStore } from '#stores/projectsStore.svelte.ts'
+    import { storedProjectCount } from '#lib/storage/projectCount.ts'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import { resolve } from '$app/paths'
+    import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { jsonLdScriptTag, softwareApplicationLd } from '#lib/seo.ts'
 
@@ -46,9 +47,17 @@
     })
     let shadow = $derived(textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);')
 
-    //a read that failed knows nothing of the projects, and their page says why
+    /**
+     * How many Projects are stored, counted without reading them: `pending` until the count is
+     * in, and undefined when the browser's storage could not be read.
+     */
+    let projectCount = $state<number | undefined | 'pending'>('pending')
+    onMount(() => {
+        void storedProjectCount().then((count) => (projectCount = count))
+    })
+    //a count that failed knows nothing of the projects, and their page says why
     let shouldGoToCurrentProjects = $derived(
-        ProjectStore.projects.length > 0 || !ProjectStore.inited || ProjectStore.loadFailed
+        projectCount === 'pending' || projectCount === undefined || projectCount > 0
     )
 </script>
 
@@ -176,15 +185,21 @@
                         Documentation
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/#codeCompletion')}>
+                <MainPageLinkPreview href={resolve('/examples')}>
                     {#snippet icon()}
                         <div>
-                            <FaSearch />
+                            <FaCode />
                         </div>
                     {/snippet}
                     {#snippet description()}
-                        Code completion
+                        Examples
                     {/snippet}
+                </MainPageLinkPreview>
+                <MainPageLinkPreview href={resolve('/#codeCompletion')}>
+                    {#snippet icon()}
+                        <div><FaSearch /></div>
+                    {/snippet}
+                    {#snippet description()}Code completion{/snippet}
                 </MainPageLinkPreview>
                 <MainPageLinkPreview href={resolve('/#tools')}>
                     {#snippet icon()}
@@ -216,16 +231,18 @@
                         Exam
                     {/snippet}
                 </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/chat')}>
-                    {#snippet icon()}
-                        <div>
-                            <SparklesIcon style="font-size: 1.8rem" />
-                        </div>
-                    {/snippet}
-                    {#snippet description()}
-                        AI Chat
-                    {/snippet}
-                </MainPageLinkPreview>
+                {#if AI_FEATURES_ENABLED}
+                    <MainPageLinkPreview href={resolve('/chat')}>
+                        {#snippet icon()}
+                            <div>
+                                <SparklesIcon style="font-size: 1.8rem" />
+                            </div>
+                        {/snippet}
+                        {#snippet description()}
+                            AI Chat
+                        {/snippet}
+                    </MainPageLinkPreview>
+                {/if}
             </div>
         </div>
     </div>
@@ -333,25 +350,29 @@
                 where the editor is locked down.
             </div>
         </MainPageSection>
-        <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp" reverse>
-            {#snippet title()}
-                AI Chat
-            {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
-                Chat with an AI assistant that can write, run and debug assembly code directly in
-                the browser. Use the <a
-                    href={resolve('/chat')}
-                    title="AI Chat"
-                    class="external-link"
-                >
+        {#if AI_FEATURES_ENABLED}
+            <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp" reverse>
+                {#snippet title()}
                     AI Chat
-                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-                        <GoLinkExternal />
-                    </div>
-                </a>
-                to get help with M68K, MIPS, RISC-V, x86-64 and Z80 assembly.
-            </div>
-        </MainPageSection>
+                {/snippet}
+                <div class="description" class:textShadow={textShadowSecondary}>
+                    Chat with an AI assistant that can write, run and debug assembly code directly
+                    in the browser. Use the <a
+                        href={resolve('/chat')}
+                        title="AI Chat"
+                        class="external-link"
+                    >
+                        AI Chat
+                        <div
+                            style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem"
+                        >
+                            <GoLinkExternal />
+                        </div>
+                    </a>
+                    to get help with M68K, MIPS, RISC-V, x86-64 and Z80 assembly.
+                </div>
+            </MainPageSection>
+        {/if}
         <MainPageSection id="embed">
             {#snippet title()}
                 Embed

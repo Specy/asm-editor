@@ -76,6 +76,6 @@ export default ts.config(
         }
     },
     {
-        ignores: ['.svelte-kit/', 'package/', 'node_modules/', 'examples/', 'static/']
+        ignores: ['.svelte-kit/', 'package/', 'node_modules/', 'static/']
     }
 )

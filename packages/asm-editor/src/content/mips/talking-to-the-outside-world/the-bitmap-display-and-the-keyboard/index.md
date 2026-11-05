@@ -195,14 +195,22 @@ poll from turning into a tight busy-wait. The loads, branches, `li` instructions
 instruction still count toward the running instruction budget. The elapsed pause itself adds no
 running instructions, so the program can wait without spending that budget merely to count time.
 
-Keep bit 1 of both control registers clear in this lesson. It requests interrupt-driven I/O, which
-the Playground does not support; the run stops if a program tries to set it. Poll Ready bit 0
-instead.
+This program polls Ready bit 0, so keep bit 1 of both control registers clear. Bit 1 enables the
+device's interrupts, which need a handler. See
+[Interrupts and the timer](/documentation/mips/interrupts#keyboard) for an example using interrupts.
 
 A testcase types its input lines into the receiver, one character at a time, each line followed by a
 newline (10). A `runFor` testcase without input, such as the one above, only runs up to that
 instruction budget and checks that no runtime error occurred. No testcase checks the rendered Screen
 image, so try that part interactively.
+
+## Arrow keys, held keys and the mouse
+
+The receiver reports typed characters. Arrow keys and Shift do not produce characters, and the
+receiver does not report when a key is released. A game that uses arrow keys or moves only while
+a key is held can read the **Input controller** at `0xffff0300`. It reports key presses and releases,
+held keys, and the mouse position and buttons. See the
+[Input controller reference](/documentation/mips/input-controller) for examples.
 
 ## Optional application: a moving dot
 

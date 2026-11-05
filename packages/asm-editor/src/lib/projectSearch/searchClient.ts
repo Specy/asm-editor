@@ -13,8 +13,8 @@ import {
 
 /**
  * How long a search may take before its worker is ended and started again (decision 27): plain
- * and whole-word queries take milliseconds over 16 MiB, a regular expression that backtracks can
- * take minutes on one line.
+ * and whole-word queries took milliseconds over 16 MiB of text, measured, while a regular
+ * expression that backtracks can take minutes on one line.
  */
 export const SEARCH_TIME_LIMIT_MS = 2_000
 /** How long after typing stops the panel searches (decision 27), as `delayMs`. */

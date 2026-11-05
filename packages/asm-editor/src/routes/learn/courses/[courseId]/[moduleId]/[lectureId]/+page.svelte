@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { PageData } from './$types'
     import Page from '#cmp/shared/layout/Page.svelte'
+    import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import Header from '#cmp/shared/layout/Header.svelte'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -52,7 +53,7 @@
 
     //the course navbar shows the Ask AI toggle only while a lecture is on screen
     $effect(() => {
-        lectureAgent.available = true
+        lectureAgent.available = AI_FEATURES_ENABLED
         return () => {
             lectureAgent.available = false
             lectureAgent.open = false
@@ -218,16 +219,17 @@
     </Row>
 </Page>
 
-<FloatingAgentSidebar
-    bind:open={lectureAgent.open}
-    openSize="28rem"
-    verticalOffset="3.2rem"
-    bind:editorLanguage
-    bind:editorCode
-    {emulatorInstance}
-    canUpdateLanguage={true}
-    searchPlace={{ language: courseLanguage(data.course.slug), lectures: true }}
-    additionalInstructions={`
+{#if AI_FEATURES_ENABLED}
+    <FloatingAgentSidebar
+        bind:open={lectureAgent.open}
+        openSize="28rem"
+        verticalOffset="3.2rem"
+        bind:editorLanguage
+        bind:editorCode
+        {emulatorInstance}
+        canUpdateLanguage={true}
+        searchPlace={{ language: courseLanguage(data.course.slug), lectures: true }}
+        additionalInstructions={`
         The user is reading the lecture "${data.lecture.name}" from the course "${data.course.name}".
         Lecture description: ${data.lecture.description}
         Course description: ${data.course.description}
@@ -242,44 +244,45 @@
         ${data.content}
         </lecture_content>
     `}
-    workflows={[
-        {
-            name: 'Teach with a runnable example (course lecture)',
-            intentTriggers: [
-                'explain the lecture',
-                'lecture topic',
-                'demonstrate this concept',
-                'show me an example',
-                'walk me through it',
-                'practice example',
-                'how does this concept work',
-                'what does this instruction do here',
-                'run an example from the lesson'
-            ],
-            requiredTools: [
-                'view_file',
-                'compile',
-                'list_breakpoints',
-                'set_breakpoint',
-                'remove_breakpoint',
-                'run_to_completion',
-                'step',
-                'get_emulator_state',
-                'write_to_file',
-                'replace_file_content'
-            ],
-            verification:
-                'Tie each explanation to lecture content and compile results; do not execute examples unless the user explicitly asks for execution.',
-            description: `
+        workflows={[
+            {
+                name: 'Teach with a runnable example (course lecture)',
+                intentTriggers: [
+                    'explain the lecture',
+                    'lecture topic',
+                    'demonstrate this concept',
+                    'show me an example',
+                    'walk me through it',
+                    'practice example',
+                    'how does this concept work',
+                    'what does this instruction do here',
+                    'run an example from the lesson'
+                ],
+                requiredTools: [
+                    'view_file',
+                    'compile',
+                    'list_breakpoints',
+                    'set_breakpoint',
+                    'remove_breakpoint',
+                    'run_to_completion',
+                    'step',
+                    'get_emulator_state',
+                    'write_to_file',
+                    'replace_file_content'
+                ],
+                verification:
+                    'Tie each explanation to lecture content and compile results; do not execute examples unless the user explicitly asks for execution.',
+                description: `
 When the user asks a question about the lecture topic or for a demonstration of the concept being taught.
 1. Put a small focused example in the editor via write_to_file so the user can see it next to the lecture content. A markdown code block in chat is not enough — the editor lets them run and modify it.
 2. Compile the example and report whether it is valid.
 3. Do not call run_to_completion or step unless the user explicitly asks to execute/debug the example.
 4. If the user asks a follow-up, modify the example in-place via replace_file_content and compile again.
 `
-        }
-    ]}
-/>
+            }
+        ]}
+    />
+{/if}
 
 <style>
     .topic-links {

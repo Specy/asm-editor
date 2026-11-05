@@ -10,9 +10,14 @@
     import SparklesIcon from '../agent/SparklesIcon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { resolve } from '$app/paths'
+    import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
 
     interface Props {
         children?: import('svelte').Snippet
+        /** Page-specific controls alongside the site's navigation links. */
+        toolbar?: import('svelte').Snippet
+        /** Keeps Home, Projects and Docs to leave room for page controls. */
+        compact?: boolean
         exclude?: 'ai-chat'[]
         includeEmbed?: boolean
         /** Takes the AI Chat link's place, like a lecture's Ask AI toggle */
@@ -24,6 +29,8 @@
 
     let {
         children,
+        toolbar,
+        compact = false,
         exclude,
         includeEmbed = true,
         aiToggle,
@@ -34,76 +41,81 @@
     const hasMenu = $derived(menuOpen !== undefined)
 </script>
 
-<Navbar {style}>
-    <MainNavigationLinks {includeEmbed} />
+<Navbar style={toolbar ? `flex-wrap: wrap; ${style ?? ''}` : style}>
+    <MainNavigationLinks {includeEmbed} {compact} />
+    {@render toolbar?.()}
     <!-- labels fold away before their buttons do, and the icons read on their own; the folded words
          stay for screen readers -->
-    <div class="actions" class:with-embed={includeEmbed} class:with-menu={hasMenu}>
-        <div class="pill donate">
-            <ButtonLink
-                cssVar="secondary"
-                href={resolve('/donate')}
-                {@attach tooltip('Donate to the project')}
-            >
-                <Icon>
-                    <FaHeart />
-                </Icon>
-                <span class="label">Donate</span>
-            </ButtonLink>
-        </div>
-        <div class="pill star">
-            <ButtonLink
-                cssVar="secondary"
-                href="https://github.com/Specy/asm-editor"
-                target="_blank"
-                {@attach tooltip('Star the project on github')}
-            >
-                <Icon>
-                    <FaStar />
-                </Icon>
-                <span class="label">Star on github</span>
-            </ButtonLink>
-        </div>
-        {@render children?.()}
-        {#if aiToggle}
-            <button
-                type="button"
-                class="icon ai"
-                onclick={aiToggle.onclick}
-                {@attach tooltip(aiToggle.title)}
-            >
-                {#if aiToggle.open}
-                    <!-- an unplugin icon fills its parent, so it needs the sized box `Icon` gives
-                         it; `SparklesIcon` carries its own 1em size. -->
-                    <Icon size={1}>
-                        <FaTimes />
-                    </Icon>
-                {:else}
-                    <SparklesIcon />
-                {/if}
-                <span class="label">{aiToggle.label}</span>
-            </button>
-        {:else if !exclude?.includes('ai-chat')}
-            <a class="icon ai" href={resolve('/chat')} {@attach tooltip('AI Chat')}>
-                <SparklesIcon />
-                <span class="label">AI Chat</span>
-            </a>
-        {/if}
-        {#if hasMenu}
-            <div class="menu">
-                <Icon
-                    onClick={() => (menuOpen = !menuOpen)}
-                    label={menuOpen ? 'Close the menu' : 'Open the menu'}
+    {#if !compact || children || aiToggle || hasMenu}
+        <div class="actions" class:with-embed={includeEmbed} class:with-menu={hasMenu}>
+            {#if !compact}
+                <div class="pill donate">
+                    <ButtonLink
+                        cssVar="secondary"
+                        href={resolve('/donate')}
+                        {@attach tooltip('Donate to the project')}
+                    >
+                        <Icon>
+                            <FaHeart />
+                        </Icon>
+                        <span class="label">Donate</span>
+                    </ButtonLink>
+                </div>
+                <div class="pill star">
+                    <ButtonLink
+                        cssVar="secondary"
+                        href="https://github.com/Specy/asm-editor"
+                        target="_blank"
+                        {@attach tooltip('Star the project on github')}
+                    >
+                        <Icon>
+                            <FaStar />
+                        </Icon>
+                        <span class="label">Star on github</span>
+                    </ButtonLink>
+                </div>
+            {/if}
+            {@render children?.()}
+            {#if AI_FEATURES_ENABLED && aiToggle}
+                <button
+                    type="button"
+                    class="icon ai"
+                    onclick={aiToggle.onclick}
+                    {@attach tooltip(aiToggle.title)}
                 >
-                    {#if menuOpen}
-                        <FaTimes />
+                    {#if aiToggle.open}
+                        <!-- an unplugin icon fills its parent, so it needs the sized box `Icon` gives
+                         it; `SparklesIcon` carries its own 1em size. -->
+                        <Icon size={1}>
+                            <FaTimes />
+                        </Icon>
                     {:else}
-                        <FaBars />
+                        <SparklesIcon />
                     {/if}
-                </Icon>
-            </div>
-        {/if}
-    </div>
+                    <span class="label">{aiToggle.label}</span>
+                </button>
+            {:else if AI_FEATURES_ENABLED && !compact && !exclude?.includes('ai-chat')}
+                <a class="icon ai" href={resolve('/chat')} {@attach tooltip('AI Chat')}>
+                    <SparklesIcon />
+                    <span class="label">AI Chat</span>
+                </a>
+            {/if}
+            {#if hasMenu}
+                <div class="menu">
+                    <Icon
+                        onClick={() => (menuOpen = !menuOpen)}
+                        label={menuOpen ? 'Close the menu' : 'Open the menu'}
+                    >
+                        {#if menuOpen}
+                            <FaTimes />
+                        {:else}
+                            <FaBars />
+                        {/if}
+                    </Icon>
+                </div>
+            {/if}
+        </div>
+    {/if}
 </Navbar>
 
 <style lang="scss">

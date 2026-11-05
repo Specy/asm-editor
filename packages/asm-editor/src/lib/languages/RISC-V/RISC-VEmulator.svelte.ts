@@ -19,7 +19,7 @@ import {
     RegisterSize
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { MarsTarget } from '#lib/languages/mars/marsCheck.ts'
-import { MarsEmulator } from '#lib/languages/mars/MarsEmulator.svelte.ts'
+import { MarsEmulator, type MarsInterruptEntry } from '#lib/languages/mars/MarsEmulator.svelte.ts'
 import { memoryBackstepMutation, registerBackstepMutation } from '#lib/languages/mars/marsUndo.ts'
 import { exitStepText, randomStreamStepText } from '#lib/languages/mars/marsHandlers.ts'
 import type { BuildInput } from '#lib/projectFiles.ts'
@@ -107,10 +107,11 @@ class AsmEditorRISCVEmulator extends MarsEmulator<JsRiscV, JsBackStep, RISCVRegi
         return this.is64Bit ? 'RISC-V-64' : 'RISC-V'
     }
 
+    /** RV32's unsigned, as every address the Emulator reports is. */
     _getPc(): bigint {
         const riscv = this.core
         if (!riscv) return 0n
-        return this.is64Bit ? BigInt(riscv.programCounterLong) : BigInt(riscv.programCounter)
+        return this.is64Bit ? BigInt(riscv.programCounterLong) : BigInt(riscv.programCounter >>> 0)
     }
 
     _getSp(): bigint {
@@ -202,6 +203,57 @@ class AsmEditorRISCVEmulator extends MarsEmulator<JsRiscV, JsBackStep, RISCVRegi
     }
 
     /**
+     * What raised a RISC-V interrupt, from its `ucause`, and for an external one from the `utval`
+     * the receiver (0x40) or the transmitter (0x80) left, as RARS numbers them.
+     */
+    protected interruptName(cause: number): string {
+        const utval = Number(
+            composeHighLowPairs(this.requireCore().getControlAndStatusRegistersValues())[
+                RISCVCsrRegisterNames.indexOf('utval')
+            ] & 0xffn
+        )
+        return riscvInterruptName(cause & 0x7fffffff, utval)
+    }
+
+    /** `uie` bit 8: a device's request, a key's, ends a `wfi` only while it is set. */
+    protected externalInterruptsEnabled(): boolean {
+        const core = this.core
+        if (!core) return false
+        const uie = composeHighLowPairs(core.getControlAndStatusRegistersValues())[
+            RISCVCsrRegisterNames.indexOf('uie')
+        ]
+        return (uie & UIE_EXTERNAL) !== 0n
+    }
+
+    /**
+     * An interrupt taken is the one step that writes `ucause` with its top bit set and `uepc`
+     * together, and sends the program counter to the handler `utvec` names; `utval` tells the
+     * keyboard and the display apart, as for the Log.
+     */
+    protected interruptEntry(steps: readonly JsBackStep[]): MarsInterruptEntry | null {
+        let cause: bigint | undefined
+        let utval = 0n
+        let epc = false
+        let handler: number | undefined
+        for (const step of steps) {
+            if (step.action === BackStepAction.PC_RESTORE)
+                handler = Number(BigInt.asUintN(32, BigInt(step.newValue)))
+            if (step.action !== BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE) continue
+            if (step.param1 === CSR_UCAUSE) cause = BigInt(step.newValue)
+            else if (step.param1 === CSR_UTVAL) utval = BigInt(step.newValue)
+            else if (step.param1 === CSR_UEPC) epc = true
+        }
+        //an interrupt's `ucause` has its top bit set, which a signed reading of it makes negative
+        if (cause === undefined || cause >= 0n || !epc || handler === undefined) return null
+        const code = Number(BigInt.asUintN(31, cause))
+        return {
+            name: riscvInterruptName(code, Number(utval & 0xffn)),
+            code,
+            handler
+        }
+    }
+
+    /**
      * One back step as a mutation of its instruction's row, or none for the Core's own bookkeeping.
      * Every action has a case, so a new one is a type error here rather than a row nobody chose.
      */
@@ -253,11 +305,22 @@ class AsmEditorRISCVEmulator extends MarsEmulator<JsRiscV, JsBackStep, RISCVRegi
                     value: `Control and status register ${kind} 0x${step.param1.toString(16)}`
                 }
             }
-            //the cycle and instret counters are bookkeeping the program did not ask for, and the
-            //Core advances them once per instruction, so the entry that undoes them is not a
-            //mutation the diff should show; nor is the heap break the Core keeps of its layout
+            //the cycle and instret counters are bookkeeping the program did not ask for, which the
+            //Core now takes back with each instruction's other entries rather than in an entry of
+            //its own, so the action never comes; nor is the heap break the Core keeps of its
+            //layout a mutation the diff should show, nor a call or return restore, the debugger's
+            //bookkeeping of its call stack, which the Call stack panel shows
             case BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT:
             case BackStepAction.HEAP_RESTORE:
+            case BackStepAction.CALL_RESTORE:
+            case BackStepAction.RETURN_RESTORE:
+                return null
+            //a store into `timecmp` arms the timer, and taking its interrupt disarms it
+            case BackStepAction.TIMER_ARMED_RESTORE:
+                return { type: 'Other', value: step.param1 ? 'Timer disarmed' : 'Timer armed' }
+            //the display's request, sent by a store and spent by the interrupt that takes it, is
+            //the device's bookkeeping, as its line is: the row of the interrupt says it was taken
+            case BackStepAction.INTERRUPT_PULSES_RESTORE:
                 return null
             //the two a Poke records: the whole Poke, and the restore of a CSR written through its
             //own value. A poke group is rendered from its `writes` instead
@@ -304,6 +367,26 @@ function riscvRegisterFileDescriptors(systemSize: RegisterSize): RegisterFileDes
             registers: RISCVCsrRegisterNames.map((name) => ({ name }))
         }
     ]
+}
+
+/** `uie`'s and `uip`'s bit for external interrupts, the receiver's and the transmitter's. */
+const UIE_EXTERNAL = 0x100n
+
+/** The CSRs an interrupt writes, by their numbers. */
+const CSR_UEPC = 0x041
+const CSR_UCAUSE = 0x042
+const CSR_UTVAL = 0x043
+
+/**
+ * What raised a RISC-V interrupt, from `ucause`'s code without its top bit, and for an external
+ * one from the `utval` the receiver (0x40) or the transmitter (0x80) left, as RARS numbers them.
+ */
+function riscvInterruptName(code: number, utval: number): string {
+    if (code === 4) return 'Timer interrupt'
+    if (code === 0) return 'Software interrupt'
+    if (utval === 0x40) return 'Keyboard interrupt'
+    if (utval === 0x80) return 'Display interrupt'
+    return 'External interrupt'
 }
 
 /**

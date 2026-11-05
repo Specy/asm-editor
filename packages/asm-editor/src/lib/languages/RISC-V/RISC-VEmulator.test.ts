@@ -1,7 +1,10 @@
+import { readExample, exampleSourcePath } from '#lib/examples.server.ts'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
+import { inputControllerEntries } from '#lib/documentation/inputController.ts'
+import { soundDeviceExamples } from '#lib/documentation/soundDevices.ts'
 import { RecordingAudioOutput } from '#lib/languages/peripherals/audio/AudioOutput.ts'
 import { RISCV } from '@specy/risc-v'
 import { RISCVEmulator } from '#lib/languages/RISC-V/RISC-VEmulator.svelte.ts'
@@ -15,8 +18,14 @@ import {
     MARS_TRANSMITTER_DATA
 } from '#lib/languages/mars/MarsDevices.ts'
 import type { ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
-import type { Testcase } from '#lib/Project.svelte.ts'
+import type { MarsCore } from '#lib/languages/mars/MarsDevices.ts'
+import type { Project, Testcase } from '#lib/Project.svelte.ts'
 import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
+import {
+    EXCEPTION_EXAMPLE,
+    KEYBOARD_EXAMPLE,
+    TIMER_EXAMPLE
+} from '#lib/documentation/mars/interrupts.ts'
 import { ProgramClock } from '#lib/languages/peripherals/ProgramClock.ts'
 import {
     InterpreterStatus,
@@ -58,18 +67,25 @@ type Options = {
     typed?: string
     /** A virtual clock, so an animated example's frame waits do not make the test sleep. */
     virtualClock?: boolean
+    /** A clock of the test's own, which `virtualClock` stands in for when it is not given. */
+    clock?: ProgramClock
     limit?: number
     fileSystem?: FileSystem
     audio?: Audio
+    /** RV32 unless a test asks for RV64. */
+    language?: 'RISC-V' | 'RISC-V-64'
 }
 
 async function build(code: string, options: Options = {}) {
     const keyboard = options.keyboard ?? new Keyboard()
     const emulator = RISCVEmulator(code, {
+        ...(options.language ? { language: options.language } : {}),
         display: options.display ?? SMALL,
         peripherals: {
             keyboard,
-            clock: options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined,
+            clock:
+                options.clock ??
+                (options.virtualClock ? new ProgramClock({ mode: 'virtual' }) : undefined),
             fileSystem: options.fileSystem,
             audio: options.audio
         }
@@ -341,6 +357,28 @@ describe('RISC-V bitmap display', () => {
         expect(pixelAt(emulator, 0, 0)).toBe(0x000000)
     })
 
+    it('reads back only the block an Undo restored, not the whole grid', async () => {
+        //a 64 by 16 grid is four of the Core's 1 KB blocks; the program draws in the first two
+        const display = { ...SMALL, unitWidth: 1, unitHeight: 1, width: 64, height: 16 }
+        const emulator = await run(
+            DATA + storePixel(0, '0x00ff0000') + storePixel(511, '0x0000ff00') + EXIT,
+            { display }
+        )
+        expect(pixelAt(emulator, 63, 7)).toBe(0x00ff00)
+        const core = (emulator as unknown as { core: Pick<MarsCore, 'readMemoryWords'> }).core
+        const read = core.readMemoryWords.bind(core)
+        const counts: number[] = []
+        core.readMemoryWords = (address, count) => {
+            counts.push(count)
+            return read(address, count)
+        }
+        for (let step = 0; step < 8 && pixelAt(emulator, 63, 7) !== 0; step++) emulator.undo(1)
+        expect(pixelAt(emulator, 63, 7)).toBe(0x000000)
+        expect(pixelAt(emulator, 0, 0)).toBe(0xff0000)
+        //the second block's 256 words, which the undone store had written, and nothing else
+        expect(counts).toEqual([256])
+    })
+
     it('comes back blank in the configured geometry after Build and after Stop', async () => {
         const emulator = await run(DATA + storePixel(0, '0x00ffffff') + EXIT)
         expect(pixelAt(emulator, 0, 0)).toBe(0xffffff)
@@ -510,17 +548,21 @@ describe('RISC-V memory-mapped keyboard and display', () => {
         expect(emulator.readMemoryBytes(control, 4)[0]).toBe(MARS_READY_BIT)
     })
 
-    it('stops with an error naming the feature when a program enables interrupts', async () => {
+    it('keeps the interrupt-enable bit a program stores, beside the Ready bit the device states', async () => {
         const emulator = await run(
             DATA +
                 `        li      s0, ${MARS_RECEIVER_CONTROL | 0}
-        li      t1, ${MARS_INTERRUPT_ENABLE_BIT}
+        li      t1, ${MARS_INTERRUPT_ENABLE_BIT | MARS_READY_BIT}
         sw      t1, 0(s0)
+        lw      s1, 0(s0)
 ` +
                 EXIT
         )
-        expect(emulator.errors.join('\n')).toContain('Interrupt-driven I/O is not supported')
-        expect(emulator.errors.join('\n')).toContain('receiver control register')
+        expect(emulator.errors).toEqual([])
+        //no key waits, so Ready is the device's 0, and the enable bit is the program's 1; no
+        //handler was installed and none is needed while nothing asks
+        const s1 = emulator.registers.find((register) => register.name === 's1')!
+        expect(Number(s1.value)).toBe(MARS_INTERRUPT_ENABLE_BIT)
     })
 
     it('does not consume pending input when the memory viewer reads the data register', async () => {
@@ -990,7 +1032,7 @@ main:
 
 describe('the RISC-V examples', () => {
     it('draws the bitmap tour', async () => {
-        const code = readFileSync('examples/risc-v/bitmap-tour.s', 'utf8')
+        const code = readExample('risc-v/bitmap-tour.s')
         //no display is passed: the example's own `@screen` comment is what configures the Screen
         const emulator = await run(code)
         expect(emulator.errors).toEqual([])
@@ -1004,7 +1046,7 @@ describe('the RISC-V examples', () => {
     }, 15_000)
 
     it('animates the bouncing ball and lets program time pass', async () => {
-        const code = readFileSync('examples/risc-v/bouncing-ball.s', 'utf8')
+        const code = readExample('risc-v/bouncing-ball.s')
         const emulator = await run(code, { virtualClock: true, limit: 400_000 })
         expect(emulator.peripherals.screen.width).toBe(128)
         //the ball is somewhere on the background it painted. The run is cut off at its instruction
@@ -1023,8 +1065,15 @@ describe('the RISC-V examples', () => {
     })
 
     describe('the Pac-Man Project', () => {
-        const folder = 'examples/risc-v/pacman'
-        const { project } = makeProjectFromArchive(readFileSync(`${folder}/pacman.asmproj`))
+        const folder = exampleSourcePath('risc-v/pacman/README.md').replace(/\/README\.md$/, '')
+        let project: Project
+        beforeAll(async () => {
+            ;({ project } = await makeProjectFromArchive(
+                readFileSync(
+                    new URL('../../../../../examples/dist/risc-v/pacman.asmproj', import.meta.url)
+                )
+            ))
+        })
 
         /** One of its Programs built and run to its title screen, with its own Files to read. */
         async function toTitle(entry: string) {
@@ -1096,11 +1145,13 @@ describe('the RISC-V examples', () => {
         ]
 
         it('is the folder, packed, with its two Programs', () => {
-            //scripts/pack-example-projects.mjs packs the archive from the folder: the two must agree
+            //The repository packs the program's Files, leaving its metadata beside them.
             const names = (readdirSync(folder, { recursive: true }) as string[])
                 .map((name) => name.split('\\').join('/'))
                 .filter(
-                    (name) => name !== 'pacman.asmproj' && statSync(`${folder}/${name}`).isFile()
+                    (name) =>
+                        !['example.json', 'compilations.json', 'build.mjs'].includes(name) &&
+                        statSync(`${folder}/${name}`).isFile()
                 )
                 .sort()
             expect(Object.keys(project.files).sort()).toEqual(names)
@@ -1158,7 +1209,7 @@ describe('the RISC-V examples', () => {
     })
 
     it('echoes typed characters through the keyboard and display example', async () => {
-        const code = readFileSync('examples/risc-v/keyboard-display.s', 'utf8')
+        const code = readExample('risc-v/keyboard-display.s')
         const emulator = await run(code, { typed: 'abq' })
         expect(emulator.errors).toEqual([])
         expect(emulator.stdOut.endsWith('abq')).toBe(true)
@@ -1392,6 +1443,371 @@ __asm_editor_main:
  * rather than leaving it to a comment in the Core. A second writer, a different step, or an undo
  * that stops rewinding them all show up here.
  */
+/**
+ * Interrupts and RARS's timer against the real Core ([ADR 0074](../../../../../../docs/adr/0074-mips-and-risc-v-timers-count-what-their-references-count.md)):
+ * the "Interrupts and the timer" chapter's two programs, the keyboard's level-triggered requests,
+ * a Step landing on the handler with the Log saying why, Undo back out of it, and `time` counting
+ * only while the program runs.
+ */
+describe('RISC-V interrupts and the timer', () => {
+    const value = (emulator: Emulator, name: string) =>
+        Number(emulator.registers.find((register) => register.name === name)!.value)
+    //read from the Core, not the panels, which a key typed between two Steps does not refresh
+    const csr = (emulator: Emulator, name: string) =>
+        Number(
+            emulator._getRegisterFileValues('csr')[
+                (RISCVCsrRegisterNames as readonly string[]).indexOf(name)
+            ]
+        )
+    const label = (emulator: Emulator, name: string) => Number(emulator._resolveMemoryLabel(name))
+
+    it('runs the chapter’s timer program: five ticks of 100 ms, waiting with wfi', async () => {
+        const clock = new ProgramClock({ mode: 'virtual' })
+        const emulator = await build(TIMER_EXAMPLE['RISC-V'], { clock })
+        const before = emulator._getInstructionsExecuted()
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('5')
+        expect(emulator.terminated).toBe(true)
+        //each wfi moved the clock to timecmp: five ticks of 100 ms, and not a spin of the CPU
+        expect(clock.now()).toBe(500)
+        expect(Number(emulator._getInstructionsExecuted() - before)).toBeLessThan(200)
+    })
+
+    it('says in the Log, as the chapter quotes, when a Step takes the timer interrupt', async () => {
+        const emulator = await build(TIMER_EXAMPLE['RISC-V'], { virtualClock: true })
+        const handler = label(emulator, 'handler')
+        let steps = 0
+        while (Number(emulator.pc) >>> 0 !== handler && steps++ < 100) await emulator.step()
+        expect(emulator.notes.map((note) => note.text)).toEqual([
+            'Timer interrupt at 0x00400038 → handler at 0x00400054 (handler)'
+        ])
+        expect(handler).toBe(0x00400054)
+    })
+
+    it('runs it as a Testcase on the virtual clock, which wfi moves to timecmp', async () => {
+        const emulator = await build(TIMER_EXAMPLE['RISC-V'])
+        await emulator.runTestcase(SCREEN_TESTCASE, INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('5')
+    })
+
+    it('echoes every key through the receiver’s interrupt, keys typed before it was enabled included', async () => {
+        //two quick keys and Enter, all typed before the program set the enable bit
+        const emulator = await run(KEYBOARD_EXAMPLE['RISC-V'], { typed: 'ab\n' })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('ab\n')
+        expect(emulator.terminated).toBe(true)
+    })
+
+    it('runs the chapter’s exception handler, which reports the exception and ends the program', async () => {
+        const emulator = await run(EXCEPTION_EXAMPLE['RISC-V'])
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('4')
+        expect(emulator.terminated).toBe(true)
+    })
+
+    it('echoes a Testcase’s scripted input through the same interrupts', async () => {
+        const emulator = await build(KEYBOARD_EXAMPLE['RISC-V'])
+        await emulator.runTestcase({ ...SCREEN_TESTCASE, input: ['hi'] }, INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('hi\n')
+    })
+
+    it('steps into the handler, says so in the Log, and steps back out with Undo', async () => {
+        const keyboard = new Keyboard()
+        const emulator = await build(KEYBOARD_EXAMPLE['RISC-V'], { keyboard, virtualClock: true })
+        const loop = label(emulator, 'loop')
+        while (Number(emulator.pc) !== loop) await emulator.step()
+        expect(emulator.notes).toEqual([])
+        keyboard.typeText('x')
+        const before = {
+            pc: Number(emulator.pc),
+            ustatus: csr(emulator, 'ustatus'),
+            uepc: csr(emulator, 'uepc'),
+            ucause: csr(emulator, 'ucause'),
+            utval: csr(emulator, 'utval')
+        }
+        expect(csr(emulator, 'uip') & 0x100).toBe(0x100)
+        await emulator.step()
+        const handler = label(emulator, 'handler')
+        expect(Number(emulator.pc)).toBe(handler)
+        expect(csr(emulator, 'uepc')).toBe(loop)
+        expect(csr(emulator, 'utval')).toBe(0x40)
+        const hex = (address: number) => `0x${address.toString(16).padStart(8, '0')}`
+        expect(emulator.notes.map((note) => note.text)).toEqual([
+            `Keyboard interrupt at ${hex(loop)} → handler at ${hex(handler)} (handler)`
+        ])
+        //and its History row is the interrupt, not the interrupted `wfi` running
+        const [entry] = emulator._getUndoHistory(1)
+        expect(entry).toMatchObject({ kind: 'irq', pc: loop, line: -1 })
+        expect(entry.mutations[0]).toEqual({
+            type: 'TakeException',
+            value: {
+                vector: 8,
+                name: 'Keyboard interrupt',
+                from: BigInt(loop),
+                handler: BigInt(handler),
+                label: 'handler'
+            }
+        })
+        //the handler's first instruction has not run: the key still waits
+        expect(value(emulator, 't1')).toBe(0)
+
+        expect(emulator.undo(1)).toBe(1)
+        expect(Number(emulator.pc)).toBe(before.pc)
+        expect(csr(emulator, 'ustatus')).toBe(before.ustatus)
+        expect(csr(emulator, 'uepc')).toBe(before.uepc)
+        expect(csr(emulator, 'ucause')).toBe(before.ucause)
+        expect(csr(emulator, 'utval')).toBe(before.utval)
+        //the key is still waiting, so stepping forward takes the interrupt again
+        await emulator.step()
+        expect(Number(emulator.pc)).toBe(handler)
+        await emulator.step()
+        expect(value(emulator, 't1')).toBe('x'.charCodeAt(0))
+        expect(csr(emulator, 'uip') & 0x100).toBe(0)
+    })
+
+    /**
+     * A Step on a `wfi` that waits: the status line names only what can end the wait, Pause and
+     * Stop end it as they end a Run's, and a key ends it only while the receiver's interrupt and
+     * `uie` bit 8 are both on.
+     */
+    describe('a Step on wfi', () => {
+        const settled = async (promise: Promise<unknown>) => {
+            let done = false
+            void promise.then(() => (done = true))
+            //long enough for a key or a timer to have ended the wait, were it going to
+            await new Promise((resolve) => setTimeout(resolve, 30))
+            return done
+        }
+        const stepTo = async (emulator: Emulator, instruction: string, code: string) => {
+            const line = code.split('\n').findIndex((text) => text.includes(instruction))
+            while (emulator.line !== line) await emulator.step()
+        }
+
+        it('says when nothing can end the wait, warns once, and ends it at Pause', async () => {
+            const keyboard = new Keyboard()
+            const code = `        .text
+main:   li      t0, 0x110       # uie: the timer and external interrupts
+        csrs    t0, uie
+first:  wfi                     # no timer armed, no device's interrupt on
+second: wfi
+        li      a7, 10
+        ecall`
+            const emulator = await build(code, { keyboard })
+            await stepTo(emulator, 'first:', code)
+            const step = emulator.step()
+            expect(await settled(step)).toBe(false)
+            expect(emulator.runStatus).toBe('No interrupt can end this wfi. Press Pause or Stop.')
+            expect(emulator.stepWaiting).toBe(true)
+            const warnings = () => emulator.notes.filter((note) => note.tone === 'warning')
+            expect(warnings().map((note) => note.text)).toEqual([
+                expect.stringContaining(
+                    'wfi cannot resume because no enabled interrupt source can wake it'
+                )
+            ])
+            //a key is no interrupt this program turned on
+            keyboard.typeText('a')
+            expect(await settled(step)).toBe(false)
+            emulator.pause()
+            await step
+            expect(emulator.stepWaiting).toBe(false)
+            expect(emulator.runStatus).toBeUndefined()
+            expect(emulator.line).toBe(
+                code.split('\n').findIndex((text) => text.includes('second:'))
+            )
+            //the second wait says so again on the status line, but the Log only once a run
+            const again = emulator.step()
+            expect(await settled(again)).toBe(false)
+            expect(emulator.runStatus).toContain('No interrupt can end this wfi')
+            expect(warnings()).toHaveLength(1)
+            emulator.pause()
+            await again
+        })
+
+        it('waits for a key while the receiver’s interrupt and uie bit 8 are on', async () => {
+            const keyboard = new Keyboard()
+            const code = `        .text
+main:   li      t0, 0x100       # uie bit 8: external interrupts
+        csrs    t0, uie
+        li      s0, 0xffff0000
+        li      t0, 2
+        sw      t0, 0(s0)       # the receiver's interrupt on
+        wfi
+        li      a7, 10
+        ecall`
+            const emulator = await build(code, { keyboard })
+            await stepTo(emulator, 'wfi', code)
+            const step = emulator.step()
+            expect(await settled(step)).toBe(false)
+            expect(emulator.runStatus).toBe('Waiting for a keyboard interrupt (wfi)')
+            expect(emulator.notes.filter((note) => note.tone === 'warning')).toEqual([])
+            keyboard.typeText('a')
+            await step
+            expect(emulator.runStatus).toBeUndefined()
+        })
+
+        it('is not woken by a key that uie holds back, and names only the timer', async () => {
+            const keyboard = new Keyboard()
+            const code = `        .text
+main:   li      t0, 0x10        # uie bit 4 only: the timer, not external interrupts
+        csrs    t0, uie
+        li      s0, 0xffff0000
+        li      t0, 2
+        sw      t0, 0(s0)       # the receiver's interrupt on, which uie holds back
+        li      s1, 0xffff0018
+        lw      t1, 0(s1)
+        li      t2, 100000
+        add     t1, t1, t2
+        sw      t1, 8(s1)       # the timer, 100 seconds from now
+        sw      zero, 12(s1)
+        wfi
+        li      a7, 10
+        ecall`
+            const emulator = await build(code, { keyboard })
+            await stepTo(emulator, 'wfi', code)
+            const step = emulator.step()
+            expect(await settled(step)).toBe(false)
+            expect(emulator.runStatus).toBe('Waiting for a timer interrupt (wfi)')
+            keyboard.typeText('a')
+            expect(await settled(step)).toBe(false)
+            //Stop, which clears the execution, ends it too
+            emulator.clear()
+            await step.catch(() => {})
+            expect(emulator.stepWaiting).toBe(false)
+        })
+    })
+
+    //a display lab written for RARS, the transmitter's interrupt on for good and a handler that
+    //just returns once the string is printed: one request per character taken, so it ends
+    it('runs a RARS display lab that never turns the transmitter’s interrupt off', async () => {
+        const lab = `        .text
+main:   la      t0, handler
+        csrw    t0, utvec
+        li      t0, 0x100       # uie bit 8: external interrupts
+        csrs    t0, uie
+        csrsi   ustatus, 1
+        li      s1, 0xffff0000
+        li      t0, 2
+        sw      t0, 8(s1)       # transmitter control bit 1: interrupts on, for good
+        la      s0, message
+        lb      t1, 0(s0)       # print the first character: each one taken asks for the next
+        addi    s0, s0, 1
+        sw      t1, 12(s1)
+wait:   beqz    s2, wait        # the handler sets s2 once the string is done
+        li      a7, 10
+        ecall
+
+handler:                        # main leaves s0, s2, t1 to t3 to the handler
+        csrr    t2, utval
+        li      t3, 0x80        # the display
+        bne     t2, t3, back
+        lb      t1, 0(s0)
+        beqz    t1, finished
+        sw      t1, 12(s1)
+        addi    s0, s0, 1
+back:   uret
+finished:
+        li      s2, 1
+        uret
+
+        .data
+message: .asciz "hi"`
+        const emulator = await build(lab)
+        //the Core counts every instruction since it loaded, so the run's own are the difference
+        const before = emulator._getInstructionsExecuted()
+        await emulator.run(200_000)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('hi')
+        expect(emulator.terminated).toBe(true)
+        expect(Number(emulator._getInstructionsExecuted() - before)).toBeLessThan(1_000)
+    })
+
+    it('stops a Run on a breakpoint at the handler’s first instruction', async () => {
+        const emulator = await build(KEYBOARD_EXAMPLE['RISC-V'], { typed: 'q' })
+        const lines = KEYBOARD_EXAMPLE['RISC-V'].split('\n')
+        const handlerLine = lines.findIndex((line) => line.includes('lw      t1, 4(s0)'))
+        emulator.toggleBreakpoint(handlerLine)
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(Number(emulator.pc)).toBe(label(emulator, 'handler'))
+        expect(emulator.terminated).toBe(false)
+    })
+
+    it('counts time only while the program runs: not between Steps', async () => {
+        let offset = 0
+        const clock = new ProgramClock({ now: () => performance.now() + offset })
+        const emulator = await build(
+            `        .text
+main:   li      s0, 0xffff0018
+        lw      t0, 0(s0)
+        lw      t1, 0(s0)
+        li      a7, 32
+        li      a0, 30
+        ecall
+        lw      t2, 0(s0)
+` + EXIT,
+            { clock }
+        )
+        await emulator.step()
+        await emulator.step()
+        await emulator.step()
+        //a second passes between two Steps: the program does not see it
+        offset += 1000
+        await emulator.step()
+        expect(value(emulator, 't1') - value(emulator, 't0')).toBeLessThan(100)
+        //a Run counts its waits: the 30 ms sleep shows
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(value(emulator, 't2') - value(emulator, 't1')).toBeGreaterThanOrEqual(30)
+        expect(value(emulator, 't2') - value(emulator, 't1')).toBeLessThan(1000)
+    })
+
+    //RV64 has RARS's Timer Tool too: a display covering its registers turns it off there as well,
+    //or the pixels stored over `timecmp` would arm it and the pixel over `time` read the clock
+    it.each(['RISC-V', 'RISC-V-64'] as const)(
+        'switches the timer off on %s while a display at 0xffff0000 covers its registers',
+        async (language) => {
+            const program = `        .text
+main:   la      t0, handler
+        csrw    t0, utvec
+        li      t0, 0x10
+        csrs    t0, uie
+        li      s0, 0xffff0018
+        sw      zero, 8(s0)      # timecmp = 0: due at once
+        sw      zero, 12(s0)
+        csrsi   ustatus, 1
+        li      t1, 3000         # the timer is read every 1,024 instructions
+spin:   addi    t1, t1, -1
+        bnez    t1, spin
+        li      a7, 10
+        ecall
+handler:
+        li      s1, 1
+        li      t0, -1
+        sw      t0, 12(s0)
+        uret
+`
+            const uncovered = await run(program, { virtualClock: true, language })
+            expect(uncovered.errors).toEqual([])
+            expect(value(uncovered, 's1')).toBe(1)
+            expect(uncovered._getDeviceRegions().map((region) => region.name)).toContain('Timer')
+            const covering = {
+                unitWidth: 8,
+                unitHeight: 8,
+                width: 64,
+                height: 64,
+                baseAddress: 0xffff0000
+            }
+            const covered = await run(program, { virtualClock: true, display: covering, language })
+            expect(covered.errors).toEqual([])
+            expect(value(covered, 's1')).toBe(0)
+            expect(covered._getDeviceRegions().map((region) => region.name)).not.toContain('Timer')
+        }
+    )
+})
+
 describe('RISC-V cycle and instret counters', () => {
     /** Reads a general register the program wrote, as a number. */
     function registerValue(emulator: Emulator, name: string): number {
@@ -2727,5 +3143,315 @@ main:   li      t0, 0xffff0100
         expect(results[0]?.errors ?? []).toEqual([])
         expect(results[0]?.passed).toBe(true)
         expect(synthWrites(output)).toEqual([])
+    })
+})
+
+/**
+ * The Input controller at 0xffff0300 against the real Core, on RV32 and RV64
+ * ([the design record](../../../../../../docs/design/input-controller.md)). The register semantics
+ * are covered against a fake bus in `InputController.test.ts` and end to end on MIPS in
+ * `MIPSEmulator.test.ts`; these are what differs on RARS.
+ */
+describe('RISC-V Input controller', () => {
+    it('runs the chapter’s first program: the arrows pressed, until Escape', async () => {
+        const entry = inputControllerEntries('RISC-V', 'risc-v', '/documentation').find(
+            (candidate) => candidate.anchor === 'first-program'
+        )!
+        const example = /```\w+\n([\s\S]*?)```/.exec(entry.searchText)![1]
+        const keyboard = new Keyboard()
+        const emulator = await build(example, { keyboard, virtualClock: true })
+        await emulator.step()
+        for (const code of ['ArrowLeft', 'ArrowUp', 'KeyA', 'ArrowRight', 'Escape']) {
+            keyboard.keyDown({ code, key: code })
+            keyboard.keyUp({ code, key: code })
+        }
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        expect(emulator.stdOut).toBe('LUR')
+        expect(emulator.terminated).toBe(true)
+    })
+
+    it('says so when the simulator has no Input controller, as under a covering display', async () => {
+        const entry = inputControllerEntries('RISC-V', 'risc-v', '/documentation').find(
+            (candidate) => candidate.anchor === 'first-program'
+        )!
+        const example = /```\w+\n([\s\S]*?)```/.exec(entry.searchText)![1]
+        const emulator = await run(example, {
+            display: { ...SMALL, baseAddress: 0xffff0000, width: 512, height: 512 }
+        })
+        expect(emulator.stdOut).toBe('This simulator has no Input controller.\n')
+    })
+
+    const record = (kind: number, code: number, x = 0, y = 0) =>
+        (y << 21) | (x << 11) | (kind << 8) | code
+    const value = (emulator: Emulator, name: string) =>
+        emulator.registers.find((r) => r.name === name)?.value ?? -1n
+
+    it.each(['RISC-V', 'RISC-V-64'] as const)(
+        'reads its registers on %s, words that are never negative',
+        async (language) => {
+            const keyboard = new Keyboard()
+            const code =
+                DATA +
+                `        li      s0, 0xffff0300
+        lw      t0, 0(s0)
+        lw      t1, 8(s0)
+        lw      t2, 12(s0)
+        lw      t3, 16(s0)
+        lbu     t4, 0x3c(s0)
+        lw      t5, 12(s0)
+` +
+                EXIT
+            const emulator = RISCVEmulator(code, {
+                language,
+                display: SMALL,
+                peripherals: { keyboard }
+            })
+            await emulator.check()
+            await emulator.compile(200, code)
+            await emulator.step()
+            keyboard.keyDown({ code: 'MetaRight', key: 'Meta' })
+            emulator.peripherals.mouse.moveTo(7, 7)
+            emulator.peripherals.mouse.wheel(-3)
+            await emulator.run(INSTRUCTION_LIMIT)
+            expect(emulator.errors).toEqual([])
+            expect(value(emulator, 't0')).toBe(0x494e5001n)
+            expect(value(emulator, 't1')).toBe(2n)
+            //the key went down before the pointer moved
+            expect(value(emulator, 't2')).toBe(BigInt(record(1, 0xe7)))
+            //y 7, x 7, nothing held: positive on RV64 too, where lw sign-extends
+            expect(value(emulator, 't3')).toBe(BigInt((7 << 21) | (7 << 11)))
+            //usage 0xe7 is bit 7 of the key map's last byte
+            expect(value(emulator, 't4')).toBe(0x80n)
+            expect(value(emulator, 't5')).toBe(BigInt(record(6, 0xfd, 7, 7)))
+        }
+    )
+
+    it('takes an event when an RV64 ld covers the Event register', async () => {
+        const keyboard = new Keyboard()
+        const code =
+            DATA +
+            `        li      s0, 0xffff0300
+        ld      t0, 8(s0)
+        lw      t1, 8(s0)
+` +
+            EXIT
+        const emulator = RISCVEmulator(code, {
+            language: 'RISC-V-64',
+            display: SMALL,
+            peripherals: { keyboard }
+        })
+        await emulator.check()
+        await emulator.compile(200, code)
+        await emulator.step()
+        keyboard.keyDown({ code: 'KeyA', key: 'a' })
+        keyboard.keyDown({ code: 'KeyB', key: 'b' })
+        await emulator.run(INSTRUCTION_LIMIT)
+        expect(emulator.errors).toEqual([])
+        //the oldest event in the high word; the Core reads that half first, so the Status half,
+        //read after it in the same instruction, already counts one event fewer
+        expect(value(emulator, 't0')).toBe((BigInt(record(1, 0x04)) << 32n) | 1n)
+        expect(value(emulator, 't1')).toBe(1n)
+    })
+
+    it('stops a program that sets the interrupt-enable bit with sb', async () => {
+        const emulator = await run(
+            DATA +
+                `        li      s0, 0xffff0300
+        li      t0, 2
+        sb      t0, 4(s0)
+` +
+                EXIT
+        )
+        expect(emulator.errors.join('\n')).toContain(
+            'The Input controller does not raise interrupts'
+        )
+    })
+})
+
+describe('RISC-V MIDI port and sampled-audio output', () => {
+    const examples = soundDeviceExamples('RISC-V')
+    const messages = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'midi' ? [[...c.message]] : []))
+    const chunks = (output: RecordingAudioOutput) =>
+        output.commands.flatMap((c) => (c.type === 'pcm' ? [c] : []))
+    const frames = (output: RecordingAudioOutput) =>
+        chunks(output).reduce((total, chunk) => total + chunk.frames.length / 2, 0)
+    const SCALE = [60, 62, 64, 65, 67, 69, 71, 72]
+    /**
+     * A sound program runs a hundred thousand instructions or so, each of whose memory accesses the
+     * Core checks against every observer on its memory, which every Emulator of the package shares:
+     * by the end of this file, the earlier tests' Emulators have left about a thousand there.
+     */
+    const HEAVY = 30_000
+    const testcase = (expectedOutput: string): Testcase => ({
+        input: [],
+        expectedOutput,
+        startingRegisters: {},
+        expectedRegisters: {},
+        startingMemory: [],
+        expectedMemory: []
+    })
+
+    it('runs the chapter’s MIDI example, a scale on a piano, each byte once the port can take it', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(examples.midi, {
+            audio: new Audio({ output }),
+            virtualClock: true
+        })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(messages(output)).toEqual([
+            [0xc0, 0],
+            ...SCALE.flatMap((key) => [
+                [0x90, key, 100],
+                [0x80, key, 0]
+            ])
+        ])
+        //each note heard when its last byte has left, 0.32 ms a byte, and held for its 300 ms
+        const at = output.commands.flatMap((c) => (c.type === 'midi' ? [c.at] : []))
+        expect(at[1]).toBeCloseTo(5 * 0.32, 9)
+        //the note off, after the sleep, on a line idle since: three bytes from then
+        expect(at[2]).toBeCloseTo(300 + 3 * 0.32, 9)
+        expect(output.prepared).toContainEqual({ kind: 'midiPort' })
+        //the program's end lets the port's last notes go
+        expect(output.commands.at(-1)).toMatchObject({ type: 'programEnd' })
+    })
+
+    it(
+        'runs the chapter’s sampled-audio example, two seconds of a 400 Hz square wave',
+        async () => {
+            const output = new RecordingAudioOutput()
+            const emulator = await run(examples.pcm, {
+                audio: new Audio({ output }),
+                virtualClock: true
+            })
+            expect(emulator.errors).toEqual([])
+            expect(emulator.terminated).toBe(true)
+            expect(frames(output)).toBe(16_000)
+            const [first, ...rest] = chunks(output)
+            expect(first).toMatchObject({ start: 0, rate: 8000 })
+            //mono frames are heard on both sides: ten samples high, ten low
+            const left = [...first.frames].filter((_, index) => index % 2 === 0).slice(0, 20)
+            expect(left).toEqual([...new Array(10).fill(0.25), ...new Array(10).fill(-0.25)])
+            //one unbroken stream: each chunk starts where the one before it ended
+            let end = first.start + (first.frames.length / 2 / 8000) * 1000
+            for (const chunk of rest) {
+                expect(chunk.start).toBeCloseTo(end, 6)
+                end = chunk.start + (chunk.frames.length / 2 / 8000) * 1000
+            }
+        },
+        HEAVY
+    )
+
+    it(
+        'keeps the timing of both in a Testcase, which waits on its virtual clock instead of spinning',
+        async () => {
+            //5,000 bytes through the port and 8,000 words into the FIFO, waiting on Status and Free
+            //alone: the first 4,096 bytes and 8,192 frames fit at once, the rest drain at their speeds
+            const code = `        .text
+main:   li      a7, 30
+        ecall
+        mv      s7, a0
+        li      s0, 0xffff0340
+        li      s1, 5000
+byte:   lw      t0, 4(s0)
+        andi    t0, t0, 0x40
+        bnez    t0, byte
+        li      t1, 0xfe
+        sb      t1, 0(s0)
+        addi    s1, s1, -1
+        bnez    s1, byte
+        li      a7, 30
+        ecall
+        sub     a0, a0, s7
+        li      a7, 1
+        ecall
+        li      a0, 32
+        li      a7, 11
+        ecall
+        li      a7, 30
+        ecall
+        mv      s7, a0
+        li      s0, 0xffff0350
+        li      t0, 1
+        sw      t0, 0(s0)
+        li      s1, 8000
+word:   lw      t0, 8(s0)
+        beqz    t0, word
+        sw      zero, 12(s0)
+        addi    s1, s1, -1
+        bnez    s1, word
+        li      a7, 30
+        ecall
+        sub     a0, a0, s7
+        li      a7, 1
+        ecall
+        li      a7, 10
+        ecall
+`
+            const output = new RecordingAudioOutput()
+            const emulator = await build(code, { audio: new Audio({ output }) })
+            //about 90,000 instructions: a program that spun on Status or Free would run into this limit
+            const results = await emulator.test(code, [testcase('289 976')], 200_000)
+            expect(results[0]?.errors ?? []).toEqual([])
+            expect(results[0]?.passed).toBe(true)
+            //a Testcase is silent
+            expect(messages(output)).toEqual([])
+            expect(frames(output)).toBe(0)
+        },
+        HEAVY
+    )
+
+    it(
+        'runs both chapter examples in a Testcase, silent and finished',
+        async () => {
+            for (const code of [examples.midi, examples.pcm]) {
+                const emulator = await build(code, { audio: new Audio() })
+                const results = await emulator.test(code, [testcase('')], INSTRUCTION_LIMIT)
+                expect(results[0]?.errors ?? []).toEqual([])
+                expect(results[0]?.passed).toBe(true)
+            }
+        },
+        HEAVY
+    )
+
+    it('takes back a note on Undo: one not heard yet is cut, one already heard is stopped', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await build(examples.midi, {
+            audio: new Audio({ output }),
+            virtualClock: true
+        })
+        const heard = (message: number[]) =>
+            messages(output).some((m) => m.join() === message.join())
+        for (let i = 0; i < 200 && !heard([0x90, 60, 100]); i++) await emulator.step()
+        expect(heard([0x90, 60, 100])).toBe(true)
+        //no time has passed on the virtual clock: the velocity byte is still in the port
+        emulator.undo(1)
+        expect(output.commands.at(-1)).toEqual({ type: 'cut', after: 4 * 0.32, device: 'midi' })
+        expect(heard([0x80, 60, 0])).toBe(false)
+        //step on through the 300 ms the note sounds, then back over it: the note it started ends
+        for (let i = 0; i < 200 && emulator.peripherals.clock.now() < 300; i++)
+            await emulator.step()
+        expect(emulator.peripherals.clock.now()).toBe(300)
+        let undone = 0
+        while (!heard([0x80, 60, 0]) && undone < 20) undone += emulator.undo(1)
+        expect(heard([0x80, 60, 0])).toBe(true)
+        expect(messages(output).filter((m) => m[0] === 0x90)).toHaveLength(2)
+    })
+
+    it('is off while the bitmap display covers both blocks at the memory map base', async () => {
+        const output = new RecordingAudioOutput()
+        const emulator = await run(examples.midi, {
+            audio: new Audio({ output }),
+            virtualClock: true,
+            display: { ...SMALL, baseAddress: 0xffff0000, width: 128, height: 128 }
+        })
+        expect(emulator.errors).toEqual([])
+        expect(emulator.terminated).toBe(true)
+        expect(messages(output)).toEqual([])
+        const names = emulator.memoryRegions.map((region) => region.name)
+        expect(names).not.toContain('MIDI port')
+        expect(names).not.toContain('Sampled-audio output')
     })
 })

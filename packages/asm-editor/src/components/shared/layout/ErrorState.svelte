@@ -9,7 +9,6 @@
     import { copyText } from '#lib/utils.ts'
     import Button from '#cmp/shared/button/Button.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import FaRedo from '~icons/fa-solid/redo'
     import FaCopy from '~icons/fa-solid/copy'
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
@@ -22,7 +21,7 @@
         children?: Snippet
         /** The error itself, shown to copy and offered to report; left out for an expected failure. */
         error?: unknown
-        /** A label above the title, such as `Error 404`. */
+        /** The status drawn large above the title, such as `404`. */
         code?: string
         /** Whether the first way out is Reload the page, which fixes most failures to load. */
         reload?: boolean
@@ -74,14 +73,9 @@
 <div class="error-state wb-cards" class:compact class:start={align === 'start'} role="alert">
     <div class="content">
         <header>
-            <span class="warning">
-                <FaExclamationTriangle />
-            </span>
-            <div class="heading">
-                {#if code}<span class="code">{code}</span>{/if}
-                <!-- a heading by role, so a page's own heading styles leave it alone -->
-                <div class="title" role="heading" aria-level="2">{title}</div>
-            </div>
+            {#if code}<span class="code">{code}</span>{/if}
+            <!-- a heading by role, so a page's own heading styles leave it alone -->
+            <div class="title" role="heading" aria-level="2">{title}</div>
         </header>
         {#if children}
             <div class="description">{@render children()}</div>
@@ -138,12 +132,12 @@
         padding: 2rem 1rem;
         /* read from the start whatever centres the notice it is placed in */
         text-align: start;
-        color: var(--secondary-text);
-        background: var(--secondary);
+        color: var(--background-text);
     }
+    /* a panel's or a pane's own surface is the secondary one */
     .compact {
         padding: 1rem;
-        background: none;
+        color: var(--secondary-text);
     }
     .content {
         margin: auto;
@@ -163,47 +157,23 @@
     }
     header {
         display: flex;
-        align-items: center;
-        gap: 0.7rem;
-    }
-    .warning {
-        display: grid;
-        place-items: center;
-        flex: none;
-        width: 2.2rem;
-        height: 2.2rem;
-        border-radius: 0.5rem;
-        color: var(--red);
-        background: color-mix(in srgb, var(--red) 15%, transparent);
-
-        :global(svg) {
-            width: 1.1rem;
-            height: 1.1rem;
-        }
-    }
-    .compact .warning {
-        width: 1.7rem;
-        height: 1.7rem;
-        border-radius: 0.4rem;
-
-        :global(svg) {
-            width: 0.85rem;
-            height: 0.85rem;
-        }
-    }
-    .heading {
-        display: flex;
         flex-direction: column;
-        min-width: 0;
     }
     .code {
-        font-size: 0.8rem;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
+        align-self: center;
+        margin-bottom: 2rem;
+        font-size: 4rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.02em;
         color: var(--red);
     }
+    .compact .code {
+        margin-bottom: 1rem;
+        font-size: 2.5rem;
+    }
     .title {
+        min-width: 0;
         margin: 0;
         font-size: 1.6rem;
         font-weight: 600;
@@ -322,6 +292,9 @@
     }
     /* a narrow column: the title shrinks and the actions take the full width */
     @container (max-width: 26rem) {
+        .code {
+            font-size: 3rem;
+        }
         .title {
             font-size: 1.25rem;
         }

@@ -53,10 +53,18 @@ export const UNIT_SIZE_MAX = 32
 
 /**
  * The display sizes it takes, in pixels: up to MARS's largest, whose grid of 1024 by 1024 words is
- * already all of static data, and down to a single pixel.
+ * already all of MARS's own static data, and down to a single pixel.
  */
 export const DISPLAY_SIZE_MIN = 1
 export const DISPLAY_SIZE_MAX = 1024
+
+/**
+ * Where static data and the heap end: 64 MB from the data segment's base, 0x10000000, where MARS's
+ * and RARS's end at 0x10400000, 4 MB, a documented superset
+ * ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md), decision 7). A grid in static
+ * data shares the bytes from 0x10010000 to here with the program's other data and the heap.
+ */
+export const MARS_DATA_SEGMENT_END = 0x14000000
 
 /**
  * "Base address for display". MARS builds this list from its `Memory` constants and defaults to

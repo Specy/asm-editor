@@ -95,6 +95,7 @@ The brief moved "save" out of the top bar but gave it no place in the rail. Save
 - Shift+S works as today.
 - Autosave stays a Preference that the Workbench reads. On a change it calls the host's save action silently, debounced for code, following the one save rule in [project-format.md](./project-format.md) (Saving).
 - The host hears of a change to the Files at once, before the debounce, so leaving asks about it. A save the debounce is still waiting on starts at once when the page is hidden or closed, together with what the Hex editor holds typed, and Save includes both, so nothing typed before it is left unsaved.
+- Update 2026-11-04: autosave waits for 3 seconds without changes, for every change rather than for code alone, and the Workbench's session starts the waiting save at once (`saveNow`) as the page is hidden or closed, as the Workbench goes, and when the host asks before it reads the stored Project, as Back, Home and a link do ([ADR 0076](../adr/0076-a-project-holds-64-mib-of-files.md)). While a save waits, the Workbench shows nothing: under autosave the changes are kept on their own, so Save stays hidden and leaving does not ask. Save shows, as before, when autosave is off or the last save failed. The exceptions: closing the tab asks, through the browser's own question, while the save of a Project of more than 16 MiB is still being written, since that write was measured to be lost when the tab went at once, and while a Project's linked file is still to be written.
 
 ### Maximized panels
 
@@ -176,7 +177,7 @@ The owner's second review asked for:
 - **Top bar:** the execution controls sit as far from the bar's right end as from its top.
 - **Debug column height:** the column scrolls instead of squeezing what is under registers and memory into the height left. With the Debug tools as sections it is 170vh tall from the start, so sections open into room without the split being dragged. With floating Debug tools, only the Screen is under registers and memory, and it is as tall as it needs to fill the column's width, because 170vh would only leave it floating in empty space.
 - **Register rules:** the rules between the Status flags, the PC and the Register files run from edge to edge of the card.
-- **Screen section:** the Screen's size and controls (Display, the drawing buffer, the zoom and the floating window) are in its folding section's header, which replaces the Screen's own header there.
+- **Screen section:** the Screen's size and controls (Display, the drawing buffer, the zoom and the floating window) are in its folding section's header, which replaces the Screen's own header there. A handle under the Screen drags its height, from the section's 26 rem (22 rem on tablets and phones), kept per person with the panel sizes; a double click gives the section its default height back. Added on 2026-11-05 at the user's request.
 - **Scrollbar room:** side panels, the bottom panel's tabs and the debug column keep room for their scrollbar, so content that starts to scroll does not shift sideways.
 
 A request to limit how tall registers and memory can be dragged was withdrawn.

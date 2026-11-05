@@ -541,13 +541,13 @@ export const riscvRegisterFiles: RISCVRegisterFileDoc[] = [
     {
         id: 'csr',
         title: 'Control and status registers',
-        intro: 'The control and status registers are the machine talking about itself: how the floating point unit is rounding, why an exception happened, how many instructions have run. They are not addressed like the other registers. `csrr t0, fcsr` reads one into a general register and `csrw t0, fcsr` writes it back: the general register comes **first** in both of them and the control register second. Each is a short form of one of the `csrr*` instructions, which read the old value and write a new one in a single step: `csrr` is `csrrs` with `zero` as the value to set, so nothing is written, and `csrw` is `csrrw` with `zero` as the destination, so the old value is thrown away. The forms that take a constant instead of a register, `csrwi` and `csrsi`, are the exception to the order and name the control register first, as in `csrsi ustatus, 1`.\n\nThis simulator implements the seventeen registers below, the user level subset. On the 32 bit target a counter that needs 64 bits is read as two registers, the name for the low half and the name ending in `h` for the high half; on RV64 the plain name holds all of it.',
+        intro: 'Control and status registers (CSRs) hold floating point settings, trap state and counters. Read one with `csrr t0, fcsr`. In RARS syntax, write one with `csrw t0, fcsr`: the general register comes first. In GNU assembly, including Files linked to C, the write order is `csrw fcsr, t0`. Immediate forms put the CSR first in both syntaxes, as in `csrsi ustatus, 1`.\n\nThese are short forms of the `csrr*` instructions, which read an old value and write a new one in one step. `csrr` uses `csrrs` with `zero` as the value to set, leaving the CSR unchanged. `csrw` uses `csrrw` with `zero` as the destination, discarding the old value.\n\nThis simulator implements the seventeen registers below, a user-level subset. On RV32, a 64-bit counter uses the plain name for its low half and a name ending in `h` for its high half. On RV64, the plain name reads the whole counter.',
         registers: [
             {
                 name: 'ustatus',
                 number: '0x000',
                 description:
-                    'The user status register. Only two bits of it are writable here: the one that enables user level interrupts, and the one that remembers whether they were enabled before the current handler was entered, so that `uret` can put things back as it found them. Entering a handler copies the first into the second and clears the first, which is why a handler is not interrupted by the thing it is handling.'
+                    'Bit 0, UIE, enables user interrupts. Bit 4, UPIE, saves the previous UIE value. These are the only writable bits here. Entering a handler copies UIE to UPIE and clears UIE, preventing another interrupt while the handler runs. `uret` restores UIE from UPIE.'
             },
             {
                 name: 'fflags',
@@ -571,55 +571,55 @@ export const riscvRegisterFiles: RISCVRegisterFileDoc[] = [
                 name: 'uie',
                 number: '0x004',
                 description:
-                    'Which user level interrupts are enabled, one bit per source. An interrupt is delivered only when its bit is set here and interrupts are enabled in `ustatus`.'
+                    'The source mask: bit 0 enables software interrupts, bit 4 the timer, and bit 8 external interrupts from the keyboard and display. Delivery also requires UIE in `ustatus`. See [Interrupts and the timer](/documentation/risc-v/interrupts) for complete programs.'
             },
             {
                 name: 'utvec',
                 number: '0x005',
                 description:
-                    'The address of the user level trap handler: where the machine jumps when an exception or an enabled interrupt happens. A program that means to handle its own traps writes the address of its handler here and also sets the enable bit of `ustatus`, with `csrsi ustatus, 1`, because this simulator only enters the handler when that bit is set. A trap taken without both of them stops the program with the usual error message.'
+                    'The address of the handler shared by exceptions and enabled interrupts. Write the handler address here and set UIE with `csrsi ustatus, 1`. This simulator requires UIE for exception entry too. An exception without a usable handler and UIE stops the program with an error.'
             },
             {
                 name: 'uscratch',
                 number: '0x040',
                 description:
-                    'A word the handler may use as it likes. The classic use is to give the handler a stack pointer of its own, since the trap arrives with the program halfway through something and no register free to borrow.'
+                    "A register for the handler to use freely. It can hold a separate handler stack pointer or a spare value while saving the interrupted program's registers."
             },
             {
                 name: 'uepc',
                 number: '0x041',
                 description:
-                    'The address of the instruction the trap interrupted. `uret` returns to it, so a handler that has fixed the cause returns unchanged, and a handler that means to skip the offending instruction adds 4 to this register first.'
+                    'The return address used by `uret`. After an interrupt, it points to the next instruction, which has not run: leave it unchanged. After an exception, it points to the failed instruction. Leave it unchanged to retry after repairing the cause, or add 4 to deliberately skip that instruction.'
             },
             {
                 name: 'ucause',
                 number: '0x042',
                 description:
-                    'Why the trap happened: a code such as an illegal instruction or a misaligned address, with the top bit set when the cause was an interrupt rather than an exception. A handler serving several causes reads this first.'
+                    'The trap cause. Its top bit distinguishes interrupts from exceptions: bit 31 on RV32, bit 63 on RV64. The RV32 timer interrupt is `0x80000004` and an external interrupt is `0x80000008`. On RV64 these are `0x8000000000000004` and `0x8000000000000008`. With the top bit clear, the remaining bits give an exception code, such as illegal instruction or misaligned address. A shared handler reads this first.'
             },
             {
                 name: 'utval',
                 number: '0x043',
                 description:
-                    'The detail that goes with the cause: the address a load or store failed on, or the instruction that could not be decoded. Meaningless for causes that carry no such value.'
+                    'Extra detail for the cause: the address a load or store failed on, the instruction that could not be decoded, or the external device requesting an interrupt (`0x40` keyboard, `0x80` display). Read it only for causes that define a value.'
             },
             {
                 name: 'uip',
                 number: '0x044',
                 description:
-                    'Which interrupts are pending, in the same bit positions as `uie`. A source can be pending and not enabled, in which case nothing happens until the program enables it.'
+                    'Pending interrupt requests, using the same bits as `uie`. A disabled source can remain pending until enabled. Timer and external bits follow their devices and ignore writes. Set bit 0 with `csrsi uip, 1` to request a software interrupt. Taking that interrupt clears the bit.'
             },
             {
                 name: 'cycle, time, instret',
                 number: '0xC00 - 0xC02',
                 description:
-                    'The three counters, read only: elapsed cycles, elapsed time, and the number of instructions retired. A program times a piece of itself by reading one of them before and after and subtracting.'
+                    'Three read-only 64-bit counters. In this simulator, `cycle` and `instret` each increase by one per executed instruction. Read before and after a section and subtract to count its instructions.\n\nThe `time` CSR reads calendar milliseconds since 1970-01-01 UTC, the same clock as service 30. In interactive use it continues while paused, at breakpoints and between Steps. In a Testcase it starts at 2000-01-01 UTC and advances through virtual waits. This differs from memory-mapped `time` at `0xffff0018`, which measures elapsed run time from 0 and stops while paused. Use that memory register for timer deadlines (see [Interrupts and the timer](/documentation/risc-v/interrupts#timer)).'
             },
             {
                 name: 'cycleh, timeh, instreth',
                 number: '0xC80 - 0xC82',
                 description:
-                    'The high halves of the three counters, for the 32 bit target where a 64 bit count does not fit in one register. Reading the pair safely means reading the high half, then the low, then the high again, and starting over if it changed in between.'
+                    'The high 32 bits of `cycle`, `time` and `instret` for RV32. To read a 64-bit value safely, read high, then low, then high again. If the two high readings differ, repeat the sequence. On RV64, read the plain counter name for all 64 bits.'
             }
         ]
     }

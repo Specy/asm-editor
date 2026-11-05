@@ -39,7 +39,10 @@ export const DOCUMENTATION_SITES: Record<DocumentationLanguage, DocumentationSit
         ['syscalls', 'Syscalls', 'syscall'],
         ['registers', 'Registers', 'registers'],
         ['screen', 'Screen', 'screen'],
+        ['interrupts', 'Interrupts and the timer', 'interrupts'],
         ['synth', 'Synth', 'synth'],
+        ['input-controller', 'Input controller', 'input-controller'],
+        ['midi-and-audio', 'MIDI and sampled audio', 'midi-and-audio'],
         ['runtime-library', 'Runtime library', 'runtime-library'],
         ['using-c', 'Using C and C++', 'using-c']
     ]),
@@ -49,7 +52,10 @@ export const DOCUMENTATION_SITES: Record<DocumentationLanguage, DocumentationSit
         ['syscalls', 'Syscalls', 'syscall'],
         ['registers', 'Registers', 'registers'],
         ['screen', 'Screen', 'screen'],
+        ['interrupts', 'Interrupts and the timer', 'interrupts'],
         ['synth', 'Synth', 'synth'],
+        ['input-controller', 'Input controller', 'input-controller'],
+        ['midi-and-audio', 'MIDI and sampled audio', 'midi-and-audio'],
         ['runtime-library', 'Runtime library', 'runtime-library'],
         ['using-c', 'Using C and C++', 'using-c']
     ]),

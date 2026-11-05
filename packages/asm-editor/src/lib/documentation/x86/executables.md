@@ -20,7 +20,7 @@ The emulator runs 64-bit x86 Linux ELF executables:
 
 32-bit x86 binaries, binaries for other architectures (such as ARM), unlinked object files (`.o`), and standalone shared libraries (`.so`) cannot be run as an Executable.
 
-The program runs in `/project`, where it can open and read or write other Files in your project (such as `flag.txt`). Attempting to overwrite or delete the running Executable itself fails with `ETXTBSY` or `EBUSY`. The environment is single-threaded with no network access; calls that create threads, sockets, or child processes (`fork`) return an error. See [Program arguments](/documentation/x86/syscall#arguments) for the default environment variables.
+The program runs in `/project`, its working directory, where it can open and read or write the other files shown in the file explorer (such as `flag.txt`). Attempting to overwrite or delete the running Executable itself fails with `ETXTBSY` or `EBUSY`. The environment is single-threaded with no network access; calls that create threads, sockets, or child processes (`fork`) return an error. See [Program arguments](/documentation/x86/syscall#arguments) for the default environment variables.
 
 ## Shared libraries {#libraries}
 
@@ -347,6 +347,6 @@ The **Log** panel reports environment or instruction issues encountered during a
 
 Executables run entirely inside your browser's WebAssembly sandbox, and both the Listing and Ghidra Pseudocode are generated locally on your device—binaries are never uploaded to a server.
 
-The emulated process can access only the files inside the project workspace and has no network access. Breakpoints are managed by the emulator without writing `int3` (`0xcc`) into guest memory, and `ptrace(PTRACE_TRACEME)` succeeds as if no debugger were attached. Note that system calls that read the clock observe real elapsed time while paused.
+The emulated process can access only the files shown in the editor's file explorer, never your computer's disk, and has no network access. Breakpoints are managed by the emulator without writing `int3` (`0xcc`) into guest memory, and `ptrace(PTRACE_TRACEME)` succeeds as if no debugger were attached. Note that system calls that read the clock observe real elapsed time while paused.
 
 Because share links encode the project in the URL, projects containing large Executables should be shared by downloading a project archive from the Projects page instead.

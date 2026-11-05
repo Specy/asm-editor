@@ -19,6 +19,7 @@ import {
     type BuildRecord
 } from '#lib/buildOutput.ts'
 import { makeProject, normalizeProjectData, withoutBuildOutputs } from '#lib/Project.svelte.ts'
+import { programBuildSources } from '#lib/buildSources.ts'
 import {
     isLegacyLinkedFileCompatible,
     isSingleSourceProject,
@@ -124,6 +125,32 @@ describe('a Build record', () => {
         expect(buildOutputStale(record, { ...sources, entrySymbol: '_start' }, files)).toBe(true)
         expect(buildOutputStale(record, undefined, files)).toBe(true)
     })
+
+    it('is stale once an x86 Program has another File it could link, which it reads to decide', () => {
+        //the Core reads every File the Build may link to find which the program needs, and a File
+        //added before the one it took for a name, or beside the library's, can be taken instead
+        const sources = programBuildSources(
+            makeProject({
+                language: 'X86',
+                entry: 'main.asm',
+                files: { 'main.asm': plain('nop'), main: built }
+            }),
+            'main.asm'
+        )
+        const record = makeBuildRecord(sources, 'main', built, [])
+        const live = (added: Record<string, ProjectFile>) => {
+            const next = makeProject({
+                language: 'X86',
+                entry: 'main.asm',
+                files: { ...sources.files, ...added }
+            })
+            return [programBuildSources(next, 'main.asm'), next.files] as const
+        }
+        expect(buildOutputStale(record, ...live({}))).toBe(false)
+        expect(buildOutputStale(record, ...live({ 'notes.txt': plain('') }))).toBe(false)
+        for (const linkable of ['memcpy.asm', 'lib/helper.s', 'lib.nasm'])
+            expect(buildOutputStale(record, ...live({ [linkable]: plain('nop') }))).toBe(true)
+    })
 })
 
 describe('saved Build records', () => {
@@ -207,23 +234,23 @@ describe('a Project leaving the browser', () => {
         expect(payload.builds).toBeUndefined()
     })
 
-    it('in an archive', () => {
-        const entries = Object.keys(unzipSync(projectToArchive(project())))
+    it('in an archive', async () => {
+        const entries = Object.keys(unzipSync(await projectToArchive(project())))
         expect(entries).toContain('files/main.asm')
         expect(entries).not.toContain('files/main')
     })
 
-    it('as one source File, which a Build output does not stop it being', () => {
+    it('as one source File, which a Build output does not stop it being', async () => {
         const single = project()
         expect(isSingleSourceProject(single)).toBe(true)
         expect(isLegacyLinkedFileCompatible(single.toObject())).toBe(true)
-        const download = projectDownload(single)
+        const download = await projectDownload(single)
         expect(download.kind).toBe('source')
         expect(download.contents).not.toContain(built.content)
         expect(single.toExternal()).not.toContain('"main"')
         //a Build output the person changed is theirs, which only an archive holds
         single.fileSystem.annotate('main', { names: { '0x0': 'start' } })
         expect(isSingleSourceProject(single)).toBe(false)
-        expect(projectDownload(single).kind).toBe('archive')
+        expect((await projectDownload(single)).kind).toBe('archive')
     })
 })

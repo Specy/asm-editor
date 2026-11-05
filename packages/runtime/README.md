@@ -14,6 +14,8 @@ This directory holds ABI `v1` ([ADR 0031](../../docs/adr/0031-projects-pin-the-r
 | `include/` | The public headers, uploaded with every compilation as `sysroot/include` (about 54 KB). Declarations, macros and typedefs only, a one-line `/** ... */` doc comment before every function declaration, `FILE` opaque, nothing included from outside this directory. Freestanding headers derive their types from GCC's predefined macros, so they serve ILP32 and LP64 alike. |
 | `src/<area>/` | The library: one global function per file where practical (musl's grouping elsewhere, e.g. the `strto*` family), so a program using only `strlen` links only `strlen`. 262 members; the C++ ones are the `src/cxx/*.cpp` files. |
 | `src/internal/` | Private headers (`aed_sys.h` platform contract, `stdio_impl.h`, `libm.h`, `features.h`, `endian.h`, ...) and the shared scanners `shgetc.c`, `intscan.c`, `floatscan.c`. |
+| `posix/include/` | MIPS and RISC-V's own headers, uploaded as `sysroot/posix/include` and searched before `include/`: `<dirent.h>`, `<sys/stat.h>`, `<sys/types.h>`, `<unistd.h>`, and the `<errno.h>` and `<stdio.h>` that add to the shared ones with `#include_next`. Written into `generated/v1/posix-include.json` for the editor. |
+| `posix/src/` | Their members over the folder calls (`opendir`, `stat`, `mkdir`, `unlink`, `rename`, ...), built for MIPS and RISC-V only, with `-isystem sysroot/posix/include` and `-I posix/src/internal`. Only their requests upload `posix/`, so changing it recompiles nothing else. |
 | `arch/<target>/` | `aed_sys_arch.h`, the system calls as inline assembly, and `crt0.s`, for `riscv32`, `riscv64`, `mips`, `x86_64`, and the native test layers `host-x86_64` and `host-i386`. |
 | `tests/corpus/` | Test programs (C and C++), their standard input (`name.in`), input Files (`name.files/`) and deliberate-difference overrides (`name.expect.*`). |
 | `tests/expected/` | The reviewed glibc results of each program: `stdout`, `stderr`, `status` and the `files/` left in its directory. The Cores' corpus runner can compare against them without glibc. |
@@ -55,11 +57,11 @@ The Cores link with `ld` semantics ([ADR 0030](../../docs/adr/0030-cores-resolve
 ## Editor assets and the Cores
 
 ```
-node scripts/build.mjs [--target riscv32,riscv64,mips,x86_64] [--offline] [--update-abi]
-node scripts/test-cores.mjs [--target riscv32,riscv64,mips,x86_64] [--only name,...] [--optimization 0,2]
+node scripts/build.mjs [--target riscv32,riscv64,mips,x86_64] [--offline] [--plan] [--update-abi]
+node scripts/test-cores.mjs [--target riscv32,riscv64,mips,x86_64] [--only name,...] [--optimization 0,2] [--offline]
 ```
 
-`scripts/build.mjs` compiles every member through Compiler Explorer (cached under `runtime/.cache/`, so `--offline` rebuilds without network), checks each with the Core that will link it, and writes the editor's assets to `generated/v1/`. It fails when two members define one strong global, when a documented function has no member, or when an export or a struct layout of `abi/layout.c` differs from the baseline `abi/v1.json`. `scripts/test-cores.mjs` compiles every corpus program as the editor does, links it with those assets on the RARS, MARS and x86 Cores, runs it with tty standard input and an in-memory FileSystem, and compares the result with `tests/expected/`.
+`scripts/build.mjs` compiles every member through Compiler Explorer (cached under `runtime/.cache/`, so `--offline` rebuilds without network), checks each with the Core that will link it, and writes the editor's assets to `generated/v1/`. A member whose source and included headers are unchanged since the committed assets were built is taken from them instead, so only the members a change reaches are compiled; `--plan` lists the requests a build would send, and sends none. It fails when two members define one strong global, when a documented function has no member, or when an export or a struct layout of `abi/layout.c` (and, on MIPS and RISC-V, `abi/posix-layout.c`) differs from the baseline `abi/v1.json`. `scripts/test-cores.mjs` compiles every corpus program as the editor does, links it with those assets on the RARS, MARS and x86 Cores, runs it with tty standard input and an in-memory FileSystem, and compares the result with `tests/expected/`. Each compile uploads only the headers its program includes, so its cached answer (`.cache/corpus/`) stays valid until one of those headers changes.
 
 ## Native tests
 

@@ -26,6 +26,7 @@
         onSave,
         onShare,
         onChange,
+        onReady,
         unsaved = false,
         editJournals,
         access = {},
@@ -34,6 +35,7 @@
         hostPanels = [],
         hostLinks = [],
         activePanel = $bindable(null),
+        screenWindow = false,
         header
     }: Props = $props()
 
@@ -77,6 +79,7 @@
         get: () => activePanel,
         set: (id) => (activePanel = id)
     })
+    ui.screenWindowRequested = untrack(() => screenWindow)
     let headerHeight = $state(0)
     let debugged = false
     const debugToolsBuilt = $derived.by(() => {
@@ -115,7 +118,11 @@
             return true
         })
         const unmount = session.mount()
+        const controller = new AbortController()
+        onReady?.(session, controller.signal)
         return () => {
+            controller.abort()
+            if (session.building) session.cancelBuild()
             unregisterLinks()
             unmount()
         }
