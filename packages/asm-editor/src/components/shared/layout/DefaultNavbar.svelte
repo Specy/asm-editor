@@ -46,7 +46,8 @@
     /** A language's Documentation and the Courses have a search of their own in the sidebar,
      *  scoped to them, so the navbar's would be a second box doing nearly the same. */
     const pageHasSearch = $derived(
-        page.route.id?.startsWith('/documentation/') || page.route.id?.startsWith('/learn/courses')
+        page.route?.id?.startsWith('/documentation/') ||
+            page.route?.id?.startsWith('/learn/courses')
     )
 
     // the root layout mounts the site's search palette while a navbar is on the page
