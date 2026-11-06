@@ -90,6 +90,11 @@
         mappedBreakpoints?: number[]
         /** Text can be read-only while the Debug session still accepts breakpoint changes. */
         breakpointsEditable?: boolean
+        /**
+         * Scrolls on past the last line, as an editor filling a pane does. An editor set in a page
+         * stops at it, so a program that fits has nothing to scroll and the wheel scrolls the page.
+         */
+        scrollPastEnd?: boolean
         editor?: monaco.editor.IStandaloneCodeEditor
         viewZones?: {
             afterLineNumber: number
@@ -168,6 +173,7 @@
         breakpoints = [],
         mappedBreakpoints = [],
         breakpointsEditable = true,
+        scrollPastEnd = true,
         editor = $bindable(),
         viewZones = [],
         buildArtifacts = [],
@@ -260,6 +266,25 @@
         () => viewStates ?? new Map()
     )
     const toDispose: (monaco.IDisposable | (() => void))[] = []
+
+    /**
+     * An editor set in a page takes the wheel exactly while its code is taller than it is, ends
+     * included, so scrolling a long program never runs on into the page; one whose code fits
+     * leaves the wheel to the page, as there is nothing in it to scroll. Monaco reads
+     * `alwaysConsumeMouseWheel` only once, as the editor is made, so the wheel it lets through (at
+     * the code's top or bottom, or all of it when the code fits) is held here instead: Monaco stops
+     * the events it scrolls with, and only those it leaves reach the editor's own node.
+     */
+    function wheelWhenScrollable(target: monaco.editor.IStandaloneCodeEditor): () => void {
+        const node = target.getDomNode()
+        if (!node) return () => {}
+        const hold = (event: WheelEvent) => {
+            if (target.getContentHeight() > target.getLayoutInfo().height + 1)
+                event.preventDefault()
+        }
+        node.addEventListener('wheel', hold, { passive: false })
+        return () => node.removeEventListener('wheel', hold)
+    }
     let el: HTMLDivElement | null = $state(null)
 
     $effect(() => {
@@ -304,8 +329,12 @@
             minimap: { enabled: false },
             scrollbar: {
                 vertical: 'auto',
-                horizontal: 'auto'
+                horizontal: 'auto',
+                //an editor set in a page leaves the wheel it does not scroll with to the page,
+                //unless its code overflows (`wheelWhenScrollable`)
+                alwaysConsumeMouseWheel: scrollPastEnd
             },
+            scrollBeyondLastLine: scrollPastEnd,
             colorDecorators: false,
             glyphMargin: true,
             //Monaco sizes the line-number column to the model's digit count and only uses this as
@@ -322,6 +351,7 @@
         ownEditor = mountedEditor
         editor = mountedEditor
         toDispose.push(keepHoverReachable(mountedEditor, overflowWidgets))
+        if (!scrollPastEnd) toDispose.push(wheelWhenScrollable(mountedEditor))
         const observer = new ResizeObserver(() => {
             if (!mockEditor) return
             const bounds = mockEditor.getBoundingClientRect()

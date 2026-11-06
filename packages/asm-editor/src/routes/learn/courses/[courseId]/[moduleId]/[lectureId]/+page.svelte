@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { withoutLeadingTitle } from '#lib/content/lectureTitle.ts'
     import type { PageData } from './$types'
     import Page from '#cmp/shared/layout/Page.svelte'
     import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
@@ -129,7 +130,7 @@
 
 <Page cropped="110ch" contentStyle="padding: 1rem; gap: 1rem;">
     <Card padding="1.5rem 0" gap="1rem">
-        <Header noMargin style="width: min(100%, 46rem); margin: 0 auto">
+        <Header noMargin style="width: min(100%, var(--lecture-text-width)); margin: 0 auto">
             {data.lecture.name}
         </Header>
     </Card>
@@ -148,7 +149,8 @@
         </p>
     {/if}
     <div class="reading-copy">
-        <MarkdownRenderer source={data.content} spacing="1.2rem" headingIds />
+        <!-- the title above is the lecture's name, which a `# ` heading opening it would repeat -->
+        <MarkdownRenderer source={withoutLeadingTitle(data.content)} spacing="1.2rem" headingIds />
     </div>
     {#if topicLinks && inGeneralCourse && topicLinks.siblings.length > 0}
         <p class="topic-links">
@@ -285,9 +287,16 @@ When the user asks a question about the lecture topic or for a demonstration of 
 {/if}
 
 <style>
+    /* the lecture text's column, which the Markdown sets as 38em of its own text
+       (--md-text-width), so the title and these links start where the text does */
+    :global(.learn-pages) {
+        --lecture-text-width: calc(38 * var(--content-prose-size));
+    }
+
     .topic-links {
         font-family: 'Noto Serif', Rubik, sans-serif;
         font-weight: 500;
+        width: min(100%, var(--lecture-text-width));
         margin: 0 auto;
         opacity: 0.75;
         background: var(--secondary);

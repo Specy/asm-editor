@@ -9,13 +9,28 @@
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import { shortcutLabel, shortcutsStore, ShortcutAction } from '#stores/shortcutsStore.ts'
     import { openSearchPalette } from './paletteState.svelte'
+    import { SITE_SCOPE } from '#lib/search/scope.ts'
 
     interface Props {
         placeholder?: string
         size?: 'full' | 'compact'
+        /** Opens the site's palette, which searches everything, rather than the page's. */
+        site?: boolean
     }
 
-    let { placeholder = 'Search', size = 'compact' }: Props = $props()
+    let { placeholder = 'Search', size = 'compact', site = false }: Props = $props()
+    const owner = $derived(site ? 'site' : 'page')
+
+    /** The model, and for the site's search its index too: no page preloads every shard. */
+    function warm() {
+        searchClient.warmModel()
+        if (site)
+            searchClient
+                .loadScope(SITE_SCOPE)
+                .catch((error: Error) =>
+                    console.warn(`search: could not load the index (${error.message})`)
+                )
+    }
 
     const key = $derived(
         [...$shortcutsStore.entries()].find(
@@ -26,10 +41,10 @@
     function onkeydown(event: KeyboardEvent) {
         if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault()
-            openSearchPalette(event.key)
+            openSearchPalette(event.key, owner)
         } else if (event.key === 'Enter' || event.key === 'ArrowDown') {
             event.preventDefault()
-            openSearchPalette()
+            openSearchPalette('', owner)
         }
     }
 </script>
@@ -38,9 +53,9 @@
     type="button"
     class="search-launcher {size}"
     aria-haspopup="dialog"
-    onclick={() => openSearchPalette()}
-    onpointerenter={() => searchClient.warmModel()}
-    onfocus={() => searchClient.warmModel()}
+    onclick={() => openSearchPalette('', owner)}
+    onpointerenter={warm}
+    onfocus={warm}
     {onkeydown}
 >
     <span class="icon" aria-hidden="true"><FaSearch /></span>

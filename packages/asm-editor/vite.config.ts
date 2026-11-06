@@ -50,6 +50,9 @@ export default defineConfig({
     },
     server: {
         port: 4173,
+        // Cloudflare quick tunnels (`cloudflared tunnel --url`), whose random hostnames are all
+        // under trycloudflare.com, to open the dev server from another device
+        allowedHosts: ['.trycloudflare.com'],
         fs: {
             // The Cores are workspace packages, so Vite resolves their files to their real paths
             // under `packages/`, outside the app that SvelteKit's allow list covers. Without this

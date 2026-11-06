@@ -18,6 +18,7 @@ import type { DocumentationSearchAnswer, DocumentationSearchHit, SupportedLangua
 const TEXT_BUDGET = 1600
 
 function describe(scope: SearchScope): string {
+    if (scope.kind === 'site') return 'the documentation of every language and every course'
     if (scope.kind === 'courses') return 'every course'
     const name = languageLabel(scope.language.toUpperCase())
     return scope.lectures

@@ -4,7 +4,7 @@ ASM Editor is an online workspace for writing, running, and debugging assembly p
 
 The editor and simulator run in your browser, without a local installation. MIPS is one of its supported architectures, alongside RISC-V, M68K, Z80, and x86.
 
-![C source linked to generated RISC-V assembly, with the debugger and a Flappy Bird game on the simulated screen.](/images/blog/mips-mars-browser/c-riscv-screen.webp)
+![C source linked to generated RISC-V assembly, with the debugger and a Flappy ASM game on the simulated screen.](/images/blog/mips-mars-browser/c-riscv-screen.webp)
 
 ## A workspace for learning assembly
 

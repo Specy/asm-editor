@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import {
+    canonicalExampleId,
     defaultExample,
     destinationPath,
     exampleSharePath,
@@ -26,11 +27,11 @@ afterEach(() => vi.restoreAllMocks())
 
 it('gives every port a unique ISA-prefixed id, independent of its display name or source folder', () => {
     expect(new Set(examples.map((e) => e.id)).size).toBe(examples.length)
-    expect(examples.find((e) => e.id === 'risc-v-pacman')?.label).toBe('RISC-V: Pac-Man')
+    expect(examples.find((e) => e.id === 'risc-v-relay-maze')?.label).toBe('RISC-V: Relay Maze')
     const renamed = structuredClone(index)
-    renamed.examples.pacman.name = 'A different title'
-    renamed.examples.pacman.path = 'shared/pacman'
-    expect(parseExamplesIndex(renamed).find((e) => e.id === 'risc-v-pacman')).toBeDefined()
+    renamed.examples['relay-maze'].name = 'A different title'
+    renamed.examples['relay-maze'].path = 'shared/relay-maze'
+    expect(parseExamplesIndex(renamed).find((e) => e.id === 'risc-v-relay-maze')).toBeDefined()
     expect(exampleSharePath('mips-bouncing-ball')).toBe(
         '/projects/share?example=mips-bouncing-ball'
     )
@@ -95,7 +96,7 @@ it('opens a small example when the link names none, and says each port as the in
 
 it('starts the games and asmOS running on a display that fills the page, and nothing else', () => {
     const starting = examples.filter((e) => e.startup).map((e) => e.id)
-    for (const id of ['risc-v-pacman', 'mips-snake', 'z80-flappy-bird', 'x86-asmos'])
+    for (const id of ['risc-v-relay-maze', 'mips-snake', 'z80-flappy-asm', 'x86-asmos'])
         expect(starting).toContain(id)
     expect(examples.find((e) => e.id === 'x86-asmos')?.startup).toEqual({
         buildAndRun: true,
@@ -133,6 +134,22 @@ it('loads a fresh unsaved copy from a short link', async () => {
     expect(project.language).toBe('MIPS')
     expect(project.files['bouncing-ball.asm']).toBeDefined()
     expect(fetcher).toHaveBeenLastCalledWith('/examples/mips/bouncing-ball.asmproj')
+})
+
+it('opens Relay Maze from the former maze game’s share links', async () => {
+    expect(canonicalExampleId('risc-v-pacman')).toBe('risc-v-relay-maze')
+    expect(canonicalExampleId('mips-snake')).toBe('mips-snake')
+    const bytes = readFileSync(
+        new URL('../../../examples/dist/risc-v/relay-maze.asmproj', import.meta.url)
+    )
+    const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(index)))
+        .mockResolvedValueOnce(new Response(bytes))
+    const { example, project } = await loadExample('risc-v-pacman', fetcher)
+    expect(example.id).toBe('risc-v-relay-maze')
+    expect(project.name).toBe('Relay Maze')
+    expect(fetcher).toHaveBeenLastCalledWith('/examples/risc-v/relay-maze.asmproj')
 })
 
 describe('bundled example projects', () => {

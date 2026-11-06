@@ -1,6 +1,0 @@
-{
-    "name": "Flappy Bird",
-    "description": "Build a Flappy Bird game with keyboard input, gravity, moving pipes and collision checks.",
-    "order": 24,
-    "topic": "flappy-bird"
-}

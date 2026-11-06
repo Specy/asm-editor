@@ -198,7 +198,7 @@ Testcase still reads the CPU file only (`docs/design/register-files.md`).
 
 - `sum-of-two-numbers` (18): a program cannot read the console. blink's shell takes the line instead,
   the program stays parked on its `read`, and the "syscall and the Linux ABI" lecture says so.
-- `drawing-on-the-screen`, `bouncing-ball`, `keyboard-control`, `snake`, `flappy-bird` (20 to 24):
+- `drawing-on-the-screen`, `bouncing-ball`, `keyboard-control`, `snake`, `flappy-asm` (20 to 24):
   `languageHasScreen` is false for x86, because blink emulates a Linux process and a Linux process has
   no framebuffer. The "Ports, devices and the kernel in between" lecture says so.
 
@@ -214,7 +214,7 @@ once drawn, the animations after a fixed number of frames or ten seconds without
 programs read without blocking or `poll` with a timeout, and the sound runs at 22,050 Hz or less.
 `drawing-on-the-screen` (20, template 6), `bouncing-ball` (21) and `keyboard-control` (22) keep the
 ladder's slots; `mouse-paint` (23) and `pc-speaker` (24) are x86's own topics, in the slots of the
-`snake` and `flappy-bird` it does not have; `play-a-tune` (25, template 7) and `sampled-sound` (27)
+`snake` and `flappy-asm` it does not have; `play-a-tune` (25, template 7) and `sampled-sound` (27)
 take the sound ladder's. Drawing, keyboard control and mouse paint add a C version of the same
 program after the NASM one (`c|playground|target=x86|file=…`). The system-call Lecture's drawing and
 `/dev/dsp` programs are Playgrounds now that NASM searches the include directory.

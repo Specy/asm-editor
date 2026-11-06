@@ -10,6 +10,16 @@
     src: url(/fonts/FiraCode-Medium.woff2);
 }
 
+/* The width of Markdown's text column. Registered as a length so the `em` it is given resolves
+   once, at the text's own size on `.markdown-body`, and every heading inherits that width in
+   pixels: a heading then lines up with the paragraphs under it however large its own font. */
+@property --md-text-width {
+    syntax: '<length>';
+    inherits: true;
+    /* only a fallback, as an initial value has to be an absolute length: 38em at 16px */
+    initial-value: 608px;
+}
+
 * {
     margin: 0;
     padding: 0;

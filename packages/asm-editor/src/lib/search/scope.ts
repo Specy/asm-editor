@@ -40,6 +40,8 @@ export type SearchScope =
     | { kind: 'language'; language: DocumentationLanguage; lectures: boolean }
     /** The General course's pages and the list of Courses: every Course, no Documentation. */
     | { kind: 'courses' }
+    /** The navbar's search, on any page: every language's Documentation and every Course. */
+    | { kind: 'site' }
 
 export function languageScope(language: DocumentationLanguage, lectures = true): SearchScope {
     return { kind: 'language', language, lectures }
@@ -47,7 +49,10 @@ export function languageScope(language: DocumentationLanguage, lectures = true):
 
 export const COURSES_SCOPE: SearchScope = { kind: 'courses' }
 
+export const SITE_SCOPE: SearchScope = { kind: 'site' }
+
 export function shardsOf(scope: SearchScope): ShardId[] {
+    if (scope.kind === 'site') return ALL_SHARDS
     if (scope.kind === 'courses') return COURSES.map((course) => `lectures-${course}` as const)
     const shards: ShardId[] = [`docs-${scope.language}`]
     if (scope.lectures) shards.push(`lectures-${scope.language}`, `lectures-${GENERAL_COURSE}`)

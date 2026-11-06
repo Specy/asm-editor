@@ -3292,8 +3292,8 @@ describe('examples/m68k', () => {
         expect(inkCount(later)).toBeGreaterThan(1_000)
     })
 
-    it('draws the flappy bird ready screen', async () => {
-        const emulator = await runExample('flappy-bird.x68', 2 * FRAME_LOOP_LIMIT)
+    it('draws the Flappy ASM ready screen', async () => {
+        const emulator = await runExample('flappy-asm.x68', 2 * FRAME_LOOP_LIMIT)
         expectStoppedAtLimit(emulator)
         expect(emulator.peripherals.screen.doubleBuffering).toBe(true)
         //the sky is a filled rectangle over the whole screen, so nothing is left at the background

@@ -4,7 +4,7 @@
     import Icon from './Icon.svelte'
     import { toast } from '#stores/toastStore.ts'
     import { page } from '$app/state'
-    import RgbLine from '#cmp/shared/misc/RgbLine.svelte'
+    import { hexStrip } from '#cmp/specific/landing/landing.ts'
     import FaDonate from '~icons/fa-solid/heart'
     import { resolve } from '$app/paths'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
@@ -13,12 +13,23 @@
     }
 
     let { pages = [] }: Props = $props()
+    /** More rows than the tallest footer, a phone's, has room for; the rest are cut off. */
+    const HEX_ROWS = Array.from({ length: 12 }, (_, i) => 7 + i)
 </script>
 
 {#if pages.some((p) => page.url.pathname.match(p))}
     <footer class="footer">
+        <!-- the page dissolving into bytes: rows of hex, like a memory view, fading in from the
+             top of the footer and running down behind it to its bottom edge -->
+        <div class="footer-hex" aria-hidden="true">
+            {#each HEX_ROWS as row (row)}
+                <div>
+                    {#each hexStrip(row) as segment, i (i)}{#if segment.hot}<b>{segment.text}</b
+                            >{:else}{segment.text}{/if}{/each}
+                </div>
+            {/each}
+        </div>
         <div class="footer-inner">
-            <RgbLine animated />
             <div class="footer-justify">
                 <a
                     class="logo-wrapper"
@@ -112,22 +123,56 @@
         }
     }
     .footer {
+        position: relative;
         margin-top: auto;
         width: 100%;
+        background-color: var(--primary);
+    }
+
+    /* the rows of bytes are wider than any screen, so they sit out of the flow, or they would
+       widen the whole page to their own width */
+    .footer-hex {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        white-space: pre;
+        font-family: 'Fira Code', monospace;
+        font-size: 1.05rem;
+        line-height: 1.3;
+        letter-spacing: 0.08em;
+        color: color-mix(in srgb, var(--background-text) 9%, transparent);
+        user-select: none;
+        pointer-events: none;
+        /* nothing at the top, building slowly to whole at the bottom, and long gone at the sides */
+        mask-image:
+            linear-gradient(
+                transparent,
+                rgb(0 0 0 / 0.08) 35%,
+                rgb(0 0 0 / 0.3) 65%,
+                rgb(0 0 0 / 0.65) 90%,
+                #000
+            ),
+            linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+        mask-composite: intersect;
+
+        b {
+            font-weight: 400;
+            color: color-mix(in srgb, var(--accent) 30%, transparent);
+        }
     }
 
     .footer-justify {
         display: flex;
-        margin-top: 1rem;
 
         justify-content: space-between;
         align-items: center;
     }
+    /* over the bytes, with room above for them to fade in */
     .footer-inner {
-        background-color: var(--primary);
+        position: relative;
         color: var(--primary-text);
         justify-content: center;
-        padding: 1rem 1.5rem;
+        padding: 3rem 1.5rem 1.2rem;
         display: flex;
         z-index: 2;
         flex-direction: column;
@@ -138,8 +183,7 @@
             gap: 0.5rem;
         }
         .footer-inner {
-            padding: 1rem;
-            padding-top: 2rem;
+            padding: 3rem 1rem 1rem;
             height: unset;
         }
         .logo-content {

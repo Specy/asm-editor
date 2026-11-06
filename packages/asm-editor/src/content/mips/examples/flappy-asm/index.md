@@ -1,4 +1,4 @@
-Build a Flappy Bird game with moving pipes, an animated bird and a score at the top of the Screen.
+Build a Flappy ASM game with moving pipes, an animated bird and a score at the top of the Screen.
 Tap Space, lowercase `w`, or Enter to flap. The bird falls between taps, and passing a pipe adds a
 point. After a collision, tap once to reset the game and again to start.
 
@@ -1396,7 +1396,7 @@ level and down, and `digit_sprites` ten digits of 12 × 16. A word of 0, black, 
 `draw_bird` picks a picture from the frame count, so the wing goes up, level, down, level.
 `place_score` puts the score's digits into `digit_buf`, highest first, and works out the columns
 they take this frame. `draw_score` draws them when the score has changed or a pipe column went
-around it. In the Flappy Bird example Project, the sprites are the BMP pictures `assets/bird.bmp`
+around it. In the Flappy ASM example Project, the sprites are the BMP pictures `assets/bird.bmp`
 and `assets/digits.bmp` instead, which the program reads with the file services when it starts
 and which you can edit in the Pixels view.
 

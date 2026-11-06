@@ -201,10 +201,10 @@ is an inventory, with no additional public-copy rewrite authorized by that reque
   `subroutine-with-stack-arguments` describes sum_of_squares while x86 calls sum7;
   `sum-of-an-array` directs x86 readers to rax, which is overwritten for exit, while the program
   explicitly preserves the result in r8. Check shared descriptions and target tables together.
-- New ports of previously reviewed examples also need a consistency pass. Flappy Bird's README
+- New ports of previously reviewed examples also need a consistency pass. Flappy ASM's README
   still says "Both versions" above five variants. Its current C compilation instructions have
   awkward wording about running "slower than its 20 millisecond frames."
-- Current uncommitted MIPS Flappy Bird, RISC-V Flappy Bird, and RISC-V Flappy Bird in C lessons and
+- Current uncommitted MIPS Flappy ASM, RISC-V Flappy ASM, and RISC-V Flappy ASM in C lessons and
   metadata contain substantial new prose outside the original nine-page course batch. Priorities
   are the long RISC-V description, dense drawing explanations, the blanket -O0 variable-storage
   explanation, and absolute claims about unseen partial frames and 20 ms timing. The latter
@@ -215,7 +215,7 @@ is an inventory, with no additional public-copy rewrite authorized by that reque
   primarily change behavior and visibility, with no substantial new copy batch found.
 
 Recommended next scope: beginner README/description and port-consistency fixes first, then a
-bounded review of the three Flappy Bird lessons once their current changes settle. This audit
+bounded review of the three Flappy ASM lessons once their current changes settle. This audit
 used source comparison only, with no browser or emulator validation and no commit or push.
 
 ## Follow-up rewrite: non-README content first
@@ -225,14 +225,14 @@ The current-worktree baseline is saved at `/tmp/pr108-followup/source-baseline.j
 hashes are at `/tmp/pr108-followup/dirty-baseline.json`. Preserve concurrent screen, sharing,
 startup-flag, compilation-record and example-code changes. Do not commit or push.
 
-The three Flappy Bird lessons and their metadata received a local wording and accuracy pass.
+The three Flappy ASM lessons and their metadata received a local wording and accuracy pass.
 Teaching order, all headings, routes, exercises and all twelve fenced blocks are preserved.
 No course restructuring or substantive learner rewrite was performed, so the sequential-course
 orchestrator was not needed. Drawing explanations now describe copying scenery and skipping
 unchanged stores directly. Timing targets 20 ms without promising exact browser timing or hidden
 partial frames. The C lesson explains -O2 without claiming -O0 keeps every variable in memory,
 and its final edit instructions include Compile before Build and Run. All three course
-descriptions are shorter, and their titles use Flappy Bird consistently.
+descriptions are shorter, and their titles use Flappy ASM consistently.
 
 Nine new example descriptions were clarified before starting the README batch. In particular,
 Factorial and Fibonacci no longer promises factorial(8) for every target, Hello world no longer
@@ -245,5 +245,5 @@ a frame, but does not guarantee that no partial drawing is visible. The three ga
 implementations target deadlines, reset when late and always wait at least 1 ms.
 
 The README batch uses `docs-rewrite-orchestrator`: fresh reader, separate writer, then same-reader
-reread. Its bounded scope is the eighteen new example folders plus Flappy Bird, Bouncing ball
+reread. Its bounded scope is the eighteen new example folders plus Flappy ASM, Bouncing ball
 and Mouse paint, whose new target variants need a consistency check.

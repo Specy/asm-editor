@@ -15,7 +15,7 @@ import {
  * A sleep ends the slice. The sleep handler asks the Core to `pause()` after the syscall, so the
  * call comes back where the program's frame ends, and the slice with it. The Screen catches up at
  * the end of every slice, and a slice that ran on past a sleep into the next frame left that frame
- * half drawn on the Screen until the following sleep: measured on the flappy-bird example, a
+ * half drawn on the Screen until the following sleep: measured on the flappy-asm example, a
  * quarter of the slice ends did, and about one painted frame in fifteen showed a torn bird. Ending the
  * slice at the sleep is also what keeps a sleeping program's slice, and the pause it holds off, to
  * one sleep; before the Cores could stop there, only chunks sized on the sleeps did.

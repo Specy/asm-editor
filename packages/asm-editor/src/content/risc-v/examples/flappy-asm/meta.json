@@ -1,0 +1,6 @@
+{
+    "name": "Flappy ASM",
+    "description": "Build a Flappy ASM game with keyboard input, gravity, moving pipes and collision checks.",
+    "order": 24,
+    "topic": "flappy-asm"
+}

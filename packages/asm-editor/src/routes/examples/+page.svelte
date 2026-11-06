@@ -11,6 +11,7 @@
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import {
+        canonicalExampleId,
         defaultExample,
         destinationPath,
         EXAMPLE_CHANGE_MESSAGE,
@@ -36,7 +37,9 @@
     const requested = $derived(browser ? page.url.searchParams.get('example') : null)
     const startAction = $derived(browser ? readShareStart(page.url.searchParams) : undefined)
     const selected = $derived(
-        requested === null ? defaultExample(examples) : examples.find((e) => e.id === requested)
+        requested === null
+            ? defaultExample(examples)
+            : examples.find((e) => e.id === canonicalExampleId(requested))
     )
     //the editor's link for the selected example, in the frame and behind Open in editor: with the
     //flags this page's own link gives, and the example's own startup for those it leaves out. This

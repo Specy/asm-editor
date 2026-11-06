@@ -62,7 +62,7 @@
 .content-pages main.content .reading-copy ._markdown :is(p, ul, ol) {
     font-size: inherit;
     line-height: 1.6;
-    width: min(100%, 70ch);
+    width: min(100%, var(--md-text-width));
 }
 
 .content-pages main.content .reading-copy ._markdown :is(h2, h3, h4) {

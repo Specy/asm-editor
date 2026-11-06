@@ -125,7 +125,7 @@ Found along the way, not changed:
 - The editor's suite: everything passes but the failures above. `svelte-check` 0 errors, `vp fmt --check` and `vp lint` clean on every touched file, ESLint clean on the touched Svelte files.
 - Production build: succeeds; no Shiki theme chunks, no `shiki` or `carta-` in the client chunks, 6 chunks containing `displayName` where there were about 300.
 - Headless Chrome on a private dev server:
-    - Lectures (RISC-V Hello world, General course Loops, Flappy Bird in C): the prerendered HTML carries the coloured code blocks (98 `asm-` spans on Loops, no plain `language-c`); the embeds replace them after mount with the same height and gaps, and a code block and its iframe measure the same width in one page; no hydration warning.
+    - Lectures (RISC-V Hello world, General course Loops, Flappy ASM in C): the prerendered HTML carries the coloured code blocks (98 `asm-` spans on Loops, no plain `language-c`); the embeds replace them after mount with the same height and gaps, and a code block and its iframe measure the same width in one page; no hydration warning.
     - A heading link (`addressing-modes#a-fixed-displacement-4a0`) lands 72 px from the top and stays.
     - Documentation: every block coloured on the three Using C pages, the x86 Runtime library (171 of 171) and x86 `enter`.
     - The Workbench's Markdown Preview: C and RISC-V coloured by ours, Python and JSON by Monaco in the editor's colours; under the Workbench's scoped theme a change of the reader's theme changes neither, and with the scope cleared both turn to the light palette.

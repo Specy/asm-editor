@@ -1,50 +1,74 @@
 <script lang="ts">
+    import Page from '#cmp/shared/layout/Page.svelte'
+    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import AgentDocs from '#cmp/documentation/site/AgentDocs.svelte'
+    import FeatureAccordion, {
+        type AccordionFeature
+    } from '#cmp/specific/landing/FeatureAccordion.svelte'
+    import { LANDING_TARGETS, hexStrip } from '#cmp/specific/landing/landing.ts'
+    import HeroBackdrop from '#cmp/specific/landing/HeroBackdrop.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
-    import Icon from '#cmp/shared/layout/Icon.svelte'
-    import MainPageLinkPreview from '#cmp/specific/landing/HeroLink.svelte'
-    import FaGithub from '~icons/fa-brands/github'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import HeroLink from '#cmp/specific/landing/HeroLink.svelte'
+    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import FaBook from '~icons/fa-solid/book'
     import FaCode from '~icons/fa-solid/code'
-    import FaArrowRight from '~icons/fa-solid/arrow-right'
     import FaGraduationCap from '~icons/fa-solid/graduation-cap'
-    import MainPageSection from '#cmp/specific/landing/HeroSection.svelte'
-    import AgentDocs from '#cmp/documentation/site/AgentDocs.svelte'
-    import RgbLine from '#cmp/shared/misc/RgbLine.svelte'
-    import GoLinkExternal from '~icons/octicon/link-external-16'
-    import { ThemeStore } from '#stores/themeStore.svelte.ts'
-    import { onMount } from 'svelte'
-    import FaDownload from '~icons/fa-solid/download'
-    import FaDonate from '~icons/fa-solid/heart'
-    import Button from '#cmp/shared/button/Button.svelte'
-    import Page from '#cmp/shared/layout/Page.svelte'
-    import Row from '#cmp/shared/layout/Row.svelte'
-    import Column from '#cmp/shared/layout/Column.svelte'
-    import Card from '#cmp/shared/layout/Card.svelte'
-
-    import { storedProjectCount } from '#lib/storage/projectCount.ts'
-    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import FaHeart from '~icons/fa-solid/heart'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
-    import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import FaArrowLeft from '~icons/fa-solid/arrow-left'
+    import FaRedo from '~icons/fa-solid/redo'
+    import FaLock from '~icons/fa-solid/lock'
+    import FaTimes from '~icons/fa-solid/times'
+    import FaPlus from '~icons/fa-solid/plus'
+    import FaFolderOpen from '~icons/fa-solid/folder-open'
+    import FaTh from '~icons/fa-solid/th'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
+    import FaChevronRight from '~icons/fa-solid/chevron-right'
+    import FaPlay from '~icons/fa-solid/play'
+    import FaDownload from '~icons/fa-solid/download'
+    import FaGithub from '~icons/fa-brands/github'
+    import GoLinkExternal from '~icons/octicon/link-external-16'
+    import { onMount } from 'svelte'
+    import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
+    import type { ResolvedPathname } from '$app/types'
+    import { resolveHref } from '#lib/hrefs.ts'
+    import { toast } from '#stores/toastStore.ts'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import {
+        EXAMPLE_LEAVE_MESSAGE,
+        destinationPath,
+        exampleSharePath,
+        isExampleDestination
+    } from '#lib/examples.ts'
+    import { storedProjectCount } from '#lib/storage/projectCount.ts'
     import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import { jsonLdScriptTag, softwareApplicationLd, websiteLd } from '#lib/seo.ts'
+    import { SITE_URL, jsonLdScriptTag, softwareApplicationLd, websiteLd } from '#lib/seo.ts'
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>
     }
 
-    const textShadowPrimary = ThemeStore.getColor('primary').isDark()
-    const textShadowSecondary = ThemeStore.getColor('secondary').isDark()
     let installEvent: BeforeInstallPromptEvent | null = $state(null)
     onMount(() => {
-        window.addEventListener('beforeinstallprompt', (e) => {
+        const onPrompt = (e: Event) => {
             e.preventDefault()
-            console.log('beforeinstallprompt', e)
             installEvent = e as BeforeInstallPromptEvent
-        })
+        }
+        window.addEventListener('beforeinstallprompt', onPrompt)
+        return () => window.removeEventListener('beforeinstallprompt', onPrompt)
     })
-    let shadow = $derived(textShadowPrimary && 'box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);')
+
+    async function install() {
+        try {
+            await installEvent?.prompt()
+        } catch (e) {
+            console.error(e)
+        }
+        installEvent = null
+    }
 
     /**
      * How many Projects are stored, counted without reading them: `pending` until the count is
@@ -58,6 +82,235 @@
     let shouldGoToCurrentProjects = $derived(
         projectCount === 'pending' || projectCount === undefined || projectCount > 0
     )
+    const editorHref = $derived(
+        shouldGoToCurrentProjects ? resolve('/projects') : resolve('/projects/create')
+    )
+    const coursesHref = resolve('/learn/courses')
+    const examplesHref = resolve('/examples')
+
+    /**
+     * The demo: examples in the real editor, framed as the Examples page frames them and started
+     * the way each starts. The tabs of the browser drawn around it choose the example, which loads
+     * again in the one frame. The frame loads once the window is close to the screen, and never on
+     * a narrow one, where the editor would be too small to use: a picture or a link stands in.
+     */
+    const DEMO_TABS = [
+        { name: 'Relay Maze', id: 'risc-v-relay-maze', language: 'RISC-V' },
+        { name: 'asmOS', id: 'x86-asmos', language: 'x86-64' },
+        { name: 'Flappy ASM', id: 'm68k-flappy-asm', language: 'M68K' },
+        { name: 'Sum of two numbers', id: 'z80-sum-of-two-numbers', language: 'Z80', screen: false }
+    ].map(({ screen = true, ...tab }) => ({
+        ...tab,
+        // a program with a Screen opens it in its window, one that only uses the Terminal does not
+        path: exampleSharePath(tab.id, 'buildAndRun', screen) as ResolvedPathname
+    }))
+    let activeTab = $state(0)
+    const demo = $derived(DEMO_TABS[activeTab])
+    /**
+     * The framed editor takes the mouse only once it is clicked, so the wheel scrolls the page
+     * over it until then, and again once the pointer leaves the browser window.
+     */
+    let frameActive = $state(false)
+    function activateFrame() {
+        frameActive = true
+        demoFrame?.contentWindow?.focus()
+    }
+    const SITE_HOST = new URL(SITE_URL).host
+    /**
+     * The instruction sets over the hero's title, x86-64 and RISC-V first, in their own colours:
+     * each makes a new Project for its Target and opens it, as Create project with the empty
+     * program would, without the form.
+     */
+    const HERO_ISAS = (
+        [
+            ['x86-64', 'X86'],
+            ['RISC-V', 'RISC-V'],
+            ['M68K', 'M68K'],
+            ['MIPS', 'MIPS'],
+            ['Z80', 'Z80']
+        ] as const
+    ).map(([name, language]) => ({
+        name,
+        language,
+        color: LANDING_TARGETS.find((target) => target.name === name)?.color ?? 'var(--accent)'
+    }))
+    let creating = $state(false)
+    async function createProjectFor(language: AvailableLanguages) {
+        if (creating) return
+        creating = true
+        try {
+            // loaded on demand: the home page does not otherwise need the Project store
+            const [{ makeProject }, { ProjectStore }] = await Promise.all([
+                import('#lib/Project.svelte.ts'),
+                import('#stores/projectsStore.svelte.ts')
+            ])
+            const now = Date.now()
+            const project = makeProject({ name: '', language, createdAt: now, updatedAt: now })
+            await ProjectStore.addProject(project)
+            await goto(resolve('/projects/[project]', { project: project.id }))
+        } catch (e) {
+            console.error(e)
+            toast.error('Could not create the project')
+        } finally {
+            creating = false
+        }
+    }
+    let browserWindow = $state<HTMLElement>()
+    let demoFrame = $state<HTMLIFrameElement>()
+    /** Whether the screen is wide enough for the editor, which shows the demo at all. */
+    let showDemo = $state(false)
+    /** Whether the frame can load, which needs the browser to tell when the demo is on screen. */
+    let canFrame = false
+    let frameWanted = $state(false)
+    let frameLoaded = $state(false)
+    let frameKey = $state(0)
+    onMount(() => {
+        const wide = window.matchMedia?.('(min-width: 900px)')
+        if (!wide) return
+        showDemo = wide.matches
+        const onChange = () => {
+            showDemo = wide.matches
+            //the frame goes with the demo, so one shown again starts loading from nothing
+            if (!showDemo) {
+                frameLoaded = false
+                frameActive = false
+            }
+        }
+        wide.addEventListener('change', onChange)
+        return () => wide.removeEventListener('change', onChange)
+    })
+    $effect(() => {
+        //without it, as in an old browser, the picture stays
+        if (!browserWindow || typeof IntersectionObserver === 'undefined') return
+        canFrame = true
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (!entry.isIntersecting) return
+                frameWanted = true
+                observer.disconnect()
+            },
+            // only once the window is well on screen: the editor takes the focus as it starts, which
+            // scrolls the page to it, and must not pull a reader still at the top of the page
+            { threshold: 0.25 }
+        )
+        observer.observe(browserWindow)
+        return () => observer.disconnect()
+    })
+    /**
+     * The demo is a demo: what the reader changes in it is let go without asking, on a new tab, a
+     * restart or leaving the page, so trying it never ends in a dialog.
+     */
+    function loadDemo() {
+        frameWanted = canFrame
+        frameLoaded = false
+        frameActive = false
+        frameKey++
+    }
+    function openTab(index: number) {
+        if (index === activeTab) return
+        activeTab = index
+        loadDemo()
+    }
+    //the framed editor's top bar or Save asks for a page of the site: it opens here
+    function receiveFrameMessage(event: MessageEvent) {
+        if (event.origin !== window.location.origin || event.source !== demoFrame?.contentWindow)
+            return
+        if (
+            event.data?.type === EXAMPLE_LEAVE_MESSAGE &&
+            isExampleDestination(event.data.destination)
+        )
+            void goto(destinationPath(event.data.destination))
+    }
+
+    const showcases = [
+        {
+            title: 'Breakpoints, stepping and Undo',
+            description:
+                'Pause on a breakpoint, step one instruction at a time and undo the ones you already ran. Edit registers and memory while the program is paused, and see what each instruction changed.',
+            image: '/images/ASM-Tools.webp',
+            alt: 'The M68K debugger with the registers, memory and the History of the last instructions',
+            width: 1718,
+            height: 778
+        },
+        {
+            title: 'Screen, keyboard and sound',
+            description:
+                'Programs can draw on the Screen, read the keyboard and mouse, play sound, write to the Terminal and access a File System.',
+            image: '/images/ASM-Peripherals.webp',
+            alt: 'A Flappy ASM game written in M68K assembly, running on the Screen',
+            width: 1710,
+            height: 688
+        },
+        {
+            title: 'Documentation in the editor',
+            description:
+                'Every instruction, directive and system call is documented with its operands and an example. Hover an instruction in your code to read about it.',
+            image: '/images/ASM-Documentation.webp',
+            alt: 'The Documentation panel beside an M68K program, open on the add instruction',
+            width: 1350,
+            height: 1013
+        },
+        {
+            title: 'Completion and errors as you type',
+            description:
+                'Completion suggests the operands each instruction accepts and the labels in your code. Mistakes are reported as you write.',
+            image: '/images/ASM-CodeCompletion.webp',
+            alt: 'Code completion listing the addressing modes an M68K add instruction accepts',
+            width: 1050,
+            height: 750
+        }
+    ]
+
+    const deeper: AccordionFeature[] = [
+        {
+            title: 'Compile *C* and *C++*',
+            description:
+                'Write C or C++ and compile it to MIPS, RISC-V or x86-64 at any optimization level, with GCC, or Clang on MIPS and RISC-V. Each line of C is matched to the instructions it compiles to, so you can see how code gets compiled to machine code.',
+            link: { href: resolve('/documentation/risc-v/using-c'), label: 'Using C on RISC-V' },
+            image: '/images/ASM-Compile.webp',
+            alt: 'A C program summing squares beside the RISC-V assembly Clang compiled it to, with the instructions of the loop body highlighted',
+            width: 1800,
+            height: 948
+        },
+        {
+            title: 'Open an *executable (ELF)*',
+            description:
+                'Import an x86-64 Linux ELF executable to disassemble it, browse its symbols and strings, and edit its bytes in the Hex editor. Then debug it with breakpoints, stepping and Undo.',
+            link: {
+                href: resolve('/documentation/x86/executables'),
+                label: 'Read about Executables'
+            },
+            image: '/images/ASM-ReverseEngineering.webp',
+            alt: 'An imported x86-64 executable with its symbols, disassembly and pseudocode',
+            width: 1800,
+            height: 777
+        },
+        {
+            title: 'Decompile with *Ghidra*',
+            description:
+                'Read each function as C-like pseudocode from the Ghidra decompiler, rename functions and add comments as you figure out what the program does. Made for capture the flag challenges and cybersecurity courses.',
+            image: '/images/ASM-ReverseEngineering.webp',
+            alt: 'Ghidra pseudocode of a check_password function',
+            width: 1800,
+            height: 777,
+            focus: { x: '100%', y: '20%', scale: 1.5 }
+        }
+    ]
+
+    type Tile = { title: string; description: string; href: ResolvedPathname }
+    const tiles: Tile[] = [
+        {
+            title: 'Blog',
+            description:
+                'Read the ASM Editor posts about how to use the editor, changelogs and guides.',
+            href: resolve('/blog')
+        },
+        {
+            title: 'Changelog',
+            description: 'See updates and new things added in each version.',
+            href: resolve('/changelog')
+        }
+    ]
 </script>
 
 <svelte:head>
@@ -84,518 +337,1542 @@
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     {@html jsonLdScriptTag(websiteLd())}
 </svelte:head>
-<DefaultNavbar />
-<Page>
-    <div class="main">
-        <div class="content row">
-            <img
-                src="/images/ASM-Pacman.webp"
-                alt="Pac-Man written in C, running on RISC-V in ASM Editor"
-                class="preview-image"
-            />
-            <div class="presentation">
-                <h1 class="welcome-title" class:textShadow={textShadowPrimary}>
-                    The best web IDE for Assembly <br />
-                    <span style="font-size: 1.2rem; opacity: 0.8">
-                        M68K, MIPS, RISC-V, x86-64, Z80
-                    </span>
-                </h1>
 
-                <Column gap="0.6rem">
-                    <Row gap="0.6rem" wrap>
-                        <ButtonLink
-                            style={`${shadow}; padding: 0.5rem 0.7rem`}
-                            cssVar="tertiary"
-                            href="https://github.com/Specy/asm-editor"
-                            {@attach tooltip('Open the project on github')}
-                            aria-label="GitHub"
-                        >
-                            <Icon>
-                                <FaGithub />
-                            </Icon>
-                        </ButtonLink>
-                        <ButtonLink
-                            style={`${shadow}; padding: 0.5rem 0.7rem`}
-                            cssVar="tertiary"
-                            href="/donate"
-                            {@attach tooltip('Donate to the project')}
-                            aria-label="Donate"
-                        >
-                            <Icon>
-                                <FaDonate />
-                            </Icon>
-                        </ButtonLink>
-                        <ButtonLink
-                            href={shouldGoToCurrentProjects ? '/projects' : '/projects/create'}
-                            style={`${shadow} gap: 0.5rem; min-width: 12.5rem`}
-                            {@attach tooltip('Open the editor')}
-                        >
-                            {#if shouldGoToCurrentProjects}
-                                Go to your projects
-                            {:else}
-                                Create first project
-                            {/if}
-                            <Icon>
-                                <FaArrowRight />
-                            </Icon>
-                        </ButtonLink>
-                    </Row>
+<svelte:window onmessage={receiveFrameMessage} />
 
-                    <Row wrap gap="0.5rem">
-                        <ButtonLink
-                            href="/learn/courses"
-                            cssVar="accent2"
-                            style={`${shadow} gap: 0.5rem`}
-                        >
-                            Courses
-                            <Icon>
-                                <FaGraduationCap />
-                            </Icon>
-                        </ButtonLink>
-                        <Button
-                            style={`${shadow} gap: 0.5rem; min-width: 11.25rem; ${!installEvent ? 'pointer-events: none; opacity: 0' : ''}`}
-                            cssVar="secondary"
-                            onClick={async () => {
-                                try {
-                                    await installEvent?.prompt()
-                                } catch (e) {
-                                    console.error(e)
-                                }
-                                installEvent = null
-                            }}
-                        >
-                            <Icon>
-                                <FaDownload />
-                            </Icon>
-                            Install WebApp
-                        </Button>
-                    </Row>
-                </Column>
+{#snippet rule()}
+    <div class="rule" aria-hidden="true"><div class="rule-frame"><i></i><i></i></div></div>
+{/snippet}
+
+<!-- a divider drawn as two rows of hex bytes, like a strip of a memory view -->
+{#snippet band(seed: number)}
+    {@render rule()}
+    <div class="band" aria-hidden="true">
+        {#each [seed * 2, seed * 2 + 1] as row (row)}
+            <div class="hex">
+                {#each hexStrip(row) as segment, i (i)}{#if segment.hot}<b>{segment.text}</b
+                        >{:else}{segment.text}{/if}{/each}
             </div>
-        </div>
-        <RgbLine animated height="0.5rem" style="border-radius: 0;" />
-        <div class="links-row-wrapper">
-            <div class="links-row">
-                <MainPageLinkPreview href={resolve('/documentation')}>
-                    {#snippet icon()}
-                        <div>
-                            <FaBook />
-                        </div>
-                    {/snippet}
-                    {#snippet description()}
-                        Documentation
-                    {/snippet}
-                </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/examples')}>
-                    {#snippet icon()}
-                        <div>
-                            <FaCode />
-                        </div>
-                    {/snippet}
-                    {#snippet description()}
-                        Examples
-                    {/snippet}
-                </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/learn/courses')}>
-                    {#snippet icon()}
-                        <div>
-                            <FaGraduationCap />
-                        </div>
-                    {/snippet}
-                    {#snippet description()}
-                        Courses
-                    {/snippet}
-                </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/donate')}>
-                    {#snippet icon()}
-                        <div>
-                            <FaDonate />
-                        </div>
-                    {/snippet}
-                    {#snippet description()}
-                        Donate
-                    {/snippet}
-                </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/embed')} title="Embed the app in your website">
-                    {#snippet icon()}
-                        <div>
-                            <FaCode />
-                        </div>
-                    {/snippet}
-                    {#snippet description()}
-                        Embed
-                    {/snippet}
-                </MainPageLinkPreview>
-                <MainPageLinkPreview href={resolve('/exam')} title="Create an exam for students">
-                    {#snippet icon()}
-                        <div>
-                            <FaDumbbell />
-                        </div>
-                    {/snippet}
-                    {#snippet description()}
-                        Exam
-                    {/snippet}
-                </MainPageLinkPreview>
-                {#if AI_FEATURES_ENABLED}
-                    <MainPageLinkPreview href={resolve('/chat')}>
-                        {#snippet icon()}
-                            <div>
-                                <SparklesIcon style="font-size: 1.8rem" />
-                            </div>
-                        {/snippet}
-                        {#snippet description()}
-                            AI Chat
-                        {/snippet}
-                    </MainPageLinkPreview>
-                {/if}
-            </div>
-        </div>
+        {/each}
     </div>
-    <div class="column sections-wrapper">
-        <MainPageSection id="documentation" imageUrl="/images/ASM-Documentation.webp">
-            {#snippet title()}
-                Documentation
-            {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
-                The editor comes with built-in documentation for the M68K, MIPS, RISC-V, x86-64 and
-                Z80 instruction sets including the valid addressing modes, description and examples
-                for each instruction, directive and syscall.
-                <a
-                    href={resolve('/documentation')}
-                    title="View documentation"
-                    class="external-link"
-                >
-                    Visit the documentation
-                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-                        <GoLinkExternal />
-                    </div>
-                </a>
-            </div>
-            <AgentDocs level={3} style="margin-top: 1.5rem;" />
-        </MainPageSection>
-        <MainPageSection id="codeCompletion" imageUrl="/images/ASM-CodeCompletion.webp" reverse>
-            {#snippet title()}
-                Code completion
-            {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
-                Write and learn faster with the code completion tools, suggesting you with the valid
-                addressing modes and shortcuts for labels and other keywords. Real time semantic
-                errors that warn you before you compile the code.
-            </div>
-        </MainPageSection>
-        <MainPageSection id="tools" imageUrl="/images/ASM-Tools.webp">
-            {#snippet title()}
-                Tools & Customisation
-            {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
-                Feature rich tools to help you debug your code. Includes breakpoints, stepping,
-                undo, poking registers and memory, stack tracer, register/memory diffing,
-                decimal/hexadecimal conversions, stdout/stdin/errors, customisable shortcuts and
-                settings, formatter and more. You can also customise the theme of the editor to your
-                liking.
-            </div>
-        </MainPageSection>
-        <MainPageSection id="compile" imageUrl="/images/ASM-Compile.webp" reverse>
-            {#snippet title()}
-                Compile from C/C++
-            {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
-                Write C or C++ and compile it to MIPS, RISC-V or x86-64 assembly at any optimization
-                level, with GCC, or Clang on MIPS and RISC-V. C source lines are mapped to the
-                assembly instructions so you can see how loops, function calls and expressions
-                become assembly.
-            </div>
-        </MainPageSection>
-        <MainPageSection id="reverseEngineering" imageUrl="/images/ASM-ReverseEngineering.webp">
-            {#snippet title()}
-                Reverse engineering & CTFs
-            {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
-                Import an x86-64 Linux ELF executable, to disassemble it, decompile it to C-like
-                pseudocode with the Ghidra decompiler and edit its bytes in the hex editor. Rename
-                functions, add comments, browse its strings and debug it with breakpoints, stepping
-                and undo. Made for capture the flag challenges, cybersecurity courses and learning
-                how compiled programs work.
-                <a
-                    href={resolve('/documentation/x86/executables')}
-                    title="Read about Executables"
-                    class="external-link"
-                >
-                    Read about Executables
-                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-                        <GoLinkExternal />
-                    </div>
-                </a>
-            </div>
-        </MainPageSection>
-        <MainPageSection id="peripherals" imageUrl="/images/ASM-Peripherals.webp" reverse>
-            {#snippet title()}
-                Peripherals
-            {/snippet}
-            <div class="description" class:textShadow={textShadowSecondary}>
-                Programs can draw on a screen and interact with the user through mouse and keyboard
-                or use the terminal for stdout and stdin. Available for M68K, MIPS, RISC-V and Z80.
-                This can also be used to write simple interactive games and programs.
-            </div>
-        </MainPageSection>
-        <MainPageSection id="exam">
-            {#snippet title()}
-                Exam
-            {/snippet}
-            <div class="description" class:textShadow={textShadowPrimary}>
-                Create exams for students with the <a
-                    href={resolve('/exam')}
-                    title="Exam tool"
-                    class="external-link"
-                >
-                    Exam tool
-                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-                        <GoLinkExternal />
-                    </div>
-                </a>
-                where the editor is locked down.
-            </div>
-        </MainPageSection>
-        {#if AI_FEATURES_ENABLED}
-            <MainPageSection id="chat" imageUrl="/images/ASM-AI-Chat.webp" reverse>
-                {#snippet title()}
-                    AI Chat
-                {/snippet}
-                <div class="description" class:textShadow={textShadowSecondary}>
-                    Chat with an AI assistant that can write, run and debug assembly code directly
-                    in the browser. Use the <a
-                        href={resolve('/chat')}
-                        title="AI Chat"
-                        class="external-link"
-                    >
-                        AI Chat
-                        <div
-                            style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem"
-                        >
-                            <GoLinkExternal />
-                        </div>
-                    </a>
-                    to get help with M68K, MIPS, RISC-V, x86-64 and Z80 assembly.
-                </div>
-            </MainPageSection>
+    {@render rule()}
+{/snippet}
+
+{#snippet editorButton()}
+    <ButtonLink href={editorHref} style="gap: 0.6rem" {@attach tooltip('Open the editor')}>
+        {#if shouldGoToCurrentProjects}
+            <span class="icon" aria-hidden="true"><FaFolderOpen /></span>
+            Go to your projects
+        {:else}
+            <span class="icon" aria-hidden="true"><FaPlus /></span>
+            Create first project
         {/if}
-        <!-- Without the AI Chat section, Embed follows Exam and takes the alternate side and colour. -->
-        <MainPageSection id="embed" reverse={!AI_FEATURES_ENABLED}>
-            {#snippet title()}
-                Embed
-            {/snippet}
-            <div
-                class="description"
-                class:textShadow={AI_FEATURES_ENABLED ? textShadowPrimary : textShadowSecondary}
-            >
-                Embed the editor in your website to show and teach how assembly works using the <a
-                    href={resolve('/embed')}
-                    title="Embedder tool"
-                    class="external-link"
-                >
-                    Embedder tool
-                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-                        <GoLinkExternal />
+    </ButtonLink>
+{/snippet}
+
+<DefaultNavbar>
+    <span class="create-project">
+        <ButtonLink
+            href={resolve('/projects/create')}
+            {@attach tooltip('Start a new Project in the editor')}
+        >
+            <span class="create-icon"><FaPlus /></span>
+            <span class="create-label">Create project</span>
+        </ButtonLink>
+    </span>
+</DefaultNavbar>
+<Page hasNavbar>
+    <div class="landing">
+        <div class="first-screen">
+            <section class="hero" aria-labelledby="hero-title">
+                <HeroBackdrop />
+                <div class="hero-content">
+                    <div class="isas" role="group" aria-label="Create a project for">
+                        {#each HERO_ISAS as isa (isa.name)}
+                            <button
+                                type="button"
+                                style="--dot: {isa.color}"
+                                disabled={creating}
+                                onclick={() => createProjectFor(isa.language)}
+                                {@attach tooltip(`Create an empty ${isa.name} Project and open it`)}
+                            >
+                                <span class="isa-name">{isa.name}</span>
+                            </button>
+                        {/each}
                     </div>
-                </a>
+                    <h1 id="hero-title">The web IDE for <em>assembly</em></h1>
+                    <p class="lede">
+                        Write assembly and C/C++ in your browser, run it or step one instruction at
+                        a time and undo any step while debugging what it does.
+                    </p>
+                    <div class="actions">
+                        {@render editorButton()}
+                        <ButtonLink href={coursesHref} cssVar="tertiary" style="gap: 0.6rem">
+                            <span class="icon" aria-hidden="true"><FaGraduationCap /></span>
+                            Courses
+                        </ButtonLink>
+                        {#if installEvent}
+                            <Button cssVar="tertiary" style="gap: 0.6rem" onClick={install}>
+                                <span class="icon"><FaDownload /></span>
+                                Install the app
+                            </Button>
+                        {/if}
+                    </div>
+                </div>
+            </section>
+
+            {@render rule()}
+
+            <!-- one stream of hex bytes across the whole width, as in the dividers, under the cards -->
+            <div class="quick-row">
+                <div class="quick-hex" aria-hidden="true">
+                    {#each hexStrip(100, 1000) as segment, i (i)}{#if segment.hot}<b
+                                >{segment.text}</b
+                            >{:else}{segment.text}{/if}{/each}
+                </div>
+                <nav class="frame quick-links" aria-label="Quick links">
+                    <HeroLink href={resolve('/documentation')}>
+                        {#snippet icon()}<FaBook />{/snippet}
+                        {#snippet description()}Documentation{/snippet}
+                    </HeroLink>
+                    <HeroLink href={examplesHref}>
+                        {#snippet icon()}<FaCode />{/snippet}
+                        {#snippet description()}Examples{/snippet}
+                    </HeroLink>
+                    <HeroLink href={coursesHref}>
+                        {#snippet icon()}<FaGraduationCap />{/snippet}
+                        {#snippet description()}Courses{/snippet}
+                    </HeroLink>
+                    <HeroLink href={resolve('/donate')}>
+                        {#snippet icon()}<FaHeart />{/snippet}
+                        {#snippet description()}Donate{/snippet}
+                    </HeroLink>
+                    <HeroLink href={resolve('/embed')} title="Embed the app in your website">
+                        {#snippet icon()}<FaCode />{/snippet}
+                        {#snippet description()}Embed{/snippet}
+                    </HeroLink>
+                    <HeroLink href={resolve('/exam')} title="Create an exam for students">
+                        {#snippet icon()}<FaDumbbell />{/snippet}
+                        {#snippet description()}Exam{/snippet}
+                    </HeroLink>
+                    {#if AI_FEATURES_ENABLED}
+                        <HeroLink href={resolve('/chat')}>
+                            {#snippet icon()}<SparklesIcon style="font-size: 1.8rem" />{/snippet}
+                            {#snippet description()}AI Chat{/snippet}
+                        </HeroLink>
+                    {/if}
+                </nav>
             </div>
-        </MainPageSection>
-        <section id="citation" class="citation">
-            <Card
-                background="secondary"
-                border="tertiary"
-                padding="2rem"
-                gap="1rem"
-                radius="0.8rem"
-                align="start"
-                style="width: 100%; max-width: 44rem"
-            >
-                <h2 class="citation-title">Published research</h2>
-                <p>
-                    ASM Editor is described in a peer-reviewed paper presented at the 2026 IEEE
-                    Global Engineering Education Conference, together with the first-year course it
-                    was built for.
-                </p>
-                <p class="reference">
-                    E. Menichelli and L. Forlizzi, &ldquo;ASM Editor: Understanding Language
-                    Abstractions Through Assembly Programming&rdquo;, 2026 IEEE Global Engineering
-                    Education Conference (EDUCON), Cairo, Egypt, 2026.
-                </p>
-                <a
-                    href="https://doi.org/10.1109/EDUCON67543.2026.11574463"
-                    title="Read the EDUCON 2026 paper"
-                    class="external-link"
+        </div>
+
+        {@render rule()}
+
+        <!-- only on a screen wide enough for the editor, added once the page knows: a phone gets
+             neither the frame nor its picture -->
+        {#if showDemo}
+            <section class="frame showcase" aria-label="Examples running in the editor">
+                <!-- the cover comes back once the pointer leaves the whole window, not on its way
+                     to the tabs or the address bar -->
+                <div
+                    class="browser"
+                    role="group"
+                    bind:this={browserWindow}
+                    onpointerleave={() => (frameActive = false)}
                 >
-                    Read the paper
-                    <div style="width: 1rem; height: 1rem; margin-top: 0.2rem; margin-left: 0.3rem">
-                        <GoLinkExternal />
+                    <div class="browser-tabs">
+                        <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+                        {#each DEMO_TABS as tab, index (tab.id)}
+                            <button
+                                type="button"
+                                class="browser-tab"
+                                class:active={index === activeTab}
+                                aria-pressed={index === activeTab}
+                                onclick={() => openTab(index)}
+                                {@attach tooltip(
+                                    `Run the ${tab.language} ${tab.name} example here`
+                                )}
+                            >
+                                <img src="/favicon.png" alt="" />
+                                <span class="ellipsis">{tab.name}</span>
+                                <span class="close" aria-hidden="true"><FaTimes /></span>
+                            </button>
+                        {/each}
+                        <a class="browser-tab" href={examplesHref}>
+                            <span class="tab-icon"><FaTh /></span>
+                            <span class="ellipsis">Examples</span>
+                        </a>
+                        <a
+                            class="new-tab"
+                            href={resolve('/projects/create')}
+                            aria-label="Create project"
+                            {@attach tooltip('Start a new Project in the editor')}
+                        >
+                            <FaPlus />
+                        </a>
                     </div>
-                </a>
-            </Card>
+                    <div class="browser-toolbar">
+                        <div class="browser-nav">
+                            <span class="nav-button" aria-hidden="true"><FaArrowLeft /></span>
+                            <span class="nav-button" aria-hidden="true"><FaArrowRight /></span>
+                            <button
+                                type="button"
+                                class="nav-button"
+                                onclick={loadDemo}
+                                aria-label={`Restart ${demo.name}`}
+                                {@attach tooltip('Load the example again from the start')}
+                            >
+                                <FaRedo />
+                            </button>
+                        </div>
+                        <a
+                            class="address"
+                            href={demo.path}
+                            {@attach tooltip(`Open ${demo.name} in the editor`)}
+                        >
+                            <span class="lock"><FaLock /></span>
+                            <span class="ellipsis"
+                                ><span class="host">{SITE_HOST}</span>{demo.path}</span
+                            >
+                        </a>
+                    </div>
+                    <div
+                        class="viewport"
+                        role="group"
+                        aria-label={`The editor running ${demo.name}`}
+                    >
+                        {#if !frameLoaded}
+                            {#if activeTab === 0}
+                                <img
+                                    src="/images/ASM-RelayMaze.webp"
+                                    alt="Relay Maze written in RISC-V assembly, running in ASM Editor"
+                                    width="1917"
+                                    height="909"
+                                    loading="lazy"
+                                />
+                            {:else if frameWanted}
+                                <p class="loading">Opening {demo.name}…</p>
+                            {/if}
+                        {/if}
+                        {#if frameWanted}
+                            {#key frameKey}
+                                <iframe
+                                    bind:this={demoFrame}
+                                    src={demo.path}
+                                    title={`ASM Editor running the ${demo.name} example`}
+                                    allow="clipboard-write; fullscreen; autoplay"
+                                    class:loaded={frameLoaded}
+                                    onload={() => (frameLoaded = true)}
+                                ></iframe>
+                            {/key}
+                            {#if frameLoaded && !frameActive}
+                                <button type="button" class="activate" onclick={activateFrame}>
+                                    <span class="activate-hint">Click to try the editor</span>
+                                </button>
+                            {/if}
+                        {:else}
+                            <span class="play">
+                                <ButtonLink href={demo.path} style="gap: 0.6rem">
+                                    <span class="icon"><FaPlay /></span>
+                                    Play {demo.name}
+                                </ButtonLink>
+                            </span>
+                        {/if}
+                    </div>
+                </div>
+            </section>
+
+            {@render rule()}
+        {/if}
+
+        <section class="frame docs" aria-labelledby="targets-title">
+            <header class="section-head">
+                <div>
+                    <h2 id="targets-title"><em>Documentation</em> for five Instruction Sets</h2>
+                    <p>
+                        Read the interactive documentation of each ISA, with instructions,
+                        directives and system calls. With descriptions, examples and how to use
+                        them. Available <a class="inline-link" href={resolve('/documentation')}
+                            >here</a
+                        > or inside the editor.
+                    </p>
+                </div>
+                <div class="head-links">
+                    <ButtonLink href={resolve('/documentation')} style="gap: 0.6rem">
+                        Open the documentation
+                        <span class="chevron"><FaChevronRight /></span>
+                    </ButtonLink>
+                    <a class="text-link" href={coursesHref}>
+                        View the courses
+                        <span class="chevron"><FaChevronRight /></span>
+                    </a>
+                </div>
+            </header>
+            {@render rule()}
+            <div class="targets">
+                {#each LANDING_TARGETS as target (target.name)}
+                    <article
+                        class="target"
+                        style="--tile: {target.color}"
+                        class:ink-light={target.ink === 'light'}
+                    >
+                        <!-- the same page as the card's Documentation link, so it stays out of the
+                             tab order and the accessibility tree -->
+                        <a
+                            class="tile"
+                            href={resolveHref(target.documentation)}
+                            aria-hidden="true"
+                            tabindex="-1"
+                        >
+                            <span>{target.glyph}</span>
+                        </a>
+                        <div class="target-body">
+                            <div class="target-head">
+                                <h3>{target.name}</h3>
+                            </div>
+                            <p>{target.description}</p>
+                            <div class="target-links">
+                                <a class="docs-link" href={resolveHref(target.documentation)}>
+                                    Documentation <span class="chevron"><FaChevronRight /></span>
+                                </a>
+                                {#if target.course}
+                                    <a href={resolveHref(target.course)}>
+                                        Course <span class="chevron"><FaChevronRight /></span>
+                                    </a>
+                                {/if}
+                            </div>
+                        </div>
+                    </article>
+                {/each}
+            </div>
         </section>
+
+        {@render band(1)}
+
+        <section class="frame" aria-label="Debugging in the editor">
+            <div class="cards">
+                {#each showcases as card (card.title)}
+                    <article class="card">
+                        <div class="shot">
+                            <div class="shot-inner">
+                                <img
+                                    src={card.image}
+                                    alt={card.alt}
+                                    width={card.width}
+                                    height={card.height}
+                                    loading="lazy"
+                                />
+                            </div>
+                        </div>
+                        <h3>{card.title}</h3>
+                        <p>{card.description}</p>
+                    </article>
+                {/each}
+            </div>
+        </section>
+
+        {@render band(2)}
+
+        <section class="frame" aria-labelledby="deeper-title">
+            <header class="section-head">
+                <div>
+                    <h2 id="deeper-title">From C to machine code, and back</h2>
+                    <p>
+                        See how C and C++ code is compiled to machine code, or decompile a program
+                        to understand what it does.
+                    </p>
+                </div>
+            </header>
+            {@render rule()}
+            <FeatureAccordion features={deeper} />
+            {@render rule()}
+            <nav class="tiles" aria-label="More of ASM Editor">
+                {#each tiles as tile (tile.title)}
+                    <a class="tile-link" href={tile.href}>
+                        <span class="tile-title">
+                            {tile.title}
+                            <span class="arrow" aria-hidden="true"><FaArrowRight /></span>
+                        </span>
+                        <span class="tile-text">{tile.description}</span>
+                    </a>
+                {/each}
+                <a
+                    class="tile-link"
+                    href="https://github.com/Specy/asm-editor"
+                    target="_blank"
+                    rel="noopener"
+                >
+                    <span class="tile-title">
+                        <span class="icon"><FaGithub /></span>
+                        GitHub
+                        <span class="arrow" aria-hidden="true"><GoLinkExternal /></span>
+                    </span>
+                    <span class="tile-text">Read the source, report a bug or star the project.</span
+                    >
+                </a>
+            </nav>
+            {@render rule()}
+            <div class="agents">
+                <AgentDocs level={2} />
+            </div>
+        </section>
+
+        {@render band(3)}
+
+        <section class="frame letter" aria-labelledby="research-title">
+            <p class="kicker">Published research</p>
+            <h2 id="research-title">ASM Editor at EDUCON 2026</h2>
+            <p>
+                ASM Editor is described in a peer-reviewed paper presented at the 2026 IEEE Global
+                Engineering Education Conference, together with the first-year course it was built
+                for.
+            </p>
+            <div class="divider" aria-hidden="true"></div>
+            <p class="reference">
+                E. Menichelli and L. Forlizzi, &ldquo;ASM Editor: Understanding Language
+                Abstractions Through Assembly Programming&rdquo;, 2026 IEEE Global Engineering
+                Education Conference (EDUCON), Cairo, Egypt, 2026.
+            </p>
+            <ButtonLink
+                href="https://doi.org/10.1109/EDUCON67543.2026.11574463"
+                cssVar="tertiary"
+                style="gap: 0.6rem"
+                title="Read the EDUCON 2026 paper"
+            >
+                Read the paper <span class="chevron"><GoLinkExternal /></span>
+            </ButtonLink>
+        </section>
+
+        {@render rule()}
+
+        <section class="frame closing" aria-labelledby="closing-title">
+            <h2 id="closing-title">Write your first program</h2>
+            <p>Start from an empty Project, or open an example and change it.</p>
+            <div class="actions">
+                {@render editorButton()}
+                <ButtonLink href={examplesHref} cssVar="tertiary" style="gap: 0.6rem">
+                    <span class="icon" aria-hidden="true"><FaCode /></span>
+                    Open an example
+                </ButtonLink>
+            </div>
+        </section>
+
+        {@render rule()}
     </div>
 </Page>
 
-<div class="pre-footer" class:fade={false}></div>
-
 <style lang="scss">
-    /* Fades a last section on the secondary colour (a `reverse` one) into the footer. The last
-       section is on the primary colour now, the footer's own, so `fade` is off in the markup: turn
-       it back on if adding or removing a section leaves a `reverse` one last. */
-    .pre-footer.fade {
-        height: 5rem;
-        min-height: 5rem;
-        flex: 1;
-        background: linear-gradient(0deg, var(--primary) 10%, var(--secondary));
-    }
-
-    .welcome-title {
-        font-size: 3rem;
-        padding: 1rem;
-        max-width: 38rem;
-        text-align: center;
-        color: var(--primary-text);
-        font-weight: bold;
-        line-height: 1.15;
-    }
-
-    .textShadow {
-        text-shadow: 2px 2px 12px rgb(36 36 36);
-    }
-
-    /* fades in over the section above it the way a MainPageSection does (HeroSection.svelte) */
-    .citation {
-        display: flex;
-        justify-content: center;
+    .landing {
+        --inner: min(100% - 2rem, 76rem);
+        --line: color-mix(in srgb, var(--background-text) 11%, transparent);
+        --line-strong: color-mix(in srgb, var(--background-text) 20%, transparent);
+        --muted: color-mix(in srgb, var(--background-text) 68%, transparent);
+        --serif: 'Noto Serif', Georgia, serif;
+        --mono: 'Fira Code', monospace;
+        --lit:
+            radial-gradient(
+                ellipse 80% 70% at 50% 0%,
+                color-mix(in srgb, var(--accent2) 85%, transparent),
+                transparent 75%
+            ),
+            linear-gradient(
+                180deg,
+                color-mix(in srgb, var(--accent2) 30%, var(--background)),
+                var(--secondary)
+            );
         position: relative;
-        z-index: 1;
-        margin-top: -3rem;
-        padding: 4.5rem 1rem 3rem;
-        background-color: var(--primary);
-        mask-image: linear-gradient(#0000, #000 3rem);
-        font-size: 1.1rem;
-        line-height: 1.6rem;
+        width: 100%;
+        color: var(--background-text);
+        padding-bottom: 4rem;
     }
 
-    .citation-title {
-        font-size: 2.2rem;
-        font-weight: bold;
-        line-height: 1.2;
+    h1,
+    h2,
+    h3 {
+        font-weight: 400;
+        margin: 0;
     }
 
-    .reference {
-        font-size: 0.9rem;
+    .frame {
+        position: relative;
+        width: var(--inner);
+        margin: 0 auto;
+        border-inline: 1px solid var(--line);
+    }
+
+    /* a divider across the page, a dot where it crosses the frame; the dots sit in a box laid out
+       as the frame is, the same width between the same automatic margins, so they round to the
+       same pixels as the frame's lines and stay centred on them at any width */
+    .rule {
+        position: relative;
+        z-index: 3;
+        height: 1px;
+        background: var(--line);
+    }
+
+    .rule-frame {
+        position: relative;
+        width: var(--inner);
+        height: 1px;
+        margin: 0 auto;
+
+        /* 5px over a 1px line: two pixels each side */
+        i {
+            position: absolute;
+            top: -2px;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: color-mix(in srgb, var(--background-text) 40%, transparent);
+        }
+
+        i:nth-child(1) {
+            left: -2px;
+        }
+
+        i:nth-child(2) {
+            right: -2px;
+        }
+    }
+
+    /* a rule inside a section only crosses the frame, so it has no guides to mark */
+    .frame .rule i {
+        display: none;
+    }
+
+    .band {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.15rem;
+        height: 3.4rem;
+        overflow: hidden;
+        mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+    }
+
+    .hex {
+        white-space: pre;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        line-height: 1.3;
+        letter-spacing: 0.08em;
+        color: color-mix(in srgb, var(--background-text) 16%, transparent);
+
+        b {
+            font-weight: 400;
+            color: color-mix(in srgb, var(--accent) 50%, transparent);
+        }
+    }
+
+    .chevron {
+        display: inline-flex;
+        width: 0.6rem;
         opacity: 0.8;
     }
 
-    .sections-wrapper {
-        padding: 3rem 0;
-        padding-bottom: 0;
-        font-family: 'Fira Code', monospace;
-        background-color: var(--primary);
-        color: var(--primary-text);
+    /* ---- hero ---- */
+
+    /* the hero and the quick links fill the first screen, the links at its foot, when they fit */
+    .first-screen {
+        display: flex;
+        flex-direction: column;
+        min-height: calc(var(--screen-height) - 3.2rem);
     }
 
-    .presentation {
-        display: flex;
+    .hero {
+        position: relative;
         flex: 1;
-        gap: 1rem;
+        display: grid;
+        place-items: center;
+        min-height: 26rem;
+        overflow: hidden;
+    }
+
+    .hero-content {
+        position: relative;
+        display: flex;
         flex-direction: column;
-        justify-content: center;
         align-items: center;
-        background-color: rgba(var(--RGB-primary), 0.9);
-        backdrop-filter: blur(2px);
-        z-index: 2;
+        text-align: center;
+        gap: 1.4rem;
+        padding: 3rem 1.25rem;
+        max-width: 48rem;
     }
 
-    :global(body) {
-        scroll-behavior: smooth;
-    }
-
-    .external-link {
-        color: var(--accent);
-        display: inline-flex;
-
-        &:hover {
-            text-decoration: underline;
-        }
-    }
-
-    .links-row-wrapper {
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+    /* the instruction sets as one bar, a coloured square on each */
+    .isas {
         display: flex;
-        justify-content: center;
-    }
+        border: 1px solid var(--line-strong);
+        border-radius: 0.4rem;
+        background: color-mix(in srgb, var(--background) 60%, transparent);
+        backdrop-filter: blur(8px);
+        overflow: hidden;
 
-    .links-row {
-        gap: 0.1rem;
-        background-color: var(--background);
-        display: flex;
-        flex-wrap: wrap;
-    }
-
-    .main {
-        display: flex;
-        flex-direction: column;
-        min-height: 100dvh;
-        border-radius: 0.6rem;
-
-        .content {
+        button {
+            all: unset;
             display: flex;
-            flex: 1;
-            overflow: hidden;
-            position: relative;
-            border-radius: 0.45rem;
-        }
-    }
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.9rem;
+            cursor: pointer;
+            font-family: var(--mono);
+            font-size: 0.9rem;
+            color: var(--background-text);
 
-    .preview-image {
-        display: flex;
-        width: 100%;
-        height: 100%;
-        top: 0;
-        left: 0;
-        position: absolute;
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: cover;
-    }
+            &::before {
+                content: '';
+                width: 0.5rem;
+                height: 0.5rem;
+                border-radius: 2px;
+                background: var(--dot);
+            }
 
-    @media screen and (max-width: 650px) {
-        .main {
-            .content {
-                width: 100%;
+            &:hover {
+                background: color-mix(in srgb, var(--dot) 16%, transparent);
+            }
+
+            &:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: -2px;
+            }
+
+            &:disabled {
+                cursor: progress;
             }
         }
-        .welcome-title {
-            font-size: 2.3rem;
+
+        button + button {
+            border-left: 1px solid var(--line-strong);
         }
     }
 
-    @media screen and (max-width: 850px) {
-        .citation {
-            margin-top: 0;
-            padding: 0.5rem 1rem 1.5rem;
-            mask-image: none;
+    /* Fira Code's line box puts its capitals off centre, low on one system and high on another:
+       trimmed to the capitals, the padding centres what is seen, the same everywhere */
+    @supports (text-box: trim-both cap alphabetic) {
+        .isas button {
+            padding-block: 0.65rem;
         }
-        .citation-title {
-            font-size: 1.8rem;
-        }
-        .pre-footer.fade {
-            background: transparent;
+
+        /* on the label rather than the button, as a flex container's text is not trimmed */
+        .isa-name {
+            display: block;
+            text-box: trim-both cap alphabetic;
         }
     }
 
-    @keyframes gradient {
-        0% {
-            background-position: 0 50%;
+    @media (max-width: 480px) {
+        .isas button {
+            padding-inline: 0.6rem;
+            font-size: 0.8rem;
         }
-        50% {
-            background-position: 100% 50%;
+    }
+
+    /* the app's own face */
+    h1 {
+        font-family: Rubik, sans-serif;
+        font-weight: 500;
+        font-size: clamp(2.5rem, 5.5vw, 4rem);
+        line-height: 1.08;
+        letter-spacing: -0.01em;
+        text-shadow: 0 0 2rem var(--background);
+
+        em {
+            font-style: normal;
+            color: var(--accent);
         }
-        100% {
-            background-position: 0 50%;
+    }
+
+    .lede {
+        font-family: var(--mono);
+        font-size: 1rem;
+        line-height: 1.7;
+        letter-spacing: 0.02em;
+        color: color-mix(in srgb, var(--background-text) 82%, transparent);
+        max-width: 29rem;
+    }
+
+    .actions .icon {
+        display: flex;
+        width: 0.9rem;
+    }
+
+    .actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.7rem;
+        margin-top: 0.4rem;
+    }
+
+    /* ---- quick links ---- */
+
+    .quick-row {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .quick-hex {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        letter-spacing: 0.08em;
+        word-spacing: 0.1em;
+        text-align: justify;
+        color: color-mix(in srgb, var(--background-text) 16%, transparent);
+        pointer-events: none;
+        user-select: none;
+        /* the hero's fade: gone at the screen's edges, whole at its middle */
+        mask-image: linear-gradient(90deg, transparent, #000 50%, transparent);
+
+        b {
+            font-weight: 400;
+            color: color-mix(in srgb, var(--accent) 50%, transparent);
+        }
+    }
+
+    /* no background of its own, so the bytes show through the cards; the lines between them
+       are the cards' own borders, solid, each card's top and left one, pulled back a pixel so
+       those along the row's edges fall outside it and are cut off */
+    .quick-links {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        overflow: hidden;
+    }
+
+    /* the cards a quarter see-through over the bytes, which show through faintly; a plain change of
+       colour under the pointer, with nothing moving or fading */
+    .quick-links :global(.link-element) {
+        position: relative;
+        background: color-mix(in srgb, var(--background) 75%, transparent);
+        color: var(--background-text);
+        transition: none;
+        margin: -1px 0 0 -1px;
+        border-top: 1px solid color-mix(in srgb, var(--background-text) 11%, var(--background));
+        border-left: 1px solid color-mix(in srgb, var(--background-text) 11%, var(--background));
+
+        &:hover {
+            background: color-mix(in srgb, var(--accent) 14%, var(--background));
+            color: var(--background-text);
+        }
+    }
+
+    .section-head p,
+    .target-body p,
+    .card p,
+    .tile-text,
+    .closing p {
+        font-family: var(--mono);
+        font-size: 0.92rem;
+        line-height: 1.7;
+        letter-spacing: 0.02em;
+        color: var(--muted);
+    }
+
+    /* ---- the editor in a browser window ---- */
+
+    .showcase {
+        padding: 0.75rem;
+        background: var(--lit);
+    }
+
+    .browser {
+        --chrome: color-mix(in srgb, var(--background) 55%, var(--tertiary));
+        border-radius: 0.6rem;
+        border: 1px solid var(--line-strong);
+        background: var(--chrome);
+        box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.45);
+        overflow: hidden;
+    }
+
+    .browser-tabs {
+        display: flex;
+        align-items: flex-end;
+        gap: 0.2rem;
+        height: 2.6rem;
+        padding: 0 0.6rem;
+    }
+
+    /* the window buttons and the new-tab button sit on the tabs' middle line, as a browser's do */
+    .lights,
+    .new-tab {
+        flex: none;
+        display: flex;
+        align-items: center;
+        height: 2.15rem;
+    }
+
+    .lights {
+        gap: 0.45rem;
+        margin-right: 0.8rem;
+
+        i {
+            width: 0.75rem;
+            height: 0.75rem;
+            border-radius: 50%;
+        }
+
+        i:nth-child(1) {
+            background: #ff5f57;
+        }
+        i:nth-child(2) {
+            background: #febc2e;
+        }
+        i:nth-child(3) {
+            background: #28c840;
+        }
+    }
+
+    .browser-tab {
+        all: unset;
+        position: relative;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        flex: 0 1 12rem;
+        height: 2.15rem;
+        min-width: 0;
+        padding: 0 0.8rem;
+        border-radius: 0.5rem 0.5rem 0 0;
+        cursor: pointer;
+        font-family: Rubik, sans-serif;
+        font-size: 0.82rem;
+        color: var(--muted);
+        transition:
+            background-color 0.15s,
+            color 0.15s;
+
+        img {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 0.2rem;
+        }
+
+        .ellipsis {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .close {
+            flex: none;
+            display: flex;
+            width: 0.55rem;
+            opacity: 0;
+        }
+
+        .tab-icon {
+            flex: none;
+            display: flex;
+            width: 0.85rem;
+        }
+
+        &:hover {
+            background: color-mix(in srgb, var(--secondary) 55%, transparent);
+            color: var(--secondary-text);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
+
+        /* the line between two tabs, gone beside the open tab and the one under the pointer */
+        &::after {
+            content: '';
+            position: absolute;
+            right: -0.1rem;
+            top: 50%;
+            height: 1.1rem;
+            width: 1px;
+            transform: translateY(-50%);
+            background: var(--line-strong);
+        }
+
+        &.active::after,
+        &:hover::after,
+        &:has(+ .active)::after,
+        &:has(+ :hover)::after {
+            opacity: 0;
+        }
+
+        &.active {
+            background: var(--secondary);
+            color: var(--secondary-text);
+            cursor: default;
+
+            .close {
+                opacity: 0.5;
+            }
+        }
+    }
+
+    .new-tab {
+        justify-content: center;
+        width: 2rem;
+        margin-left: 0.2rem;
+        border-radius: 0.4rem;
+        color: var(--muted);
+
+        :global(svg) {
+            width: 0.75rem;
+        }
+
+        &:hover {
+            color: var(--secondary-text);
+            background: color-mix(in srgb, var(--secondary) 55%, transparent);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--accent);
+        }
+    }
+
+    .loading {
+        align-self: center;
+        justify-self: center;
+        font-family: var(--mono);
+        font-size: 0.9rem;
+        color: var(--muted);
+    }
+
+    .browser-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        height: 2.6rem;
+        padding: 0 0.6rem;
+        background: var(--secondary);
+        color: var(--secondary-text);
+        border-bottom: 1px solid var(--line);
+    }
+
+    .browser-nav {
+        display: flex;
+        gap: 0.1rem;
+    }
+
+    .nav-button {
+        all: unset;
+        display: grid;
+        place-items: center;
+        width: 1.9rem;
+        height: 1.9rem;
+        border-radius: 50%;
+        color: var(--muted);
+
+        :global(svg) {
+            width: 0.75rem;
+        }
+
+        &:is(button) {
+            cursor: pointer;
+        }
+
+        &:is(button):hover {
+            background: color-mix(in srgb, var(--secondary-text) 10%, transparent);
+            color: var(--secondary-text);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--accent);
+        }
+    }
+
+    .address {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        height: 1.85rem;
+        padding: 0 0.85rem;
+        border-radius: 1rem;
+        background: color-mix(in srgb, var(--background) 65%, var(--secondary));
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        color: var(--muted);
+
+        .lock {
+            flex: none;
+            display: flex;
+            width: 0.6rem;
+        }
+
+        .host {
+            color: var(--secondary-text);
+        }
+
+        &:hover {
+            box-shadow: inset 0 0 0 1px var(--line-strong);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--accent);
+        }
+    }
+
+    .viewport {
+        position: relative;
+        display: grid;
+        aspect-ratio: 2.25 / 1;
+        overflow: hidden;
+        background: var(--background);
+
+        > * {
+            grid-area: 1 / 1;
+        }
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: left top;
+        }
+
+        iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        iframe.loaded {
+            opacity: 1;
+        }
+    }
+
+    /* over the framed editor until it is clicked, so the wheel scrolls the page */
+    .activate {
+        all: unset;
+        /* after the unset, which clears the grid area every child of the viewport shares */
+        grid-area: 1 / 1;
+        position: relative;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+
+        &:hover,
+        &:focus-visible {
+            background: rgb(0 0 0 / 0.55);
+        }
+
+        &:hover .activate-hint,
+        &:focus-visible .activate-hint {
+            opacity: 1;
+            transform: none;
+        }
+    }
+
+    .activate-hint {
+        padding: 0.7rem 1.2rem;
+        border-radius: 0.4rem;
+        background: var(--secondary);
+        color: var(--secondary-text);
+        border: 1px solid var(--line-strong);
+        font-size: 1rem;
+        box-shadow: 0 0.6rem 1.6rem rgb(0 0 0 / 0.45);
+        opacity: 0;
+        transform: translateY(0.3rem);
+        transition:
+            opacity 0.2s,
+            transform 0.2s;
+    }
+
+    .play {
+        align-self: center;
+        justify-self: center;
+        z-index: 1;
+
+        .icon {
+            display: flex;
+            width: 0.75rem;
+        }
+    }
+
+    /* too narrow for the editor: the screenshot and its link stand in */
+    @media (max-width: 900px) {
+        .viewport {
+            aspect-ratio: 1917 / 909;
+        }
+    }
+
+    /* ---- section headers ---- */
+
+    .section-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1.5rem 3rem;
+        padding: 2.75rem 2.5rem;
+
+        h2 {
+            font-family: var(--serif);
+            font-size: clamp(1.8rem, 3.5vw, 2.3rem);
+            line-height: 1.2;
+            margin-bottom: 0.7rem;
+        }
+
+        p {
+            font-size: 1rem;
+            max-width: 36rem;
+        }
+    }
+
+    /* the button, and a link under it lined up with its left edge */
+    .head-links {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.8rem;
+        flex-shrink: 0;
+    }
+
+    /* a link inside a sentence, in the accent like the page's other text links */
+    .inline-link {
+        color: var(--accent);
+        text-decoration: underline;
+        text-underline-offset: 0.25em;
+        text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+
+        &:hover {
+            text-decoration-color: currentColor;
+        }
+    }
+
+    .text-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 0.9rem;
+        text-decoration: underline;
+        text-underline-offset: 0.25em;
+        text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+
+        &:hover {
+            text-decoration-color: currentColor;
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+    }
+
+    /* ---- the instruction sets ---- */
+
+    .targets,
+    .cards,
+    .tiles {
+        display: grid;
+        gap: 1px;
+        background: var(--line);
+    }
+
+    .targets {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .target {
+        display: grid;
+        grid-template-columns: 6.5rem minmax(0, 1fr);
+        background: var(--background);
+        --ink: #14161b;
+
+        &.ink-light {
+            --ink: #ffffff;
+        }
+    }
+
+    .tile {
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        background:
+            repeating-linear-gradient(135deg, rgb(255 255 255 / 0.13) 0 1px, transparent 1px 7px),
+            linear-gradient(160deg, color-mix(in srgb, var(--tile) 85%, white), var(--tile) 60%);
+        box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.18);
+
+        span {
+            font-family: var(--mono);
+            font-size: 1.35rem;
+            color: var(--ink);
+            padding: 0.2rem 0.45rem;
+            border: 2px solid color-mix(in srgb, var(--ink) 70%, transparent);
+            border-radius: 0.3rem;
+        }
+    }
+
+    .target-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 1.3rem 1.4rem 1.2rem;
+
+        p {
+            flex: 1;
+            font-size: 0.85rem;
+        }
+    }
+
+    .target-head {
+        display: flex;
+        align-items: baseline;
+        gap: 0.7rem;
+        /* with the body's own gap, the title stands apart from the text under it */
+        margin-bottom: 0.3rem;
+
+        h3 {
+            font-family: var(--serif);
+            font-weight: 500;
+            font-size: 1.3rem;
+        }
+    }
+
+    .target-links {
+        display: flex;
+        gap: 1.2rem;
+
+        a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            /* the tile's colour, pulled towards the text so it reads on light and dark themes */
+            color: color-mix(in srgb, var(--tile) 70%, var(--background-text));
+
+            &:hover {
+                text-decoration: underline;
+                text-underline-offset: 0.25em;
+            }
+        }
+    }
+
+    /* ---- the documentation ---- */
+
+    .docs {
+        background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--accent) 11%, var(--background)),
+            var(--background) 22rem
+        );
+        box-shadow: inset 0 3px 0 var(--accent);
+
+        .section-head h2 em {
+            font-style: italic;
+            color: var(--accent);
+        }
+    }
+
+    /* ---- the feature cards ---- */
+
+    .cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card {
+        padding: 2.5rem;
+        background: var(--background);
+
+        h3 {
+            font-family: var(--serif);
+            font-weight: 500;
+            font-size: 1.3rem;
+            margin: 1.4rem 0 0.8rem;
+        }
+
+        p {
+            max-width: 32rem;
+        }
+    }
+
+    .shot {
+        border: 1px dashed var(--line-strong);
+        border-radius: 0.2rem;
+    }
+
+    /* the picture covers the whole frame inside the dashed edge */
+    .shot-inner {
+        aspect-ratio: 16 / 10;
+        overflow: hidden;
+        border-radius: 0.2rem;
+
+        img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: left top;
+        }
+    }
+
+    /* ---- the navbar's Create project ---- */
+
+    .create-project {
+        display: flex;
+
+        :global(.btn) {
+            gap: 0.5rem;
+            height: 2.2rem;
+            padding: 0 1rem;
+        }
+    }
+
+    .create-icon {
+        display: flex;
+        width: 0.75rem;
+    }
+
+    @media (max-width: 760px) {
+        .create-project :global(.btn) {
+            width: 2.2rem;
+            padding: 0;
+        }
+
+        .create-label {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+            white-space: nowrap;
+        }
+    }
+
+    /* ---- the more-of-the-site tiles ---- */
+
+    .tiles {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .tile-link {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 1.8rem 2rem;
+        background: var(--background);
+        transition: background-color 0.15s;
+
+        &:hover {
+            background: color-mix(in srgb, var(--background-text) 4%, var(--background));
+
+            .arrow {
+                transform: translateX(3px);
+                opacity: 1;
+            }
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
+    }
+
+    .tile-title {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-family: var(--serif);
+        font-size: 1.15rem;
+
+        .icon {
+            display: flex;
+            width: 1rem;
+        }
+    }
+
+    .arrow {
+        display: flex;
+        width: 0.75rem;
+        opacity: 0.5;
+        transition:
+            transform 0.2s,
+            opacity 0.2s;
+    }
+
+    .tile-text {
+        font-size: 0.85rem;
+    }
+
+    .agents {
+        padding: 2.5rem;
+
+        :global(section .heading) {
+            font-family: var(--serif);
+            font-weight: 400;
+            font-size: 1.3rem;
+        }
+
+        :global(.agents > p) {
+            font-family: var(--mono);
+            font-size: 0.92rem;
+            letter-spacing: 0.02em;
+            color: var(--muted);
+        }
+    }
+
+    /* ---- research ---- */
+
+    .letter {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 1.1rem;
+        padding: 4.5rem 1.5rem;
+
+        h2 {
+            font-family: var(--serif);
+            font-size: clamp(1.7rem, 3.2vw, 2.1rem);
+        }
+
+        p {
+            font-family: var(--serif);
+            font-size: 1.1rem;
+            line-height: 1.75;
+            max-width: 40rem;
+        }
+
+        .kicker {
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .reference {
+            font-style: italic;
+            font-size: 0.98rem;
+            color: var(--muted);
+        }
+    }
+
+    .divider {
+        width: 4rem;
+        border-top: 1px solid var(--line-strong);
+        margin: 0.4rem 0;
+    }
+
+    /* ---- closing call ---- */
+
+    .closing {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 1rem;
+        padding: 5rem 1.5rem;
+        background: var(--lit);
+
+        /* the hero title's face */
+        h2 {
+            font-family: Rubik, sans-serif;
+            font-weight: 500;
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            color: var(--background-text);
+        }
+
+        p {
+            color: color-mix(in srgb, var(--background-text) 82%, transparent);
+        }
+
+        .actions {
+            margin-top: 0.8rem;
+        }
+    }
+
+    /* ---- sizes ---- */
+
+    @media (max-width: 1080px) {
+        .targets {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 900px) {
+        .section-head {
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 2rem 1.25rem;
+        }
+
+        .cards,
+        .tiles {
+            grid-template-columns: 1fr;
+        }
+
+        .card {
+            padding: 1.5rem 1.25rem 2rem;
+        }
+
+        .agents {
+            padding: 1.5rem 1.25rem;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .landing {
+            --inner: calc(100% - 1rem);
+        }
+
+        /* the picture across the card's whole width, from its top edge */
+        .shot {
+            margin: -1.5rem -1.25rem 0;
+            border: none;
+            border-radius: 0;
+        }
+
+        .shot-inner {
+            border-radius: 0;
+        }
+
+        .hero-content {
+            padding: 3.5rem 0.75rem;
+        }
+
+        .targets {
+            grid-template-columns: 1fr;
+        }
+
+        .target {
+            grid-template-columns: 4.5rem minmax(0, 1fr);
+        }
+
+        .tile span {
+            font-size: 1rem;
+        }
+
+        .tile-link {
+            padding: 1.4rem 1.25rem;
+        }
+
+        .showcase {
+            padding: 0.5rem;
+        }
+
+        .lede {
+            font-size: 0.95rem;
+        }
+
+        .browser-nav,
+        .lights,
+        .browser-tab img {
+            display: none;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .arrow,
+        .viewport iframe {
+            transition: none;
         }
     }
 </style>

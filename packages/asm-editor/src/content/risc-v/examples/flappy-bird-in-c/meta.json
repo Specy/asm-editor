@@ -1,6 +1,0 @@
-{
-    "name": "Flappy Bird in C",
-    "description": "Recreate the assembly Flappy Bird game in C using the simulator API.",
-    "order": 25,
-    "topic": "flappy-bird-in-c"
-}

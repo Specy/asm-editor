@@ -240,16 +240,6 @@
             class:embed-builder={!inIframe}
             style={inIframe ? 'display: contents' : ''}
         >
-            {#if !inIframe}
-                <header class="page-heading">
-                    <h1>Embed an assembly editor</h1>
-                    <p>
-                        Customize the editor below, then copy its URL or iframe code into your
-                        website.
-                    </p>
-                </header>
-            {/if}
-
             <div class:builder-workspace={!inIframe} style={inIframe ? 'display: contents' : ''}>
                 <Column
                     style={`--embed-padding: ${framedByUs ? 'var(--wb-gap)' : '0.5rem'}; padding: var(--embed-padding) var(--embed-padding) ${inIframe ? 'var(--embed-padding)' : '0'}; flex:1; min-width: 0`}
@@ -334,8 +324,8 @@
                                     <span>Instruction Set</span>
                                     <Select
                                         onChange={changeLanguage}
-                                        style="background-color: var(--tertiary); color: var(--secondary-text); text-align: center;"
-                                        wrapperStyle="max-width: 5rem;"
+                                        style="background-color: var(--tertiary); color: var(--secondary-text); padding: 0.3rem 0.6rem; gap: 0.4rem;"
+                                        wrapperStyle="width: 7rem; flex: none;"
                                         options={languageOptions}
                                         bind:value={settings.language}
                                     />
@@ -404,29 +394,9 @@
         display: contents;
     }
 
-    .page-heading {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.2rem 1rem;
-        padding: 0.5rem 0.5rem 0;
-    }
-
-    .page-heading h1 {
-        margin: 0;
-        font-size: 1.8rem;
-    }
-
-    .page-heading p,
     .card-heading p {
         margin: 0;
         color: var(--hint);
-    }
-
-    .page-heading p {
-        flex: 1 1 20rem;
-        min-width: 0;
-        max-width: 52rem;
     }
 
     .embed-grid {
@@ -494,6 +464,9 @@
 
     .share-settings span {
         min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     textarea {
@@ -523,31 +496,20 @@
        regular document flow below this breakpoint remains the fallback when the page needs to
        grow vertically. */
     @media (min-width: 1100px) and (min-height: 640px) {
-        .page-heading {
-            flex: none;
-            padding: 0.15rem 0.5rem 0;
-        }
-
-        .page-heading h1 {
-            font-size: 1.45rem;
-        }
-
-        .page-heading p {
-            font-size: 0.85rem;
-        }
-
         .builder-workspace {
             display: grid;
             flex: 1;
             grid-template-columns: minmax(0, 1fr);
-            grid-template-rows: minmax(15.5rem, 1.25fr) minmax(13rem, 0.85fr);
+            /* the settings set the bottom row's height, all of them in view; the editor takes the rest */
+            grid-template-rows: minmax(15.5rem, 1fr) auto;
             gap: 0.35rem;
             min-height: 0;
             min-width: 0;
         }
 
+        /* the settings get the widest column, the two outputs wrap their text in what is left */
         .embed-grid {
-            grid-template-columns: minmax(17rem, 1fr) repeat(2, minmax(0, 1.1fr));
+            grid-template-columns: minmax(22rem, 1.5fr) repeat(2, minmax(0, 1fr));
             align-content: stretch;
             align-items: stretch;
             gap: 0.35rem;
@@ -558,6 +520,9 @@
         .embed-card {
             gap: 0.4rem;
             padding: 0.55rem;
+            /* a short window scrolls the card rather than the page */
+            min-height: 0;
+            overflow: auto;
         }
 
         .card-heading h2 {

@@ -746,7 +746,7 @@ pipes:      dc.w    0,0,0
             dc.w    0,0,0
             dc.w    0,0,0
 
-title:      dc.b    'FLAPPY 68K',0
+title:      dc.b    'FLAPPY ASM',0
 hint1:      dc.b    'TAP SPACE, W, ENTER OR THE UP ARROW',0
 hint2:      dc.b    'OR CLICK ON THE SCREEN ITSELF',0
 hint3:      dc.b    'CLICK THE SCREEN PANEL SO IT TAKES THE KEYS',0

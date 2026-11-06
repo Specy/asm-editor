@@ -26,7 +26,10 @@
     class:has-nav={hasNavbar}
     class:fills-screen={fillsScreen}
     {style}
-    in:fly|global={{ x: $navigationStore.direction === 'back' ? 16 : -16, duration: 500 }}
+    in:fly|global={{
+        y: $navigationStore.direction === 'back' ? 8 : -8,
+        duration: 500
+    }}
 >
     <div
         class="column"

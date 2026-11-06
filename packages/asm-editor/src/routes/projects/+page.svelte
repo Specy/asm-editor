@@ -121,7 +121,8 @@
 </svelte:head>
 
 <DefaultNavbar />
-<Page hasNavbar>
+<!-- the width and padding of the documentation and course pages -->
+<Page hasNavbar cropped="70rem" contentStyle="padding: 1rem">
     <div class="project-display wb-cards">
         <div class="content">
             <div class="top-row">
@@ -317,9 +318,7 @@
         user-select: none;
         display: flex;
         flex-direction: column;
-        align-items: center;
         height: 100%;
-        padding: 0 1rem;
     }
 
     .project-grid {
@@ -337,7 +336,6 @@
     .content {
         display: flex;
         flex-direction: column;
-        max-width: 60rem;
         width: 100%;
     }
 

@@ -1,10 +1,10 @@
-Recreate the [assembly Flappy Bird](/learn/courses/risc-v/examples/flappy-bird) in C with `<sim.h>`.
+Recreate the [assembly Flappy ASM](/learn/courses/risc-v/examples/flappy-asm) in C with `<sim.h>`.
 It uses the same 192 × 256 grid, shaded pipes, and bird and digit sprites. The scenery is drawn
 once and reused, and each frame paints only the pixels that change, each one once. It targets one
 frame every 20 milliseconds.
 
 Choose **-O2** in the **Compiler optimization** menu next to **Compile**, then press **Compile**,
-**Build** and **Run**. Compile translates `flappy-bird.c` for **RISC-V** and opens its Generated
+**Build** and **Run**. Compile translates `flappy-asm.c` for **RISC-V** and opens its Generated
 assembly in another file tab. The first compilation needs an internet connection.
 
 The default is **-O0**, which disables most compiler optimizations. Use **-O2** here to reduce the
@@ -33,7 +33,7 @@ These functions come from the editor's `<sim.h>` header. Including it provides a
 simulator API. In Generated assembly, keyboard polling becomes memory-mapped loads, and timing
 and printing become `ecall` instructions.
 
-```c|playground|target=riscv|file=flappy-bird.c|open-screen|console|no-registers|allow-open
+```c|playground|target=riscv|file=flappy-asm.c|open-screen|console|no-registers|allow-open
 #include <sim.h>
 
 /* 384 x 512 pixels on the Screen, one array cell for each 2 x 2 square: a grid of 192 x 256. */
@@ -794,7 +794,7 @@ see-through. Each frame paints every pixel at most once, with the colour it ends
 a frame the Screen shows before it is finished never shows the bird missing. `repaint_pipes`
 therefore leaves out the bird's and the score's rows, and `sprite_column` paints those columns: the
 sprite where it is not see-through, and the world, from `world_column`, around it. In the Flappy
-Bird example Project, the sprites come from `assets/bird.bmp` and `assets/digits.bmp` instead,
+ASM example Project, the sprites come from `assets/bird.bmp` and `assets/digits.bmp` instead,
 read with `fopen` when the program starts.
 
 `hit_test` lets the ground stop the whole picture, but the pipes only a box `HIT_INSET` pixels

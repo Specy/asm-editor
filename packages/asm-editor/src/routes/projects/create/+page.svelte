@@ -12,9 +12,7 @@
     import Form from '#cmp/shared/layout/Form.svelte'
     import { toast } from '#stores/toastStore.ts'
     import { type AvailableLanguages, makeProject } from '#lib/Project.svelte.ts'
-    import FaAngleLeft from '~icons/fa-solid/angle-left'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
-    import Icon from '#cmp/shared/layout/Icon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
@@ -138,18 +136,6 @@
 <Page cropped="40rem" style="padding-top: 3rem">
     <div class="create-project">
         <div class="row top-title">
-            <a
-                href={resolve('/projects')}
-                class="go-back"
-                {@attach tooltip('Go to the projects page')}
-                aria-label="Back"
-            >
-                <Button hasIcon cssVar="primary" style="padding: 0.4rem">
-                    <Icon size={2}>
-                        <FaAngleLeft />
-                    </Icon>
-                </Button>
-            </a>
             <Title>Create new project</Title>
         </div>
         {#if data.gettingStarted}
@@ -221,11 +207,13 @@
 </Page>
 
 <style lang="scss">
+    /* room between the form and the footer */
     .create-project {
         padding-top: 2rem;
+        padding-bottom: 4rem;
 
         @media screen and (max-width: 650px) {
-            padding: 1rem;
+            padding: 1rem 1rem 3rem;
         }
     }
 
@@ -284,13 +272,5 @@
     .template-description {
         font-size: 0.85rem;
         opacity: 0.8;
-    }
-
-    @media screen and (min-width: 650px) {
-        .go-back {
-            position: absolute;
-            top: 4.2rem;
-            left: 1rem;
-        }
     }
 </style>

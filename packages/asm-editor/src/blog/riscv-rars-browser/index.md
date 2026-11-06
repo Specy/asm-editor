@@ -4,7 +4,7 @@ ASM Editor is an online workspace for writing, running, and debugging assembly p
 
 The editor and simulator run in your browser, without a local installation. RISC-V is one of its supported architectures, alongside MIPS, M68K, Z80, and x86. Choose **RISC-V** for 32-bit programs (RV32) or **RISC-V-64** for 64-bit programs (RV64).
 
-![C source linked to generated RISC-V assembly, with the debugger and a Flappy Bird game on the simulated screen.](/images/blog/mips-mars-browser/c-riscv-screen.webp)
+![C source linked to generated RISC-V assembly, with the debugger and a Flappy ASM game on the simulated screen.](/images/blog/mips-mars-browser/c-riscv-screen.webp)
 
 ## A workspace for learning assembly
 

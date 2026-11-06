@@ -1,0 +1,6 @@
+{
+    "name": "Flappy ASM in C",
+    "description": "Recreate the assembly Flappy ASM game in C using the simulator API.",
+    "order": 25,
+    "topic": "flappy-asm-in-c"
+}

@@ -138,7 +138,7 @@ const PROGRAMS: Program[] = [
             'the repository’s own animation: a video drawn cell by cell (tasks 11, 23, 80, 81, 87)'
     },
     {
-        path: 'm68k/flappy-bird.x68',
+        path: 'm68k/flappy-asm.x68',
         language: 'M68K',
         //the game reads the keyboard and the mouse every frame and only leaves its title screen
         //once one of them says flap; with nothing held it measures a still picture

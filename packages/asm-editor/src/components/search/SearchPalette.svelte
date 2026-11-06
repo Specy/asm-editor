@@ -17,6 +17,7 @@
     import { goto } from '$app/navigation'
     import type { ResolvedPathname } from '$app/types'
     import { hasCodeName } from '#lib/documentation/entries.ts'
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
     import { resolveHref } from '#lib/hrefs.ts'
     import { queryTerms, type SearchResult } from '#lib/search/engine.ts'
@@ -25,14 +26,22 @@
     import HighlightedText from './HighlightedText.svelte'
     import SearchField from './SearchField.svelte'
     import { closeSearchPalette, openSearchPalette, searchPalette } from './paletteState.svelte'
-    import { listenForSearchKey } from './searchHotkey'
+    import { listenForSearchKey, typedInEditor } from './searchHotkey'
 
     interface Props {
         scope: SearchScope
         placeholder?: string
+        /**
+         * The site's palette, which the root layout mounts on every page with the navbar and the
+         * navbar's box opens. A page's own palette is the one Ctrl+K opens where there is one.
+         */
+        site?: boolean
     }
 
-    let { scope, placeholder = 'Search' }: Props = $props()
+    let { scope, placeholder = 'Search', site = false }: Props = $props()
+
+    /** Open, and this palette is the one opened. */
+    const shown = $derived(searchPalette.open && searchPalette.owner === (site ? 'site' : 'page'))
 
     let query = $state('')
     let results = $state<SearchResult[]>([])
@@ -44,10 +53,24 @@
 
     const terms = $derived(queryTerms(query))
 
-    $effect(() => listenForSearchKey(() => openSearchPalette()))
+    // counted untracked: the count is read to be raised, which would otherwise run this forever
+    $effect(() => {
+        if (site) return
+        untrack(() => searchPalette.pagePalettes++)
+        return () => untrack(() => searchPalette.pagePalettes--)
+    })
+
+    // the site's palette takes the key only where no page palette does, and never from an editor
+    $effect(() =>
+        listenForSearchKey((event) => {
+            if (!site) return void openSearchPalette()
+            if (searchPalette.pagePalettes > 0 || typedInEditor(event)) return false
+            openSearchPalette('', 'site')
+        })
+    )
 
     $effect(() => {
-        if (!searchPalette.open) return
+        if (!shown) return
         untrack(() => {
             opener = document.activeElement as HTMLElement | null
             query = searchPalette.query
@@ -64,7 +87,7 @@
     $effect(() => {
         const text = query.trim()
         const where = scope
-        if (!searchPalette.open || !text) {
+        if (!shown || !text) {
             results = []
             searched = ''
             return
@@ -160,7 +183,7 @@
     }
 </script>
 
-{#if searchPalette.open}
+{#if shown}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="backdrop" onclick={close} transition:backdropFade>
         <div
@@ -206,8 +229,11 @@
                             {#if result.kind === 'entry'}
                                 <!-- an instruction names its category after its Chapter:
                                      "Instructions · Arithmetic" -->
+                                <!-- the site's search mixes the languages, so it names the one -->
                                 <span class="kind"
-                                    >{result.entry.category
+                                    >{site
+                                        ? `${languageLabel(result.entry.language.toUpperCase())} · `
+                                        : ''}{result.entry.category
                                         ? `${result.entry.chapterTitle} · ${categoryLabel(result.entry.category)}`
                                         : result.entry.chapterTitle}</span
                                 >

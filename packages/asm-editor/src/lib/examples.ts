@@ -120,9 +120,16 @@ export class ExampleNotFoundError extends Error {
     }
 }
 
+/** Keep existing share links working when an example is replaced. */
+export function canonicalExampleId(id: string): string {
+    return id === 'risc-v-pacman' ? 'risc-v-relay-maze' : id
+}
+
 /** The example `id` names, and a fresh unsaved copy of its Project. */
 export async function loadExample(id: string, fetcher: typeof fetch = fetch) {
-    const example = (await loadExamples(fetcher)).find((example) => example.id === id)
+    const example = (await loadExamples(fetcher)).find(
+        (example) => example.id === canonicalExampleId(id)
+    )
     if (!example) throw new ExampleNotFoundError()
     const response = await fetcher(`/examples/${example.archive}`)
     if (!response.ok) throw new Error('Could not load the example project')

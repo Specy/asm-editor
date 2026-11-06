@@ -1,10 +1,10 @@
-Build a Flappy Bird game with moving pipes, an animated bird and a score at the top of the Screen.
+Build a Flappy ASM game with moving pipes, an animated bird and a score at the top of the Screen.
 Tap Space, lowercase `w`, or Enter to flap. A collision ends the run. Tap once to reset the game
 and again to start.
 
 **Click the Screen panel before you press a key**, as in Move a square with the keyboard.
 
-For the same game written with the simulator's C API, see [Flappy Bird in C](/learn/courses/risc-v/examples/flappy-bird-in-c).
+For the same game written with the simulator's C API, see [Flappy ASM in C](/learn/courses/risc-v/examples/flappy-asm-in-c).
 
 This example combines the frame loop, keyboard input, screen addresses, and supplied xorshift
 helper from The snake game. It adds three game states, fractional movement, pipe records and
@@ -1575,7 +1575,7 @@ when the colour changes, one store.
 `draw_bird` picks a picture from the frame count, `(s11 >> 2) & 3`, with 3 shown as level: up,
 level, down, level, four frames each. `shown_y` records where the bird was last drawn.
 
-In the Flappy Bird example Project, the sprites are not in the source: they are the BMP pictures
+In the Flappy ASM example Project, the sprites are not in the source: they are the BMP pictures
 `assets/bird.bmp` and `assets/digits.bmp`, which the program reads with the file services when it
 starts, and which you can edit in the Pixels view.
 

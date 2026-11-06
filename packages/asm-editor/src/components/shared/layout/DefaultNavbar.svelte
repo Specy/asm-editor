@@ -11,6 +11,10 @@
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { resolve } from '$app/paths'
     import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
+    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
+    import { untrack } from 'svelte'
+    import { page } from '$app/state'
+    import { searchPalette } from '#cmp/search/paletteState.svelte.ts'
 
     interface Props {
         children?: import('svelte').Snippet
@@ -39,10 +43,33 @@
     }: Props = $props()
 
     const hasMenu = $derived(menuOpen !== undefined)
+    /** A language's Documentation and the Courses have a search of their own in the sidebar,
+     *  scoped to them, so the navbar's would be a second box doing nearly the same. */
+    const pageHasSearch = $derived(
+        page.route.id?.startsWith('/documentation/') || page.route.id?.startsWith('/learn/courses')
+    )
+
+    // the root layout mounts the site's search palette while a navbar is on the page
+    // (untracked: the count is read to be raised, which would otherwise run this again forever)
+    $effect(() => {
+        untrack(() => searchPalette.navbars++)
+        return () => untrack(() => searchPalette.navbars--)
+    })
+    /** Donate and Star read as text, with a surface only under the pointer, so a page's own
+     *  action, like the home page's Create project, is the one filled button. */
+    const QUIET =
+        '--btn-color: transparent; --btn-text: color-mix(in srgb, var(--background-text) 70%, transparent); font-weight: 400'
 </script>
 
 <Navbar style={toolbar ? `flex-wrap: wrap; ${style ?? ''}` : style}>
     <MainNavigationLinks {includeEmbed} {compact} />
+    {#if !compact && !pageHasSearch}
+        <!-- searches every language's Documentation and every Course, from any page; centred in
+             the bar where there is room, beside the buttons where there is not -->
+        <div class="search">
+            <SearchLauncher site placeholder="Search docs" />
+        </div>
+    {/if}
     {@render toolbar?.()}
     <!-- labels fold away before their buttons do, and the icons read on their own; the folded words
          stay for screen readers -->
@@ -53,6 +80,7 @@
                     <ButtonLink
                         cssVar="secondary"
                         href={resolve('/donate')}
+                        style={QUIET}
                         {@attach tooltip('Donate to the project')}
                     >
                         <Icon>
@@ -66,6 +94,7 @@
                         cssVar="secondary"
                         href="https://github.com/Specy/asm-editor"
                         target="_blank"
+                        style={QUIET}
                         {@attach tooltip('Star the project on github')}
                     >
                         <Icon>
@@ -173,7 +202,57 @@
     .pill :global(.btn) {
         gap: 0.5rem;
         height: 2.2rem;
-        padding: 0 1rem;
+        padding: 0 0.7rem;
+    }
+
+    .search {
+        flex: none;
+        width: 13rem;
+    }
+
+    @media (min-width: 1200px) {
+        .search {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 18rem;
+            transform: translate(-50%, -50%);
+        }
+    }
+
+    .search :global(.search-launcher) {
+        height: 2.2rem;
+    }
+
+    /* folded to its icon, like the buttons beside it */
+    @mixin folded-search {
+        .search {
+            width: 2.2rem;
+        }
+
+        .search :global(.search-launcher) {
+            justify-content: center;
+            padding: 0;
+        }
+
+        .search :global(.placeholder),
+        .search :global(kbd) {
+            @include folded-label;
+        }
+    }
+
+    @media (max-width: 1000px) {
+        .search {
+            width: 9.5rem;
+        }
+
+        .search :global(kbd) {
+            display: none;
+        }
+    }
+
+    @media (max-width: 860px) {
+        @include folded-search;
     }
 
     .donate :global(svg) {

@@ -50,16 +50,16 @@
     <Header noMargin>
         {data.course.name}
     </Header>
+    <!-- what the course is, under its title and at its left edge, before the search -->
+    <div class="reading-copy">
+        <MarkdownRenderer source={data.content} centered={false} />
+    </div>
     <SearchLauncher
         size="full"
         placeholder={courseLanguage(data.course.slug)
             ? `Search ${data.course.name} and its documentation`
             : 'Search in every course'}
     />
-
-    <div class="reading-copy">
-        <MarkdownRenderer source={data.content} />
-    </div>
     <Column gap="1rem">
         {#each data.course.modules as module (module.slug)}
             <TogglableSection

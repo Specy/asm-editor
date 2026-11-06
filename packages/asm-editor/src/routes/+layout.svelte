@@ -5,6 +5,9 @@
     import { page } from '$app/state'
     import ThemeProvider from '#cmp/shared/providers/ThemeProvider.svelte'
     import PromptProvider from '#cmp/shared/providers/PromptProvider.svelte'
+    import SearchPalette from '#cmp/search/SearchPalette.svelte'
+    import { searchPalette } from '#cmp/search/paletteState.svelte.ts'
+    import { SITE_SCOPE } from '#lib/search/scope.ts'
     import Footer from '#cmp/shared/layout/Footer.svelte'
     import { onMount } from 'svelte'
     import { ScopedTheme, ThemeStore } from '#stores/themeStore.svelte.ts'
@@ -80,6 +83,16 @@
         <PromptProvider>
             <PageTransition refresh={page.url.pathname} />
             {@render children?.()}
+            <!-- the navbar's search, mounted here, outside the navbar, whose backdrop filter would
+                 hold a fixed palette inside it; only on pages with the navbar, so it never takes
+                 Ctrl+K from the editor -->
+            {#if searchPalette.navbars > 0}
+                <SearchPalette
+                    site
+                    scope={SITE_SCOPE}
+                    placeholder="Search the documentation and the courses"
+                />
+            {/if}
 
             <!-- fix this -->
             <Footer

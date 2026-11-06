@@ -501,7 +501,8 @@
     />
 </svelte:head>
 
-<!-- leaving asks first only while there are changes nothing will save on its own -->
+<!-- leaving asks first only while there are changes nothing will save on its own, and never in a
+     frame -->
 <svelte:window
     onbeforeunload={(e) => {
         if (openExample) checkExample()
@@ -514,6 +515,10 @@
             (saving && (savedAtRisk() || linked)) ||
             (linked && ProjectStore.linkedWritePending(project.id))
         if (!unsaved && !writing) return
+        //a page showing the editor in a frame, the home page's demo or the Examples page, is the
+        //one being left: the browser's dialog would ask about a page the reader cannot see, and
+        //the Examples page asks about the changes itself
+        if (framed) return
         e.preventDefault()
         e.returnValue = 'You have unsaved changes'
     }}

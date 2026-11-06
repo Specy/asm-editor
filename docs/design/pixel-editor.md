@@ -1,6 +1,6 @@
 # Pixel editor
 
-Decision record for the **Pixel editor**, a small editor for drawing the pictures a program reads at run time, such as the sprite sheets of the [Pac-Man example](../../packages/asm-editor/examples/risc-v/pacman/README.md). Settled one question at a time in a grill session on 2026-10-25.
+Decision record for the **Pixel editor**, a small editor for drawing the pictures a program reads at run time, such as the sprite sheets of the [Relay Maze example](../../packages/examples/risc-v/relay-maze/README.md). Settled one question at a time in a grill session on 2026-10-25.
 
 ## 1. A view of the File, beside Preview and Hex
 

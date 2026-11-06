@@ -4,7 +4,7 @@ ASM Editor is an online workspace for writing, running, and debugging assembly p
 
 It supports MIPS, RISC-V, M68K, Z80, and x86. You can start with your own program, a project template, or a runnable example from the [courses](/learn/courses) and [reference documentation](/documentation).
 
-![C source linked to generated RISC-V assembly, with the debugger and a Flappy Bird game on the simulated screen.](/images/blog/mips-mars-browser/c-riscv-screen.webp)
+![C source linked to generated RISC-V assembly, with the debugger and a Flappy ASM game on the simulated screen.](/images/blog/mips-mars-browser/c-riscv-screen.webp)
 
 ## Create a project
 

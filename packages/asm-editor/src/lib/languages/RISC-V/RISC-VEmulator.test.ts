@@ -1,6 +1,5 @@
-import { readExample, exampleSourcePath } from '#lib/examples.server.ts'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { readExample } from '#lib/examples.server.ts'
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { Audio } from '#lib/languages/peripherals/audio/Audio.ts'
 import { synthEntries } from '#lib/documentation/synth.ts'
 import { inputControllerEntries } from '#lib/documentation/inputController.ts'
@@ -19,7 +18,7 @@ import {
 } from '#lib/languages/mars/MarsDevices.ts'
 import type { ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
 import type { MarsCore } from '#lib/languages/mars/MarsDevices.ts'
-import type { Project, Testcase } from '#lib/Project.svelte.ts'
+import type { Testcase } from '#lib/Project.svelte.ts'
 import { Keyboard } from '#lib/languages/peripherals/Keyboard.ts'
 import {
     EXCEPTION_EXAMPLE,
@@ -35,10 +34,6 @@ import {
 import { FileSystem } from '#lib/languages/peripherals/FileSystem.ts'
 import { CPU_REGISTER_FILE_ID } from '#lib/languages/GenericEmulator.svelte.ts'
 import { RISCVCsrRegisterNames } from '#lib/languages/RISC-V/RISC-V-registers.ts'
-import { makeProjectFromArchive } from '#lib/projectArchive.ts'
-import { fileBytes } from '#lib/projectFiles.ts'
-import { programBuildSources } from '#lib/buildSources.ts'
-import { compilationStatus } from '#lib/sourceCompilation/records.ts'
 
 /**
  * RARS's bitmap display and keyboard-and-display registers against the real Core under node, the
@@ -1062,150 +1057,6 @@ describe('the RISC-V examples', () => {
         expect(ball).toBeLessThanOrEqual(36)
         //program time advanced through the frame waits, on a clock that started at zero
         expect(emulator.stdOut).toContain('ms of program time: ')
-    })
-
-    describe('the Pac-Man Project', () => {
-        const folder = exampleSourcePath('risc-v/pacman/README.md').replace(/\/README\.md$/, '')
-        let project: Project
-        beforeAll(async () => {
-            ;({ project } = await makeProjectFromArchive(
-                readFileSync(
-                    new URL('../../../../../examples/dist/risc-v/pacman.asmproj', import.meta.url)
-                )
-            ))
-        })
-
-        /** One of its Programs built and run to its title screen, with its own Files to read. */
-        async function toTitle(entry: string) {
-            const sources = programBuildSources(project, entry)
-            const keyboard = new Keyboard()
-            const clock = new ProgramClock({ mode: 'virtual' })
-            const output = new RecordingAudioOutput()
-            const emulator = RISCVEmulator(sources, {
-                peripherals: {
-                    keyboard,
-                    clock,
-                    fileSystem: new FileSystem(project.files),
-                    audio: new Audio({ clock, output })
-                }
-            })
-            await emulator.check()
-            await emulator.compile(0, sources)
-            expect(emulator.errors).toEqual([])
-            //the arcade's own 224 by 288, which its @screen directive asks for and MARS cannot show
-            expect([emulator.peripherals.screen.width, emulator.peripherals.screen.height]).toEqual(
-                [224, 288]
-            )
-            const at = (x: number, y: number) => pixelAt(emulator, x, y)
-            const runUntil = async (done: () => boolean) => {
-                for (let ran = 0; !done(); ran += 250_000) {
-                    expect(ran).toBeLessThan(10_000_000)
-                    await emulator.run(250_000)
-                    expect(emulator.errors).toEqual([])
-                }
-            }
-            //the title, once the Files are read: PUSH SPACE in orange from tile 9 of row 14
-            await runUntil(() => at(72, 112) === 0xffb852)
-            /**
-             * What the game tells the Synth's three channels, frame by frame: each frame starts
-             * with channel 1's volume, and ends with what every channel plays, its Hz and volume.
-             */
-            const frames = () => {
-                const state = [0, 1, 2].map(() => [0, 0])
-                const frames: number[][][] = []
-                for (const command of output.commands) {
-                    if (command.type !== 'synth') continue
-                    for (let i = 0; i < command.writes.length; i += 2) {
-                        const [register, value] = [command.writes[i]!, command.writes[i + 1]!]
-                        if (register >= 0x100) continue
-                        if (register === 0x12 && state.some(([, volume]) => volume)) {
-                            frames.push(state.map((channel) => [...channel]))
-                        }
-                        const channel = state[register >> 5]!
-                        if ((register & 0x1f) === 0x00) channel[0] = value
-                        if ((register & 0x1f) === 0x12) channel[1] = value
-                    }
-                }
-                return frames
-            }
-            //the title is silent: the sound starts with a game, and it is all the Synth's
-            expect(frames()).toEqual([])
-            expect(output.commands.some((command) => command.type === 'note')).toBe(false)
-            return { keyboard, at, runUntil, frames }
-        }
-
-        /**
-         * The start music's first frame, as the arcade's chip played it: the bass's C at 67 Hz,
-         * already fading, and the tune's C at 539 Hz, three octaves up.
-         */
-        const FIRST_FRAME = [
-            [67, 112],
-            [539, 120],
-            [0, 0]
-        ]
-
-        it('is the folder, packed, with its two Programs', () => {
-            //The repository packs the program's Files, leaving its metadata beside them.
-            const names = (readdirSync(folder, { recursive: true }) as string[])
-                .map((name) => name.split('\\').join('/'))
-                .filter(
-                    (name) =>
-                        !['example.json', 'compilations.json', 'build.mjs'].includes(name) &&
-                        statSync(`${folder}/${name}`).isFile()
-                )
-                .sort()
-            expect(Object.keys(project.files).sort()).toEqual(names)
-            //Buffer.equals: toEqual walks half a megabyte of bytes one element at a time
-            const differing = names.filter(
-                (name) =>
-                    !Buffer.from(fileBytes(project.files[name]!)).equals(
-                        readFileSync(`${folder}/${name}`)
-                    )
-            )
-            expect(differing).toEqual([])
-            expect(Object.keys(project.programs).sort()).toEqual([
-                'assembly/main.s',
-                'c/pacman.c.riscv'
-            ])
-            //the C Program's assembly is what Compile makes of the sources in the folder: compile
-            //c/pacman.c again in the editor after changing them, then pack
-            const record = project.compilations.find((item) => item.sourcePath === 'c/pacman.c')!
-            expect(record.optimization).toBe('2')
-            expect(compilationStatus(record, project.files, 'RISC-V').stale).toBe(false)
-        })
-
-        it('plays the assembly version, reading its pictures from its Files', async () => {
-            const { keyboard, at, runUntil, frames } = await toTitle('assembly/main.s')
-            //every lit pixel of maze.bmp, a 24 bit bottom-up BMP, is on the Screen under the score
-            const bmp = readFileSync(`${folder}/assets/maze.bmp`)
-            const pixels = bmp.readUInt32LE(10)
-            const wrong: string[] = []
-            for (let y = 0; y < 248; y++) {
-                for (let x = 0; x < 224; x++) {
-                    const p = pixels + (247 - y) * 672 + x * 3
-                    const color =
-                        ((bmp[p + 2] ?? 0) << 16) | ((bmp[p + 1] ?? 0) << 8) | (bmp[p] ?? 0)
-                    if (color && at(x, 24 + y) !== color) wrong.push(`${x},${y}`)
-                }
-            }
-            expect(wrong).toEqual([])
-            //a key starts a game: READY! in yellow, and Pac-Man, round, at his start, once
-            //PLAYER ONE has gone
-            keyboard.typeText(' ')
-            await runUntil(() => at(111, 211) === 0xffff00)
-            expect(at(88, 160)).toBe(0xffff00)
-            //with the start music, played on the Synth with stores
-            expect(frames()[0]).toEqual(FIRST_FRAME)
-        }, 60_000)
-
-        it('plays the C version from the assembly it comes with', async () => {
-            const { keyboard, at, runUntil, frames } = await toTitle('c/pacman.c.riscv')
-            keyboard.typeText(' ')
-            await runUntil(() => at(111, 211) === 0xffff00)
-            expect(at(88, 160)).toBe(0xffff00)
-            //with the start music, played on the Synth through SIM_SYNTH16 and SIM_SYNTH8
-            expect(frames()[0]).toEqual(FIRST_FRAME)
-        }, 60_000)
     })
 
     it('echoes typed characters through the keyboard and display example', async () => {

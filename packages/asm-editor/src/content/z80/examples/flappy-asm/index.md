@@ -1,4 +1,4 @@
-A playable flappy bird. The bird waits for your first tap, then gravity pulls it down and each new
+A playable Flappy ASM. The bird waits for your first tap, then gravity pulls it down and each new
 press gives it one flap upwards. Pipes scroll in from the right, with gap positions chosen from a
 clock-seeded sequence. The game ends when the bird touches a pipe or the ground; another tap starts
 the next one.

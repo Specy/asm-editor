@@ -209,6 +209,8 @@
     }
 
     :global(._markdown .markdown-body) {
+        /* about 70 characters of the text, the same for the headings (see global.css) */
+        --md-text-width: 38em;
         display: flex;
         flex-direction: column;
         gap: var(--gap, 1rem);
@@ -216,6 +218,13 @@
 
     :global(._markdown p) {
         color: var(--background-text-muted);
+    }
+
+    /* a link reads as one, as the Documentation's entries and the Markdown preview mark theirs:
+       the page's own links take the text's colour, which would leave these looking like text */
+    :global(._markdown a) {
+        color: var(--accent);
+        text-decoration: underline;
     }
 
     :global(._markdown table) {
@@ -308,18 +317,19 @@
         line-height: 1.5;
         font-family: 'Noto Serif', Rubik, sans-serif;
         font-weight: 500;
-        width: min(100%, 70ch);
+        width: min(100%, var(--md-text-width));
         margin: 0 var(--md-inline-margin, auto);
     }
 
+    /* the paragraphs' column, so a heading starts where its text does, centred or not */
     :global(.markdown-body h1),
     :global(.markdown-body h2),
     :global(.markdown-body h3),
     :global(.markdown-body h4),
     :global(.markdown-body h5),
     :global(.markdown-body h6) {
-        width: min(100%, 46rem);
-        margin: 0 var(--md-inline-margin, 0);
+        width: min(100%, var(--md-text-width));
+        margin: 0 var(--md-inline-margin, auto);
     }
 
     :global(.markdown-body h1:not(:first-child)),
@@ -372,7 +382,7 @@
        around everything when open */
     :global(._markdown details) {
         box-sizing: border-box;
-        width: min(100%, 70ch);
+        width: min(100%, var(--md-text-width));
         margin: 0 var(--md-inline-margin, auto);
         border: solid 0.1rem var(--tertiary);
         border-radius: 0.8rem;

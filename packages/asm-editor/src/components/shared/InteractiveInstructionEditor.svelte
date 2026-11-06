@@ -645,6 +645,7 @@
                 {changedLines}
                 {viewZones}
                 breakpointsEditable={!selectedIsSource}
+                scrollPastEnd={!embedded}
                 breakpoints={emulator.breakpoints
                     .filter(isLineBreakpoint)
                     .filter((breakpoint) => breakpoint.file === displayedAssemblyFile)

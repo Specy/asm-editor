@@ -15,7 +15,7 @@ Every example Project the editor ships moves out of `packages/asm-editor/example
 | Keyboard and display | MIPS, RISC-V                          | `shared/keyboard-display/`    |
 | Keyboard move        | M68K, Z80                             | `shared/keyboard-move/`       |
 | Mouse paint          | M68K, Z80                             | `shared/mouse-paint/`         |
-| Flappy Bird          | M68K (assembly), RISC-V (C)           | `shared/flappy-bird/`         |
+| Flappy ASM           | M68K (assembly), RISC-V (C)           | `shared/flappy-asm/`          |
 | asmOS                | X86; RISC-V and MIPS when ported      | `shared/asmos/`, build script |
 | Graphics tour        | M68K                                  | `m68k/graphics-tour/`         |
 | Bad Apple!!          | M68K                                  | `m68k/bad-apple/`             |
@@ -128,7 +128,7 @@ Every example Project the editor ships moves out of `packages/asm-editor/example
             "M68K": [
                 "bad-apple",
                 "bouncing-ball",
-                "flappy-bird",
+                "flappy-asm",
                 "graphics-tour",
                 "keyboard-move",
                 "mouse-paint"
@@ -157,7 +157,7 @@ Every example Project the editor ships moves out of `packages/asm-editor/example
     - **`npm run sync -- <archive> <example> [--variant <variant>] [--delete]`** (asm-examples, plain Node) takes a Project exported from the editor after Compile; the port is the archive's Target. It finds where each File comes from by running the example's build without packing, writes the port's Files back, the shared ones to the example's root, leaves out the Build outputs the editor saved, removes Files the archive no longer has only with `--delete` (never a shared one), makes a new port folder when a shared example has none for that Target, copies the archive's Compilation records into `compilations.json`, and prints how the manifest's Programs and tabs differ from `example.json`, which stays hand-written. The usual workflow is: open the archive from `dist/`, edit and Compile in the editor, export, then sync.
     - **`record-compilations`** (the editor's scripts, which import its code as the pack script does today) recomputes the listed records from the Files. It is for a compile done outside the editor's UI, such as asmOS's harness or the Compiler Explorer driver run from a script, and is run right after compiling, because it vouches that the output is current.
 
-    _Amended 2026-11-03, step 2:_ Flappy Bird and asmOS were compiled by a scratch tool that runs the editor's own Compile (`compileSource`) on the sources `compilations.json` lists, then writes the Generated assembly into the example and the record Compile returned into `compilations.json`. It vouches for nothing, since the record comes from the compile itself, so step 3 makes it the editor's tool in place of `record-compilations`.
+    _Amended 2026-11-03, step 2:_ Flappy ASM and asmOS were compiled by a scratch tool that runs the editor's own Compile (`compileSource`) on the sources `compilations.json` lists, then writes the Generated assembly into the example and the record Compile returned into `compilations.json`. It vouches for nothing, since the record comes from the compile itself, so step 3 makes it the editor's tool in place of `record-compilations`.
 
     Rejected:
     - **Fingerprints filled in by the editor at import**, as the pack script fills them at pack time. This is the simplest option, but a stale Generated assembly would show as current. asmOS's `.c.asm` files are stale right now, since its platform-layer commit.
@@ -248,7 +248,7 @@ Every example Project the editor ships moves out of `packages/asm-editor/example
 - Copy each example into its folder (table above), with an `example.json` and its README. Their history stays in the editor's.
 - Name what the MIT License does not cover in each README: Pac-Man's sound tables, taken from the arcade's own sound routine; Bad Apple!!'s frames, from Anira's video.
 - Pac-Man: copy its Compilation record from today's archive into `compilations.json`. The build must then pass with no recompiling.
-- Flappy Bird's RISC-V port has no Generated assembly yet: Compile it once at the level its README needs, then sync. Done at -O0, the level its course page starts at.
+- Flappy ASM's RISC-V port has no Generated assembly yet: Compile it once at the level its README needs, then sync. Done at -O0, the level its course page starts at.
 - asmOS: move `asmOS/` to `shared/asmos/` and add its `build.mjs`. Recompile its seven units on Compiler Explorer, since they are stale since the platform layer, then `record-compilations`. Its tools look for the editor two folders up when it is a submodule, and at `../asm-editor` otherwise. Done; `tools/harness/pack.mjs` is gone, replaced by the build. The recompile was not left until the RISC-V and MIPS ports, because until then the whole build fails and the editor would have no asmOS to ship.
 
 **3. The editor**
