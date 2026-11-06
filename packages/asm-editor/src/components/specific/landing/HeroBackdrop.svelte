@@ -258,7 +258,7 @@
         pointer-events: none;
         user-select: none;
         background: var(--background);
-        mask-image: radial-gradient(ellipse 30% 50% at 50% 50%, transparent 42%, #000 100%);
+        mask-image: radial-gradient(ellipse 38% 62% at 50% 50%, transparent 46%, #000 100%);
     }
 
     /* faint, but the registers and memory a little less, so what each step changes shows */
@@ -418,7 +418,7 @@
     @media (max-width: 1000px) {
         .backdrop {
             grid-template-columns: 2.8rem minmax(0, 1fr) minmax(14rem, 0.7fr);
-            mask-image: radial-gradient(ellipse 55% 48% at 50% 50%, transparent 35%, #000 100%);
+            mask-image: radial-gradient(ellipse 68% 60% at 50% 50%, transparent 39%, #000 100%);
         }
 
         .memory {

@@ -1838,6 +1838,16 @@
             padding: 3.5rem 0.75rem;
         }
 
+        /* the instruction sets as plain names, with no coloured square */
+        .isas button::before {
+            display: none;
+        }
+
+        /* the bytes under the quick links fade only near the edges, as a phone is narrow */
+        .quick-hex {
+            mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent);
+        }
+
         .targets {
             grid-template-columns: 1fr;
         }
