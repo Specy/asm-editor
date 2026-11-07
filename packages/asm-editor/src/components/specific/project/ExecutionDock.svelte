@@ -552,7 +552,6 @@
         /* the tray's colour, which a disabled control sinks into: the code's darker shade where it
            floats over the editor, the cards' own where a layout lays it out among them */
         --tray: var(--execution-tray, var(--primary));
-        --dock-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
     }
 
     /* each end one opaque tray lifted off the code by a shadow, its buttons sunk into it: the one
@@ -563,7 +562,7 @@
         gap: 0.2rem;
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
-        border: 1px solid var(--dock-line);
+        border: 1px solid var(--line);
         border-radius: 0.6rem;
         background-color: var(--tray);
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
@@ -576,7 +575,7 @@
         width: 1px;
         height: 60%;
         margin: 0 0.2rem;
-        background-color: var(--dock-line);
+        background-color: var(--line);
     }
 
     .fill-only {
@@ -731,7 +730,7 @@
         gap: 0.2rem;
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
-        border: 1px solid var(--dock-line);
+        border: 1px solid var(--line);
         border-radius: 0.6rem;
         background-color: var(--tray);
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
@@ -803,7 +802,7 @@
 
     .attached.fill {
         border: none;
-        border-top: 1px solid var(--dock-line);
+        border-top: 1px solid var(--line);
         border-radius: 0;
         backdrop-filter: blur(4px);
         box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);

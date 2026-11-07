@@ -5,9 +5,10 @@
 // tray sits, sizes and pads itself.
 
 // A tray floating over what is beneath, which it blurs through a tint holding `$tint` of
-// `--primary`. `--tray-line`, its hairline edge's colour, is for what inside is ruled the same.
+// `--primary`. `--tray-line`, its hairline edge's colour, is for what inside is ruled the same: the
+// design system's `--line`, under the trays' older name.
 @mixin surface($tint: 80%) {
-    --tray-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
+    --tray-line: var(--line);
     color: var(--primary-text);
     border: 1px solid var(--tray-line);
     border-radius: 0.6rem;

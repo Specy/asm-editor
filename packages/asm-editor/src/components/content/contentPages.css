@@ -1,10 +1,11 @@
 /* Public docs and courses follow the blog's heading scale, with compact reference material.
-   Keep these rules inside the route layouts so editor panels keep their own density. */
+   Keep these rules inside the route layouts so editor panels keep their own density. The sizes are
+   the page end of the type scale (styles/tokens.css), which steps down on phones by itself. */
 .content-pages {
-    --content-title-size: 2.75rem;
-    --content-heading-size: 1.8rem;
-    --content-subheading-size: 1.4rem;
-    --content-prose-size: 1.1rem;
+    --content-title-size: var(--fs-h1);
+    --content-heading-size: var(--fs-h2);
+    --content-subheading-size: var(--fs-h3);
+    --content-prose-size: var(--fs-prose);
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -95,13 +96,6 @@
 }
 
 @media (max-width: 600px) {
-    .content-pages {
-        --content-title-size: 2.1rem;
-        --content-heading-size: 1.6rem;
-        --content-subheading-size: 1.3rem;
-        --content-prose-size: 1.05rem;
-    }
-
     .learn-pages {
         --content-title-size: 2.2rem;
         --content-heading-size: 1.75rem;

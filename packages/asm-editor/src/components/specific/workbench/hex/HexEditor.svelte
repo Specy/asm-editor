@@ -1061,7 +1061,6 @@
 <style lang="scss">
     .hex-editor {
         --cell-pad-x: 0.25rem;
-        --hex-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
         --hex-gutter: color-mix(in srgb, var(--tertiary) 45%, var(--secondary));
         /* the execution dock's tray and the gap under it, which the bytes scroll clear of */
         --dock-room: 0px;
@@ -1079,7 +1078,7 @@
     }
     .hex-notice {
         padding: 0.45rem 0.75rem;
-        border-bottom: 1px solid var(--hex-line);
+        border-bottom: 1px solid var(--line);
         background: color-mix(in srgb, var(--accent2, var(--accent)) 10%, var(--secondary));
         font-size: 0.8rem;
         overflow-wrap: anywhere;
@@ -1158,7 +1157,7 @@
         position: sticky;
         top: 0;
         z-index: 2;
-        border-bottom: 1px solid var(--hex-line);
+        border-bottom: 1px solid var(--line);
         background: var(--hex-gutter);
         color: color-mix(in srgb, var(--secondary-text) 60%, transparent);
     }
@@ -1189,7 +1188,7 @@
     .hex-text {
         display: flex;
         padding: 0 0.5rem;
-        border-left: 1px solid var(--hex-line);
+        border-left: 1px solid var(--line);
     }
     .hex-cell,
     .text-cell {
