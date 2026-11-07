@@ -4010,10 +4010,23 @@ export class WorkbenchSession {
                 ? pair.sourceLocationsOf(lines)
                 : lines.map((line) => ({ path: group.displayedPath, line }))
         const selection = locations.length ? locations : undefined
+        const other = group === pair.source ? pair.assembly : pair.source
+        //lines compiled from another File, one the C File includes or `<sim.h>`: the source pane
+        //opens it, as a click in the source pane finds its lines in the Generated assembly
+        if (
+            selection &&
+            other === pair.source &&
+            !selection.some((location) => location.path === other.displayedPath)
+        ) {
+            const shown = this.mappedSourceSelection(group, other, selection[0].path)
+            if (shown) {
+                void this.showMappedSource(group, other, shown, lines, selection[0].line)
+                return
+            }
+        }
         //Dragging a selection repeats the same lines; keep the value so nothing recomputes.
         if (!sameLocations(selection, this.mappingSelection)) this.mappingSelection = selection
         if (!selection) return
-        const other = group === pair.source ? pair.assembly : pair.source
         const otherLines =
             other === pair.source
                 ? selection.flatMap((location) =>
@@ -4031,6 +4044,70 @@ export class WorkbenchSession {
             )
         )
         if (!inView) editor.revealLineInCenter(otherLines[0] + 1)
+    }
+
+    /**
+     * Opens the File behind a selection of Generated assembly in the source pane, as
+     * `mappedSourceSelection` found it, then selects the lines (a pair that changes drops its
+     * selection) and shows `line` of it. The assembly pane stays the focused one.
+     */
+    private async showMappedSource(
+        assembly: EditorGroup,
+        source: EditorGroup,
+        selection: ProjectSourceSelection,
+        lines: readonly number[],
+        line: number
+    ) {
+        this.recordJump(source)
+        //in the preview tab, so that clicking through the assembly does not fill the row
+        this.show(selection, source, 'text', true)
+        this.focusEditorGroup(assembly)
+        await tick()
+        const pair = this.linePairing
+        if (
+            this.disposed ||
+            pair?.assembly !== assembly ||
+            pair.source !== source ||
+            source.displayedPath !== selection.path
+        )
+            return
+        const again = pair.sourceLocationsOf(lines)
+        this.mappingSelection = again.length ? again : undefined
+        await this.revealWhenShown(source, line, {
+            focus: false,
+            still: () => sameLocations(this.mappingSelection, again)
+        })
+    }
+
+    /**
+     * The version of a File the source pane of a mapped pair would show it in, the Build's while
+     * it shows the Build's, when the pair would still hold with it there: the File is one the
+     * shown Generated assembly was compiled from, unchanged since.
+     */
+    private mappedSourceSelection(
+        assembly: EditorGroup,
+        source: EditorGroup,
+        path: string
+    ): ProjectSourceSelection | undefined {
+        const selection =
+            source.sourceView === 'snapshot' && this.existsInBuild(path)
+                ? buildSource(path, this.buildGeneration)
+                : liveSource(path)
+        //as `EditorGroup.displayedFile` reads it
+        const displayedFile = path.startsWith(RUNTIME_NAMESPACE)
+            ? this.runtimeMemberFile(path)
+            : selection.sourceKind === 'build'
+              ? this.snapshotFile(path)
+              : this.project.files[path]
+        const pair = resolveMappingPair(
+            [assembly, { displayedPath: path, displayedFile, displayedView: 'text' }],
+            this.project.sourceMaps,
+            this.project.compilations,
+            this.project.files,
+            this.project.language,
+            (member) => this.runtimeSourceMap(member)
+        )
+        return pair?.assembly === assembly ? selection : undefined
     }
 
     cancelSourceCompilation() {

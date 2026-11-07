@@ -9,6 +9,7 @@
     import Select from '#cmp/shared/input/Select.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import {
         canonicalExampleId,
@@ -17,6 +18,7 @@
         EXAMPLE_CHANGE_MESSAGE,
         EXAMPLE_LEAVE_MESSAGE,
         exampleSharePath,
+        examplesIsa,
         examplesPath,
         isExampleDestination,
         loadExamples,
@@ -31,14 +33,20 @@
     let examples = $state<Example[]>([])
     let status = $state<'loading' | 'loaded' | 'error'>('loading')
     let failure = $state<unknown>()
-    let isa = $state('')
     let frame = $state<HTMLIFrameElement>()
     let dirty = $state(false)
     const requested = $derived(browser ? page.url.searchParams.get('example') : null)
     const startAction = $derived(browser ? readShareStart(page.url.searchParams) : undefined)
+    //the link's `isa`, when some example is written for it: `?isa=mips` shares the MIPS examples
+    const isa = $derived.by(() => {
+        const language = browser ? examplesIsa(page.url.searchParams.get('isa')) : undefined
+        return language && examples.some((e) => e.language === language) ? language : undefined
+    })
+    let isaValue = $derived<string>(isa ?? '')
+    const filtered = $derived(examples.filter((e) => !isa || e.language === isa))
     const selected = $derived(
         requested === null
-            ? defaultExample(examples)
+            ? defaultExample(filtered)
             : examples.find((e) => e.id === canonicalExampleId(requested))
     )
     //the editor's link for the selected example, in the frame and behind Open in editor: with the
@@ -52,7 +60,6 @@
             : { action: undefined, fullscreenDisplay: false }
         return exampleSharePath(selected.id, action, fullscreenDisplay)
     })
-    const filtered = $derived(examples.filter((e) => !isa || e.language === isa))
     let pickerValue = $derived(
         filtered.some((e) => e.id === selected?.id) ? (selected?.id ?? '') : ''
     )
@@ -99,9 +106,24 @@
     async function choose(id: string) {
         if (id === selected?.id) return
         try {
-            await goto(examplesPath(id, startAction), { reset: false })
+            await goto(examplesPath(id, startAction, isa), { reset: false })
         } finally {
             pickerValue = filtered.some((e) => e.id === selected?.id) ? (selected?.id ?? '') : ''
+        }
+    }
+
+    //the shown example stays when it is written for the chosen instruction set, else that set's first
+    //example takes its place. The link names it only when it already did, or when "All" would
+    //otherwise show a different first example
+    async function chooseIsa(value: string) {
+        const next = examplesIsa(value)
+        if (next === isa) return
+        const keep = selected !== undefined && (!next || selected.language === next)
+        const id = keep && (requested !== null || !next) ? selected.id : undefined
+        try {
+            await goto(examplesPath(id, startAction, next), { reset: false })
+        } finally {
+            isaValue = isa ?? ''
         }
     }
 
@@ -133,7 +155,7 @@
     async function share(action?: ShareStartAction) {
         if (selected)
             await copyText(
-                new URL(examplesPath(selected.id, action), window.location.origin).href,
+                new URL(examplesPath(selected.id, action, isa), window.location.origin).href,
                 'Example link'
             )
     }
@@ -173,8 +195,11 @@
                         <div class="isa-picker">
                             <Select
                                 options={isas}
-                                bind:value={isa}
+                                bind:value={isaValue}
                                 ariaLabel="Filter by instruction set"
+                                onChange={(value) => {
+                                    void chooseIsa(value).catch(() => undefined)
+                                }}
                                 disabled={status !== 'loaded'}
                                 wrapperStyle="width: 100%;"
                             />
@@ -220,14 +245,19 @@
                                 >
                             {/snippet}
                         </ShareMenu>
-                        {#if editorPath}
-                            <ButtonLink
-                                cssVar="secondary"
-                                href={editorPath}
-                                target="_blank"
-                                rel="noopener">Open in editor</ButtonLink
+                        <ButtonLink
+                            cssVar="accent"
+                            href={editorPath}
+                            disabled={!editorPath}
+                            aria-disabled={!editorPath}
+                            target="_blank"
+                            rel="noopener"
+                            style="gap: 0.5rem"
+                        >
+                            <span class="button-icon" aria-hidden="true"><FaExternalLinkAlt /></span
                             >
-                        {/if}
+                            Open in editor
+                        </ButtonLink>
                     </div>
                 </nav>
             {/snippet}
@@ -331,6 +361,11 @@
         flex-wrap: wrap;
         gap: 0.5rem;
     }
+    .button-icon {
+        display: flex;
+        width: 0.9rem;
+        flex-shrink: 0;
+    }
     iframe {
         display: block;
         width: 100%;
@@ -343,6 +378,10 @@
         padding: 1rem;
     }
     @media (max-width: 600px) {
+        /* the toolbar wraps under the site links: keep it close to them */
+        .examples-page :global(.navbar) {
+            row-gap: 0.25rem;
+        }
         .pickers {
             display: flex;
             gap: 0.5rem;
@@ -359,6 +398,13 @@
         .actions {
             width: 100%;
             margin: 0;
+        }
+        /* Share example and Open in editor split the row */
+        .actions > :global(.btn) {
+            flex: 1 1 0;
+        }
+        .button-icon {
+            display: none;
         }
     }
 </style>

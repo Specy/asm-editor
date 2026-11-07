@@ -151,8 +151,19 @@ export function exampleSharePath(
     return `${resolve('/projects/[project]', { project: 'share' })}?example=${encodeURIComponent(id)}${shareStartQuery(action)}${fullscreenDisplay ? '&fullscreenDisplay=true' : ''}`
 }
 
-export function examplesPath(id?: string, action?: ShareStartAction): ResolvedPathname {
+/** The `isa` the Examples page link filters by, spelled in lower case: `?isa=mips`. */
+export function examplesIsa(value: string | null): AvailableLanguages | undefined {
+    if (!value) return undefined
+    return AVAILABLE_LANGUAGES.find((language) => language.toLowerCase() === value.toLowerCase())
+}
+
+export function examplesPath(
+    id?: string,
+    action?: ShareStartAction,
+    isa?: AvailableLanguages
+): ResolvedPathname {
     const query = new URLSearchParams()
+    if (isa) query.set('isa', isa.toLowerCase())
     if (id !== undefined) query.set('example', id)
     if (action) query.set(action, 'true')
     return `${resolve('/examples')}${query.size ? `?${query}` : ''}` as ResolvedPathname

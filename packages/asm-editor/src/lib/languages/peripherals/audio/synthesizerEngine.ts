@@ -368,7 +368,7 @@ class Engine implements SynthesizerEngine {
         player.idleTimer = setTimeout(() => {
             player.idleTimer = null
             if (player.voice !== null || !player.connected) return
-            player.synth.disconnect()
+            player.synth.disconnect(this.destination)
             player.connected = false
         }, IDLE_DISCONNECT_MS)
     }
@@ -497,7 +497,7 @@ class PortPool implements MidiPorts {
             if (port.lent || !port.connected) return
             //a context suspended meanwhile has not played the reset yet
             if (this.context.currentTime < port.freeAt) return this.idle(port)
-            port.synth.disconnect()
+            port.synth.disconnect(port.gain)
             port.connected = false
         }, IDLE_DISCONNECT_MS)
     }

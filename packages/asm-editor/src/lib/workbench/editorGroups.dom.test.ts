@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { flushSync } from 'svelte'
+import { flushSync, tick } from 'svelte'
 import { editorGroupsFixture } from './__fixtures__/editorGroups.svelte'
 import { compileProjectSource } from '#lib/sourceCompilation/compileProjectSource.ts'
 import { fileFingerprint } from '#lib/sourceCompilation/records.ts'
@@ -512,6 +512,52 @@ describe('independent editor groups', () => {
         session.selectMappedLines(second, [2])
         expect(session.mappingSelection).toBeUndefined()
         expect(session.activeMappingColors).toBeUndefined()
+    })
+    it('opens the File behind assembly lines the shown C File did not make', async () => {
+        const fixture = setup(),
+            { session } = fixture
+        const first = session.groups[0],
+            second = openSecond(session, 'main.s')
+        const { record, map } = result(fixture)
+        fixture.project.recordCompilation(record, {
+            ...map,
+            lines: [null, { path: 'main.c', line: 0 }, { path: 'value.h', line: 0 }]
+        })
+        flushSync()
+        session.selectMappedLines(second, [2])
+        await vi.waitFor(() =>
+            expect(session.mappingSelection).toEqual([{ path: 'value.h', line: 0 }])
+        )
+        expect(first.displayedPath).toBe('value.h')
+        expect(first.tabs.preview).toBe('value.h')
+        expect(session.focusedGroup).toBe(second)
+        expect(session.mappingPair?.source).toBe(first)
+        expect(first.mappedLines).toEqual([0])
+        expect(second.mappedLines).toEqual([2])
+        //and back again to the C File
+        session.selectMappedLines(second, [1])
+        await vi.waitFor(() =>
+            expect(session.mappingSelection).toEqual([{ path: 'main.c', line: 0 }])
+        )
+        expect(first.displayedPath).toBe('main.c')
+    })
+    it('leaves the source pane alone when the File behind assembly lines is not the compiled one', async () => {
+        const fixture = setup(),
+            { session } = fixture
+        const first = session.groups[0],
+            second = openSecond(session, 'main.s')
+        const { record, map } = result(fixture)
+        //a File the record does not name, so nothing says the assembly was compiled from it as it is
+        fixture.project.recordCompilation(record, {
+            ...map,
+            lines: [null, { path: 'main.c', line: 0 }, { path: 'other.h', line: 0 }]
+        })
+        flushSync()
+        session.selectMappedLines(second, [2])
+        await tick()
+        expect(first.displayedPath).toBe('main.c')
+        expect(session.mappingPair?.source).toBe(first)
+        expect(session.mappingSelection).toEqual([{ path: 'other.h', line: 0 }])
     })
     it('stops a breakpoint on C source at the first instruction of each mapped block', () => {
         const fixture = setup(),

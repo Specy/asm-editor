@@ -411,12 +411,18 @@
                             <span class="icon" aria-hidden="true"><FaGraduationCap /></span>
                             Courses
                         </ButtonLink>
-                        {#if installEvent}
-                            <Button cssVar="tertiary" style="gap: 0.6rem" onClick={install}>
-                                <span class="icon"><FaDownload /></span>
-                                Install the app
-                            </Button>
-                        {/if}
+                    </div>
+                    <!-- always takes its room, so the centred hero does not move when the browser offers the install -->
+                    <div class="install actions" class:hidden={!installEvent}>
+                        <Button
+                            cssVar="tertiary"
+                            style="gap: 0.6rem"
+                            onClick={install}
+                            disabled={!installEvent}
+                        >
+                            <span class="icon"><FaDownload /></span>
+                            Install the app
+                        </Button>
                     </div>
                 </div>
             </section>
@@ -1002,6 +1008,14 @@
         justify-content: center;
         gap: 0.7rem;
         margin-top: 0.4rem;
+    }
+
+    .actions.install {
+        margin-top: -0.7rem;
+    }
+
+    .actions.install.hidden {
+        visibility: hidden;
     }
 
     /* ---- quick links ---- */

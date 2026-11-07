@@ -5,6 +5,7 @@ import {
     defaultExample,
     destinationPath,
     exampleSharePath,
+    examplesIsa,
     examplesPath,
     isExampleDestination,
     loadExample,
@@ -46,6 +47,14 @@ it('gives every port a unique ISA-prefixed id, independent of its display name o
         '/examples?example=mips-bouncing-ball&buildAndRun=true'
     )
     expect(examplesPath(undefined, 'build')).toBe('/examples?build=true')
+    expect(examplesPath(undefined, undefined, 'RISC-V')).toBe('/examples?isa=risc-v')
+    expect(examplesPath('mips-snake', undefined, 'MIPS')).toBe(
+        '/examples?isa=mips&example=mips-snake'
+    )
+    expect(examplesIsa('mips')).toBe('MIPS')
+    expect(examplesIsa('Risc-V')).toBe('RISC-V')
+    expect(examplesIsa('arm')).toBeUndefined()
+    expect(examplesIsa(null)).toBeUndefined()
 })
 
 it('keeps variants distinct, leaves out a port whose id another has, and rejects unsafe archive paths', () => {

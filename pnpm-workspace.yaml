@@ -13,12 +13,15 @@ packages:
 
 # One Vite+ and one TypeScript for every package that runs `vp`. pnpm keys an install by its peers,
 # and the root's `vp` runs the editor's tests, so a second instance would hand SvelteKit a second Vite.
+# `vite` is Vite+'s own core under Vite's name, and `vp` stops when its version differs from
+# `vite-plus`: change both lines together. The editor's `vite` and the override below read it here.
 catalog:
     typescript: ^6.0.3
-    vite-plus: 1.3.0
+    vite-plus: 1.4.0
+    vite: npm:@voidzero-dev/vite-plus-core@1.4.0
 
 overrides:
-    vite@*: npm:@voidzero-dev/vite-plus-core@1.3.0
+    vite@*: 'catalog:'
 
 allowBuilds:
     # Checks that the platform binary package was installed.
