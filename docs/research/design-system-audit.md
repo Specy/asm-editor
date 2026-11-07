@@ -2,6 +2,8 @@
 
 Date: 2026-11-07. Scope: every page and the Workbench of `packages/asm-editor`, after the search palette was moved onto the tray surface. No code was changed. Paths are relative to `packages/asm-editor/src/`.
 
+The owner's decisions on this audit are in [the Design system record](../design/design-system.md), which overrides it where they differ: notably the type scale (decision 11), the radii (12, chained radii are not outliers), `--shadow-4` and `--r-sheet` (cut), and muted text (17, the theme's `--*-text-muted` is a prose colour, not a label colour).
+
 Method: counted style declarations across the 286 `.svelte` files and the 10 stylesheets, ran three read-only audits (controls, surfaces and overlays, typography and colour), and screenshotted every route plus the Workbench in edit, Debug, Explorer context menu and Settings states. Screenshots are in `.cache/design-system-audit/shots/` (git-ignored).
 
 ## Summary
