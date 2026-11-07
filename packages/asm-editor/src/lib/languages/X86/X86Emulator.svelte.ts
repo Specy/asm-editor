@@ -52,6 +52,7 @@ import { GenericEmulator } from '#lib/languages/GenericEmulator.svelte.ts'
 import {
     type ExecutionSlice,
     type ExecutionSliceRequest,
+    afterNextPaint,
     sliceInstructionBudget
 } from '#lib/languages/ExecutionSlice.ts'
 import type { ExecutionGeneration } from '#lib/languages/ExecutionController.ts'
@@ -1093,6 +1094,16 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         }
     }
 
+    /**
+     * Says what the Build waits for, and has the Core wait until the page has painted it: the
+     * assembler, `ld` and a load each hold the page until they finish, and a phase said just
+     * before one would only reach the screen after it, leaving the download before it on show.
+     */
+    private showBuildPhase(progress: X86Progress): Promise<void> {
+        this.reportBuildPhase(buildPhaseText(progress))
+        return afterNextPaint()
+    }
+
     private async compileSources(sources: BuildSources): Promise<CompileResult> {
         const core = this.requireCore()
         //an Executable Entry is loaded, not assembled, so nothing about assembly can stop it:
@@ -1122,7 +1133,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                     //while it runs
                     core.loadExecutable(bytes, {
                         protectedPath: '/project/' + sources.entry,
-                        onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
+                        onProgress: (progress) => this.showBuildPhase(progress)
                     }),
                     this.programStartOf(bytes)
                 ])
@@ -1157,7 +1168,7 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.applyDisplayMode()
         const linked = linksX86StartUnit(sources)
         const result = await core.compileProject(x86CoreProject(sources), {
-            onProgress: (progress) => this.reportBuildPhase(buildPhaseText(progress))
+            onProgress: (progress) => this.showBuildPhase(progress)
         })
         // Carried on both outcomes: a build that succeeded with warnings is the
         // case where they are worth reading.
