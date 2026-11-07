@@ -124,7 +124,7 @@
         width: fit-content;
         max-width: 100%;
         overflow-x: auto;
-        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border: var(--wb-card-edge, 1px solid var(--line));
         border-radius: var(--wb-radius, 0.4rem);
         background: var(--secondary);
         color: var(--secondary-text);
@@ -133,7 +133,7 @@
     .mark {
         padding: 0.15rem 0.5rem;
         text-align: center;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
     }
     .name {
@@ -178,17 +178,17 @@
         gap: 0.35rem;
         padding: 0.1rem 0.55rem;
         border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         background-color: color-mix(in srgb, var(--tertiary) 30%, transparent);
     }
     .glyph {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
     .reads {
         color: var(--secondary-text);
     }
     .read-flags {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
     }
     .varies {
@@ -199,14 +199,14 @@
     .notes {
         margin: 0;
         padding-left: 1rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     .compact {
         display: inline-flex;
         flex-wrap: wrap;
         gap: 0.1rem 0.45rem;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
     }
     .compact-flag {

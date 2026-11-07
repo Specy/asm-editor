@@ -363,9 +363,9 @@
         cursor: move;
         background-color: var(--secondary);
         color: var(--secondary-text);
-        font-family: Rubik;
+        font-family: var(--font-ui);
         /* a button's own default, written down so the bar reads the same as a div */
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         position: relative;
         border-top-left-radius: 0.4rem;
         border-top-right-radius: 0.4rem;

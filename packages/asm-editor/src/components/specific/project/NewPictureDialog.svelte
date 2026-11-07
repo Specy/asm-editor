@@ -166,7 +166,7 @@
         height: 2rem;
         padding: 0 0.5rem;
         border: 1px solid var(--tray-line);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background: var(--secondary);
         color: var(--secondary-text);
         font: inherit;

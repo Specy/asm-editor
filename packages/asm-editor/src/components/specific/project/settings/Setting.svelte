@@ -67,7 +67,7 @@
     }
     .number {
         padding: 0.6rem 1rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         width: 7rem;
         background-color: var(--tertiary);
         color: var(--tertiary-text);

@@ -94,7 +94,7 @@
         width: 15rem;
         gap: 1rem;
         text-align: center;
-        font-size: 1.2rem;
+        font-size: var(--fs-lead);
         justify-content: space-between;
         background-color: var(--secondary);
         color: var(--secondary-text);
@@ -107,7 +107,7 @@
     }
 
     .code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
 
     @media (max-width: 600px) {

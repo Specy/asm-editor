@@ -183,7 +183,7 @@
         background: var(--primary);
         color: var(--primary-text);
         font-family: var(--font-mono);
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
 
         &:focus {
             border-color: var(--accent);

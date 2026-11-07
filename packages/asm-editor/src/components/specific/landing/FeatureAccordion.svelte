@@ -154,7 +154,7 @@
         width: 100%;
         padding: 1.2rem 2.5rem;
         cursor: pointer;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.95rem;
         letter-spacing: 0.02em;
         color: var(--muted);
@@ -239,7 +239,7 @@
     }
 
     p {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.95rem;
         line-height: 1.75;
         letter-spacing: 0.02em;
@@ -253,7 +253,7 @@
         gap: 0.4rem;
         margin-top: 1.2rem;
         color: var(--accent);
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.95rem;
         text-decoration: underline;
         text-underline-offset: 0.25em;

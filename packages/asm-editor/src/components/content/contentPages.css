@@ -39,7 +39,7 @@
 
 .content-pages main.content .intro,
 .content-pages main.content > .column > p:not(.topic-links) {
-    font-size: 1.2rem;
+    font-size: var(--fs-lead);
     font-weight: 400;
     line-height: 1.65;
     max-width: 70ch;

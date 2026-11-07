@@ -140,7 +140,7 @@
         align-self: center;
         padding: 0.3rem 0.85rem;
         border: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         background-color: var(--background);
         color: var(--accent);
         font: inherit;

@@ -563,9 +563,9 @@
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
         border: 1px solid var(--line);
-        border-radius: 0.6rem;
+        border-radius: var(--r-overlay);
         background-color: var(--tray);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
+        box-shadow: var(--shadow-2);
         pointer-events: auto;
     }
 
@@ -701,7 +701,7 @@
 
     .optimization,
     .compiler {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         background: var(--tray);
     }
 
@@ -731,9 +731,9 @@
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
         border: 1px solid var(--line);
-        border-radius: 0.6rem;
+        border-radius: var(--r-overlay);
         background-color: var(--tray);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
+        box-shadow: var(--shadow-2);
         pointer-events: auto;
 
         .toolbar {

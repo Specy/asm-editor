@@ -204,13 +204,13 @@
         white-space: nowrap;
     }
     .code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.95em;
     }
     .signature {
         flex: 1;
         min-width: 0;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         color: var(--background-text-prose);
         overflow: hidden;
@@ -220,7 +220,7 @@
     .category {
         flex: none;
         margin-left: auto;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--background-text-prose);
         white-space: nowrap;
     }
@@ -229,7 +229,7 @@
         grid-column: 2;
         grid-row: 2;
         margin-top: 0.25rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
         overflow: hidden;
         text-overflow: ellipsis;
@@ -245,7 +245,7 @@
     }
     .page-link {
         align-self: flex-start;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         color: var(--accent);
         text-decoration: underline;
     }

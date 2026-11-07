@@ -131,8 +131,8 @@
         flex: 1;
         min-width: 0;
         color: var(--secondary-text);
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         /* one line is exactly a button high, so it sits level with them, and 1px lower than
            half the leading, since Fira Code draws its letters high in the line */
         --line-height: 1.25rem;

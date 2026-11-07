@@ -1178,7 +1178,7 @@
 
         .label {
             font-family: Rubik, sans-serif;
-            font-size: 0.75rem;
+            font-size: var(--fs-caption);
         }
     }
     .hex-bytes {
@@ -1286,7 +1286,7 @@
         left: 0.6rem;
         padding: 0.5rem 0;
         font-family: Rubik, sans-serif;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         opacity: 0.7;
     }
     /* what a phone's keyboard types into, under the caret so the page does not jump to it */

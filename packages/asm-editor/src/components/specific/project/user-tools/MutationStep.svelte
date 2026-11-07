@@ -402,14 +402,14 @@
 
 <style lang="scss">
     .disassembly {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         overflow-wrap: anywhere;
         text-align: right;
     }
     .cycles {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
     }
     .stretch {
         font-size: 0.8rem;
@@ -433,7 +433,7 @@
         justify-content: center;
         font-size: 0.8rem;
         transition: all 0.2s;
-        font-family: Rubik;
+        font-family: var(--font-ui);
         border-radius: 0.2rem;
     }
 
@@ -451,7 +451,7 @@
         background-color: var(--accent);
         color: var(--accent-text);
         font-size: 0.8rem;
-        font-family: Rubik;
+        font-family: var(--font-ui);
         border-radius: 0.2rem;
         opacity: 0;
     }
@@ -578,7 +578,7 @@
     }
 
     .handler {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.85em;
     }
 

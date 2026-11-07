@@ -251,7 +251,7 @@
 
     .hint {
         margin: 0.2rem 0.6rem 0;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
         line-height: 1.4;
     }

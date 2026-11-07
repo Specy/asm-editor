@@ -100,7 +100,7 @@
     }
 
     .from-source {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-weight: bold;
         line-height: 1;
         color: var(--accent);

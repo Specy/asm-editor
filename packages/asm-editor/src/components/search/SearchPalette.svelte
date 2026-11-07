@@ -453,12 +453,12 @@
     }
 
     .code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
 
     .signature {
         min-width: 0;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         font-weight: normal;
         opacity: 0.65;
@@ -468,7 +468,7 @@
     }
 
     .line {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         opacity: 0.75;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -497,7 +497,7 @@
         margin-top: auto;
         padding: 0.45rem 0.85rem;
         border-top: 1px solid var(--tray-line);
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: color-mix(in srgb, var(--primary-text) 65%, transparent);
 
         span {
@@ -516,7 +516,7 @@
         height: 1.2rem;
         padding: 0 0.3rem;
         border: 1px solid color-mix(in srgb, var(--primary-text) 25%, transparent);
-        border-radius: 0.25rem;
+        border-radius: var(--r-chip);
         font-family: inherit;
         font-size: 0.7rem;
 

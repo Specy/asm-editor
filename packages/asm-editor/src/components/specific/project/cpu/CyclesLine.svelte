@@ -51,7 +51,7 @@
 
     /* the fonts of the PC's row under it: its name's for the label, its value's for the count */
     .label {
-        font-family: Rubik;
+        font-family: var(--font-ui);
         font-size: 0.9rem;
         font-weight: bold;
         text-transform: uppercase;
@@ -60,7 +60,7 @@
 
     .count {
         font-family: var(--font-mono);
-        font-size: 1rem;
+        font-size: var(--fs-body);
         opacity: 0.8;
     }
 

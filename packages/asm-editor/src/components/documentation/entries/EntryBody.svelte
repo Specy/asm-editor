@@ -173,7 +173,7 @@
         background-color: color-mix(in srgb, var(--accent) 8%, transparent);
     }
     .entry-body :global(._markdown table) {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
     .entry-body :global(._markdown td),
     .entry-body :global(._markdown th) {
@@ -187,7 +187,7 @@
         font-size: 0.95rem;
     }
     dt {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.9rem;
         color: var(--accent);
         white-space: nowrap;
@@ -225,8 +225,8 @@
         text-overflow: ellipsis;
     }
     .swatches code {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
 </style>

@@ -1160,7 +1160,7 @@
 
     .library-title {
         padding: 0.2rem 0.5rem;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         text-transform: uppercase;
         letter-spacing: 0.04em;
         opacity: 0.7;
@@ -1174,7 +1174,7 @@
     .stale-note {
         flex: none;
         margin-left: auto;
-        font-size: 0.65rem;
+        font-size: var(--fs-micro);
         font-style: italic;
         white-space: nowrap;
     }
@@ -1242,7 +1242,7 @@
     }
 
     .hints-title {
-        font-size: 0.65rem;
+        font-size: var(--fs-micro);
         text-transform: uppercase;
         font-weight: 600;
         letter-spacing: 0.04em;
@@ -1295,7 +1295,7 @@
         min-width: 1rem;
         padding: 0.05rem 0.25rem;
         border-radius: 0.5rem;
-        font-size: 0.65rem;
+        font-size: var(--fs-micro);
         line-height: 1rem;
         text-align: center;
     }
@@ -1383,7 +1383,7 @@
     }
 
     .disclosure {
-        transition: transform 120ms ease;
+        transition: transform var(--dur-fast) ease;
 
         &.expanded {
             transform: rotate(90deg);
@@ -1527,7 +1527,7 @@
         color: color-mix(in srgb, var(--secondary-text) 70%, transparent);
         background: color-mix(in srgb, var(--secondary-text) 6%, transparent);
         border: 1px solid color-mix(in srgb, var(--secondary-text) 30%, transparent);
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         font-size: 0.48rem;
         font-weight: 700;
         line-height: 0.72rem;
@@ -1570,7 +1570,7 @@
         padding: 1.25rem 0.8rem;
         text-align: center;
         opacity: 0.55;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
     }
 
     @media (hover: none) {

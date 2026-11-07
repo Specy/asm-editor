@@ -307,7 +307,7 @@
         gap: 0.4rem;
     }
     .hint code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
 
     .source-note {
@@ -337,7 +337,7 @@
         input {
             width: 6rem;
             padding: 0.4rem 0.6rem;
-            border-radius: 0.4rem;
+            border-radius: var(--r-control);
             background: var(--tertiary);
             color: var(--tertiary-text);
             font-size: 0.8rem;
@@ -345,7 +345,7 @@
     }
 
     .hint {
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
         line-height: 1.4;
     }

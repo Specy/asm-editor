@@ -131,6 +131,8 @@
 </div>
 
 <style lang="scss">
+    @use '../../../../styles/radius.scss' as *;
+
     .segmented-control {
         height: fit-content;
     }
@@ -140,7 +142,7 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        font-family: Rubik;
+        font-family: var(--font-ui);
         font-size: 0.8rem;
         white-space: nowrap;
     }
@@ -164,7 +166,7 @@
         grid-auto-columns: auto;
         width: fit-content;
         border: 0.1rem solid var(--accent2);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--primary);
         isolation: isolate;
 
@@ -213,7 +215,7 @@
         position: absolute;
         top: 0.1rem;
         bottom: 0.1rem;
-        border-radius: 0.2rem;
+        border-radius: nested-radius(var(--r-control), $border: 0.1rem, $inset: 0.1rem);
         background-color: var(--accent2);
         pointer-events: none;
         transition:

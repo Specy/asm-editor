@@ -1830,8 +1830,8 @@
     }
     /* numbers that change under the pointer, in figures of one width, each with its room */
     .number {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.75rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-caption);
     }
     .zoom {
         min-width: 5ch;
@@ -1995,7 +1995,7 @@
         border-radius: 0.5rem;
         background: var(--tertiary);
         color: var(--tertiary-text);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
+        box-shadow: var(--shadow-3);
         font-size: 0.8rem;
     }
     .setting {

@@ -136,7 +136,7 @@
         display: flex;
         align-items: stretch;
         border: 1px solid var(--tray-line);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--secondary);
         color: var(--secondary-text);
 
@@ -154,7 +154,7 @@
         display: flex;
         align-items: center;
         padding-left: 0.6rem;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         opacity: 0.7;
     }
 
@@ -167,7 +167,7 @@
         outline: none;
         background: transparent;
         color: inherit;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.9rem;
     }
 

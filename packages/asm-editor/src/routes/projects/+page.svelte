@@ -307,7 +307,7 @@
     }
 
     .empty-hint {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         color: var(--hint);
     }
 

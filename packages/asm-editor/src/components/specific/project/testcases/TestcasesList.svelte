@@ -132,7 +132,7 @@
         margin: 0.8rem 1rem;
         padding: 0.55rem 1rem;
         border: 1px solid var(--accent);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         text-align: center;
         font-family: Rubik, sans-serif;
         font-size: 0.9rem;

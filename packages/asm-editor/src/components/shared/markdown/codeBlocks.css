@@ -9,7 +9,7 @@ pre.code-block {
     max-height: 60vh;
     margin: 0;
     padding: 0.4rem 1rem;
-    border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+    border: var(--wb-card-edge, 1px solid var(--line));
     border-radius: var(--wb-radius, 0.4rem);
     background: var(--secondary) !important;
     color: var(--secondary-text) !important;
@@ -23,7 +23,7 @@ pre.code-block {
 
 pre.code-block > code,
 pre.code-block > .code-gutter {
-    font-family: var(--example-font-family, 'Fira Code', monospace);
+    font-family: var(--example-font-family, var(--font-mono));
     font-size: var(--example-font-size, 16px);
     line-height: var(--example-line-height, 22px);
     font-weight: normal;
@@ -145,8 +145,8 @@ pre.code-block.code-block-fill {
     padding: 0.35rem 0.75rem;
     background: var(--secondary);
     color: var(--primary-text);
-    font-family: var(--example-font-family, 'Fira Code', monospace);
-    font-size: 0.85rem;
+    font-family: var(--example-font-family, var(--font-mono));
+    font-size: var(--fs-small);
 }
 
 div.code-playground {

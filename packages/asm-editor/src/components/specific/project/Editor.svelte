@@ -1251,7 +1251,7 @@
             transparent
         ) !important;
         backdrop-filter: blur(4px);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35) !important;
+        box-shadow: var(--shadow-3) !important;
         top: 1rem !important;
         right: 2.4rem !important;
     }
@@ -1314,7 +1314,7 @@
         overflow-x: auto;
         display: block;
         margin: 0.5rem 0;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         border-radius: 0.5rem;
         border: solid 0.1rem var(--primary);
         width: fit-content;

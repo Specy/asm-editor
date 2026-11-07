@@ -58,19 +58,19 @@
 
     .btn {
         padding: 0.6rem 1rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         color: var(--btn-text, --accent-text);
         background-color: var(--btn-color, --accent);
         text-align: center;
         display: flex;
         transition: all 0.3s;
-        font-size: 1rem;
+        font-size: var(--fs-body);
         align-items: center;
         justify-content: center;
         border: none;
         width: fit-content;
         user-select: none;
-        font-family: Rubik;
+        font-family: var(--font-ui);
         position: relative;
         cursor: pointer;
 

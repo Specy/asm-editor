@@ -185,7 +185,7 @@
         border: 1px solid color-mix(in srgb, var(--tertiary-text) 25%, transparent);
         border-radius: 0.25rem;
         font-family: inherit;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         white-space: nowrap;
         opacity: 0.85;
     }

@@ -196,8 +196,8 @@
         min-width: 1.1rem;
         height: 1.1rem;
         padding: 0 0.3rem;
-        border-radius: 999px;
-        font-size: 0.65rem;
+        border-radius: var(--r-pill);
+        font-size: var(--fs-micro);
         font-weight: 700;
         background-color: var(--accent2);
         color: var(--accent2-text);

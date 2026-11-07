@@ -790,7 +790,7 @@
         min-width: min-content;
         min-height: min-content;
         font-family: var(--font-mono);
-        font-size: 1rem;
+        font-size: var(--fs-body);
         grid-template-columns: min-content;
         grid-template-rows: min-content;
         grid-template-areas:
@@ -844,7 +844,7 @@
         backdrop-filter: blur(6px);
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25);
         font-family: var(--font-ui);
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         color: var(--tertiary-text);
         overflow-wrap: anywhere;
         pointer-events: none;

@@ -102,16 +102,16 @@
     }
     .title {
         margin: 0;
-        font-size: 1.2rem;
+        font-size: var(--fs-lead);
     }
     .prose .title {
         font-size: 1.35rem;
     }
     .code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
     .signature {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.9rem;
         color: var(--background-text-prose);
         overflow-wrap: anywhere;

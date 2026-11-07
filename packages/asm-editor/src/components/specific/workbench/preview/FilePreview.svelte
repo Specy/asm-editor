@@ -318,7 +318,7 @@
         height: 2.2rem;
         padding: 0 0.9rem;
         border: 1px solid var(--line);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background: var(--primary);
         color: var(--primary-text);
         font: inherit;

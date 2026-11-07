@@ -177,7 +177,7 @@
         border: 0;
         background: transparent;
         color: var(--tertiary-text);
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         outline: none;
     }
     .row {

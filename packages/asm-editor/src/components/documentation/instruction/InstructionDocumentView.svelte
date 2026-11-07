@@ -480,7 +480,7 @@
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         font: inherit;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         cursor: pointer;
     }
     .show-all:hover {

@@ -70,7 +70,7 @@
         overflow: auto;
         scrollbar-gutter: stable;
         padding: var(--wb-output-padding);
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.82rem;
         line-height: 1.55;
     }

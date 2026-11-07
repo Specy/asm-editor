@@ -106,7 +106,7 @@
         padding: 0.5rem 0.4rem;
         background-color: transparent;
         color: inherit;
-        font-size: 1rem;
+        font-size: var(--fs-body);
     }
     /* the caret is enough: the field is the only thing in its dialog that takes focus */
     .search-field.bare:focus-within {
@@ -163,7 +163,7 @@
     }
     .status {
         flex: none;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         white-space: nowrap;
         opacity: 0.7;
     }

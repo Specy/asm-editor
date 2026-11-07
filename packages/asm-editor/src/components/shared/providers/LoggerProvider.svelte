@@ -152,7 +152,7 @@
     }
     .toast-text {
         padding: 0.6rem 0.75rem 0.7rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         line-height: 1.45;
         display: flex;
         overflow-y: auto;

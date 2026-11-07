@@ -473,7 +473,7 @@
         flex-direction: column;
         gap: 0.22rem;
         padding: 0.4rem 0.2rem;
-        font-size: 1rem;
+        font-size: var(--fs-body);
         @media screen and (max-width: 1000px) {
             width: unset;
         }
@@ -510,7 +510,7 @@
     //the panel already have. The column is sized by what it holds, so a wider tab would move the
     //memory panel beside it every time it was picked
     .wide {
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
 
         .register-hex {
             display: grid;
@@ -528,7 +528,7 @@
         cursor: text;
         user-select: all;
         font-family: var(--font-mono);
-        font-size: 1rem;
+        font-size: var(--fs-body);
         box-shadow: rgba(0, 0, 0, 0.4) 0px 0px 6px;
         left: 100%;
         z-index: 3;
@@ -565,7 +565,7 @@
         justify-content: center;
         //Rubik's capitals sit a little above the middle of their line
         padding: 0.25rem 0.2rem 0.15rem;
-        font-family: Rubik;
+        font-family: var(--font-ui);
         border-radius: 0.2rem;
         border: none;
         min-width: 1.6rem;

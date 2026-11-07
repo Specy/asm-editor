@@ -103,7 +103,7 @@
 <style lang="scss">
     code,
     .patch-input {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
 
     .patch-title {
@@ -123,7 +123,7 @@
         box-sizing: border-box;
         padding: 0.45rem 0.6rem;
         border: 1px solid var(--tray-line);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--secondary);
         color: var(--secondary-text);
         font-size: 0.9rem;

@@ -36,7 +36,7 @@
 
 <style>
     .asm-code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
         white-space: pre;
     }

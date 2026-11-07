@@ -295,10 +295,10 @@
     kbd {
         margin-left: auto;
         padding: 0.05rem 0.35rem;
-        border-radius: 0.25rem;
+        border-radius: var(--r-chip);
         background: var(--tertiary);
         color: var(--tertiary-text);
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         font-family: inherit;
     }
     .hints ul {

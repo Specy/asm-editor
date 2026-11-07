@@ -118,7 +118,7 @@ body {
     background-color: var(--background, #171a21);
     color: var(--background-text, #dbdbdb);
     display: grid;
-    font-family: Rubik;
+    font-family: var(--font-ui);
     overflow-x: clip;
 }
 
@@ -236,7 +236,7 @@ input[type='radio'] {
 
 button {
     cursor: pointer;
-    font-family: Rubik;
+    font-family: var(--font-ui);
 }
 
 /* Monaco's context menu, a translucent tint (its theme's menu.background) that blurs what is

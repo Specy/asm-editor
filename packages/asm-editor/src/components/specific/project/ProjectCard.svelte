@@ -272,7 +272,7 @@
         min-height: 2.6rem;
         padding: 0.25rem 0.3rem;
         margin: -0.25rem -0.3rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         line-height: 1.45;
         color: var(--secondary-text-prose, var(--secondary-text));
         overflow-wrap: anywhere;
@@ -297,14 +297,14 @@
     .edited {
         align-self: flex-end;
         max-width: 100%;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
     }
 
     .language {
         flex: none;
         color: var(--hint);
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         font-weight: 500;
         white-space: nowrap;
     }

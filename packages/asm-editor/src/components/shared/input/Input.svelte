@@ -54,7 +54,7 @@
     .input-row {
         display: flex;
         align-items: center;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         padding: 0.2rem;
         background-color: var(--secondary);
         color: var(--secondary-text);

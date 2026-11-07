@@ -43,8 +43,7 @@
         gap: 0.5rem;
         min-height: 2rem;
         padding: 0.2rem 0.3rem 0.2rem 0.6rem;
-        border-bottom: 1px solid
-            var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border-bottom: 1px solid var(--line);
         background: var(--wb-section-header, var(--secondary));
         color: var(--secondary-text);
         font-size: 0.8rem;

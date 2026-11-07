@@ -992,7 +992,7 @@
 
     .lede {
         font-family: var(--mono);
-        font-size: 1rem;
+        font-size: var(--fs-body);
         line-height: 1.7;
         letter-spacing: 0.02em;
         color: color-mix(in srgb, var(--background-text) 82%, transparent);
@@ -1392,7 +1392,7 @@
         background: var(--secondary);
         color: var(--secondary-text);
         border: 1px solid var(--landing-line-strong);
-        font-size: 1rem;
+        font-size: var(--fs-body);
         box-shadow: 0 0.6rem 1.6rem rgb(0 0 0 / 0.45);
         opacity: 0;
         transform: translateY(0.3rem);
@@ -1436,7 +1436,7 @@
         }
 
         p {
-            font-size: 1rem;
+            font-size: var(--fs-body);
             max-width: 36rem;
         }
     }
@@ -1535,7 +1535,7 @@
 
         p {
             flex: 1;
-            font-size: 0.85rem;
+            font-size: var(--fs-small);
         }
     }
 
@@ -1562,7 +1562,7 @@
             align-items: center;
             gap: 0.4rem;
             font-family: var(--mono);
-            font-size: 0.85rem;
+            font-size: var(--fs-small);
             /* the tile's colour, pulled towards the text so it reads on light and dark themes */
             color: color-mix(in srgb, var(--tile) 70%, var(--background-text));
 
@@ -1716,7 +1716,7 @@
     }
 
     .tile-text {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
 
     .agents {
@@ -1873,7 +1873,7 @@
         }
 
         .tile span {
-            font-size: 1rem;
+            font-size: var(--fs-body);
         }
 
         .tile-link {

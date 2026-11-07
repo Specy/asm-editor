@@ -594,7 +594,7 @@
     .tool {
         padding: 0.35rem 0.8rem;
         border: none;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--secondary);
         color: var(--secondary-text);
         font: inherit;
@@ -656,7 +656,7 @@
         border: var(--chapter-border-width) solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         border-radius: 0.5rem 0.5rem 0 0;
-        box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+        box-shadow: var(--shadow-1);
     }
     .chapter.folded .chapter-title {
         border-radius: 0.5rem;
@@ -702,7 +702,7 @@
         border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
-        box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+        box-shadow: var(--shadow-1);
     }
     /* a prose entry's title, brought back into view by Show less, lands below the pinned heading */
     .chapter :global(.prose-title) {

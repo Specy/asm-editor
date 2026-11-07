@@ -630,7 +630,7 @@
         background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
         color: var(--secondary-text);
         font-family: Rubik, sans-serif;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         font-weight: 500;
         white-space: nowrap;
         cursor: pointer;

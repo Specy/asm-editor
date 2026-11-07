@@ -1103,7 +1103,7 @@
         min-height: 0;
         background-color: var(--secondary);
         border-radius: var(--wb-radius, 0.4rem);
-        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border: var(--wb-card-edge, 1px solid var(--line));
         overflow: hidden;
     }
 

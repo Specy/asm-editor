@@ -457,7 +457,7 @@
         width: 100%;
         padding: 0.7rem 1rem;
         border: none;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--secondary);
         color: var(--secondary-text);
         font-family: inherit;
@@ -529,7 +529,7 @@
         border: none;
         background-color: var(--secondary);
         color: var(--secondary-text);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
+        box-shadow: var(--shadow-3);
     }
 
     /* over the options as they scroll past, set apart from them by a line from edge to edge. It

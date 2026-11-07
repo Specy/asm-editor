@@ -771,7 +771,7 @@
         padding: 0.15rem 0.4rem;
         border: none;
         border-radius: 0.2rem;
-        font-family: Rubik;
+        font-family: var(--font-ui);
         font-size: 0.8rem;
         color: inherit;
         background-color: var(--secondary);
