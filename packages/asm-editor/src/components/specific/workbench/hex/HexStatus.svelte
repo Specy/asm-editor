@@ -97,7 +97,7 @@
 
 <style lang="scss">
     .fact b {
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-weight: normal;
         opacity: 1;
     }
@@ -107,7 +107,7 @@
         min-width: 8ch;
     }
     .region {
-        font-family: monospace;
+        font-family: var(--font-mono);
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 14rem;

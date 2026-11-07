@@ -474,7 +474,7 @@
            shift sideways */
         scrollbar-gutter: stable;
         padding: var(--terminal-padding, 0.5rem 0.5rem 0.5rem 0.8rem);
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     .interactive {

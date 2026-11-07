@@ -42,7 +42,7 @@
 <div class="search-field" class:bare onpointerenter={warm} onfocusin={warm} role="presentation">
     <span class="icon" aria-hidden="true">
         {#if loading}
-            <span class="spinner"></span>
+            <span class="spinner keeps-moving"></span>
         {:else}
             <FaSearch />
         {/if}

@@ -26,7 +26,7 @@
             onclick={recompile.onClick}
         >
             {#if recompile.busy}
-                <span class="spinner" aria-hidden="true"><FaSpinner /></span>
+                <span class="spinner keeps-moving" aria-hidden="true"><FaSpinner /></span>
                 Compiling…
             {:else}
                 {notice}

@@ -1111,7 +1111,7 @@
         display: flex;
         flex: none;
         overflow-x: auto;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--wb-line);
     }
 
     .playground-code {

@@ -85,7 +85,7 @@
         overflow-y: hidden;
         padding: 0.2rem 0.8rem;
         border-bottom: 1px solid var(--wb-line, color-mix(in srgb, var(--hint) 30%, transparent));
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     .line {

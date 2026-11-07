@@ -124,7 +124,7 @@
     }
 
     .warning .mark {
-        color: var(--warning, #d49a30);
+        color: var(--warning);
     }
 
     .error .mark {

@@ -68,7 +68,7 @@
                 {#if !iconTabs}{tab.label}{/if}
                 {#if tab.id === 'problems'}
                     {#if session.analysisSpinnerVisible}
-                        <span class="badge pending" title="Analyzing">
+                        <span class="badge pending keeps-moving" title="Analyzing">
                             <FaSpinner />
                         </span>
                     {:else}

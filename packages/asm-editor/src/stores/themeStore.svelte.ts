@@ -19,8 +19,9 @@ const THEME_PROPS = {
     hint: { name: 'hint', readonly: true },
     textDarker: { name: 'text-layered', readonly: true },
     scrollbar: { name: 'scrollbar' },
-    red: { name: 'red', readonly: true }, //TODO rename to warn
-    green: { name: 'green', readonly: true } //TODO rename to success
+    red: { name: 'red', readonly: true }, //TODO rename to danger
+    green: { name: 'green', readonly: true }, //TODO rename to success
+    warning: { name: 'warning', readonly: true }
 } as const
 
 export type ThemeKeys = keyof typeof THEME_PROPS
@@ -41,7 +42,14 @@ type StoredTheme<T extends string = string> = {
 }
 
 /** The colours every built-in theme shares, which are the readonly ones. */
-const SHARED_COLORS = { hint: '#939393', textDarker: '#c1c1c1', red: '#ed4f4f', green: '#356a59' }
+const SHARED_COLORS = {
+    hint: '#939393',
+    textDarker: '#c1c1c1',
+    red: '#ed4f4f',
+    green: '#356a59',
+    //what the editor's warning marks and the Log's notes were drawn in before it was a theme colour
+    warning: '#d49a30'
+}
 
 /** The colours a built-in theme picks for itself; its primary is its background. */
 type BuiltinColors = Record<Exclude<ThemeKeys, 'primary' | keyof typeof SHARED_COLORS>, string>

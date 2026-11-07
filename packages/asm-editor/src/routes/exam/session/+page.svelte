@@ -1139,7 +1139,7 @@
         position: relative;
         border-radius: 0.5rem;
         overflow: hidden;
-        border: solid 0.1rem var(--border-color-dark);
+        border: solid 0.1rem color-mix(in srgb, var(--tertiary) 60%, transparent);
     }
 
     @media (max-width: 840px) {

@@ -59,7 +59,7 @@
     }
 
     .count {
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 1rem;
         opacity: 0.8;
     }
@@ -68,7 +68,7 @@
        right end, where neither the count before it nor its own width moves the rest */
     .last {
         margin-left: auto;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.9rem;
         color: var(--accent);
     }

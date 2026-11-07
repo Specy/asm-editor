@@ -527,7 +527,7 @@
         position: absolute;
         cursor: text;
         user-select: all;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 1rem;
         box-shadow: rgba(0, 0, 0, 0.4) 0px 0px 6px;
         left: 100%;
@@ -628,7 +628,7 @@
     //the input the chunk becomes while it is being poked, drawn in the row's own monospace so the
     //digits stay where they were
     .chunk-input {
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: inherit;
         text-align: center;
         //the box the read-only cell has, digit for digit: `box-sizing: border-box` is global, so
@@ -659,6 +659,6 @@
         justify-content: center;
         flex: 1;
         opacity: 0.4;
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 </style>

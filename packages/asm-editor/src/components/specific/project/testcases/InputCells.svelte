@@ -100,6 +100,11 @@
         &:focus-within {
             border-color: color-mix(in srgb, var(--accent) 70%, transparent);
         }
+
+        /* the cell's edge shows the focus, in place of the app's ring */
+        :focus-visible {
+            outline: none;
+        }
     }
 
     .index {

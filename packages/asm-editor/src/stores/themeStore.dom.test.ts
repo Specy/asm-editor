@@ -21,7 +21,8 @@ const PROPS = [
     ['textDarker', 'text-layered', true],
     ['scrollbar', 'scrollbar', false],
     ['red', 'red', true],
-    ['green', 'green', true]
+    ['green', 'green', true],
+    ['warning', 'warning', true]
 ] as const
 
 /** Every built-in theme's colours, as they were written out by hand. */
@@ -40,7 +41,8 @@ const BUILTINS = [
             textDarker: '#c1c1c1',
             scrollbar: '#3b5364',
             red: '#ed4f4f',
-            green: '#356a59'
+            green: '#356a59',
+            warning: '#d49a30'
         }
     },
     {
@@ -57,7 +59,8 @@ const BUILTINS = [
             textDarker: '#c1c1c1',
             scrollbar: '#433d6f',
             red: '#ed4f4f',
-            green: '#356a59'
+            green: '#356a59',
+            warning: '#d49a30'
         }
     },
     {
@@ -74,7 +77,8 @@ const BUILTINS = [
             textDarker: '#c1c1c1',
             scrollbar: '#3d446f',
             red: '#ed4f4f',
-            green: '#356a59'
+            green: '#356a59',
+            warning: '#d49a30'
         }
     },
     {
@@ -91,7 +95,8 @@ const BUILTINS = [
             textDarker: '#c1c1c1',
             scrollbar: '#2f4a43',
             red: '#ed4f4f',
-            green: '#356a59'
+            green: '#356a59',
+            warning: '#d49a30'
         }
     },
     {
@@ -108,7 +113,8 @@ const BUILTINS = [
             textDarker: '#c1c1c1',
             scrollbar: '#2a5c80',
             red: '#ed4f4f',
-            green: '#356a59'
+            green: '#356a59',
+            warning: '#d49a30'
         }
     }
 ]

@@ -1,13 +1,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap');
+@import './styles/tokens.css';
 
 @font-face {
     font-family: Rubik;
     src: url('https://fonts.gstatic.com/s/rubik/v28/iJWKBXyIfDnIV7nBrXw.woff2');
 }
 
+/* Fira Code's variable font, as two faces of the one file (downloaded once). A request for 400, the
+   default, falls on the first and is drawn at 500, the weight the app's code has always been in;
+   600 and up fall on the second and are the real bold rather than one the browser synthesises
+   (design-system.md, D15). */
 @font-face {
     font-family: 'Fira Code';
-    src: url(/fonts/FiraCode-Medium.woff2);
+    src: url(/fonts/FiraCode-VF.woff2) format('woff2');
+    font-weight: 500;
+}
+
+@font-face {
+    font-family: 'Fira Code';
+    src: url(/fonts/FiraCode-VF.woff2) format('woff2');
+    font-weight: 501 700;
 }
 
 /* The width of Markdown's text column. Registered as a length so the `em` it is given resolves
@@ -27,6 +39,35 @@
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
     outline: none;
+}
+
+/* The keyboard's focus, on every control that does not draw its own: the reset above takes the
+   browser's away. A text field takes it inside its edge, so that it never covers a neighbour in a
+   dense form; Monaco draws its own cursor and focus. */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+:is(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+    textarea,
+    [contenteditable]
+):focus-visible {
+    outline-offset: -2px;
+}
+
+.monaco-editor :focus-visible {
+    outline: none;
+}
+
+/* A form control is in the text around it, as a button is, rather than in the browser's own font
+   and size */
+input,
+textarea,
+select {
+    font: inherit;
+    color: inherit;
 }
 
 /* Icons fill their parent, preserving the sizing contract configured in unplugin-icons. */
@@ -148,10 +189,12 @@ input[type='radio'] {
     justify-content: center;
 }
 
+/* --scroll-accent is the theme's scrollbar colour, written on the document's root as well as the
+   theme's, since the page's own scrollbar belongs to the root */
 ::-webkit-scrollbar {
     width: 0.3rem;
     height: 0.4rem;
-    background: rgba(44, 44, 44, 0.9);
+    background: transparent;
 }
 
 ::-webkit-scrollbar-track {
@@ -164,7 +207,31 @@ input[type='radio'] {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    background: color-mix(in srgb, var(--scroll-accent) 75%, currentColor);
+}
+
+/* Firefox has no ::-webkit-scrollbar. Chrome 121 and later would drop the rules above as soon as
+   scrollbar-color is set, so only a browser without them gets it. */
+@supports not selector(::-webkit-scrollbar) {
+    html {
+        scrollbar-color: var(--scroll-accent) transparent;
+        scrollbar-width: thin;
+    }
+}
+
+/* Asked for less motion, CSS transitions and animations end at once, but for what has to keep
+   moving to mean anything: a spinner (something is under way) and a toast's countdown bar.
+   Svelte's transitions run through element.animate(), which no stylesheet reaches; they shorten
+   themselves through motion() (design-system-plan.md, stage 3). */
+@media (prefers-reduced-motion: reduce) {
+    :where(:not(.keeps-moving)),
+    :where(:not(.keeps-moving))::before,
+    :where(:not(.keeps-moving))::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 button {

@@ -182,7 +182,7 @@
         border-radius: 0.25rem;
         background: var(--primary);
         color: var(--primary-text);
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.85rem;
 
         &:focus {

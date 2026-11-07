@@ -280,7 +280,7 @@
                 >
                     <Icon size={1}>
                         {#if progress}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
                         {:else if building}
                             <FaRegClock />
                         {:else}
@@ -315,7 +315,7 @@
                 >
                     <Icon size={0.9}>
                         {#if compilation.busy}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
                         {:else}
                             <FaCode />
                         {/if}
@@ -488,7 +488,7 @@
                 >
                     <Icon size={0.9}>
                         {#if sound.loading}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
                         {:else if sound.muted}
                             <FaVolumeMute />
                         {:else}

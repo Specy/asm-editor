@@ -537,7 +537,7 @@
     .destination small {
         margin-left: auto;
         opacity: 0.7;
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
     .data-label {
         padding-left: 1.3rem;
@@ -650,7 +650,7 @@
     .address-completion {
         padding: 0.3rem 0.3rem 0.3rem 0;
         font-size: 1rem;
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
     .address-completion {
         position: absolute;

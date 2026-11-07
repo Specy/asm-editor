@@ -542,7 +542,7 @@
     }
 
     .poke-value {
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     //an IRQ's heading: the request and its handler, the whole of what the row is about

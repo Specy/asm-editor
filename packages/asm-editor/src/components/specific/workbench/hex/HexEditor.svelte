@@ -1116,11 +1116,16 @@
         min-width: 0;
         overflow: auto;
         overscroll-behavior: contain;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.875rem;
         user-select: none;
     }
-    /* the keyboard reached the bytes: a ring round them, over the header and the offsets */
+    /* the keyboard reached the bytes: a ring round them, over the header and the offsets, in place
+       of the app's ring on the scroller itself */
+    .hex-scroller:focus-visible {
+        outline: none;
+    }
+
     .hex-area:has(.hex-scroller:focus-visible)::after {
         content: '';
         position: absolute;
@@ -1307,7 +1312,7 @@
         background: var(--tertiary);
         color: var(--tertiary-text);
         box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         overflow-wrap: anywhere;
         pointer-events: none;
@@ -1316,7 +1321,7 @@
         position: absolute;
         visibility: hidden;
         pointer-events: none;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.875rem;
         white-space: pre;
 

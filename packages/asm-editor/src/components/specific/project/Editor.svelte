@@ -1421,7 +1421,7 @@
 
     //what runs when it is not what the line shows, after the line's text
     :global(.line-note) {
-        color: var(--warning, #d49a30);
+        color: var(--warning);
         font-style: italic;
     }
 
@@ -1430,10 +1430,10 @@
     :global(.patched-line-marker) {
         width: 3px !important;
         margin-left: 3px;
-        background-color: var(--warning, #d49a30);
+        background-color: var(--warning);
     }
     :global(.patched-line) {
-        background-color: color-mix(in srgb, var(--warning, #d49a30) 12%, transparent);
+        background-color: color-mix(in srgb, var(--warning) 12%, transparent);
     }
 
     :global(.selected-line-number) {

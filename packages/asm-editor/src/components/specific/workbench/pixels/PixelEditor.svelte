@@ -1853,7 +1853,7 @@
     /* at the far end, so the facts before it moving never move it */
     .read-only {
         margin-left: auto;
-        background: color-mix(in srgb, var(--warning, var(--accent)) 22%, transparent);
+        background: color-mix(in srgb, var(--warning) 22%, transparent);
     }
     .pixel-toolbar {
         container: pixel-toolbar / inline-size;

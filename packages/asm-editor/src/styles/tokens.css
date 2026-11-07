@@ -1,0 +1,11 @@
+/* The design system's tokens that do not depend on the theme (docs/design/design-system.md). The
+   ones drawn from a theme colour are written by themeCssVariables() beside the theme's colours, on
+   every element that carries a theme, since a custom property that reads a colour resolves where
+   it is declared. */
+:root {
+    /* D2: Rubik for interface and reference text, Noto Serif for long prose read from top to
+       bottom, Fira Code only for code and machine values */
+    --font-ui: Rubik;
+    --font-read: 'Noto Serif', Rubik, sans-serif;
+    --font-mono: 'Fira Code', monospace;
+}

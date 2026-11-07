@@ -41,7 +41,7 @@
             </div>
             <div class="toast-progress">
                 <div
-                    class="toast-progress-bar"
+                    class="toast-progress-bar keeps-moving"
                     style={`
 					animation-duration: ${$toast.duration}ms; 
 					background-color: ${$toast.color};

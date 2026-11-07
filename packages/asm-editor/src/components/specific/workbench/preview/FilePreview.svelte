@@ -206,7 +206,7 @@
         --dock-room: calc(var(--wb-control-height, 2.6rem) + 0.75rem);
     }
     .mime {
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
     /* one button, which keeps its words in a narrower pane than the Hex editor's three */
     @container file-status (max-width: 22rem) {

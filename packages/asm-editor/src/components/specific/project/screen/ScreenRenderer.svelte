@@ -754,7 +754,7 @@
 
     .screen-size {
         color: var(--hint);
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     .screen-actions {
