@@ -54,6 +54,16 @@
         return { open: false, left, top: TOP }
     }
 
+    /**
+     * The least the Call stack and the History may be dragged to show: two History entries, in
+     * the root font's size.
+     */
+    const MIN_MAX_HEIGHT_REM = 10
+    const rootFontSize =
+        typeof document === 'undefined'
+            ? 16
+            : parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+
     function update(id: string, index: number, change: Partial<FloatingWindowState>) {
         workbenchLayout.setFloating(id, { ...windowOf(id, index), ...change })
     }
@@ -72,6 +82,12 @@
         }
         bind:left={() => windowOf(tool.id, index).left, (left) => update(tool.id, index, { left })}
         bind:top={() => windowOf(tool.id, index).top, (top) => update(tool.id, index, { top })}
+        resizableMaxHeight={tool.kind !== 'memory'}
+        minMaxHeight={MIN_MAX_HEIGHT_REM * rootFontSize}
+        bind:maxHeight={
+            () => windowOf(tool.id, index).maxHeight ?? 0,
+            (maxHeight) => update(tool.id, index, { maxHeight })
+        }
     >
         {#if tool.kind === 'memory'}
             <div class="window-body">

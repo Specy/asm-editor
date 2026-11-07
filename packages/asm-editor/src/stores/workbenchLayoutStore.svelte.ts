@@ -12,6 +12,11 @@ export type FloatingWindowState = {
     open: boolean
     left: number
     top: number
+    /**
+     * The most the window's body shows, in pixels, set by dragging its bottom edge; what is longer
+     * scrolls. Left out until dragged, when the window keeps its own default.
+     */
+    maxHeight?: number
 }
 
 export type WorkbenchLayout = {
@@ -156,6 +161,9 @@ export function readStoredLayout(json: string | null): WorkbenchLayout {
                     left: Math.round(window.left),
                     top: Math.round(window.top)
                 }
+                if (finite(window.maxHeight) && window.maxHeight > 0) {
+                    layout.floating[id].maxHeight = Math.round(window.maxHeight)
+                }
             }
         }
     }
@@ -246,6 +254,9 @@ function createWorkbenchLayoutStore() {
                 open: window.open,
                 left: Math.round(window.left),
                 top: Math.round(window.top)
+            }
+            if (window.maxHeight !== undefined) {
+                data.floating[id].maxHeight = Math.round(window.maxHeight)
             }
             store()
         }

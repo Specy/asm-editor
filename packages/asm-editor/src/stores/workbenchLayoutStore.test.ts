@@ -15,7 +15,10 @@ describe('readStoredLayout', () => {
             debugTopHeight: 480,
             screenHeight: 520,
             collapsed: { screen: true, history: false },
-            floating: { history: { open: true, left: 420, top: 60 } },
+            floating: {
+                history: { open: true, left: 420, top: 60 },
+                callstack: { open: true, left: 300, top: 9, maxHeight: 240 }
+            },
             searchLookIn: { files: true, listings: false, pseudocode: false }
         }
         expect(readStoredLayout(JSON.stringify(stored))).toEqual(stored)

@@ -71,7 +71,8 @@
         border-top-left-radius: 0;
         border-top-right-radius: 0;
         gap: 0.4rem;
-        max-height: 30rem;
+        /* the floating window's bottom edge sets it, when it has been dragged */
+        max-height: var(--floating-body-max-height, 30rem);
         width: 12rem;
         overflow-y: auto;
     }

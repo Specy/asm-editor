@@ -5,7 +5,7 @@
  * it would have at its position.
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
-import { flushSync, mount, unmount } from 'svelte'
+import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
 import DraggableContainer from './DraggableContainer.svelte'
 
 let target: HTMLElement
@@ -35,6 +35,7 @@ afterEach(() => {
     component = undefined
     target.remove()
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
 })
 
 function pointer(type: string, x: number, y: number) {
@@ -141,4 +142,63 @@ it('moves its left edge by the left corner, and says which corner was let go', (
     drag(corner, [200, 270], [-500, 270])
     expect(state.left).toBe(6)
     expect(state.left + state.width).toBe(700)
+})
+
+/** A body whose content is its own scroller, as the Call stack's and the History's are. */
+const scrollingList = createRawSnippet(() => ({ render: () => '<div class="list"></div>' }))
+
+it('offers the bottom edge only while the content scrolls', () => {
+    component = mount(DraggableContainer, {
+        target,
+        props: {
+            title: 'History',
+            hidden: false,
+            resizableMaxHeight: true,
+            children: scrollingList
+        }
+    })
+    flushSync()
+    //jsdom lays nothing out, so the content is exactly as tall as what it shows
+    expect(target.querySelector('.resize-edge')).toBeNull()
+})
+
+it('sets the most its body shows by the bottom edge, from the height it has, no lower than its minimum', () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1000)
+    const state = $state({ maxHeight: 0 })
+    component = mount(DraggableContainer, {
+        target,
+        props: {
+            title: 'History',
+            hidden: false,
+            resizableMaxHeight: true,
+            children: scrollingList,
+            minMaxHeight: 160,
+            get maxHeight() {
+                return state.maxHeight
+            },
+            set maxHeight(value) {
+                state.maxHeight = value
+            }
+        }
+    })
+    flushSync()
+    expect(target.querySelector('.resize-corner')).toBeNull()
+    const body = target.querySelector<HTMLElement>('.draggable-container-content')!
+    //left to the content's own default until dragged
+    expect(body.style.getPropertyValue('--floating-body-max-height')).toBe('')
+    vi.spyOn(body, 'getBoundingClientRect').mockReturnValue(new DOMRect(300, 40, 200, 250))
+    Object.defineProperty(body, 'clientHeight', { configurable: true, value: 250 })
+    const edge = target.querySelector('.resize-edge')!
+
+    //up from the height the body has now
+    drag(edge, [400, 290], [400, 240])
+    expect(state.maxHeight).toBe(200)
+    expect(body.style.getPropertyValue('--floating-body-max-height')).toBe('200px')
+
+    drag(edge, [400, 240], [400, 0])
+    expect(state.maxHeight).toBe(160)
+
+    //down to the viewport's edge, less the gap a drag keeps
+    drag(edge, [400, 200], [400, 5000])
+    expect(state.maxHeight).toBe(700 - 40 - 6)
 })

@@ -71,7 +71,8 @@
     .call-stack-wrapper {
         background-color: var(--primary);
         border-radius: 0.7rem;
-        max-height: 20rem;
+        /* the floating window's bottom edge sets it, when it has been dragged */
+        max-height: var(--floating-body-max-height, 20rem);
         padding: 0.4rem;
         max-width: 12rem;
         overflow-y: auto;

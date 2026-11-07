@@ -53,6 +53,17 @@
          * one here, keeping the edge the corner did not move.
          */
         onResizeEnd?: (corner: 'start' | 'end') => void
+        /**
+         * Whether the most the body shows is set by dragging its bottom edge, for a window as
+         * large as what it shows: `maxHeight`, in pixels, which the edge changes, kept inside the
+         * viewport and no lower than `minMaxHeight`; 0 leaves it to the content's own default.
+         * The body hands it to its content as `--floating-body-max-height`, and the content, which
+         * scrolls what is longer, takes its `max-height` from it; shorter content keeps its height.
+         * The edge shows only while the content scrolls, which is the body's first element.
+         */
+        resizableMaxHeight?: boolean
+        maxHeight?: number
+        minMaxHeight?: number
         children?: import('svelte').Snippet
     }
 
@@ -75,6 +86,9 @@
         minWidth = 160,
         minHeight = 120,
         onResizeEnd,
+        resizableMaxHeight = false,
+        maxHeight = $bindable(0),
+        minMaxHeight = 160,
         children
     }: Props = $props()
 
@@ -135,6 +149,76 @@
         if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId)
         onResizeEnd?.(corner)
     }
+
+    let edgeStartY = 0
+    let edgeStart = 0
+    let edgeMax = 0
+    let draggingEdge = $state(false)
+
+    function onEdgeDown(e: PointerEvent) {
+        if (e.button !== 0 || !content) return
+        e.preventDefault()
+        e.stopPropagation()
+        draggingEdge = true
+        edgeStartY = e.clientY
+        //from the height the body has now, not the most it may have: content shorter than that
+        //shrinks as soon as the edge moves up
+        edgeStart = content.clientHeight || maxHeight
+        const room = window.innerHeight - content.getBoundingClientRect().top
+        edgeMax = Math.max(minMaxHeight, room - EDGE, Math.min(edgeStart, room))
+        ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    }
+
+    function onEdgeMove(e: PointerEvent) {
+        if (!draggingEdge) return
+        const proposed = edgeStart + e.clientY - edgeStartY
+        maxHeight = Math.round(Math.min(edgeMax, Math.max(minMaxHeight, proposed)))
+    }
+
+    function onEdgeUp(e: PointerEvent) {
+        if (!draggingEdge) return
+        draggingEdge = false
+        const target = e.currentTarget as HTMLElement
+        if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId)
+    }
+
+    /**
+     * Whether the content is longer than the body shows, which is when the edge is offered: the
+     * body's size and what is in it change as the program runs, so it is measured again, once a
+     * frame at most, after either does.
+     */
+    let overflowing = $state(false)
+    $effect(() => {
+        if (!resizableMaxHeight || collapsed || !content) return
+        const body = content
+        let frame = 0
+        const measure = () => {
+            frame = 0
+            const scroller = body.firstElementChild
+            overflowing = !!scroller && scroller.scrollHeight > scroller.clientHeight + 1
+        }
+        const schedule = () => {
+            if (!frame) frame = requestAnimationFrame(measure)
+        }
+        const resizes = new ResizeObserver(schedule)
+        const mutations = new MutationObserver(schedule)
+        resizes.observe(body)
+        mutations.observe(body, { childList: true, subtree: true, characterData: true })
+        measure()
+        return () => {
+            resizes.disconnect()
+            mutations.disconnect()
+            cancelAnimationFrame(frame)
+        }
+    })
+
+    const bodyStyle = $derived.by(() => {
+        if (collapsed) return ''
+        if (resizable) return `width: ${width}px; height: ${height}px;`
+        if (resizableMaxHeight && maxHeight > 0)
+            return `--floating-body-max-height: ${Math.max(minMaxHeight, maxHeight)}px;`
+        return ''
+    })
 
     //a window the caller can take away has no collapsed state: its bar goes with its body
     const collapsed = $derived(onClose ? false : hidden)
@@ -226,9 +310,9 @@
     <div
         class="draggable-container-content"
         class:hidden={collapsed}
-        class:resizing={resizing !== null}
+        class:resizing={resizing !== null || draggingEdge}
         class:sized={resizable && !collapsed}
-        style={resizable && !collapsed ? `width: ${width}px; height: ${height}px;` : ''}
+        style={bodyStyle}
         bind:this={content}
     >
         {#if mounted}
@@ -248,6 +332,17 @@
                 onpointercancel={onResizeUp}
             ></div>
         {/each}
+    {:else if resizableMaxHeight && !collapsed && (overflowing || draggingEdge)}
+        <!-- kept while it is dragged, so that a drag lengthening the body past its content does
+             not lose the edge under the pointer -->
+        <div
+            class="resize-edge"
+            aria-hidden="true"
+            onpointerdown={onEdgeDown}
+            onpointermove={onEdgeMove}
+            onpointerup={onEdgeUp}
+            onpointercancel={onEdgeUp}
+        ></div>
     {/if}
 </Draggable>
 
@@ -340,6 +435,38 @@
 
         &:hover {
             opacity: 1;
+        }
+    }
+
+    /* the bottom edge, a strip across the frame a little taller than it, marked by a short pill in
+       its middle, which says the edge can be dragged */
+    .resize-edge {
+        position: absolute;
+        left: 0.8rem;
+        right: 0.8rem;
+        /* centred on the body's 0.1rem bottom border, whose outer edge is the window's bottom */
+        bottom: -0.2rem;
+        height: 0.5rem;
+        cursor: ns-resize;
+        touch-action: none;
+
+        &::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 2rem;
+            height: 0.25rem;
+            border-radius: 0.125rem;
+            transform: translate(-50%, -50%);
+            /* the frame's own colour, a thickening of the border, until the pointer is on it */
+            background-color: var(--accent2);
+            transition: background-color 0.15s;
+        }
+
+        &:hover::after,
+        &:active::after {
+            background-color: var(--secondary-text);
         }
     }
 

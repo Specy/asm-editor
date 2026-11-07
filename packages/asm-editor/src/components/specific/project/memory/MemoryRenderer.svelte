@@ -504,9 +504,17 @@
         {#each memory.current as word, i (currentAddress + BigInt(i))}
             {@const unreadableByte = !!unreadable?.mask[i]}
             {@const signed = unsignedBigIntToSigned(BigInt(word), 1)}
-            {@const frameColor = callStackAddresses.find(
-                (frame) => currentAddress + BigInt(i) >= frame.sp
-            )?.color}
+            {@const written =
+                !unreadableByte && word !== (memory.prevState[i] ?? defaultMemoryValue)}
+            {@const highlighted =
+                written ||
+                currentAddress + BigInt(i) === sp ||
+                inRange(i, selectedAddressesIndexes.start, selectedAddressesIndexes.len)}
+            <!-- a byte's frame colour gives way to a highlight, which brings its own text colour
+                 to read on it: the write's, the stack pointer's, the selection's -->
+            {@const frameColor = highlighted
+                ? undefined
+                : callStackAddresses.find((frame) => currentAddress + BigInt(i) >= frame.sp)?.color}
             <div
                 class="memory-number"
                 class:outlined={!!annotations[i].region}

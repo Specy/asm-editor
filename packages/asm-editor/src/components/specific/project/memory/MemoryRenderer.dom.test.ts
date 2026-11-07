@@ -39,6 +39,9 @@ function render(
         /** A pointer menu, whose calls are recorded with the cell they were given. */
         withMenu?: boolean
         markedAddress?: bigint
+        callStackAddresses?: import('#lib/languages/commonLanguageFeatures.svelte.ts').ColorizedLabel[]
+        /** The bytes before the last step, where they differ from `BYTES`. */
+        prevState?: number[]
     } = {}
 ) {
     const pokes: { address: bigint; bytes: number[] }[] = []
@@ -47,7 +50,7 @@ function render(
     document.body.appendChild(target)
     const memory: DiffedMemory = {
         current: Uint8Array.from(BYTES),
-        prevState: Uint8Array.from(BYTES),
+        prevState: Uint8Array.from(options.prevState ?? BYTES),
         unreadable: options.unreadable
             ? {
                   address: ADDRESS,
@@ -79,7 +82,8 @@ function render(
                       return [{ label: 'Follow pointer', onSelect: () => {} }]
                   }
                 : undefined,
-            markedAddress: options.markedAddress
+            markedAddress: options.markedAddress,
+            callStackAddresses: options.callStackAddresses
         }
     })
     flushSync()
@@ -315,6 +319,30 @@ describe("a byte's cell", () => {
             '66',
             '77'
         ])
+        panel.close()
+    })
+})
+
+describe("a stack frame's bytes", () => {
+    it('take the frame colour, except where a highlight brings its own', () => {
+        const prevState = [...BYTES]
+        prevState[5] = 0
+        const panel = render({
+            callStackAddresses: [{ address: 0n, sp: ADDRESS + 2n, color: 'rgb(1, 2, 3)' }],
+            sp: ADDRESS + 3n,
+            prevState
+        })
+        panel.select(6)
+        const cells = panel.cells()
+        //before the frame
+        expect(cells[1].style.color).toBe('')
+        expect(cells[2].style.color).toBe('rgb(1, 2, 3)')
+        //the stack pointer, the written byte and the selection read in their highlight's colour
+        expect(cells[3].style.color).toBe('var(--accent2-text)')
+        expect(cells[5].classList.contains('modified')).toBe(true)
+        expect(cells[5].style.color).toBe('')
+        expect(cells[6].style.color).toBe('var(--green-text)')
+        expect(cells[7].style.color).toBe('rgb(1, 2, 3)')
         panel.close()
     })
 })
