@@ -129,11 +129,11 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        border-right: 1px solid var(--line);
+        border-right: 1px solid var(--landing-line);
     }
 
     .item {
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--landing-line);
 
         &:last-child {
             border-bottom: none;
@@ -154,7 +154,7 @@
         width: 100%;
         padding: 1.2rem 2.5rem;
         cursor: pointer;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.95rem;
         letter-spacing: 0.02em;
         color: var(--muted);
@@ -239,7 +239,7 @@
     }
 
     p {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.95rem;
         line-height: 1.75;
         letter-spacing: 0.02em;
@@ -253,7 +253,7 @@
         gap: 0.4rem;
         margin-top: 1.2rem;
         color: var(--accent);
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.95rem;
         text-decoration: underline;
         text-underline-offset: 0.25em;
@@ -327,7 +327,7 @@
             object-position: left top;
             margin-top: 1.4rem;
             border-radius: 0.3rem;
-            border: 1px solid var(--line);
+            border: 1px solid var(--landing-line);
         }
     }
 

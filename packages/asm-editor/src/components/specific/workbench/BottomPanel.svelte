@@ -68,7 +68,7 @@
                 {#if !iconTabs}{tab.label}{/if}
                 {#if tab.id === 'problems'}
                     {#if session.analysisSpinnerVisible}
-                        <span class="badge pending" title="Analyzing">
+                        <span class="badge pending keeps-moving" title="Analyzing">
                             <FaSpinner />
                         </span>
                     {:else}
@@ -196,8 +196,8 @@
         min-width: 1.1rem;
         height: 1.1rem;
         padding: 0 0.3rem;
-        border-radius: 999px;
-        font-size: 0.65rem;
+        border-radius: var(--r-pill);
+        font-size: var(--fs-micro);
         font-weight: 700;
         background-color: var(--accent2);
         color: var(--accent2-text);
@@ -208,8 +208,8 @@
         }
 
         &.error {
-            background-color: var(--red);
-            color: var(--red-text);
+            background-color: var(--danger);
+            color: var(--danger-text);
         }
 
         &.warning {

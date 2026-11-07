@@ -6,8 +6,11 @@
         label: string
         title: string
         icon: Component
-        /** A colour that says how the thing it opens went, such as failing Testcases in red. */
-        tone?: 'red' | 'green'
+        /**
+         * A colour that says how the thing it opens went, such as failing Testcases in the danger
+         * colour.
+         */
+        tone?: 'danger' | 'success'
         onClick: () => void
     }
 
@@ -280,7 +283,7 @@
                 >
                     <Icon size={1}>
                         {#if progress}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
                         {:else if building}
                             <FaRegClock />
                         {:else}
@@ -315,7 +318,7 @@
                 >
                     <Icon size={0.9}>
                         {#if compilation.busy}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
                         {:else}
                             <FaCode />
                         {/if}
@@ -488,7 +491,7 @@
                 >
                     <Icon size={0.9}>
                         {#if sound.loading}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
                         {:else if sound.muted}
                             <FaVolumeMute />
                         {:else}
@@ -549,7 +552,6 @@
         /* the tray's colour, which a disabled control sinks into: the code's darker shade where it
            floats over the editor, the cards' own where a layout lays it out among them */
         --tray: var(--execution-tray, var(--primary));
-        --dock-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
     }
 
     /* each end one opaque tray lifted off the code by a shadow, its buttons sunk into it: the one
@@ -560,10 +562,10 @@
         gap: 0.2rem;
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
-        border: 1px solid var(--dock-line);
-        border-radius: 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: var(--r-overlay);
         background-color: var(--tray);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
+        box-shadow: var(--shadow-2);
         pointer-events: auto;
     }
 
@@ -573,7 +575,7 @@
         width: 1px;
         height: 60%;
         margin: 0 0.2rem;
-        background-color: var(--dock-line);
+        background-color: var(--line);
     }
 
     .fill-only {
@@ -598,16 +600,16 @@
         color: var(--accent);
     }
 
-    .red {
-        color: var(--red);
+    .danger {
+        color: var(--danger);
     }
 
     .sound.playing {
         color: var(--accent);
     }
 
-    .green {
-        color: var(--green);
+    .success {
+        color: var(--success);
     }
 
     .primary {
@@ -699,7 +701,7 @@
 
     .optimization,
     .compiler {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         background: var(--tray);
     }
 
@@ -728,10 +730,10 @@
         gap: 0.2rem;
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
-        border: 1px solid var(--dock-line);
-        border-radius: 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: var(--r-overlay);
         background-color: var(--tray);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
+        box-shadow: var(--shadow-2);
         pointer-events: auto;
 
         .toolbar {
@@ -800,7 +802,7 @@
 
     .attached.fill {
         border: none;
-        border-top: 1px solid var(--dock-line);
+        border-top: 1px solid var(--line);
         border-radius: 0;
         backdrop-filter: blur(4px);
         box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);

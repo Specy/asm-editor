@@ -95,7 +95,7 @@
         display: flex;
         flex-direction: column;
         gap: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .intro p {
         margin: 0;
@@ -142,9 +142,9 @@
     }
     .platform p {
         margin: 0;
-        font-size: 1rem;
+        font-size: var(--fs-body);
         line-height: 1.6;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .platform-footer {
         display: flex;

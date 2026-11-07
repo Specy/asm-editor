@@ -41,7 +41,7 @@
             </div>
             <div class="toast-progress">
                 <div
-                    class="toast-progress-bar"
+                    class="toast-progress-bar keeps-moving"
                     style={`
 					animation-duration: ${$toast.duration}ms; 
 					background-color: ${$toast.color};
@@ -152,7 +152,7 @@
     }
     .toast-text {
         padding: 0.6rem 0.75rem 0.7rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         line-height: 1.45;
         display: flex;
         overflow-y: auto;

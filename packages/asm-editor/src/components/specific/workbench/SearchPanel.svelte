@@ -754,7 +754,7 @@
         }
 
         &.invalid {
-            outline: 2px solid color-mix(in srgb, var(--red) 75%, transparent);
+            outline: 2px solid color-mix(in srgb, var(--danger) 75%, transparent);
         }
 
         input {
@@ -789,7 +789,7 @@
         border-radius: 0.3rem;
         background: transparent;
         color: inherit;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.7rem;
         line-height: 1;
         opacity: 0.75;
@@ -840,7 +840,7 @@
     .problem {
         margin: 0;
         padding: 0 0.3rem;
-        color: var(--red);
+        color: var(--danger);
         font-size: 0.72rem;
         line-height: 1.35;
         overflow-wrap: anywhere;
@@ -858,7 +858,7 @@
             min-height: 1.8rem;
             padding: 0.2rem 0.5rem;
             border: none;
-            border-radius: 0.4rem;
+            border-radius: var(--r-control);
             outline: none;
             background-color: var(--tertiary);
             color: var(--tertiary-text);
@@ -926,7 +926,7 @@
         }
 
         &.failed {
-            color: var(--red);
+            color: var(--danger);
         }
     }
 
@@ -978,7 +978,7 @@
 
     .failure-name {
         flex: none;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
 
     .failure-error {
@@ -1003,7 +1003,7 @@
     .note {
         margin: 0;
         padding: 0.3rem 0.8rem;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         line-height: 1.4;
         color: var(--hint);
     }
@@ -1020,7 +1020,7 @@
         }
 
         &.failed {
-            color: var(--red);
+            color: var(--danger);
             opacity: 1;
         }
     }
@@ -1103,7 +1103,7 @@
     .view-tag {
         flex: none;
         padding: 0.02rem 0.3rem;
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         background: color-mix(in srgb, var(--accent) 12%, transparent);
         color: var(--accent);
         font-size: 0.6rem;
@@ -1122,16 +1122,16 @@
         min-width: 1.2rem;
         margin-left: auto;
         padding: 0 0.35rem;
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         background: var(--tertiary);
-        font-size: 0.65rem;
+        font-size: var(--fs-micro);
         font-weight: normal;
         text-align: center;
     }
 
     .function {
         padding-left: 1.2rem;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.72rem;
 
         .function-name {
@@ -1141,7 +1141,7 @@
 
     .row {
         gap: 0.5rem;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.72rem;
 
         &.level-2 {

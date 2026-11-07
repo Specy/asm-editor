@@ -106,11 +106,11 @@
     }
     dt {
         opacity: 0.65;
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
     dd {
         margin-left: auto;
-        font-family: monospace;
+        font-family: var(--font-mono);
         text-align: right;
         overflow-wrap: break-word;
         min-width: 0;

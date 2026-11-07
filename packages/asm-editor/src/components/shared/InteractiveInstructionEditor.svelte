@@ -591,9 +591,9 @@
                           ? FaExclamationTriangle
                           : FaListOl,
                       tone: testcasesResult.some((r) => !r.passed)
-                          ? 'red'
+                          ? 'danger'
                           : testcasesResult.length > 0
-                            ? 'green'
+                            ? 'success'
                             : undefined,
                       onClick: () => (testcasesVisible = !testcasesVisible)
                   },
@@ -1103,7 +1103,7 @@
         min-height: 0;
         background-color: var(--secondary);
         border-radius: var(--wb-radius, 0.4rem);
-        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border: var(--wb-card-edge, 1px solid var(--line));
         overflow: hidden;
     }
 
@@ -1111,7 +1111,7 @@
         display: flex;
         flex: none;
         overflow-x: auto;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--wb-line);
     }
 
     .playground-code {
@@ -1159,7 +1159,7 @@
         z-index: 6;
         content: '';
         inset: 0;
-        border: 0.2rem solid var(--red);
+        border: 0.2rem solid var(--danger);
         pointer-events: none;
         animation: appear 0.3s ease-in;
     }

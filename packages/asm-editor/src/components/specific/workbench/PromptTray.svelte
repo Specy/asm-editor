@@ -158,7 +158,7 @@
     /* apart from Cancel and the button that goes on, at the row's start */
     .delete {
         margin-right: auto;
-        color: var(--red);
+        color: var(--danger);
     }
 
     .primary {

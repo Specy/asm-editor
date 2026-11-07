@@ -20,7 +20,7 @@
 
 <style lang="scss">
     .menu-title {
-        font-size: 1rem;
+        font-size: var(--fs-body);
         font-weight: normal;
     }
     .menu-link {

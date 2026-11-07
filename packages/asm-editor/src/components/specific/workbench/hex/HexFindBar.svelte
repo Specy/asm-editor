@@ -182,14 +182,14 @@
         border-radius: 0.25rem;
         background: var(--primary);
         color: var(--primary-text);
-        font-family: monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
 
         &:focus {
             border-color: var(--accent);
         }
         &.failed {
-            border-color: var(--red);
+            border-color: var(--danger);
         }
     }
     .message {
@@ -202,7 +202,7 @@
         opacity: 0.8;
 
         &.failed {
-            color: var(--red);
+            color: var(--danger);
             opacity: 1;
         }
     }

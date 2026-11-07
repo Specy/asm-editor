@@ -1093,7 +1093,7 @@
         background-color: var(--secondary);
         color: var(--secondary-text);
         padding: 0.8rem;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         resize: vertical;
     }
 
@@ -1139,7 +1139,7 @@
         position: relative;
         border-radius: 0.5rem;
         overflow: hidden;
-        border: solid 0.1rem var(--border-color-dark);
+        border: solid 0.1rem var(--line);
     }
 
     @media (max-width: 840px) {

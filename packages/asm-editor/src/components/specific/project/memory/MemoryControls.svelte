@@ -498,10 +498,7 @@
 
 <style lang="scss">
     .memory-controls-layout {
-        --memory-control-border: var(
-            --wb-line,
-            color-mix(in srgb, var(--tertiary) 60%, transparent)
-        );
+        --memory-control-border: var(--line);
         container: memory-controls / inline-size;
         flex: 1;
         width: 100%;
@@ -537,7 +534,7 @@
     .destination small {
         margin-left: auto;
         opacity: 0.7;
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
     .data-label {
         padding-left: 1.3rem;
@@ -580,7 +577,7 @@
         & > :global(svg) {
             position: relative;
             left: calc((var(--reach-right) - var(--reach-left)) / 2);
-            transition: transform 120ms ease;
+            transition: transform var(--dur-fast) ease;
         }
         &.expanded > :global(svg) {
             transform: rotate(90deg);
@@ -610,7 +607,7 @@
         white-space: nowrap;
     }
     .address-error {
-        color: var(--red);
+        color: var(--danger);
         font-size: 0.8rem;
     }
     .address-caption {
@@ -632,7 +629,7 @@
         min-width: 0;
         display: flex;
         border: 1px solid var(--memory-control-border);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         /* the text has as much room on its right as above and below it, the input's own 0.3rem
            included */
         padding: 0.2rem 0.2rem 0.2rem 0.6rem;
@@ -649,8 +646,8 @@
     .hex-address-input,
     .address-completion {
         padding: 0.3rem 0.3rem 0.3rem 0;
-        font-size: 1rem;
-        font-family: monospace;
+        font-size: var(--fs-body);
+        font-family: var(--font-mono);
     }
     .address-completion {
         position: absolute;

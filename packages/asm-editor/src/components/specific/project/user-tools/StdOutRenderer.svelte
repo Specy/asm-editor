@@ -79,8 +79,8 @@
         position: absolute;
         z-index: 1;
         display: flex;
-        background-color: var(--red);
-        color: var(--red-text);
+        background-color: var(--danger);
+        color: var(--danger-text);
         padding: 0.2rem;
         right: 0.4rem;
         border-radius: 0.2rem;
@@ -101,7 +101,7 @@
         min-height: 4rem;
         max-height: 6.5rem;
         position: relative;
-        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border: var(--wb-card-edge, 1px solid var(--line));
         border-radius: var(--wb-radius, 0.4rem);
         overflow: hidden;
         display: flex;

@@ -5,16 +5,17 @@
 // tray sits, sizes and pads itself.
 
 // A tray floating over what is beneath, which it blurs through a tint holding `$tint` of
-// `--primary`. `--tray-line`, its hairline edge's colour, is for what inside is ruled the same.
+// `--primary`. `--tray-line`, its hairline edge's colour, is for what inside is ruled the same: the
+// design system's `--line`, under the trays' older name.
 @mixin surface($tint: 80%) {
-    --tray-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
+    --tray-line: var(--line);
     color: var(--primary-text);
     border: 1px solid var(--tray-line);
-    border-radius: 0.6rem;
+    border-radius: var(--r-overlay);
     background-color: color-mix(in srgb, var(--primary) #{$tint}, transparent);
     backdrop-filter: blur(4px);
-    box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
-    font-family: Rubik;
+    box-shadow: var(--shadow-2);
+    font-family: var(--font-ui);
 }
 
 // A button in a tray's row, as tall as the row: its label, tinted on hover.
@@ -28,7 +29,7 @@
     border-radius: 0.4rem;
     background-color: transparent;
     color: var(--primary-text);
-    font-family: Rubik;
+    font-family: var(--font-ui);
     font-size: $font-size;
     font-weight: 500;
     white-space: nowrap;

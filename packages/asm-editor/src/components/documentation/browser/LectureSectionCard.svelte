@@ -77,7 +77,7 @@
         outline-offset: -2px;
     }
     .where {
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--accent);
         overflow: hidden;
         text-overflow: ellipsis;
@@ -87,8 +87,8 @@
         font-weight: 600;
     }
     .excerpt {
-        font-size: 0.85rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
         display: -webkit-box;
         -webkit-line-clamp: 3;
         line-clamp: 3;
@@ -123,7 +123,7 @@
         align-items: center;
         gap: 0.4rem;
         align-self: flex-start;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         color: var(--accent);
         text-decoration: underline;
     }

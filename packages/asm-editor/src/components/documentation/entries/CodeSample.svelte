@@ -64,7 +64,7 @@
     }
     figcaption {
         font-size: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .fill {
         flex: 1;

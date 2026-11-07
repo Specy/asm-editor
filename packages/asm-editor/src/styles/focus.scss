@@ -1,0 +1,12 @@
+// The keyboard's focus ring of `global.css`, for a component that has to draw it itself, such as
+// a control clipped by its container's edge (`$inset: true` draws it inside its own edge).
+@mixin focus-ring($inset: false) {
+    &:focus-visible {
+        outline: 2px solid var(--accent);
+        @if $inset {
+            outline-offset: -2px;
+        } @else {
+            outline-offset: 2px;
+        }
+    }
+}

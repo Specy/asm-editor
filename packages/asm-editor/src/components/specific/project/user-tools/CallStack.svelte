@@ -126,7 +126,7 @@
         align-items: center;
         background-color: transparent;
         color: var(--primary-text);
-        font-family: Rubik;
+        font-family: var(--font-ui);
         font-size: 0.9rem;
         border-radius: 0.3rem;
         cursor: pointer;

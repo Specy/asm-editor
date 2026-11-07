@@ -476,7 +476,7 @@
             </Button>
             {#if selectedAddressesIndexes.start !== -1}
                 <Button
-                    cssVar="green"
+                    cssVar="success"
                     style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
                     onClick={clearSelection}
                 >
@@ -613,7 +613,7 @@
                                                 selectedAddressesIndexes.start,
                                                 selectedAddressesIndexes.len
                                             )
-                                                ? 'background-color: var(--green); color: var(--green-text);'
+                                                ? 'background-color: var(--success); color: var(--success-text);'
                                                 : ''
                                         }
                     ${frameColor ? `color: ${frameColor}` : ''}
@@ -762,7 +762,7 @@
     //the input the selection popup becomes while it is being poked, in the panel's own monospace
     //so the digits sit where the popup drew them
     .selection-input {
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: inherit;
         text-align: center;
         align-self: center;
@@ -780,7 +780,7 @@
 
     //a commit that does not fit the selection: the input keeps what was typed and says why
     .refused {
-        outline-color: var(--red);
+        outline-color: var(--danger);
     }
 
     .memory-grid {
@@ -789,8 +789,8 @@
         //Keep the table around its cells so a smaller host scrolls the whole table.
         min-width: min-content;
         min-height: min-content;
-        font-family: monospace;
-        font-size: 1rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-body);
         grid-template-columns: min-content;
         grid-template-rows: min-content;
         grid-template-areas:
@@ -838,20 +838,20 @@
         width: fit-content;
         margin: 0 auto;
         padding: 0.45rem 0.6rem;
-        border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+        border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
         border-radius: 0.4rem;
         background: color-mix(in srgb, var(--tertiary) 65%, transparent);
         backdrop-filter: blur(6px);
         box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25);
-        font-family: sans-serif;
-        font-size: 0.85rem;
+        font-family: var(--font-ui);
+        font-size: var(--fs-small);
         color: var(--tertiary-text);
         overflow-wrap: anywhere;
         pointer-events: none;
         transition: opacity 0.15s;
 
         :global(svg) {
-            color: var(--red);
+            color: var(--danger);
             flex-shrink: 0;
             margin-top: 0.1rem;
         }
@@ -891,7 +891,7 @@
     }
 
     .memory-grid-address {
-        font-family: monospace;
+        font-family: var(--font-mono);
         padding: 0 0.5rem;
         display: flex;
         align-items: center;

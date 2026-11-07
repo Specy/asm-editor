@@ -263,14 +263,14 @@
     .template-option-description {
         display: block;
         overflow: hidden;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         text-overflow: ellipsis;
         white-space: nowrap;
         opacity: 0.75;
     }
 
     .template-description {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         opacity: 0.8;
     }
 </style>

@@ -145,7 +145,7 @@
         justify-content: center;
         width: 2rem;
         height: 2rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         cursor: pointer;
@@ -165,26 +165,26 @@
         min-width: 0;
         max-width: 16rem;
         padding: 0.6rem 0.8rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--tertiary);
         color: var(--tertiary-text);
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
 
         &.invalid {
-            outline: 1px solid var(--red);
+            outline: 1px solid var(--danger);
         }
     }
     .problem {
         flex-basis: 100%;
         margin: 0;
-        font-size: 0.75rem;
-        color: var(--red);
+        font-size: var(--fs-caption);
+        color: var(--danger);
         text-align: right;
     }
     .number {
         padding: 0.6rem 1rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         width: 7rem;
         background-color: var(--tertiary);
         color: var(--tertiary-text);

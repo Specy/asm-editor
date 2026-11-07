@@ -217,7 +217,7 @@
     }
 
     :global(._markdown p) {
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
 
     /* a link reads as one, as the Documentation's entries and the Markdown preview mark theirs:
@@ -232,7 +232,7 @@
         overflow-x: auto;
         display: block;
         margin: 0.5rem var(--md-inline-margin, auto);
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         border-radius: 0.5rem;
         border: solid 0.1rem var(--tertiary);
         width: fit-content;
@@ -240,7 +240,7 @@
     }
 
     :global(._markdown code:not(pre code)) {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         background: var(--secondary);
         padding: 0.2rem 0.4rem;
         border-radius: 0.3rem;
@@ -315,7 +315,7 @@
     :global(._markdown ul),
     :global(._markdown ol) {
         line-height: 1.5;
-        font-family: 'Noto Serif', Rubik, sans-serif;
+        font-family: var(--font-read);
         font-weight: 500;
         width: min(100%, var(--md-text-width));
         margin: 0 var(--md-inline-margin, auto);

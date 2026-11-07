@@ -186,7 +186,7 @@
             margin: 0 -1px;
             border: var(--outline-edge);
             border-radius: 0.5rem 0.5rem 0 0;
-            box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+            box-shadow: var(--shadow-1);
         }
 
         &.collapsed .section-header {
@@ -243,7 +243,7 @@
         background: transparent;
         color: inherit;
         font-weight: bold;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         text-align: left;
         cursor: pointer;
 

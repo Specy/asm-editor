@@ -98,7 +98,7 @@
     }
 
     .monospaced {
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     .tooltip-base:hover {

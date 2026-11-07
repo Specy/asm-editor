@@ -209,7 +209,7 @@
         border: none;
         border-radius: 0.3rem;
         background: transparent;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         cursor: pointer;
     }
     .toggle:focus-visible {
@@ -226,7 +226,7 @@
     }
     .syntax {
         min-width: 0;
-        font-family: var(--example-font-family, 'Fira Code', monospace);
+        font-family: var(--example-font-family, var(--font-mono));
         font-size: var(--example-font-size, 1rem);
         line-height: var(--example-line-height, 1.4);
         font-variant-ligatures: none;
@@ -260,8 +260,8 @@
     .chip {
         padding: 0 0.35rem;
         border-radius: 0.3rem;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.75rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-caption);
         line-height: 1.5;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
@@ -275,8 +275,8 @@
         align-items: baseline;
         gap: 0.1rem 0.4rem;
         margin-left: auto;
-        font-size: 0.85rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
     }
     /* In the narrow panel the fact line sits under the syntax, past the toggle */
     .compact .pattern-facts {
@@ -289,8 +289,8 @@
     }
     .row-note {
         margin: -0.15rem 0.8rem 0.35rem 2.3rem;
-        font-size: 0.85rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
     }
     .body {
         display: flex;
@@ -309,7 +309,7 @@
         align-items: baseline;
         gap: 0.35rem 0.6rem;
         padding: 0.2rem 0;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
     .detail-label {
         min-width: 11rem;
@@ -317,7 +317,7 @@
     }
     .detail-name {
         margin-left: 0.3em;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .modes {
         display: flex;
@@ -326,8 +326,8 @@
     }
     .mode {
         padding: 0.1rem 0.4rem;
-        border-radius: 0.25rem;
-        font-family: 'Fira Code', monospace;
+        border-radius: var(--r-chip);
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         font-variant-ligatures: none;
         background-color: var(--tertiary);
@@ -391,7 +391,7 @@
         max-width: 80ch;
         margin: 0;
         font-size: 0.82rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .form-facts {
         margin-left: 0.5rem;
@@ -401,7 +401,7 @@
         width: 0.75rem;
         height: 0.75rem;
         margin-top: 0.45rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .expansion {
         flex: 0 1 auto;

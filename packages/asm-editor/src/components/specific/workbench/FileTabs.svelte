@@ -242,7 +242,7 @@
         color: color-mix(in srgb, var(--secondary-text) 70%, transparent);
         background: color-mix(in srgb, var(--secondary-text) 6%, transparent);
         border: 1px solid color-mix(in srgb, var(--secondary-text) 30%, transparent);
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         font-size: 0.5rem;
         font-weight: 700;
         line-height: 0.8rem;
@@ -261,7 +261,7 @@
         align-items: center;
         flex: none;
         padding: 0 0.8rem;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
     }
 </style>

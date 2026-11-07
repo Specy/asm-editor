@@ -1231,8 +1231,8 @@
     }
 
     :global(.error-line) {
-        background-color: var(--red);
-        color: var(--red-text);
+        background-color: var(--danger);
+        color: var(--danger-text);
     }
 
     :global(.selected-line-text) {
@@ -1251,7 +1251,7 @@
             transparent
         ) !important;
         backdrop-filter: blur(4px);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35) !important;
+        box-shadow: var(--shadow-3) !important;
         top: 1rem !important;
         right: 2.4rem !important;
     }
@@ -1314,7 +1314,7 @@
         overflow-x: auto;
         display: block;
         margin: 0.5rem 0;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         border-radius: 0.5rem;
         border: solid 0.1rem var(--primary);
         width: fit-content;
@@ -1421,7 +1421,7 @@
 
     //what runs when it is not what the line shows, after the line's text
     :global(.line-note) {
-        color: var(--warning, #d49a30);
+        color: var(--warning);
         font-style: italic;
     }
 
@@ -1430,10 +1430,10 @@
     :global(.patched-line-marker) {
         width: 3px !important;
         margin-left: 3px;
-        background-color: var(--warning, #d49a30);
+        background-color: var(--warning);
     }
     :global(.patched-line) {
-        background-color: color-mix(in srgb, var(--warning, #d49a30) 12%, transparent);
+        background-color: color-mix(in srgb, var(--warning) 12%, transparent);
     }
 
     :global(.selected-line-number) {
@@ -1441,7 +1441,7 @@
     }
 
     :global(.error-line-number) {
-        color: var(--red-text) !important;
+        color: var(--danger-text) !important;
     }
 
     //A breakpoint on the highlighted line would vanish into the same accent color.

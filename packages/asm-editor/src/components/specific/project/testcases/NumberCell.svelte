@@ -105,7 +105,7 @@
         width: 100%;
         height: 100%;
         padding: 0.45rem 0.7rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         background-color: transparent;
         color: var(--secondary-text);
         text-overflow: ellipsis;

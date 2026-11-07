@@ -93,12 +93,17 @@
         align-items: center;
         max-width: 100%;
         border: 1px solid var(--tc-line);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--tc-field);
         transition: border-color 0.15s;
 
         &:focus-within {
             border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+        }
+
+        /* the cell's edge shows the focus, in place of the app's ring */
+        :focus-visible {
+            outline: none;
         }
     }
 
@@ -119,7 +124,7 @@
         max-width: 100%;
         //the 1.1rem a box's width adds to its characters
         padding: 0.4rem 0.55rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         background-color: transparent;
         color: var(--secondary-text);
         white-space: pre;
@@ -140,7 +145,7 @@
     .add {
         padding: 0.4rem 0.75rem;
         border: 1px dashed var(--tc-line);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         font-family: Rubik, sans-serif;
         font-size: 0.82rem;
         color: var(--hint);

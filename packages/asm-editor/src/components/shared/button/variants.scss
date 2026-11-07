@@ -32,7 +32,7 @@
         }
 
         &.bordered {
-            border-color: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
+            border-color: var(--line);
         }
 
         &:focus-visible {

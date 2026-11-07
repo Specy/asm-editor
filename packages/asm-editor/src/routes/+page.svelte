@@ -769,8 +769,10 @@
 <style lang="scss">
     .landing {
         --inner: min(100% - 2rem, 76rem);
-        --line: color-mix(in srgb, var(--background-text) 11%, transparent);
-        --line-strong: color-mix(in srgb, var(--background-text) 20%, transparent);
+        /* the home page's own hairlines, named apart from the shared --line until the page moves
+           onto it (design-system-plan.md, stage 4) */
+        --landing-line: color-mix(in srgb, var(--background-text) 11%, transparent);
+        --landing-line-strong: color-mix(in srgb, var(--background-text) 20%, transparent);
         --muted: color-mix(in srgb, var(--background-text) 68%, transparent);
         --serif: 'Noto Serif', Georgia, serif;
         --mono: 'Fira Code', monospace;
@@ -802,7 +804,7 @@
         position: relative;
         width: var(--inner);
         margin: 0 auto;
-        border-inline: 1px solid var(--line);
+        border-inline: 1px solid var(--landing-line);
     }
 
     /* a divider across the page, a dot where it crosses the frame; the dots sit in a box laid out
@@ -812,7 +814,7 @@
         position: relative;
         z-index: 3;
         height: 1px;
-        background: var(--line);
+        background: var(--landing-line);
     }
 
     .rule-frame {
@@ -908,7 +910,7 @@
     /* the instruction sets as one bar, a coloured square on each */
     .isas {
         display: flex;
-        border: 1px solid var(--line-strong);
+        border: 1px solid var(--landing-line-strong);
         border-radius: 0.4rem;
         background: color-mix(in srgb, var(--background) 60%, transparent);
         backdrop-filter: blur(8px);
@@ -948,7 +950,7 @@
         }
 
         button + button {
-            border-left: 1px solid var(--line-strong);
+            border-left: 1px solid var(--landing-line-strong);
         }
     }
 
@@ -990,7 +992,7 @@
 
     .lede {
         font-family: var(--mono);
-        font-size: 1rem;
+        font-size: var(--fs-body);
         line-height: 1.7;
         letter-spacing: 0.02em;
         color: color-mix(in srgb, var(--background-text) 82%, transparent);
@@ -1096,7 +1098,7 @@
     .browser {
         --chrome: color-mix(in srgb, var(--background) 55%, var(--tertiary));
         border-radius: 0.6rem;
-        border: 1px solid var(--line-strong);
+        border: 1px solid var(--landing-line-strong);
         background: var(--chrome);
         box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.45);
         overflow: hidden;
@@ -1203,7 +1205,7 @@
             height: 1.1rem;
             width: 1px;
             transform: translateY(-50%);
-            background: var(--line-strong);
+            background: var(--landing-line-strong);
         }
 
         &.active::after,
@@ -1261,7 +1263,7 @@
         padding: 0 0.6rem;
         background: var(--secondary);
         color: var(--secondary-text);
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--landing-line);
     }
 
     .browser-nav {
@@ -1321,7 +1323,7 @@
         }
 
         &:hover {
-            box-shadow: inset 0 0 0 1px var(--line-strong);
+            box-shadow: inset 0 0 0 1px var(--landing-line-strong);
         }
 
         &:focus-visible {
@@ -1389,8 +1391,8 @@
         border-radius: 0.4rem;
         background: var(--secondary);
         color: var(--secondary-text);
-        border: 1px solid var(--line-strong);
-        font-size: 1rem;
+        border: 1px solid var(--landing-line-strong);
+        font-size: var(--fs-body);
         box-shadow: 0 0.6rem 1.6rem rgb(0 0 0 / 0.45);
         opacity: 0;
         transform: translateY(0.3rem);
@@ -1434,7 +1436,7 @@
         }
 
         p {
-            font-size: 1rem;
+            font-size: var(--fs-body);
             max-width: 36rem;
         }
     }
@@ -1488,7 +1490,7 @@
     .tiles {
         display: grid;
         gap: 1px;
-        background: var(--line);
+        background: var(--landing-line);
     }
 
     .targets {
@@ -1533,7 +1535,7 @@
 
         p {
             flex: 1;
-            font-size: 0.85rem;
+            font-size: var(--fs-small);
         }
     }
 
@@ -1560,7 +1562,7 @@
             align-items: center;
             gap: 0.4rem;
             font-family: var(--mono);
-            font-size: 0.85rem;
+            font-size: var(--fs-small);
             /* the tile's colour, pulled towards the text so it reads on light and dark themes */
             color: color-mix(in srgb, var(--tile) 70%, var(--background-text));
 
@@ -1610,7 +1612,7 @@
     }
 
     .shot {
-        border: 1px dashed var(--line-strong);
+        border: 1px dashed var(--landing-line-strong);
         border-radius: 0.2rem;
     }
 
@@ -1714,7 +1716,7 @@
     }
 
     .tile-text {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
 
     .agents {
@@ -1771,7 +1773,7 @@
 
     .divider {
         width: 4rem;
-        border-top: 1px solid var(--line-strong);
+        border-top: 1px solid var(--landing-line-strong);
         margin: 0.4rem 0;
     }
 
@@ -1871,7 +1873,7 @@
         }
 
         .tile span {
-            font-size: 1rem;
+            font-size: var(--fs-body);
         }
 
         .tile-link {

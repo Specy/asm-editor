@@ -95,7 +95,7 @@
             margin-right: 0.5rem;
         }
         > div {
-            font-size: 1rem;
+            font-size: var(--fs-body);
         }
     }
     a {
@@ -136,7 +136,7 @@
         inset: 0;
         overflow: hidden;
         white-space: pre;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 1.05rem;
         line-height: 1.3;
         letter-spacing: 0.08em;

@@ -473,7 +473,7 @@
         flex-direction: column;
         gap: 0.22rem;
         padding: 0.4rem 0.2rem;
-        font-size: 1rem;
+        font-size: var(--fs-body);
         @media screen and (max-width: 1000px) {
             width: unset;
         }
@@ -510,7 +510,7 @@
     //the panel already have. The column is sized by what it holds, so a wider tab would move the
     //memory panel beside it every time it was picked
     .wide {
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
 
         .register-hex {
             display: grid;
@@ -527,8 +527,8 @@
         position: absolute;
         cursor: text;
         user-select: all;
-        font-family: monospace;
-        font-size: 1rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-body);
         box-shadow: rgba(0, 0, 0, 0.4) 0px 0px 6px;
         left: 100%;
         z-index: 3;
@@ -565,7 +565,7 @@
         justify-content: center;
         //Rubik's capitals sit a little above the middle of their line
         padding: 0.25rem 0.2rem 0.15rem;
-        font-family: Rubik;
+        font-family: var(--font-ui);
         border-radius: 0.2rem;
         border: none;
         min-width: 1.6rem;
@@ -628,7 +628,7 @@
     //the input the chunk becomes while it is being poked, drawn in the row's own monospace so the
     //digits stay where they were
     .chunk-input {
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: inherit;
         text-align: center;
         //the box the read-only cell has, digit for digit: `box-sizing: border-box` is global, so
@@ -650,7 +650,7 @@
 
     //a commit the helper refused: the input keeps what was typed and says why in its title
     .refused {
-        outline-color: var(--red);
+        outline-color: var(--danger);
     }
 
     .blank-register {
@@ -659,6 +659,6 @@
         justify-content: center;
         flex: 1;
         opacity: 0.4;
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 </style>

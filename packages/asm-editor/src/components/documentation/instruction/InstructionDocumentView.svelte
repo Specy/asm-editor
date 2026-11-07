@@ -343,7 +343,7 @@
         margin: 0;
         min-width: 0;
         font-size: 1.3rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         opacity: 0.85;
     }
     .panel .identity {
@@ -366,7 +366,7 @@
         max-width: 80ch;
         margin: 0;
         font-size: 0.9rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     /* its own spaces, which Svelte would trim from the span's text */
     .fact-dot {
@@ -430,13 +430,13 @@
     .count {
         font-size: 0.8rem;
         font-weight: normal;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .explanation {
         margin: 0;
         max-width: 80ch;
         font-size: 0.88rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     /* Boxes are drawn with rules, not fills: the box's edge, a rule under its note and one
        between its rows, so a row and its opened forms read apart without a block of colour. */
@@ -457,7 +457,7 @@
         padding: 0.45rem 0.8rem;
         border-bottom: 1px solid var(--doc-rule);
         font-size: 0.9rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .panel .note {
         padding: 0.35rem 0.5rem;
@@ -480,7 +480,7 @@
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         font: inherit;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         cursor: pointer;
     }
     .show-all:hover {

@@ -85,7 +85,7 @@
         overflow-y: hidden;
         padding: 0.2rem 0.8rem;
         border-bottom: 1px solid var(--wb-line, color-mix(in srgb, var(--hint) 30%, transparent));
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     .line {
@@ -130,7 +130,7 @@
         }
 
         &.invalid {
-            border-bottom: 1px solid var(--red);
+            border-bottom: 1px solid var(--danger);
         }
     }
 
@@ -142,6 +142,6 @@
     .problem {
         font-family: Rubik, sans-serif;
         font-size: 0.78em;
-        color: var(--red);
+        color: var(--danger);
     }
 </style>

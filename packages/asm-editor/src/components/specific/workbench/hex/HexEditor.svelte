@@ -1061,7 +1061,6 @@
 <style lang="scss">
     .hex-editor {
         --cell-pad-x: 0.25rem;
-        --hex-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
         --hex-gutter: color-mix(in srgb, var(--tertiary) 45%, var(--secondary));
         /* the execution dock's tray and the gap under it, which the bytes scroll clear of */
         --dock-room: 0px;
@@ -1079,7 +1078,7 @@
     }
     .hex-notice {
         padding: 0.45rem 0.75rem;
-        border-bottom: 1px solid var(--hex-line);
+        border-bottom: 1px solid var(--line);
         background: color-mix(in srgb, var(--accent2, var(--accent)) 10%, var(--secondary));
         font-size: 0.8rem;
         overflow-wrap: anywhere;
@@ -1116,11 +1115,16 @@
         min-width: 0;
         overflow: auto;
         overscroll-behavior: contain;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.875rem;
         user-select: none;
     }
-    /* the keyboard reached the bytes: a ring round them, over the header and the offsets */
+    /* the keyboard reached the bytes: a ring round them, over the header and the offsets, in place
+       of the app's ring on the scroller itself */
+    .hex-scroller:focus-visible {
+        outline: none;
+    }
+
     .hex-area:has(.hex-scroller:focus-visible)::after {
         content: '';
         position: absolute;
@@ -1153,7 +1157,7 @@
         position: sticky;
         top: 0;
         z-index: 2;
-        border-bottom: 1px solid var(--hex-line);
+        border-bottom: 1px solid var(--line);
         background: var(--hex-gutter);
         color: color-mix(in srgb, var(--secondary-text) 60%, transparent);
     }
@@ -1174,7 +1178,7 @@
 
         .label {
             font-family: Rubik, sans-serif;
-            font-size: 0.75rem;
+            font-size: var(--fs-caption);
         }
     }
     .hex-bytes {
@@ -1184,7 +1188,7 @@
     .hex-text {
         display: flex;
         padding: 0 0.5rem;
-        border-left: 1px solid var(--hex-line);
+        border-left: 1px solid var(--line);
     }
     .hex-cell,
     .text-cell {
@@ -1248,8 +1252,8 @@
     }
     .selected,
     .hex-row:not(.hex-header) .selected:hover {
-        background: var(--green);
-        color: var(--green-text);
+        background: var(--success);
+        color: var(--success-text);
     }
     /* the caret: a frame round its byte, its digit filled, solid while the bytes have the keyboard */
     .caret {
@@ -1282,7 +1286,7 @@
         left: 0.6rem;
         padding: 0.5rem 0;
         font-family: Rubik, sans-serif;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         opacity: 0.7;
     }
     /* what a phone's keyboard types into, under the caret so the page does not jump to it */
@@ -1307,7 +1311,7 @@
         background: var(--tertiary);
         color: var(--tertiary-text);
         box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         overflow-wrap: anywhere;
         pointer-events: none;
@@ -1316,7 +1320,7 @@
         position: absolute;
         visibility: hidden;
         pointer-events: none;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.875rem;
         white-space: pre;
 

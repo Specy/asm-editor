@@ -166,7 +166,7 @@
         font-weight: 700;
         line-height: 1;
         letter-spacing: -0.02em;
-        color: var(--red);
+        color: var(--danger);
     }
     .compact .code {
         margin-bottom: 1rem;
@@ -189,7 +189,7 @@
         overflow-wrap: anywhere;
     }
     .compact .description {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
     .actions {
         display: flex;
@@ -203,7 +203,7 @@
     }
     .error-state.compact .actions > :global(.btn) {
         padding: 0.35rem 0.7rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
     /* a Workbench card (workbench.css): the error under a header band a shade lighter */
     .error-card {
@@ -221,7 +221,7 @@
         justify-content: space-between;
         min-height: 2rem;
         padding: 0 0.3rem 0 0.7rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         font-weight: 600;
         background: var(--wb-section-header);
         border-bottom: 1px solid var(--wb-line);
@@ -255,8 +255,8 @@
         max-height: 10rem;
         overflow: auto;
         padding: 0.7rem;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         line-height: 1.5;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
@@ -265,7 +265,7 @@
     }
     .compact .error-message {
         max-height: 6rem;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
     }
     .report {
         margin: 0;
@@ -299,7 +299,7 @@
             font-size: 1.25rem;
         }
         .compact .title {
-            font-size: 1rem;
+            font-size: var(--fs-body);
         }
         .actions > :global(*) {
             flex: 1;

@@ -341,7 +341,7 @@ describe("a stack frame's bytes", () => {
         expect(cells[3].style.color).toBe('var(--accent2-text)')
         expect(cells[5].classList.contains('modified')).toBe(true)
         expect(cells[5].style.color).toBe('')
-        expect(cells[6].style.color).toBe('var(--green-text)')
+        expect(cells[6].style.color).toBe('var(--success-text)')
         expect(cells[7].style.color).toBe('rgb(1, 2, 3)')
         panel.close()
     })
@@ -432,7 +432,7 @@ it('tints device overlaps, preserves SP and selection highlights, and hovers bot
             'Bitmap display · .data · Game::score (_ZN4Game5scoreE) (library)'
         )
         ui.select(0)
-        expect(ui.cells()[0].getAttribute('style')).toContain('background-color: var(--green)')
+        expect(ui.cells()[0].getAttribute('style')).toContain('background-color: var(--success)')
         expect(outline(0)).toContain(deviceOutline)
     } finally {
         ui.close()

@@ -208,7 +208,7 @@
 </svelte:head>
 
 <DefaultNavbar />
-<Page contentStyle="padding-top: 3.5rem;">
+<Page hasNavbar contentStyle="padding: 1rem;">
     <div class="exam-builder">
         <section class="settings-card">
             <div class="settings-grid">

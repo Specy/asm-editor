@@ -103,10 +103,10 @@
         --tc-form: color-mix(in srgb, var(--secondary) 70%, var(--tertiary));
         --tc-hover: color-mix(in srgb, var(--tertiary) 35%, transparent);
         //the theme's green brightened as the Log brightens its marks, where the browser can
-        --tc-pass: color-mix(in srgb, var(--green), white 40%);
-        --tc-pass: rgb(from var(--green) calc(r * 1.6) calc(g * 1.6) calc(b * 1.6));
-        --tc-fail: var(--red);
-        --tc-fail-bg: color-mix(in srgb, var(--red) 15%, transparent);
+        --tc-pass: color-mix(in srgb, var(--success), white 40%);
+        --tc-pass: rgb(from var(--success) calc(r * 1.6) calc(g * 1.6) calc(b * 1.6));
+        --tc-fail: var(--danger);
+        --tc-fail-bg: color-mix(in srgb, var(--danger) 15%, transparent);
         --tc-start: color-mix(in srgb, var(--accent2) 40%, #7ab8f5);
         --tc-expect: var(--accent);
         --tc-string: color-mix(in srgb, #e5c07b 85%, var(--secondary-text));
@@ -132,7 +132,7 @@
         margin: 0.8rem 1rem;
         padding: 0.55rem 1rem;
         border: 1px solid var(--accent);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         text-align: center;
         font-family: Rubik, sans-serif;
         font-size: 0.9rem;

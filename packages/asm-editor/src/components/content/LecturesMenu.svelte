@@ -53,7 +53,7 @@
     .lecture-link-inner {
         opacity: 0.9;
         transition: transform 0.1s;
-        font-size: 1rem;
+        font-size: var(--fs-body);
     }
     a:hover > .lecture-link-inner {
         transform: translateX(0.2rem);

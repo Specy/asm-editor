@@ -744,7 +744,7 @@
         gap: 0.4rem;
         height: 1.8rem;
         padding: 0 0.5rem 0 0.8rem;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         background: color-mix(in srgb, var(--tertiary) 42%, transparent);
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
@@ -765,7 +765,7 @@
         color: var(--accent);
         background: color-mix(in srgb, var(--accent) 12%, transparent);
         border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         font-size: 0.48rem;
         font-weight: 700;
         line-height: 0.72rem;
@@ -873,7 +873,7 @@
         border: 0;
         color: inherit;
         background: transparent;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.72rem;
         text-align: left;
         cursor: pointer;

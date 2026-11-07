@@ -4,7 +4,7 @@
 // sets on its root.
 
 @mixin mono {
-    font-family: 'Fira Code', monospace;
+    font-family: var(--font-mono);
 }
 
 @mixin frame {
@@ -17,7 +17,7 @@
 @mixin head {
     background-color: var(--tc-head);
     color: var(--hint);
-    font-size: 0.75rem;
+    font-size: var(--fs-caption);
     font-weight: 400;
     text-align: left;
 }
@@ -25,7 +25,7 @@
 @mixin field {
     width: 100%;
     padding: 0.45rem 0.7rem;
-    border-radius: 0.4rem;
+    border-radius: var(--r-control);
     border: 1px solid var(--tc-line);
     background-color: var(--tc-field);
     color: var(--secondary-text);

@@ -269,7 +269,7 @@
         table-layout: fixed;
         border-collapse: separate;
         border-spacing: 0;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
 
     .name-column {
@@ -318,7 +318,7 @@
             padding: 0.45rem 0.8rem 0.45rem 0;
             appearance: none;
             font-weight: 600;
-            font-size: 0.85rem;
+            font-size: var(--fs-small);
             background-color: transparent;
             color: var(--secondary-text);
             cursor: pointer;

@@ -78,9 +78,9 @@
 
     p {
         margin: 0;
-        font-size: 1rem;
+        font-size: var(--fs-body);
         line-height: 1.6;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
 
     .card-footer {

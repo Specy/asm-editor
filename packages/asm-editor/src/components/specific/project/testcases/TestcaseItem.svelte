@@ -408,7 +408,7 @@
     }
 
     .caption {
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
         opacity: 0.8;
     }
@@ -430,7 +430,7 @@
     .arguments {
         @include mono;
         margin: 0;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
 
         &.invalid {
             border-color: var(--tc-fail);
@@ -445,7 +445,7 @@
         @include mono;
         min-height: 2.25rem;
         margin: 0;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         line-height: 1.35;
         resize: vertical;
         white-space: pre-wrap;

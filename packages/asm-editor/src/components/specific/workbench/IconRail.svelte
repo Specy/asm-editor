@@ -172,11 +172,11 @@
         border: 1px solid var(--secondary);
 
         &.success {
-            background-color: var(--green);
+            background-color: var(--success);
         }
 
         &.error {
-            background-color: var(--red);
+            background-color: var(--danger);
         }
     }
 </style>

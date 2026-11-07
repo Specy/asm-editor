@@ -1812,7 +1812,6 @@
 
 <style lang="scss">
     .pixel-editor {
-        --pixel-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
         /* what the toolbar's buttons sit on, which the rule within a split button is cut in */
         --toolbar-surface: var(--secondary);
         --toolbar-pad: 0.3rem;
@@ -1831,8 +1830,8 @@
     }
     /* numbers that change under the pointer, in figures of one width, each with its room */
     .number {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.75rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-caption);
     }
     .zoom {
         min-width: 5ch;
@@ -1853,13 +1852,13 @@
     /* at the far end, so the facts before it moving never move it */
     .read-only {
         margin-left: auto;
-        background: color-mix(in srgb, var(--warning, var(--accent)) 22%, transparent);
+        background: color-mix(in srgb, var(--warning) 22%, transparent);
     }
     .pixel-toolbar {
         container: pixel-toolbar / inline-size;
         background: var(--toolbar-surface);
         padding: var(--toolbar-pad) 0.4rem;
-        border-bottom: 1px solid var(--pixel-line);
+        border-bottom: 1px solid var(--line);
         font-size: 0.8rem;
     }
     /* Undo and Redo at the left edge and the view at the right, the tools and colours centred
@@ -1996,7 +1995,7 @@
         border-radius: 0.5rem;
         background: var(--tertiary);
         color: var(--tertiary-text);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
+        box-shadow: var(--shadow-3);
         font-size: 0.8rem;
     }
     .setting {
@@ -2121,7 +2120,7 @@
         width: 1.25rem;
         height: 1.25rem;
         padding: 0;
-        border: 1px solid var(--pixel-line);
+        border: 1px solid var(--line);
         border-radius: 0.2rem;
         background:
             linear-gradient(var(--swatch), var(--swatch)),
@@ -2193,7 +2192,7 @@
     .action {
         height: 1.8rem;
         padding: 0 0.8rem;
-        border: 1px solid var(--pixel-line);
+        border: 1px solid var(--line);
         border-radius: 0.35rem;
         background: var(--primary);
         color: var(--primary-text);
@@ -2236,7 +2235,7 @@
         display: none;
     }
     .probe-line {
-        color: var(--pixel-line);
+        color: var(--line);
     }
     .probe-accent {
         color: var(--accent);

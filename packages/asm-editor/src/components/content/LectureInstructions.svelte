@@ -58,7 +58,7 @@
     }
     /* the lecture's own inline code, as a link */
     code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         background: var(--secondary);
         padding: 0.2rem 0.4rem;
         border-radius: 0.3rem;

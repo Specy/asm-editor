@@ -70,7 +70,7 @@
         overflow: auto;
         scrollbar-gutter: stable;
         padding: var(--wb-output-padding);
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.82rem;
         line-height: 1.55;
     }
@@ -119,16 +119,16 @@
     }
 
     .success .mark {
-        color: var(--green);
+        color: var(--success);
         filter: brightness(1.6);
     }
 
     .warning .mark {
-        color: var(--warning, #d49a30);
+        color: var(--warning);
     }
 
     .error .mark {
-        color: var(--red);
+        color: var(--danger);
     }
 
     .info .mark {

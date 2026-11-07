@@ -378,7 +378,9 @@
     </Page>
 </ThemeScope>
 
-<style>
+<style lang="scss">
+    @use '../../styles/radius.scss' as *;
+
     .embed-builder {
         display: flex;
         flex: 1;
@@ -416,7 +418,7 @@
         gap: 0.8rem;
         background: var(--wb-surface, var(--secondary));
         color: var(--secondary-text);
-        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
+        border: var(--wb-card-edge, 1px solid var(--line));
         border-radius: var(--wb-radius, 0.4rem);
     }
 
@@ -438,7 +440,7 @@
 
     .card-heading p {
         margin-top: 0.25rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
 
     .settings-grid {
@@ -458,7 +460,7 @@
             --wb-section-header,
             color-mix(in srgb, var(--secondary) 72%, var(--tertiary))
         );
-        border-radius: calc(var(--wb-radius, 0.4rem) - 0.1rem);
+        border-radius: nested-radius(var(--wb-radius, var(--r-control)), $inset: 0.1rem);
         font-size: 0.9rem;
     }
 

@@ -191,7 +191,6 @@
 
 <style lang="scss">
     .file-preview {
-        --preview-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
         /* the execution dock's tray and the gap under it, which the Preview keeps clear of */
         --dock-room: 0px;
         display: flex;
@@ -206,7 +205,7 @@
         --dock-room: calc(var(--wb-control-height, 2.6rem) + 0.75rem);
     }
     .mime {
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
     /* one button, which keeps its words in a narrower pane than the Hex editor's three */
     @container file-status (max-width: 22rem) {
@@ -260,7 +259,7 @@
             transparent 0
         );
         background-size: 1rem 1rem;
-        box-shadow: 0 0 0 1px var(--preview-line);
+        box-shadow: 0 0 0 1px var(--line);
     }
     /* the frame runs to the pane's bottom edge, as the code editor does, with the dock floating over
        the viewer: room left above the dock showed as a strip of the pane under the PDF */
@@ -318,8 +317,8 @@
         gap: 0.45rem;
         height: 2.2rem;
         padding: 0 0.9rem;
-        border: 1px solid var(--preview-line);
-        border-radius: 0.4rem;
+        border: 1px solid var(--line);
+        border-radius: var(--r-control);
         background: var(--primary);
         color: var(--primary-text);
         font: inherit;

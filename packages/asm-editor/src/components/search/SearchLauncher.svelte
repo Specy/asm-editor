@@ -116,7 +116,7 @@
         border-radius: 0.3rem;
         border: 1px solid var(--tertiary);
         font-family: inherit;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         opacity: 0.8;
     }
 </style>

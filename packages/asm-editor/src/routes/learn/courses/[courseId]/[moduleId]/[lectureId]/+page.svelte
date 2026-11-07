@@ -294,7 +294,7 @@ When the user asks a question about the lecture topic or for a demonstration of 
     }
 
     .topic-links {
-        font-family: 'Noto Serif', Rubik, sans-serif;
+        font-family: var(--font-read);
         font-weight: 500;
         width: min(100%, var(--lecture-text-width));
         margin: 0 auto;

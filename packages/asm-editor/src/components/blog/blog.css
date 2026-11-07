@@ -32,7 +32,7 @@
     border-radius: 1.2rem;
     background: color-mix(in srgb, var(--accent) 9%, var(--secondary));
     border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
-    font-size: 0.75rem;
+    font-size: var(--fs-caption);
     color: var(--background-text);
     text-decoration: none;
 }
@@ -44,7 +44,7 @@
     border-radius: 1.2rem;
     background: var(--accent);
     color: var(--accent-text);
-    font-size: 0.75rem;
+    font-size: var(--fs-caption);
     font-weight: bold;
 }
 .blog-article-header .blog-draft {
@@ -161,7 +161,7 @@
 .blog-post-layout {
     display: grid;
     /* Match the reading column to the paragraph font's 70ch measure. */
-    font-family: 'Noto Serif', Rubik, sans-serif;
+    font-family: var(--font-read);
     font-size: 1.2rem;
     font-weight: 500;
     grid-template-columns: minmax(1.25rem, 1fr) minmax(0, 70ch) minmax(1.25rem, 1fr);
@@ -169,7 +169,7 @@
 .blog-article,
 .blog-outline {
     font-family: Rubik, sans-serif;
-    font-size: 1rem;
+    font-size: var(--fs-body);
     font-weight: 400;
 }
 .blog-article {
@@ -187,7 +187,7 @@
     font-size: 0.8rem;
     font-weight: 600;
     margin-bottom: 0.8rem;
-    color: var(--background-text-muted);
+    color: var(--background-text-prose);
 }
 .blog-outline nav {
     min-height: 0;
@@ -202,9 +202,9 @@
     padding: 0.55rem 0.9rem;
     margin-left: -1px;
     border-left: 2px solid transparent;
-    font-size: 0.85rem;
+    font-size: var(--fs-small);
     line-height: 1.45;
-    color: var(--background-text-muted);
+    color: var(--background-text-prose);
     text-decoration: none;
 }
 .blog-outline li a:hover,
@@ -222,7 +222,7 @@
     margin: 1rem auto 3.5rem;
 }
 .blog-back {
-    font-size: 0.85rem;
+    font-size: var(--fs-small);
     color: var(--accent);
     text-decoration: none;
 }
@@ -255,7 +255,7 @@
 }
 .blog-article ._markdown p,
 .blog-article ._markdown li {
-    font-family: 'Noto Serif', Rubik, sans-serif;
+    font-family: var(--font-read);
     font-size: 1.2rem;
     font-weight: 500;
     letter-spacing: 0.01em;
@@ -298,7 +298,7 @@
     background: var(--accent);
     color: var(--accent-text);
     font-family: Rubik, sans-serif;
-    font-size: 1rem;
+    font-size: var(--fs-body);
     font-weight: 500;
     line-height: 1.4;
     text-decoration: none;
@@ -327,7 +327,7 @@
 .blog-article ._markdown figcaption {
     max-width: 70ch;
     margin: 0.75rem auto;
-    font-size: 0.85rem;
+    font-size: var(--fs-small);
     line-height: 1.5;
     opacity: 0.75;
 }

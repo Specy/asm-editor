@@ -329,7 +329,7 @@
         flex: none;
         height: 2.2rem;
         background: var(--wb-strip);
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
 
         span {
             display: flex;
@@ -358,7 +358,7 @@
         flex: 1;
         padding-top: 0.4rem;
         overflow: hidden;
-        font-family: var(--example-font-family, 'Fira Code', monospace);
+        font-family: var(--example-font-family, var(--font-mono));
         font-size: var(--example-font-size, 0.95rem);
         color: var(--secondary-text);
     }

@@ -288,7 +288,7 @@
         @include field;
         @include mono;
         padding: 0.35rem 0.6rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
 
         &[aria-invalid='true'] {
             border-color: var(--tc-fail);

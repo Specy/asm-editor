@@ -85,7 +85,7 @@
     }
     h3 {
         margin: 0;
-        font-size: 1rem;
+        font-size: var(--fs-body);
     }
     summary {
         display: flex;
@@ -98,10 +98,10 @@
     }
     .count {
         font-size: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .compact h3 {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
     /* one line a symbol, ruled apart, the text kept to a readable measure */
     dl {
@@ -115,7 +115,7 @@
         font-size: 0.92rem;
     }
     .compact dl {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
     .line {
         display: grid;
@@ -140,7 +140,7 @@
         margin: 0;
     }
     dt code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
         color: var(--accent);
         white-space: nowrap;

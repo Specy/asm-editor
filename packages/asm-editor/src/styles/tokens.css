@@ -1,0 +1,63 @@
+/* The design system's tokens that do not depend on the theme (docs/design/design-system.md). The
+   ones drawn from a theme colour (--line, --line-strong, --selected-bg) are written by
+   themeCssVariables() beside the theme's colours, on every element that carries a theme, since a
+   custom property that reads a colour resolves where it is declared. The Popover's radius and
+   shadow are drawn in SVG and will be named again in styles/elevation.ts, which has to agree with
+   --r-overlay and --shadow-3 here. */
+:root {
+    /* D2: Rubik for interface and reference text, Noto Serif for long prose read from top to
+       bottom, Fira Code only for code and machine values */
+    --font-ui: Rubik;
+    --font-read: 'Noto Serif', Rubik, sans-serif;
+    --font-mono: 'Fira Code', monospace;
+
+    /* D11: one type scale. The interface end, for the app, the index pages and the reference */
+    --fs-micro: 0.65rem;
+    --fs-caption: 0.75rem;
+    --fs-small: 0.85rem;
+    --fs-body: 1rem;
+    /* the page end, the scale contentPages.css drew the content pages in, a step smaller on
+       phones (below); a reading page (a lecture's body, a blog post's) raises --fs-prose, --fs-h3
+       and --fs-h2 one step for itself */
+    --fs-prose: 1.1rem;
+    --fs-lead: 1.2rem;
+    --fs-h3: 1.4rem;
+    --fs-h2: 1.8rem;
+    --fs-h1: 2.75rem;
+
+    /* D12: the radii of what stands alone: a chip, a control or a Card, a Tray or a Popover, a
+       pill. What sits close inside a rounded parent takes nested-radius() of the parent's
+       (styles/radius.scss) */
+    --r-chip: 0.25rem;
+    --r-control: 0.4rem;
+    --r-overlay: 0.6rem;
+    --r-pill: 999px;
+
+    /* D13: elevation. Sticky headers and raised rows, then Trays, then Popovers */
+    --shadow-1: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+    --shadow-2: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
+    --shadow-3: 0 0.5rem 1.5rem rgb(0 0 0 / 0.35);
+    /* hover and press, then a Tray or a Popover opening and closing; Svelte's cubicOut */
+    --dur-fast: 120ms;
+    --dur-base: 160ms;
+    --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+
+    /* what is behind a dialog or a sheet */
+    --scrim: rgb(0 0 0 / 0.35);
+
+    /* D4 and D17, drawn from the text colour of the surface they are used on: an unregistered
+       custom property keeps `currentColor` until it is used, which in `background-color` is the
+       element's own colour and in `color` its parent's */
+    --hover-bg: color-mix(in srgb, currentColor 10%, transparent);
+    --text-muted: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+/* the page end a step smaller on phones, at contentPages.css's breakpoint; the lead keeps its size */
+@media (max-width: 600px) {
+    :root {
+        --fs-prose: 1.05rem;
+        --fs-h3: 1.3rem;
+        --fs-h2: 1.6rem;
+        --fs-h1: 2.1rem;
+    }
+}

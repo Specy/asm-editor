@@ -196,7 +196,7 @@
         grid-template-columns:
             max-content max-content minmax(min-content, max-content)
             minmax(6rem, 1fr);
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
 
     .row {
