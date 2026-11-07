@@ -19,6 +19,8 @@
     import { hasCodeName } from '#lib/documentation/entries.ts'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
+    import { courseAccent, languageAccent } from '#lib/languages/languageColors.ts'
+    import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { resolveHref } from '#lib/hrefs.ts'
     import { queryTerms, type SearchResult } from '#lib/search/engine.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
@@ -183,6 +185,12 @@
     }
 </script>
 
+{#snippet language(color: string | null, name?: string)}
+    <!-- the General course belongs to no language: an empty square keeps the rows lined up -->
+    <span class="swatch" class:none={!color} style:--swatch={color} aria-hidden="true"></span>
+    {#if name}<span class="language">{name}</span>{/if}
+{/snippet}
+
 {#if shown}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="backdrop" onclick={close} transition:backdropFade>
@@ -197,6 +205,7 @@
         >
             <div class="top">
                 <SearchField
+                    bare
                     bind:value={query}
                     bind:el={input}
                     {placeholder}
@@ -228,14 +237,20 @@
                         >
                             {#if result.kind === 'entry'}
                                 <!-- an instruction names its category after its Chapter:
-                                     "Instructions · Arithmetic" -->
-                                <!-- the site's search mixes the languages, so it names the one -->
+                                     "Instructions · Arithmetic"; the site's search mixes the
+                                     languages, so it names the one, in that language's colour -->
                                 <span class="kind"
-                                    >{site
-                                        ? `${languageLabel(result.entry.language.toUpperCase())} · `
-                                        : ''}{result.entry.category
-                                        ? `${result.entry.chapterTitle} · ${categoryLabel(result.entry.category)}`
-                                        : result.entry.chapterTitle}</span
+                                    >{#if site}{@render language(
+                                            languageAccent(
+                                                result.entry.language.toUpperCase() as AvailableLanguages
+                                            ),
+                                            languageLabel(result.entry.language.toUpperCase())
+                                        )}<span class="dot" aria-hidden="true">·</span>{/if}<span
+                                        class="where"
+                                        >{result.entry.category
+                                            ? `${result.entry.chapterTitle} · ${categoryLabel(result.entry.category)}`
+                                            : result.entry.chapterTitle}</span
+                                    ></span
                                 >
                                 <span class="title">
                                     <span
@@ -254,11 +269,20 @@
                                 >
                             {:else}
                                 <span class="kind"
-                                    >{result.section.courseName} › {result.section
-                                        .lectureName}</span
+                                    >{@render language(courseAccent(result.section.course))}<span
+                                        class="where"
+                                        >{result.section.courseName} › {result.section
+                                            .lectureName}</span
+                                    ></span
                                 >
+                                <!-- one flex item, or the gap would split the words around each match -->
                                 <span class="title"
-                                    ><HighlightedText text={result.section.title} {terms} /></span
+                                    ><span
+                                        ><HighlightedText
+                                            text={result.section.title}
+                                            {terms}
+                                        /></span
+                                    ></span
                                 >
                                 <span class="line"
                                     ><HighlightedText text={result.excerpt} {terms} /></span
@@ -273,8 +297,9 @@
             {/if}
             <footer>
                 <span
-                    ><kbd aria-label="Up"><FaArrowUp /></kbd>
-                    <kbd aria-label="Down"><FaArrowDown /></kbd> to move</span
+                    ><kbd aria-label="Up"><FaArrowUp /></kbd><kbd aria-label="Down"
+                        ><FaArrowDown /></kbd
+                    > to move</span
                 >
                 <span><kbd>Enter</kbd> to open</span>
                 <span><kbd>Esc</kbd> to close</span>
@@ -283,7 +308,11 @@
     </div>
 {/if}
 
-<style>
+<style lang="scss">
+    @use '../shared/button/tray.scss';
+
+    /* lighter than a modal's: the palette is a tray over the page, as the prompts are, and the page
+       stays readable around it */
     .backdrop {
         position: fixed;
         inset: 0;
@@ -292,119 +321,193 @@
         justify-content: center;
         align-items: flex-start;
         padding: 12vh 1rem 1rem;
-        background-color: rgb(0 0 0 / 45%);
-        backdrop-filter: blur(2px);
+        background-color: rgb(0 0 0 / 35%);
     }
+
+    /* drawn as the app's trays (prompts, toasts, the execution dock): a translucent tint that blurs
+       what is beneath, a hairline edge, lifted by a shadow; denser and blurrier than a prompt's, as
+       it holds a page of text over a page of text. The field is its top, ruled off from the results
+       and the keys with the tray's own line */
     .palette {
+        @include tray.surface(94%);
+        backdrop-filter: blur(16px);
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
-        width: min(44rem, 100%);
+        width: min(42rem, 100%);
         /* the same box whether there are results or not, so it does not jump as they arrive */
         min-height: min(26rem, 70vh);
         max-height: 70vh;
-        padding: 0.6rem;
-        border-radius: 0.8rem;
-        background-color: var(--primary);
-        color: var(--primary-text);
-        box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+        overflow: hidden;
+        box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 0.4);
         outline: none;
         transform-origin: top center;
     }
+
     .top {
         display: flex;
+        flex: none;
         align-items: center;
         gap: 0.5rem;
+        padding: 0.3rem 0.5rem;
+        border-bottom: 1px solid var(--tray-line);
     }
+
     .top > :global(.search-field) {
         flex: 1;
     }
+
     .close {
+        @include tray.tool(0.6rem);
         display: none;
         flex: none;
-        padding: 0.5rem 0.3rem;
-        border: none;
-        background: transparent;
+        height: 2rem;
         color: var(--accent);
-        font: inherit;
-        cursor: pointer;
     }
+
     .results {
         display: flex;
         flex-direction: column;
-        gap: 0.15rem;
+        gap: 2px;
         margin: 0;
-        padding: 0;
+        padding: 0.35rem;
         list-style: none;
         overflow-y: auto;
         min-height: 0;
     }
+
+    /* a menu's rows: no surface until pointed at or chosen with the arrows, then the tint the tray's
+       buttons take on hover, with an accent edge so the chosen one reads at a glance */
     li {
+        position: relative;
         display: flex;
         flex-direction: column;
-        gap: 0.1rem;
-        padding: 0.45rem 0.6rem;
-        border-radius: 0.5rem;
-        cursor: pointer;
+        gap: 0.15rem;
         min-width: 0;
+        padding: 0.45rem 0.7rem;
+        border-radius: 0.4rem;
+        cursor: pointer;
     }
+
     li.selected {
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
+
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0.45rem;
+            bottom: 0.45rem;
+            left: 0;
+            width: 2px;
+            border-radius: 1px;
+            background-color: var(--accent);
+        }
     }
+
     .kind {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-width: 0;
         font-size: 0.72rem;
-        color: var(--accent);
+        color: color-mix(in srgb, var(--primary-text) 60%, transparent);
+    }
+
+    /* the square the home page's instruction sets wear */
+    .swatch {
+        flex: none;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 0.1rem;
+        background-color: var(--swatch);
+
+        &.none {
+            border: 1px solid color-mix(in srgb, var(--primary-text) 35%, transparent);
+            background-color: transparent;
+        }
+    }
+
+    .language {
+        flex: none;
+        color: var(--primary-text);
+        font-weight: 500;
+    }
+
+    .dot {
+        flex: none;
+        opacity: 0.6;
+    }
+
+    .where {
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+
     .title {
         display: flex;
         align-items: baseline;
         gap: 0.5rem;
-        font-weight: 600;
         min-width: 0;
+        font-weight: 500;
     }
+
     .code {
         font-family: 'Fira Code', monospace;
     }
+
     .signature {
         min-width: 0;
         font-family: 'Fira Code', monospace;
         font-size: 0.8rem;
         font-weight: normal;
-        opacity: 0.7;
+        opacity: 0.65;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+
     .line {
         font-size: 0.85rem;
-        opacity: 0.8;
+        opacity: 0.75;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+
     .empty {
+        padding: 0.8rem 0.7rem;
         cursor: default;
-        opacity: 0.7;
+        opacity: 0.65;
+        font-size: 0.9rem;
     }
+
     .hint {
         flex: 1;
         margin: 0;
-        padding: 0.6rem;
+        padding: 0.9rem 1.05rem;
         opacity: 0.6;
         font-size: 0.9rem;
     }
+
     footer {
         display: flex;
+        flex: none;
+        gap: 1.1rem;
         margin-top: auto;
-        gap: 1rem;
-        padding: 0.2rem 0.4rem 0;
+        padding: 0.45rem 0.85rem;
+        border-top: 1px solid var(--tray-line);
         font-size: 0.75rem;
-        opacity: 0.7;
+        color: color-mix(in srgb, var(--primary-text) 65%, transparent);
+
+        span {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
     }
+
+    /* the keys the Tooltips show */
     kbd {
         display: inline-flex;
         align-items: center;
@@ -412,30 +515,36 @@
         min-width: 1.2rem;
         height: 1.2rem;
         padding: 0 0.3rem;
+        border: 1px solid color-mix(in srgb, var(--primary-text) 25%, transparent);
         border-radius: 0.25rem;
-        border: 1px solid var(--tertiary);
         font-family: inherit;
-        vertical-align: middle;
+        font-size: 0.7rem;
+
+        :global(svg) {
+            width: 0.55rem;
+            height: 0.55rem;
+        }
     }
-    kbd :global(svg) {
-        width: 0.6rem;
-        height: 0.6rem;
-    }
+
     @media (max-width: 600px) {
         .backdrop {
             padding: 0;
         }
+
         .palette {
             width: 100%;
-            max-height: none;
             height: 100%;
+            max-height: none;
+            border: none;
             border-radius: 0;
         }
+
         footer {
             display: none;
         }
+
         .close {
-            display: block;
+            display: flex;
         }
     }
 </style>

@@ -18,11 +18,10 @@ Each `main` on this page therefore begins with:
     addi sp, sp, -12       # 0x7FFFEFFC -> 0x7FFFEFF0
 ```
 
-Now `sp` is 16-byte aligned before `main` makes a call. After the call, `main` adds 12 to restore the
-playground's original stack boundary. In an environment that already supplies an ABI-aligned stack,
-this playground setup would be unnecessary. The playground enters `main` directly with its own
-unaligned value, so treat the first adjustment as startup setup; the convention-following examples
-begin with the calls made after it.
+This adjustment aligns `sp` before `main` makes any calls. After the calls, `main` adds 12 to
+restore the playground's initial `sp`. The playground enters `main` directly, so this initial
+adjustment is startup setup. The calls that follow it use the standard alignment. An environment
+that starts with a 16-byte-aligned stack does not need this setup.
 
 ## Pass an argument and return a result
 
@@ -59,7 +58,7 @@ In this playground, `end` names the address just after the last assembled instru
 the end of the program completes the run. The jump is ordinary control flow, not a hardware exit
 operation.
 
-## One ra, and two calls that need it
+## Preserve ra across nested calls
 
 A subroutine that makes a call is a **non-leaf subroutine**. Its own caller's return address arrives
 in `ra`, but its inner `jal` replaces `ra` with a new address. The non-leaf subroutine must preserve
@@ -115,10 +114,10 @@ If the save and restore of `ra` are removed, the second `jal doubled` leaves `ra
 Calls also need an agreement about ordinary register values. The standard convention divides them
 into two groups:
 
-| registers                        | preservation rule                                      |
-| -------------------------------- | ------------------------------------------------------ |
-| `t0` to `t6`, `a0` to `a7`, `ra` | caller saves a value if it needs that value after call |
-| `s0` to `s11`, `sp`              | callee restores any of these registers that it changes |
+| registers                        | preservation rule                                          |
+| -------------------------------- | ---------------------------------------------------------- |
+| `t0` to `t6`, `a0` to `a7`, `ra` | caller saves a value if it needs that value after the call |
+| `s0` to `s11`, `sp`              | callee restores any of these registers that it changes     |
 
 The first group is **caller-saved**. A caller does not save every register in the group; it saves
 only values that must survive the call. Argument registers belong here because a call commonly uses
@@ -156,13 +155,14 @@ end:
 ```
 
 `t1` finishes at 999 because `scribble` may replace `t0`. `s1` finishes at 222 because `scribble`
-saves and restores `s0`. This leaf uses a frame to preserve `s0`; it has no reason to save `ra`.
+saves and restores `s0`. This leaf subroutine uses a frame to preserve `s0`. It does not need to
+save `ra` because it makes no calls.
 
 The same caller-saved rule explains the earlier `quadruple` prologue. As the caller of `doubled`,
 `quadruple` needs its incoming `ra` after both inner calls, so it stores that value in its frame.
 
-These rules are an agreement followed by software, not behavior enforced by the processor. They let
-code that follows the same RISC-V ABI call each other safely.
+These rules are an agreement followed by software, not behavior enforced by the processor.
+Subroutines that follow the same RISC-V ABI can call each other safely.
 
 ## Arguments after the eighth
 
@@ -217,7 +217,8 @@ While `sum10` runs, `sp` is `0x7FFFEFE0`:
 | `0x7FFFEFE0` | 🟢 00000009 | `0(sp)`    | ninth    |
 | `0x7FFFEFE4` |  0000000A   | `4(sp)`    | tenth    |
 
-`jal` itself pushes nothing, so the ninth argument really is at `0(sp)` when this leaf begins.
+`jal` does not push a return address onto the stack, so the ninth argument is at `0(sp)` when
+`sum10` begins.
 `sum10` returns 55 in `a0`, and `main` copies it to `s0`.
 
 Stack offsets are always measured from the current value of `sp`. If `sum10` reserved a 16-byte
@@ -416,7 +417,7 @@ end:
 
 </details>
 
-The value testcase alone cannot prove that `quad` made both calls or preserved `ra`. Step through it
-to verify that structure: each call to `doubled` replaces `ra`, the `lw` recovers the address in
+The test checks the final register values. To check that `quad` made both calls and preserved `ra`,
+step through the program: each call to `doubled` replaces `ra`, the `lw` recovers the address in
 `main`, and the final `ret` uses that recovered address. At the end, `sp` is back at the playground's
 starting value.

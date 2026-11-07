@@ -63,7 +63,7 @@ control-flow shape a `do while` loop.
 
 Here is a bottom-tested version of the sum. The counter begins at 10 and counts down to zero:
 
-`bnez t1, loop` branches to `loop` when `t1 != 0`. It is the assembler convenience for
+`bnez t1, loop` branches to `loop` when `t1 != 0`. It is a pseudoinstruction for
 `bne t1, zero, loop`.
 
 ```riscv|playground
@@ -169,8 +169,8 @@ done:
 `0x10010014` for this array in the simulator. At the end, `t0` and `t1` both contain that address.
 
 If another value is appended to the `.word` line, the assembler places `end` after the new final
-word. The loop then visits the added word. A counted loop can also adapt when its length is updated;
-the end label is useful here because it keeps this particular boundary beside the data it describes.
+word. The loop then visits the added word. With a counted loop, you would also need to update the
+length. The end label keeps the boundary beside the data it describes.
 
 Equality is enough in this example because the pointer advances by exactly four bytes and lands on
 `end`. A loop written as “continue while the current address is below the end address” would compare
@@ -296,8 +296,10 @@ the fifth word, `bne` falls through to `done`, which is where this small program
 
 </details>
 
-Both top-tested and bottom-tested loops are useful. Choose the shape from the required behavior,
-especially whether zero passes are possible. As a secondary consideration, a bottom test can use
-one conditional branch per pass, while a top-tested layout commonly uses a conditional branch and
-an unconditional jump. Those control-flow instructions are the small amount of work that makes the
-repetition happen.
+Choose the loop's test position based on whether the body should run when the initial condition is
+false. A top-tested loop can skip the body. A bottom-tested loop runs it at least once unless you
+add a test before entry.
+
+The layouts above also use different numbers of control-flow instructions. The bottom-tested loop
+uses one conditional branch per pass. The top-tested loop uses a conditional branch and an
+unconditional jump.

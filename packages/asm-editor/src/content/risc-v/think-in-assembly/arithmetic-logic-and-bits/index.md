@@ -57,8 +57,8 @@ main:
     mulhu t2, t0, t0     # high half: 0x00000002
 ```
 
-Each instruction writes only its named destination. There is no hidden product register to collect.
-A program that needs all 64 bits executes the appropriate pair.
+Each instruction writes only its destination register. To get all 64 bits, use `mul` for the low
+half and the appropriate instruction for the high half.
 
 ## Quotient and remainder
 
@@ -68,15 +68,15 @@ Division also has signed and unsigned forms:
 - **`divu`** writes the unsigned quotient, and **`remu`** writes the unsigned remainder.
 
 For a nonzero divisor, signed division truncates the quotient toward zero. The remainder has the
-dividend's sign when it is nonzero. In every ordinary case, the two results satisfy this mathematical
-equation:
+dividend's sign when it is nonzero. Unless signed division overflows, the two results satisfy this equation:
 
 ```text
 dividend = quotient * divisor + remainder
 ```
 
 The RV32 signed overflow case, `-2147483648 / -1`, is the exception. Its mathematical quotient
-cannot fit in a signed word, so RISC-V supplies the separately defined register results shown below.
+cannot fit in a signed word. The division edge cases table below shows the quotient and remainder
+that RISC-V produces.
 
 ```riscv|playground
 .text
@@ -93,8 +93,8 @@ main:
 
 ### Division edge cases
 
-RISC-V defines register results for division by zero. The instruction executes without an ISA
-exception. Add a guard whenever zero is invalid for your program.
+Division by zero produces the quotient and remainder shown below instead of raising an exception.
+If zero is not a valid divisor in your program, test for it before dividing.
 
 | operation                 | quotient                     | remainder |
 | ------------------------- | ---------------------------- | --------- |
@@ -247,8 +247,8 @@ main:
     andi t2, t2, 1      # t2 = 1 if it was set, 0 if it was clear
 ```
 
-The same shift-created mask can set, clear or flip a dynamic bit. The outputs below are separate
-alternatives computed from the original value in `t0`:
+To set, clear or flip a bit whose position is held in a register, first shift 1 to that position
+to make a mask. Each operation below uses the original value in `t0`:
 
 ```riscv
     li   t2, 1
@@ -298,11 +298,12 @@ main:
 ```
 
 If `slt` produces 1, subtracting it from zero produces the all-one mask. The `and` keeps every
-differing bit, and the final `xor` changes `t0` into `t1`. If `slt` produces 0, the all-zero mask
-clears the difference and the final result stays equal to `t0`.
+differing bit, and the final `xor` stores the value of `t1` in `t4`. If `slt` produces 0, the
+all-zero mask clears the difference, so `t4` receives the value of `t0`. Neither input register
+changes.
 
-Use `sltu` in the same pattern for an unsigned maximum. This five-instruction sequence is mainly a
-compact demonstration of comparison masks and `xor` selection. A branch can express a maximum more
+Use `sltu` in the same pattern for an unsigned maximum. This five-instruction sequence
+shows how a comparison and `xor` can select a value using a mask. A branch can express a maximum more
 directly, and performance depends on the processor and surrounding code.
 
 ## Check the choices
@@ -415,7 +416,7 @@ main:
 </details>
 
 The final exercise starts `t0` at `0xF0F0F0F0`. Count its set bits and leave the count 16 in `t1`.
-You may destroy `t0` while counting.
+You may change `t0` while counting.
 
 ```riscv|playground|exercise
 .text

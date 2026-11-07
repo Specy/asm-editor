@@ -19,6 +19,7 @@ other values that must survive calls live in saved registers:
 | `s4`, `s5` | horizontal and vertical steps, each `-1` or `1` |
 | `s6`       | current width of the bottom bar                 |
 | `s7`       | largest valid top-left coordinate for the ball  |
+| `s8`       | low word of the clock reading at the start      |
 
 `fill_rect` takes `x`, `y`, width, and height in `a0`–`a3`. It reads `s0` and `s1`, uses only
 `t0`–`t3` as scratch registers, and leaves `s0`–`s7` unchanged. A zero or negative width or height
@@ -80,6 +81,9 @@ main:
     li s4, 1                # dx
     li s5, 1                # dy
     li s7, LIMIT
+    li a7, 30
+    ecall
+    mv s8, a0               # remember when the animation starts
 
 frame:
     li s1, BACKGROUND       # erase the ball at its old position
@@ -113,10 +117,11 @@ y_done:
     li a3, BALL
     jal fill_rect
 
-    li a7, 30               # elapsed milliseconds since the run started
+    li a7, 30               # milliseconds since 1970-01-01 UTC
     ecall
+    sub t1, a0, s8          # elapsed milliseconds since the animation started
     li t0, 100
-    div t1, a0, t0          # tenths of a second
+    div t1, t1, t0          # tenths of a second
     li t0, SIDE
     rem s6, t1, t0          # width modulo 32
 
@@ -163,18 +168,20 @@ and bottom edges use the same rule.
 
 ## Drawing a sequence of frames
 
-The display words are the picture, so each `sw` changes a visible cell. The background is filled
-once before the loop. Later frames erase the old 4 by 4 ball and draw the new one, leaving the rest
-of the background alone. The bottom row is cleared and redrawn because its width changes over time.
+Each word in display memory holds the colour of one visible cell, so each `sw` changes that cell.
+The program fills the background once before the loop. Later frames erase the old 4 by 4 ball and
+draw the new one, leaving the rest of the background alone. The program clears and redraws the
+bottom row because the bar's width changes over time.
 
 The inner loop in `fill_rect` is bottom-tested: it stores a cell before `bnez` decides whether to
 repeat. The two `blez` checks at the entrance are therefore important. They prevent a width or
 height of zero from entering a loop that expects a positive count. In particular, the time bar can
 safely call the helper when `s6` is zero.
 
-Service 30 supplies elapsed milliseconds in `a0`. Dividing by 100 turns that reading into tenths of
-a second, and the remainder after division by 32 gives a bar width from 0 through 31. The bar wraps
-to zero every 3.2 seconds.
+Service 30 returns milliseconds since 1970-01-01 UTC, with the low word in `a0`. The program saves
+the starting reading in `s8` and subtracts it from each new reading to get elapsed milliseconds.
+Dividing by 100 gives tenths of a second, and the remainder after division by 32 gives a bar width
+from 0 through 31. The bar wraps to zero every 3.2 seconds.
 
 Service 32 controls the pace of the frames. During an interactive run it waits for the requested
 duration, so `FRAME = 60` produces about seventeen frames per second. In a testcase, service 32

@@ -1,4 +1,4 @@
-An operation number can choose a piece of code through a table of addresses. This program uses
+A **jump table** stores code addresses so that an operation number can select which code to run. This program uses
 `t2 = 2`, so it selects entry 2 — the third entry, because indexes start at 0 — and leaves
 `6 * 3`, or 18, in `t6`.
 
@@ -52,7 +52,7 @@ assembled. Open the memory panel at `10010000` to inspect the four addresses you
 produced; the important fact is their order: entry 0 leads to `add_op`, entry 1 to `sub_op`, and
 so on.
 
-After the check, the lookup has three steps. `slli` turns a word index into a byte offset by
+After the range check, `slli` turns a word index into a byte offset by
 multiplying it by 4. Adding that offset to the table base finds the selected word. `lw` reads the
 address in that word, and `jr t5` continues execution at the address held in `t5`. With `t2 = 2`,
 the offset is 8, so `lw` reads the address of `mul_op`.
@@ -61,8 +61,9 @@ The check comes first because an invalid index would point outside the four-word
 values 0, 1, and 3 to select the other operations. Then try 4 and -1: both take the
 `out_of_range` path and leave -1 in `t6`, without loading an address from outside the table.
 
-Each operation ends with `j done`. The handlers sit one after another in memory, so without that
-jump, finishing `add_op` would continue into `sub_op` and overwrite the answer. Step through the
+The first three operations end with `j done`. Their code sits one after another in memory, so without that
+jump, finishing `add_op` would continue into `sub_op` and overwrite the answer. The last operation,
+`div_op`, reaches `done` directly because that label comes next. Step through the
 program once and watch `t6`: for the starting values it finishes at 18.
 
 ## Try it: add a fifth operation

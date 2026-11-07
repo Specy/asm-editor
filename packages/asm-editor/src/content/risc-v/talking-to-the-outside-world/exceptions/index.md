@@ -32,7 +32,7 @@ this Playground reports the fault and ends the run.
 
 ## Installing a handler
 
-This program deliberately places `w` at a misaligned address. The byte `odd` occupies one byte;
+This program deliberately places `w` at a misaligned address. The variable `odd` occupies one byte.
 `.align 0` prevents the usual padding before the word, so `w`'s address ends in `...01`. A normal
 word alignment directive would insert padding before `w`.
 
@@ -110,15 +110,15 @@ For these memory faults, `ucause` and `utval` help identify the problem:
 |    6 | store address misaligned | the store address        |
 |    7 | store access fault       | the inaccessible address |
 
-Arithmetic instructions do not raise these faults. That includes `div`: as in the earlier arithmetic
-work, this Playground produces `-1` for division by zero.
+Arithmetic instructions do not raise these faults. As you saw in the arithmetic lesson, `div`
+produces `-1` for division by zero in this Playground.
 
-## Polling still handles input
+## Faults and interrupts
 
 An interrupt is a device asking for attention between instructions; it is different from the
 instruction-caused faults above. The same handler can receive timer and keyboard interrupts; see
-[Interrupts and the timer](/documentation/risc-v/interrupts) for examples. This lesson uses polling:
-read the ready status, then read a character when one is available.
+[Interrupts and the timer](/documentation/risc-v/interrupts) for examples. You can also keep using
+polling for input: read the ready status, then read a character when one is available.
 
 ## Your turn
 
@@ -163,8 +163,8 @@ end:
 }
 ```
 
-Automated state checks cover reaching post-fault main, preserved `t0`, unchanged `t2`, and restored
-`sp`; stepping verifies the `uepc` update and `uret` control path.
+The checks verify that execution reaches `li s0, 5` and that `t0`, `t2`, and `sp` keep their
+original values. Step through your handler to check how it updates `uepc` and returns with `uret`.
 
 <details>
 <summary>Show solution</summary>

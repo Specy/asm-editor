@@ -1,5 +1,5 @@
 An array occupies one contiguous run of memory, with equal-sized elements placed one after another.
-Its memory representation carries no automatic length or bounds. A program can keep the length in a
+The stored elements do not include the array's length or bounds. A program can keep the length in a
 register or memory, define it as a constant, or mark the address just after the final element.
 
 To reach element `i`, start with the array's base address and add `i * element_size`. RISC-V addresses
@@ -136,7 +136,7 @@ done:
 
 With the data shown, the third characters differ, so `t4` becomes 0. Change `right` to `"same"`
 and `t4` becomes 1. The `beqz` is reached only after the two loaded bytes have compared equal. If
-that equal byte is zero, both strings ended at the same position and every earlier pair matched.
+both bytes are zero, both strings ended at the same position and every earlier pair matched.
 
 ## Two dimensions
 
@@ -173,10 +173,10 @@ main:
 
 `t3` becomes 22, the byte offset of element 11, and `t5` becomes 23. The line breaks in the data
 declaration make the rows visible to a reader; memory contains twelve consecutive halfwords. The
-value of `COLS` is what gives those bytes their row shape during the calculation.
+value of `COLS` tells the address calculation how many elements belong to each row.
 
 When the row width and element size are powers of two, shifts can express both multiplications
-directly. A row above occupies `4 * 2 = 8` bytes, and a column step occupies 2 bytes. This complete
+directly. Each row in this example occupies `4 * 2 = 8` bytes, and moving one column adds 2 bytes. This
 sequence computes the same address:
 
 ```riscv

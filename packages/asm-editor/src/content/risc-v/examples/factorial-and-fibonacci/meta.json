@@ -1,6 +1,6 @@
 {
     "name": "Recursion: factorial and Fibonacci",
-    "description": "Recursive factorial and Fibonacci with aligned per-call frames, saved return addresses and arguments, and a frame-building exercise.",
+    "description": "Use recursion to calculate factorials and Fibonacci numbers, saving return addresses and arguments in aligned stack frames. Complete a recursive factorial routine.",
     "order": 12,
     "topic": "factorial-and-fibonacci"
 }

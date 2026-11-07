@@ -1,4 +1,5 @@
-The string at `0x10010000` is turned back to front where it lies, with no second copy of it anywhere.
+This program reverses the string at `0x10010000` in place: it changes the original bytes without
+creating a second copy.
 `t0` stays at the left end while `t1` first scans for the zero byte. Then `t1` backs up to the right
 end, and the two pointers walk towards each other, swapping the bytes they point at until they meet
 or cross.
@@ -34,8 +35,7 @@ done:
 The program only knows where the string starts, so the right pointer has to be found first. Both
 pointers begin at the start; `t1` becomes the right pointer only after the scan. The scan stops on
 the terminator, which is one byte past the last character, and `addi t1, t1, -1` backs it onto a
-real letter. The empty-string check comes first because an empty string has no real letter to back
-onto.
+character. The empty-string check comes first because an empty string has no last character.
 
 Here is the string after the first two passes and after the last one, with the addresses held still
 and only the contents moving:
@@ -63,11 +63,11 @@ When the pointers meet or cross, `bgeu t0, t1, done` is true and the loop is ove
 odd number of characters leaves its middle one untouched, which is correct: a character swapped
 with itself is the same character. A one-character string reaches the same check with both pointers
 on that character, so it also needs no swap. For an empty string, the check at `at_end` jumps to
-`done` before `t1` is moved or either pointer is used by a load or store.
+`done` before `t1` is moved backward or the swap loop reads or writes any bytes.
 
 The swap itself needs both bytes read before either is written, which is why there are two loads
-before the two stores. Write `sb` into the left position first and you have destroyed the byte you
-were about to copy out of it.
+before the two stores. If you store the right byte in the left position before loading the left byte, you overwrite the
+byte you still need to copy to the right.
 
 `bgeu` is the **unsigned** comparison, which is the family for addresses. Addresses are not signed
 numbers, so the comparison must not treat an address whose top bit is set as negative.
@@ -111,7 +111,7 @@ done:
 For four boundary checks, return to the opening runnable program and change its `.asciz` string to
 each of `""`, `"Q"`, `"cat"`, and `"desk"`, one at a time. Before each run, predict the bytes
 including the final zero, then inspect them in the memory panel. These inputs check the empty,
-one-character, odd-length, and even-length cases without changing the fixed `"drawer"` exercise.
+one-character, odd-length, and even-length cases.
 
 <details>
 <summary>Show expected bytes</summary>

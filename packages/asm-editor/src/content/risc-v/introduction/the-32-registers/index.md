@@ -1,22 +1,22 @@
 ## What a register is
 
-A processor needs somewhere close by to keep the values it is working with. A **register** is one
-of these small storage places inside the processor. There are far fewer registers than locations in
-memory, but the processor can work with registers directly and quickly.
+A **register** is a small storage place inside the processor. The processor uses registers to hold
+the values it is working with. There are far fewer registers than locations in memory, but the
+processor can work with registers directly and quickly.
 
 The basic 32-bit RISC-V design has 32 **integer registers**. Each one holds 32 bits: 32 binary digits
 that can each be zero or one. A program can use that pattern of bits as a number, an address or
 another kind of value.
 
-Registers already exist and already have names. When writing assembly, you choose which register
-will hold each value and keep track of that choice.
+When writing assembly, you choose which register will hold each value. You use the register's name
+to refer to that value in your instructions.
 
 ## Numbered names and aliases
 
 The 32 integer registers have numbered names from `x0` through `x31`. RISC-V assembly also gives
 them descriptive names such as `t0`, `s0` and `a0`.
 
-These are two naming systems for the same set of registers. For example:
+Each descriptive name refers to one of the numbered registers:
 
 | numbered name | descriptive name |
 | ------------- | ---------------- |
@@ -25,16 +25,17 @@ These are two naming systems for the same set of registers. For example:
 | `x8`          | `s0` or `fp`     |
 | `x10`         | `a0`             |
 
-An alternative name for the same thing is called an **alias**. `x5` and `t0` name one storage
-place. If that register holds 12, reading either `x5` or `t0` gives 12. Replacing the value through
-the name `t0` also replaces the value seen through the name `x5`.
+An alternative name for the same thing is called an **alias**. `x5` and `t0` name the same register.
+If you store 12 in `t0`, reading either `x5` or `t0` gives 12. If you then store a different value in
+`x5`, reading `t0` gives that new value too.
 
 The same applies to `x8`, which has two descriptive aliases. `x8`, `s0` and `fp` are three
 accepted names for one register.
 
 The descriptive names are often called the **ABI names**. An ABI is a set of conventions that helps
-separately written parts of a program work together. The numbered name tells you which register it
-is; the ABI name also suggests the job that register usually has.
+separately written parts of a program work together. These conventions include agreements about
+which registers hold which values. The numbered name identifies the register, and the ABI name
+suggests its usual job.
 
 ## The complete register table
 
@@ -56,18 +57,16 @@ it.
 | `x18`-`x27`   | `s2`-`s11`  | saved values                                |
 | `x28`-`x31`   | `t3`-`t6`   | temporary values                            |
 
-The table gives each ABI name its conventional meaning. `t0` through `t6` are temporary registers:
-programs commonly use them for values needed during a piece of work. Keep the table nearby when
-you encounter the other names.
+`t0` through `t6` are temporary registers, commonly used to hold values during a calculation.
+Names such as "stack pointer" and "return address" describe other jobs that registers have when
+parts of a program work together. You can look up those names here as you learn to use them.
 
-With one exception, these roles are agreements between programmers and tools. The processor allows
-any ordinary register to hold a value. The group names make their conventional jobs visible when
-you read a program.
+With one exception, the processor does not enforce the roles in the table. Programmers and tools
+follow these conventions so that each part of a program knows where to find the values it needs.
 
 ## The register that is always zero
 
-`x0`, also called `zero`, is the exception. Its behaviour is part of the processor design, not
-just a naming convention:
+`x0`, also called `zero`, is the exception. Its behaviour is part of the processor design:
 
 - Reading `zero` always gives 0.
 - Trying to replace its value has no effect. The new value is discarded.
@@ -98,7 +97,3 @@ Use the table to answer these questions:
 4. It produces 0. A value written to `zero` is discarded.
 
 </details>
-
-The main ideas are simple: a register is a small storage place inside the processor, each integer
-register has an `x` number, and its ABI name is an alias that suggests its conventional role.
-`zero` is special because the processor guarantees that it always reads as 0.

@@ -1,6 +1,6 @@
 {
     "name": "A subroutine with its arguments in registers",
-    "description": "Call a leaf subroutine with aligned sp, pass arguments in a0 and a1, return a result in a0, and follow the caller-saved register rules.",
+    "description": "Pass arguments in a0 and a1, return a result in a0, align the stack pointer, and follow the caller-saved register rules in a leaf subroutine.",
     "order": 10,
     "topic": "subroutine-with-register-arguments",
     "template": 3

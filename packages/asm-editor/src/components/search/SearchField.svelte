@@ -19,6 +19,11 @@
         placeholder?: string
         /** A label for screen readers, when there is no visible one. */
         label?: string
+        /**
+         * No box of its own: the palette's field is the top of the palette, ruled off from the
+         * results, rather than a box inside it.
+         */
+        bare?: boolean
     }
 
     let {
@@ -26,6 +31,7 @@
         el = $bindable(),
         placeholder = 'Search',
         label = 'Search',
+        bare = false,
         ...rest
     }: Props = $props()
 
@@ -33,7 +39,7 @@
     const warm = () => searchClient.warmModel()
 </script>
 
-<div class="search-field" onpointerenter={warm} onfocusin={warm} role="presentation">
+<div class="search-field" class:bare onpointerenter={warm} onfocusin={warm} role="presentation">
     <span class="icon" aria-hidden="true">
         {#if loading}
             <span class="spinner"></span>
@@ -94,6 +100,29 @@
     }
     .search-field:focus-within {
         outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+    }
+    .search-field.bare {
+        gap: 0.65rem;
+        padding: 0.5rem 0.4rem;
+        background-color: transparent;
+        color: inherit;
+        font-size: 1rem;
+    }
+    /* the caret is enough: the field is the only thing in its dialog that takes focus */
+    .search-field.bare:focus-within {
+        outline: none;
+    }
+    .bare .icon {
+        width: 1rem;
+        height: 1rem;
+        opacity: 0.6;
+    }
+    .bare input::placeholder {
+        color: inherit;
+        opacity: 0.5;
+    }
+    .bare .clear:hover {
+        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
     }
     .icon {
         display: flex;

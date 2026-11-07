@@ -1,5 +1,6 @@
-These two subroutines call themselves. `factorial(8)` returns 40320 in `s0`, and `fib(10)` returns
-55 in `s1`. Both examples expect a nonnegative `n` in `a0` and return their answer in `a0`.
+These two subroutines use recursion: each calls itself. Both expect a nonnegative `n` in `a0`
+and return their answer in `a0`. The program calls `factorial(8)` and saves its result, 40320,
+in `s0`, then calls `fib(10)` and saves its result, 55, in `s1`.
 
 A recursive call uses the same `ra` and argument registers as any other call. Before making that
 call, the current call therefore saves the return address and every value it will still need. Its
@@ -69,16 +70,16 @@ top-level call and finally to `0x7fffeffc` when `main` finishes.
 For `factorial(8)`, the active calls have their own saved `n` values from 8 down to 1. The first
 frame begins at `0x7fffefe0`. Eight frames occupy 128 bytes, so the deepest `sp` is
 `0x7fffef70`. At that point `0(sp)` contains 1 and `4(sp)` contains the innermost return address.
-As the calls return, each one reloads its own `n`, multiplies it by the answer in `a0`, restores its
-own `ra`, and releases its frame.
+The base case returns 1. Each waiting call then reloads its own `n` and multiplies it by the
+answer in `a0`. Every call restores its own `ra` and releases its frame before returning.
 
 Saving `ra` is essential because the inner `jal factorial` replaces the only `ra` register. Saving
 `n` is essential because the inner call also replaces `a0`. A fixed memory location would be shared
 by all calls; moving `sp` gives every active call a different `0(sp)` and `4(sp)`.
 
 The longest descent in `fib(10)` follows 10, 9, 8, and so on down to 1. Ten active 16-byte frames
-put `sp` at `0x7fffef50`. Each non-base frame uses one more stored word than a factorial frame
-because it must keep the result of `fib(n - 1)` while it computes `fib(n - 2)`.
+put `sp` at `0x7fffef50`. Each call with `n` greater than 1 stores one more word in its frame
+than a factorial call because it must keep the result of `fib(n - 1)` while it computes `fib(n - 2)`.
 
 ## Two results inside one Fibonacci call
 
@@ -115,7 +116,7 @@ restore `ra` and `sp` before returning. After the recursive call, reload that ca
 multiply it by the returned answer.
 
 The unchanged `main` checks two inputs: `factorial(5)` must leave 120 in `s1`, and `factorial(7)`
-must leave 5040 in `s2`. The function must also preserve the `s0` sentinel and finish with `sp` at
+must leave 5040 in `s2`. The function must also preserve the test value in `s0` and finish with `sp` at
 the Playground's initial `0x7fffeffc`.
 
 ```riscv|playground|exercise

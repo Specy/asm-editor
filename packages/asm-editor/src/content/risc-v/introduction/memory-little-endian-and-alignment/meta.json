@@ -1,6 +1,6 @@
 {
     "name": "Memory, little endian and alignment",
-    "description": "How RISC-V arranges a multi-byte value at consecutive addresses, and how natural alignment matches a starting address to an access size.",
+    "description": "How RISC-V stores the bytes of a value in memory, and which addresses you can use for a multi-byte access.",
     "order": 2,
     "topic": "memory"
 }

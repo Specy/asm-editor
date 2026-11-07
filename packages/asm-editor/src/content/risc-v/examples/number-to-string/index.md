@@ -8,11 +8,11 @@ BEEF
 ```
 
 The subroutine builds the characters for each line, then gives the finished string to service 4.
-Its contract is:
+To call the subroutine:
 
-- `a0` contains a nonnegative 32-bit signed integer, from 0 through 2147483647.
-- `a1` contains a base from 2 through 36.
-- `a0` is consumed as the running quotient. After the call, do not rely on any `a` or `t` register
+- Put a nonnegative 32-bit signed integer, from 0 through 2147483647, in `a0`.
+- Put a base from 2 through 36 in `a1`.
+- The subroutine replaces `a0` with each new quotient. After the call, do not rely on any `a` or `t` register
   retaining its value.
 
 Those limits matter. Base 0 is not a number base, and division by base 1 would never bring a
@@ -74,7 +74,7 @@ by 16 is 3054 with 15 left over. The remainder 15 is the `F` at the right-hand e
 Repeated division therefore discovers the digits from right to left. The program matches that order
 by filling the buffer backward.
 
-Here is 48879 in base 16 coming apart, one pass per row:
+Here is how the loop converts 48879 to base 16, one pass per row:
 
 | pass | `a0` before | remainder | digit | `a0` after |
 | ---- | ----------- | --------- | ----- | ---------- |
@@ -90,12 +90,12 @@ character, which is exactly the address service 4 needs.
 
 RISC-V provides quotient and remainder as separate instructions. Both `rem` and `div` must read the
 original dividend, so `rem` comes first: `div a0, a0, a1` replaces that dividend in `a0` with the
-quotient. Under the routine's contract, both operands are nonnegative, so `rem` produces a remainder
+quotient. With the supported inputs, both operands are nonnegative, so `rem` produces a remainder
 from 0 through `base - 1`. That also makes the signed `blt` safe here.
 
 A remainder is still a number and must be changed into a character code. Adding 48 maps 0 through 9
 to `'0'` through `'9'`. For larger digits, adding 55 maps 10 through 35 to `'A'` through `'Z'`:
-10 + 55 is 65, the code for `'A'`. The program uses the already-calculated immediate 55.
+10 + 55 is 65, the code for `'A'`. The `addi` instruction uses 55 as its immediate operand.
 
 The loop runs once even when the input is zero, so zero becomes the one-character string `"0"`.
 For the largest supported value, base 2 needs 31 digits. The 34-byte buffer therefore has room for

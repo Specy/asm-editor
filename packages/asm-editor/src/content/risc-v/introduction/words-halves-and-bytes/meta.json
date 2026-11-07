@@ -1,6 +1,6 @@
 {
     "name": "Words, halves and bytes",
-    "description": "RISC-V byte, halfword and word sizes, their signed and unsigned ranges, and how sign extension and zero extension place smaller values in 32-bit registers.",
+    "description": "Byte, halfword and word sizes in RISC-V, their signed and unsigned ranges, and how to extend smaller values to 32 bits.",
     "order": 3,
     "topic": "numbers"
 }

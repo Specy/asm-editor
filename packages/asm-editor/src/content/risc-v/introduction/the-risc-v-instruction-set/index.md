@@ -1,7 +1,6 @@
-This lecture introduces RISC-V instruction notation. Its two goals are to:
-
-- understand the parts of one simple instruction; and
-- recognize that some convenient names are rewritten before the processor sees them.
+A RISC-V assembly instruction has a name followed by the values or locations it works with.
+You will learn to read these parts and see how the assembler rewrites some convenient names
+before the processor executes them.
 
 ## The parts of an instruction
 
@@ -37,7 +36,7 @@ If `t0` holds 7 and `t1` holds 3, the instruction writes 10 to `t2`. It does not
 
 This destination-first pattern is common in RISC-V arithmetic instructions.
 
-The order of the sources matters when the operation is not interchangeable. For subtraction,
+The order of the sources matters for subtraction:
 
 ```riscv
 sub t2, t0, t1
@@ -88,15 +87,15 @@ Recall that reading `zero` always gives 0. Both lines therefore mean:
 t1 = 0 - t0
 ```
 
-If `t0` holds 5, `t1` receives -5. The convenient spelling and the real instruction have the same
-effect here; the difference is which one the processor actually has in its machine code.
+If `t0` holds 5, `t1` receives -5. Both spellings have the same effect here. The processor executes
+the machine code for `sub` in either case.
 
 A line accepted by the assembler is not always a distinct instruction implemented by the
 processor.
 
 ## The base instruction set and extensions
 
-An **instruction set** is the complete agreed vocabulary of real instructions and the rules for
+An **instruction set** is the set of real instructions a processor can execute and the rules for
 using them. RISC-V organizes that vocabulary as a small base plus optional **extensions**. An
 extension is an additional group of instructions that a processor may support.
 
@@ -133,6 +132,7 @@ not implement it cannot execute them.
 
 </details>
 
-A mnemonic names an operation, operands name what it works with, and common register arithmetic
-writes its first operand from the source operands that follow. The assembler translates real
-instructions and can also expand convenient pseudo-instructions.
+A mnemonic names an operation, and operands tell it where to get values or put a result. In
+instructions such as `add` and `sub`, the first operand is the destination and the next two are
+the sources. The assembler translates real instructions into machine code and expands
+pseudo-instructions into real instructions.

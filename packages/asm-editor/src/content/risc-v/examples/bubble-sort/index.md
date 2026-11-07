@@ -1,7 +1,7 @@
-This program sorts the eight words in `numbers` from smallest to largest, in the same memory
-locations. One pass compares adjacent pairs from left to right. When the left value is greater than
-the right value, it swaps them, so the largest remaining value reaches the end. Eight elements need
-seven passes.
+This program uses bubble sort to sort the eight words in `numbers` from smallest to largest,
+in place. Each pass compares adjacent pairs from left to right. When the left value is greater than
+the right value, it swaps them, so the largest remaining value reaches the end. This program makes
+seven passes for its eight elements.
 
 ```riscv|playground|memory|allow-open
 .eqv COUNT, 8
@@ -53,9 +53,9 @@ makes `7 + 6 + 5 + 4 + 3 + 2 + 1 = 28` pair comparisons.
 
 ## The two loop states
 
-`t0` counts outer passes still to run. At the start of each pass, its current value also happens to
-be the number of unsettled adjacent pairs, so `mv t2, t0` gives that number to the inner loop.
-From then on the counters have distinct roles: `t2` falls to zero once per comparison, while `t0`
+`t0` counts outer passes still to run. At the start of each pass, its current value is also
+the number of adjacent pairs left to compare, so `mv t2, t0` gives that number to the inner loop.
+From then on the counters have distinct roles: `t2` decreases by one per comparison, while `t0`
 stays unchanged until the whole pass finishes.
 
 Both setup instructions belong inside `outer`. After the final comparison, `t1` points at the last
@@ -74,9 +74,8 @@ order, reverse only the operands of that branch:
 ```
 
 The Playground's assembler does not accept `COUNT-1` as the immediate in `li t0, COUNT-1`.
-Loading `COUNT` and subtracting one at run time expresses the same starting count in syntax this
-Playground accepts; it is a limitation of this assembler's accepted syntax, not a rule of the
-RISC-V instruction set.
+Load `COUNT` and subtract one at run time to get the same starting count. This syntax limitation
+comes from the Playground's assembler, not the RISC-V instruction set.
 
 Run the program with the memory panel at `10010000`. The words finish as
 `1, 4, 8, 15, 16, 23, 42, 99`.

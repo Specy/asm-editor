@@ -81,8 +81,8 @@ The six real comparison branches from the introduction are `beq`, `bne`, `blt`, 
 The unsigned ordering branches follow the same pattern. For example, `bgtu a, b, label` is a
 convenient spelling of `bltu b, a, label`, and `bleu a, b, label` becomes `bgeu b, a, label`.
 
-Each line in this table assembles to one real branch instruction. The convenient spelling gives
-the assembler a clearer way to express the question in the source code.
+Each line in this table assembles to one real branch instruction. The convenient spelling lets
+you write the comparison in the same order as the condition you want to test.
 
 ## Chain tests for several ranges
 
@@ -196,8 +196,8 @@ done:
 
 There are three valid indices, so the valid range is 0 through 2. The `bgeu` checks `t0` against
 the table length before any address is calculated. An index of 3 or more branches to
-`out_of_range`. A negative RV32 value has a large unsigned interpretation, so it follows that same
-safe path.
+`out_of_range`. If `t0` holds a negative RV32 value, `bgeu` treats it as a large unsigned number
+and branches to `out_of_range` too.
 
 For a valid index, the lookup reuses the word-array calculation:
 

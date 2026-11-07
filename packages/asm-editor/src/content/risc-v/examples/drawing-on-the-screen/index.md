@@ -1,8 +1,10 @@
-The bitmap display is a 32 by 32 grid of words. Writing a colour word to one of those words changes
-one cell on the Screen panel. A rectangle is a set of horizontal runs, and a disc is a set of cells
-selected by a distance test.
+This program draws a house, grass and a sun on a 32 by 32 grid in the Screen panel. Each cell
+corresponds to one word in memory. Writing a colour to that word changes the cell. To draw a
+rectangle, the program fills horizontal runs of cells. To draw a disc, it uses a distance test to
+choose which cells to fill.
 
-This page uses two drawing subroutines. Here is their contract before we call either one:
+The program uses two drawing subroutines. This table lists their inputs, the shared values they
+read and the temporary registers they overwrite:
 
 | Routine        | Inputs                                    | Shared values       | Scratch registers |
 | -------------- | ----------------------------------------- | ------------------- | ----------------- |
@@ -11,10 +13,9 @@ This page uses two drawing subroutines. Here is their contract before we call ei
 
 In both rows, `s0` is the display address and `s1` is the current colour. The routines read those
 saved registers but do not change them. Their names end in `_32` because their address calculation
-assumes a display 32 cells wide. Use a radius of zero or greater for `fill_disc_32` (radius zero
-draws nothing because the distance test is strict). Neither helper clips coordinates at the display
-edges, so callers normally keep every shape within columns 0–31
-and rows 0–31. An out-of-range coordinate may wrap into another row or address memory outside the
+assumes a display 32 cells wide. Use a radius of zero or greater for `fill_disc_32`. A radius of zero
+draws nothing because a cell must be strictly inside the radius to be filled. Neither routine clips
+coordinates at the display edges, so keep every shape within columns 0–31 and rows 0–31. An out-of-range coordinate may wrap into another row or address memory outside the
 display.
 
 `jal fill_rect_32` calls the rectangle routine, and `ret` returns to the instruction after the call.
@@ -61,11 +62,11 @@ For example, `fill_rect_32(1, 2, 3, 2)` means `a0=1`, `a1=2`, `a2=3`, `a3=2`:
 | 2                | `s0 + (2*32 + 1)*4` | `(1,2)`, `(2,2)`, `(3,2)` | 3, 2, 1     |
 | 3                | `s0 + (3*32 + 1)*4` | `(1,3)`, `(2,3)`, `(3,3)` | 3, 2, 1     |
 
-After row 3, `t0` becomes 4. That equals the one-past limit in `t1`, so the outer loop stops.
+After row 3, `t0` becomes 4. That equals the first row after the rectangle, stored in `t1`, so the outer loop stops.
 
 ## Building the picture from calls
 
-With the helper available, drawing the top twenty rows is argument setup followed by a call:
+To fill the top twenty rows with the sky colour, set the arguments and call `fill_rect_32`:
 
 ```riscv
 li s1, SKY
@@ -221,7 +222,7 @@ roof:
 
 The screen directive makes each word an 8 by 8 block in a 256 by 256 display, giving 32 cells per
 side. The `display` label names the first word. Its 4096 bytes are exactly `32 * 32 * 4`. Colours use
-`0x00RRGGBB`; the six constants near the top are a compact palette for the picture.
+`0x00RRGGBB`; the six constants near the top define the colours used in the picture.
 
 ## Exercises
 

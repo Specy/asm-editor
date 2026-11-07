@@ -1,6 +1,5 @@
-Six numbers are written into memory by the assembler, and the program adds them up and leaves the
-total in `t2`. The loop has no counter in it at all: it stops when the pointer walking the array
-arrives at the address just past the end.
+This program adds six numbers stored in memory and leaves the total in `t2`. The loop uses a
+pointer instead of a counter: it stops when the pointer reaches the address just past the last element.
 
 ```riscv|playground|memory|allow-open
 .data
@@ -19,8 +18,8 @@ loop:
     bne t0, t1, loop
 ```
 
-`end:` is a label with nothing underneath it. A label is just a name for the address the assembler
-had reached when it read the name, so `end` names the address the seventh word would have gone at.
+`end:` is a label with no data after it. A label names the current address during assembly, so
+`end` names the address immediately after the sixth word.
 Laid out, the data section looks like this:
 
 ```
@@ -33,14 +32,14 @@ Laid out, the data section looks like this:
 10010018        <- end, and where t0 finishes
 ```
 
-`t0` takes exactly six steps of 4 and lands on `end` on the seventh test, which is when `bne` gives
-up and the program stops. It lands exactly on it rather than overshooting, so comparing the two for
-equality is safe.
+`t0` advances by 4 bytes six times and reaches `end` on the sixth test. At that point, `bne` does
+not branch, and the program stops. Each step matches the size of a word, so the pointer reaches
+`end` exactly and the equality check works.
 
-The test being at the **bottom** of the loop is what makes this four instructions a pass instead of
-five. A loop that checks at the top needs that check plus a separate jump back after the body. Here,
-the backwards `bne` does both jobs. It costs you one thing: the body always runs once before anything
-is checked, so a loop written this way over an empty array would read an element that is not there.
+Testing at the **bottom** of the loop keeps each pass to four instructions. A loop that checks at
+the top needs that check plus a separate jump back after the body. Here, `bne` both checks the pointer
+and branches back when there are more elements. The body always runs once before the first check,
+so this loop would try to read an element even if the array were empty.
 
 ## Your turn: sum a different array
 

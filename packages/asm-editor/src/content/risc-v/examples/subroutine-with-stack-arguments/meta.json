@@ -1,6 +1,6 @@
 {
     "name": "Stack arguments and a stack frame",
-    "description": "A clearly labelled stack-argument convention, aligned caller and callee frames, a local that survives a nested call, and preserved fp and s1.",
+    "description": "Pass arguments on the stack, align stack frames, and preserve local values and registers across nested calls.",
     "order": 11,
     "topic": "subroutine-with-stack-arguments"
 }

@@ -1,6 +1,6 @@
 {
     "name": "Loops",
-    "description": "A loop is a branch backwards and a counter you keep yourself. Why the test belongs at the bottom, nested loops, and walking an array against an end pointer.",
+    "description": "Build loops with branches and jumps, choose where to test the condition, nest loops, and walk through an array using an end pointer.",
     "order": 1,
     "topic": "loops"
 }

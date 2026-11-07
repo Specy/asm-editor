@@ -1,7 +1,7 @@
-Recreate the [assembly Flappy ASM](/learn/courses/risc-v/examples/flappy-asm) in C with `<sim.h>`.
+Recreate the [assembly version of Flappy ASM](/learn/courses/risc-v/examples/flappy-asm) in C with `<sim.h>`.
 It uses the same 192 × 256 grid, shaded pipes, and bird and digit sprites. The scenery is drawn
-once and reused, and each frame paints only the pixels that change, each one once. It targets one
-frame every 20 milliseconds.
+once and reused. Each frame updates only the pixels whose colors change, writing each one at
+most once. The game targets one frame every 20 milliseconds.
 
 Choose **-O2** in the **Compiler optimization** menu next to **Compile**, then press **Compile**,
 **Build** and **Run**. Compile translates `flappy-asm.c` for **RISC-V** and opens its Generated
@@ -19,7 +19,7 @@ the score and the best score of the session at each game over. Press **Stop** to
 Build. Each array element colors a 2 × 2 pixel square, so the array has 192 columns and 256 rows.
 The program draws by storing colors in `display[y * WIDTH + x]`.
 
-The remaining simulator services have C names:
+The game uses these functions from `<sim.h>`:
 
 | C API                                                 | What the game uses it for                                 |
 | ----------------------------------------------------- | --------------------------------------------------------- |
@@ -770,7 +770,7 @@ int main(void) {
 
 `bird_y` and `velocity` keep the fractional movement from the assembly version. Dividing the
 position by 16 with `bird_y >> 4` chooses a screen row without losing the fraction stored for the
-next frame. Each `struct Pipe` holds the left column of its cap, the gap middle, and whether it has
+next frame. Each `struct Pipe` holds the left column of its cap, the center of the gap, and whether it has
 already contributed to the score.
 
 `read_flap` drains the keyboard queue once per frame. `update` makes the bird bob in `READY`,
@@ -785,28 +785,31 @@ tables.
 
 Stores to display memory trigger Screen updates, so `put` skips pixels whose colour is unchanged.
 `move_pipes` only changes the pipe records. Later in the frame, `repaint_pipes` compares each
-column of a pipe's shading with the column to its left: only where they differ has the Screen
-changed, and `pipe_rows` repaints the body rows or the cap rows that did. `slide_stripes` stores
-only the grass words whose colour changed, every fourth one.
+column of a pipe's shading with the column to its left. Where the colors differ, `pipe_rows`
+repaints the affected body or cap rows. `slide_stripes` updates only the grass pixels whose
+colors changed, which occur in every fourth column.
 
-`bird_sprites` and `digit_sprites` hold the sprites, one `0x00RRGGBB` word a pixel, with 0 for
-see-through. Each frame paints every pixel at most once, with the colour it ends the frame in, so
-a frame the Screen shows before it is finished never shows the bird missing. `repaint_pipes`
-therefore leaves out the bird's and the score's rows, and `sprite_column` paints those columns: the
-sprite where it is not see-through, and the world, from `world_column`, around it. In the Flappy
-ASM example Project, the sprites come from `assets/bird.bmp` and `assets/digits.bmp` instead,
-read with `fopen` when the program starts.
+`bird_sprites` and `digit_sprites` store one `0x00RRGGBB` word per pixel, with 0 for transparent
+pixels. Each frame writes a changed pixel directly to its final color, at most once. This avoids
+erasing the bird before drawing it in its new position, which could make it disappear briefly if
+the Screen refreshes during drawing.
 
-`hit_test` lets the ground stop the whole picture, but the pipes only a box `HIT_INSET` pixels
-inside it, which leaves out the picture's see-through corners and forgives a near miss.
+`repaint_pipes` skips the rows occupied by the bird and the score. `sprite_column` draws those
+regions, using the sprite's color for opaque pixels and `world_column` for the scenery around
+them. In the Flappy ASM example Project, the program instead loads the sprites from
+`assets/bird.bmp` and `assets/digits.bmp` with `fopen` when it starts.
+
+`hit_test` checks the bird's full rectangle for a collision with the ground. For pipes, it uses a
+smaller collision box, inset by `HIT_INSET` pixels on each side. This excludes the sprite's
+transparent corners and gives the bird some room for a near miss.
 
 `wait_frame` stores the next frame's deadline in `next_frame` and sleeps for the remaining time.
 This includes drawing time in the `FRAME_MS` interval. If there is no time left to wait, the routine
 resets the schedule and sleeps for one millisecond. Actual timing also depends on browser
-scheduling. The Screen can refresh between sleeps, but since each pixel is painted once a frame,
-such a refresh only shows an earlier version of the picture.
+scheduling. The Screen can refresh between sleeps. During drawing, it can show a mixture of the previous
+frame and the completed parts of the new frame.
 
 Try changing `FRAME_MS`, `GRAVITY`, `HALF_GAP` or `HIT_INSET`, then Compile and Build again. Compare
 `hit_test` with the assembly version: both use half-open ranges, so a box that fits exactly between
-a gap's two edges survives. Change a colour in `bird_sprites`, or `towers`, then Compile, Build and
-Run again to see the change.
+a gap's two edges survives. Change a color in `bird_sprites` or a building height in `towers`, then Compile, Build and Run
+again to see the change.

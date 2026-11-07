@@ -30,7 +30,7 @@ The Playground starts `sp` at `0x7fffeffc`. RISC-V requires it to be a multiple 
 `main` subtracts 12 before `jal` and adds 12 back immediately after the return. `gcd` does not need
 stack space of its own, but it still begins with an aligned `sp`.
 
-As the loop runs, the arguments are working registers. For `gcd(84, 36)`, `a0` finishes as 12 and
+The loop uses the argument registers to hold intermediate values. For `gcd(84, 36)`, `a0` finishes as 12 and
 `a1` finishes as 0. The caller copies the result from `a0` to `s0` before using `a0` for anything
 else.
 
@@ -51,7 +51,7 @@ stack frame.
 Write the leaf subroutine `difference`. It receives two nonnegative signed 32-bit integers (0 through
 2,147,483,647) in `a0` and `a1` and returns their absolute difference in `a0`. It may change `a1`
 and any `t` register, but it must not change an `s` register. Do not use memory or call another
-subroutine. `main` puts a sentinel in `s3`; the test checks that the subroutine leaves it unchanged.
+subroutine. `main` puts the value 12345 in `s3` so the test can check that the subroutine leaves it unchanged.
 
 Also replace each `addi sp, sp, 0` around a call: subtract 12 before `jal` so `sp` is 16-byte aligned,
 then add 12 after the return. The three calls check both argument orders and equal arguments. At the

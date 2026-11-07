@@ -1,6 +1,6 @@
-The array contains twelve numbers in ascending order. This program finds the index of 91 by
-repeatedly cutting the possible range in half. It leaves the index in `t4`, or -1 if the target is
-absent.
+This program uses binary search to find the index of 91 in an array of twelve numbers in ascending
+order. It repeatedly cuts the possible range in half and leaves the index in `t4`, or -1 if the
+target is absent.
 
 The range includes both ends: `low` and `high` are possible indices. The idea that keeps the search
 correct is:
@@ -70,7 +70,8 @@ Every element access uses `slli` to multiply `mid` by the four-byte size of each
 adds the array's base address, and then uses `lw` to read the element. The `lw` writes over the
 address in `t6` because the program no longer needs that address.
 
-Here is the range closing on the answer. Each row corresponds to one trip through the loop body:
+The table shows how the range shrinks until the program finds the target. Each row corresponds to
+one trip through the loop body:
 
 | probe | `low` | `high` | `mid` | `numbers[mid]` | branch result             |
 | ----- | ----- | ------ | ----- | -------------- | ------------------------- |
@@ -99,6 +100,6 @@ Start from the working program and make these small tests:
    again. It is a sentinel just beyond the array, so a correct search must still leave -1 in `t4`.
 4. Before running the 90 search, make a table with columns for `low`, `high`, `mid`, and
    `numbers[mid]`. Fill one row for every probe, then compare it with a step-by-step run.
-5. Finally, hide the two bound-update lines, `addi t2, t5, 1` and `addi t3, t5, -1`, with comments.
+5. Finally, comment out the two bound-update lines, `addi t2, t5, 1` and `addi t3, t5, -1`.
    Restore them from the rule: a middle value that is too small moves `low`; one that is too large
    moves `high`.

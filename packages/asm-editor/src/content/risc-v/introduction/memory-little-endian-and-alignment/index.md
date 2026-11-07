@@ -18,11 +18,10 @@ Consecutive addresses name consecutive bytes:
 | `0x1003` | next byte         |
 
 One byte contains eight bits. A multi-byte value therefore occupies several adjacent
-addresses. Reading or writing bytes in memory is called a **memory access**. Two questions then
-matter:
+addresses. Reading or writing bytes in memory is called a **memory access**. And we could ask:
 
 1. In what order are the bytes placed at those addresses?
-2. Which starting addresses support an access of several bytes?
+2. At which addresses can a multi-byte access begin?
 
 These questions describe **byte order** and **alignment**.
 
@@ -57,7 +56,7 @@ the written number:
 
 ```text
 written number:        12 34 56 78
-in increasing address: 78 56 34 12
+in address order:     78 56 34 12
 ```
 
 When RISC-V reads those four bytes as one value, it uses the same little-endian rule and
@@ -88,8 +87,7 @@ Suppose the four-byte value `0xA1B2C3D4` begins at address `0x2000`.
 ## Alignment
 
 A multi-byte value needs several adjacent addresses. A memory access is **naturally aligned** when
-its starting address is divisible by the number of bytes in the access. This course's simulator
-requires that alignment for accesses of several bytes at once.
+its starting address is divisible by the number of bytes in the access.
 
 For a four-byte access, the starting address must therefore be a multiple of four. These are aligned
 starts:
@@ -102,15 +100,13 @@ Each address is four bytes after the previous one. Addresses such as `0x1001`, `
 are not four-byte aligned. In hexadecimal, a four-byte-aligned address ends in `0`, `4`, `8` or `C`.
 That ending is a quick way to recognize the rule; the rule itself is still “a multiple of four.”
 
-The same idea follows the access size:
+The required alignment depends on how many bytes you access:
 
 | bytes accessed | aligned starting address |
 | -------------- | ------------------------ |
 | 1              | any address              |
 | 2              | a multiple of 2          |
 | 4              | a multiple of 4          |
-
-The starting address must be divisible by the number of bytes in the access.
 
 Sometimes arranging the next value for an aligned access leaves a gap. Suppose three bytes already
 occupy addresses `0x1000` through `0x1002`. The next free address is `0x1003`, but that is not a
@@ -121,8 +117,8 @@ address:  0x1000  0x1001  0x1002  0x1003  0x1004  0x1005  0x1006  0x1007
 use:      existing existing existing  gap   |------ four-byte value ------|
 ```
 
-The unused byte at `0x1003` is called **padding**. It moves the next starting point forward to the
-required boundary.
+The unused byte at `0x1003` is called **padding**. Leaving this gap lets the next value begin at
+an aligned address.
 
 In this course's simulator, a multi-byte access from an incorrectly aligned address stops the
 program with an alignment error.

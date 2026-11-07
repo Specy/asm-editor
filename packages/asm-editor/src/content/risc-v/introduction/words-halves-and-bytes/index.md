@@ -1,7 +1,6 @@
-RISC-V gives three names to the sizes used most often in this course: **byte**, **halfword** and
-**word**. By the end of this lecture, you should be able to tell how many bits each one contains,
-read its signed and unsigned ranges, and decide whether a smaller value needs sign extension or
-zero extension when it enters a 32-bit register.
+RISC-V uses **byte**, **halfword** and **word** to name three sizes of data. Each size has a signed
+and an unsigned range. When a value is smaller than a 32-bit register, sign extension or zero
+extension fills the remaining bits while preserving its signed or unsigned value.
 
 ## Byte, halfword and word
 
@@ -85,8 +84,8 @@ zero-extended to a word:    00008001
 sign-extended to a word:    FFFF8001
 ```
 
-The halfword `0x8001` is 32,769 unsigned and -32,767 signed. Zero extension preserves the first
-meaning; sign extension preserves the second.
+The halfword `0x8001` is 32,769 unsigned and -32,767 signed. Zero extension preserves the unsigned
+value. Sign extension preserves the signed value.
 
 A word already fills a 32-bit register, so it needs no extension.
 
@@ -111,7 +110,7 @@ A word already fills a 32-bit register, so it needs no extension.
 
 </details>
 
-The central idea is that size and interpretation are separate. **Byte**, **halfword** and **word**
-say how many bits there are. **Signed** and **unsigned** say how to read those bits. When a byte or
+Size and interpretation are separate. **Byte**, **halfword** and **word** say how many bits there
+are. **Signed** and **unsigned** say how to read those bits. When a byte or
 halfword must fill a 32-bit register, sign extension preserves its signed value and zero extension
 preserves its unsigned value.

@@ -67,9 +67,8 @@ A `w` operation follows three steps:
 2. Compute a 32-bit result, discarding anything beyond those 32 bits.
 3. Sign extend that result to fill the 64-bit destination register.
 
-Sign extension in step 3 is a rule of these particular operations. It is not a rule for every
-32-bit-looking pattern held in an RV64 register. A plain 64-bit instruction can leave bit 31 set
-while bits 32 through 63 remain zero.
+The `w` instructions always sign extend their results. Other instructions can produce a value
+with bit 31 set while bits 32 through 63 remain zero, as the next example shows.
 
 Compare the plain and `w` forms in this example:
 
@@ -91,7 +90,7 @@ produced the 32-bit pattern `80000000`, then copied bit 31 into the upper half.
 
 The second pair makes the 32-bit wrap visible. `t4` becomes `0000000100000000`, while `t5` becomes
 `0000000000000000`. The `addw` result keeps only the low 32 bits, so the carry into bit 32 is
-discarded; the remaining 32-bit result is zero.
+discarded. The remaining 32-bit result is zero.
 
 Use this decision rule:
 
@@ -100,7 +99,7 @@ Use this decision rule:
   32-bit result.
 - When loading a word, choose `lw` for sign extension and `lwu` for zero extension.
 
-The naming pattern is regular enough to use as a lookup:
+These are the full-width instructions and their `w` forms:
 
 | operation           | full 64-bit form             | 32-bit-result form               |
 | ------------------- | ---------------------------- | -------------------------------- |

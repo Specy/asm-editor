@@ -2,9 +2,9 @@ The stack is a region of memory used for temporary storage. RISC-V uses `x2`, al
 the **stack pointer** by convention. The register itself still holds an ordinary integer address;
 moving it does not automatically read, write or clear memory.
 
-Some startup code must give `sp` a usable address before a program treats it as a stack pointer.
-This playground does that for us and starts `sp` at `0x7FFFEFFC`, near the high end of its memory.
-That is this playground's initial value, not a value guaranteed by the RISC-V architecture.
+Before a program uses the stack, startup code must set `sp` to a usable address.
+This playground starts `sp` at `0x7FFFEFFC`, near the high end of its memory.
+Other RISC-V environments can use a different initial address.
 
 ## A push is a subtraction and a store
 
@@ -63,8 +63,7 @@ The two pops read the words in the opposite order. `t2` gets `22222222`, `t3` ge
 and `sp` returns to `0x7FFFEFFC`. This is **last in, first out**. Both values remain in memory
 because a pop changes the boundary; it does not erase the bytes.
 
-After running, enter `7FFFEFF4` in the memory panel's address box to see both words. The **Stack**
-tab of the memory panel already displays this region.
+After running, enter `7FFFEFF4` in the memory panel's address box to see both words.
 
 ## One adjustment, several stores
 
@@ -105,7 +104,7 @@ While the values are saved, `sp` is `0x7FFFEFF0` and the reserved block holds:
 Each restore uses the same offset as its matching save. Adding 12 at the end restores the exact
 value that `sp` had before the block was reserved.
 
-## Two kinds of alignment
+## Word alignment and stack alignment
 
 Every word address above is a multiple of 4. That **natural alignment** is what the current `lw` and
 `sw` examples require in this playground, and subtracting 4 or 12 from the 4-byte-aligned initial
@@ -119,7 +118,7 @@ alignment their word accesses need, but they do not demonstrate calling-conventi
 environment that follows that convention, startup or calling code supplies a 16-byte-aligned `sp`,
 and frame sizes that are multiples of 16 preserve it.
 
-## Room of your own
+## Reserve space for a local array
 
 Moving `sp` can reserve space for temporary data as well as saved register values. This example
 reserves sixteen bytes and treats them as a local array of four words:
@@ -147,14 +146,12 @@ fill:
 word array; here the base address happens to be in `sp`.
 
 After the last `addi`, the bytes still contain the four values, but the block is available for
-later stack use. Reserving that region again may overwrite them. The pointer records which region
-is currently reserved; moving the pointer performs no automatic memory operation.
+later stack use. Reserving that region again may overwrite them. `sp` marks the boundary of the reserved region. Changing it does not read, write or clear memory.
 
-## Restore the boundary
+## Restore the stack pointer
 
 Code that reserves a stack block must restore the previous value of `sp` when it finishes using the
-block. Otherwise later code starts from the wrong boundary, so all of its expected stack offsets
-refer to the wrong addresses.
+block. Otherwise later code uses the wrong base address for its stack offsets.
 
 For a simple block, the amount added at the end matches the amount subtracted at the beginning. It
 is useful to write those two adjustments as a pair and then fill in the loads, stores and

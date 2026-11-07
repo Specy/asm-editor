@@ -1,6 +1,6 @@
-Two numbers sit in registers, and the program leaves the larger of them in `t2` and the distance
-between them in `t4`. It is the first program here where some instructions get skipped, so step
-through it rather than running it and watch which ones the arrow visits.
+This program compares two numbers in registers. It leaves the larger number in `t2` and the
+nonnegative distance between them in `t4`. Step through it and watch which instructions the arrow
+visits: the branches cause some instructions to be skipped.
 
 ```riscv|playground|allow-open
 .text
@@ -15,7 +15,7 @@ a_is_bigger:
     mv t2, t0
 done:
 
-    slt t3, t0, t1          # the same question, answered as a number
+    slt t3, t0, t1          # t3 = 1 if a < b, otherwise 0
 
     sub t4, t0, t1          # the distance, which may come out negative
     bgez t4, positive       # if it did not, it is already the answer
@@ -27,12 +27,12 @@ positive:
 being compared are named right there in the instruction, and the jump either happens or it does not.
 Nothing is left behind for a later instruction to read.
 
-`slt t3, t0, t1` asks the same question and answers it differently. Instead of jumping it writes 1
-or 0 into `t3`, so you get the comparison as a value you can keep, add to something, or test later.
-Reach for the branch when the next thing to do is choose between two pieces of code, and for `slt`
-when you want the answer itself.
+`slt t3, t0, t1` compares the numbers in the opposite order: it writes 1 into `t3` if `t0` is less
+than `t1`, or 0 otherwise. It stores the comparison result instead of jumping, so you can keep the
+result, add it to something, or test it later. Use a branch to choose between two pieces of code,
+and use `slt` when you want the comparison result as a value.
 
-The `j done` is the part that is easy to leave out. Two pieces of code, only one of them allowed to
+The `j done` is the part that is easy to leave out. Only one of the two assignments to `t2` should
 run, so the first one has to jump over the second. Delete that line and the program runs straight
 into `a_is_bigger` and overwrites the answer it just worked out, which is a good thing to see once
 on purpose.

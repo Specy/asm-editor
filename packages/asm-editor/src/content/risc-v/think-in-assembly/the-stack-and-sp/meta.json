@@ -1,6 +1,6 @@
 {
     "name": "The stack and sp",
-    "description": "The stack is memory and sp is an ordinary register, so a push is a subtraction and a store that you write. Saving several registers with one adjustment, room for locals, and giving every byte of it back.",
+    "description": "Use sp to save values on the stack, reserve space for local data, and release that space when you finish.",
     "order": 4,
     "topic": "the-stack"
 }

@@ -1,6 +1,5 @@
-Nothing in memory records how long a string is. An array can be told its length in a constant, but a
-string that arrives from outside the program has only one thing marking its end: a zero byte after
-the last character. This program finds that byte and measures the distance back to where it started.
+A null-terminated string ends with a zero byte after the last character. To find its length, this
+program scans for that byte and subtracts the string's starting address from its address.
 
 ```riscv|playground|memory|allow-open
 .data
@@ -27,13 +26,13 @@ byte, so the distance it calculates is both a byte count and a character count. 
 `41 73 73 65 6D 62 6C 79 20 69 73 20 66 75 6E 00`, and its text button draws those same bytes back
 as letters.
 
-`lb` loads a single byte. `beqz t2, at_end` takes the branch when that byte is zero, which is the
-only thing separating the terminator from any other byte. `lbu` would make the same zero/not-zero
+`lb` loads a single byte. `beqz t2, at_end` takes the branch when that byte is zero, marking the end
+of the string. `lbu` would make the same zero/not-zero
 decision: signedness changes how nonzero bytes are extended into a register, not whether zero is
 zero.
 
-The subtraction at the end is the part worth slowing down for. Two addresses are just two numbers,
-so subtracting one from the other gives a count of bytes:
+Subtracting the starting address from the terminator's address gives the number of bytes before
+the terminator:
 
 ```
 10010000   'A'   <- t1 stayed here
@@ -44,7 +43,7 @@ so subtracting one from the other gives a count of bytes:
 ```
 
 `t0` stops **on** the zero byte and not past it, because the branch happens before the `addi` that
-would have stepped over it. So `t0 - t1` is 15, the number of real characters, with the terminator
+would have stepped over it. So `t0 - t1` is 15, the number of characters, with the terminator
 not counted.
 
 An empty string still has its terminator. With `text: .asciz ""`, the first byte at `text` is already

@@ -1,6 +1,6 @@
 {
     "name": "Drawing shapes on the screen",
-    "description": "Build horizontal runs, rectangles and a disc from pixel stores, then combine the drawing subroutines into a house scene.",
+    "description": "Draw rectangles and a disc by writing colours to memory, then combine the drawing subroutines to make a house scene.",
     "order": 20,
     "topic": "drawing-on-the-screen",
     "template": 6

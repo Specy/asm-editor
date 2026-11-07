@@ -1,6 +1,6 @@
 {
     "name": "The RISC-V instruction set",
-    "description": "Read the mnemonic and operands of a simple RISC-V instruction, distinguish destinations from sources, and see how assembler pseudo-instructions fit into the base instruction set and its extensions.",
+    "description": "Read RISC-V mnemonics and operands, distinguish destinations from sources, and learn about pseudo-instructions, the base instruction set and extensions.",
     "order": 4,
     "topic": "instruction-set"
 }

@@ -1,4 +1,5 @@
-This is a short output-formatting recap. In the Playground, put a service number in `a7`, put its
+You can build a line of console output by printing text, numbers, and characters in sequence.
+In the Playground, put a service number in `a7`, put its
 input in the register that service expects, and run `ecall`. Here the program builds one console
 line from text, a number, and one character:
 
@@ -38,12 +39,12 @@ values currently in those registers.
 
 Because service 4 needs a zero-terminated string, this declaration uses `.asciz`. Its seven
 characters take seven bytes, and `.asciz` adds an eighth byte whose value is zero. Service 4 starts
-at the address in `a0` and prints through that zero. `.ascii` does not add it, so service 4 could
+at the address in `a0` and prints the characters up to, but not including, that zero. `.ascii` does not add it, so service 4 could
 continue into later data instead of stopping after the label.
 
 The three services each print one kind of value: service 4 prints a zero-terminated string, service
 1 prints a signed 32-bit integer, and service 11 prints one character. That is why the line needs
-three requests. The final exit request ends this Playground run deliberately.
+three requests. Service 10 then ends the Playground run.
 
 ## Format a greeting
 

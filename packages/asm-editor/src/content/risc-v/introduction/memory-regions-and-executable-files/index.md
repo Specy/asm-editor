@@ -1,14 +1,14 @@
-A program's instructions, greeting and score need addresses. A **memory region** is a range of
-addresses with a particular purpose; a **memory map** shows where those regions are.
+A program's instructions and stored values occupy memory addresses. A **memory region** is a range
+of addresses with a particular purpose. A **memory map** shows where those regions are.
 
-Keep two questions in view: how does the source group its contents, and where do those contents
-live when the program runs?
+The source groups instructions and data into sections. The memory map shows where they go when
+the program runs.
 
 ## Sections and regions
 
 An assembly **section** groups contents for the tools building the program. You have used `.text`
-for instructions and `.data` for stored values. These two directives select the corresponding
-regions here, but several source sections can contribute to one memory region.
+for instructions and `.data` for stored values. In this editor, these directives select the
+instruction area and data area. Several source sections can contribute to one memory region.
 
 Common sections:
 
@@ -20,11 +20,12 @@ Common sections:
 | `.bss`    | writable storage initially filled with zero | a 16-byte buffer           |
 
 In this RISC-V editor, `.data`, `.section .rodata` and `.bss` all select the **same writable data
-area**. Switching sections continues the data layout. `.section .rodata` does not protect
+area**. Switching between these sections continues adding data after the previous declaration. `.section .rodata` does not protect
 the greeting against writes. Keeping the greeting and `.space` buffer inside `.data` also works.
 
-These declarations provide **static storage**: space lasting for the program's execution, with
-sizes determined during Build. The score can change. “Static” describes storage lifetime.
+These declarations provide **static storage**: memory reserved for the entire time the program
+runs, with sizes determined during Build. Static storage can hold values that change, such as
+the score. “Static” describes how long the storage lasts.
 
 ## Inspect one complete program
 
@@ -76,8 +77,8 @@ Its bytes use little-endian order.
 The data area is one part of the default map. Two other regions provide working storage:
 
 - The **stack** holds temporary values, such as saved register values. The **stack pointer**, `sp`,
-  tracks the current stack position. When a calculation finishes, its temporary values can stop
-  being needed, allowing that stack space to be reused.
+  tracks the current stack position. When a calculation no longer needs its
+  temporary values, the program can reuse that stack space.
 - The **heap** provides space requested while a program runs, for example for an image whose size
   comes from input. The **heap break** marks the end of the heap space currently granted; moving
   that boundary forward makes more space available.
@@ -90,8 +91,8 @@ The data area is one part of the default map. Two other regions provide working 
 | stack                   | initial `sp`: `0x7FFFEFFC`        | temporary working storage      |
 | MMIO                    | `0xFFFF0000`                      | keyboard and console registers |
 
-These starting points and initial `sp` belong to the simulator's default map; RISC-V itself does
-not prescribe them. Use the table as a reference.
+These starting addresses and the initial value of `sp` belong to the simulator's default map.
+RISC-V itself does not prescribe them.
 
 RV64 uses the same displayed locations here, with wider registers. Switching from RV32 to RV64
 leaves `.word` at four bytes; `.dword` declares eight bytes. The declaration's size and alignment
@@ -121,7 +122,7 @@ source → assembler → object file → linker → executable file → loader �
 
 The **assembler** encodes instructions and lays out data. An **object file** holds those contents
 and information for combining files. The **linker** combines object files and settles references
-to labels defined elsewhere. The **loader** prepares memory and execution from the executable.
+to labels defined elsewhere. The **loader** loads the executable into memory and prepares it to run.
 Its entry point can lead to startup instructions that run before `main`.
 
 ## ELF describes the file and its loading

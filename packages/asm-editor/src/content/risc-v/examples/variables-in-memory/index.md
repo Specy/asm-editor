@@ -20,10 +20,10 @@ main:
     sw t1, 8(t0)        # write the answer back into memory
 ```
 
-There are six source instruction lines. Three carry values across the boundary between memory and
-registers: two `lw` lines and one `sw` line. `add` reads registers and writes a register, and that is
-all it can do. Anything sitting in memory has to come in through a load and go back out through a
-store. `la` is a pseudo-instruction, so the assembler may turn that one source line into more than
+There are six source instruction lines. Three transfer values between memory and registers:
+two `lw` lines load values and one `sw` line stores a value. `add` reads registers and writes a
+register. To add values stored in memory, the program must load them into registers first, then
+store the result back in memory. `la` is a pseudo-instruction, so the assembler may turn that one source line into more than
 one machine instruction when it builds the program.
 
 The three four-byte slots begin at `0x10010000`, where `.data` puts the first label. `price` and
@@ -41,17 +41,15 @@ This editor initializes its data memory to zero, so the reserved bytes at `total
 before the program runs. Reserving space does not by itself promise zero-filled bytes on every
 system.
 
-The bytes come out backwards from how you would read the number: 250 is `0x000000FA` and the panel
-shows `FA 00 00 00`. That is little endian, the lowest byte of a word at the lowest address. The
-**W** button in the panel's header groups the bytes into words again and shows them the way round
-you wrote them.
+The panel shows bytes in address order: 250 is `0x000000FA`, and the panel shows `FA 00 00 00`.
+This is little-endian byte order: the least significant byte of a word is stored at the lowest
+address.
 
-`TAX` and `price` are both names, and they do not behave alike. `TAX` was declared with `.eqv`, so
-the assembler puts the number 20 into the instruction itself and nothing goes near memory. `price`
-is a label on a piece of data, so it stands for an address, and getting at the value there takes a
-load.
+`TAX` is an assembler constant declared with `.eqv`. The assembler puts its value, 20, into the
+`addi` instruction itself, so the program does not need to load it from memory. `price` is a data
+label: it stands for an address, and the program must load the value stored at that address.
 
-That `la t0, price` happens once, and every access after it counts from the address in `t0`:
+`la t0, price` loads the address once. Each load and store after it uses an offset from `t0`:
 `0(t0)` selects `price`, `4(t0)` selects `shipping`, and `8(t0)` selects `total`. Each offset is a
 multiple of four, so each word access is aligned.
 

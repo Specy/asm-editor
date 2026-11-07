@@ -1,6 +1,6 @@
-Forty bytes of room are reserved in memory and a loop writes the numbers 1 to 10 into them, one word
-per pass. The answer is in the memory panel: type `10010000` in its address box and the ten words
-are there, `00000001` to `0000000A`.
+This program reserves forty bytes in memory and uses a loop to write the numbers 1 to 10, one word
+per pass. To see the result in the memory panel, type `10010000` in its address box. The ten words
+contain `00000001` to `0000000A`.
 
 ```riscv|playground|memory|allow-open
 .eqv COUNT, 10
@@ -21,9 +21,9 @@ fill:
     bnez t2, fill
 ```
 
-Three registers, three jobs, and keeping them apart is the whole trick of the program. `t0` is
-**where**, `t1` is **what**, and `t2` is **how many are left**. Only `t2` decides when to stop. Here
-are all three at the top of each pass:
+Each of the three registers has a separate job. `t0` holds the **address to write to**, `t1` holds
+the **number to write**, and `t2` holds the **number of passes left**. Only `t2` decides when to stop.
+Here are all three at the start of each pass:
 
 | pass | `t0` (where) | `t1` (what) | `t2` (left) |
 | ---- | ------------ | ----------- | ----------- |
@@ -32,21 +32,21 @@ are all three at the top of each pass:
 | 3    | `10010008`   | 3           | 8           |
 | ...  | ...          | ...         | ...         |
 | 10   | `10010024`   | 10          | 1           |
-| gone | `10010028`   | 11          | 0           |
+| end  | `10010028`   | 11          | 0           |
 
-The last row is the state the program stops in. `t0` and `t1` have both gone one step too far, which
-is normal and harmless: nothing reads them again. `t2` reaching 0 is what let the `bnez` fall
-through.
+The last row shows the registers when the program stops. `t0` points just past the reserved memory,
+and `t1` holds 11. Nothing reads them again, so these final updates are harmless. Since `t2` is 0,
+`bnez` does not branch back to `fill`.
 
 `sw t1, 0(t0)` writes the word to whatever address `t0` holds, so moving `t0` on by 4 is what turns
-one instruction into ten different destinations. That 4 is the size of a word, and it is yours to
-get right: the store itself has no idea how far apart the things you are storing should be. Put an
+one instruction into ten different destinations. That 4 is the size of a word in bytes. The
+store instruction does not advance the address, so the program must add the correct number of bytes. Put an
 `8` there and the numbers land eight bytes apart, with an untouched zero between each pair, and the
 last five spill past the forty bytes `.space` reserved.
 
-Counting down rather than up is why the last line is a `bnez` and not a comparison. A branch here
-looks at two registers, and `zero` is a register that is always available and always reads 0, so
-"has this hit zero yet" is free. In this simple version, counting up to 10 would need the 10 loaded
+Counting down lets the loop test whether `t2` has reached zero. `bnez t2, fill` is shorthand for
+`bne t2, zero, fill`: it compares `t2` with the `zero` register, which always reads 0. The program
+does not need to load 0 into another register. In this simple version, counting up to 10 would need the 10 loaded
 into a fourth register for the branch to compare against.
 
 ## Try it

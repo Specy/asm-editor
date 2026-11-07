@@ -1,6 +1,6 @@
 {
     "name": "Bubble sort",
-    "description": "Sort words in place with adjacent swaps, a shrinking inner loop, and an outer loop for the remaining passes.",
+    "description": "Use nested loops to sort words in place by comparing and swapping adjacent values.",
     "order": 13,
     "topic": "bubble-sort"
 }

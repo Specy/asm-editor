@@ -1,11 +1,11 @@
-`sum_of_squares(a, b)` returns `a * a + b * b` in `a0`. This example deliberately passes its two
-inputs on the stack. That is a teaching convention here, not the usual rule: normally the first
-eight RISC-V arguments go in `a0` through `a7`. Stack arguments become necessary when there are
-more inputs than those registers can hold.
+`sum_of_squares(a, b)` returns `a * a + b * b` in `a0`. In this example, the caller passes both
+inputs on the stack. Normally, the first eight RISC-V arguments go in `a0` through `a7`, and
+additional arguments go on the stack. Passing both inputs on the stack here lets you practise
+reading stack arguments.
 
 The stack also has a separate job. `sum_of_squares` calls `square` twice, so it must keep its own
-return address and its first answer somewhere safe while the second call runs. Its frame holds
-those values. `fp` is another name for `s0`; since `s0` is callee-saved, a subroutine using `fp`
+return address and its first result while the second call runs. It stores
+those values in its stack frame. `fp` is another name for `s0`; since `s0` is callee-saved, a subroutine using `fp`
 must save and restore the caller's `s0` value.
 
 ```riscv|playground|memory|allow-open
@@ -56,14 +56,14 @@ main:
     mv s2, a0               # 25; s0 is 123 and s1 is 456 again
 ```
 
-The Playground begins with `sp = 0x7fffeffc`, which is 12 modulo 16. `main` subtracts 12, so its
-`jal` sees `sp = 0x7fffeff0`, a multiple of 16. The two 4-byte arguments occupy the first eight
+The Playground begins with `sp = 0x7fffeffc`, which is 12 modulo 16. `main` subtracts 12, so
+`sp = 0x7fffeff0` when it calls `sum_of_squares`. This address is a multiple of 16. The two 4-byte arguments occupy the first eight
 bytes; the remaining four bytes are padding. `sum_of_squares` and `square` each subtract 16, so
 their frames keep that alignment. Every subtraction has the matching addition before its `ret` or
 before `main` finishes.
 
-Here is one exact snapshot: the second call of `square`, after `square` has made its frame and
-computed `4 * 4`, but before it returns. `sp` is `0x7fffefd0`; `fp` is still `0x7fffeff0` in
+The table below shows the stack during the second call to `square`, after it has created its frame
+and computed `4 * 4`, but before it returns. `sp` is `0x7fffefd0`; `fp` is still `0x7fffeff0` in
 `sum_of_squares`.
 
 | Address                   | Reached as                   | Value                      | Meaning                                        |
@@ -84,17 +84,18 @@ does not call another subroutine, so its incoming `ra` remains in the register a
 directly. Its frame is only to demonstrate using and preserving `s1`; a shorter `square` could use
 `mul a0, a0, a0` and need no frame at all.
 
-The prologue claims the words a subroutine needs and saves its callee-saved registers or `ra` when a
-nested call would overwrite it. The epilogue restores them in reverse: restore saved values, put
-`sp` back, then `ret`. Popping a frame only moves `sp`; old words can remain visible in the memory
-panel, but they are no longer yours to use.
+The instructions that set up a stack frame are called the **prologue**. They reserve space and save
+any callee-saved registers the subroutine changes. A subroutine that makes nested calls also saves
+`ra`, because each call overwrites it. The **epilogue** restores the saved values, puts `sp` back,
+and returns with `ret`. Removing a frame only moves `sp`. The old values can remain visible in the
+memory panel, but the subroutine no longer owns that space.
 
 ## Your turn: finish the frame
 
-Complete `sum_of_squares`. Keep the same stack-argument teaching convention: its inputs are 5 and
-12 at `0(fp)` and `4(fp)`. It must return 169 in `a0`, preserve `s0` and `s1`, and leave `sp` at the
-Playground's initial `0x7fffeffc`. `square` may change `a0` and temporary registers, but must give
-`s1` back unchanged. Use a 16-byte frame in `sum_of_squares` for its local, saved `fp`, and saved
+Complete `sum_of_squares`. Read its inputs, 5 and 12, from the stack at
+`0(fp)` and `4(fp)`. It must return 169 in `a0`, preserve `s0` and `s1`, and leave `sp` at the
+Playground's initial `0x7fffeffc`. `square` may change `a0` and temporary registers, but must restore
+`s1` before returning. Use a 16-byte frame in `sum_of_squares` for its local, saved `fp`, and saved
 `ra`.
 
 ```riscv|playground|exercise

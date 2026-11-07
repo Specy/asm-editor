@@ -82,7 +82,7 @@ done:
 ```
 
 The `pluck` buffer is in the program's memory. Playback reads the Synth's own **Sample memory**,
-shared by all its channels. The **upload** copies between them: write the source address, byte
+shared by all its channels. An **upload** copies the buffer into Sample memory: write the source address, byte
 count and destination offset, then write to `0x188(s0)` to copy the bytes at that moment.
 Changing `pluck` afterwards has no effect on playback until another upload copies it again.
 
@@ -105,5 +105,5 @@ insert `li t1, 3840` followed by `sh t1, 0x0e(s0)` immediately after `sh t6, 0x0
 initial fade, samples 3,840 through 3,999 repeat as a quiet held tone.
 
 Then change the sound itself. `andi t4, t1, 16` splits each cycle of 32 samples in two
-halves; `andi t4, t1, 8` makes it 16 samples per cycle, an octave higher. The
+halves; `andi t4, t1, 8` makes each cycle 16 samples long, raising the pitch an octave. The
 [Synth chapter](/documentation/risc-v/synth#samples) has the other registers.

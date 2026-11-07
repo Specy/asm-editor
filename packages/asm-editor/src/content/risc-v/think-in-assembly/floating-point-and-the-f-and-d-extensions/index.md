@@ -69,11 +69,10 @@ An F-only processor has 32-bit floating-point registers. When D is present, as i
 playgrounds, those registers are 64 bits wide. A single uses the low 32 bits, and a floating-point
 instruction fills the upper 32 bits with ones. This is **NaN boxing**.
 
-The box makes an accidental `.d` use easy to detect: interpreting the complete boxed pattern as a
-double produces a NaN. It does not make the reverse interpretation safe. If a register contains a
-double, the Single view simply interprets its low 32 bits as a single. Those bits could represent
-many values. For example, double-precision 3.75 is `400E000000000000`, whose low word is zero, so
-the Single view displays 0.0.
+Interpreting the complete boxed pattern as a double produces a NaN. The Single view also checks
+the box: if the upper 32 bits are not all ones, it displays NaN. For example, double-precision
+3.75 is `400E000000000000`. Its low 32 bits are zero, but it is not a boxed single, so the Single
+view displays NaN.
 
 ## Load, calculate and store
 
@@ -137,9 +136,9 @@ to the double.
 ## Conversions and raw moves
 
 A **conversion** preserves the numeric value as closely as the destination format allows. A **raw
-move** preserves the payload bits within the width it transfers. For `fmv.w.x`, those are the low 32
-bits; on a D-capable register, the instruction also fills the upper 32 bits with ones to create a
-NaN-boxed single. These are different operations even when they cross the same two register files.
+move** copies bits without converting the number they represent. For example, `fmv.w.x` copies the
+low 32 bits of an integer register into a floating-point register. When D is present, it also fills
+the upper 32 bits with ones to create a NaN-boxed single.
 
 | instruction        | action in this RV32 playground                                      |
 | ------------------ | ------------------------------------------------------------------- |

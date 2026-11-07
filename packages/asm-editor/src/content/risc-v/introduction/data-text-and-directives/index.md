@@ -69,7 +69,7 @@ After these two instructions, `t0` holds the address of `score` and `t1` holds t
 
 ## Directives that create data
 
-These common data directives are useful reference material.
+Use these directives to declare data:
 
 | directive       | bytes it asks the assembler to place                     |
 | --------------- | -------------------------------------------------------- |
@@ -85,8 +85,8 @@ order. For example, `.word 0x11223344` appears in increasing memory addresses
 as `44 33 22 11`.
 
 `.ascii` writes the characters you provide. `.asciz` also appends a zero byte, often called a
-**terminator**. Code for a zero-terminated string needs that terminator; without it, the code
-continues into the following bytes. A string can instead use `.ascii` with its length stored
+**terminator**. Code that reads a zero-terminated string uses the terminator to find its end. Without it, the code
+continues reading the following bytes. A string can instead use `.ascii` with its length stored
 separately.
 
 `.space` is useful for a buffer: an area the running program fills. The number after it is a count
@@ -111,7 +111,7 @@ In this assembler, `.half` and `.word` align their own starting addresses. `.byt
 `.asciz` and `.space` do not. Put `.align 2` before a `.space` buffer if the program will access that
 buffer with `lw` or `sw`.
 
-## Inspect one data layout
+## Inspect a data layout
 
 Build this example and open the memory panel at `10010000`. The two instructions place the addresses
 of `w` and `room` in `t0` and `t1`, where you can compare them with the table.
@@ -169,7 +169,7 @@ The label `values` means a memory address, so `la t4, values` places that addres
 `lw t2, 0(t4)` reads the word stored there. `t0` receives 4 from the assembled constant. `t2`
 receives 4 from the word in memory.
 
-This is the distinction to keep:
+The names and instructions have different roles:
 
 - an `.eqv` name stands for a number known while assembling;
 - a label stands for an address in the assembled program; and
@@ -216,9 +216,9 @@ main:
 
 </details>
 
-## A compact program shape for this editor
+## Putting the pieces together
 
-This is a complete small program for the editor using a constant, static data and run-time code:
+This complete program uses a constant, static data and instructions that update the stored value:
 
 ```riscv|playground|memory
 .eqv STEP, 1

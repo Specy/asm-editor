@@ -1,6 +1,6 @@
 {
     "name": "A jump table",
-    "description": "A checked index selects one of four handler addresses in memory, then jr jumps to the selected operation.",
+    "description": "Check an operation number, then use a jump table to select one of four operations.",
     "order": 14,
     "topic": "jump-table"
 }

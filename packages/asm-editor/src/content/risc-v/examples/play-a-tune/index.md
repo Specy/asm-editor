@@ -51,8 +51,8 @@ at once and advances the virtual clock instead.
 
 ## Try it
 
-Change `li a2, 0` to `li a2, 73` and run the program again: the same tune on a flute. 40 is a
-violin and 56 a trumpet.
+Change `li a2, 0` to `li a2, 73` and run the program again to hear the same tune on a flute.
+Use instrument 40 for a violin or 56 for a trumpet.
 
 Then change service 33 to 31. Service 31 starts the note and goes on at once, so all fifteen notes
 start within a few instructions of each other and overlap.

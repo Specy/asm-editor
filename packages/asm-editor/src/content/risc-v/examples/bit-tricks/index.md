@@ -1,5 +1,5 @@
-One 32-bit value can be inspected in several useful ways by treating its register as a pattern of
-bits. This program starts with `t0 = 182` and produces five results:
+This program uses masks, shifts and loops to inspect a 32-bit value as a pattern of bits. It starts
+with `t0 = 182` and produces five results:
 
 | question                                               | result register | value for 182 |
 | ------------------------------------------------------ | --------------- | ------------- |
@@ -42,17 +42,17 @@ lead_done:
 
 `andi` keeps a bit wherever the mask has a 1 and clears it everywhere else. The mask 1 therefore
 keeps only the lowest bit. That bit is 0 for an even value and 1 for an odd value, so `t1` is the
-answer directly.
+answer.
 
 Every place a bit moves left doubles its place value, so shifting 182 left by three gives 1456.
-This multiplication interpretation is exact only when the mathematical result fits the intended
+The shift gives the same result as multiplication only when the product fits the intended
 32-bit range. A register keeps only the low 32 bits: any bits shifted past bit 31 are discarded.
 The instruction itself does not distinguish signed from unsigned values; the same remaining bit
 pattern can have different signed and unsigned interpretations. The shift amount in `slli` is a
 constant from 0 through 31. `sll` instead takes the shift amount from a register.
 
-`andi t3, t0, 0xF` keeps the bottom four bits. This is also how a field is pulled out of a packed
-value: shift the wanted field down if necessary, then mask off the other bits. Here the bottom four
+`andi t3, t0, 0xF` keeps the bottom four bits. You can also use this technique to extract a field from
+a packed value: shift the field down if necessary, then mask off the other bits. Here the bottom four
 bits of 182 are `0110`, so `t3` becomes 6.
 
 There is a limit on an immediate mask. The constant in `andi` is 12 bits and is sign extended, so
@@ -77,9 +77,9 @@ the copy in `t5` shifts right:
 After pass 8, `t5` is zero. The loop still runs until `t6` has counted down from 32 to 0, so it
 always inspects all 32 positions; the remaining 24 passes add zero. `srli` brings zeroes in at the
 top, which is useful when the register is being treated as bits. `srai` instead copies the sign bit
-into the new positions and is used when shifting a signed value right as arithmetic.
+into the new positions. This is an arithmetic right shift, used for signed values.
 
-The leading-zero loop starts at 32 and subtracts once for every shift needed to empty the register.
+The leading-zero loop starts with `s1 = 32` and subtracts 1 for every shift needed to make `s2` zero.
 It runs at most 32 times. For 182, eight shifts reach zero, leaving `s1 = 24`. If `t0` is zero, the
 branch exits before any subtraction and returns 32. If bit 31 is set, emptying the register takes
 32 logical shifts and the result is 0; this includes every bit pattern interpreted as a negative

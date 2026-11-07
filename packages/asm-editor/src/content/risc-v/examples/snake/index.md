@@ -46,7 +46,7 @@ display address = display + 4 * (row * 32 + column)
 Mutable game state lives in memory so helpers can load it by name. Saved registers hold
 configuration and current-frame values that are needed across calls.
 
-Each trip through `frame` does these jobs:
+Each iteration of `frame` does these jobs:
 
 1. Read at most one key and accept a safe change of direction.
 2. Save the old tail cell, then shift the body from tail toward head.
@@ -375,16 +375,15 @@ dy + ny = 0 +  0 = 0
 That request is refused. A request for up, `(0, -1)`, leaves nonzero sums and is accepted. The two
 sums are both zero only when the requested direction is the exact opposite.
 
-`draw_cell` uses `a0` for its ordinary argument, while also reading `s0` and `s1`. Those saved
-registers are program-local parts of this helper's contract. They do not replace the general
-calling-convention rule that ordinary subroutine arguments go in `a` registers.
+`draw_cell` uses `a0` for its ordinary argument, while also reading `s0` and `s1`. This program uses those saved
+registers to pass the display address and colour to `draw_cell`. Ordinary subroutine arguments
+still go in `a` registers, as described in the calling convention.
 
-## Food, growth, and the supplied generator
+## Food, growth, and the random number generator
 
-`next_random` is a supplied **xorshift** helper. Given `seed`, it applies the fixed shift counts
-13, 17, and 5, stores the next seed, and returns that value in `a0`. Its contract is enough to use
-it; the mathematical choice of constants is outside this example. The sequence is deterministic,
-so the same starting seed produces the same values on every run.
+`next_random` uses the **xorshift** algorithm to generate a sequence of numbers. Given `seed`,
+it applies shifts of 13, 17, and 5 bits, stores the next seed, and returns that value in `a0`.
+The sequence is deterministic, so the same starting seed produces the same values on every run.
 
 `place_food` calls the helper twice. Masking a result with 31 retains five bits, giving a value
 from 0 through 31 for one coordinate. After packing the candidate cell, the helper scans `body`.
@@ -408,11 +407,11 @@ operation remains visible.
 ## Drawing and calls
 
 Most frames change two visible cells: the old tail becomes background and the new head becomes
-green. The food is drawn again to cover the frame in which a meal placed it somewhere new. On a
+green. The program also draws the food each frame so it appears at its new position after a meal. On a
 growth frame, `s5` skips the tail erase once. Updating these few cells avoids clearing and
 redrawing the whole board every 120 milliseconds.
 
-The score uses console `ecall`s because the bitmap display contains pixels. The other `ecall`s
+The program prints the score in the console using `ecall`s. The other `ecall`s
 wait for the next frame and exit after a collision.
 
 At startup, `main` subtracts 12 from the Playground's initial stack pointer to align it before the

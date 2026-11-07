@@ -1,11 +1,11 @@
-Two unit conversions, one in each direction. The first turns 365 days into hours with a `mul`, and
+This example makes two unit conversions. The first turns 365 days into hours with a `mul`, and
 the second turns 1000 seconds into 16 minutes and 40 seconds, with the minutes from a `div` and the
 leftover seconds from a `rem`.
 
 The arithmetic examples so far have mostly added and subtracted. Multiplication and division are
 the **M extension**: a group of instructions that a RISC-V chip is allowed to leave out, and that
-this simulator has. That is the deal the whole instruction set is built on, a small core everyone
-implements and named groups on top of it.
+this simulator supports. RISC-V has a small base instruction set, with named extensions that add
+groups of instructions.
 
 ```riscv|playground|allow-open
 .text
@@ -25,27 +25,27 @@ main:
     rem s3, t0, s1
 ```
 
-Multiply two 32 bit numbers and the answer can need 64 bits. A register holds 32, so the product
-comes in two pieces and each piece is an instruction: `mul` writes the bottom half, `mulh` writes
-the top half of the same multiplication. For 365 times 24 the top half is all zeroes, since 8760
-fits with room to spare, and the second instruction looks pointless.
+Multiply two 32-bit numbers and the answer can need 64 bits. A register holds 32 bits, so you need
+two instructions to get the full product: `mul` writes the bottom half, and `mulh` writes the top
+half of the same multiplication. For 365 times 24 the top half is all zeroes, since 8760 fits in
+the bottom half.
 
-Change the 24 to `12000000` and it stops looking pointless. `t2` comes out at `05117F00` and `t3` at
-1, and the real answer is that 1 times 4294967296, plus 85032704, which is 4380000000. The low half
+Change the 24 to `12000000` to see a product that needs both halves. `t2` becomes `0x05117F00` and
+`t3` becomes 1. The full product is 1 times 4,294,967,296, plus 85,032,704, which is 4,380,000,000. The low half
 alone has lost the part that did not fit. The high-half instruction says how to interpret each
 operand: `mulh` is signed times signed, `mulhu` is unsigned times unsigned, and `mulhsu` treats its
 first operand as signed and its second as unsigned.
 
-`div` and `rem` split the same way, one instruction per answer, over the same two source registers.
-Division cuts towards zero and the remainder keeps the sign of the number being divided, so -7 over
+`div` writes the quotient, and `rem` writes the remainder. Both use the same two source registers.
+Division rounds towards zero and the remainder keeps the sign of the number being divided, so -7 over
 2 is -3 with a remainder of -1. `divu` and `remu` are the pair that read their operands as plain
 unsigned values from 0 through 4,294,967,295.
 
-The last two lines divide by zero, and the program does not stop, complain, or print anything. `div`
-answers `FFFFFFFF`, which is -1, and `rem` hands back the number you were dividing. That is the
-defined behaviour, not a bug in the simulator, and it means a program handed a zero it did not
-expect carries on quietly with a wrong answer. If a divisor could be zero, check it and branch to
-the handling your program needs before doing the division.
+The last two instructions divide by zero without stopping the program or reporting an error. `div`
+writes `0xFFFFFFFF`, which is -1, and `rem` returns the number you were dividing. RISC-V defines
+these results, so an unexpected zero divisor can let your program continue with an incorrect
+result. If a divisor could be zero, check it and branch to code that handles it before doing the
+division.
 
 Signed division has one more special case. The smallest signed 32-bit number is `0x80000000`, or
 -2,147,483,648, and its positive counterpart cannot fit in a signed register. Dividing it by -1

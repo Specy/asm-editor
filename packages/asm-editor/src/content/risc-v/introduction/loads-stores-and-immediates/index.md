@@ -1,6 +1,5 @@
 RISC-V keeps arithmetic and memory access separate. To change a value in memory, you first load it
-into a register, work on it there, and then store it back. This lecture develops that pattern and
-the operand notation it uses.
+into a register, work on it there, and then store it back.
 
 ## Real operands and assembler conveniences
 
@@ -37,7 +36,7 @@ one real instruction to construct. Use `li` for a number, `mv` to copy a registe
 the address represented by a label.
 
 Assemblers can also accept some label-based shortcuts for loads and stores. Those shortcuts are
-not another hardware addressing mode. In this course, the clear general pattern is to use `la`
+not another hardware addressing mode. In this course, use `la`
 once to place a label's address in a register, then access memory with `offset(base)`.
 
 ## Working with an immediate
@@ -145,7 +144,7 @@ sw   t1, 0(t0)         # store: copy the changed word back to memory
 The original memory value remains after the load. Changing `t1` changes only the register; the
 final store writes the changed value back to memory.
 
-The same shape works at other sizes. To change a byte, load it with `lb` or `lbu`, work on the
+The same pattern works at other sizes. To change a byte, load it with `lb` or `lbu`, work on the
 32-bit register value, and write its low byte back with `sb`. Your choice between `lb` and `lbu`
 depends on whether the byte should be treated as a signed or unsigned value while it is in the
 register.
@@ -188,8 +187,8 @@ lw   t4, 0(t3)         # load numbers[i]
 For a byte array, the index is already a byte offset. For a halfword array, the byte offset is the
 index multiplied by 2.
 
-A pointer is a register that holds an address. It can hold the current element's address and move
-to the next element:
+A **pointer** is an address used to access data in memory. You can keep a pointer in a register
+and add the element size to make it point to the next element:
 
 ```riscv
 # t0 = address of one word element
@@ -257,6 +256,5 @@ receives 30.
 
 </details>
 
-The pattern to carry forward is small but powerful: use immediates for constants, calculate memory
-addresses in bytes, load values into registers, do the work there, and store results back when
-memory must change.
+Use immediates for constants and calculate memory addresses in bytes. To change a value in memory,
+load it into a register, do the work there, and store the result back.

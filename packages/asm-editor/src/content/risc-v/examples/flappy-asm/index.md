@@ -166,7 +166,7 @@ main:
     li s11, 0               # frames since the program started
     jal make_backdrop
     jal new_game
-    li a7, 30               # service 30: milliseconds since the run started
+    li a7, 30               # service 30: milliseconds since 1970-01-01 UTC
     ecall
     la t0, next_frame
     sw a0, 0(t0)            # the first frame starts now
@@ -1449,17 +1449,17 @@ to zero.
 The score increases after a pipe's right edge passes the bird's left edge. Setting `counted` to 1
 ensures that later frames do not score the same pipe again.
 
-Treat `random_gap` as a supplied helper, as in the Snake game. Its useful contract is: it returns a
-gap middle from 92 to 140 in `a0`, and, besides the link address created by `jal`, it changes only
-`a0` and `t6`. Service 30 supplies a seed when play begins, while xorshift deterministically
-produces the following values. A seed of zero would stay zero through every shift and `xor`, so
+Treat `random_gap` as a supplied helper, as in the Snake game. It returns the middle of a gap
+from 92 to 140 in `a0` and changes only `a0` and `t6`. The call itself also sets `ra` through
+`jal`. Service 30 supplies a seed when play begins. From that seed, xorshift produces a repeatable
+sequence of values. A seed of zero would stay zero through every shift and `xor`, so
 `start` replaces it with a fixed nonzero one.
 
 ## Collision ranges
 
-The hit test uses **half-open intervals**: the first position belongs to the object and the position
-after the end does not. The pipes test a box `HITIN`, 2 pixels, inside the bird's picture, which
-leaves out its see-through corners and forgives a near miss. Horizontally, that box occupies
+The hit test uses **half-open intervals**: the starting position is included and the ending
+position is excluded. For pipe collisions, it tests a box inset from the bird's picture by
+`HITIN`, or 2 pixels, on each side. This leaves out the transparent corners and allows near misses. Horizontally, that box occupies
 `[HITX, HITR)`, which is `[50, 63)`, and a pipe occupies `[left, left + PIPEW)`. The test uses the
 cap's width for the whole pipe, two columns wider on each side than the body.
 
@@ -1476,9 +1476,9 @@ at or before `HITX`. That explains the `bge` and `ble` branches in `hit_test`.
 The same convention applies vertically. If the top row is 100 and `BIRDH` is 12, the bird's picture
 occupies `[100, 112)` and its box `[102, 110)`. A gap with middle 100 and `HALFGAP` 40 occupies
 `[60, 140)`, so the bird fits. The test uses strict `blt` and `bgt` for the pipe edges: equality
-means the box still fits exactly. The ground stops the whole picture: it starts at `GROUNDY`, row
-216, and a bird whose excluded bottom edge equals `GROUNDY` is still clear of it, which is why the
-ground test branches with `ble`.
+means the box still fits exactly. The ground test uses the whole bird picture. The ground starts
+at `GROUNDY`, row 216. When the row just past the bird's bottom equals `GROUNDY`, the bird is
+still clear of the ground, which is why the test branches with `ble`.
 
 ## The backdrop
 
@@ -1556,9 +1556,9 @@ takes longer than usual. If the program first painted the world over the bird an
 bird again, such a frame would show the bird missing, and the bird would flicker. So in each frame
 every pixel is painted at most once, with the colour it ends the frame in.
 
-The bird and the score are the parts drawn over the world. `repaint_pipes` leaves out the rows the
-bird takes this frame, in the bird's columns, and the score's rows in the score's columns, and
-notes in `score_covered` that the score needs drawing again. `sprite_column` then paints one column
+The bird and the score are drawn over the world. Within the bird's columns, `repaint_pipes`
+skips the rows occupied by the bird this frame. It also skips the score's rows within the score's
+columns and sets `score_covered` when the score needs drawing again. `sprite_column` then paints one column
 of a sprite and the world around it: walking down the rows, it paints the world with `world_column`
 up to each pixel of the sprite that is not see-through, then that pixel. `draw_bird` calls it for
 the bird's 17 columns, over the rows from the higher of the bird's old and new top rows to the
@@ -1587,8 +1587,8 @@ columns the digits take this frame, `score_left` to `score_right`, centred at th
 before `repaint_pipes`, which needs those columns. A score only grows during a game, so its
 columns always include the ones the previous score took.
 
-`draw_score` draws the digits with `sprite_column` when the score has changed or a pipe column went
-around it; in other frames it returns at once.
+`draw_score` draws the digits with `sprite_column` when the score has changed or `repaint_pipes`
+has skipped pixels occupied by the score. In other frames it returns at once.
 
 ## Frame timing
 
@@ -1598,8 +1598,8 @@ around it; in other frames it returns at once.
 schedule from the current time.
 
 The routine always sleeps for at least a millisecond, giving the Screen time to show the drawing.
-The Screen can also refresh between sleeps, while a frame is still being drawn; because each pixel
-is painted once, such a frame is only an earlier version of the picture. Drawing time and browser
+The Screen can also refresh while a frame is still being drawn. It can then show a mixture of
+pixels from the previous frame and the completed parts of the new frame. Drawing time and browser
 scheduling affect the actual time between frames.
 
 ## Saved registers across calls

@@ -1,5 +1,5 @@
-`ecall` asks the Playground to do work. A screen and a console device can also be reached through
-addresses. RISC-V still uses the load and store instructions you already know: `lw` reads a word
+`ecall` asks the Playground to do work. Your program can also access the screen and console
+through memory addresses. RISC-V still uses the load and store instructions you already know: `lw` reads a word
 from an address and `sw` writes one.
 
 This is **memory-mapped I/O**. The important distinction is what sits behind the address. The
@@ -113,8 +113,8 @@ main:
 ## The console registers at `0xffff0000`
 
 The console appears as four **device registers**. The two control registers carry status and
-control bits; the two data registers carry characters. They are accessed with ordinary `lw` and
-`sw` spelling, but they are not a buffer in your data section. In particular, reading receiver data
+control bits; the two data registers carry characters. Your program accesses them with the same `lw` and
+`sw` instructions it uses for data memory, but these registers are not a buffer in your data section. In particular, reading receiver data
 takes a character from the input queue, and storing transmitter data sends a character to the
 console.
 
@@ -153,8 +153,8 @@ same 32 address bits still select these registers.
 
 ## Polling and echoing keys
 
-No instruction announces that a key was pressed. Instead, a program can repeatedly load receiver
-control, keep bit 0, and branch back while that bit is zero. This is **polling**. Once Ready is one,
+To check whether a character is waiting, a program can repeatedly load receiver control,
+keep bit 0, and branch back while that bit is zero. This is **polling**. Once Ready is one,
 loading receiver data obtains one queued character. The following program sends that character back
 through transmitter data and ends when it receives `q`.
 
@@ -200,7 +200,7 @@ quit:
 
 In this Playground, service 32 lets an empty polling loop wait without spending its instruction
 budget. During an interactive run it waits for the requested time; a testcase advances its virtual
-clock immediately. The wait makes the program pleasant to leave idle while it is waiting for a key.
+clock immediately. This lets the program keep waiting for a key without using up that budget.
 
 ## Arrow keys, held keys and the mouse
 
@@ -212,7 +212,7 @@ held keys, and the mouse position and buttons. See the
 
 ## Your turn
 
-The Screen panel is a 16-by-16 word grid whose base label is `display`. Put white at the pixel with
+The Screen panel shows a 16-by-16 grid of words starting at `display`. Set the pixel to white at
 the supplied `x` and `y` values. Derive the row-and-column offset, convert it to bytes, and store
 `0x00FFFFFF` at the resulting address.
 

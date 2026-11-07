@@ -1,6 +1,6 @@
 {
     "name": "jal, ret and the calling convention",
-    "description": "Call and return with jal, ra and ret; pass arguments and results; preserve registers in leaf, non-leaf and recursive subroutines; and build aligned stack frames.",
+    "description": "Use jal and ret to call subroutines and return. Pass arguments, return results, preserve registers and build aligned stack frames for nested calls and recursion.",
     "order": 5,
     "topic": "subroutines"
 }

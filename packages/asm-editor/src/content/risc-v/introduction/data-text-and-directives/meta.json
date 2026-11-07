@@ -1,6 +1,6 @@
 {
     "name": ".data, .text and directives",
-    "description": "How .text and .data organize a RISC-V source file, how labels and common directives lay out static data, and how this editor chooses main as the starting point.",
+    "description": "Organize code and data with .text and .data, name addresses with labels, declare data and constants, and choose the program’s starting point.",
     "order": 7,
     "topic": "program-structure"
 }

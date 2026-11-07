@@ -34,7 +34,7 @@ compare t0 with t1
 
 When the condition is true, the branch is **taken**. Execution continues at the instruction named
 by the label. When the condition is false, the branch is **not taken**, and execution **falls
-through** to the next line.
+through** to the next instruction.
 
 Here is a small example. Assume all four registers start at 0:
 
@@ -48,7 +48,7 @@ done:
 ```
 
 `bge` asks whether `t0` is greater than or equal to `t1`. Here it asks whether 4 is at least 9, so
-the answer is no. The branch falls through and both `li` instructions run. At the end, `t2` and
+the answer is no. The branch falls through and the two following `li` instructions run. At the end, `t2` and
 `t3` both hold 1.
 
 If `t0` held 12 instead, the branch would be taken. Execution would continue at `done`, skipping
@@ -147,7 +147,7 @@ through.
 <summary>Show answers</summary>
 
 1. Taken. The two registers contain equal values.
-2. Falls through. The two registers are not different.
+2. Falls through. The two registers contain equal values.
 3. Falls through. As signed values, -3 is not greater than or equal to 2.
 4. Taken. As unsigned values, 0 is greater than or equal to 0.
 

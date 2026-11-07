@@ -1,5 +1,5 @@
-Eight words sit in memory and the program walks them once. `t1` holds the largest value seen so
-far, while `t2` holds its index: 0 for the first word, 1 for the second, and so on.
+This program finds the largest signed value in an array of eight words. `t1` holds the largest
+value seen so far, while `t2` holds its index: 0 for the first word, 1 for the second, and so on.
 
 ```riscv|playground|memory|allow-open
 .eqv COUNT, 8
@@ -27,9 +27,10 @@ not_bigger:
 ```
 
 The first word supplies the initial answer, so the loop only has to inspect indexes 1 through 7.
-This pattern requires an array with **at least one element**: an empty array has no first word to
-load and no natural maximum to return. Code that accepts empty arrays needs a separate policy, such
-as reporting an error or returning a result chosen by the caller.
+This loop starts at index 1 and checks the count after reading, so this version requires **at least
+two elements**. For a one-element array, the initial value and index are already the result, and
+the program should skip the loop. An empty array has no first word or natural maximum. Code that
+accepts empty arrays must handle them separately, for example by reporting an error.
 
 At the start of each pass, `t1` and `t2` describe the best element among all the earlier indexes.
 `ble t5, t1, not_bigger` branches when the current element in `t5` is **less than or equal to** the
@@ -58,7 +59,8 @@ The comparison must match the meaning of the data. `ble` uses signed ordering, s
 as smaller than the positive values. In a 32-bit register, the same bit pattern can be displayed as
 signed `-4` or hexadecimal `0xFFFFFFFC`. If an unsigned branch such as `bleu` compares that
 pattern, it interprets it as 4294967292 and would choose it over every positive value in this array.
-The bits never changed. Only the instruction looking at them did.
+The bit pattern is the same. The branch instruction determines whether it is compared as a signed
+or unsigned value.
 
 ## Your turn: find the value and its first index
 

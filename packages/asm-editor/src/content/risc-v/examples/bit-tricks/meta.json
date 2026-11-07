@@ -1,6 +1,6 @@
 {
     "name": "Even or odd, count the set bits, multiply by shifting",
-    "description": "Five questions about one 32-bit value answered with masks, shifts and bounded bit-counting loops.",
+    "description": "Use masks, shifts and loops to check parity, multiply, extract a bit field, and count set bits and leading zeroes.",
     "order": 9,
     "topic": "bit-tricks"
 }

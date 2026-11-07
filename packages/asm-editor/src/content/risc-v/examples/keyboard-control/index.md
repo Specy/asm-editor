@@ -1,10 +1,10 @@
-A square you steer. The `w`, `a`, `s` and `d` keys set which way it is going and it keeps going that
-way on its own, coming back in at the opposite edge when it leaves the grid. **Click the Screen panel
+This program moves a square that you steer with the `w`, `a`, `s` and `d` keys. The square keeps
+moving in the direction you choose and wraps to the opposite edge when it leaves the grid. **Click the Screen panel
 first**: the Screen panel receives keyboard input only while it has focus, and a ring around it shows
 when it does.
 
-This animation also checks for keyboard input once per frame. A typed control key changes its
-direction on that frame and every frame after it.
+The program checks for keyboard input once per frame. When it reads one of these keys, it changes
+the square's direction for that frame and keeps that direction until it reads another control key.
 
 Each frame does five jobs in order:
 

@@ -1,5 +1,6 @@
 This program asks for two numbers and prints their sum. Press Run. At the first prompt, type a
-decimal integer in the console and press Enter. The program pauses at that `ecall` until then.
+decimal integer in the console and press Enter. The program pauses at the read-integer `ecall`
+until you submit the number.
 
 Service 5 turns the text you entered into an integer and places that result in `a0`.
 
@@ -43,8 +44,8 @@ main:
 
 Service 5 places its result in `a0`. Save the first result before a setup instruction such as
 `la a0, second` replaces it. Here `mv t0, a0` keeps that number in `t0`. After the second read,
-`add t0, t0, a0` puts the sum in `t0`; then `la a0, answer` can load the address for the label, and
-`mv a0, t0` can load the sum for service 1.
+`add t0, t0, a0` puts the sum in `t0`. Then `la a0, answer` loads the address of the answer string
+for service 4, and `mv a0, t0` loads the sum for service 1.
 
 For each number, the program prints its prompt with service 4 and then calls service 5 to read the
 number.
@@ -53,12 +54,12 @@ The `\n` at the front of `second` and `answer` is a newline inside the string, s
 output on a new line. The text and newline in `.asciz "\nSecond number: "` occupy 16 bytes.
 `.asciz` adds the zero terminator, so the declaration occupies 17 bytes in total.
 
-Type 17 and 25 and the console reads `The sum is 42`. Service 5 reads a **decimal** number. In this
+Enter 17 and 25 at the prompts, and the program prints `The sum is 42`. Service 5 reads a **decimal** number. In this
 Playground, input that is not a valid decimal integer ends the run.
 
-Turn that `add` into a `sub` and the console reads `The sum is -8`, because service 1 prints its
+Change `add` to `sub` and run the program with the same inputs. It prints `The sum is -8`, because service 1 prints its
 argument as a **signed** number. After that change, `t0` contains the bits `FFFFFFF8`. Change the
-`li a7, 1` under it to `li a7, 36`; service 36 prints those same bits as the unsigned value
+`li a7, 1` in the output section to `li a7, 36`. Service 36 prints those same bits as the unsigned value
 `4294967288`.
 
 ## Your turn: read two numbers and print their difference

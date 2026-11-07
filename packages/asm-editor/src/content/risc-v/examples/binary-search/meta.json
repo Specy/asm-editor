@@ -1,6 +1,6 @@
 {
     "name": "Binary search",
-    "description": "Find a value in a sorted array by maintaining an inclusive range and discarding half after each midpoint probe.",
+    "description": "Use binary search to find a value in a sorted array by repeatedly cutting the search range in half.",
     "order": 15,
     "topic": "binary-search"
 }

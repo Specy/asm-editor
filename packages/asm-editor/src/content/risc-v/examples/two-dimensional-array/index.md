@@ -1,5 +1,5 @@
 You have already used `row * COLS + column` to reach one element of a 2D array. This example uses
-the same row-major layout for two jobs: it loads one word, then walks down a column and adds its
+the same row-major layout to load one word, then walk down a column and add its
 values. The new idea is the fixed byte step between two entries in the same column.
 
 Rows and columns are numbered from zero. In this 3-by-4 grid, row 2 is the third row and column 1
@@ -74,14 +74,15 @@ After three passes, `s0` is **222**. `t1` is a countdown rather than a row index
 earlier values are no longer needed. `s0` is the register chosen to hold the sum; this program makes
 no subroutine calls.
 
-`ROW_STRIDE` names the value 16 because this grid has a fixed layout. The name keeps the meaning
-visible at the `addi`: changing the grid to five columns would require updating its `.eqv` to 20.
+`ROW_STRIDE` is 16 because each row occupies 16 bytes. Using this name in `addi` makes it clear
+that the pointer advances by one row. Changing the grid to five columns would require updating
+the `ROW_STRIDE` definition to 20.
 
 ## Your turn: sum another column
 
 Complete the loop so it adds zero-based column 2 and leaves the total in `t2`. The grid is fixed at
-three nonempty rows of four words, so `ROW_STRIDE` is 16. Advance `t0` by one row stride on each
-pass, use `t3` as the rows-remaining counter, and use `t4` to hold the word you load. The expected
+three rows of four words, so `ROW_STRIDE` is 16. Advance `t0` by one row stride on each
+pass, use `t3` to count the rows remaining, and use `t4` to hold the word you load. The expected
 total is 333.
 
 ```riscv|playground|memory|exercise

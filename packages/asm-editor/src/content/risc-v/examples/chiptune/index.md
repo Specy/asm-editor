@@ -1,15 +1,21 @@
-This program plays a short tune on the **Synth**, this editor's sound chip at `0xffff0100`;
-RARS does not have it. Three channels play together: a pulse wave for the melody, a triangle
+This program plays a short tune on the **Synth**, the editor's sound chip at `0xffff0100`.
+The Synth is not available in RARS. Three channels play together: a pulse wave for the melody, a triangle
 wave for the bass, and noise for the drums. Choose **Build**, then **Run**, with your sound on.
 
-Each channel repeats the same register layout every `0x20` bytes. Channels 0, 1 and 2 start at
-`s0`, `s0 + 0x20` and `s0 + 0x40`. Add a setting's offset: decay is at `0x06`, so bass decay is
-at `0x26(s0)`. `sh` writes two-byte settings; `sb` writes one-byte settings. Pulse **width**
-counts the high part of a cycle out of 4096: 1024 gives a quarter; 2048 gives half, a square wave.
+Each channel has the same register layout, and the channels start `0x20` bytes apart. The program
+stores the Synth's base address in `s0`, so channels 0, 1 and 2 start at `s0`, `s0 + 0x20` and
+`s0 + 0x40`. Add a setting's offset to the channel's starting address to find its register. For
+example, decay is at offset `0x06`, so the bass's decay register is at `0x26(s0)`. `sh` writes
+two-byte settings, and `sb` writes one-byte settings.
 
-An **envelope** shapes a note's volume. Gate-on starts the **attack**, which rises to full
-volume; **decay** falls to the **sustain** level and holds there while the gate stays on.
-Gate-off starts the **release**, which fades to silence. Sustain ranges from 0 (silence) to 127
+Pulse **width** sets how much of each cycle the wave stays high, in units of 1/4096 of a cycle.
+A value of 1024 keeps it high for a quarter of the cycle. A value of 2048 keeps it high for half
+the cycle, producing a square wave.
+
+An **envelope** shapes a note's volume. Turning the gate on starts the **attack**, which raises
+the volume to full. The **decay** then lowers it to the **sustain** level, where it stays while
+the gate is on.
+Turning the gate off starts the **release**, which fades to silence. Sustain ranges from 0 (silence) to 127
 (the channel's full volume). Attack, decay and release use ticks of `1/1024` second, about one
 millisecond. Decay and release values describe a fall across the whole volume range; smaller
 drops take proportionally less time. A zero time makes that phase immediate. Registers start at
@@ -110,14 +116,14 @@ the first step; the first eight data lines pack four steps each. `lhu` reads the
 values at offsets 0, 2 and 4; adding 6 to `s1` reaches the next triple. A zero tells `strike` to
 leave that channel alone.
 
-Service 32 waits 150 milliseconds per step. The first 32 steps make four bars of eight; the
-separate 33rd triple plays the closing chord. The following `.half -1` stores `0xffff`, the end
+Service 32 waits 150 milliseconds per step. The first 32 steps make four bars of eight steps
+each. The separate 33rd triple plays the closing chord. The following `.half -1` stores `0xffff`, the end
 marker checked in the lead position. `done` lets that chord ring for another 600 milliseconds
 before exiting. Noise frequency controls the drum's brightness: 1200 gives a low thud, 7000 a
 snare-like sound and 24000 a hi-hat-like hiss.
 
-`strike` has a local register contract: its caller supplies the frequency in `t0` and the
-channel's starting address in `a1`. It reads both and uses `s2` for gate-on, 1. `jal strike`
+To call `strike`, put the frequency in `t0` and the channel's starting address in `a1`. The
+routine reads both registers and uses the value 1 in `s2` to turn the gate on. `jal strike`
 saves the return address in `ra`; `jr ra` jumps back to it, just like `ret`. For a nonzero
 frequency, the routine turns the gate off, stores the frequency, then turns the gate on. This
 restarts attack from the current envelope level. The bass's immediate attack and full sustain
@@ -133,5 +139,5 @@ half-width pulse will sound, then run it to compare the hollower square wave wit
 Then make the bass shorter. After its waveform store, add `li t0, 150` followed by
 `sh t0, 0x26(s0)` for decay, and replace `sb t0, 0x33(s0)` with `sb zero, 0x33(s0)` for zero
 sustain. Predict which bass notes will now have silence between them, then run and listen:
-each dies away in about 146 milliseconds, before the next 150-millisecond step. The
+each bass note dies away in about 146 milliseconds, before the next 150-millisecond step. The
 [Synth chapter](/documentation/risc-v/synth) has the other registers.
