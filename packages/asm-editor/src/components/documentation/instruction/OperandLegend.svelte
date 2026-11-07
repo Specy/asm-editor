@@ -98,7 +98,7 @@
     }
     .count {
         font-size: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .compact h3 {
         font-size: 0.85rem;

@@ -584,7 +584,7 @@
     .note {
         margin: 0;
         padding: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .toolbar {
         display: flex;

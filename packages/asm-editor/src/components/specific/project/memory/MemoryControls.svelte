@@ -610,7 +610,7 @@
         white-space: nowrap;
     }
     .address-error {
-        color: var(--red);
+        color: var(--danger);
         font-size: 0.8rem;
     }
     .address-caption {

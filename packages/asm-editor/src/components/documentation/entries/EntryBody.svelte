@@ -227,6 +227,6 @@
     .swatches code {
         font-family: 'Fira Code', monospace;
         font-size: 0.85rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
 </style>

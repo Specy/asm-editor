@@ -254,8 +254,8 @@
         }
 
         &.delete:hover {
-            color: var(--red);
-            background-color: color-mix(in srgb, var(--red) 15%, transparent);
+            color: var(--danger);
+            background-color: color-mix(in srgb, var(--danger) 15%, transparent);
         }
     }
 
@@ -274,7 +274,7 @@
         margin: -0.25rem -0.3rem;
         font-size: 0.85rem;
         line-height: 1.45;
-        color: var(--secondary-text-muted, var(--secondary-text));
+        color: var(--secondary-text-prose, var(--secondary-text));
         overflow-wrap: anywhere;
 
         &:empty::before {

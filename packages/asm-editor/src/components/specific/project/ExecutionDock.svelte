@@ -6,8 +6,11 @@
         label: string
         title: string
         icon: Component
-        /** A colour that says how the thing it opens went, such as failing Testcases in red. */
-        tone?: 'red' | 'green'
+        /**
+         * A colour that says how the thing it opens went, such as failing Testcases in the danger
+         * colour.
+         */
+        tone?: 'danger' | 'success'
         onClick: () => void
     }
 
@@ -598,16 +601,16 @@
         color: var(--accent);
     }
 
-    .red {
-        color: var(--red);
+    .danger {
+        color: var(--danger);
     }
 
     .sound.playing {
         color: var(--accent);
     }
 
-    .green {
-        color: var(--green);
+    .success {
+        color: var(--success);
     }
 
     .primary {

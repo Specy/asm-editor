@@ -650,7 +650,7 @@
 
     //a commit the helper refused: the input keeps what was typed and says why in its title
     .refused {
-        outline-color: var(--red);
+        outline-color: var(--danger);
     }
 
     .blank-register {

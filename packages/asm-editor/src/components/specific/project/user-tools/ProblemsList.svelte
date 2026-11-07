@@ -80,7 +80,7 @@
         }
 
         button.error {
-            background: color-mix(in srgb, var(--red) 15%, transparent);
+            background: color-mix(in srgb, var(--danger) 15%, transparent);
         }
 
         button.related-location {

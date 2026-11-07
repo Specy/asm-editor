@@ -79,8 +79,8 @@
         position: absolute;
         z-index: 1;
         display: flex;
-        background-color: var(--red);
-        color: var(--red-text);
+        background-color: var(--danger);
+        color: var(--danger-text);
         padding: 0.2rem;
         right: 0.4rem;
         border-radius: 0.2rem;

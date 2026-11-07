@@ -754,7 +754,7 @@
         }
 
         &.invalid {
-            outline: 2px solid color-mix(in srgb, var(--red) 75%, transparent);
+            outline: 2px solid color-mix(in srgb, var(--danger) 75%, transparent);
         }
 
         input {
@@ -840,7 +840,7 @@
     .problem {
         margin: 0;
         padding: 0 0.3rem;
-        color: var(--red);
+        color: var(--danger);
         font-size: 0.72rem;
         line-height: 1.35;
         overflow-wrap: anywhere;
@@ -926,7 +926,7 @@
         }
 
         &.failed {
-            color: var(--red);
+            color: var(--danger);
         }
     }
 
@@ -1020,7 +1020,7 @@
         }
 
         &.failed {
-            color: var(--red);
+            color: var(--danger);
             opacity: 1;
         }
     }

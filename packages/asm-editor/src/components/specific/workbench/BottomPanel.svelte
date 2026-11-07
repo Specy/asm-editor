@@ -208,8 +208,8 @@
         }
 
         &.error {
-            background-color: var(--red);
-            color: var(--red-text);
+            background-color: var(--danger);
+            color: var(--danger-text);
         }
 
         &.warning {

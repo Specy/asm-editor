@@ -113,7 +113,7 @@
     .signature {
         font-family: 'Fira Code', monospace;
         font-size: 0.9rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         overflow-wrap: anywhere;
     }
 </style>

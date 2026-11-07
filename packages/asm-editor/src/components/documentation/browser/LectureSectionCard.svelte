@@ -88,7 +88,7 @@
     }
     .excerpt {
         font-size: 0.85rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         display: -webkit-box;
         -webkit-line-clamp: 3;
         line-clamp: 3;

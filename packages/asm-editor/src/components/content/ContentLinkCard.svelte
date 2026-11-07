@@ -80,7 +80,7 @@
         margin: 0;
         font-size: 1rem;
         line-height: 1.6;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
 
     .card-footer {

@@ -129,11 +129,11 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        border-right: 1px solid var(--line);
+        border-right: 1px solid var(--landing-line);
     }
 
     .item {
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--landing-line);
 
         &:last-child {
             border-bottom: none;
@@ -327,7 +327,7 @@
             object-position: left top;
             margin-top: 1.4rem;
             border-radius: 0.3rem;
-            border: 1px solid var(--line);
+            border: 1px solid var(--landing-line);
         }
     }
 

@@ -146,7 +146,7 @@
         }
 
         &.invalid:focus-within {
-            outline-color: var(--red);
+            outline-color: var(--danger);
         }
     }
 
@@ -192,6 +192,6 @@
     }
 
     .annotation-error {
-        color: var(--red);
+        color: var(--danger);
     }
 </style>

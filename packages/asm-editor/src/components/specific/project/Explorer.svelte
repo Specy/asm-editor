@@ -1393,9 +1393,9 @@
     .entry-warning {
         flex: none;
         padding: 0.42rem 0.75rem;
-        color: var(--red);
-        background: color-mix(in srgb, var(--red) 10%, transparent);
-        border-bottom: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
+        color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 10%, transparent);
+        border-bottom: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
         font-size: 0.7rem;
         overflow-wrap: anywhere;
     }

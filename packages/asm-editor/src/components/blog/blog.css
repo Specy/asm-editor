@@ -187,7 +187,7 @@
     font-size: 0.8rem;
     font-weight: 600;
     margin-bottom: 0.8rem;
-    color: var(--background-text-muted);
+    color: var(--background-text-prose);
 }
 .blog-outline nav {
     min-height: 0;
@@ -204,7 +204,7 @@
     border-left: 2px solid transparent;
     font-size: 0.85rem;
     line-height: 1.45;
-    color: var(--background-text-muted);
+    color: var(--background-text-prose);
     text-decoration: none;
 }
 .blog-outline li a:hover,

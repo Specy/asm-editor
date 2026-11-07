@@ -19,8 +19,8 @@ const THEME_PROPS = {
     hint: { name: 'hint', readonly: true },
     textDarker: { name: 'text-layered', readonly: true },
     scrollbar: { name: 'scrollbar' },
-    red: { name: 'red', readonly: true }, //TODO rename to danger
-    green: { name: 'green', readonly: true }, //TODO rename to success
+    danger: { name: 'danger', readonly: true },
+    success: { name: 'success', readonly: true },
     warning: { name: 'warning', readonly: true }
 } as const
 
@@ -45,8 +45,8 @@ type StoredTheme<T extends string = string> = {
 const SHARED_COLORS = {
     hint: '#939393',
     textDarker: '#c1c1c1',
-    red: '#ed4f4f',
-    green: '#356a59',
+    danger: '#ed4f4f',
+    success: '#356a59',
     //what the editor's warning marks and the Log's notes were drawn in before it was a theme colour
     warning: '#d49a30'
 }
@@ -122,17 +122,18 @@ export const BUILTIN_THEMES: StoredTheme<ThemeKeys>[] = [
 type ThemeTextColors = {
     textForDark: string
     textForLight: string
-    textMutedForDark: string
-    textMutedForLight: string
+    textProseForDark: string
+    textProseForLight: string
 }
 
 const TEXT_COLORS: ThemeTextColors = {
     textForDark: '#dbdbdb',
     textForLight: '#181818',
-    //the same text, dimmed: what long-form prose (a lecture, a documentation description) is
-    //written in, so it sits a step below titles and interface text without losing contrast
-    textMutedForDark: '#d4d4d4',
-    textMutedForLight: '#3a3a3a'
+    //the same text, dimmed a hair: what long-form prose (a lecture, a documentation description)
+    //is written in, so it sits a step below titles and interface text without losing contrast. Not
+    //a muted label, which is --text-muted (design-system.md, D17)
+    textProseForDark: '#d4d4d4',
+    textProseForLight: '#3a3a3a'
 }
 
 function toRgbChannels(color: string) {
@@ -155,19 +156,49 @@ export function themeCssVariables(
         const isDark = new TinyColor(color).isDark()
         const foreground = isDark ? text.textForDark : text.textForLight
         //the dimmed variant of the same text, for prose sitting on this color
-        const muted = isDark ? text.textMutedForDark : text.textMutedForLight
+        const prose = isDark ? text.textProseForDark : text.textProseForLight
         return `
     --${name}: ${color};
     --${name}-text: ${foreground};
-    --${name}-text-muted: ${muted};
+    --${name}-text-prose: ${prose};
     --RGB-${name}: ${toRgbChannels(color)};
     --RGB-${name}-text: ${toRgbChannels(foreground)};
-    --RGB-${name}-text-muted: ${toRgbChannels(muted)};
+    --RGB-${name}-text-prose: ${toRgbChannels(prose)};
 `
     })
+    //the design system's tokens drawn from the theme's colours (design-system.md, D4 and D7),
+    //here so that they resolve against the colours of the element that carries the theme
     return `${declarations.join('\n')}
     --scroll-accent: ${theme.scrollbar.color};
+    --line: color-mix(in srgb, var(--tertiary) 60%, transparent);
+    --line-strong: var(--tertiary);
+    --selected-bg: color-mix(in srgb, var(--accent) 20%, transparent);
 `
+}
+
+/** The shared colours a theme stored before they were named by meaning, under their new names. */
+const RENAMED_COLORS = { red: 'danger', green: 'success' } as const
+
+/**
+ * A saved theme as the current version reads it: its `red` and `green` became `danger` and
+ * `success` (design-system.md, D9). They are read-only, so they take the shared colour rather than
+ * a stored one, and are put where the theme lists them.
+ */
+export function upgradeStoredTheme(stored: StoredTheme): StoredTheme<ThemeKeys> {
+    const entries = Object.entries(stored.theme).map(([key, prop]) => {
+        const renamed = RENAMED_COLORS[key as keyof typeof RENAMED_COLORS]
+        if (!renamed) return [key, prop]
+        return [
+            renamed,
+            {
+                ...prop,
+                prop: renamed,
+                name: THEME_PROPS[renamed].name,
+                color: SHARED_COLORS[renamed]
+            }
+        ]
+    })
+    return { ...stored, theme: Object.fromEntries(entries) } as StoredTheme<ThemeKeys>
 }
 
 function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
@@ -241,9 +272,9 @@ function makeThemeStore(_theme: StoredTheme<ThemeKeys>) {
             if (!browser) return
             const savedThemesJson = localStorage.getItem('themes')
             if (savedThemesJson === null) return
-            const savedThemes: StoredTheme<ThemeKeys>[] | null = JSON.parse(savedThemesJson)
+            const savedThemes: StoredTheme[] | null = JSON.parse(savedThemesJson)
             if (!savedThemes) return
-            themes = [...BUILTIN_THEMES, ...savedThemes]
+            themes = [...BUILTIN_THEMES, ...savedThemes.map(upgradeStoredTheme)]
             select(getChosenTheme())
         } catch (e) {
             console.error(e)

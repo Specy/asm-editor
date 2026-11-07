@@ -476,7 +476,7 @@
             </Button>
             {#if selectedAddressesIndexes.start !== -1}
                 <Button
-                    cssVar="green"
+                    cssVar="success"
                     style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
                     onClick={clearSelection}
                 >
@@ -613,7 +613,7 @@
                                                 selectedAddressesIndexes.start,
                                                 selectedAddressesIndexes.len
                                             )
-                                                ? 'background-color: var(--green); color: var(--green-text);'
+                                                ? 'background-color: var(--success); color: var(--success-text);'
                                                 : ''
                                         }
                     ${frameColor ? `color: ${frameColor}` : ''}
@@ -780,7 +780,7 @@
 
     //a commit that does not fit the selection: the input keeps what was typed and says why
     .refused {
-        outline-color: var(--red);
+        outline-color: var(--danger);
     }
 
     .memory-grid {
@@ -838,7 +838,7 @@
         width: fit-content;
         margin: 0 auto;
         padding: 0.45rem 0.6rem;
-        border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+        border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
         border-radius: 0.4rem;
         background: color-mix(in srgb, var(--tertiary) 65%, transparent);
         backdrop-filter: blur(6px);
@@ -851,7 +851,7 @@
         transition: opacity 0.15s;
 
         :global(svg) {
-            color: var(--red);
+            color: var(--danger);
             flex-shrink: 0;
             margin-top: 0.1rem;
         }

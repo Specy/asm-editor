@@ -1231,8 +1231,8 @@
     }
 
     :global(.error-line) {
-        background-color: var(--red);
-        color: var(--red-text);
+        background-color: var(--danger);
+        color: var(--danger-text);
     }
 
     :global(.selected-line-text) {
@@ -1441,7 +1441,7 @@
     }
 
     :global(.error-line-number) {
-        color: var(--red-text) !important;
+        color: var(--danger-text) !important;
     }
 
     //A breakpoint on the highlighted line would vanish into the same accent color.

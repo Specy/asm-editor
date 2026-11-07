@@ -172,14 +172,14 @@
         font-size: 0.85rem;
 
         &.invalid {
-            outline: 1px solid var(--red);
+            outline: 1px solid var(--danger);
         }
     }
     .problem {
         flex-basis: 100%;
         margin: 0;
         font-size: 0.75rem;
-        color: var(--red);
+        color: var(--danger);
         text-align: right;
     }
     .number {

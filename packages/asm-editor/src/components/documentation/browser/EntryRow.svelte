@@ -212,7 +212,7 @@
         min-width: 0;
         font-family: 'Fira Code', monospace;
         font-size: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -221,7 +221,7 @@
         flex: none;
         margin-left: auto;
         font-size: 0.75rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         white-space: nowrap;
     }
     .summary {
@@ -230,7 +230,7 @@
         grid-row: 2;
         margin-top: 0.25rem;
         font-size: 0.85rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

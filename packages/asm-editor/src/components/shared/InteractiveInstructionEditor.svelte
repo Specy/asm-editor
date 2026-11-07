@@ -591,9 +591,9 @@
                           ? FaExclamationTriangle
                           : FaListOl,
                       tone: testcasesResult.some((r) => !r.passed)
-                          ? 'red'
+                          ? 'danger'
                           : testcasesResult.length > 0
-                            ? 'green'
+                            ? 'success'
                             : undefined,
                       onClick: () => (testcasesVisible = !testcasesVisible)
                   },
@@ -1159,7 +1159,7 @@
         z-index: 6;
         content: '';
         inset: 0;
-        border: 0.2rem solid var(--red);
+        border: 0.2rem solid var(--danger);
         pointer-events: none;
         animation: appear 0.3s ease-in;
     }

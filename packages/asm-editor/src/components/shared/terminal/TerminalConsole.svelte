@@ -450,7 +450,7 @@
            the panel's own text colour keeps its contrast on a dark panel and on a light one, and
            the bright half leans further towards it */
         --terminal-0: color-mix(in srgb, #000 55%, var(--secondary-text));
-        --terminal-1: var(--red);
+        --terminal-1: var(--danger);
         --terminal-2: color-mix(in srgb, #3fa65a 80%, var(--secondary-text));
         --terminal-3: color-mix(in srgb, #c9a227 80%, var(--secondary-text));
         --terminal-4: color-mix(in srgb, #3f82d8 80%, var(--secondary-text));
@@ -458,7 +458,7 @@
         --terminal-6: color-mix(in srgb, #2aa5b8 80%, var(--secondary-text));
         --terminal-7: color-mix(in srgb, #fff 35%, var(--secondary-text));
         --terminal-8: var(--hint);
-        --terminal-9: color-mix(in srgb, var(--red) 65%, var(--secondary-text));
+        --terminal-9: color-mix(in srgb, var(--danger) 65%, var(--secondary-text));
         --terminal-10: color-mix(in srgb, #3fa65a 55%, var(--secondary-text));
         --terminal-11: color-mix(in srgb, #c9a227 55%, var(--secondary-text));
         --terminal-12: color-mix(in srgb, #3f82d8 55%, var(--secondary-text));

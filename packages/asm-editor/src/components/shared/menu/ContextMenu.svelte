@@ -241,7 +241,7 @@
         }
 
         &.danger:not(:disabled) {
-            color: var(--red);
+            color: var(--danger);
         }
     }
 

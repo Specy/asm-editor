@@ -119,7 +119,7 @@
     }
 
     .success .mark {
-        color: var(--green);
+        color: var(--success);
         filter: brightness(1.6);
     }
 
@@ -128,7 +128,7 @@
     }
 
     .error .mark {
-        color: var(--red);
+        color: var(--danger);
     }
 
     .info .mark {

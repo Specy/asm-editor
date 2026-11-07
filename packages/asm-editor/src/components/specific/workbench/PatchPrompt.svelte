@@ -158,6 +158,6 @@
     }
 
     .patch-error {
-        color: var(--red);
+        color: var(--danger);
     }
 </style>

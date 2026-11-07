@@ -7,7 +7,13 @@
  * write a selected theme's colours straight into the built-in default.
  */
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { BUILTIN_THEMES, DEFAULT_THEME, ThemeStore } from '#stores/themeStore.svelte.ts'
+import {
+    BUILTIN_THEMES,
+    DEFAULT_THEME,
+    ThemeStore,
+    themeCssVariables,
+    upgradeStoredTheme
+} from '#stores/themeStore.svelte.ts'
 
 /** Each colour's prop, CSS name and whether it is readonly, in the order a theme lists them. */
 const PROPS = [
@@ -20,8 +26,8 @@ const PROPS = [
     ['hint', 'hint', true],
     ['textDarker', 'text-layered', true],
     ['scrollbar', 'scrollbar', false],
-    ['red', 'red', true],
-    ['green', 'green', true],
+    ['danger', 'danger', true],
+    ['success', 'success', true],
     ['warning', 'warning', true]
 ] as const
 
@@ -40,8 +46,8 @@ const BUILTINS = [
             hint: '#939393',
             textDarker: '#c1c1c1',
             scrollbar: '#3b5364',
-            red: '#ed4f4f',
-            green: '#356a59',
+            danger: '#ed4f4f',
+            success: '#356a59',
             warning: '#d49a30'
         }
     },
@@ -58,8 +64,8 @@ const BUILTINS = [
             hint: '#939393',
             textDarker: '#c1c1c1',
             scrollbar: '#433d6f',
-            red: '#ed4f4f',
-            green: '#356a59',
+            danger: '#ed4f4f',
+            success: '#356a59',
             warning: '#d49a30'
         }
     },
@@ -76,8 +82,8 @@ const BUILTINS = [
             hint: '#939393',
             textDarker: '#c1c1c1',
             scrollbar: '#3d446f',
-            red: '#ed4f4f',
-            green: '#356a59',
+            danger: '#ed4f4f',
+            success: '#356a59',
             warning: '#d49a30'
         }
     },
@@ -94,8 +100,8 @@ const BUILTINS = [
             hint: '#939393',
             textDarker: '#c1c1c1',
             scrollbar: '#2f4a43',
-            red: '#ed4f4f',
-            green: '#356a59',
+            danger: '#ed4f4f',
+            success: '#356a59',
             warning: '#d49a30'
         }
     },
@@ -112,8 +118,8 @@ const BUILTINS = [
             hint: '#939393',
             textDarker: '#c1c1c1',
             scrollbar: '#2a5c80',
-            red: '#ed4f4f',
-            green: '#356a59',
+            danger: '#ed4f4f',
+            success: '#356a59',
             warning: '#d49a30'
         }
     }
@@ -151,6 +157,41 @@ describe('built-in themes', () => {
     })
 })
 
+describe('the CSS variables', () => {
+    it('write each colour, its text and its prose text, then the tokens drawn from the theme', () => {
+        const css = themeCssVariables(DEFAULT_THEME.theme, ThemeStore.meta)
+        expect(css).toContain('--danger: #ed4f4f;')
+        expect(css).toContain('--success-text: #dbdbdb;')
+        expect(css).toContain('--background-text-prose: #d4d4d4;')
+        expect(css).not.toContain('-text-muted')
+        expect(css).toContain('--line: color-mix(in srgb, var(--tertiary) 60%, transparent);')
+        expect(css).toContain('--line-strong: var(--tertiary);')
+        expect(css).toContain('--selected-bg: color-mix(in srgb, var(--accent) 20%, transparent);')
+    })
+})
+
+describe('a saved theme', () => {
+    it('has its red and green renamed danger and success, in place, at the shared colours', () => {
+        const { danger, success } = BUILTIN_THEMES[1].theme
+        const old = Object.fromEntries(
+            Object.entries(BUILTIN_THEMES[1].theme).map(([key, prop]) =>
+                key === 'danger'
+                    ? ['red', { ...danger, prop: 'red', name: 'red', color: '#ff0000' }]
+                    : key === 'success'
+                      ? ['green', { ...success, prop: 'green', name: 'green' }]
+                      : [key, prop]
+            )
+        )
+        const upgraded = upgradeStoredTheme({ ...BUILTIN_THEMES[1], editable: true, theme: old })
+        expect(JSON.stringify(upgraded.theme)).toBe(JSON.stringify(BUILTIN_THEMES[1].theme))
+    })
+
+    it('keeps one already saved under the new names as it is', () => {
+        const saved = { ...BUILTIN_THEMES[2], editable: true }
+        expect(upgradeStoredTheme(saved)).toStrictEqual(saved)
+    })
+})
+
 describe('ThemeStore', () => {
     afterEach(() => {
         vi.useRealTimers()
@@ -165,8 +206,8 @@ describe('ThemeStore', () => {
             name: 'Default',
             textForDark: '#dbdbdb',
             textForLight: '#181818',
-            textMutedForDark: '#d4d4d4',
-            textMutedForLight: '#3a3a3a',
+            textProseForDark: '#d4d4d4',
+            textProseForLight: '#3a3a3a',
             version: 1,
             id: 'default',
             extends: 'default',

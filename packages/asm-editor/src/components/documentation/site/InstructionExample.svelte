@@ -42,7 +42,7 @@
 <style>
     .target {
         margin: 0;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         font-size: 0.9rem;
     }
 </style>

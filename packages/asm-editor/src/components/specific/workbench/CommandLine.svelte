@@ -130,7 +130,7 @@
         }
 
         &.invalid {
-            border-bottom: 1px solid var(--red);
+            border-bottom: 1px solid var(--danger);
         }
     }
 
@@ -142,6 +142,6 @@
     .problem {
         font-family: Rubik, sans-serif;
         font-size: 0.78em;
-        color: var(--red);
+        color: var(--danger);
     }
 </style>

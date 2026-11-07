@@ -166,7 +166,7 @@
         font-weight: 700;
         line-height: 1;
         letter-spacing: -0.02em;
-        color: var(--red);
+        color: var(--danger);
     }
     .compact .code {
         margin-bottom: 1rem;

@@ -189,7 +189,7 @@
             border-color: var(--accent);
         }
         &.failed {
-            border-color: var(--red);
+            border-color: var(--danger);
         }
     }
     .message {
@@ -202,7 +202,7 @@
         opacity: 0.8;
 
         &.failed {
-            color: var(--red);
+            color: var(--danger);
             opacity: 1;
         }
     }

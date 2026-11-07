@@ -138,7 +138,7 @@
     }
     .name {
         font-size: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
     }
     .name.read {
@@ -155,7 +155,7 @@
     }
     .glyph[data-kind='unchanged'],
     .mark[data-kind='unchanged'] {
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         opacity: 0.7;
     }
     .glyph[data-kind='undefined'],
@@ -170,7 +170,7 @@
         padding: 0;
         list-style: none;
         font-size: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .legend-item {
         display: inline-flex;
@@ -194,13 +194,13 @@
     .varies {
         margin: 0;
         font-size: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .notes {
         margin: 0;
         padding-left: 1rem;
         font-size: 0.85rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .compact {
         display: inline-flex;

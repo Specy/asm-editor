@@ -142,8 +142,8 @@ body {
 }
 
 /* prose (a lecture, a documentation description) written a step below titles and interface text */
-.text-muted {
-    color: var(--background-text-muted);
+.text-prose {
+    color: var(--background-text-prose);
 }
 
 a {

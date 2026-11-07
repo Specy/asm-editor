@@ -70,7 +70,7 @@
         min-width: 0;
         font-size: 0.9rem;
         line-height: 1.5;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     ul {
         display: inline;

@@ -87,7 +87,7 @@
     }
     p {
         margin: 0;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .nested p {
         color: inherit;
@@ -135,9 +135,9 @@
         font-size: 0.85rem;
         /* one line is exactly a button high, so it sits level with them, and 1px lower than
            half the leading, since Fira Code draws its letters high in the line */
-        --line: 1.25rem;
-        --half: calc((var(--button) - var(--line)) / 2);
-        line-height: var(--line);
+        --line-height: 1.25rem;
+        --half: calc((var(--button) - var(--line-height)) / 2);
+        line-height: var(--line-height);
         padding: calc(var(--half) + 1px) 0 calc(var(--half) - 1px);
         white-space: nowrap;
         overflow: hidden;

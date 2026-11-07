@@ -217,7 +217,7 @@
     }
 
     :global(._markdown p) {
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
 
     /* a link reads as one, as the Documentation's entries and the Markdown preview mark theirs:

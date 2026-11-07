@@ -209,7 +209,7 @@
         border: none;
         border-radius: 0.3rem;
         background: transparent;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         cursor: pointer;
     }
     .toggle:focus-visible {
@@ -276,7 +276,7 @@
         gap: 0.1rem 0.4rem;
         margin-left: auto;
         font-size: 0.85rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     /* In the narrow panel the fact line sits under the syntax, past the toggle */
     .compact .pattern-facts {
@@ -290,7 +290,7 @@
     .row-note {
         margin: -0.15rem 0.8rem 0.35rem 2.3rem;
         font-size: 0.85rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .body {
         display: flex;
@@ -317,7 +317,7 @@
     }
     .detail-name {
         margin-left: 0.3em;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .modes {
         display: flex;
@@ -391,7 +391,7 @@
         max-width: 80ch;
         margin: 0;
         font-size: 0.82rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .form-facts {
         margin-left: 0.5rem;
@@ -401,7 +401,7 @@
         width: 0.75rem;
         height: 0.75rem;
         margin-top: 0.45rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .expansion {
         flex: 0 1 auto;

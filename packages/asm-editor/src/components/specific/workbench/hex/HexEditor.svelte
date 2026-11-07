@@ -1253,8 +1253,8 @@
     }
     .selected,
     .hex-row:not(.hex-header) .selected:hover {
-        background: var(--green);
-        color: var(--green-text);
+        background: var(--success);
+        color: var(--success-text);
     }
     /* the caret: a frame round its byte, its digit filled, solid while the bytes have the keyboard */
     .caret {
