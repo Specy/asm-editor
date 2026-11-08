@@ -37,16 +37,16 @@ jobs:
 | address register `a0`         |  1200 |
 | memory location numbered 1200 |    25 |
 
-Here, `a0` holds the address 1200. That address tells the processor which memory location is of
-interest. The data at that location is 25.
+Here, `a0` holds the address 1200. The processor can use that address to find the value 25 in
+memory.
 
-Address registers are used for location numbers like 1200. A program might use `a0` for the start
+Address registers hold memory addresses like 1200. A program might use `a0` for the start
 of some text and `a1` for the next memory location it plans to visit. This gives the processor one
 group of registers for finding places in memory and another group for values used in calculations.
 
 ## `a7` and `sp`
 
-The last address register has two names: `a7` and `sp`. Both names refer to the same visible
+The last address register has two names: `a7` and `sp`. Both names refer to the same
 register. If its value changes under one name, the value shown under the other name changes too.
 
 `sp` means **stack pointer**. The processor uses this register for stack bookkeeping, so reserve

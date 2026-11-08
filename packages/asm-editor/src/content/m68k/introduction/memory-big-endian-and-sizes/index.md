@@ -51,11 +51,11 @@ Hex uses sixteen digits instead of ten:
 0 1 2 3 4 5 6 7 8 9 A B C D E F
 ```
 
-After 9 comes A, and after F the next position increases. For example, the address after `$2009` is
+After 9 comes A. After F, that digit returns to 0 and the digit to its left increases. For example, the address after `$2009` is
 `$200A`, and the address after `$200F` is `$2010`.
 
 Each hex digit represents four bits, so a pair of hex digits can show one byte. The examples below
-are deliberately written with one, two and four pairs:
+use one, two and four pairs:
 
 | example     | pairs written | bytes shown |
 | ----------- | ------------: | ----------: |
@@ -65,8 +65,8 @@ are deliberately written with one, two and four pairs:
 
 Read a memory diagram by grouping hex digits into pairs, one pair per byte. Leading zero pairs may
 also be written: `$0012` is the same number as `$12`, displayed with two pairs instead of one. The
-number of written pairs describes this display; a memory access still chooses whether it uses one,
-two or four bytes.
+number of written pairs tells you how the number is displayed. The size of a memory access
+determines whether the processor uses one, two or four bytes.
 
 ## A long in four locations
 

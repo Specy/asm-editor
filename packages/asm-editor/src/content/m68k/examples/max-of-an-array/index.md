@@ -30,7 +30,7 @@ numbers: dc.w 12, -4, 37, 8, 99, 41, 2, 60
 
 `org $2000` places the eight words at `$2000` through `$200F`, two bytes per word. The first
 `move.w (a0)+, d0` reads 12 and moves `a0` to `$2002`. This gives the program a best value before
-the loop starts. Starting the best at 0 would give the wrong answer if every element were negative.
+the loop starts. Setting the initial best value to 0 would give the wrong answer if every element were negative.
 
 Seven elements remain. The loop starts its `dbra` counter at `count-2`, or 6, so its seven passes
 check the words at indices 1 through 7. `d4` advances to each index before that word is read.
@@ -55,7 +55,7 @@ first read, `d0` is `0000000C` (12) and `a0` is `00002002`. On the first loop pa
 `d0` stays 12 and `d3` stays 0. The first `dbra` changes `d1` from 6 to 5 and returns to `loop`.
 
 Keep stepping until the word 99 is read from `$2008`. At that point `d4` is 4 and `a0` is
-`0000200A`. Its comparison is greater, so the two moves put `00000063` in `d0` and `00000004` in
+`0000200A`. Since 99 is greater than the best value so far, the two moves put `00000063` in `d0` and `00000004` in
 `d3`. The remaining words do not change that pair.
 
 ## Try an unsigned comparison

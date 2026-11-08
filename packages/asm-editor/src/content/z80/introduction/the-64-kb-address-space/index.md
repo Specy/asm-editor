@@ -1,6 +1,6 @@
 # The 64 KB address space
 
-Memory holds bytes, and each byte has an address. The Z80 uses 16-bit addresses, from `0x0000` through `0xFFFF`. That gives it 65,536 addresses, or 64 KB, in the address map it can use directly. A 16-bit pair such as `hl` can hold any address in that map.
+Memory holds bytes, and each byte has an address. The Z80 uses 16-bit addresses, from `0x0000` through `0xFFFF`. That gives it an **address space** of 65,536 bytes, or 64 KB, that it can use directly. A 16-bit register pair such as `hl` can hold any address in that space.
 
 In these examples, `.org 0x8000` places the program at `0x8000`, as it did in earlier programs. We will use addresses around `0x9000` for data so they are easy to find in the memory panel. These are choices for our editor examples, not a rule dividing every Z80 machine's memory in the same way.
 
@@ -23,7 +23,7 @@ You can also keep an address in a pair, which is useful when you want to move to
 
 ## A two-byte number in memory
 
-A pair holds two bytes. `ld (0x9000), hl` stores both bytes of `hl` in memory, starting at `0x9000`. `ld de, (0x9000)` reads those two bytes back into `de`.
+A register pair holds two bytes. `ld (0x9000), hl` stores both bytes of `hl` in memory, starting at `0x9000`. `ld de, (0x9000)` reads those two bytes back into `de`.
 
 ```z80|playground|memory
     .org 0x8000
@@ -42,7 +42,7 @@ After Run, `de` holds `1234`. Look at the two memory addresses separately:
 
 In the pair, `0x12` is the high byte and `0x34` is the low byte. In memory, the **low byte goes at the lower address**. This byte order is called **little endian**. A two-byte load from `0x9000` puts those bytes back together as `0x1234`.
 
-You can read either byte on its own. In the next program, `b` receives the low byte and `a` receives the high byte. Notice that it uses the two explicit addresses, not a pair load.
+You can read either byte on its own. In the next program, `b` receives the low byte and `a` receives the high byte. The program reads each byte using its address.
 
 ```z80|playground|memory
     .org 0x8000
@@ -94,7 +94,9 @@ Write the two-byte number `0xBEEF` starting at `0x9000`, then read the byte at `
 
 </details>
 
-For a second exercise, three bytes are already in memory: `0x11`, `0x22`, and `0x33` at `0x9000`, `0x9001`, and `0x9002`. Copy them in the same order to `0x9010`, `0x9011`, and `0x9012`. Use `hl` for the address you read and `de` for the address you write. `ld (de), a` writes the byte in `a` to the address held in `de`. After each copy, `inc hl` and `inc de` advance both addresses by one. Three copies written out are enough.
+For a second exercise, three bytes are already in memory: `0x11`, `0x22`, and `0x33` at `0x9000`, `0x9001`, and `0x9002`. Copy them in the same order to `0x9010`, `0x9011`, and `0x9012`.
+
+Use `hl` for the address you read from and `de` for the address you write to. `ld (de), a` writes the byte in `a` to the address held in `de`. After each copy, `inc hl` and `inc de` advance both addresses by one. Write out the instructions for all three copies.
 
 ```z80|playground|exercise|memory
     .org 0x8000

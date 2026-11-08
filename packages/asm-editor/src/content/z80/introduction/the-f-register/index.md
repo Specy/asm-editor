@@ -32,10 +32,14 @@ The two flags to learn first are:
 - **`C`**, carry: 1 when an unsigned addition needs an extra bit, or when an unsigned subtraction
   needs to borrow.
 
-The other four are results the CPU records as well. `S` copies the top bit of a result; `H` records
-a carry from the lower four bits to the upper four bits of a byte; `P/V` records parity or signed
-overflow, depending on the instruction; and `N` records that the arithmetic was a subtraction. The
-comparisons below use `Z` and `C`.
+The other four flags record these facts:
+
+- `S` copies the top bit of a result.
+- In byte arithmetic, `H` records a carry or borrow between the lower and upper four bits.
+- `P/V` records parity or signed overflow, depending on the instruction.
+- `N` records that the arithmetic was a subtraction.
+
+The comparisons below use `Z` and `C`.
 
 ## Compare without changing `a`
 
@@ -57,7 +61,7 @@ With `cp c`, the subtraction is zero, so `Z` is 1 and `C` is 0. Change the last 
 and run it again. Now the subtraction is 12 minus 15. It is not zero, so `Z` is 0. It also needs a
 borrow, so `C` is 1.
 
-This gives `cp` a useful unsigned meaning:
+When you read `a` and `value` as unsigned numbers, the flags tell you how they compare:
 
 | After `cp value` | What it says about unsigned `a` and `value` |
 | ---------------- | ------------------------------------------- |

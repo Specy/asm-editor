@@ -1,6 +1,6 @@
-This program creates two files and plays them: `tone.wav`, half a second of a square wave, and
-`tune.mid`, four notes on a flute. The playground starts without these files, so the program writes
-both with the file tasks first. Choose **Build**, then **Run**, with your sound on.
+This program creates and plays two sound files. `tone.wav` contains half a second of a square
+wave, and `tune.mid` contains four notes on a flute. The playground starts without these files,
+so the program creates them with the file tasks before playing them. Turn your sound on to hear them.
 
 The WAV file holds samples: numbers describing the sound's level over time. The MIDI file holds
 instructions for a synthesizer, which generates the sound. Each MIDI event below starts with a
@@ -99,7 +99,7 @@ end address gives that count. Task 52 creates the file and returns its handle in
 reuse that handle to write the bytes and close the file.
 
 The two players behave differently. The standard player, tasks 70 to 72 and 76, plays WAV files
-one at a time: while its current sound is playing, task 70 starts nothing and returns 0 in `d0.w`. The
+one at a time: while its current sound is playing, task 70 does not start another sound and returns 0 in `d0.w`. The
 program waits for the WAV to finish with task 23: 50 hundredths of a second is 500 ms. The DirectX
 player, tasks 73 to 75 and 77, mixes sounds and also plays MIDI files, so task 73 would have played
 the MIDI file even if the WAV were still sounding. Task 9 then ends the program, while the MIDI
@@ -131,9 +131,8 @@ directly. The length `midiend-track` counts the bytes following the track's size
 
 The first event, `dc.b 0, $C0, 73`, has no delay and selects instrument 73, the flute. The event
 code, also called a status byte, says what to do: `$C0` changes the instrument, `$90` starts a note,
-and `$80` stops a note. The final hexadecimal digit, 0 in each of these codes, selects MIDI channel
-
-1. A MIDI channel groups events for an instrument; it is separate from the WAV's audio channel.
+and `$80` stops a note. The final hexadecimal digit, 0 in each of these codes, selects MIDI
+channel 1. A MIDI channel groups events for an instrument; it is separate from the WAV's audio channel.
 
 For example, `dc.b 0, $90, 60, 100` starts middle C immediately, at velocity 100. The next event,
 `dc.b 96, $80, 60, 0`, waits 96 ticks and stops that same pitch. The next note starts with a delay

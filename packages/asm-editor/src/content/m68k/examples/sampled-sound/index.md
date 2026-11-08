@@ -1,9 +1,9 @@
-This program computes a sound, copies it into the **Synth**, the sound chip this editor adds at
-`$E00100`, and plays it as a scale. EASy68K does not have the Synth. Choose **Build**, then
-**Run**, with your sound on.
+This program generates a fading square wave, copies it into the **Synth** and plays it as a
+scale. The Synth is the sound chip this editor adds at `$E00100`. EASy68K does not have it.
+Run the program with your sound on.
 
 A **sample** is the sound's level at one instant. The Synth takes raw signed bytes, from -128 to
-127, with 0 at the centre; these have no WAV header. Unlike the unsigned 8-bit WAV samples in the
+127, with 0 at the centre. The sample data has no WAV header. Unlike the unsigned 8-bit WAV samples in the
 earlier example, whose centre was 128, positive and negative values here swing around 0.
 
 The fill loop builds a fading square wave, 32 samples per period. `lsr.w #5, d2` divides the
@@ -99,7 +99,7 @@ restart before their full fade has played; the highest note finishes before the 
 ## Try it
 
 First change `move.l #30, d1` to `move.l #80, d1`: 80 hundredths is 800 ms, long enough to hear
-each sound reach its end and loop before the next note restarts it. Then replace the gate-on
+each sound reach its end before the next note restarts it. Then replace the gate-on
 store `move.b #1, $10(a0)` with `move.b #3, $10(a0)`, keeping the gate-off store
 `move.b #0, $10(a0)`. The value 3 sets both the gate and loop bits. Bit 1 makes the channel go
 back to its **loop start**, the word at offset `$0E`, whenever it reaches the end. Its initial

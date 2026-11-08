@@ -1,7 +1,7 @@
-This program asks four questions about 182: Is it odd? What is it times eight? What are its lowest
+This program asks four questions about 182: Is it odd? What is 182 multiplied by eight? What are its lowest
 four bits? How many of its 32 bits are ones? It leaves the answers in `d1` through `d4`.
 
-The same value, `$B6` or `%10110110`, supplies every answer. A bit test answers the first question,
+The value 182 is `$B6` in hexadecimal or `%10110110` in binary. A bit test answers the first question,
 a left shift multiplies it, a mask extracts four bits, and a loop counts the ones.
 
 ```m68k|playground|allow-open

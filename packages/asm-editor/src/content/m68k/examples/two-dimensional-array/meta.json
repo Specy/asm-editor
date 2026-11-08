@@ -1,6 +1,6 @@
 {
     "name": "A 2D array",
-    "description": "Three rows of four words, one element reached by row and column, and a whole column added up by stepping a row at a time.",
+    "description": "Read an element from a two-dimensional array using its row and column, then add the values in that column.",
     "order": 16,
     "topic": "two-dimensional-array"
 }

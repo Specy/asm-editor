@@ -1,6 +1,6 @@
 {
     "name": "Flappy ASM",
-    "description": "A game with a state machine in it: three states, gravity counted in sixteenths of a pixel, a press that only counts on the frame it began, and three pipes recycled into an endless course.",
+    "description": "A game that uses a state machine with three states, gravity in sixteenths of a pixel, one flap per press, and three pipes reused for an endless course.",
     "order": 24,
     "topic": "flappy-asm"
 }

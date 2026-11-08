@@ -1,6 +1,6 @@
 {
     "name": "The stack, push and pop",
-    "description": "Use the stack's two-byte items in last-in, first-out order. Trace push and pop byte by byte, save pairs around work, and keep the stack balanced.",
+    "description": "Trace how push and pop store register pairs, restore saved values, and keep the stack balanced.",
     "order": 4,
     "topic": "the-stack"
 }

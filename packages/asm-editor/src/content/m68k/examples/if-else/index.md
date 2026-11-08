@@ -1,7 +1,7 @@
 Two signed numbers are in `d0` and `d1`. This program puts the larger number in `d2` and their
 **absolute difference** in `d3`: the distance between them, always zero or positive. Try it with
-small signed numbers (for example, from -1000 to 1000), so the subtraction and its negation fit in
-a signed long.
+small signed numbers (for example, from -1000 to 1000), so the difference and its absolute value
+fit in a signed 32-bit value.
 
 The first decision uses `cmp.l d1, d0`. M68K writes the source first, so this compares `d0` with
 `d1` by calculating `d0 - d1` for the flags. It leaves both registers unchanged. The signed branch
@@ -38,9 +38,11 @@ taken; `neg.l d3` changes -27 to 27. At the end, the registers panel shows `d2=0
 
 The two decisions prepare their flags differently: `cmp` calculates a difference only for the
 flags, while `sub` stores the difference and sets flags at the same time. Here, `bpl` can read the
-`N` flag left by `sub` directly. The `bra done` is needed because the first choice has two
-assignments and only one may run; the second choice only needs to skip `neg.l` when the difference
-is already non-negative.
+`N` flag left by `sub` directly.
+
+In the first choice, `bra done` skips the assignment to `d2` at `a_is_bigger`, so only one of the
+two assignments runs. The second choice only needs to skip `neg.l` when the difference is already
+non-negative.
 
 ## Try it
 

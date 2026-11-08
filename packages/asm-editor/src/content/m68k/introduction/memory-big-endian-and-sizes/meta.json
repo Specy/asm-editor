@@ -1,6 +1,6 @@
 {
     "name": "Memory, big endian and sizes",
-    "description": "How byte-addressed memory holds words and longs, how hexadecimal makes their bytes visible, and how big-endian order and alignment govern access.",
+    "description": "Bytes, words and longs in memory, hexadecimal notation, big-endian byte order, and the 68000's even-address rule for words and longs.",
     "order": 2,
     "topic": "memory"
 }

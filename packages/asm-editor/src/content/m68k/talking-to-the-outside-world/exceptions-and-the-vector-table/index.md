@@ -10,19 +10,18 @@ handlers, including services that a program calls through a trap.
 ## The vector table
 
 The processor finds handlers through a table at the bottom of memory. Its first 1024 bytes,
-`$000000` to `$0003FF`, contain 256 **vectors**. Each vector is a four-byte address of a
-handler. Each kind of exception has a vector number.
+`$000000` to `$0003FF`, contain 256 **vectors**. Each vector stores a handler’s four-byte address. Each kind of exception has a vector number.
 
 To find a vector, multiply its number by 4. Division by zero uses vector 5, so its handler
 address is stored at 5 × 4 = 20, or `$14`.
 
-| vector | address         | cause                                                 |
-| -----: | --------------- | ----------------------------------------------------- |
-|      3 | `$00C`          | address error: a word or long at an odd address       |
-|      4 | `$010`          | illegal instruction: a word that is no instruction    |
-|      5 | `$014`          | division by zero                                      |
-|      8 | `$020`          | privilege violation, in user mode below               |
-|  32-46 | `$080` - `$0B8` | `trap #0` to `trap #14`: `trap #n` uses vector 32 + n |
+| vector | address         | cause                                                                |
+| -----: | --------------- | -------------------------------------------------------------------- |
+|      3 | `$00C`          | address error: a word or long at an odd address                      |
+|      4 | `$010`          | illegal instruction: a word that does not encode a valid instruction |
+|      5 | `$014`          | division by zero                                                     |
+|      8 | `$020`          | privilege violation: a privileged instruction in user mode           |
+|  32-46 | `$080` - `$0B8` | `trap #0` to `trap #14`: `trap #n` uses vector 32 + n                |
 
 The [Exceptions documentation](/documentation/m68k/exceptions#the-vector-table) lists the rest.
 
@@ -37,7 +36,7 @@ Division by zero at line 3: vector 5 at $000014 holds no handler
 The simulator handles `trap #15` itself, as EASy68K does. Its numbered tasks provide services
 such as printing text and ending the program.
 
-## Fill a vector
+## Install a handler
 
 To handle division by zero, write the handler’s address to vector 5 before the division. The
 handler below ends with `rte`, short for _return from exception_.
@@ -77,7 +76,7 @@ the high byte contains processor settings. Bit 13 is the **S** bit. When S is se
 is in **supervisor mode**, where privileged instructions are allowed. In this simulator, a
 program starts with `sr` at `$2000`, so it starts in supervisor mode.
 
-When the `divu` meets its zero divisor, the processor:
+When `divu` encounters a zero divisor, the processor:
 
 1. keeps a copy of `sr` and enters supervisor mode. If it was in user mode, `a7` now selects
    the supervisor stack, leaving the user stack untouched;
@@ -87,7 +86,7 @@ When the `divu` meets its zero divisor, the processor:
 
 `rte` pops the saved `sr` and address from the frame. The program continues at that address,
 with its own flags and mode restored. A handler that returns uses `rte`: `rts` would pop only
-four of the six bytes and return to an address made of the wrong ones.
+four of the six bytes and treat the saved `sr` and part of the saved address as a return address.
 
 A handler should preserve registers that the interrupted program expects to keep. For an
 unexpected exception, save registers the handler uses with `movem` and restore them before
@@ -132,7 +131,7 @@ exception frame the `trap` pushed:
 
 The handler reaches the frame through `a7`: the saved `sr` is at `(sp)` and the return address at
 `2(sp)`. At this point `muls` is the next instruction to execute. Step once to execute it and reach
-`rte`, then step again to execute `rte`. It takes the six bytes back: `a7` is `01000000`
+`rte`, then step again to execute `rte`. It removes the six-byte frame from the stack: `a7` is `01000000`
 again, and the program counter is at `after`. In the full editor, the Call stack lists the exception, as
 `TRAP #3 → square`, from the `trap` until that `rte`.
 
@@ -145,8 +144,8 @@ one it was. Returning there runs it again, and raises the same exception again, 
 that wants the program to carry on first adds the instruction's size to the address in the frame,
 at `2(sp)`. After a Build, hovering an instruction shows its machine code, and so its size.
 
-The 68000 has an instruction made only to raise an illegal instruction exception: `illegal`, two
-bytes long. Programs put it where the code must never get to.
+The two-byte `illegal` instruction raises an illegal instruction exception. Programs use it to
+catch execution reaching code that should never run.
 
 An address error can stop an instruction during a memory access. On the 68000 its frame is
 14 bytes long. From the current `sp`, its fields appear in ascending address order:
@@ -202,11 +201,11 @@ can write the condition codes alone using `move` to `ccr`.
 
 Each mode has its own stack pointer. In supervisor mode `a7` is the **supervisor stack pointer**
 (SSP), which starts at `$1000000`. In user mode it is the **user stack pointer** (USP), which
-starts at `$FF0000`. The other one is kept aside, and the **System** register file shows both,
-beside `sr`. Supervisor code sets up the user stack before it enters user mode, with
+starts at `$FF0000`. The processor keeps the inactive stack pointer separately. The **System** register file shows
+both stack pointers beside `sr`. Supervisor code sets up the user stack before it enters user mode, with
 `move.l a0, usp`; `usp` is written only from an address register, so the address goes into `a0`
-first. Then it enters user mode by clearing S: `$DFFF` is every bit but bit 13, so
-`andi.w #$dfff, sr` clears S and keeps the rest.
+first. Then it enters user mode by clearing S. In `$DFFF`, every bit except bit 13 is set, so
+`andi.w #$dfff, sr` clears S and leaves the other bits unchanged.
 
 ```m68k|playground|system|memory|no-flags|allow-open
     move.l #refused, $20    ; vector 8: privilege violation
@@ -227,9 +226,9 @@ refused:
 
 The registers panel opens on the System file. Build it and Step, switching to the CPU file to see
 `a7`. After the `andi`, S is 0, `sr` is `0000`, and `a7` holds the same value as the USP,
-`00008000`, while the SSP waits at `01000000`. The push lands on the user stack, at `$7FFC`. The
+`00008000`, while the SSP stays at `01000000`. The push lands on the user stack, at `$7FFC`. The
 `move.w #$2000, sr` is refused: the processor switches to supervisor mode, `a7` becomes the SSP,
-and the frame goes on the supervisor stack, at `$FFFFFA`, not on the user one. The `sr` it saved
+and pushes the exception frame onto the supervisor stack, at `$FFFFFA`. The `sr` it saved
 is `$0000`, user mode, and the address is `$101A`, the refused `move` itself, whose machine code,
 `46 fc 20 00`, is four bytes. The handler counts the refusal in `d7` and steps past those four
 bytes. Its `rte` restores the saved `sr`, with S clear, so the program is back in user mode on its
@@ -342,8 +341,8 @@ done:
 
 ### 3. A stack for user mode
 
-The skeleton pushes `d0`. Before it, give user mode a stack that starts at `$4000` and enter user
-mode, so that the push lands on that stack. `a7` must end at `$3FFC`, with the value of `d0`
+The code below pushes `d0` onto the stack. Before that instruction, set the user stack pointer to
+`$4000` and enter user mode so that the push uses that stack. `a7` must end at `$3FFC`, with the value of `d0`
 stored there.
 
 ```m68k|playground|exercise

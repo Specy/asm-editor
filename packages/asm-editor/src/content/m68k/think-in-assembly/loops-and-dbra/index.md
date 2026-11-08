@@ -37,8 +37,7 @@ The backward `bra` does not decide whether the loop should continue. It simply r
 This loop terminates because `d1` changes on every pass: it increases by 1 and eventually becomes
 11, which satisfies the exit condition. The body sees exactly the ten values 1 through 10, so it
 runs ten times. If the initial value in `d1` were already 11, the first test would branch to
-`loop_done`; the body and update would run zero times. Testing before the body gives a loop this
-zero-pass possibility.
+`loop_done`, skipping the body and update. Testing before the body allows the loop to run zero times.
 
 ## Count passes with familiar instructions
 
@@ -72,8 +71,8 @@ update. The counter progresses like this:
 |                    2 |                        1 | branch back             |
 |                    1 |                        0 | fall through            |
 
-There are ten starting values from 10 down through 1, so there are ten body executions. The top
-`tst` handles the separate case of zero requested passes before execution reaches the body.
+The counter starts each pass with a value from 10 down through 1, so the body runs ten times. The
+`tst` before the loop checks for zero requested passes before execution reaches the body.
 
 ## Let `dbra` update and test the counter
 
@@ -133,10 +132,9 @@ That largest count starts with the low word `$FFFF`; after the first body execut
 
 ### Guard a count that can be zero
 
-The label in a `dbra` loop is normally placed at the body. Without an earlier guard, this body-first
-shape always executes at least once: execution reaches the body before `dbra` gets its first chance
-to test the counter. If a requested count can be zero, test it before preparing and entering the
-loop:
+The label in a `dbra` loop is normally placed at the body. Without a test before the loop, the body
+always runs at least once because execution reaches it before `dbra` tests the counter. If a
+requested count can be zero, test it before preparing and entering the loop:
 
 ```m68k|playground|no-flags
     move.l #0, d0       ; count the body executions

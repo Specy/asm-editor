@@ -30,11 +30,11 @@ The accumulator, `a`, is the destination for the usual byte arithmetic. The oper
     halt
 ```
 
-`inc` and `dec` are handy for adding or subtracting one. They can name a byte register or `(hl)`. They update most arithmetic flags but leave `C` unchanged, which matters when a carry still has a job to do.
+`inc` and `dec` are handy for adding or subtracting one. They can name a byte register or `(hl)`. They update most arithmetic flags but leave `C` unchanged, so you can still use that carry in a later instruction.
 
 ## Logic: work on matching bits
 
-`and`, `or`, and `xor` also use `a` as their result. Their operand can be a byte register, a number written in the instruction, or the byte at `(hl)`, just as with byte arithmetic. They compare each bit of `a` with the matching bit of their operand; a bit never carries into its neighbour.
+`and`, `or`, and `xor` also store their results in `a`. Their operand can be a byte register, a number written in the instruction, or the byte at `(hl)`, just as with byte arithmetic. They compare each bit of `a` with the matching bit of their operand; a bit never carries into its neighbour.
 
 | First bit | Second bit | AND | OR  | XOR |
 | --------- | ---------- | --- | --- | --- |
@@ -43,7 +43,7 @@ The accumulator, `a`, is the destination for the usual byte arithmetic. The oper
 | 1         | 0          | 0   | 1   | 1   |
 | 1         | 1          | 1   | 1   | 0   |
 
-A **mask** is a byte chosen for its pattern of bits. `and` with a mask keeps the positions where the mask has 1s. `or` forces those positions to 1. `xor` flips those positions. `cpl` flips every one of the eight bits in `a`.
+A **mask** is a byte chosen for its pattern of bits. `and` keeps the bits where the mask has 1s and clears the rest. `or` sets the bits where the mask has 1s. `xor` flips the bits where the mask has 1s. `cpl` flips every one of the eight bits in `a`.
 
 ```z80|playground
     .org 0x8000
@@ -109,7 +109,7 @@ For an unsigned byte, `sla` doubles it when the answer fits, and `srl` gives its
     halt
 ```
 
-After the pair shift, `hl` is `2468`: an unsigned 16-bit doubling. When `hl` itself is the pair to double, `add hl, hl` is a shorter way to do the same job.
+After shifting both bytes, `hl` is `2468`: an unsigned 16-bit doubling. When `hl` itself is the pair to double, `add hl, hl` is a shorter way to do the same job.
 
 ## Pair arithmetic and wider additions
 
@@ -124,7 +124,7 @@ Pairs hold 16-bit values. For example, `add hl, bc`, `add hl, de`, and `add hl, 
     halt
 ```
 
-`adc hl, bc` and `adc hl, de` add the carry flag to a pair. `C` can be tested by `jr c` after a comparison, or used as an input by `adc` and `sbc` to join pieces of a larger number. To add two values that are wider than one pair, add the low bytes first, then use `adc` for each higher byte:
+`adc hl, bc` and `adc hl, de` add the source pair and the carry flag to `hl`. `C` can be tested by `jr c` after a comparison, or used as an input by `adc` and `sbc` to join pieces of a larger number. To add values one byte at a time, add the low bytes first, then use `adc` for each higher byte:
 
 ```z80|playground
     .org 0x8000
@@ -139,7 +139,7 @@ Pairs hold 16-bit values. For example, `add hl, bc`, `add hl, de`, and `add hl, 
     halt
 ```
 
-This leaves `hl` at `0100`. The `adc` must immediately follow work that produced the carry; another arithmetic or logic instruction could replace it.
+This leaves `hl` at `0100`. Keep the carry unchanged between `add` and `adc`. The `ld` instructions above leave it unchanged, but another arithmetic or logic instruction could overwrite it.
 
 ## Practice: bits and pair subtraction
 

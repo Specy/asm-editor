@@ -27,7 +27,7 @@ adds it to `d0`, **then** advances `a0` by two bytes. The `+` advances the point
 it does not add anything extra to the sum. On the first pass, the instruction reads 4 at `$2000`,
 leaves 4 in `d0`, and moves `a0` to `$2002`, where the 8 is stored.
 
-`dbra` runs the body once more than the starting value in its low word. Starting `d1` at
+With `dbra`, the loop body runs once more than the starting value in the low word of `d1`. Starting `d1` at
 `count-1`, or 5, gives six reads. After the sixth read, `a0` is `$200C`, just past the array; the
 loop does not read from that address. The final `dbra` makes the low word of `d1` `$FFFF` and
 falls through to `simhalt`, which stops the program.

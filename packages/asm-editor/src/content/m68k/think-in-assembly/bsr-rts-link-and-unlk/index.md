@@ -1,6 +1,6 @@
 # bsr, rts, link and unlk
 
-A **subroutine** is a reusable group of instructions entered by a call and left by a return. A
+A **subroutine** is a reusable group of instructions that a program calls and then returns from. A
 call can come from different places, so the subroutine must know which instruction to resume after
 each one. On M68K, `bsr label` (branch to subroutine) puts that **return address** on the stack and
 jumps to `label`. `rts` (return from subroutine) takes the address off the stack and resumes there.
@@ -43,8 +43,8 @@ without it, execution would fall through from the caller into `triple` a second 
 The processor supplies the return-address behavior. The choice of `d0` for the input and answer is
 an agreement between these two pieces of code. So is the choice to let `triple` overwrite `d2`.
 If its caller needs the old `d2` afterward, the caller must save and restore it. Together, such
-agreements form a **calling convention**. This lesson uses local conventions stated beside each
-routine; it does not assume a particular system-wide register rule.
+agreements form a **calling convention**. Each routine below states which registers it uses and
+which it preserves.
 
 A routine can instead promise to preserve a scratch register. This version doubles `d0` while
 giving the caller its original `d2` back:
@@ -73,7 +73,7 @@ promise about `d2` is a choice made for this example, not a rule imposed by `bsr
 
 ## Pass long arguments on the stack
 
-Here is another local agreement: the caller pushes two **long** arguments, the routine reads them
+Here is another calling convention: the caller pushes two **long** arguments, the routine reads them
 without removing them, the answer comes back in `d0`, and the caller removes the arguments after
 `rts`. The caller pushes `b` first and `a` second:
 
@@ -93,7 +93,7 @@ add_two:
 end:
 ```
 
-Starting from the playground's `$1000000` stack pointer, each push changes the top:
+Starting with `sp = $1000000`, each push changes the stack pointer and the value at the top of the stack:
 
 | moment                       | `sp`       | value at `(sp)`         |
 | ---------------------------- | ---------- | ----------------------- |
@@ -104,7 +104,7 @@ Starting from the playground's `$1000000` stack pointer, each push changes the t
 | after `rts`                  | `$FFFFF8`  | `a`, still on the stack |
 | after caller's `add.l #8,sp` | `$1000000` | both arguments removed  |
 
-At entry, `(sp)` is the return address, `4(sp)` is the long `a` (22), and `8(sp)` is the long `b`
+On entry to `add_two`, `(sp)` holds the return address, `4(sp)` holds `a` (22), and `8(sp)` holds `b`
 (20). These offsets come from this push order and from each argument occupying four bytes. A
 different size or order would give different offsets. `rts` removes only the return address; the
 caller's `add.l #8,sp` is the cleanup rule chosen here.
@@ -145,8 +145,8 @@ squares:
 end:
 ```
 
-After `link`, the layout is as follows. The addresses assume the playground's initial
-`sp = $1000000`. The two local rows name reserved space, not values supplied by `link`:
+After `link`, the stack has the layout below. The addresses assume the playground's initial
+`sp = $1000000`. The space for the two local values has been reserved but has not been initialized:
 
 | address   | offset from `a6` | contents immediately after `link` |
 | --------- | ---------------- | --------------------------------- |
@@ -157,8 +157,8 @@ After `link`, the layout is as follows. The addresses assume the playground's in
 | `$FFFFFC` | `8(a6)`          | long argument `n = 7`             |
 
 Here `sp = $FFFFEC` and `a6 = $FFFFF4` immediately after `link`. The routine writes both locals
-before reading them. The positive offset `8(a6)` is the first argument because this call pushed
-one long; more long arguments would follow at `12(a6)`, `16(a6)`, and so on. `a6` stays fixed until
+before reading them. The first argument is at `8(a6)`, above the saved `a6` and the return address.
+More long arguments would follow at `12(a6)`, `16(a6)`, and so on. `a6` stays fixed until
 `unlk`, even if the routine temporarily pushes another value.
 
 The saved value at `(a6)` links to a caller's frame **if that caller also uses `a6` as its frame
@@ -207,7 +207,7 @@ end:
 
 ### 2. Read stack arguments
 
-The caller pushes long `b = 20` and then long `a = 22`. Fill in `add_two` so it returns 42 in
+The caller pushes `b = 20` and then `a = 22`, both as longs. Fill in `add_two` so it returns 42 in
 `d0`. Leave its two arguments in place for the caller to remove; `rts` must find the return
 address at `(sp)`. The instruction after the call marks the return path in `d3`.
 

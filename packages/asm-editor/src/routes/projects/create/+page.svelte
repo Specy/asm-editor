@@ -2,8 +2,6 @@
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { languageAccent } from '#lib/languages/languageColors.ts'
     import {
-        COMPATIBLE_WITH,
-        LANGUAGE_DESCRIPTIONS,
         LANGUAGE_ORDER,
         languageCapabilities,
         type LanguageCapability
@@ -16,6 +14,7 @@
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import TextField from '#cmp/shared/input/TextField.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
+    import InstructionSetPicker from '#cmp/shared/input/InstructionSetPicker.svelte'
     import Textarea from '#cmp/shared/input/Textarea.svelte'
     import Title from '#cmp/shared/layout/Header.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
@@ -63,7 +62,6 @@
         decompile: FaFileCode
     }
     const capabilities = $derived(languageCapabilities(language))
-    const compatible = $derived(COMPATIBLE_WITH[language])
 
     const LANGUAGE_STORAGE_KEY = 'asm-editor_new-project-isa'
     onMount(() => {
@@ -90,25 +88,6 @@
         rememberLanguage(value)
     }
 
-    /** The tiles, in order, for the arrow keys to move between. */
-    const tiles: HTMLButtonElement[] = $state([])
-
-    /** A radio group's keys: the arrows move to the next or previous set and pick it, wrapping
-     *  round at the ends, and Home and End go to the first and the last. */
-    function onTileKeyDown(event: KeyboardEvent, index: number) {
-        const count = LANGUAGE_ORDER.length
-        let next: number
-        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % count
-        else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
-            next = (index - 1 + count) % count
-        else if (event.key === 'Home') next = 0
-        else if (event.key === 'End') next = count - 1
-        else return
-        event.preventDefault()
-        pickLanguage(LANGUAGE_ORDER[next])
-        tiles[next]?.focus()
-    }
-
     const BAREBONES = 'barebones'
     let templateId = $state(BAREBONES)
 
@@ -127,8 +106,6 @@
         templates.find((template) => template.id === templateId) ?? templates[0]
     )
     const templateDescriptionId = $props.id()
-    /** The line on the set picked, which its tile is described by, read once it is reached. */
-    const aboutId = `${templateDescriptionId}-about`
 
     async function create() {
         const project = makeProject({
@@ -186,53 +163,8 @@
         <Card padding="0">
             <Form onSubmit={create}>
                 <h2 class="band first">Instruction set</h2>
-                <div class="section sets">
-                    <div class="tiles" role="radiogroup" aria-label="Instruction set">
-                        {#each LANGUAGE_ORDER as value, index (value)}
-                            <button
-                                bind:this={tiles[index]}
-                                type="button"
-                                role="radio"
-                                class="tile"
-                                aria-checked={language === value}
-                                aria-describedby={language === value ? aboutId : undefined}
-                                tabindex={language === value ? 0 : -1}
-                                onclick={() => pickLanguage(value)}
-                                onkeydown={(event) => onTileKeyDown(event, index)}
-                            >
-                                <span
-                                    class="language-square"
-                                    style:background-color={languageAccent(value)}
-                                    aria-hidden="true"
-                                ></span>
-                                {languageLabel(value)}
-                            </button>
-                        {/each}
-                    </div>
-                    <!-- every set's line laid out unseen in the one cell under the picked one's, so the
-                         cell is as tall as the tallest of them at any width and in any font's line
-                         metrics, and what is under it stays put whichever set is picked (owner,
-                         2026-11-08) -->
-                    <div class="about-cell">
-                        {#each LANGUAGE_ORDER as value (value)}
-                            <div class="about sizer" aria-hidden="true">
-                                <p class="language-description">{LANGUAGE_DESCRIPTIONS[value]}</p>
-                                {#if COMPATIBLE_WITH[value]}
-                                    <p class="compatible">
-                                        Compatible with {COMPATIBLE_WITH[value]}
-                                    </p>
-                                {/if}
-                            </div>
-                        {/each}
-                        <div class="about" id={aboutId}>
-                            <p class="language-description">{LANGUAGE_DESCRIPTIONS[language]}</p>
-                            {#if compatible}
-                                <p class="compatible">
-                                    Compatible with <span class="simulator">{compatible}</span>
-                                </p>
-                            {/if}
-                        </div>
-                    </div>
+                <div class="section">
+                    <InstructionSetPicker selected={language} onSelect={pickLanguage} />
                     <ul class="capabilities" aria-label="Features">
                         {#each capabilities as capability (capability.id)}
                             {@const CapabilityIcon = CAPABILITY_ICONS[capability.id]}
@@ -379,98 +311,12 @@
         padding: 0.85rem 1.25rem 1rem;
     }
 
-    /* three to a row, or two where three would cut "RISC-V-64" (each tile needs about 7.4rem:
-       its padding, square, gap and nine characters of Fira Code), which is most phones */
-    .sets {
-        container-type: inline-size;
-    }
-    .tiles {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.4rem;
-    }
-    @container (max-width: 23.5rem) {
-        .tiles {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    /* a field's fill and edge (styles/field.scss), as the Template beside it; the picked one in
-       the accent, the one you have (D4), a tint of it over the fill inside an edge of it */
-    .tile {
-        @include field.surface;
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        min-width: 0;
-        padding: 0.75rem 0.8rem;
-        font: var(--fs-small) / 1.3 var(--font-mono);
-        text-align: left;
-        white-space: nowrap;
-        cursor: pointer;
-        transition:
-            background-color var(--dur-fast),
-            border-color var(--dur-fast);
-
-        &:hover {
-            background-color: color-mix(in srgb, currentColor 8%, field.$fill);
-        }
-
-        &[aria-checked='true'] {
-            border-color: var(--accent);
-            background-color: color-mix(in srgb, var(--accent) 18%, field.$fill);
-        }
-    }
-
     /* drawn as the home page's instruction-set bar draws its squares */
     .language-square {
         flex: none;
         width: 0.5rem;
         height: 0.5rem;
         border-radius: 2px;
-    }
-
-    /* the picked set's line over the others', unseen: the one grid cell they share takes the
-       tallest one's height */
-    .about-cell {
-        display: grid;
-        margin-top: 0.15rem;
-    }
-
-    /* what the set is at the left, the simulator it follows at the right, which drops under it
-       when the two do not fit on one line; at the cell's top, not stretched to its height, which
-       would spread a wrapped line's two rows apart */
-    .about {
-        grid-area: 1 / 1;
-        align-self: start;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 0.25rem 0.75rem;
-
-        p {
-            margin: 0;
-        }
-    }
-
-    .sizer {
-        visibility: hidden;
-    }
-
-    .language-description {
-        font-size: var(--fs-small);
-        line-height: 1.45;
-    }
-
-    .compatible {
-        font: var(--fs-caption) / 1.45 var(--font-mono);
-        color: var(--text-muted);
-        white-space: nowrap;
-    }
-
-    .simulator {
-        color: var(--accent);
     }
 
     .capabilities {

@@ -1,9 +1,9 @@
-This course is about the Zilog Z80, and about writing programs for it.
+This course teaches Zilog Z80 assembly through programs you can run and step through in the editor.
 
 If you have never written assembly before, read
-[Assembly basics](/learn/courses/assembly-basics) first. It covers registers, memory, branching, the
-stack and the rest once and quickly, to give you the ideas. This course takes all of that for
-granted and goes over the same ground again in much more depth, on one machine.
+[Assembly basics](/learn/courses/assembly-basics) first. It introduces registers, memory,
+branching and the stack. This course builds on those ideas with detailed explanations and Z80
+examples.
 
-The Z80 is an 8 bit CPU. Its registers hold one byte each, they pair up into 16 bit registers when an
-address is needed, and a value too big for a register is the ordinary case here, not the exception.
+The Z80 is an 8-bit processor. You will use single-byte values and register pairs that hold
+16-bit numbers and addresses.

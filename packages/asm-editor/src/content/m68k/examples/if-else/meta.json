@@ -1,6 +1,6 @@
 {
     "name": "The bigger of two numbers",
-    "description": "A compare and a branch pick the larger of two registers, and a second branch turns the difference into a distance.",
+    "description": "Use branches to select the larger of two signed numbers and calculate their absolute difference.",
     "order": 2,
     "topic": "if-else"
 }

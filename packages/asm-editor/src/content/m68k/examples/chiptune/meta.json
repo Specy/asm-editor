@@ -1,6 +1,6 @@
 {
     "name": "Chiptune",
-    "description": "Play a short tune on the Synth: a pulse lead, a triangle bass and noise drums on three channels, stepped by a table in memory.",
+    "description": "Play a short tune on three Synth channels, using a pulse wave for the melody, a triangle wave for the bass and noise for the drums.",
     "order": 26,
     "topic": "chiptune",
     "template": 8

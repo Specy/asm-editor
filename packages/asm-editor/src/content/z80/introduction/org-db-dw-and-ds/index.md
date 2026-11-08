@@ -1,6 +1,6 @@
 # org, db, dw and ds
 
-An assembler turns instructions into bytes in memory. A **directive** tells the assembler where to put bytes or which data bytes to make. The CPU does not execute directives.
+An assembler turns instructions into bytes in memory. A **directive** tells the assembler where to put bytes or which data bytes to write. The CPU does not execute directives.
 
 ## Place bytes with `.org`
 
@@ -60,7 +60,7 @@ filled: .ds 3, 0xEE     ; addresses 9004 through 9006
 marker: .db 0xFF        ; address 9007
 ```
 
-Before Run, this editor shows `00 00 00 00` at `buffer` because fresh emulator memory starts cleared, not because `.ds 4` wrote zeroes. It shows `EE EE EE` at `filled` because that line _does_ write bytes. After Run, the first two bytes of `buffer` are `11 22`. `inc hl` adds one to the address in `hl`; it does not change the byte at the old address.
+Before you run the program, the memory panel shows `00 00 00 00` at `buffer` because fresh emulator memory starts cleared, not because `.ds 4` wrote zeroes. It shows `EE EE EE` at `filled` because that line _does_ write bytes. After you run the program, the first two bytes of `buffer` are `11 22`. `inc hl` adds one to the address in `hl`; it does not change the byte at the old address.
 
 ## Give a number a name with `equ`
 

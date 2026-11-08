@@ -1,6 +1,6 @@
 {
     "name": "Bytes, words and longs",
-    "description": "How M68K byte, word and long operations affect data registers, how signed readings depend on width, and how to sign-extend a value with ext.",
+    "description": "How M68K byte, word and long operations affect data registers, how signed values depend on width, and how to sign-extend a value with ext.",
     "order": 3,
     "topic": "numbers"
 }

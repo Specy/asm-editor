@@ -1,4 +1,4 @@
-The **stack** is a part of memory used for temporary two-byte values. Its top is tracked by the 16-bit register `sp`, the **stack pointer**. In this editor's playground, a program starts with `sp = 0xFFFF`. That is the initial playground state, not a value every Z80 program can assume.
+The **stack** is a part of memory used for temporary two-byte values. Its top is tracked by the 16-bit register `sp`, the **stack pointer**. In this editor's playground, a program starts with `sp = 0xFFFF`. Other Z80 programs may need to set `sp` before using the stack.
 
 The stack grows toward smaller addresses. A stack item in this lesson is always one 16-bit pair, so it occupies two bytes.
 
@@ -62,9 +62,9 @@ After `push bc` and `push de`, `sp` is `0xFFF9`. Each pair below is shown as its
 
 The bytes `BC` and `9A` remain in memory, but they are no longer part of the stack. A later `push` can overwrite them. The pair pushed last is the first pair popped: this order is called **LIFO**, for “last in, first out.”
 
-## LIFO lets pairs cross or copy
+## Swap and copy register pairs
 
-To get a pair back unchanged, pop it in the reverse order from the pushes. Sometimes you deliberately choose another destination. This swaps `bc` and `de`:
+To restore saved pairs to their original registers, pop them in the reverse order of the pushes. Sometimes you deliberately choose another destination. This swaps `bc` and `de`:
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -79,7 +79,7 @@ To get a pair back unchanged, pop it in the reverse order from the pushes. Somet
 
 The first `pop` receives the value from the most recent `push`. There are two pushes and two pops, so `sp` finishes at `0xFFFF`.
 
-The same rule can copy a pair into another pair:
+You can also copy a value from one register pair to another:
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -108,7 +108,7 @@ After the `pop`, `a` is `05` and `Z` is 1 again. With the flags panel open, step
 
 ## Keep the stack balanced in a nested loop
 
-The useful pattern is simple: push a pair before work that needs to overwrite it, then pop that pair after the work. The pops must be in reverse order. This nested loop needs `b` for both counters and uses `hl` for inner work, while `hl` also keeps the outer count.
+To preserve a pair, push it before work that needs to overwrite it, then pop it after the work. The pops must be in reverse order. This nested loop uses `b` as the counter for both loops. It also uses `hl` to count completed outer iterations, so it saves `hl` before the inner loop uses it.
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -133,7 +133,7 @@ inner:
 
 Keep one rule in mind: every path through a piece of code must leave the stack at the same depth it entered. For example, a jump that skips a matching `pop` leaves `sp` two bytes lower. Repeating that path in a loop keeps moving the stack into lower memory and overwrites whatever is there.
 
-## Your turn on the stack
+## Your turn
 
 The test starts `bc` at `0x1111` and `de` at `0x2222`. Swap them using only the stack: four instructions and no `ld`. Leave the stack balanced.
 

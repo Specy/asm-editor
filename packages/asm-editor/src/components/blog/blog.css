@@ -74,7 +74,7 @@
     display: block;
     position: relative;
     z-index: -1;
-    height: 10rem;
+    height: 13rem;
     overflow: hidden;
 }
 .blog-card-image img {
@@ -83,7 +83,7 @@
     height: 100%;
     object-fit: cover;
     object-position: top;
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 6rem), transparent);
     opacity: 0.8;
     filter: saturate(0.35);
     transition: filter var(--dur-base);
@@ -99,7 +99,7 @@
 }
 /* the title over the picture's fading end, the card the shorter for it */
 .blog-card-image + .blog-card-body {
-    margin-top: -3rem;
+    margin-top: -6rem;
 }
 .blog-date,
 .blog-byline {

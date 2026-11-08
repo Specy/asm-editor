@@ -120,7 +120,7 @@ The Screen keeps two colours. Task 81 sets the **fill** for the inside of a shap
 **pen** for its outline, lines and text. Each takes a colour in `d1.l`. The `both_colours`
 subroutine gives both the same colour. For example, `move.l #SKY, d1` followed by
 `bsr both_colours` makes the sky rectangle blue throughout. The house instead sets `WALL` as its
-fill and `WHITE` as its pen; task 93 makes that outline three pixels wide.
+fill and `WHITE` as its pen. Task 93 makes that outline three pixels wide.
 
 A colour is `$00BBGGRR`: blue, green and red are the last three bytes, in that order.
 `$00E0B070` gives the sky red 112, green 176 and blue 224. After `both_colours` returns, the
@@ -135,8 +135,9 @@ Tasks 80, 81 and 93 only need `d1`; the line and flood-fill tasks below need `d1
 
 ## Closing the roof
 
-Task 86 moves the drawing point to the left eave at `(180, 200)` without making a mark. Each task
-85 draws a line from that point to the new `(d1,d2)` position and leaves the drawing point there.
+Task 86 moves the drawing point to the left eave at `(180, 200)` without making a mark. Each call to
+task 85 draws a line from the current drawing point to the new `(d1,d2)` position and leaves the
+drawing point there.
 The three lines go up to the peak, down to the right eave, then back to the left eave. That last
 line is the roof's bottom edge.
 

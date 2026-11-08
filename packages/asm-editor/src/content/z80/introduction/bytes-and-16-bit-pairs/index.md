@@ -1,10 +1,10 @@
 # Bytes and 16-bit pairs
 
-A byte register such as `a` holds eight bits: 256 possible patterns. Read as an **unsigned** number, those patterns run from 0 to 255. A value such as 300 cannot fit in one byte register, but it can fit in a two-byte pair such as `hl`. The size of the place you choose matters even when the arithmetic is simple.
+A byte register such as `a` holds eight bits: 256 possible patterns. Read as an **unsigned** number, those patterns run from 0 to 255. A value such as 300 cannot fit in one byte register, but it can fit in a two-byte register pair such as `hl`.
 
 ## One byte, two readings
 
-The same byte can also represent a **signed** number, from -128 to 127. The Z80 uses _two's complement_ for this reading. In this reading, a byte whose leftmost bit is 0 is nonnegative, and one whose leftmost bit is 1 is negative. Here are a few bytes in both readings:
+The same byte can also represent a **signed** number, from -128 to 127. The Z80 uses _two's complement_ to represent signed numbers. A byte whose leftmost bit is 0 represents a nonnegative number, and one whose leftmost bit is 1 represents a negative number. Here are a few bytes read as both unsigned and signed numbers:
 
 | Byte in hex | Unsigned | Signed |
 | ----------- | -------: | -----: |
@@ -69,7 +69,7 @@ Suppose `a` contains an unsigned byte and you want to keep that same number in `
     halt
 ```
 
-It matters that `h` is set explicitly: whatever it held before would otherwise remain part of `hl`. The unsigned byte `0xFB` widens to `0x00FB`, while signed -5 widens to `0xFFFB`. To preserve a signed byte in a pair, use high byte `0x00` when source bit 7 is 0 and `0xFF` when it is 1. This is called **sign extension**. These two 16-bit patterns have different values even though both end in `FB`.
+Set `h` explicitly so that its previous value does not remain part of `hl`. The unsigned byte `0xFB` widens to `0x00FB`, while signed -5 widens to `0xFFFB`. To preserve a signed byte in a pair, set the high byte to `0x00` when bit 7 of the original byte is 0, or to `0xFF` when it is 1. This is called **sign extension**. These two 16-bit patterns have different values even though both end in `FB`.
 
 ## Try it yourself
 

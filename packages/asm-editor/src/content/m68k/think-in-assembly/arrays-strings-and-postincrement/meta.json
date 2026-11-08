@@ -1,6 +1,6 @@
 {
     "name": "Arrays, strings and (a0)+",
-    "description": "Traverse and index equal-size array elements, then measure and copy zero-terminated byte strings safely.",
+    "description": "Loop through arrays, find elements by index, and measure and copy zero-terminated strings.",
     "order": 3,
     "topic": "data-in-memory"
 }

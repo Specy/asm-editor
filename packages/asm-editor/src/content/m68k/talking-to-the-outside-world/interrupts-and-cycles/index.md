@@ -24,8 +24,8 @@ and `$2700` selects mask 7. The editor starts a program with `sr` set to `$2000`
 mask bits in the **System** register file.
 
 The processor takes a request between two instructions. As for a `trap`, it switches to
-supervisor mode and pushes the program counter and `sr` on the supervisor stack, six bytes. Then
-it sets the mask to the request's level, so that nothing at that level or below interrupts the
+supervisor mode and pushes the program counter and `sr` onto the supervisor stack. Together,
+they take six bytes. Then it sets the mask to the request's level, so that nothing at that level or below interrupts the
 handler, and jumps to the address in the level's **autovector**: vector 24 + level, at `$60` +
 4 × level.
 
@@ -51,9 +51,8 @@ that level's timer on, and the level alone turns it off again. `d3.l` is the int
 milliseconds. So `$82` in `d2.b` asks for a level-2 timer.
 
 Once the handler is installed and the timer is running, a program with nothing else to do can
-wait with `stop`. `stop #$2000` loads
-`$2000` into `sr`, supervisor mode with the mask at 0, and then runs nothing until a request above
-the mask comes. The processor takes the request, the handler runs, and its `rte` returns to the
+wait with `stop`. `stop #$2000` loads `$2000` into `sr`, selecting supervisor mode with the
+mask at 0. The processor then waits until a request above the mask arrives. The processor takes the request, the handler runs, and its `rte` returns to the
 instruction after the `stop`.
 
 ```m68k|playground|console|no-flags|allow-open
@@ -91,17 +90,18 @@ wait for it. The console shows a number every half second, and the program ends 
 seconds. Task 6 prints the one character whose code is in `d1.b`, and `#' '` is the code of a
 space.
 
-The handler does as little as it can: it counts, and the program does the printing once `stop`
-lets it go on. A handler runs between two instructions of a program that is not expecting it, so
-it should be quick, and leave every register as it found it, except the one it is there to
-change, here `d6`. A longer handler saves the registers it uses with `movem` and restores them
+The handler only updates the count. The main program prints it after the interrupt ends the
+`stop` wait. A handler can run between any two instructions, so it should finish quickly and
+preserve the registers the interrupted program uses. Here, `d6` is the shared counter that the
+handler deliberately changes. A longer handler saves the registers it uses with `movem` and restores them
 before `rte`.
 
 Open the example in the full editor and run it to see the waiting status beside the **Terminal**
 tab. History records each IRQ and its handler steps. Taking the request costs 44 cycles. Undo can
 reverse the request, leaving it waiting to be taken again.
 
-`stop` is a privileged instruction, as writing `sr` is, so a program in user mode cannot use it.
+`stop` is a privileged instruction, so a program in user mode cannot use it. Writing to `sr`
+also requires supervisor mode.
 
 ## A key press on the screen
 
@@ -191,14 +191,15 @@ so this must be done in supervisor mode. Restore the saved `sr` rather than assu
 ## Counting cycles
 
 Interrupt handling takes processor time too. To examine that cost and the cost of ordinary code,
-we can count cycles. A 68000 works to the beat of a clock, and each beat is a **clock cycle**. Every instruction takes
-a whole number of them: 4 for `moveq`, 8 for `add.l d0, d1`, 10 for a `dbra` that loops back,
+we can count cycles. A 68000 works to the beat of a clock, and each beat is a **clock cycle**.
+Every instruction takes a whole number of cycles: 4 for `moveq`, 8 for `add.l d0, d1`, 10 for a `dbra` that loops back,
 more than 100 for a division. At 8 MHz, the clock of an Atari ST, a 68000 has eight million cycles
 a second.
 
-The editor counts them as a 68000 takes them. The **Cycles** line over the registers reads, for example,
-`Cycles 1,016 (+4)`: the count so far, and what the last step took. In the full editor each
-History row shows its own, and the **Log** tab gives the total when the program ends. Taking an
+The editor counts cycles using 68000 instruction timings. The **Cycles** line above the registers
+reads, for example, `Cycles 1,016 (+4)`: 1,016 cycles so far, with 4 taken by the last step. In the
+full editor, each History row shows the cycles taken by that step, and the **Log** tab gives the
+total when the program ends. Taking an
 IRQ costs 44 cycles and a `trap #3` 34, but a `trap #15` task costs nothing, so tasks 30 and 31,
 which the trap #15 lecture showed, can clear and read the counter without changing what they
 measure: task 30 sets it back to 0, and task 31 reads it into `d1.l`.
@@ -222,7 +223,8 @@ loop:
 ```
 
 It prints `1016`: 8 for the `move.w`, 99 × 10 for the rounds that go back, 14 for the last one,
-and 4 for the `moveq #31, d0`, which runs before the read and so is counted in it. At 8 MHz those 1,016 cycles take about an eighth of a millisecond.
+and 4 for `moveq #31, d0`. That instruction runs before task 31 reads the counter, so its cycles
+are included. At 8 MHz those 1,016 cycles take about an eighth of a millisecond.
 
 Build it and Step. The Cycles line grows by each instruction's cost as it runs; the
 first `trap #15` sets it back to 0, and the others add nothing. Then change `#99` to `#999` and

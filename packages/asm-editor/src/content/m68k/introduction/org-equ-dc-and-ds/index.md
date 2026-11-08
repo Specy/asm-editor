@@ -126,7 +126,7 @@ longs: ds.l 2
 `bytes` is `$2100`, `words` is `$2108`, and `longs` is `$210E`. A program must write a reserved
 location before relying on its contents. `ds` does not promise zeroes or any other initial value.
 
-## `equ`: name an assembler-time number
+## `equ`: name a number during assembly
 
 `equ` gives a name to a numeric expression. Its name is written without a colon:
 
@@ -144,10 +144,10 @@ stored:
     dc.l cells
 ```
 
-Define each name before another `equ` expression uses it. In this lesson, an expression can use
+Define each name before another `equ` expression uses it. An expression can use
 decimal or `$`-prefixed hexadecimal integers, earlier `equ` names, parentheses, and the operators
 `+`, `-`, `*`, and `/`. Write the expression without spaces, as in `rows*cols` or
-`(cols+1)*4`. Multiplication is ordinary assembler-time arithmetic.
+`(cols+1)*4`. The assembler calculates these expressions during Build.
 
 The assembler calculates `cells` as 20. It places 20 inside the first `move.l` as an immediate
 value and also writes 20 into the long at `stored`. During Run, `d0` receives the immediate 20,
@@ -164,8 +164,9 @@ name was used.
 At `$3000`, declare the three words 100, 200, and 300. Immediately after them, reserve eight
 uninitialised bytes with the label `room`. Put the address named by `room` in `a0`.
 
-The three `dc.w` values give the six bytes from `$3000` through `$3005` defined initial contents.
-`room` begins at `$3006`, and its eight reserved bytes have unspecified contents.
+The three `dc.w` values occupy six bytes, from `$3000` through `$3005`. The assembler writes
+100, 200, and 300 into those words. `room` begins at `$3006`, and its eight reserved bytes have
+unspecified contents.
 
 ```m68k|playground|memory|exercise
 ; your code here

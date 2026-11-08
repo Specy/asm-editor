@@ -76,7 +76,7 @@ three bytes of `d1` keep their previous bits.
 A stored bit pattern has no signed or unsigned label. Its numeric value depends on the width and
 interpretation chosen when it is used.
 
-For an unsigned value, every bit contributes to a value starting at zero. For a signed value, the
+An unsigned value is zero or positive. For a signed value, the
 M68K uses **two's complement**. At a chosen width, a 0 in the highest bit gives a non-negative
 value, while a 1 gives a negative value.
 
@@ -105,7 +105,7 @@ into the new bits above it. A positive value receives zeroes; a negative value r
 ext.size Dn
 ```
 
-`Dn` means any data register from `d0` through `d7`. The two forms used here have precise jobs:
+`Dn` means any data register from `d0` through `d7`:
 
 - `ext.w Dn` sign-extends the low byte into the low word. It preserves the register's upper word.
 - `ext.l Dn` sign-extends the low word across the full long.
@@ -135,7 +135,7 @@ For a positive byte such as `$70`, the same two instructions fill the new bits w
 
 ### 1. Copy three different sizes
 
-The testcase starts `d0` at `$12345678`. Registers `d1`, `d2` and `d3` each start at
+The test starts `d0` at `$12345678`. Registers `d1`, `d2` and `d3` each start at
 `$AABBCCDD` so that preserved upper bits remain visible.
 
 Write three `move` instructions:

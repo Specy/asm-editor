@@ -1,6 +1,6 @@
-This program plays a short tune on the **Synth**, the sound chip this editor adds at `$E00100`;
-EASy68K does not have it. Three of its eight channels play together, the way a game console's music
-did: a pulse wave for the melody, a triangle wave for the bass, and noise for the drums. Choose
+This program plays a short tune on the **Synth**, the sound chip this editor adds at `$E00100`.
+EASy68K does not have this chip. Three of its eight channels play together: a pulse wave for
+the melody, a triangle wave for the bass, and noise for the drums. Choose
 **Build**, then **Run**, with your sound on.
 
 Each channel has the same controls in a block of `$20` bytes. With `a0` pointing at channel 0,
@@ -8,16 +8,17 @@ channel 1's controls are `$20` bytes farther on and channel 2's are `$40` bytes 
 example, the waveform is at offset `$11` within a channel, so channel 1's waveform is at
 `$20 + $11 = $31` from `a0`.
 
-The **envelope** shapes a note's level: **attack** rises to full, **decay** falls to the
-**sustain** level, and **release** fades to silence when the gate turns off. Sustain holds while
-the gate stays on and ranges from 0 to 127; the separate volume control scales the whole note.
+The **envelope** shapes a note's level over time. Turning the **gate** on starts the **attack**,
+which raises the level to full. The **decay** then lowers it to the **sustain** level, which holds
+while the gate stays on. Turning the gate off starts the **release**, which fades to silence.
+Sustain ranges from 0 to 127. The separate volume control scales the whole note.
 Attack, decay and release use ticks of 1/1024 second. Attack gives the time for a full rise from
 silence; decay and release give the time for a full fall to silence, so a smaller change takes
-less time. A time of 0 is immediate. The controls start at 0, which supplies the bass's instant
-attack and the drum's silent sustain here.
+less time. A time of 0 is immediate. The controls start at 0, so the bass has an instant
+attack and the drum has a silent sustain in this program.
 
 The lead uses a pulse wave. Its **pulse width** sets how much of each cycle is high, in parts of
-4096: 1024 is a quarter of the cycle; 2048 gives equal high and low halves, a square wave.
+4096: 1024 is a quarter of the cycle. A value of 2048 gives equal high and low halves, a square wave.
 
 ```m68k|playground|no-flags|allow-open
 SYNTH   equ $E00100             ; channel 0; channel 1 is at +$20 and channel 2 at +$40
@@ -98,8 +99,7 @@ bytes, so after all three it points at `659`, the start of the next step. `strik
 unchanged, letting the loop continue through the table.
 
 The next step reads `659, 0, 0`: the lead changes pitch, while the bass and drum get no register
-writes. A table value of 0 leaves all channel controls unchanged. The bass keeps sounding;
-the drum gets no new hit.
+writes. A table value of 0 leaves all channel controls unchanged. The bass keeps sounding, and the drum gets no new hit.
 
 Task 23 waits 15 hundredths of a second after each step. The eight long lines contain 32 steps,
 grouped musically into four **bars** of eight steps over the chords C, A minor, F and G. The
@@ -107,15 +107,15 @@ bass gets a frequency on the first and fifth step of each bar. A closing triple 
 then the single word `$FFFF` ends the loop before it reads another bass or drum word. `done`
 lets that closing chord ring for another 60 hundredths of a second before ending the program.
 
-Each channel is set up once. The lead decays to a quieter level; the bass holds at full level;
-the drum's sustain is 0, so each hit decays to silence even though its gate stays on. The noise
+Each channel is set up once. The lead decays to a quieter level, and the bass holds at full level.
+The drum's sustain is 0, so each hit decays to silence even though its gate stays on. The noise
 frequency sets how bright a drum sounds: 1200 gives a low thud, 7000 a snare-like sound and 24000
 a hi-hat-like sound.
 
-`strike` plays one frequency on one channel. Storing the new frequency would only change the
-pitch of the note already sounding, so it turns the gate off and on around it to restart the
-attack from the current level. With the bass's instant attack and full sustain, a repeated pitch
-may still sound continuous; restarting the envelope does not necessarily make an audible gap.
+`strike` plays one frequency on one channel. Storing the new frequency alone would change the
+pitch of the note already sounding. To restart the attack from the current level, `strike` turns
+the gate off, stores the frequency, then turns the gate on again. With the bass's instant attack and full sustain, a repeated pitch
+may still sound continuous. Restarting the envelope does not necessarily make an audible gap.
 
 ## Try it
 

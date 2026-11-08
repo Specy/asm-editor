@@ -3,7 +3,7 @@ On the way back, each call multiplies the answer by its own `n`. `fib(10)` also 
 but each call above 1 needs two answers: `fib(n - 1)` and `fib(n - 2)`.
 
 Both routines take a nonnegative long argument on the stack and return a long in `d0`. Each
-invocation gets its own stack frame, so it can still find its argument after a deeper call returns.
+call gets its own stack frame, so it can still find its argument after a deeper call returns.
 
 ```m68k|playground|memory|no-flags|allow-open
     move.l #8, -(sp)        ; n = 8
@@ -74,7 +74,7 @@ and the saved `a6` occupy three longs. At this point `a7` and `a6` are `00FFFFF4
 `8(a6)` contains 8. Each recursive invocation uses another 12 bytes for those same three
 longs. At the `link` for `n = 1`, `a7` reaches `00FFFFA0`.
 
-Step back out until you reach `move.l 8(a6), d1` in the call where `n = 2`. Its inner call
+Keep stepping until you reach `move.l 8(a6), d1` in the call where `n = 2`. Its inner call
 returned 1 in `d0`. Reading `8(a6)` retrieves this invocation's 2, so `mulu` makes `d0 = 2`.
 The same pattern continues for 3 through 8. Each invocation has its own argument and saved
 `a6`; `unlk` restores the caller's `a6` as the calls return.
@@ -84,7 +84,7 @@ The same pattern continues for 3 through 8. Each invocation has its own argument
 In `fib`, `link a6, #-4` also reserves one local long at `-4(a6)`. Step through a call with
 `n = 2`. The first inner call returns `fib(1) = 1`, which is stored at `-4(a6)`. The next
 inner call returns `fib(0) = 0` in `d0`. The final `add.l` reads the saved 1 and returns
-`fib(2) = 1`. The local belongs to this invocation, so deeper calls can use their own
+`fib(2) = 1`. The local variable belongs to this invocation, so deeper calls can use their own
 `-4(a6)` without changing it. Including the argument, return address, saved `a6`, and local,
 each active `fib` invocation uses 16 bytes of stack.
 

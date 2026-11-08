@@ -132,17 +132,18 @@ intervals a little over 30 milliseconds. A held key is seen on successive polls,
 begins and ends between two polls is missed. Click the Screen panel to give it focus before
 pressing a key. Key events outside the focused panel do not reach the program.
 
-## Direction kept between frames
+## Keeping the direction between frames
 
 `dx` and `dy` are the square's horizontal and vertical steps, measured in pixels per frame. They
 start at `8` and `0`, so the square initially moves right. Pressing left writes `-8` to `dx` and
-clears `dy`; pressing up writes `-8` to `dy` and clears `dx`. The other arrows do the corresponding
-work. Clearing the other step keeps each new direction horizontal or vertical.
+clears `dy`; pressing up writes `-8` to `dy` and clears `dx`. Pressing right writes `8` to `dx`
+and clears `dy`; pressing down writes `8` to `dy` and clears `dx`. Clearing the other step keeps
+each new direction horizontal or vertical.
 
 On every frame, the program adds `dx` to `boxx` and `dy` to `boxy`. A poll with no arrow down
 leaves those steps in memory, so releasing an arrow does not stop the square. A later arrow changes
 the stored steps. The square is drawn at its saved position before the program polls and computes
-the next position, so you see a direction change in the following picture.
+the next position, so you see a direction change in the next frame.
 
 The Screen is 640 by 480 pixels, and the square is 40 by 40. Its top-left corner can reach X =
 `640 - 40 = 600` and Y = `480 - 40 = 440` while the whole square remains visible. `RIGHT` and

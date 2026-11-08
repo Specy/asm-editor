@@ -1,6 +1,6 @@
 {
     "name": "Bytes and 16-bit pairs",
-    "description": "Byte ranges and signed readings, wraparound, 16-bit pair addition, and widening an unsigned byte into a pair.",
+    "description": "Signed and unsigned byte ranges, wraparound, addition with 16-bit register pairs, and copying an unsigned byte into a pair.",
     "order": 4,
     "topic": "numbers"
 }

@@ -51,11 +51,11 @@ table + 8 = $2008  →  address of mul_op  →  a1  →  jmp (a1)
 puts that stored address in `a1`. `jmp (a1)` transfers execution to `mul_op`. The assembler
 chooses the handler's numeric address, so you do not have to type that number into the source.
 The `bra done` after multiplication skips the handlers that follow it; otherwise execution
-would continue into `div_op`. The division handler falls directly through to `done`.
+would continue into `div_op`. The division handler continues directly to `done`.
 
 Select **Build**, then **Run**. `d4` finishes at `00000012` in the registers panel: hexadecimal
 `12` is decimal 18. Select **Build** again to reset the program, then use **Step**. Watch `d3`
-become 8 after `lsl.l`, and set the memory panel to `2000`. Its third long, at `$2008`, is the
+become 8 after `lsl.l`, and set the memory panel to `2000`. The table's third entry, at `$2008`, is the
 address that `move.l (a0, d3), a1` loads into `a1`. After `jmp (a1)`, the next instruction is
 the one labelled `mul_op`.
 

@@ -1,5 +1,6 @@
-A grid in memory is still a line of values. This example stores three rows of four words at
-`$2000`. It reads one value using a row and column, then adds the three values in that column.
+A two-dimensional array is a grid of rows and columns stored as a line of values in memory.
+This example stores three rows of four words at `$2000`. It reads one value using a row and
+column, then adds the three values in that column.
 Both row and column indices start at **0**: the rows are 0, 1 and 2, and the columns are 0, 1,
 2 and 3.
 

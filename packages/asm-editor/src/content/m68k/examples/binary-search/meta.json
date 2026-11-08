@@ -1,6 +1,6 @@
 {
     "name": "Binary search",
-    "description": "Twelve sorted words searched by halving the range four times, with the index left in d3 and -1 when the value is not there.",
+    "description": "Use binary search to find a value in a sorted array. The program leaves its index in d3, or -1 if it is not found.",
     "order": 15,
     "topic": "binary-search"
 }

@@ -3,7 +3,7 @@
 `add` and `sub` use the byte, word or long size written on the instruction. On a base 68000,
 multiplication takes two word-sized inputs and produces a long result. Division takes a long
 dividend and a word divisor, then packs a word-sized quotient and remainder into a data register.
-After those operations, this lesson moves from whole numbers to the individual bits inside them.
+You can also work with individual bits using masks, shifts, rotates and bit instructions.
 
 ## Multiply two words into one long
 
@@ -92,7 +92,7 @@ The quotient must also fit in its 16-bit destination. A quotient overflow sets `
 `bvs label` means **branch when `V` is 1**. Put it immediately after the division so that it reads
 the flags from that division, and do not use the packed result on the overflow path.
 
-This complete shape checks zero first and quotient overflow second:
+This example checks for a zero divisor first and quotient overflow second:
 
 ```m68k|playground
     move.l #100000, d0
@@ -219,8 +219,8 @@ Because the branch must read the shift's carry, place it immediately after the s
 
 ### Extract and assemble fields
 
-Once shifts are defined, a mask and a shift can isolate a field inside a value. Shift the field
-down to the low end, then clear everything above it:
+A field is a group of bits within a value. To extract a field, shift it down to the low end,
+then use a mask to clear everything above it:
 
 ```m68k|playground|no-flags
     move.l #$12345678, d0
@@ -232,8 +232,8 @@ down to the low end, then clear everything above it:
     ori.l #$000000CD, d1   ; d1 = $0000ABCD
 ```
 
-The first pair extracts the second-lowest byte. The second pair opens eight low bits below `$AB`
-and sets them from the mask `$CD`.
+The first example extracts the second-lowest byte. The second shifts `$AB` left by eight bits,
+leaving zeroes in the low byte, then uses `or` to fill that byte with `$CD`.
 
 ## Test or change one bit
 
@@ -274,7 +274,7 @@ the tested bit was clear and `bne` means it was set.
 `d0` starts at 1000. Divide it by the known nonzero divisor 7. Leave quotient 142 in `d2` and
 remainder 6 in `d3`, with zeroes in the upper part of both registers. Preserve `d0`.
 
-The destination registers start with different sentinels, so both packed halves must be replaced.
+The destination registers start with nonzero values, so your code must replace both words of each register.
 Use `swap` to move the remainder into the low word and an `and` mask to clear each unwanted half.
 
 ```m68k|playground|exercise
@@ -316,9 +316,9 @@ Use `swap` to move the remainder into the low word and an `and` mask to clear ea
 Initialize `d1` with `move.l #0,d1`, and use `bcc` immediately after each shift to skip the add
 when the bit entering `C` was 0.
 
-Use `d2` as a `dbra` counter. Initialize only its low word for 32 passes, preserving the sentinel in
-its high word. The finished values should show 16 set bits, an empty `d0`, and the normal `$FFFF`
-ending word from `dbra`.
+Use `d2` as a `dbra` counter. Initialize only its low word for 32 passes, preserving `$A5A5` in
+its high word. When the loop finishes, `d1` should be 16 and `d0` should be zero. The low word of
+`d2` should be `$FFFF`, the value left by `dbra` when its counter runs out.
 
 ```m68k|playground|exercise
 ; your code here

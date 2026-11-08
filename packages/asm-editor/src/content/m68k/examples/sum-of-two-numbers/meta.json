@@ -1,6 +1,6 @@
 {
     "name": "Read two numbers and print their sum",
-    "description": "Two prompts that wait for you to type, the numbers coming back in d1, and their sum printed on a line of its own.",
+    "description": "Read two numbers into d1, save the first in d2, then add them and print their sum on a new line.",
     "order": 18,
     "topic": "sum-of-two-numbers",
     "template": 5

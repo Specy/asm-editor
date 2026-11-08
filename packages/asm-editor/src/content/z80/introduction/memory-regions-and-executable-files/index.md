@@ -59,8 +59,8 @@ contents. Its occupied space changes as work begins and ends. A **heap** supplie
 while a program runs; a program can release a block when it no longer needs it.
 
 The **stack pointer** is the register that tracks the stack's current position. The editor initially
-sets it to `0xFFFF`. This is a starting position, not a
-protected boundary around a stack region. The editor provides no heap allocator or dedicated heap region.
+sets it to `0xFFFF`. This starting position does not protect the stack from writes elsewhere in the
+program. The editor provides no heap allocator or dedicated heap region.
 Our example needs neither kind of working storage: its fixed buffer is enough.
 
 ## Which addresses reach devices?
@@ -78,7 +78,7 @@ The Z80's address range alone does not tell you which addresses reach RAM or dev
 ## Sections in other toolchains
 
 Some assemblers group a program's contents into **sections** before choosing their final addresses.
-These conventional names describe the kinds of contents contributed by the source:
+These conventional section names describe what each section contains:
 
 | Section   | Usual purpose                                                                   |
 | --------- | ------------------------------------------------------------------------------- |
@@ -87,9 +87,10 @@ These conventional names describe the kinds of contents contributed by the sourc
 | `.data`   | Writable data with stored initial values                                        |
 | `.bss`    | Writable storage described by its size rather than a block of stored data bytes |
 
-Our instructions, greeting, score and buffer have those respective roles. In this editor's Z80
-programs, use `.org`, `.db`, `.dw` and `.ds` to place them. Section names are background for other
-toolchains. In particular, `.bss` and `.ds` are not interchangeable promises about initialization.
+Our instructions have the role of `.text`, the greeting of `.rodata`, the score of `.data` and the
+buffer of `.bss`. In this editor's Z80 programs, use `.org`, `.db`, `.dw` and `.ds` to place them.
+These section names help you recognize the same roles in other toolchains. However, `.bss` and
+`.ds` have different initialization rules.
 
 ## From source to memory
 
@@ -108,8 +109,8 @@ greeting's final address.
 An **executable file** packages a program for loading. The **loader** places its contents in memory
 and prepares execution. The **entry point** is the address where execution begins.
 
-A **file offset** is a byte's position counted from the start of a file. It is a different coordinate
-from a memory address. Suppose a file's bytes are loaded consecutively starting at `0x8000`.
+A **file offset** is a byte's position counted from the start of a file. A memory address identifies
+its position in memory instead. Suppose a file's bytes are loaded consecutively starting at `0x8000`.
 The byte at file offset `0x0010` then reaches memory address `0x8010`. Without the loading address
 or other layout information, the offset alone cannot tell you the memory address.
 

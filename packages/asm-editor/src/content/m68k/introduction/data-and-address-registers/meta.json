@@ -1,6 +1,6 @@
 {
     "name": "Data and address registers",
-    "description": "Meet the M68K data and address registers, learn what an address represents, and see why a7 is also called sp.",
+    "description": "Learn what data and address registers hold, what a memory address is, and why a7 is also called sp.",
     "order": 1,
     "topic": "registers"
 }
