@@ -1,6 +1,6 @@
 {
     "name": "Variables in memory and constants",
-    "description": "Add two words from memory and an assembler constant, then inspect the word written back as the total.",
+    "description": "Add a price, a shipping cost, and a tax, then inspect the total stored in memory.",
     "order": 1,
     "topic": "variables-in-memory"
 }

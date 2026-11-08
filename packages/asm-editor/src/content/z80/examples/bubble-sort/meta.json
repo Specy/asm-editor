@@ -1,6 +1,6 @@
 {
     "name": "Bubble sort",
-    "description": "Sort eight bytes in place with neighbouring comparisons and swaps, using c for passes and b for each djnz-controlled inner loop.",
+    "description": "Sort eight bytes in place using bubble sort, with c counting passes and b counting comparisons.",
     "order": 13,
     "topic": "bubble-sort"
 }

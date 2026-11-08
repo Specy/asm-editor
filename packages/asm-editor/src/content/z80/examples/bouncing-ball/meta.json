@@ -1,6 +1,6 @@
 {
     "name": "A bouncing ball",
-    "description": "A ball that turns round at all four edges, drawn off screen and shown a whole frame at a time, paced by the frame port instead of by how fast your machine is.",
+    "description": "Animate a bouncing ball using double buffering and the frame port to show each completed frame in time with the display.",
     "order": 21,
     "topic": "bouncing-ball"
 }

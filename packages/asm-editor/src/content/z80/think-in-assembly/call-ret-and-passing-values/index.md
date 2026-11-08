@@ -4,7 +4,7 @@ particular call.
 
 The Z80 remembers where to carry on by putting a return address on the stack. Passing an argument
 to the subroutine and bringing a result back are separate jobs. The program has to choose where
-those values travel.
+to put those values.
 
 ## `call` leaves a return address on the stack
 
@@ -56,10 +56,11 @@ The `jp done` also matters. After `ld b, a`, ordinary execution would otherwise 
 `triple` without a call. Its `ret` would then treat unrelated bytes as an address. Arrange the
 surrounding control flow so a subroutine is entered by `call`.
 
-## Decide how values travel
+## Decide how to pass values
 
 The CPU gives `call` and `ret` their stack behaviour, but it has no built-in idea of parameters or
-return values. The caller and subroutine need an agreement. Possible contract rules include:
+return values. The caller and subroutine need an agreement about how to pass values and which
+registers to preserve. For example, they might agree that:
 
 - the argument arrives in `a`;
 - the result leaves in `a`;
@@ -70,8 +71,8 @@ the program and recorded in a comment; the CPU does not enforce it. A small prog
 own rules. Code that calls an existing library has to follow the rules that library states.
 
 Registers are the simplest place to pass a few values. In `triple`, `a` carries both the argument
-and the result. The subroutine also uses `c` as scratch space, so its contract should either say that
-`bc` may change or preserve the old value.
+and the result. The subroutine also uses `c` as scratch space. Its contract should say that `bc` may
+change, or the subroutine should preserve the old value.
 
 ## Preserve registers promised by the contract
 
@@ -190,7 +191,7 @@ There is no `ld ix, sp`, so `ld ix, 0` followed by `add ix, sp` copies the curre
 `ix`. The value in `ix` then stays fixed while the subroutine reads its arguments. A register used
 this way is called a **frame pointer**, and the group of values for this call is its **stack frame**.
 
-Immediately after `push ix`, `sp` and `ix` both hold `0xFFF7`. Here is the frame one byte at a time:
+After `add ix, sp`, `sp` and `ix` both hold `0xFFF7`. Here is the frame one byte at a time:
 
 | Address  | Reached as | Byte    | Meaning                              |
 | -------- | ---------- | ------- | ------------------------------------ |
@@ -207,7 +208,7 @@ Every item is a two-byte word stored low byte first. The saved `ix` accounts for
 and the return address accounts for offsets 2 and 3. That is why the first argument begins at
 `ix+4`, not `ix+2`.
 
-The ending is balanced in two stages. The subroutine's `pop ix` removes what the subroutine pushed,
+The stack is restored in two stages. The subroutine's `pop ix` removes what the subroutine pushed,
 then `ret` removes the return address. Back in the caller, two more pops remove the two arguments the
 caller pushed. `hl` finishes at `0x002A`, `ix` is restored to `0x3456`, and `sp` is back at
 `0xFFFF`.

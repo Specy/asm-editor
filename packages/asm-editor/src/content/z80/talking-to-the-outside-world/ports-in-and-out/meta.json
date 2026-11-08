@@ -1,6 +1,6 @@
 {
     "name": "Ports: in and out",
-    "description": "Use the Z80's separate I/O space with in and out. Print characters and numbers, read console input, and pass a 16-bit value through the playground's word port.",
+    "description": "Use in and out to print characters and numbers, read console input, and play sounds through the playground's I/O ports.",
     "order": 0,
     "topic": "syscalls"
 }

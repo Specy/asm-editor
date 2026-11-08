@@ -1,4 +1,4 @@
-This grid has three rows of four words. The program first adds column 1 across all three rows,
+This two-dimensional array has three rows of four words. The program first adds column 1 across all three rows,
 leaving 222 (`00DE`) in `iy`. It then reads row 2, column 1 into `de`: that word is 200 (`00C8`).
 Rows and columns are numbered from zero, so row 2 is the last row and column 1 is the second column.
 
@@ -65,8 +65,8 @@ once more to `901A`; the loop is finished, so that address is never read.
 
 Inside the loop, `de` first holds the word read through `ix`. `add hl, de` adds it to the running
 total. The program then loads `STRIDE` into `de` to move `ix` down one row. The `+0` and `+1` in
-`(ix+0)` and `(ix+1)` are fixed byte offsets within one word; `add ix, de` makes the larger move
-between rows. When all three words have been added, `push hl` and `pop iy` save the total in `iy`.
+`(ix+0)` and `(ix+1)` are fixed byte offsets within one word. `add ix, de` advances `ix` to the
+same column in the next row. When all three words have been added, `push hl` and `pop iy` save the total in `iy`.
 That frees `hl` for the separate row-and-column lookup.
 
 For that lookup, `row * COLS + col` gives the word's position in the sequence: `2 * 4 + 1 = 9`.

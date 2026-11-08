@@ -1,5 +1,5 @@
-A binary search looks for an unsigned byte in an ascending array. Instead of checking every byte,
-it probes the middle of the part that could still contain the target. This program searches the
+Binary search looks for a value in a sorted array. Instead of checking every element,
+it checks the middle of the range that could still contain the target. This program searches the
 twelve bytes below for `91`. It leaves the matching index in `e`; if no byte matches, it leaves
 `FF` in `e`.
 
@@ -51,9 +51,9 @@ search_done:
 numbers: .db 2, 5, 8, 12, 16, 23, 38, 56, 72, 91, 100, 127
 ```
 
-The live range is **half-open**: `[low, high)`. `low` is included and `high` is one past the last
-possible index, so the initial range is `[0, 12)`. That makes the three outcomes after a probe
-direct:
+The range still being searched is **half-open**: `[low, high)`. `low` is included and `high` is one
+past the last possible index, so the initial range is `[0, 12)`. Each comparison determines what
+happens next:
 
 | Comparison of `numbers[mid]` with the target | Next range          |
 | -------------------------------------------- | ------------------- |
@@ -81,18 +81,18 @@ Change `ld d, 91` to `ld d, 90`, build, and run again. The complete no-match pat
 | 7 | 9 | 8 | 72 | too small; `low = 9` |
 
 Now `low` and `high` are both 9, so the loop ends without reaching `hit`. `e` was initialized to
-`FF` and was never changed, making `de` `5AFF`. `FF` is safe as the not-found marker here because
+`FF` and was never changed, so `de` holds `5AFF`. `FF` is safe as the not-found marker here because
 the valid indices are only `00` through `0B`.
 
-`srl a` divides the sum by two, rounding down, to make the middle index. This exact program uses a
+`srl a` divides the sum by two, rounding down, to calculate the middle index. This program uses a
 one-byte count and indices, and it forms `low + high` in the one-byte register `a`; keep `count` at
 128 or less so that sum cannot overflow. The twelve-byte demo is well inside that limit. Its inputs
-must be ascending unsigned bytes, and `d` is an unsigned byte target. `de` is simply two adjacent
-registers here: target in `d`, result in `e`.
+must be unsigned bytes sorted in ascending order, and `d` holds the unsigned byte target. The two
+halves of `de` have separate roles here: `d` holds the target and `e` holds the result.
 
 The address calculation starts with `hl = numbers` and adds the index to its low byte. If that
 addition carries, `inc h` completes the pointer addition. In this listing `numbers` is visibly at
-`9000`, but the carry-handling code also stays correct if the array is moved near the end of a page.
+`9000`, but handling the carry also lets the array start near the end of a 256-byte memory page.
 
 Finally, `a` needs to hold both the middle index and the byte read from memory. `push af` saves the
 index before the read, and each branch uses `pop af` exactly once before either updating a bound or

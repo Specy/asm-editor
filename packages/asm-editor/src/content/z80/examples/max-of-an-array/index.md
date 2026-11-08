@@ -44,17 +44,17 @@ to compare against, even if every element is negative. Starting the best at zero
 as the answer for an all-negative array, although zero might not occur in it. `hl` then moves past
 the first byte, so `b` starts at `count-1`: seven comparisons remain.
 
-`cp (hl)` compares by calculating `best - current` for the flags; it leaves `a` and `c` unchanged.
+`cp (hl)` sets the flags by calculating `best - current`. It leaves `a` and `c` unchanged.
 For signed bytes, a negative result normally means the current element is larger. But an 8-bit
 subtraction can wrap past the signed range of -128 through 127. Then the S flag describes the sign
 of the wrapped byte, and P/V is set to report the overflow. These three comparisons show why both
 flags matter:
 
-| Best in `c` | Current at `(hl)` | Subtraction and wrapped byte | S   | P/V | Route                      |
-| ----------- | ----------------- | ---------------------------- | --- | --- | -------------------------- |
-| -100        | 37                | -137 wraps to `77` (+119)    | 0   | 1   | `pe` then `p`: take 37     |
-| 37          | -4                | 41 is `29` (+41)             | 0   | 0   | neither jump: keep 37      |
-| 99          | -50               | 149 wraps to `95` (-107)     | 1   | 1   | `pe`, then no `p`: keep 99 |
+| Best in `c` | Current at `(hl)` | Subtraction and result (hex) | S   | P/V | Route                           |
+| ----------- | ----------------- | ---------------------------- | --- | --- | ------------------------------- |
+| -100        | 37                | -137 wraps to `77` (+119)    | 0   | 1   | `pe` then `p`: take 37          |
+| 37          | -4                | 41 is `29` (+41)             | 0   | 0   | `pe` and `m` not taken: keep 37 |
+| 99          | -50               | 149 wraps to `95` (-107)     | 1   | 1   | `pe`, then no `p`: keep 99      |
 
 In the first row, -100 really is less than 37, despite the positive-looking wrapped result. In the
 last row, 99 really is greater than -50, despite the negative-looking result. `jp pe` takes the

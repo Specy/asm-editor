@@ -252,7 +252,7 @@ The read does not replace `b` or `c`. The keyboard ports are:
 | `0x32` | code of the last key pressed, or 0 before any press                |
 | `0x33` | code of the last key released, or 0 before any release             |
 
-Letters use the ASCII code of their capital. Arrow codes are left `0x25`, up `0x26`, right `0x27`
+Letters use the ASCII code of their uppercase form. Arrow codes are left `0x25`, up `0x26`, right `0x27`
 and down `0x28`. Click the Screen before pressing a key; its focus ring shows where input goes.
 
 ```z80|playground|open-screen|no-registers|no-flags
@@ -390,9 +390,10 @@ reports whether a key is down **now** without consuming anything.
 
 ## Read the mouse
 
-Mouse reads also use `in r, (c)`. Here `c` selects X `0x40`, Y `0x41`, buttons `0x42`, or event
-count `0x43`. Register `b` selects a view: 0 is the current state, 1 the most recent button-release
-snapshot, and 2 the most recent button-press snapshot.
+Mouse reads also use `in r, (c)`. Set `c` to `0x40` to read X, `0x41` to read Y, `0x42` to read
+the buttons, or `0x43` to read the event count. Register `b` selects which state to read:
+0 for the current state, 1 for a snapshot taken at the most recent button release, or 2 for a
+snapshot taken at the most recent button press.
 
 In the buttons byte, bit 0 is left, bit 1 right, bit 2 middle, bit 3 marks a double click in the
 last-press view, bit 4 is Shift, bit 5 Alt and bit 6 Ctrl.
@@ -476,7 +477,7 @@ Set X and Y through ports `0x23` and `0x24` before reading `0x28`. With double b
 pixel comes from the off-screen image being drawn. The cursor ports use 8 by 8 character cells, and
 printing a character advances the column by one.
 
-## Two to draw
+## Try drawing and reading Screen state
 
 Fill a red rectangle over the box from `(10, 10)` up to but not including `(100, 100)`. Then read
 the colour of pixel `(50, 50)` into `a`. Red is `0xE0`, so `a` should finish as `E0`. Set both pen

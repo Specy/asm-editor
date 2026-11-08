@@ -1,9 +1,9 @@
-This tune uses the **Sound chip**, the MSX's AY-3-8910: channel A plays the melody, B the bass
-and C the drums. Choose **Build**, then **Run**, with your sound on.
+This tune uses the **Sound chip**, the MSX's AY-3-8910: channel A plays the melody, channel B plays the bass
+and channel C plays the drums. Choose **Build**, then **Run**, with your sound on.
 
 The chip has three square-wave channels, one shared noise generator and one shared **envelope
 generator**, which changes volume over time. A volume value of 16 makes a channel follow the
-envelope. Here C follows shape 0: fall from full volume to silence and stay there. Writing 0 to
+envelope. Here channel C uses shape 0: its volume falls from full volume to silence and stays there. Writing 0 to
 shape register 13 restarts that fall, striking the drum; even writing the same shape restarts it.
 
 Each `setup` line pairs a register number with its value. The initialization loop selects the
@@ -32,7 +32,7 @@ Each step occupies five bytes. The first row, `.word 214, 854` followed by `.byt
 | 4                | 24    | Noise period; restart the drum envelope |
 
 A zero in either tone field leaves that channel unchanged. A zero drum byte means no new hit: any previous
-envelope fall continues. Neither commands immediate silence.
+envelope fall continues. Neither kind of zero silences a channel immediately.
 
 ```z80|playground|no-flags|allow-open
         .org 0x8000
@@ -176,7 +176,7 @@ song:
         .word 0xffff
 ```
 
-The main 32 steps make four bars of eight, over C, A minor, F and G. Each step waits 15 hundredths
+The first 32 steps make four bars of eight steps each, over C, A minor, F and G. Each step waits 15 hundredths
 of a second through the wait port. A 33rd step returns to the opening C notes and strikes the
 drum. The following `0xFFFF` word ends the table; after another 60 hundredths, `halt` silences the
 chip.
@@ -196,7 +196,7 @@ Make the drums longer by editing `setup`: change `.byte 11, 0x58` to `.byte 11, 
 Period `0x0400`, or 1,024, gives a fall of about 146 ms.
 
 Keep those edits, then give the lead the envelope too: change `.byte 8, 11` to `.byte 8, 16` in
-`setup`. Each drum hit now restarts the same 146 ms volume fall for both lead and drums. A lead
+`setup`. Each drum hit now restarts the same 146 ms volume fall for both the lead and the drums. A lead
 note alone does not restart it. On steps without a new hit, any unfinished fall continues briefly,
 then both channels stay silent until the next hit. The bass keeps its fixed volume. The
 [Sound chip ports](/documentation/z80/io#sound-chip) list the other registers.

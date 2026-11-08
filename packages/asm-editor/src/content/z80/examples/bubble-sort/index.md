@@ -1,5 +1,5 @@
-This program sorts eight bytes in memory into ascending order, in place: it changes the array
-itself rather than making a second array. The inner loop compares neighbouring bytes and swaps a
+This program uses bubble sort to put eight bytes in memory into ascending order. It sorts in
+place, changing the array itself rather than making a second array. The inner loop compares neighbouring bytes and swaps a
 pair that is out of order. One full pass moves the largest remaining byte to the right end. Later
 passes need fewer comparisons because those rightmost bytes are already in place.
 
@@ -35,9 +35,9 @@ in_order:
 numbers: .db 42, 8, 15, 4, 23, 16, 99, 1
 ```
 
-There are two counters. `c` starts at 7 and records how many passes, and therefore how many
-comparisons in the next pass, remain. At `outer`, `ld b, c` makes `b` the inner-loop count.
-`djnz inner` decrements `b` and jumps back while `b` is not zero, so it consumes `b` completely.
+There are two counters. `c` starts at 7 and holds the number of passes remaining. It also gives
+the number of comparisons to make in the current pass. At `outer`, `ld b, c` copies that count into `b`.
+`djnz inner` decrements `b` and jumps back while `b` is not zero. The inner loop ends when `b` reaches zero.
 Afterward, `dec c` and `jr nz, outer` start the next, shorter pass. Here `c` is a register; the
 **C flag** mentioned by the comparison is a separate thing.
 
@@ -62,7 +62,7 @@ unchanged.
 
 Both `ld hl, numbers` and `ld b, c` belong inside the outer loop. By the end of a pass, `hl` has
 walked to the last byte compared, so the next pass must start at `numbers` again. Also, `djnz` has
-left `b` as `00`; reloading it from the still-useful `c` gives the next pass its correct length.
+left `b` as `00`; reloading it from `c` gives the next pass its correct length.
 
 Choose **Run**, then open the memory panel at `9000`. The eight bytes should read
 `01 04 08 0F 10 17 2A 63`: 1, 4, 8, 15, 16, 23, 42, and 99.

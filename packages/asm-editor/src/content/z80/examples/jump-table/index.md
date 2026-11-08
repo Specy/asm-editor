@@ -1,4 +1,5 @@
-Four addresses sit in a table at `9000`. The number in `a` picks one of them: `0` means add,
+A jump table stores the addresses of code to jump to. This program stores four addresses at
+`9000`. The number in `a` picks one of them: `0` means add,
 `1` subtract, `2` multiply, and `3` divide. The program reads that address into `hl` and jumps
 there. With `a = 2`, it takes the third entry and multiplies 6 by 3.
 
@@ -79,9 +80,9 @@ longer point at the high byte. At `jp (hl)`, the jump goes to the address _in_ `
 instruction does not read another address from memory or push a return address.
 
 Choose **Run**. Multiplication leaves `a = 12` and `c = 12` in the hexadecimal registers
-panel: `12` hex is 18 decimal. `hl` remains `801B`. Every arm reaches `done`, where
-`ld c, a` keeps the result easy to inspect. The `jr done` instructions also stop one arm
-from falling through into the next.
+panel: `12` hex is 18 decimal. `hl` remains `801B`. Each operation reaches `done`, where
+`ld c, a` keeps the result easy to inspect. The `jr done` instructions also stop execution
+from falling through into the next operation.
 
 This example expects `op` to be **0 through 3**. There is no range check. If `op` is 4 or
 more, the lookup reads beyond the table and `jp (hl)` can jump to an unintended address.
@@ -96,16 +97,16 @@ prediction with the registers panel. Open the answers after trying all four valu
 <details>
 <summary>Check your answers</summary>
 
-| `op` | Arm      | `hl` at `jp (hl)` | Result in `c` (hex) |
-| ---- | -------- | ----------------- | ------------------- |
-| 0    | add      | `8013`            | `09`                |
-| 1    | subtract | `8017`            | `03`                |
-| 2    | multiply | `801B`            | `12`                |
-| 3    | divide   | `8022`            | `02`                |
+| `op` | Operation | `hl` at `jp (hl)` | Result in `c` (hex) |
+| ---- | --------- | ----------------- | ------------------- |
+| 0    | add       | `8013`            | `09`                |
+| 1    | subtract  | `8017`            | `03`                |
+| 2    | multiply  | `801B`            | `12`                |
+| 3    | divide    | `8022`            | `02`                |
 
 </details>
 
-The dispatcher takes the same sequence of instructions for each valid `op`: it calculates one
+The lookup takes the same sequence of instructions for each valid `op`: it calculates one
 table position and reads one address. In a chain of comparisons, a choice near the end must
 pass the earlier comparisons first. Here the operation itself may still use comparisons or a
-loop; only the choice of arm has no comparison chain.
+loop; only the choice of operation has no comparison chain.

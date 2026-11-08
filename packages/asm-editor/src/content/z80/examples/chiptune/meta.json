@@ -1,6 +1,6 @@
 {
     "name": "Chiptune",
-    "description": "Play a short tune on the MSX sound chip: a lead and a bass on two square-wave channels and noise drums struck by the envelope.",
+    "description": "Play a short tune on the MSX sound chip: two square-wave channels play the melody and bass, while noise and a volume envelope create the drums.",
     "order": 26,
     "topic": "chiptune",
     "template": 8

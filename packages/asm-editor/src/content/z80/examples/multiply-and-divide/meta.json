@@ -1,6 +1,6 @@
 {
     "name": "Multiply and divide, with the remainder",
-    "description": "Multiply by testing and adding bits, then divide one bit at a time to find both the quotient and remainder.",
+    "description": "Multiply using shifts and addition, then divide one bit at a time to find both the quotient and remainder.",
     "order": 8,
     "topic": "multiply-and-divide"
 }

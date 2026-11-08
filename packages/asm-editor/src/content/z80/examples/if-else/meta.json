@@ -1,6 +1,6 @@
 {
     "name": "The bigger of two numbers",
-    "description": "Borrow flags and conditional jumps choose the larger unsigned value and turn a subtraction into a distance.",
+    "description": "Use the carry flag and conditional jumps to find the larger unsigned value and the distance between two numbers.",
     "order": 2,
     "topic": "if-else"
 }

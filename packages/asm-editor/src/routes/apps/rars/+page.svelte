@@ -53,7 +53,7 @@
             start()
         } else {
             const script = document.createElement('script')
-            script.src = 'https://cjrtnc.leaningtech.com/20250530_2444/loader.js'
+            script.src = 'https://cjrtnc.leaningtech.com/5.0/loader.js'
             script.async = true
             document.head.appendChild(script)
             script.onload = start

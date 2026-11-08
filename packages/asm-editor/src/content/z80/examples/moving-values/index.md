@@ -15,11 +15,11 @@ change in the registers panel.
 ```
 
 Build the program, then use **Step** to watch `a`, `b`, and `hl`. The first two `ld` instructions
-put 30 in `a` and 12 in `b`. `add a, b` puts their sum, 42, in `a`; `b` stays 12. Next,
+put 30 in `a` and 12 in `b`. `add a, b` puts their sum, 42, in `a`. Register `b` stays 12. Next,
 `add a, a` adds `a` to itself, leaving the perimeter, 84, in `a`.
 
-The panel shows register values in hexadecimal: after the first add, `a` shows `2A` (42 in
-decimal); after the second, it shows `54` (84 in decimal). You can also press **Run** after
+The panel shows register values in hexadecimal. After the first add, `a` shows `2A` (42 in
+decimal). After the second, it shows `54` (84 in decimal). You can also press **Run** after
 building to go straight to the final values.
 
 The last two `ld` instructions show what happens when you write one half of a register pair.

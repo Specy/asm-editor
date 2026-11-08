@@ -1,9 +1,9 @@
 This program plays the first phrase of Beethoven's "Ode to Joy". A loop reads a table of pitches
-and durations, playing one note and waiting for it to end before moving to the next. Choose
-**Build**, then **Run**, with your sound on.
+and durations, playing one note and waiting for it to end before moving to the next. Turn your
+sound on to hear the tune.
 
-Each note occupies four bytes in the table: a two-byte pitch word followed by a two-byte duration
-word, in milliseconds. `.dw` stores each word low byte first. The pitches used here fit in one
+Each note occupies four bytes in the table: a two-byte pitch followed by a two-byte duration
+in milliseconds. `.dw` stores each word low byte first. The pitches used here fit in one
 byte, so the loop reads the pitch's low byte and skips its high byte. It reads both bytes of the
 duration: 200 fits in a byte, but durations such as 400 and 600 exceed 255.
 

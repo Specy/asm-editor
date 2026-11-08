@@ -1,6 +1,7 @@
 `sum_of_squares(x, y)` takes its two arguments on the stack, calls a second subroutine twice to
 square them, and returns their sum in `hl`. It needs a local variable to hold the first square while
-the second call runs, and that local lives on the stack too, in a frame built for it by hand.
+the second call runs, and that local variable also lives on the stack. The subroutine sets up a stack frame to access
+its arguments and local variable through `ix`.
 
 In the previous example, the caller passed arguments in registers. Here the caller pushes two
 arguments, and `sum_of_squares` makes room on the same stack for a value it must keep across a
@@ -79,21 +80,20 @@ The five instructions after `sum_of_squares:` build its frame. The pointer chang
 In this playground, `sp` starts at `FFFF`.
 
 `push ix` puts the caller's `ix` on the stack. The caller may have been using `ix` for something of
-its own, and this subroutine is about to overwrite it, so it has to go back exactly as it was found.
+its own, and this subroutine is about to overwrite it, so it must restore the caller's value before returning.
 
 `ld ix, 0` then `add ix, sp` copies `sp` into `ix`. It takes two instructions because there is no
-`ld ix, sp`; zeroing `ix` and adding `sp` to it gets there. From this moment `ix` stops moving and
-`sp` carries on, which is the whole point of the arrangement.
+`ld ix, sp`; setting `ix` to zero and adding `sp` copies the value. `ix` then stays fixed while `sp` changes,
+so the arguments and local variable remain at fixed offsets from `ix`.
 
 `dec sp` twice lowers the stack pointer by two bytes. Those bytes are reserved for this routine's
 local, but they do not yet contain a useful value. The next `push` or `call` grows the stack below
 the new `sp`, leaving the reserved bytes alone.
 
-At the end, `ld sp, ix` throws the local room away by putting `sp` back where `ix` has been sitting
-all along, and `pop ix` hands the caller's `ix` back.
+At the end, `ld sp, ix` releases the space for the local variable by restoring `sp` to the frame's
+base. Then `pop ix` restores the caller's `ix`.
 
-After `ld (ix-1), h` stores the first square, and before `sum_of_squares` loads `y`, the frame is
-this. 🟢 marks `sp`; `ix` still points at `FFF7`:
+After `ld (ix-1), h` stores the first square, and before `sum_of_squares` loads `y`, the stack contains these values. 🟢 marks `sp`; `ix` still points at `FFF7`:
 
 |  address | value        | reached as | what it is                                   |
 | -------: | :----------- | ---------- | -------------------------------------------- |
@@ -108,13 +108,14 @@ The arguments are above `ix` because the caller pushed them before the `call`. T
 `ld (ix-1), h` and enter `FFF5` in the memory panel. After **Run**, the same bytes remain in memory,
 although `sp` has returned to `FFFF`: changing `sp` does not erase them.
 
-A word takes two instructions to move through `(ix+dd)`, because the displaced mode reads and writes
-one byte: `ld l, (ix+4)` and `ld h, (ix+5)` are one 16 bit argument arriving, low byte first. The
-displacement is a constant written into the instruction, from -128 to 127. A byte farther away
-needs its address worked out separately.
+Loading or storing a word through `(ix+dd)` takes two instructions because each instruction
+reads or writes one byte. For example, `ld l, (ix+4)` and `ld h, (ix+5)` load one 16-bit argument,
+low byte first. The
+displacement is a constant written into the instruction, from -128 to 127. To access a byte outside that range,
+you must calculate its address separately.
 
-`square` keeps to a smaller agreement of its own: it uses `de` and puts it back. It changes `a`
-and `b`, and uses `l` as its loop count, so its input must be from 0 to 255 with `h = 0`. The Z80
+`square` saves `de` before using it and restores it before returning. It changes `a` and `b`,
+and copies `l` into `b` for its loop count, so its input must be from 0 to 255 with `h = 0`. The Z80
 has no multiply instruction; repeated addition makes each square. With the shown inputs,
 `hl` ends at `0019`, which is 25 in decimal: 9 plus 16. For larger inputs, the final sum can exceed
 what 16 bits hold; `hl` then contains only the low 16 bits.
