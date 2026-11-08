@@ -74,7 +74,7 @@
     display: block;
     position: relative;
     z-index: -1;
-    height: 13rem;
+    height: 11rem;
     overflow: hidden;
 }
 .blog-card-image img {
@@ -83,7 +83,7 @@
     height: 100%;
     object-fit: cover;
     object-position: top;
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 6rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 5.5rem, rgb(0 0 0 / 0.5) 7.2rem, transparent);
     opacity: 0.8;
     filter: saturate(0.35);
     transition: filter var(--dur-base);
@@ -99,12 +99,23 @@
 }
 /* the title over the picture's fading end, the card the shorter for it */
 .blog-card-image + .blog-card-body {
-    margin-top: -6rem;
+    margin-top: -4rem;
 }
 .blog-date,
 .blog-byline {
     font-size: var(--fs-small);
     color: var(--text-muted);
+}
+/* the title and the description over the picture's fading end: a halo in the card's own surface
+   colour, so they stand off the picture on a dark theme and a light one alike */
+.blog-card h3,
+.blog-card p {
+    text-shadow:
+        0 0 0.15rem var(--wb-surface),
+        0 0 0.4rem var(--wb-surface),
+        0 0 0.4rem var(--wb-surface),
+        0 0 0.9rem var(--wb-surface),
+        0 0 1.5rem var(--wb-surface);
 }
 .blog-card h3 {
     font-size: var(--fs-h3);

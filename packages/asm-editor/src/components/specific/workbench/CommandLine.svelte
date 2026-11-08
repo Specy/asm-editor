@@ -106,7 +106,6 @@
 
     .program {
         color: var(--accent);
-        font-weight: 700;
     }
 
     /* an inline editor in the line (styles/field.scss), its text the line's own, the ring inside

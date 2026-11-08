@@ -27,6 +27,15 @@
         focus?: boolean
         /** The style of the label round it, when it has one. */
         wrapperStyle?: string
+        /**
+         * A secret shown as dots that no browser or password manager offers to save, for the exam's
+         * passwords: a "Save password?" bubble takes the focus from the page, which a running exam
+         * reads as the student leaving it. A text field with its characters masked
+         * (`-webkit-text-security`), never a password field, which is what a browser offers to
+         * save; where a browser can't mask one, a password field after all, so the secret is never
+         * shown in the clear. It can't be copied or cut out.
+         */
+        concealed?: boolean
     }
 
     let {
@@ -39,27 +48,46 @@
         invalid = false,
         focus = false,
         wrapperStyle,
+        concealed = false,
         type = 'text',
         spellcheck = false,
         class: className,
         ...rest
     }: Props = $props()
 
+    //whether this browser draws a text field's characters as dots (Chrome, Edge, Safari, Firefox
+    //from 2024); assumed until the page has started, which is where a concealed field is used
+    let masks = $state(true)
     onMount(() => {
+        if (concealed) masks = CSS.supports('-webkit-text-security', 'disc')
         if (focus) el?.focus()
     })
+
+    //no password manager's own detection either (1Password, LastPass, Bitwarden, Dashlane)
+    const concealedAttributes = {
+        autocomplete: 'off',
+        'data-1p-ignore': '',
+        'data-lpignore': 'true',
+        'data-bwignore': '',
+        'data-form-type': 'other'
+    } as const
+    const keepSecret = (event: ClipboardEvent) => event.preventDefault()
 </script>
 
 {#snippet field()}
     <input
         bind:this={el}
         bind:value
-        {type}
+        type={concealed ? (masks ? 'text' : 'password') : type}
         {spellcheck}
         {...rest}
+        {...concealed ? concealedAttributes : {}}
+        oncopy={concealed ? keepSecret : rest.oncopy}
+        oncut={concealed ? keepSecret : rest.oncut}
         class={['text-field', size, className]}
         class:mono
         class:invalid
+        class:concealed
     />
 {/snippet}
 
@@ -90,6 +118,9 @@
     }
     .invalid {
         border-color: var(--danger);
+    }
+    .concealed {
+        -webkit-text-security: disc;
     }
     .invalid:focus-visible {
         outline-color: var(--danger);

@@ -2,11 +2,12 @@
     import { tick } from 'svelte'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { languageAccent } from '#lib/languages/languageColors.ts'
+    import { LANGUAGE_ORDER } from '#lib/languages/languageCapabilities.ts'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
-    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
+    import InstructionSetPicker from '#cmp/shared/input/InstructionSetPicker.svelte'
     import { BASE_CODE } from '#lib/Config.ts'
     import Header from '#cmp/shared/layout/Header.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
@@ -27,11 +28,11 @@
     } from '#cmp/specific/exam/examBuilder.ts'
     import { copyText, encryptData, makeHash } from '#lib/utils.ts'
     import { toast } from '#stores/toastStore.ts'
-    import FaDumbbell from '~icons/fa-solid/dumbbell'
     import FaPlus from '~icons/fa-solid/plus'
     import FaTrash from '~icons/fa-solid/trash'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
@@ -57,8 +58,9 @@
         timeLimitMinutes: string
     }
 
+    //the title starts empty, its placeholder saying what an exam left untitled is called
     let settings: Settings = $state({
-        title: 'Untitled exam',
+        title: '',
         instructions: '',
         unlockPassword: '',
         examAccessPassword: '',
@@ -68,16 +70,8 @@
         key: sectionTypeLabel(value),
         value
     }))
-    /** The instruction sets a section can be written in, in the create page's order, each marked
-     *  with the colour of its own theme as the create page marks them. */
-    const LANGUAGES = (
-        ['M68K', 'MIPS', 'RISC-V', 'RISC-V-64', 'X86', 'Z80'] as AvailableLanguages[]
-    ).filter((language) => language in BASE_CODE)
-    const languageOptions = LANGUAGES.map((value) => ({
-        id: value,
-        label: languageLabel(value),
-        iconColor: languageAccent(value)
-    }))
+    /** The instruction sets a section can be written in, as the create page offers them. */
+    const LANGUAGES = LANGUAGE_ORDER.filter((language) => language in BASE_CODE)
 
     let sections = $state([
         createDefaultExamSection(ExamSectionType.AssemblyCoding)
@@ -85,9 +79,24 @@
     /** The part the card beside the outline shows: the Details, the general instructions, or a
      *  section by its id. */
     let current = $state<string>(DETAILS)
+    /** The section shown, when the part shown is one. */
+    const currentSection = $derived(sections.find((section) => section.id === current))
     /** The exam link just made, while the browser would not copy it: it is nowhere else to copy. */
     let uncopiedExamUrl = $state('')
     let unlockPasswordField = $state<HTMLInputElement>()
+
+    /** The footer's summary of the exam: the sets its coding sections are written in, in the order
+     *  they first come, and how many sections it has. */
+    const examLanguages = $derived([
+        ...new Set(
+            sections
+                .filter((section) => section.type === ExamSectionType.AssemblyCoding)
+                .map((section) => (section as AssemblyCodingSection).language)
+        )
+    ])
+    const sectionCount = $derived(
+        `${sections.length} ${sections.length === 1 ? 'section' : 'sections'}`
+    )
 
     function addSection(type: ExamSectionType) {
         const section = createDefaultExamSection(type)
@@ -157,9 +166,11 @@
         section.options = section.options.filter((option) => option.id !== optionId)
     }
 
-    function onAssemblyLanguageChange(section: AssemblyCodingSection, id: string) {
-        const language = LANGUAGES.find((value) => value === id)
-        if (!language) return
+    function onAssemblyLanguageChange(
+        section: AssemblyCodingSection,
+        language: AvailableLanguages
+    ) {
+        if (section.language === language) return
         if (section.starterCode === BASE_CODE[section.language]) {
             section.starterCode = BASE_CODE[language]
         }
@@ -229,6 +240,7 @@
         <div class="title-room">
             <Header>Exam builder</Header>
         </div>
+        <!-- Create exam link is the part Card's footer, so nothing stands under the outline -->
         <ExamOutline
             {sections}
             {current}
@@ -236,53 +248,57 @@
             onMove={moveSection}
             onAdd={addSection}
         >
-            {#snippet footer()}
-                <Button onClick={createExamUrl} style="gap: 0.5rem;">
-                    <Icon>
-                        <FaDumbbell />
-                    </Icon>
-                    Create exam link
-                </Button>
-                {#if uncopiedExamUrl}
-                    <p class="link-note">
-                        The browser did not let the page copy the exam link. Copy it from here:
-                    </p>
-                    <textarea
-                        class="exam-link"
-                        aria-label="Exam link"
-                        readonly
-                        value={uncopiedExamUrl}></textarea>
-                {/if}
-            {/snippet}
+            {#snippet footer()}{/snippet}
         </ExamOutline>
 
+        <!-- the create page's Card: its sections under header bands, the first band the part's
+             name, and a footer with the exam at the left and the actions at the right -->
         <Card element="section" class="part-card" padding="0" aria-labelledby="exam-part-title">
             {#if current === DETAILS}
-                <header class="part-head">
-                    <h2 id="exam-part-title" class="part-title">Details</h2>
+                <header class="band first">
+                    <h2 id="exam-part-title">Details</h2>
                 </header>
-                <div class="part-body">
-                    <TextField type="text" label="Exam title" bind:value={settings.title} />
-                    <div class="pair">
-                        <TextField
-                            type="password"
-                            label="Unlock password"
-                            placeholder="Required"
-                            bind:el={unlockPasswordField}
-                            bind:value={settings.unlockPassword}
-                        />
-                        <TextField
-                            type="password"
-                            label="Exam access password"
-                            placeholder="Optional"
-                            bind:value={settings.examAccessPassword}
-                        />
-                        <TextField
-                            type="number"
-                            label="Time limit (minutes)"
-                            placeholder="Leave empty for unlimited"
-                            bind:value={settings.timeLimitMinutes}
-                        />
+                <div class="section">
+                    <div class="pair-room">
+                        <div class="pair narrow-second">
+                            <TextField
+                                type="text"
+                                label="Exam title"
+                                hint="Optional"
+                                placeholder="Untitled exam"
+                                bind:value={settings.title}
+                            />
+                            <TextField
+                                type="number"
+                                label="Time limit (minutes)"
+                                hint="Optional"
+                                placeholder="No limit"
+                                bind:value={settings.timeLimitMinutes}
+                            />
+                        </div>
+                    </div>
+                </div>
+                <h3 class="band">Passwords</h3>
+                <div class="section">
+                    <div class="pair-room">
+                        <div class="pair">
+                            <TextField
+                                concealed
+                                label="Unlock password"
+                                hint="Required"
+                                aria-required="true"
+                                placeholder="Known only to you"
+                                bind:el={unlockPasswordField}
+                                bind:value={settings.unlockPassword}
+                            />
+                            <TextField
+                                concealed
+                                label="Exam access password"
+                                hint="Optional"
+                                placeholder="Given to everyone taking it"
+                                bind:value={settings.examAccessPassword}
+                            />
+                        </div>
                     </div>
                     <div class="exam-notes">
                         <p>
@@ -299,10 +315,10 @@
                     </div>
                 </div>
             {:else if current === INSTRUCTIONS}
-                <header class="part-head">
-                    <h2 id="exam-part-title" class="part-title">General instructions</h2>
+                <header class="band first">
+                    <h2 id="exam-part-title">General instructions</h2>
                 </header>
-                <div class="part-body">
+                <div class="section">
                     <p class="part-hint">
                         Shown before the first section. Left empty, the exam opens on the first
                         section.
@@ -314,31 +330,12 @@
             {:else}
                 {#each sections as section, i (section.id)}
                     {#if section.id === current}
-                        <!-- the same heading as the other parts', with the section's title and
-                             type beside its number -->
-                        <header class="part-head">
-                            <h2 id="exam-part-title" class="part-title">Section {i + 1}</h2>
-                            <div class="head-fields">
-                                <div class="head-title">
-                                    <TextField
-                                        type="text"
-                                        aria-label="Section title"
-                                        placeholder="Untitled"
-                                        bind:value={section.title}
-                                    />
-                                </div>
-                                <div class="head-type">
-                                    <Select
-                                        ariaLabel="Section type"
-                                        value={section.type}
-                                        onChange={(type) => changeSectionType(section.id, type)}
-                                        options={sectionTypeOptions}
-                                    />
-                                </div>
-                            </div>
+                        <header class="band first">
+                            <h2 id="exam-part-title">Section {i + 1}</h2>
                             <!-- on a phone the outline's arrows are in its Select's place -->
                             <div class="phone-moves">
                                 <IconButton
+                                    size="sm"
                                     {@attach tooltip('Move section up')}
                                     label="Move section up"
                                     disabled={i === 0}
@@ -347,6 +344,7 @@
                                     <FaArrowUp />
                                 </IconButton>
                                 <IconButton
+                                    size="sm"
                                     {@attach tooltip('Move section down')}
                                     label="Move section down"
                                     disabled={i === sections.length - 1}
@@ -356,83 +354,107 @@
                                 </IconButton>
                             </div>
                         </header>
-
-                        <div class="part-body">
-                            {#if section.type === ExamSectionType.AssemblyCoding}
-                                {@const assemblySection = section as AssemblyCodingSection}
-                                <div class="field language-field">
-                                    <span aria-hidden="true">Instruction set</span>
-                                    <SegmentedControl
-                                        wrap
-                                        size="md"
-                                        ariaLabel="Instruction set"
-                                        options={languageOptions}
-                                        selected={assemblySection.language}
-                                        onSelect={(id) =>
-                                            onAssemblyLanguageChange(assemblySection, id)}
-                                    >
-                                        {#snippet face(option)}
-                                            <span
-                                                class="language-square"
-                                                style:background-color={option.iconColor}
-                                                aria-hidden="true"
-                                            ></span>
-                                            {option.label}
-                                        {/snippet}
-                                    </SegmentedControl>
-                                </div>
-                            {/if}
-
-                            <div class="field">
-                                <h3 class="field-label">Prompt</h3>
-                                <div class="markdown-field prompt">
-                                    <MarkdownEditor layout="switch" bind:value={section.prompt} />
+                        <div class="section">
+                            <div class="pair-room">
+                                <div class="pair narrow-second">
+                                    <TextField
+                                        type="text"
+                                        label="Title"
+                                        hint="Optional"
+                                        placeholder="Untitled"
+                                        bind:value={section.title}
+                                    />
+                                    <Select
+                                        title="Type"
+                                        value={section.type}
+                                        onChange={(type) => changeSectionType(section.id, type)}
+                                        options={sectionTypeOptions}
+                                    />
                                 </div>
                             </div>
+                        </div>
 
-                            {#if section.type === ExamSectionType.OpenQuestion}
-                                {@const openSection = section}
+                        {#if section.type === ExamSectionType.AssemblyCoding}
+                            {@const assemblySection = section as AssemblyCodingSection}
+                            <h3 class="band">Instruction set</h3>
+                            <div class="section">
+                                <!-- the tiles alone, without the create page's line on the
+                                     set picked (owner, 2026-11-08) -->
+                                <InstructionSetPicker
+                                    selected={assemblySection.language}
+                                    languages={LANGUAGES}
+                                    description={false}
+                                    onSelect={(language) =>
+                                        onAssemblyLanguageChange(assemblySection, language)}
+                                />
+                            </div>
+                        {/if}
+
+                        <h3 class="band">Prompt</h3>
+                        <div class="section">
+                            <div class="markdown-field prompt">
+                                <MarkdownEditor layout="switch" bind:value={section.prompt} />
+                            </div>
+                        </div>
+
+                        {#if section.type === ExamSectionType.OpenQuestion}
+                            {@const openSection = section}
+                            <h3 class="band">Answer</h3>
+                            <div class="section">
                                 <TextField
                                     type="text"
-                                    label="Answer placeholder"
+                                    label="Placeholder"
+                                    hint="Optional"
+                                    placeholder="Shown in the empty answer box"
                                     bind:value={openSection.placeholder}
                                 />
-                            {/if}
+                            </div>
+                        {/if}
 
-                            {#if section.type === ExamSectionType.MultipleChoice}
-                                {@const multipleChoiceSection = section as MultipleChoiceSection}
-                                <div class="field">
-                                    <h3 class="field-label">Options</h3>
-                                    <Row align="center" gap="0.6rem">
-                                        <Switch
-                                            id={`allow-multiple-${multipleChoiceSection.id}`}
-                                            bind:checked={multipleChoiceSection.allowMultiple}
-                                        />
-                                        <label for={`allow-multiple-${multipleChoiceSection.id}`}>
-                                            Allow multiple selections
-                                        </label>
-                                    </Row>
-                                </div>
+                        {#if section.type === ExamSectionType.MultipleChoice}
+                            {@const multipleChoiceSection = section as MultipleChoiceSection}
+                            <h3 class="band">Options</h3>
+                            <div class="section">
+                                <Row align="center" gap="0.6rem">
+                                    <Switch
+                                        id={`allow-multiple-${multipleChoiceSection.id}`}
+                                        bind:checked={multipleChoiceSection.allowMultiple}
+                                    />
+                                    <label for={`allow-multiple-${multipleChoiceSection.id}`}>
+                                        Allow multiple selections
+                                    </label>
+                                </Row>
                                 <div class="options-list">
                                     {#each multipleChoiceSection.options as option, optionIndex (option.id)}
+                                        <!-- the option's name over its field and its delete
+                                             button, joined as one control -->
                                         <div class="option">
-                                            <TextField
-                                                wrapperStyle="flex: 1;"
-                                                type="text"
-                                                label={`Option ${optionIndex + 1}`}
-                                                bind:value={option.text}
-                                            />
-                                            <IconButton
-                                                size="lg"
-                                                label={`Delete option ${optionIndex + 1}`}
-                                                {@attach tooltip('Delete option')}
-                                                onClick={() =>
-                                                    removeOption(multipleChoiceSection, option.id)}
-                                            >
-                                                <Icon>
-                                                    <FaTrash />
-                                                </Icon>
-                                            </IconButton>
+                                            <label for={`option-${option.id}`}>
+                                                Option {optionIndex + 1}
+                                            </label>
+                                            <div class="option-group">
+                                                <TextField
+                                                    id={`option-${option.id}`}
+                                                    class="option-text"
+                                                    type="text"
+                                                    placeholder="What this option says"
+                                                    bind:value={option.text}
+                                                />
+                                                <IconButton
+                                                    class="option-delete"
+                                                    label={`Delete option ${optionIndex + 1}`}
+                                                    {@attach tooltip('Delete option')}
+                                                    onClick={() =>
+                                                        removeOption(
+                                                            multipleChoiceSection,
+                                                            option.id
+                                                        )}
+                                                >
+                                                    <Icon>
+                                                        <FaTrash />
+                                                    </Icon>
+                                                </IconButton>
+                                            </div>
                                         </div>
                                     {/each}
                                     <Button
@@ -446,81 +468,120 @@
                                         Add option
                                     </Button>
                                 </div>
-                            {/if}
+                            </div>
+                        {/if}
 
-                            {#if section.type === ExamSectionType.AssemblyCoding}
-                                {@const assemblySection = section as AssemblyCodingSection}
-                                <div class="field">
-                                    <h3 class="field-label">Starting code</h3>
-                                    {#key `${assemblySection.id}-${assemblySection.language}`}
-                                        <EmulatorLoader
-                                            bind:code={assemblySection.starterCode}
-                                            language={assemblySection.language}
-                                            settings={{
-                                                globalPageElementsPerRow: 4,
-                                                globalPageSize: 4 * 8
-                                            }}
-                                        >
-                                            {#snippet children(emulator)}
-                                                <InteractiveInstructionEditor
-                                                    {emulator}
-                                                    bind:code={assemblySection.starterCode}
-                                                    bind:testcases={assemblySection.testcases}
-                                                    embedded={false}
-                                                    showConsole={false}
-                                                    showMemory={false}
-                                                    showTestcases={true}
-                                                    showPc={false}
-                                                    showRegisters={false}
-                                                    showFlags={false}
-                                                    language={assemblySection.language}
-                                                />
-                                            {/snippet}
-                                            {#snippet loading()}
-                                                <Spinner size="lg" label="Loading emulator…" />
-                                            {/snippet}
-                                        </EmulatorLoader>
-                                    {/key}
-                                </div>
-                            {/if}
+                        {#if section.type === ExamSectionType.AssemblyCoding}
+                            {@const assemblySection = section as AssemblyCodingSection}
+                            <h3 class="band">Starting code</h3>
+                            <div class="section">
+                                {#key `${assemblySection.id}-${assemblySection.language}`}
+                                    <EmulatorLoader
+                                        bind:code={assemblySection.starterCode}
+                                        language={assemblySection.language}
+                                        settings={{
+                                            globalPageElementsPerRow: 4,
+                                            globalPageSize: 4 * 8
+                                        }}
+                                    >
+                                        {#snippet children(emulator)}
+                                            <InteractiveInstructionEditor
+                                                {emulator}
+                                                bind:code={assemblySection.starterCode}
+                                                bind:testcases={assemblySection.testcases}
+                                                embedded={false}
+                                                showConsole={false}
+                                                showMemory={false}
+                                                showTestcases={true}
+                                                showPc={false}
+                                                showRegisters={false}
+                                                showFlags={false}
+                                                language={assemblySection.language}
+                                            />
+                                        {/snippet}
+                                        {#snippet loading()}
+                                            <Spinner size="lg" label="Loading emulator…" />
+                                        {/snippet}
+                                    </EmulatorLoader>
+                                {/key}
+                            </div>
+                        {/if}
 
-                            {#if section.type === ExamSectionType.CCoding}
-                                {@const cSection = section as CCodingSection}
+                        {#if section.type === ExamSectionType.CCoding}
+                            {@const cSection = section as CCodingSection}
+                            <h3 class="band">Answer</h3>
+                            <div class="section">
                                 <TextField
                                     type="text"
-                                    label="Answer placeholder"
+                                    label="Placeholder"
+                                    hint="Optional"
+                                    placeholder="Shown in the empty answer box"
                                     bind:value={cSection.placeholder}
                                 />
-                                <div class="field">
-                                    <h3 class="field-label">Starting code</h3>
-                                    <div class="c-starter">
-                                        <Editor language="c" bind:code={cSection.starterCode} />
-                                    </div>
+                            </div>
+                            <h3 class="band">Starting code</h3>
+                            <div class="section">
+                                <div class="c-starter">
+                                    <Editor language="c" bind:code={cSection.starterCode} />
                                 </div>
-                            {/if}
-                        </div>
-
-                        <footer class="part-foot">
-                            <Button
-                                kind="secondary"
-                                disabled={sections.length <= 1}
-                                onClick={() => removeSection(section.id)}
-                                style="gap: 0.5rem;"
-                            >
-                                <Icon size="small">
-                                    <FaTrash />
-                                </Icon>
-                                Delete section
-                            </Button>
-                        </footer>
+                            </div>
+                        {/if}
                     {/if}
                 {/each}
             {/if}
+
+            <!-- the create page's footer: what the exam is at the left, the actions at the right,
+                 held at the window's bottom until the Card's end comes up -->
+            <footer class="card-footer">
+                {#if uncopiedExamUrl}
+                    <div class="link-fallback">
+                        <p class="link-note">
+                            The browser did not let the page copy the exam link. Copy it from here:
+                        </p>
+                        <textarea
+                            class="exam-link"
+                            aria-label="Exam link"
+                            readonly
+                            value={uncopiedExamUrl}></textarea>
+                    </div>
+                {/if}
+                <p class="summary">
+                    {#each examLanguages as language (language)}
+                        <span class="summary-language">
+                            <span
+                                class="language-square"
+                                style:background-color={languageAccent(language)}
+                                aria-hidden="true"
+                            ></span>
+                            {languageLabel(language)}
+                        </span>
+                    {/each}
+                    <span class="summary-count">{sectionCount}</span>
+                </p>
+                <div class="actions">
+                    {#if currentSection}
+                        <Button
+                            kind="ghost"
+                            disabled={sections.length <= 1}
+                            onClick={() => removeSection(currentSection.id)}
+                        >
+                            Delete section
+                        </Button>
+                    {/if}
+                    <Button onClick={createExamUrl} style="gap: 0.45rem">
+                        Create exam link
+                        <Icon size="caption"><FaArrowRight /></Icon>
+                    </Button>
+                </div>
+            </footer>
         </Card>
     </div>
 </Page>
 
 <style lang="scss">
+    @use '../../styles/field.scss';
+    @use '../../styles/radius.scss' as *;
+
     /* the picked part's Card in the middle of the page and the title over it, the outline in the
        room at its left, 1rem from it. The first column never gets narrower than the outline, so
        where the room at the Card's left is too small the Card moves right of the middle, until it
@@ -557,115 +618,74 @@
         width: var(--outline-width);
         margin-right: var(--outline-gap);
     }
+    /* the outline's foot holds nothing now that Create exam link is the Card's footer: no rule
+       and no room for it */
+    .exam-builder > :global(.exam-outline .foot:not(:has(*))) {
+        display: none;
+    }
     .exam-builder > :global(.part-card) {
         grid-area: card;
     }
 
-    /* the Card's heading over a rule, its fields, and a rule over its actions, as the create
-       page's Card draws its form: the part's name, and a section's title and type beside it. The
-       band is as tall for every part; a section's fields fill it but for a little room above, below
-       and at their right, the same all three ways, which makes them a form's fields' height */
-    .part-head {
-        --head-height: 3.25rem;
-        --head-room: 0.4375rem;
+    /* a section's header, a band a shade lighter than the Card over a rule, as the create page
+       draws its "Instruction set" and "Details" (CollapsibleSection's look); the ones after the
+       first are ruled off above too. The words start 1rem in, as the part's fields do (X-13) */
+    .band {
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        min-height: var(--head-height);
-        padding: var(--head-room) var(--head-room) var(--head-room) 1rem;
-        border-bottom: 1px solid var(--line);
-    }
-    .part-title {
-        flex: none;
         margin: 0;
-        font: 600 var(--fs-lead) / 1.3 var(--font-ui);
+        padding: 0.6rem 1rem;
+        background-color: var(--wb-section-header);
+        border-block: 1px solid var(--line);
+        font: 700 var(--fs-small) / 1.4 var(--font-ui);
+        color: var(--secondary-text);
+
+        h2 {
+            margin: 0;
+            font: inherit;
+        }
     }
-    .head-fields {
-        display: flex;
-        flex: 1;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        min-width: 0;
+    /* the first band is the Card's top, its corners inside the Card's 1px edge */
+    .band.first {
+        border-top: none;
+        border-radius: nested-radius(var(--wb-radius), $border: 1px)
+            nested-radius(var(--wb-radius), $border: 1px) 0 0;
     }
-    .head-title {
-        display: flex;
-        flex: 1 1 8rem;
-        min-width: 0;
-    }
-    .head-title > :global(.text-field) {
-        flex: 1;
-    }
-    .head-title > :global(.text-field),
-    .head-type :global(.control) {
-        height: calc(var(--head-height) - 2 * var(--head-room) - 1px);
-    }
-    /* as wide for every type, so the title field keeps its width when the type changes */
-    .head-type {
-        flex: none;
-        width: 12rem;
-    }
-    .part-body {
-        container-type: inline-size;
+
+    .section {
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        padding: 1rem;
-    }
-    .part-foot {
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.5rem;
-        padding: 0.75rem 1rem;
-        border-top: 1px solid var(--line);
+        padding: 0.85rem 1rem 1rem;
     }
     .part-hint {
         margin: 0;
         color: var(--text-muted);
     }
 
-    /* two fields side by side, one under the other where the Card is narrow */
+    /* two fields side by side, one under the other where the Card is narrow; the box they are
+       measured against is their own, so the sections with editors (whose Testcases window is
+       placed against the screen) are not containers */
+    .pair-room {
+        container-type: inline-size;
+    }
     .pair {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
         gap: 1rem;
     }
+    /* a wide field and a short one: a title and a number, or a title and its type, the Select as
+       wide for every type so the title keeps its width when the type changes */
+    .pair.narrow-second {
+        grid-template-columns: minmax(0, 1fr) 13rem;
+    }
     @container (max-width: 34rem) {
-        .pair {
+        .pair,
+        .pair.narrow-second {
             grid-template-columns: minmax(0, 1fr);
         }
-    }
-
-    /* a label over its control, as the shared fields draw theirs */
-    .field {
-        display: flex;
-        flex-direction: column;
-        gap: 0.3rem;
-        min-width: 0;
-    }
-    .field-label {
-        margin: 0;
-        font: inherit;
-    }
-
-    /* the instruction sets on one row while they fit, then in rows of three, then of two, so that
-       no name is cut, as on the create page */
-    @container (max-width: 34rem) {
-        .language-field {
-            --segmented-columns: 3;
-        }
-    }
-    @container (max-width: 19rem) {
-        .language-field {
-            --segmented-columns: 2;
-        }
-    }
-    /* drawn as the create page and the home page's bar draw their squares */
-    .language-square {
-        flex: none;
-        width: 0.5rem;
-        height: 0.5rem;
-        margin-right: 0.5rem;
-        border-radius: 2px;
     }
 
     .markdown-field {
@@ -691,6 +711,130 @@
         margin: 0;
     }
 
+    /* the C starter code in the card's edge, as the editors in the Workbench are */
+    .c-starter {
+        position: relative;
+        display: flex;
+        flex: 1;
+        min-height: 15rem;
+        border: var(--wb-card-edge);
+        border-radius: var(--wb-radius);
+        overflow: hidden;
+    }
+
+    /* the options one under the other, a hairline between one and the next with the same room
+       either side of it, and Add option under the last */
+    .options-list {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    /* a label over its control, as the shared fields draw theirs */
+    .option {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        width: 100%;
+    }
+    .option + .option {
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--line);
+    }
+    /* the field and its delete button as one control: the button in the field's fill and edge,
+       as tall as the field, the two meeting on one hairline with only the group's outer corners
+       rounded */
+    .option-group {
+        display: flex;
+        align-items: stretch;
+    }
+    .option-group > :global(.option-text) {
+        flex: 1;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+    .option-group > :global(.option-delete) {
+        @include field.surface;
+        width: 2.6rem;
+        height: auto;
+        margin-left: -1px;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+    .option-group > :global(.option-delete:hover:not(:disabled)) {
+        background-color: color-mix(in srgb, currentColor 8%, field.$fill);
+    }
+
+    .phone-moves {
+        display: none;
+        gap: 0.2rem;
+        /* in the band's line, not making it taller */
+        margin-block: -0.2rem;
+    }
+
+    /* a rule across the card over what the exam is at the left and the actions at the right; on a
+       phone the summary takes a line of its own over them. Held at the window's bottom while the
+       Card's end is below it, as the create page's is (O-43), in the Card's fill so what scrolls
+       under it does not show through, its lower corners inside the Card's 1px edge. Over the
+       editors' own layers that scroll under it (the code's 2, the Build dock's 5 and a failed
+       run's frame 6) and under the floating Testcases window (11) */
+    .card-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 7;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+        padding: 0.7rem 1rem;
+        border-top: 1px solid var(--line);
+        background-color: var(--wb-surface);
+        border-radius: 0 0 nested-radius(var(--wb-radius), $border: 1px)
+            nested-radius(var(--wb-radius), $border: 1px);
+    }
+
+    /* the create page's summary: each set's square and name, then the number of sections, apart
+       by the row's gap in muted Fira Code, wrapping onto another line when the sections use many
+       sets */
+    .summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        min-width: 0;
+        margin: 0;
+        font: var(--fs-small) / 1.4 var(--font-mono);
+        color: var(--text-muted);
+    }
+    .summary-language,
+    .summary-count {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    /* drawn as the home page's instruction-set bar draws its squares */
+    .language-square {
+        flex: none;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 2px;
+    }
+
+    .actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-left: auto;
+    }
+
+    /* the link to copy by hand, over the summary and the actions, the whole footer's width */
+    .link-fallback {
+        display: flex;
+        flex-basis: 100%;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
     .link-note {
         margin: 0;
         font-size: var(--fs-small);
@@ -708,38 +852,8 @@
         overflow-wrap: anywhere;
     }
 
-    /* the C starter code in the card's edge, as the editors in the Workbench are */
-    .c-starter {
-        position: relative;
-        display: flex;
-        flex: 1;
-        min-height: 15rem;
-        border: var(--wb-card-edge);
-        border-radius: var(--wb-radius);
-        overflow: hidden;
-    }
-
-    .options-list {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-    .option {
-        display: flex;
-        align-items: flex-end;
-        gap: 0.4rem;
-        width: 100%;
-    }
-
-    .phone-moves {
-        display: none;
-        gap: 0.2rem;
-    }
-
-    /* a phone: the title, the outline (ExamOutline.svelte) and the part one under the other, the
-       arrows in the part's heading beside its name, and a section's title and type on a line of
-       their own under them */
+    /* a phone: the title, the outline (ExamOutline.svelte) and the part one under the other, a
+       section's arrows in its band beside its number */
     @media (max-width: 720px) {
         .exam-builder {
             grid-template-columns: minmax(0, 1fr);
@@ -753,26 +867,18 @@
             width: auto;
             margin: 0 0 1rem;
         }
-        .part-head {
-            flex-wrap: wrap;
-            row-gap: 0.5rem;
-        }
         .phone-moves {
             display: flex;
             margin-left: auto;
         }
-        .head-fields {
-            order: 1;
-            flex-basis: 100%;
+        .band {
+            padding: 0.55rem 0.75rem;
         }
-        .part-head {
-            padding-left: 0.75rem;
+        .section {
+            padding: 0.8rem 0.75rem 0.75rem;
         }
-        .part-foot {
-            padding-inline: 0.75rem;
-        }
-        .part-body {
-            padding: 0.75rem;
+        .card-footer {
+            padding: 0.7rem 0.75rem;
         }
         .markdown-field.instructions {
             height: 20rem;

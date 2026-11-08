@@ -10,3 +10,10 @@
 /*/llms-full.txt
   Content-Type: text/plain; charset=utf-8
   X-Robots-Tag: noindex
+
+# The app's own files, named by a hash of their content: a new build gives a changed file a new
+# name, so a browser can keep each one for a week without asking again (Pages' default asks after
+# two minutes, about a hundred revalidations on a return visit).
+/_app/immutable/*
+  Cache-Control: public, max-age=604800, immutable
+

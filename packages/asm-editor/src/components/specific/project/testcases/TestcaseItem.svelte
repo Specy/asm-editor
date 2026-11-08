@@ -93,6 +93,15 @@
             0
     )
     const hasMemory = $derived(testcase.startingMemory.length + testcase.expectedMemory.length > 0)
+    //a Testcase that sets and expects nothing, which a read-only list would unfold to an empty body:
+    //all it checks is that the program prints nothing
+    const empty = $derived(
+        !hasRegisters &&
+            !hasMemory &&
+            !testcase.arguments?.trim() &&
+            testcase.input.length === 0 &&
+            testcase.expectedOutput === ''
+    )
     //x86, MIPS and RISC-V programs take Arguments; a Testcase without its own runs with the Project's
     const takesArguments = $derived(languageTakesArguments(language))
     const argumentsProblem = $derived.by(() => {
@@ -261,6 +270,11 @@
                                 <p class="difference">{difference}</p>
                             {/if}
                         </div>
+                    {/if}
+                    {#if !editable && empty && !result?.errors.length}
+                        <p class="empty">
+                            This Testcase is empty. It only checks that the program prints nothing.
+                        </p>
                     {/if}
                     {#if editable}
                         <div class="footer">
@@ -434,6 +448,12 @@
     .caption {
         font-size: var(--fs-caption);
         color: var(--hint);
+    }
+
+    .empty {
+        margin: 0;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
     }
 
     .verdict {
