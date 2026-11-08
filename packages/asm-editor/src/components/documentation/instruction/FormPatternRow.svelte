@@ -237,7 +237,7 @@
         overflow-wrap: anywhere;
     }
     .compact .syntax {
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
         line-height: var(--example-line-height, 1.4);
     }
     .symbol {
@@ -271,7 +271,7 @@
         color: var(--tertiary-text);
     }
     .compact .chip {
-        font-size: var(--fs-caption);
+        font-size: var(--entry-caption-size, var(--fs-caption));
     }
     .chip[title] {
         cursor: help;
@@ -289,7 +289,7 @@
     .compact .pattern-facts {
         flex-basis: 100%;
         margin-left: 1.8rem;
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     .dot {
         color: var(--text-muted);
@@ -400,9 +400,11 @@
         font-size: var(--fs-body);
         color: var(--background-text-prose);
     }
-    /* the panel's dense sizes */
+    /* the panel's dense sizes, a step larger in an entry the Workbench's panel has expanded, which
+       sets `--entry-text-size` and `--entry-caption-size` (EntryRow; owner, 2026-11-08): the syntax
+       then at the editor's 16px, as the entry's code samples are */
     .compact :is(.row-note, .detail, .mode, .form, .form-note) {
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     .form-facts {
         margin-left: 0.5rem;
@@ -415,8 +417,8 @@
         color: var(--background-text-prose);
     }
     .compact .arrow {
-        width: var(--fs-caption);
-        height: var(--fs-caption);
+        width: var(--entry-caption-size, var(--fs-caption));
+        height: var(--entry-caption-size, var(--fs-caption));
         margin-top: 0.45rem;
     }
     .expansion {

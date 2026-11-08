@@ -96,7 +96,9 @@
 
 <style lang="scss">
     .testcases {
-        // the colours every part of a Testcase is drawn in, from the theme
+        // the colours every part of a Testcase is drawn in, from the theme; the list's own fill,
+        // which a Testcase's pinned row is drawn on too
+        --tc-surface: var(--secondary);
         --tc-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 75%, transparent));
         --tc-table: color-mix(in srgb, var(--secondary) 92%, var(--tertiary));
         --tc-head: color-mix(in srgb, var(--background) 55%, var(--secondary));
@@ -123,7 +125,7 @@
         overflow-y: auto;
         // Keep the content width steady when unfolding a testcase makes the list scroll.
         scrollbar-gutter: stable;
-        background-color: var(--secondary);
+        background-color: var(--tc-surface);
         color: var(--secondary-text);
     }
 

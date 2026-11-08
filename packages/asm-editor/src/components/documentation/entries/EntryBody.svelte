@@ -13,9 +13,11 @@
         entry: DocumentationEntry
         /** Off in an Exam: links into the Documentation stay, as marks the panel follows. */
         disableLinks?: boolean
+        /** An instruction's toggles drawn as folding headers: the Workbench's panel's. */
+        foldingToggles?: boolean
     }
 
-    let { entry, disableLinks = false }: Props = $props()
+    let { entry, disableLinks = false, foldingToggles = false }: Props = $props()
 
     const view = $derived(entry.view)
 
@@ -38,6 +40,7 @@
             document={view.document}
             density="panel"
             {disableLinks}
+            {foldingToggles}
             language={EXAMPLE_LANGUAGES[entry.language]}
         >
             {#snippet example()}
@@ -132,8 +135,9 @@
 
 <style>
     /* The text's size is --entry-text-size where the entry's place sets one, --fs-small otherwise:
-       a Chapter's page reads its cards a step larger, at --fs-body, where the Documentation panel
-       stays dense (owner, 2026-11-08). The code samples keep their own size */
+       a Chapter's page reads its cards a step larger, at --fs-body, and so does an entry expanded
+       in the Workbench's Documentation panel (EntryRow), where the panel's other rows stay dense
+       (owner, 2026-11-08). The code samples keep their own size */
     .entry-body {
         /* Keep positioned entry content beneath the sticky chapter and category headings. */
         isolation: isolate;

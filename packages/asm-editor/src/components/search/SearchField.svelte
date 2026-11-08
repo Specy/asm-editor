@@ -112,6 +112,7 @@
         <IconButton
             size="sm"
             quiet
+            class="clear"
             label={clearLabel}
             {@attach tooltip(clearLabel)}
             onClick={() => {
@@ -129,18 +130,37 @@
     @use '../../styles/radius.scss' as *;
     @use '../../styles/visually-hidden.scss' as *;
 
-    /* a field (styles/field.scss) round its icon, its text and its buttons */
+    /* a field (styles/field.scss) round its icon, its text and its buttons; its height, its
+       padding and its edge named, which its clear button reaches across */
     .search-field {
         @include field.box;
+        --field-height: calc(1.4rem + 0.9rem);
+        --field-pad-block: 0.45rem;
+        --field-pad-start: 0.6rem;
+        --field-pad-end: 0.6rem;
+        --field-edge: 1px;
         container-type: inline-size;
         position: relative;
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.45rem 0.6rem;
+        padding: var(--field-pad-block) var(--field-pad-end) var(--field-pad-block)
+            var(--field-pad-start);
         /* Tall enough for the clear button, so the field does not grow when it appears. */
-        min-height: calc(1.4rem + 0.9rem);
+        min-height: var(--field-height);
         min-width: 0;
+    }
+    /* The clear button runs edge to edge: the box's whole height inside its edge, a square at its
+       end across the padding, its outer corners following the box's (D12) and its inner ones
+       square (owner, 2026-11-08) */
+    .search-field > :global(.icon-button.clear) {
+        align-self: stretch;
+        width: calc(var(--field-height) - 2 * var(--field-edge));
+        height: auto;
+        margin: calc(-1 * var(--field-pad-block)) calc(-1 * var(--field-pad-end))
+            calc(-1 * var(--field-pad-block)) 0;
+        border-radius: 0 #{nested-radius(var(--r-control), $border: 1px)}
+            #{nested-radius(var(--r-control), $border: 1px)} 0;
     }
     /* a side panel's: as tall as its rows of controls, its buttons a quarter rem inside its edge,
        their corners running parallel to its own (D12); the caller's buttons at its end take the
@@ -151,11 +171,12 @@
                 $border: 1px,
                 $inset: 0.25rem
             )};
+        --field-height: 2rem;
+        --field-pad-block: 0.2rem;
+        --field-pad-end: 0.25rem;
         gap: 0.45rem;
-        min-height: 2rem;
-        padding: 0.2rem 0.25rem 0.2rem 0.6rem;
 
-        > :global(.icon-button) {
+        > :global(.icon-button:not(.clear)) {
             border-radius: var(--search-field-inner-radius);
         }
     }
@@ -166,12 +187,34 @@
         outline-color: var(--danger);
     }
     .search-field.bare {
+        --field-pad-block: 0.5rem;
+        --field-pad-start: 0.4rem;
+        --field-pad-end: 0.4rem;
+        --field-edge: 0px;
+        /* the palette's top band round it (SearchPalette's `.top`), whose padding the clear button
+           reaches across too: from the palette's top edge to the rule under the field, and to the
+           palette's edge, whose corner it follows */
+        --band-pad-block: 0.3rem;
+        --band-pad-end: 0.5rem;
         gap: 0.65rem;
-        padding: 0.5rem 0.4rem;
         border: none;
         background-color: transparent;
         color: inherit;
         font-size: var(--fs-body);
+    }
+    .search-field.bare > :global(.icon-button.clear) {
+        width: calc(var(--field-height) + 2 * var(--band-pad-block));
+        margin: calc(-1 * (var(--field-pad-block) + var(--band-pad-block)))
+            calc(-1 * (var(--field-pad-end) + var(--band-pad-end)))
+            calc(-1 * (var(--field-pad-block) + var(--band-pad-block))) 0;
+        border-radius: 0 #{nested-radius(var(--r-overlay), $border: 1px)} 0 0;
+    }
+    /* on a phone the palette fills the screen without corners, its Cancel after the field */
+    @media (max-width: 600px) {
+        .search-field.bare > :global(.icon-button.clear) {
+            margin-right: calc(-1 * var(--field-pad-end));
+            border-radius: 0;
+        }
     }
     /* the caret is enough: the field is the only thing in its dialog that takes focus */
     .search-field.bare:has(input:focus-visible) {

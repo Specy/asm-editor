@@ -21,6 +21,11 @@
         padding?: string
         gap?: string
         style?: string
+        /**
+         * Whether a link card's surface lightens under the pointer; off for a card that answers the
+         * hover another way, as the blog's cards do with their picture.
+         */
+        hoverTint?: boolean
         children?: Snippet
     }
 
@@ -30,6 +35,7 @@
         padding,
         gap,
         style = '',
+        hoverTint = true,
         class: className,
         children,
         ...rest
@@ -43,6 +49,7 @@
     {href}
     class={['card', 'wb-cards', className]}
     class:link={href !== undefined}
+    class:no-tint={!hoverTint}
     style="{padding ? `padding: ${padding};` : ''}{gap ? `gap: ${gap};` : ''}{style}"
 >
     {@render children?.()}
@@ -85,8 +92,8 @@
     .card:has(:global(.card-cover)) {
         transition: background-color var(--dur-fast);
     }
-    .link:hover,
-    .card:has(:global(.card-cover)):hover {
+    .link:not(.no-tint):hover,
+    .card:has(:global(.card-cover)):not(.no-tint):hover {
         background-color: color-mix(
             in srgb,
             currentColor 3%,

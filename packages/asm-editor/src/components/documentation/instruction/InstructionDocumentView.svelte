@@ -30,6 +30,7 @@
         type InstructionDocument
     } from '#lib/documentation/instructions/document.ts'
     import FlagStrip from './FlagStrip.svelte'
+    import FoldToggle from './FoldToggle.svelte'
     import FormPatternRow from './FormPatternRow.svelte'
     import InstructionLessons from './InstructionLessons.svelte'
     import OperandLegend, { symbolSlug } from './OperandLegend.svelte'
@@ -46,6 +47,11 @@
         aliases?: string[]
         /** The Lectures whose code uses it, the header's last line on the page. */
         lessons?: readonly InstructionLesson[]
+        /**
+         * The Operands legend's and a folded Forms section's headings drawn as folding headers
+         * (`FoldToggle`): the Workbench's panel's (owner, 2026-11-08). `/all` keeps its plain ones.
+         */
+        foldingToggles?: boolean
     }
 
     let {
@@ -55,7 +61,8 @@
         example,
         language,
         aliases = [],
-        lessons = []
+        lessons = [],
+        foldingToggles = false
     }: Props = $props()
 
     // the editor's colours and font for the highlighted forms, as code samples take them
@@ -68,13 +75,16 @@
     let marked = $state<string | undefined>()
     let showAll = $state<Record<number, boolean>>({})
     let legendOpen = $state(false)
+    /** The folded sections opened with their folding header (`foldingToggles`). */
+    let unfolded = $state<Record<number, boolean>>({})
 
     //what the reader did on one instruction is not done on the next, which a route shows in this
-    //same view: nothing marked, no section shown whole, the legend closed
+    //same view: nothing marked, no section shown whole or unfolded, the legend closed
     $effect(() => {
         void document.name
         marked = undefined
         showAll = {}
+        unfolded = {}
         legendOpen = false
     })
 
@@ -256,7 +266,23 @@
                         </button>
                     {/if}
                 {/snippet}
-                {#if section.collapsed}
+                {#if section.collapsed && foldingToggles}
+                    <section class="section">
+                        <h2 class="heading">
+                            <FoldToggle
+                                label={sectionHeading(section.tags)}
+                                count={`${rows} ${rows === 1 ? 'row' : 'rows'}`}
+                                bind:open={
+                                    () => !!unfolded[index],
+                                    (open) => (unfolded = { ...unfolded, [index]: open })
+                                }
+                            />
+                        </h2>
+                        {#if unfolded[index]}
+                            {@render body()}
+                        {/if}
+                    </section>
+                {:else if section.collapsed}
                     <details class="section">
                         <summary
                             ><span class="heading">{sectionHeading(section.tags)}</span>
@@ -282,6 +308,7 @@
                 {disableLinks}
                 compact={panel}
                 collapsible={panel && document.operands.length > PANEL_LEGEND_LINES}
+                folding={foldingToggles}
             />
         {/if}
 
@@ -313,8 +340,11 @@
         gap: 1.4rem;
         min-width: 0;
     }
+    /* the panel's sizes, a step larger in an entry the Workbench's panel has expanded, which sets
+       `--entry-text-size` (EntryRow; owner, 2026-11-08): its prose, headings, explanations and
+       notes at --fs-body */
     .panel {
-        --instruction-prose-size: 0.92rem;
+        --instruction-prose-size: var(--entry-text-size, 0.92rem);
         gap: 0.8rem;
     }
     .header {
@@ -405,7 +435,7 @@
         font-size: var(--fs-lead);
     }
     .panel .heading {
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     details.section > summary {
         display: flex;
@@ -417,7 +447,7 @@
         font-size: var(--fs-lead);
     }
     .panel details.section > summary {
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     details.section > summary .heading {
         font-size: inherit;
@@ -436,7 +466,7 @@
         color: var(--background-text-prose);
     }
     .panel .explanation {
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     /* Boxes are drawn with rules, not fills: the box's edge, a rule under its note and one
        between its rows, so a row and its opened forms read apart without a block of colour. */
@@ -461,7 +491,7 @@
     }
     .panel .note {
         padding: 0.35rem 0.5rem;
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     .rows {
         display: flex;

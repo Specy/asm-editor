@@ -8,11 +8,16 @@
     /* D2: Rubik for interface and reference text, Noto Serif for long prose read from top to
        bottom, Fira Code only for code and machine values. Each falls back within its kind: the
        interface to a sans-serif, where a Rubik that has not loaded (or its Latin subset's missing
-       →, ≥, ⌘ and ✓) would otherwise fall to the browser's default serif; prose to Georgia and a
-       serif while Noto Serif loads or when Google Fonts is blocked */
-    --font-ui: Rubik, sans-serif;
-    --font-read: 'Noto Serif', Georgia, serif;
-    --font-mono: 'Fira Code', monospace;
+       →, ≥, ⌘ and ✓) would otherwise fall to the browser's default serif; prose to a serif. While
+       one of the three loads, or if it cannot, its text is drawn in its fallback, a system font
+       sized to its widths and lines (styles/fonts.css), so nothing moves when it comes in. Noto
+       Serif has three, each a family of its own: the device's own Noto Serif, Georgia, DejaVu
+       Serif */
+    --font-ui: Rubik, 'Rubik fallback', sans-serif;
+    --font-read:
+        'Noto Serif', 'Noto Serif fallback local', 'Noto Serif fallback',
+        'Noto Serif fallback DejaVu', serif;
+    --font-mono: 'Fira Code', 'Fira Code fallback', 'Fira Code fallback Consolas', monospace;
 
     /* D11: one type scale. The interface end, for the app, the index pages and the reference */
     --fs-micro: 0.65rem;

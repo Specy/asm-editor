@@ -123,22 +123,25 @@
 </script>
 
 <article class="testcase" class:open>
-    <button class="header" aria-expanded={open} aria-controls="{id}-body" onclick={toggle}>
-        <span class="chevron" aria-hidden="true"><FaAngleRight /></span>
-        <StatusDot
-            class="dot"
-            color={status === 'passed'
-                ? 'var(--tc-pass)'
-                : status === 'failed'
-                  ? 'var(--tc-fail)'
-                  : undefined}
-            hollow={status !== 'passed' && status !== 'failed'}
-        />
-        <span class="title ellipsis" class:unnamed={!testcase.name?.trim()}>
-            {testcaseLabel(testcase, index)}
-        </span>
-        <span class="status {status}">{statusText}</span>
-    </button>
+    <!-- pinned at the top of the list while the body under it scrolls -->
+    <div class="bar">
+        <button class="header" aria-expanded={open} aria-controls="{id}-body" onclick={toggle}>
+            <span class="chevron" aria-hidden="true"><FaAngleRight /></span>
+            <StatusDot
+                class="dot"
+                color={status === 'passed'
+                    ? 'var(--tc-pass)'
+                    : status === 'failed'
+                      ? 'var(--tc-fail)'
+                      : undefined}
+                hollow={status !== 'passed' && status !== 'failed'}
+            />
+            <span class="title ellipsis" class:unnamed={!testcase.name?.trim()}>
+                {testcaseLabel(testcase, index)}
+            </span>
+            <span class="status {status}">{statusText}</span>
+        </button>
+    </div>
     {#if built}
         <div class="body-fold" class:shown bind:this={fold}>
             <div class="body-clip">
@@ -280,6 +283,27 @@
         border-bottom: 1px solid var(--tc-line);
     }
 
+    /* the row stays at the top of the list's scroll area while its Testcase's body scrolls under
+       it, on the list's own fill, until the end of the Testcase takes it away, so the next open
+       one's row pushes it up; the list's top edge is straight in the Workbench panel and in the
+       floating window alike, under their bars' rule, so nothing shows round it. Pinned, it draws
+       the rule a Testcase draws under itself just below it, where the browser can tell (Chrome's
+       scroll-state queries); pushed up, that rule lies on the Testcase's own */
+    .bar {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        container-type: scroll-state;
+        background-color: var(--tc-surface);
+    }
+
+    @container scroll-state(stuck: top) {
+        .header {
+            box-shadow: 0 1px 0 var(--tc-line);
+        }
+    }
+
+    /* its focus ring inside its edge, where the list's top cannot cut it off while it is pinned */
     .header {
         display: flex;
         align-items: center;
@@ -296,6 +320,10 @@
         &:hover,
         &:focus-visible {
             background-color: var(--tc-hover);
+        }
+
+        &:focus-visible {
+            outline-offset: -2px;
         }
     }
 

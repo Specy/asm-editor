@@ -336,6 +336,15 @@
     {@html jsonLdScriptTag(softwareApplicationLd())}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     {@html jsonLdScriptTag(websiteLd())}
+    <!-- the page's body, its lede and its first screen's code are in Fira Code: fetched with the
+         page, as Rubik is (app.html), by the same URL as its @font-face (styles/fonts.css) -->
+    <link
+        rel="preload"
+        href="/fonts/FiraCode-VF.woff2"
+        as="font"
+        type="font/woff2"
+        crossorigin=""
+    />
 </svelte:head>
 
 <svelte:window onmessage={receiveFrameMessage} />

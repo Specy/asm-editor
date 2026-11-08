@@ -8,7 +8,7 @@
 </script>
 
 <!-- a Card whose title's link covers it, its tags above that link -->
-<Card element="article" class="blog-card">
+<Card element="article" class="blog-card" hoverTint={false}>
     {#if post.image}<div class="blog-card-image">
             <img src={post.image.src} alt="" loading="lazy" width="1440" height="1000" />
         </div>{/if}

@@ -13,6 +13,7 @@
 </script>
 
 <a {href} class="menu-link" aria-current={current ? 'page' : undefined} onclick={onClick}>
+    <span class="dot" aria-hidden="true"></span>
     {title}
 </a>
 
@@ -29,8 +30,20 @@
         @include outline.row('[aria-current="page"]');
         @include outline.row-padding;
         @include focus-ring($inset: true);
+        gap: 0.8rem;
         padding-left: var(--menu-link-indent, 0.75rem);
         font-size: var(--fs-body);
         font-weight: 400;
+    }
+
+    /* a page's bullet, a dot rather than an icon, where the row's text would start: the 0.8rem
+       gap puts the title 1.2rem further in, under the instructions' names (the documentation
+       sidebar's `--instruction-indent`, 2.2rem, against its 1rem `--menu-link-indent`) */
+    .dot {
+        flex: none;
+        width: 0.4rem;
+        height: 0.4rem;
+        border-radius: var(--r-pill);
+        background-color: var(--accent);
     }
 </style>

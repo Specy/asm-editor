@@ -206,11 +206,17 @@
 {/snippet}
 
 {#if shown}
-    <!-- the scrim, a sibling under the palette rather than around it: the palette's own blur sees
-         only up to an ancestor with a blur or a fade of its own -->
+    <!-- the scrim, a sibling under the palette rather than around it -->
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="backdrop" onclick={close} transition:backdropFade></div>
     <div class="place">
+        <!-- the scrim's blur, in four bands round the palette rather than under it: a blur is
+             worked out again over its whole area whenever anything over it changes, so one under
+             the palette blurred the whole page in every frame of a scroll through the results -->
+        <div class="band band-above" transition:backdropFade></div>
+        <div class="band band-left" transition:backdropFade></div>
+        <div class="band band-right" transition:backdropFade></div>
+        <div class="band band-below" transition:backdropFade></div>
         <div
             class="palette"
             transition:paletteMotion
@@ -333,41 +339,75 @@
     @use '../shared/button/tray.scss';
 
     /* lighter than a modal's: the palette is a tray over the page, as the prompts are, and the page
-       stays readable around it, dimmed by the scrim and blurred by 2px; the floating Testcases
-       window has the same (FloatingContainer.svelte) */
+       stays readable around it, dimmed by the scrim and blurred by 2px (the bands below); the
+       floating Testcases window has the same (FloatingContainer.svelte) */
     .backdrop {
         position: fixed;
         inset: 0;
         z-index: 50;
         background-color: var(--scrim);
-        backdrop-filter: blur(2px);
     }
 
-    /* where the palette sits over the scrim, which takes the clicks around it */
+    /* where the palette sits over the scrim, which takes the clicks around it: 12vh from the top,
+       at most 42rem wide and 1rem from the sides, in the middle cell of a grid whose other cells
+       are the bands that blur the page round it. Its top and sides fall on whole pixels, so that
+       the bands meet there on a pixel's edge rather than sharing one */
     .place {
         position: fixed;
         inset: 0;
         z-index: 50;
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-        padding: 12vh 1rem 1rem;
+        display: grid;
+        grid-template-columns:
+            round(down, calc((100% - min(42rem, 100% - 2rem)) / 2), 1px)
+            min(42rem, 100% - 2rem) 1fr;
+        grid-template-rows: round(12vh, 1px) auto minmax(1rem, 1fr);
         pointer-events: none;
     }
 
-    /* drawn as the app's trays (prompts, toasts, the execution dock): a translucent tint that blurs
-       what is beneath, a hairline edge, lifted by a shadow; denser and blurrier than a prompt's, as
-       it holds a page of text over a page of text. The field is its top, ruled off from the results
-       and the keys with the tray's own line */
+    /* above and below the palette the whole width, beside it its height: edge to edge with it and
+       with each other, never over one another or over the palette, or the scroll's every frame
+       would blur them again */
+    .band {
+        backdrop-filter: blur(2px);
+    }
+
+    .band-above {
+        grid-area: 1 / 1 / 2 / 4;
+    }
+
+    .band-left {
+        grid-area: 2 / 1;
+    }
+
+    .band-right {
+        grid-area: 2 / 3;
+    }
+
+    .band-below {
+        grid-area: 3 / 1 / 4 / 4;
+    }
+
+    /* in a tray's frame (prompts, toasts, the execution dock): a hairline edge lifted by a shadow,
+       but on a solid fill rather than a tint that blurs what is beneath, which would be worked out
+       again in every frame of a scroll through the results. The fill is what its 94% tint of
+       --primary came to over the dimmed page: --primary with 2% of black. The field is its top,
+       ruled off from the results and the keys with the tray's own line. Over the bands, its
+       shadow too */
     .palette {
-        @include tray.surface(94%);
-        backdrop-filter: blur(16px);
+        @include tray.frame;
+        grid-area: 2 / 2;
+        position: relative;
+        z-index: 1;
+        color: var(--primary-text);
+        background-color: color-mix(in srgb, var(--primary) 98%, black);
+        font-family: var(--font-ui);
         display: flex;
         flex-direction: column;
         width: min(42rem, 100%);
-        /* the same box whether there are results or not, so it does not jump as they arrive */
-        min-height: min(26rem, 70vh);
-        max-height: 70vh;
+        /* the same box whether there are results or not, so it does not jump as they arrive; in
+           whole pixels, so that its bottom edge falls on one too */
+        min-height: round(min(26rem, 70vh), 1px);
+        max-height: round(70vh, 1px);
         overflow: hidden;
         outline: none;
         transform-origin: top center;
@@ -527,8 +567,13 @@
     }
 
     @media (max-width: 600px) {
+        /* the sheet covers the page, so there is nothing round it to blur */
         .place {
-            padding: 0;
+            display: flex;
+        }
+
+        .band {
+            display: none;
         }
 
         .palette {

@@ -65,9 +65,15 @@
 .blog-card {
     overflow: hidden;
 }
-/* no fill of its own, so the Card's hover tint shows through it as through the body over it */
+/* the card's picture, its colours muted until the pointer is on the card (the card's surface keeps
+   its colour: the picture coming to life is the hover) */
+/* under the body, so the title draws over it (its opacity would otherwise paint it as a positioned
+   layer, over the body), and under the title link's cover, which keeps its pointer on the picture
+   too: below the card's content, still above its surface (the card isolates) */
 .blog-card-image {
     display: block;
+    position: relative;
+    z-index: -1;
     height: 10rem;
     overflow: hidden;
 }
@@ -79,10 +85,11 @@
     object-position: top;
     mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent);
     opacity: 0.8;
-    transition: opacity var(--dur-fast);
+    filter: saturate(0.35);
+    transition: filter var(--dur-base);
 }
 .blog-card:hover .blog-card-image img {
-    opacity: 1;
+    filter: none;
 }
 .blog-card-body {
     padding: 1.2rem;
@@ -90,8 +97,9 @@
     flex-direction: column;
     flex: 1;
 }
+/* the title over the picture's fading end, the card the shorter for it */
 .blog-card-image + .blog-card-body {
-    margin-top: -1rem;
+    margin-top: -3rem;
 }
 .blog-date,
 .blog-byline {
@@ -117,9 +125,6 @@
 .blog-card h3 a:focus-visible::after {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
-}
-.blog-card h3 a:hover {
-    color: var(--accent);
 }
 .blog-card p {
     color: var(--text-muted);

@@ -143,7 +143,8 @@ sw.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') return
 
     const url = new URL(request.url)
-    // Leave cross-origin (Google Fonts, gstatic) and extension schemes alone.
+    // Leave cross-origin requests and extension schemes alone. The fonts are our own (/fonts),
+    // cached below as they are used like the rest of /static.
     if (url.origin !== sw.location.origin) return
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return
 

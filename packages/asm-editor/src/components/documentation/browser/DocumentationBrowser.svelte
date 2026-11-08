@@ -190,7 +190,10 @@
         }
     }
 
-    /** Exact border-box sizes, including fractional pixels, so pinned headings meet without a gap. */
+    /**
+     * Exact border-box sizes, including fractional pixels, so pinned headings meet without a gap: a
+     * Chapter's heading by its id, a category's by `<chapter>/<category>`.
+     */
     const titleSizes = $state<Record<string, ResizeObserverSize[]>>({})
 
     const byId = $derived(
@@ -458,6 +461,7 @@
                         {disableLinks}
                         showCategory
                         clampProse
+                        panel
                     />
                 {:else if result.kind === 'entry'}
                     {@const entry = byId.get(result.entry.id) ?? fromIndex(result.entry)}
@@ -469,6 +473,7 @@
                         {disableLinks}
                         showCategory
                         clampProse
+                        panel
                     />
                 {:else}
                     <LectureSectionCard
@@ -537,8 +542,17 @@
                         >
                             {#if groups}
                                 {#each groups as group (group.category)}
-                                    <div class="category-group">
-                                        <h4 class="category-title small-heading">
+                                    {@const titleKey = `${chapter.id}/${group.category}`}
+                                    <div
+                                        class="category-group"
+                                        style:--category-title-height={titleSizes[titleKey]?.[0]
+                                            ? `${titleSizes[titleKey][0].blockSize}px`
+                                            : undefined}
+                                    >
+                                        <h4
+                                            class="category-title small-heading"
+                                            bind:borderBoxSize={titleSizes[titleKey]}
+                                        >
                                             {categoryLabel(group.category)}
                                         </h4>
                                         {#each group.items as entry (entry.id)}
@@ -549,6 +563,7 @@
                                                 {disableLinks}
                                                 pageLink={variant === 'page'}
                                                 clampProse={variant === 'panel'}
+                                                panel={variant === 'panel'}
                                             />
                                         {/each}
                                     </div>
@@ -562,6 +577,7 @@
                                         {disableLinks}
                                         pageLink={variant === 'page'}
                                         clampProse={variant === 'panel'}
+                                        panel={variant === 'panel'}
                                     />
                                 {/each}
                             {/if}
@@ -573,7 +589,9 @@
     {/if}
 </div>
 
-<style>
+<style lang="scss">
+    @use '../../../styles/field.scss';
+
     .documentation-browser {
         --documentation-spacing: 0.35rem;
         display: flex;
@@ -598,8 +616,11 @@
         flex: 1;
         min-width: 0;
     }
-    /* as tall as the search field beside it, and as wide as the field's own height */
+    /* as tall as the search field beside it, and as wide as the field's own height, in the field's
+       fill, edge and corner (styles/field.scss), so the two read as one group of controls (owner,
+       2026-11-08); the hover tint over its fill (D4) */
     .back {
+        @include field.surface;
         display: flex;
         flex: none;
         align-self: stretch;
@@ -607,11 +628,14 @@
         justify-content: center;
         width: calc(1.4rem + 0.9rem);
         padding: 0;
-        border: none;
-        border-radius: 0.5rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
         cursor: pointer;
+    }
+    .back:hover {
+        background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
+    }
+    .back:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
     }
     .back :global(svg) {
         width: var(--fs-small);
@@ -670,7 +694,9 @@
             display: none;
         }
     }
+    /* the results sit on the panel's surface, which a pinned name is opaque over (EntryRow) */
     .results {
+        --entry-row-under: var(--wb-surface, var(--secondary));
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
@@ -694,14 +720,22 @@
         /* The sticky heading carries the top border so it stays visible while scrolling. */
         border-top: none;
         border-radius: var(--chapter-radius);
+        /* an expanded entry's name, pinned in the Workbench's panel, sits under the Chapter's
+           heading, opaque over the well (EntryRow); a pixel under its edge, as the heading is
+           drawn on a layer of its own (`will-change`) and a fraction of a pixel apart the body
+           going by showed in a hairline between them */
+        --entry-head-top: calc(var(--chapter-title-height, 2.2rem) - 1px);
+        --entry-row-under: var(--background);
     }
     .chapter.folded {
         border-bottom: none;
     }
+    /* over the category headings, which are over the pinned names of expanded entries (EntryRow),
+       so that each goes under the one above it as its own part of the list ends */
     .chapter-title {
         position: sticky;
         top: 0;
-        z-index: 2;
+        z-index: 3;
         will-change: transform;
         margin: 0 calc(-1 * var(--chapter-border-width));
         font-size: var(--fs-body);
@@ -761,7 +795,11 @@
     .chapter-entries.categorized {
         padding-top: 0;
     }
+    /* an expanded entry's pinned name under its category's heading as well */
     .category-group {
+        --entry-head-top: calc(
+            var(--chapter-title-height, 2.2rem) + var(--category-title-height, 1.8rem) - 1px
+        );
         display: flex;
         flex-direction: column;
         gap: 0.05rem;
@@ -775,7 +813,7 @@
     .category-title {
         position: sticky;
         top: var(--chapter-title-height, 2.2rem);
-        z-index: 1;
+        z-index: 2;
         will-change: transform;
         margin: 0 -0.5rem;
         padding: 0.35rem 1rem;

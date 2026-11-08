@@ -1,0 +1,400 @@
+/* The app's own fonts, served from static/fonts (their licence is static/fonts/OFL.txt). app.html
+   preloads Rubik, and the home page Fira Code, by the same URLs as below, so a first visit fetches
+   each once, before the page's CSS asks for it; Noto Serif, which most pages never draw, is fetched
+   when a page's text asks for it. Each draws at once in its size-matched fallback while it is still
+   on its way (`swap`) rather than leaving its text invisible, and the fallback takes the same room,
+   so nothing moves when the font comes in. */
+
+/* Rubik's variable font, Google Fonts' Latin subset (v28, weights 300 to 900), self-hosted so it
+   arrives with the page rather than after a second server's CSS. */
+@font-face {
+    font-family: Rubik;
+    src: url(/fonts/Rubik-VF.woff2) format('woff2');
+    font-weight: 300 900;
+    font-display: swap;
+}
+
+/* Rubik's stand-in, `--font-ui`'s second name: Arial, or a font with Arial's widths (Liberation
+   Sans, Arimo, Helvetica), or Roboto, within 1% of Arial at the regular weight. One face per weight
+   the app uses, each scaled to Rubik's width at that weight (size-adjust), measured in Chrome with
+   hinting off, Rubik against Arimo: at 400 and 500 on the navbar's own labels, so its links and
+   buttons stay within about a pixel (Rubik is 2% to 6.7% wider than Arial word by word at 400, and
+   10.6% on Create project at 500); at 600 and 700 on sentence-case headings against Arial Bold
+   (2.35% and 4.25%). Ascent, descent and line gap are Rubik's (935, 250 and 0 per 1000 units)
+   divided by the scale, rounded up, so a line is as tall and its baseline where Rubik puts them.
+   Roboto Bold is 7% narrower than Arial Bold, so the bold faces leave it out. The unicode-range
+   is what Rubik's subset has: →, ≥, ⌘ and ✓ still fall to the sans-serif. */
+@font-face {
+    font-family: 'Rubik fallback';
+    src:
+        local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans'),
+        local('Arimo'), local('Helvetica'), local('Roboto'), local('Roboto-Regular');
+    font-weight: 1 450;
+    size-adjust: 105.2%;
+    ascent-override: 88.88%;
+    descent-override: 23.77%;
+    line-gap-override: 0%;
+    unicode-range:
+        U+20-7E, U+A0-FF, U+102, U+131, U+152-153, U+2BC, U+2C6, U+2DA, U+2DC, U+300-301, U+303-304,
+        U+308, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2039-203A, U+2044, U+2074,
+        U+20AC, U+2122, U+2212, U+2215;
+}
+
+@font-face {
+    font-family: 'Rubik fallback';
+    src:
+        local('Arial'), local('ArialMT'), local('Liberation Sans'), local('LiberationSans'),
+        local('Arimo'), local('Helvetica'), local('Roboto'), local('Roboto-Regular');
+    font-weight: 451 550;
+    size-adjust: 110%;
+    ascent-override: 85.01%;
+    descent-override: 22.73%;
+    line-gap-override: 0%;
+    unicode-range:
+        U+20-7E, U+A0-FF, U+102, U+131, U+152-153, U+2BC, U+2C6, U+2DA, U+2DC, U+300-301, U+303-304,
+        U+308, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2039-203A, U+2044, U+2074,
+        U+20AC, U+2122, U+2212, U+2215;
+}
+
+@font-face {
+    font-family: 'Rubik fallback';
+    src:
+        local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'),
+        local('LiberationSans-Bold'), local('Arimo Bold'), local('Helvetica Bold'),
+        local('Helvetica-Bold');
+    font-weight: 551 650;
+    size-adjust: 102.35%;
+    ascent-override: 91.36%;
+    descent-override: 24.43%;
+    line-gap-override: 0%;
+    unicode-range:
+        U+20-7E, U+A0-FF, U+102, U+131, U+152-153, U+2BC, U+2C6, U+2DA, U+2DC, U+300-301, U+303-304,
+        U+308, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2039-203A, U+2044, U+2074,
+        U+20AC, U+2122, U+2212, U+2215;
+}
+
+@font-face {
+    font-family: 'Rubik fallback';
+    src:
+        local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'),
+        local('LiberationSans-Bold'), local('Arimo Bold'), local('Helvetica Bold'),
+        local('Helvetica-Bold');
+    font-weight: 651 1000;
+    size-adjust: 104.25%;
+    ascent-override: 89.69%;
+    descent-override: 23.99%;
+    line-gap-override: 0%;
+    unicode-range:
+        U+20-7E, U+A0-FF, U+102, U+131, U+152-153, U+2BC, U+2C6, U+2DA, U+2DC, U+300-301, U+303-304,
+        U+308, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2039-203A, U+2044, U+2074,
+        U+20AC, U+2122, U+2212, U+2215;
+}
+
+/* Noto Serif's variable font, the long prose's (`--font-read`): Google Fonts' Latin and Latin
+   Extended subsets (v33: version 2.015, its italic 2.013, weights 100 to 900) with Google's own
+   unicode-ranges, so a page fetches a style's Latin file when it draws that style and its Latin
+   Extended file only when its text has one of those characters. The Latin face comes second, as
+   it draws the few characters both ranges list. Google's Greek, Cyrillic, Vietnamese and math
+   subsets are left out: no lecture, blog post or page draws their characters in this font (the
+   one Greek letter, the μ of a documentation page, is in Rubik), and the arrows the math subset
+   lists are not in Noto Serif at all. */
+@font-face {
+    font-family: 'Noto Serif';
+    src: url(/fonts/NotoSerif-VF-latin-ext.woff2) format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+        U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113,
+        U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+    font-family: 'Noto Serif';
+    src: url(/fonts/NotoSerif-VF.woff2) format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+        U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'Noto Serif';
+    src: url(/fonts/NotoSerif-Italic-VF-latin-ext.woff2) format('woff2');
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+    unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+        U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113,
+        U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+    font-family: 'Noto Serif';
+    src: url(/fonts/NotoSerif-Italic-VF.woff2) format('woff2');
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+    unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+        U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Noto Serif's stand-ins, `--font-read`'s next three names, a family each because each needs its
+   own scales: the device's own Noto Serif (Android's serif, and many Linux desktops'), then Georgia
+   (or Gelasio, made to Georgia's widths), then DejaVu Serif. One face per weight the prose is drawn
+   in: 500 for a lecture's or blog post's text, 700 for its bold, 500 italic for its emphasis, 400
+   and 400 italic for the home page's headings and quotes. Bold italic, which no page uses, is
+   synthesised from the italic. Each face is scaled to Noto Serif's width at that weight
+   (size-adjust), measured in Chrome with hinting off on the text drawn in it: the regular text of
+   204 paragraphs from eight lectures and four blog posts, their bold and italic runs, the home
+   page's serif text. Georgia was measured as Gelasio, which has its widths. In the lecture's
+   column those paragraphs then wrap on the same words as in Noto Serif 98% of the time in the
+   installed Noto Serif, 85% in Georgia and 85% in DejaVu Serif (8% and 12% unscaled), and of their
+   726 lines Georgia gains or loses 6 and DejaVu Serif 8. Ascent, descent and line gap are Noto
+   Serif's (1069, 293 and 0 per 1000 units) divided by the scale, rounded up, so a line is as tall
+   and its baseline where Noto Serif puts them. Liberation Serif and Tinos (Times New Roman's widths)
+   are left out: they need 120% and are then up to 9% off on a paragraph, DejaVu Serif 3.4%. No face
+   has a unicode-range: a character Noto Serif lacks (→, ⌘) is drawn by the same stand-in before and
+   after Noto Serif comes in, and a Latin Extended letter is drawn to size while its file loads. */
+@font-face {
+    font-family: 'Noto Serif fallback local';
+    src: local('Noto Serif Regular'), local('NotoSerif-Regular'), local('Noto Serif');
+    font-style: normal;
+    font-weight: 1 450;
+    size-adjust: 100%;
+    ascent-override: 106.9%;
+    descent-override: 29.3%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback local';
+    src: local('Noto Serif Regular'), local('NotoSerif-Regular'), local('Noto Serif');
+    font-style: normal;
+    font-weight: 451 550;
+    size-adjust: 101.72%;
+    ascent-override: 105.1%;
+    descent-override: 28.81%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback local';
+    src: local('Noto Serif Bold'), local('NotoSerif-Bold');
+    font-style: normal;
+    font-weight: 551 1000;
+    size-adjust: 100%;
+    ascent-override: 106.9%;
+    descent-override: 29.3%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback local';
+    src: local('Noto Serif Italic'), local('NotoSerif-Italic');
+    font-style: italic;
+    font-weight: 1 450;
+    size-adjust: 100%;
+    ascent-override: 106.9%;
+    descent-override: 29.3%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback local';
+    src: local('Noto Serif Italic'), local('NotoSerif-Italic');
+    font-style: italic;
+    font-weight: 451 550;
+    size-adjust: 103.03%;
+    ascent-override: 103.76%;
+    descent-override: 28.44%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback';
+    src: local('Georgia'), local('Gelasio Regular'), local('Gelasio-Regular'), local('Gelasio');
+    font-style: normal;
+    font-weight: 1 450;
+    size-adjust: 106.26%;
+    ascent-override: 100.61%;
+    descent-override: 27.58%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback';
+    src: local('Georgia'), local('Gelasio Regular'), local('Gelasio-Regular'), local('Gelasio');
+    font-style: normal;
+    font-weight: 451 550;
+    size-adjust: 109.79%;
+    ascent-override: 97.37%;
+    descent-override: 26.69%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback';
+    src: local('Georgia Bold'), local('Georgia-Bold'), local('Gelasio Bold'), local('Gelasio-Bold');
+    font-style: normal;
+    font-weight: 551 1000;
+    size-adjust: 97.49%;
+    ascent-override: 109.66%;
+    descent-override: 30.06%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback';
+    src:
+        local('Georgia Italic'), local('Georgia-Italic'), local('Gelasio Italic'),
+        local('Gelasio-Italic');
+    font-style: italic;
+    font-weight: 1 450;
+    size-adjust: 101.43%;
+    ascent-override: 105.4%;
+    descent-override: 28.89%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback';
+    src:
+        local('Georgia Italic'), local('Georgia-Italic'), local('Gelasio Italic'),
+        local('Gelasio-Italic');
+    font-style: italic;
+    font-weight: 451 550;
+    size-adjust: 105.85%;
+    ascent-override: 101%;
+    descent-override: 27.69%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback DejaVu';
+    src: local('DejaVu Serif'), local('DejaVuSerif');
+    font-style: normal;
+    font-weight: 1 450;
+    size-adjust: 91.76%;
+    ascent-override: 116.5%;
+    descent-override: 31.94%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback DejaVu';
+    src: local('DejaVu Serif'), local('DejaVuSerif');
+    font-style: normal;
+    font-weight: 451 550;
+    size-adjust: 94.18%;
+    ascent-override: 113.51%;
+    descent-override: 31.12%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback DejaVu';
+    src: local('DejaVu Serif Bold'), local('DejaVuSerif-Bold');
+    font-style: normal;
+    font-weight: 551 1000;
+    size-adjust: 89.38%;
+    ascent-override: 119.61%;
+    descent-override: 32.79%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback DejaVu';
+    src: local('DejaVu Serif Italic'), local('DejaVuSerif-Italic');
+    font-style: italic;
+    font-weight: 1 450;
+    size-adjust: 90.03%;
+    ascent-override: 118.74%;
+    descent-override: 32.55%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Noto Serif fallback DejaVu';
+    src: local('DejaVu Serif Italic'), local('DejaVuSerif-Italic');
+    font-style: italic;
+    font-weight: 451 550;
+    size-adjust: 93.44%;
+    ascent-override: 114.41%;
+    descent-override: 31.36%;
+    line-gap-override: 0%;
+}
+
+/* Fira Code's variable font, as two faces of the one file (downloaded once). A request for 400, the
+   default, falls on the first and is drawn at 500, the weight the app's code has always been in;
+   600 and up fall on the second and are the real bold rather than one the browser synthesises
+   (design-system.md, D15). */
+@font-face {
+    font-family: 'Fira Code';
+    src: url(/fonts/FiraCode-VF.woff2) format('woff2');
+    font-weight: 500;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Fira Code';
+    src: url(/fonts/FiraCode-VF.woff2) format('woff2');
+    font-weight: 501 700;
+    font-display: swap;
+}
+
+/* Fira Code's stand-ins, `--font-mono`'s second and third names. Every character of Fira Code is
+   1200 of its 1950 units wide (0.6154 em), at every weight; its ascent and descent are 1800 and 600,
+   with no line gap. Menlo and DejaVu Sans Mono are 1233/2048 (0.6021 em), so they are scaled by
+   102.21%; Liberation Mono and Cousine, 1229/2048, come out 0.3% narrower at that scale. Consolas,
+   1126/2048 (0.5498 em), takes 111.93% and so a family of its own. The line metrics are Fira
+   Code's divided by each scale, rounded up. */
+@font-face {
+    font-family: 'Fira Code fallback';
+    src:
+        local('Menlo'), local('Menlo-Regular'), local('DejaVu Sans Mono'), local('DejaVuSansMono'),
+        local('Liberation Mono'), local('LiberationMono'), local('Cousine');
+    font-weight: 1 550;
+    size-adjust: 102.21%;
+    ascent-override: 90.32%;
+    descent-override: 30.11%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Fira Code fallback';
+    src:
+        local('Menlo Bold'), local('Menlo-Bold'), local('DejaVu Sans Mono Bold'),
+        local('DejaVuSansMono-Bold'), local('Liberation Mono Bold'), local('LiberationMono-Bold'),
+        local('Cousine Bold'), local('Cousine-Bold');
+    font-weight: 551 1000;
+    size-adjust: 102.21%;
+    ascent-override: 90.32%;
+    descent-override: 30.11%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Fira Code fallback Consolas';
+    src: local('Consolas');
+    font-weight: 1 550;
+    size-adjust: 111.93%;
+    ascent-override: 82.47%;
+    descent-override: 27.49%;
+    line-gap-override: 0%;
+}
+
+@font-face {
+    font-family: 'Fira Code fallback Consolas';
+    src: local('Consolas Bold'), local('Consolas-Bold');
+    font-weight: 551 1000;
+    size-adjust: 111.93%;
+    ascent-override: 82.47%;
+    descent-override: 27.49%;
+    line-gap-override: 0%;
+}

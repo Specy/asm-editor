@@ -1,26 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap');
 @import './styles/tokens.css';
-
-@font-face {
-    font-family: Rubik;
-    src: url('https://fonts.gstatic.com/s/rubik/v28/iJWKBXyIfDnIV7nBrXw.woff2');
-}
-
-/* Fira Code's variable font, as two faces of the one file (downloaded once). A request for 400, the
-   default, falls on the first and is drawn at 500, the weight the app's code has always been in;
-   600 and up fall on the second and are the real bold rather than one the browser synthesises
-   (design-system.md, D15). */
-@font-face {
-    font-family: 'Fira Code';
-    src: url(/fonts/FiraCode-VF.woff2) format('woff2');
-    font-weight: 500;
-}
-
-@font-face {
-    font-family: 'Fira Code';
-    src: url(/fonts/FiraCode-VF.woff2) format('woff2');
-    font-weight: 501 700;
-}
+@import './styles/fonts.css';
 
 /* The width of Markdown's text column. Registered as a length so the `em` it is given resolves
    once, at the text's own size on `.markdown-body`, and every heading inherits that width in

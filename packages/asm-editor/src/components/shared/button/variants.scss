@@ -2,9 +2,11 @@
 @use '../../../styles/field.scss';
 
 // `Button` and `ButtonLink` (buttonVariant.ts), included in their `.btn` rule. `$disabled` is how
-// each marks a disabled button: the attribute on a button, a class on a link. Every rule that sets
-// a size or a fill is as specific as `.btn` and one class, as the old `.btn.workbench` was, so a
-// page that sizes its buttons with `.something :global(.btn)` still does.
+// each marks a disabled button: the attribute on a button, a class on a link. A rule that sets a
+// fill is as specific as `.btn` and one class, as the old `.btn.workbench` was. The size rules
+// (`md`, `sm`) weigh only `.btn` and the scoping class, the rest behind `:where()` (owner,
+// 2026-11-08): a page that sizes its buttons with `.something :global(.btn)` outweighs them
+// whichever stylesheet loads last, where it used to tie and win or lose by load order.
 
 @mixin button($disabled) {
     position: relative;
@@ -68,11 +70,11 @@
         background-color: transparent;
     }
 
-    &:where(.workbench).md {
+    &:where(.workbench.md) {
         padding: 0.5rem 0.9rem;
         font-size: 0.95rem;
     }
-    &:where(.workbench).sm {
+    &:where(.workbench.sm) {
         padding: 0.3rem 0.75rem;
         font-size: var(--fs-small);
     }
