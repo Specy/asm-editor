@@ -75,8 +75,6 @@
     const EXAM_SESSION_SNAPSHOT_PREFIX = 'asm-editor_exam_session_snapshot:'
     /** The time left from which the timer is drawn in the warning colour. */
     const LOW_TIME_MS = 5 * 60_000
-    /** The coding sections whose question the student folded away, kept for the tab's session. */
-    const FOLDED_PROMPTS_KEY = 'asm-editor_exam_folded_prompts'
 
     type StoredExamSessionSnapshot = {
         version: number
@@ -166,11 +164,11 @@
     let dotsAfter = $state(false)
 
     /**
-     * The coding sections whose question is folded to a strip beside (on a phone, over) the
-     * answer. Each section remembers its own, so a section opens on its question until the
-     * student folds it there; kept in `sessionStorage` while the tab lives, a reload included.
+     * The coding section whose question is folded to a strip beside (on a phone, over) the answer,
+     * until the student moves to another part: every part opens on its question, the first one
+     * and one gone back to alike (owner, 2026-11-08).
      */
-    let foldedPrompts = $state<string[]>(readFoldedPrompts())
+    let foldedPrompt = $state<string | null>(null)
     /** The question's Hide button and the strip that shows it again, which take the focus in turn. */
     let promptHideButton = $state<HTMLElement>()
     let promptStripButton = $state<HTMLButtonElement>()
@@ -181,28 +179,9 @@
      */
     const promptStacked = new MediaQuery('max-width: 900px', false)
 
-    function readFoldedPrompts(): string[] {
-        if (!browser) return []
-        try {
-            const stored: unknown = JSON.parse(sessionStorage.getItem(FOLDED_PROMPTS_KEY) ?? '[]')
-            return Array.isArray(stored)
-                ? stored.filter((id): id is string => typeof id === 'string')
-                : []
-        } catch {
-            return []
-        }
-    }
-
     /** Folds a section's question away or shows it again; the focus goes to what undoes it. */
     async function setPromptFolded(sectionId: string, folded: boolean) {
-        foldedPrompts = folded
-            ? [...new Set([...foldedPrompts, sectionId])]
-            : foldedPrompts.filter((id) => id !== sectionId)
-        try {
-            sessionStorage.setItem(FOLDED_PROMPTS_KEY, JSON.stringify(foldedPrompts))
-        } catch {
-            // storage may be full or blocked; the fold then lasts until the page closes
-        }
+        foldedPrompt = folded ? sectionId : null
         await tick()
         ;(folded ? promptStripButton : promptHideButton)?.focus()
     }
@@ -321,6 +300,7 @@
         const part = parts[index]
         if (!part || examDisabled) return
         activeSectionId = part.id
+        foldedPrompt = null
     }
 
     /**
@@ -995,7 +975,7 @@
      anywhere along it. The folded panel stays built, hidden, so it opens again where it was
      scrolled to -->
 {#snippet promptColumn(section: ExamSection, number: number)}
-    {@const folded = foldedPrompts.includes(section.id)}
+    {@const folded = foldedPrompt === section.id}
     {#if folded}
         <button
             type="button"
@@ -1320,7 +1300,7 @@
                              "Next section", the last word for screen readers only -->
                         <div class="pager" bind:this={pagerElement}>
                             <Button
-                                kind="ghost"
+                                kind="secondary"
                                 size="sm"
                                 class="step previous"
                                 disabled={!canGoToPreviousSection}
@@ -1334,7 +1314,7 @@
                                 {activePartIndex + 1} / {parts.length}
                             </span>
                             <Button
-                                kind="ghost"
+                                kind="secondary"
                                 size="sm"
                                 class="step next"
                                 disabled={!canGoToNextSection}
