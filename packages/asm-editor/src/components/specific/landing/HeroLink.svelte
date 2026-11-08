@@ -22,22 +22,28 @@
 </a>
 
 <style lang="scss">
+    /* One of the home page's quick links, a card in a row of them over hex bytes: a quarter
+       see-through, so the bytes show through faintly, and a plain change of colour under the
+       pointer, with nothing moving or fading. The lines between the cards are their own top and
+       left borders, solid over the page so the bytes do not show through them, pulled back a
+       pixel so that those along the row's edges fall outside it, which cuts them off. */
     .link-element {
+        position: relative;
         display: flex;
         flex-direction: column;
-        background-color: var(--secondary);
         gap: 1rem;
         flex: 1;
         min-width: 10rem;
+        margin: -1px 0 0 -1px;
         padding: 1.4rem;
         align-items: center;
         justify-content: space-between;
-        transition:
-            background-color var(--dur-fast),
-            color var(--dur-fast);
+        background-color: color-mix(in srgb, var(--background) 75%, transparent);
+        color: var(--background-text);
+        border-top: 1px solid color-mix(in srgb, var(--tertiary) 60%, var(--background));
+        border-left: 1px solid color-mix(in srgb, var(--tertiary) 60%, var(--background));
         &:hover {
-            background-color: var(--tertiary);
-            color: var(--tertiary-text);
+            background-color: color-mix(in srgb, var(--accent) 14%, var(--background));
         }
     }
     .link-icon {

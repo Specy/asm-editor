@@ -80,9 +80,6 @@
 </Page>
 
 <style lang="scss">
-    .intro {
-        margin: 0;
-    }
     .langs {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));

@@ -7,21 +7,16 @@
      */
     import Page from '#cmp/shared/layout/Page.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
     import { chapters } from '#lib/documentation/riscv/riscv.ts'
 </script>
 
-<svelte:head>
-    <title>RISC-V Complete Documentation - ASM Editor</title>
-    <meta
-        name="description"
-        content="Complete RISC-V documentation in a single page. Includes all instructions, directives, and syscalls."
-    />
-    <meta
-        property="og:description"
-        content="Complete RISC-V documentation in a single page. Includes all instructions, directives, and syscalls."
-    />
-</svelte:head>
+<PageMeta
+    title="RISC-V Complete Documentation - ASM Editor"
+    description="Complete RISC-V documentation in a single page. Includes all instructions, directives, and syscalls."
+    type="article"
+/>
 
 <Page cropped="70rem" contentStyle="padding: 1rem; gap: 1rem;">
     <Header>RISC-V Complete Documentation</Header>

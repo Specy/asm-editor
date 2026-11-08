@@ -45,10 +45,8 @@
             popupWidth={240}
             openAbove
             chevron={FaChevronDown}
-            wrapperStyle="height: 100%; min-width: 0;"
-            style="height: 100%; padding: {ui.deviceClass === 'phone'
-                ? '0 0.6rem 0 0.5rem'
-                : '0 0.9rem 0 0.6rem'}; gap: 0.45rem; border: none; border-radius: 0; background: transparent; color: var(--secondary-text); font-size: var(--fs-caption); font-weight: 600;"
+            look="bare"
+            compact={ui.deviceClass === 'phone'}
         >
             {#snippet trigger()}
                 {#if ui.deviceClass !== 'phone'}<span class="caption">Program</span>{/if}
@@ -66,7 +64,8 @@
 {/if}
 
 <style lang="scss">
-    /* drawn as the strip's own text, like the run info and the tabs, on the strip's rule */
+    /* drawn as the strip's own text, like the run info and the tabs, on the strip's rule (the
+       Select's `bare` look), in its size */
     .program-picker {
         display: flex;
         align-items: stretch;

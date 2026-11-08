@@ -81,7 +81,7 @@ $phone: 600px;
 // back in its place once the page reaches it (owner, 2026-11-08): on `$z` over what scrolls under
 // it, in the Card's fill so that does not show through, its lower corners inside the Card's 1px
 // edge on the Card's corner `$card-bottom`.
-@mixin sticky-footer($z: 1, $card-bottom: var(--wb-radius)) {
+@mixin sticky-footer($z: var(--z-raised), $card-bottom: var(--wb-radius)) {
     position: sticky;
     bottom: 0;
     z-index: $z;

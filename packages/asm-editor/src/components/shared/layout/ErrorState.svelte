@@ -16,7 +16,7 @@
     import FaCopy from '~icons/fa-solid/copy'
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import type { Snippet } from 'svelte'
-    import '#cmp/specific/workbench/workbench.css'
+    import '#src/styles/cards.css'
 
     interface Props {
         title: string
@@ -222,7 +222,7 @@
         padding: 0.35rem 0.7rem;
         font-size: var(--fs-small);
     }
-    /* a Workbench card (workbench.css): the error under a header band a shade lighter */
+    /* a Workbench card (styles/cards.css): the error under a header band a shade lighter */
     .error-card {
         display: flex;
         flex-direction: column;

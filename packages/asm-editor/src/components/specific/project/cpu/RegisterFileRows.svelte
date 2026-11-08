@@ -445,7 +445,7 @@
                         -->
                         <input
                             class="chunk-input"
-                            class:refused={editedReason !== null}
+                            aria-invalid={editedReason !== null}
                             title={editedReason ?? ''}
                             aria-label="Poke {row.register.name}"
                             style="width: calc({Math.max(editedText.length, 2)}ch + 0.2rem);"
@@ -482,6 +482,7 @@
 
 <style lang="scss">
     @use '../../../../styles/field.scss';
+    @use '../../../../styles/type.scss';
 
     .registers {
         height: fit-content;
@@ -631,9 +632,7 @@
     //the input the chunk becomes while it is being poked, drawn in the row's own monospace so the
     //digits stay where they were
     .chunk-input {
-        font-family: var(--font-mono);
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
+        @include type.machine-value;
         font-size: inherit;
         text-align: center;
         //the box the read-only cell has, digit for digit: `box-sizing: border-box` is global, so
@@ -652,7 +651,7 @@
     }
 
     //a commit the helper refused: the input keeps what was typed and says why in its title
-    .refused {
+    .chunk-input[aria-invalid='true'] {
         outline: 2px solid var(--danger);
         outline-offset: -2px;
     }
@@ -663,8 +662,6 @@
         justify-content: center;
         flex: 1;
         opacity: 0.4;
-        font-family: var(--font-mono);
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
+        @include type.machine-value;
     }
 </style>

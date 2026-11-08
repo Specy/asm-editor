@@ -60,6 +60,9 @@
        a positioned box that isolates (a Card, an editor) stacks inside it and needs none of these.
        A popover in the browser's top layer (a Select's list, a menu, a Tooltip) is over all of
        them, and a z-index does nothing there */
+    /* raised over what scrolls under it inside the page, as a form's sticky footer is over the
+       fields it passes (form-card.scss) */
+    --z-raised: 1;
     /* the navbar, fixed over the page that scrolls under it */
     --z-navbar: 4;
     /* a window dragged about over its own view: the Debug windows (Draggable), the Screen's

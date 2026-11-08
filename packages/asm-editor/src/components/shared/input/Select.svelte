@@ -585,6 +585,10 @@
        the control opened out rather than as a menu tinted over the page */
     .list {
         @include popover.surface($solid: true);
+        /* its corner, a Popover's unless the caller draws it on another (the memory view's region
+           list, on a control's), which the options inside it follow */
+        --surface-radius: var(--r-overlay);
+        border-radius: var(--surface-radius);
         background-color: field.$fill;
         color: field.$text;
         position: fixed;
@@ -612,7 +616,7 @@
     .option {
         padding: 0.5rem 0.75rem;
         /* inside the list's 1px edge and 0.25rem padding, its curve parallel to the list's */
-        border-radius: nested-radius(var(--r-overlay), $border: 1px, $inset: 0.25rem);
+        border-radius: nested-radius(var(--surface-radius), $border: 1px, $inset: 0.25rem);
         cursor: pointer;
     }
 

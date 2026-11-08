@@ -422,6 +422,10 @@
         display: flex;
     }
 
+    /* `simpleCode`, compact code (a Documentation entry, a lecture's card or an instruction in the
+       panel, a note under an editor line): no room round it and the width of what holds it. `!important`, as markdownPlaygrounds.ts writes
+       a playground fence's margin and max-width inline, which only it beats; it beats a caller's
+       rule too, so a caller sets none of these */
     :global(.simple-code pre.code-block) {
         margin: 0 !important;
         width: unset !important;

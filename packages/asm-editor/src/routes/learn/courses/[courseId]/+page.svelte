@@ -68,17 +68,12 @@
                 sectionStyle="margin-left: 0.6rem; padding-left: 0.6rem;"
                 style="gap: 0.2rem"
             >
-                {#snippet title()}
-                    <span style="margin-left: -0.1rem">
-                        {module.name}
-                    </span>
-                {/snippet}
+                {#snippet title()}{module.name}{/snippet}
                 <Card style="overflow: hidden">
                     <LecturesMenu
                         lectures={module.lectures}
                         courseId={data.course.slug}
                         moduleId={module.slug}
-                        lectureStyle="padding: 0.6rem 1rem 0.6rem 1.2rem"
                     />
                 </Card>
             </TogglableSection>

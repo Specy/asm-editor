@@ -26,7 +26,8 @@
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { placeCard, type Box } from '#cmp/shared/floating/floating.ts'
-    import { popoverElevation } from '#src/styles/elevation.ts'
+    import { POPOVER_ARROW, popoverElevation } from '#src/styles/elevation.ts'
+    import { remToPx } from '#src/styles/rem.ts'
     import { usesCommandKey } from '#stores/shortcutsStore.ts'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
     import FaCopy from '~icons/fa-solid/copy'
@@ -204,13 +205,9 @@
 
     let inspectorOpen = $derived(!workbenchLayout.isCollapsed('hex:inspector', false))
     let littleEndian = $state(true)
-    const remPx = () =>
-        typeof document === 'undefined'
-            ? 16
-            : parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
     /** The data inspector beside the bytes when a 16-byte row and it both fit, else below them. */
     const inspectorSide = $derived(
-        inspectorOpen && probeWidth > 0 && width >= probeWidth + SCROLLBAR + 17 * remPx()
+        inspectorOpen && probeWidth > 0 && width >= probeWidth + SCROLLBAR + remToPx(17)
     )
     /** 16 bytes a row where one fits, else 8, as on a phone (an open item the plan left to measure). */
     const bytesPerRow = $derived(
@@ -551,8 +548,6 @@
             return
         hovered = { offset, cell: { left, top, width: box.width, height: box.height } }
     }
-    /** The hover card's arrow, which stands out of it towards the byte. */
-    const HOVER_ARROW = 6
     let hoverWidth = $state(0)
     let hoverHeight = $state(0)
     /**
@@ -567,7 +562,7 @@
             {
                 side: 'bottom',
                 gap: 2,
-                arrow: HOVER_ARROW,
+                arrow: POPOVER_ARROW,
                 radius: popoverElevation().radius,
                 align: 'start',
                 margin: 4,
@@ -1060,7 +1055,6 @@
                                 height={hoverHeight}
                                 side={hoverPlace.side}
                                 at={hoverPlace.arrow}
-                                arrow={HOVER_ARROW}
                                 solid
                             />
                         {/if}

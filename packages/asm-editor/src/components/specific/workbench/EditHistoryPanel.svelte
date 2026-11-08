@@ -221,7 +221,6 @@
         align-items: center;
         gap: 0.6rem;
         width: 100%;
-        height: 1.8rem;
         padding: 0 0.6rem;
         border: 0;
         border-radius: 0.3rem;
@@ -230,15 +229,8 @@
         font: inherit;
         text-align: left;
         cursor: pointer;
+        @include rows.row(1.8rem);
 
-        &:hover:not(:disabled),
-        &:focus-visible {
-            background: var(--hover-bg);
-        }
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
         /* the current step, the shared current item (D4), under the pointer too; square on the
            side its edge marks */
         &.current,

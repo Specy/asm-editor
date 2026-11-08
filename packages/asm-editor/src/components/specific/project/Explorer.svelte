@@ -1034,6 +1034,7 @@
                                     class={['entry-mark', { selected: selectedEntry }]}
                                     tone={selectedEntry ? 'accent' : 'neutral'}
                                     solid={selectedEntry}
+                                    weight="medium"
                                     title={selectedEntry
                                         ? 'Entry of the selected program'
                                         : 'Entry of a program'}>ENTRY</Badge
@@ -1352,13 +1353,13 @@
         align-items: center;
         width: 100%;
         min-width: 0;
-        height: 1.55rem;
         border: 0;
         color: inherit;
         background: transparent;
         font: inherit;
         font-size: var(--fs-caption);
         text-align: left;
+        @include rows.row(1.55rem);
 
         &.directory.drop-target {
             background-color: color-mix(in srgb, var(--accent) 24%, var(--tertiary));
@@ -1411,16 +1412,16 @@
         box-sizing: border-box;
     }
 
-    /* the row the pointer or the keyboard is on, and the one whose menu is open: the panel's text
-       at 10% */
-    .tree-row:hover,
+    /* the row the keyboard is on, whose button has the focus, and the one whose menu is open:
+       the hover's tint (`rows.row`), the panel's text at 10% */
     .tree-row:focus-within,
     .tree-row.menu-open {
-        background: var(--hover-bg);
+        background-color: var(--hover-bg);
     }
 
-    /* the File open in the editor */
-    .tree-row.selected {
+    /* the File open in the editor, under the pointer too */
+    .tree-row.selected,
+    .tree-row.selected:hover:not(:disabled) {
         @include rows.selected;
     }
 

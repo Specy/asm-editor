@@ -196,7 +196,7 @@ describe('poking memory from the selection popup', () => {
         expect(panel.pokes).toEqual([])
         const open = panel.input()!
         expect(open.value).toBe('1ff')
-        expect(open.classList.contains('refused')).toBe(true)
+        expect(open.getAttribute('aria-invalid')).toBe('true')
         expect(open.title).toContain('8 bits wide')
         panel.close()
     })

@@ -1,13 +1,12 @@
 <script lang="ts">
     import { tick } from 'svelte'
-    import { LANGUAGE_ORDER } from '#lib/languages/languageCapabilities.ts'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
     import InstructionSetPicker from '#cmp/shared/input/InstructionSetPicker.svelte'
     import { BASE_CODE } from '#lib/Config.ts'
-    import Header from '#cmp/shared/layout/Header.svelte'
+    import PageHead from '#cmp/shared/layout/PageHead.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
     import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
@@ -69,8 +68,6 @@
         key: sectionTypeLabel(value),
         value
     }))
-    /** The instruction sets a section can be written in, as the create page offers them. */
-    const LANGUAGES = LANGUAGE_ORDER.filter((language) => language in BASE_CODE)
 
     let sections = $state([
         createDefaultExamSection(ExamSectionType.AssemblyCoding)
@@ -78,7 +75,6 @@
     /** The part the card beside the outline shows: the Details, the general instructions, or a
      *  section by its id. */
     let current = $state<string>(DETAILS)
-    /** The section shown, when the part shown is one. */
     /** The exam link just made, while the browser would not copy it: it is nowhere else to copy. */
     let uncopiedExamUrl = $state('')
     let unlockPasswordField = $state<HTMLInputElement>()
@@ -225,9 +221,7 @@
     <!-- the picked part's Card in the middle of the page, as a documentation page's column is, the
          title over it and the outline of the exam in the room at its left -->
     <div class="exam-builder">
-        <div class="title-room">
-            <Header>Exam builder</Header>
-        </div>
+        <PageHead title="Exam builder" compact class="title-room" />
         <!-- Create exam link at the outline's foot, under Add section (owner, 2026-11-08: the part
              Card has no footer), with the link to copy by hand over it when the browser would not
              copy it -->
@@ -331,7 +325,7 @@
                         section.
                     </p>
                     <div class="markdown-field instructions">
-                        <MarkdownEditor layout="switch" bind:value={settings.instructions} />
+                        <MarkdownEditor bind:value={settings.instructions} />
                     </div>
                 </div>
             {:else}
@@ -398,7 +392,6 @@
                                      set picked (owner, 2026-11-08) -->
                                 <InstructionSetPicker
                                     selected={assemblySection.language}
-                                    languages={LANGUAGES}
                                     description={false}
                                     onSelect={(language) =>
                                         onAssemblyLanguageChange(assemblySection, language)}
@@ -409,7 +402,7 @@
                         <h3 class="band">Prompt</h3>
                         <div class="section">
                             <div class="markdown-field prompt">
-                                <MarkdownEditor layout="switch" bind:value={section.prompt} />
+                                <MarkdownEditor bind:value={section.prompt} />
                             </div>
                         </div>
 
@@ -550,38 +543,36 @@
 
 <style lang="scss">
     @use '../../styles/field.scss';
-    @use '../../styles/radius.scss' as *;
+    @use '../../styles/form-card.scss';
+    @use '../../components/specific/exam/exam.scss';
 
     /* the picked part's Card in the middle of the page and the title over it, the outline in the
        room at its left, 1rem from it. The first column never gets narrower than the outline, so
        where the room at the Card's left is too small the Card moves right of the middle, until it
-       sits beside the outline and gets narrower with the window (the third column is then empty) */
+       sits beside the outline and gets narrower with the window (the third column is then empty).
+       The part's words and fields start 1rem in, 0.75rem on a phone (X-13) */
     .exam-builder {
         --outline-width: 16rem;
         --outline-gap: 1rem;
         display: grid;
         grid-template-columns:
             minmax(calc(var(--outline-width) + var(--outline-gap)), 1fr)
-            minmax(0, 52rem)
+            minmax(0, exam.$column)
             minmax(0, 1fr);
         grid-template-areas:
             '. title .'
             'outline card .';
         align-items: start;
         padding-bottom: 1.4rem;
+        @include form-card.inset(1rem, 0.75rem, exam.$phone);
     }
-    /* the title over the Card. Smaller than the other pages' titles, a step of the scale down
-       (`--fs-h2`, where theirs is `--fs-h1`), with less room above and below it, so that the
-       outline and the Card start higher and the part has more of the window (the owner's
-       exception for this page) */
-    .title-room {
+    /* the title over the Card, the smaller one (PageHead's `compact`, the owner's exception for
+       this page, O-92), so that the outline and the Card start higher and the part has more of the
+       window: 0.5rem above it and 0.75rem under it */
+    .exam-builder > :global(.title-room) {
         grid-area: title;
         min-width: 0;
-        padding-top: 0.5rem;
-    }
-    .title-room :global(h1) {
-        margin: 0 0 0.75rem;
-        font-size: var(--fs-h2);
+        padding: 0.5rem 0 0.75rem;
     }
     .exam-builder > :global(.exam-outline) {
         grid-area: outline;
@@ -593,37 +584,27 @@
         grid-area: card;
     }
 
-    /* a section's header, a band a shade lighter than the Card over a rule, as the create page
-       draws its "Instruction set" and "Details" (CollapsibleSection's look); the ones after the
-       first are ruled off above too. The words start 1rem in, as the part's fields do (X-13) */
+    /* a section's header, as the create page draws its "Instruction set" and "Details"
+       (styles/form-card.scss), the part's name in the first, the Card's top; a section's with
+       Delete section at its right */
     .band {
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        margin: 0;
-        padding: 0.6rem 1rem;
-        background-color: var(--wb-section-header);
-        border-block: 1px solid var(--line);
-        font: 700 var(--fs-small) / 1.4 var(--font-ui);
-        color: var(--secondary-text);
+        @include form-card.band(exam.$phone);
 
         h2 {
             margin: 0;
             font: inherit;
         }
     }
-    /* the first band is the Card's top, its corners inside the Card's 1px edge */
     .band.first {
-        border-top: none;
-        border-radius: nested-radius(var(--wb-radius), $border: 1px)
-            nested-radius(var(--wb-radius), $border: 1px) 0 0;
+        @include form-card.band-first;
     }
 
+    /* what a band heads, its fields 1rem apart */
     .section {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        padding: 0.85rem 1rem 1rem;
+        @include form-card.section(1rem, exam.$phone, 0.75rem);
     }
     .part-hint {
         margin: 0;
@@ -698,9 +679,7 @@
     }
     /* a label over its control, as the shared fields draw theirs */
     .option {
-        display: flex;
-        flex-direction: column;
-        gap: 0.3rem;
+        @include form-card.labelled;
         width: 100%;
     }
     .option + .option {
@@ -769,7 +748,7 @@
 
     /* a phone: the title, the outline (ExamOutline.svelte) and the part one under the other, a
        section's arrows in its band beside its number */
-    @media (max-width: 720px) {
+    @media (max-width: exam.$phone) {
         .exam-builder {
             grid-template-columns: minmax(0, 1fr);
             grid-template-areas:
@@ -785,12 +764,6 @@
         .phone-moves {
             display: flex;
             margin-left: 0.25rem;
-        }
-        .band {
-            padding: 0.55rem 0.75rem;
-        }
-        .section {
-            padding: 0.8rem 0.75rem 0.75rem;
         }
         .markdown-field.instructions {
             height: 20rem;

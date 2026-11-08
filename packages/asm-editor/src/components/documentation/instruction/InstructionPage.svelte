@@ -7,7 +7,8 @@
      * source, which the Interactive editor replaces once it loads.
      */
     import { page } from '$app/state'
-    import { toMetaDescription, jsonLdScriptTag, instructionLd, breadcrumbLd } from '#lib/seo.ts'
+    import { toMetaDescription, instructionLd, breadcrumbLd } from '#lib/seo.ts'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import type { InstructionDocument } from '#lib/documentation/instructions/document.ts'
     import type { InstructionExample as Example } from '#lib/documentation/instructions/content.ts'
@@ -57,28 +58,19 @@
     )
 </script>
 
-<svelte:head>
-    <title>{pageTitle}</title>
-    <meta name="description" content={metaDescription} />
-    <meta property="og:title" content={pageTitle} />
-    <meta property="og:description" content={metaDescription} />
-    <meta property="og:type" content="article" />
-    <!-- The page's schema.org description. {@html} is the only way to emit a <script> from a
-         component: <svelte:element this="script"> renders nothing in Svelte, and a literal script
-         tag here is taken as the component's own instance script. Safe because the payload is
-         machine generated and serializeJsonLd escapes < > and &, so nothing interpolated can close
-         the tag. -->
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    {@html jsonLdScriptTag(structuredData)}
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    {@html jsonLdScriptTag(
+<PageMeta
+    title={pageTitle}
+    description={metaDescription}
+    type="article"
+    jsonLd={[
+        structuredData,
         breadcrumbLd([
             { name: 'Documentation', pathname: '/documentation' },
             { name: architecture, pathname: root },
             { name: document.name.toUpperCase(), pathname: page.url.pathname }
         ])
-    )}
-</svelte:head>
+    ]}
+/>
 
 <!-- the page ends on the example's card, not on prose: the content pages' room under the last
      paragraph would only be empty space under it, so the column's own padding is all it keeps -->

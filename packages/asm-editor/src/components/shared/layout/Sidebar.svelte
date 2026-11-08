@@ -50,9 +50,9 @@
         width: var(--side-menu-width);
         min-width: var(--side-menu-width);
         gap: 0;
-        top: 3.2rem;
+        top: var(--navbar-height);
         padding-top: 1rem;
-        height: calc(var(--screen-height) - 3.2rem);
+        height: calc(var(--screen-height) - var(--navbar-height));
         overflow-y: auto;
         position: sticky;
     }
@@ -96,7 +96,7 @@
 
     .side-menu-underlay {
         position: fixed;
-        top: 3.2rem;
+        top: var(--navbar-height);
         left: 0;
         width: 100vw;
         height: 100%;

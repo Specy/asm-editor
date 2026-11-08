@@ -39,15 +39,16 @@
 </script>
 
 <PageMeta {title} {description} type="website" {jsonLd} />
-<!-- the 70rem column every documentation index has, so the titles start at one x; what is under
-     the title keeps its 60rem at its left (design-system.md, D8) -->
+<!-- the 70rem column every documentation index has, so the titles start at one x; the search box
+     and the links keep their 60rem at its left, the introduction the content pages' lead
+     (contentPages.css) (design-system.md, D8) -->
 <Page cropped="70rem" contentStyle="padding: 1rem; gap: 1rem">
     <Header>{site.label} Documentation</Header>
     <div class="search">
         <SearchLauncher size="full" placeholder={`Search the ${site.label} docs and courses`} />
     </div>
     {#each intro as paragraph, index (index)}
-        <p class="intro"><InlineMarkdown source={paragraph} /></p>
+        <p class="intro"><InlineMarkdown source={paragraph} accentCode /></p>
     {/each}
     <div class="links">
         {#each site.pages as link (link.id)}
@@ -61,15 +62,6 @@
 <style lang="scss">
     .search {
         max-width: 60rem;
-    }
-    .intro {
-        line-height: 1.5;
-        max-width: 60rem;
-        margin: 0;
-    }
-    .intro :global(code) {
-        background-color: var(--secondary);
-        color: var(--accent);
     }
     .links {
         display: grid;

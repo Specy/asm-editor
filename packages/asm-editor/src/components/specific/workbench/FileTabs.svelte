@@ -79,10 +79,12 @@
         >
         {#if session.project.program(file.id)}
             {@const selected = file.id === session.project.selectedProgram}
+            <!-- at medium weight in a tab, not a Badge's bold -->
             <Badge
                 class={['entry-mark', { selected }]}
                 tone={selected ? 'accent' : 'neutral'}
                 solid={selected}
+                weight="medium"
                 title={selected ? 'Entry of the selected program' : 'Entry of a program'}
                 >ENTRY</Badge
             >
@@ -118,21 +120,18 @@
 </TabStrip>
 
 <style lang="scss">
-    /* the ENTRY mark in a tab at medium weight, not a Badge's bold (doubled class: Badge's own
-       rule weighs as much as one class and a scoped hash) */
-    :global(.badge.entry-mark.entry-mark) {
-        font-weight: 500;
-    }
-
-    /* the strip itself is TabStrip's; this is what a File's tab and the editor's own end of the
-       strip add to it */
-    /* the editor's own end of the strip: a filling IconButton, a square as tall as the strip, edge
-       to edge in it and square-cornered, in the strip's text. Its bottom border is the strip's rule
+    /* the strip itself is TabStrip's, and what follows is what this adds to it. The editor's own
+       end of the strip: a filling IconButton, a square as tall as the strip, edge to edge in it
+       and square-cornered, in the strip's text. Its bottom border is the strip's rule
        (TabStrip gives it to everything after the tabs), which its hover fill stops at rather than
-       tinting it. In the card's top-right corner its own corner follows the card's curve
-       (EditorArea) */
+       tinting it. As the strip's last part, its top-right corner is `--group-action-corner`, which
+       the editor sets on the pane in its card's top-right corner (EditorArea), so that it follows
+       the card's curve there */
     :global(.group-action) {
         --icon-button-cell: var(--tab-strip-height);
+    }
+    :global(.group-action:last-child) {
+        --icon-button-radius: 0 var(--group-action-corner, 0) 0 0;
     }
 
     .name {

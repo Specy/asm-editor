@@ -62,15 +62,19 @@
 </div>
 
 <style lang="scss">
+    @use '../../../../styles/radius.scss' as *;
+
+    /* square under the floating window's bar, and at the bottom inside the window's 1px edge, its
+       curve parallel to the window's (DraggableContainer's `$corner`, a control's; D12), which
+       clips it */
     .tab {
         background-color: var(--primary);
         color: var(--primary-text);
         padding: 0.4rem;
-        border-radius: var(--r-overlay);
+        border-radius: 0 0 nested-radius(var(--r-control), $border: 1px)
+            nested-radius(var(--r-control), $border: 1px);
         /* the floating window's tray shadow below its bar, which casts none into it */
         box-shadow: var(--shadow-2);
-        border-top-left-radius: 0;
-        border-top-right-radius: 0;
         gap: 0.4rem;
         /* the floating window's bottom edge sets it, when it has been dragged */
         max-height: var(--floating-body-max-height, 30rem);

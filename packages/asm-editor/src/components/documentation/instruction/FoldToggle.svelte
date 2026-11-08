@@ -65,9 +65,4 @@
         font-weight: 400;
         color: var(--text-muted);
     }
-    @media (prefers-reduced-motion: reduce) {
-        .chevron {
-            transition: none;
-        }
-    }
 </style>

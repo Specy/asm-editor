@@ -476,9 +476,6 @@
         width: 100%;
         font-size: var(--fs-small);
     }
-    .section :global(.testcase-field.mono) {
-        font-size: var(--fs-small);
-    }
 
     .arguments {
         @include mono;

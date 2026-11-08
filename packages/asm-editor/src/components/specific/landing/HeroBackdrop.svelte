@@ -277,7 +277,6 @@
         mask-image: radial-gradient(ellipse 38% 62% at 50% 50%, transparent 46%, #000 100%);
     }
 
-    /* faint, but the registers and memory a little less, so what each step changes shows */
     /* both sides fade into the page, from the screen's edges to its middle, as the bytes under
        the quick links do: the memory side all the way, the code side lighter */
     .backdrop::after {
@@ -293,6 +292,8 @@
         pointer-events: none;
     }
 
+    /* faint, but the registers and memory a little less (below), so what each step changes
+       shows */
     .card {
         opacity: 0.3;
         display: flex;

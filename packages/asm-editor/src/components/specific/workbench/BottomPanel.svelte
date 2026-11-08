@@ -77,8 +77,7 @@
         scroll={false}
         {panelId}
         onselect={(id) => (session.bottomTab = id as BottomTab)}
-        tabAttributes={(item) =>
-            iconTabs ? { 'aria-label': item.label, style: 'padding: 0 0.75rem' } : {}}
+        iconOnly={iconTabs}
     >
         {#snippet tab(item)}
             <span class="tab-face" class:icon-only={iconTabs}>
@@ -208,8 +207,6 @@
         padding: 0 0.9rem 0 0.6rem;
         font-size: var(--fs-caption);
         color: var(--hint);
-
-        /* one line, cut short rather than wrapped in a strip one line tall */
     }
 
     .tab-body {

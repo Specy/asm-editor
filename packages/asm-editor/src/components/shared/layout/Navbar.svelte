@@ -30,7 +30,7 @@
         background-color: color-mix(in srgb, var(--background) 82%, transparent);
         border-bottom: 1px solid color-mix(in srgb, var(--background-text) 11%, transparent);
         backdrop-filter: blur(0.5rem);
-        z-index: 4;
+        z-index: var(--z-navbar);
     }
 
     @media (max-width: 600px) {

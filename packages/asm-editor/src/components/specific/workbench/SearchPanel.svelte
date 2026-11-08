@@ -479,7 +479,7 @@
                     <label {@attach tooltip(place.title)}>
                         <Switch
                             checked={lookIn[place.key]}
-                            style="--switch-width: 1.9rem; --switch-height: 1.05rem; --switch-padding: 0.15rem"
+                            size="xs"
                             onChange={(checked) => search.setLookIn(place.key, checked)}
                         />
                         {place.label}
@@ -979,23 +979,13 @@
         display: flex;
         align-items: center;
         gap: 0.4rem;
-        height: 1.55rem;
         padding: 0 0.6rem 0 0.4rem;
         cursor: pointer;
         white-space: nowrap;
         /* a long list lays out and paints only the rows in view */
         content-visibility: auto;
         contain-intrinsic-size: auto 1.55rem;
-
-        &:hover,
-        &:focus-visible {
-            background: var(--hover-bg);
-        }
-
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
+        @include rows.row(1.55rem);
     }
 
     .touch .item {
@@ -1070,7 +1060,9 @@
             padding-left: 2.4rem;
         }
 
-        &.opened {
+        /* the row opened, under the pointer too */
+        &.opened,
+        &.opened:hover:not(:disabled) {
             @include rows.selected;
         }
     }

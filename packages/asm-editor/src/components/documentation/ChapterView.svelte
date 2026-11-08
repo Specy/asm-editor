@@ -94,7 +94,7 @@
     .chapter > :global(.entry) {
         display: flex;
         flex-direction: column;
-        scroll-margin-top: 5.5rem;
+        scroll-margin-top: var(--anchor-offset);
     }
     .chapter > .prose {
         gap: 0.5rem;
@@ -129,8 +129,12 @@
         margin: 0;
         font-size: var(--fs-lead);
     }
+    /* a prose entry's title, a heading of the page's reading text (contentPages.css) */
     .prose .title {
-        font-size: var(--fs-h3);
+        font-size: var(--fs-h2);
+        font-weight: 700;
+        line-height: 1.3;
+        letter-spacing: -0.015em;
     }
     .code {
         font-family: var(--font-mono);

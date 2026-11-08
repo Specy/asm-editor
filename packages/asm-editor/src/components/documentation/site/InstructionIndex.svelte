@@ -45,12 +45,8 @@
     <Header>{label} Instructions</Header>
     {@render children?.()}
     {#each groups as group (group.letter)}
-        <a href="#{group.letter}" style="width: min-content; margin-top: 2rem;">
-            <h2 class="letter-group" id={group.letter}>
-                <div>
-                    {group.letter}
-                </div>
-            </h2>
+        <a href="#{group.letter}" class="letter-link">
+            <h2 class="letter-group" id={group.letter}>{group.letter}</h2>
         </a>
         <div class="instructions">
             {#each group.names as name (name)}
@@ -76,6 +72,12 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
+    }
+
+    /* a letter's heading, a link to itself, 2rem under the group above */
+    .letter-link {
+        width: min-content;
+        margin-top: 2rem;
     }
 
     .letter-group {

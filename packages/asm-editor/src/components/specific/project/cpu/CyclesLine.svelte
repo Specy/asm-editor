@@ -38,7 +38,9 @@
     {/if}
 </div>
 
-<style>
+<style lang="scss">
+    @use '../../../../styles/type.scss';
+
     .cycles-line {
         display: flex;
         flex: none;
@@ -61,10 +63,8 @@
 
     /* both in Fira Code at the size and weight of the PC's value (MemoryRenderer's .memory-grid) */
     .count {
-        font-family: var(--font-mono);
+        @include type.machine-value;
         font-size: var(--fs-body);
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
         color: var(--text-muted);
     }
 
@@ -72,10 +72,8 @@
        right end, where neither the count before it nor its own width moves the rest */
     .last {
         margin-left: auto;
-        font-family: var(--font-mono);
+        @include type.machine-value;
         font-size: 0.9rem;
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
         color: var(--accent);
     }
 </style>

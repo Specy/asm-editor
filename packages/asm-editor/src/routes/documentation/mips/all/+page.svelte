@@ -7,21 +7,16 @@
      */
     import Page from '#cmp/shared/layout/Page.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
     import { chapters } from '#lib/documentation/mips/mips.ts'
 </script>
 
-<svelte:head>
-    <title>MIPS Complete Documentation - ASM Editor</title>
-    <meta
-        name="description"
-        content="Complete MIPS documentation in a single page. Includes all instructions, directives, and syscalls."
-    />
-    <meta
-        property="og:description"
-        content="Complete MIPS documentation in a single page. Includes all instructions, directives, and syscalls."
-    />
-</svelte:head>
+<PageMeta
+    title="MIPS Complete Documentation - ASM Editor"
+    description="Complete MIPS documentation in a single page. Includes all instructions, directives, and syscalls."
+    type="article"
+/>
 
 <Page cropped="70rem" contentStyle="padding: 1rem; gap: 1rem;">
     <Header>MIPS Complete Documentation</Header>

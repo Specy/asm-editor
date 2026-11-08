@@ -63,7 +63,7 @@
         flex: 1;
     }
     .has-nav {
-        margin-top: 3.2rem;
+        margin-top: var(--navbar-height);
     }
     @media print {
         .content {

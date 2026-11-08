@@ -8,13 +8,13 @@
      * The create page, the embed builder and the exam builder pick their set with it.
      */
     import { languageLabel } from '#lib/languages/languageLabel.ts'
-    import { languageAccent } from '#lib/languages/languageColors.ts'
     import {
         COMPATIBLE_WITH,
         LANGUAGE_DESCRIPTIONS,
         LANGUAGE_ORDER
     } from '#lib/languages/languageCapabilities.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import LanguageSquare from '#cmp/shared/misc/LanguageSquare.svelte'
 
     interface Props {
         selected: AvailableLanguages
@@ -73,11 +73,7 @@
                 onclick={() => onSelect(value)}
                 onkeydown={(event) => onTileKeyDown(event, index)}
             >
-                <span
-                    class="language-square"
-                    style:background-color={languageAccent(value)}
-                    aria-hidden="true"
-                ></span>
+                <LanguageSquare language={value} />
                 {languageLabel(value)}
             </button>
         {/each}
@@ -152,14 +148,6 @@
             border-color: var(--accent);
             background-color: color-mix(in srgb, var(--accent) 18%, field.$fill);
         }
-    }
-
-    /* drawn as the home page's instruction-set bar draws its squares */
-    .language-square {
-        flex: none;
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 2px;
     }
 
     /* the picked set's line over the others', unseen: the one grid cell they share takes the

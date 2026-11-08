@@ -647,8 +647,8 @@
 <style lang="scss">
     /* a layer of its own at the editor's 2, so what floats in the pane (the run controls, the
        prompts, the drop frame) stacks inside it rather than over the page: under the floating
-       Screen window at 4 and the drawers at 5. The connector ribbons, at 1, run under it to
-       hide the join */
+       Screen window (`--z-float`) and the drawers (`--z-drawer`). The connector ribbons, at 1, run
+       under it to hide the join */
     .editor-pane {
         position: relative;
         z-index: 2;

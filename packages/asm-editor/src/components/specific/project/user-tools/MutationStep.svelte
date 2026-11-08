@@ -484,7 +484,9 @@
         }
     }
 
-    /* inside the floating History's 0.4rem padding, its corner parallel to the window's (D12) */
+    /* inside the floating History's 0.4rem padding, on an overlay's corner less that padding,
+       which ran parallel to the window's while the window was on an overlay's corner (D12). The
+       window is on a control's corner now, inside which it would be square: the owner's call */
     .step {
         border-radius: nested-radius(var(--r-overlay), $inset: 0.4rem);
         padding: 0.4rem;

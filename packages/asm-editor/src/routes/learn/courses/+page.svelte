@@ -76,18 +76,6 @@
 <SearchPalette scope={COURSES_SCOPE} placeholder="Search in every course" />
 
 <style>
-    .intro {
-        display: flex;
-        flex-direction: column;
-        gap: 0.8rem;
-    }
-    .intro p {
-        margin: 0;
-    }
-    .intro a {
-        color: var(--accent);
-        text-decoration: underline;
-    }
     .courses {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));

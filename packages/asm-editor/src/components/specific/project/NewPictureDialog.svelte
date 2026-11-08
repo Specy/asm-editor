@@ -141,7 +141,7 @@
         top: 1rem;
         left: 50%;
         transform: translateX(-50%);
-        z-index: 20;
+        z-index: var(--z-tray);
         display: flex;
         flex-direction: column;
         gap: 0.55rem;

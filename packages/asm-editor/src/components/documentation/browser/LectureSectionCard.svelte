@@ -109,12 +109,6 @@
         width: 100%;
         margin: 0;
     }
-    .body :global(._markdown pre:has(code)) {
-        min-width: 0;
-        max-width: 100%;
-        margin: 0.3rem 0;
-        box-shadow: none;
-    }
     .open {
         display: inline-flex;
         align-items: center;

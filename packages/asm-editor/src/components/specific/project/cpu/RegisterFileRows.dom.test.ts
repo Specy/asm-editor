@@ -204,7 +204,7 @@ describe('poking a register row', () => {
         expect(panel.pokes).toEqual([])
         const open = panel.input()!
         expect(open.value).toBe('1ffff')
-        expect(open.classList.contains('refused')).toBe(true)
+        expect(open.getAttribute('aria-invalid')).toBe('true')
         expect(open.title).toContain('16 bits')
         panel.close()
     })

@@ -8,9 +8,9 @@
      * showing any other File, a C or C++ one included, has neither, only the session's controls
      * once one is on ([programs.md](../../../../../../docs/design/programs.md), decision 5). The
      * Testcases run on the same Emulator, so Test during a Debug session ends it first, and tests
-     * the session's Program. Edge to edge in the bottom corners of the editor on a desktop, along
-     * its bottom edge on a phone, and stuck under it on a tablet. A pane showing a File in more
-     * than one way carries the view switch, during a Debug session too
+     * the session's Program. Edge to edge in the bottom corners of the editor on a desktop and a
+     * tablet, along its bottom edge on a phone. A pane showing a File in more than one way carries
+     * the view switch, during a Debug session too
      * ([file-views.md](../../../../../../docs/design/file-views.md), decisions 4 and 8). While a
      * Build goes on, its run to `main` included, Build says what it waits for and offers Cancel
      * ([reverse-engineering-ux.md](../../../../../../docs/design/reverse-engineering-ux.md),
@@ -46,19 +46,9 @@
         attached?: boolean
         group?: EditorGroup
         execution?: boolean
-        showCompilation?: boolean
-        /** The pane's view switch: a tablet's shared bar leaves it to each pane's own dock. */
-        showViews?: boolean
     }
 
-    let {
-        fill = false,
-        attached = false,
-        group,
-        execution = true,
-        showCompilation = true,
-        showViews = true
-    }: Props = $props()
+    let { fill = false, attached = false, group, execution = true }: Props = $props()
 
     /** The view switch's button for each view a File can be switched to. */
     const VIEW_BUTTONS: Partial<Record<FileView, Omit<DockView, 'id'>>> = {
@@ -113,7 +103,6 @@
         program !== undefined && session.kindAt(program) === 'executable'
     )
     const compilation = $derived.by<DockCompilation | undefined>(() => {
-        if (!showCompilation) return undefined
         if (!source && !pane.recompilationNeeded) return undefined
         const supported = isCompilationTarget(session.project.language)
         const busy = session.compiling && session.compilingGroupId === pane.id
@@ -157,7 +146,6 @@
     })
 
     const views = $derived.by<DockViews | undefined>(() => {
-        if (!showViews) return undefined
         const options = pane.viewSwitch.flatMap((view) => {
             const button = VIEW_BUTTONS[view]
             return button

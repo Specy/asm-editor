@@ -559,8 +559,8 @@ export class EditorGroup {
     }
     /**
      * Whether the execution dock floats over this pane. `controls` says whether the layout puts
-     * the execution controls in a pane, as a desktop and a phone do; a tablet has one bar for
-     * them. During a Debug session the controls group has it, and outside one every pane showing
+     * the execution controls in a pane, as every layout now does (a tablet had a bar of its own
+     * for them; the tests still pass `false`). During a Debug session the controls group has it, and outside one every pane showing
      * an Entry file, for its Program's Build ([programs-plan.md](../../../../../docs/design/programs-plan.md),
      * decision 8); a source File its compile dock outside a Debug session, and on every device a
      * File shown in more than one way its view switch.

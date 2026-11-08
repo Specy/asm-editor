@@ -17,12 +17,15 @@
     import { AGENT_MESSAGE } from '#lib/twins/agentMessage.ts'
 
     interface Props {
-        /** The heading's level: 2 where it is a section of its own, 3 inside another one. */
-        level?: 2 | 3
+        /**
+         * `landing`: in the home page's voice, as its sections are, the heading in the serif a
+         * step smaller and the text in Fira Code, small and muted.
+         */
+        look?: 'page' | 'landing'
         style?: string
     }
 
-    let { level = 2, style = '' }: Props = $props()
+    let { look = 'page', style = '' }: Props = $props()
     const id = $props.id()
     // the message is cut to one line until the reader asks to read it whole
     let expanded = $state(false)
@@ -30,9 +33,8 @@
     const BUTTON_STYLE = 'height: var(--button); flex-shrink: 0;'
 </script>
 
-<section class="agents" class:nested={level === 3} aria-labelledby={id} {style}>
-    <svelte:element this={`h${level}`} {id} class="heading">Documentation for agents</svelte:element
-    >
+<section class="agents" class:landing={look === 'landing'} aria-labelledby={id} {style}>
+    <h2 {id} class="heading">Documentation for agents</h2>
     <p>Send this message to an AI assistant so they can search the docs of each Instruction Set.</p>
     <!-- the slot keeps the one-line height, so the whole message opens over what follows -->
     <div class="slot">
@@ -76,21 +78,23 @@
         flex-direction: column;
         gap: 1rem;
     }
-    .nested {
-        gap: 0.6rem;
-    }
     .heading {
         margin: 0;
         font-size: var(--fs-h2);
     }
-    .nested .heading {
+    .landing .heading {
+        font-family: var(--font-read);
+        font-weight: 400;
         font-size: var(--fs-h3);
     }
     p {
         margin: 0;
         color: var(--background-text-prose);
     }
-    .nested p {
+    .landing p {
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
+        letter-spacing: 0.02em;
         color: var(--text-muted);
     }
     .slot {

@@ -154,6 +154,3 @@ export function heroTrace(): HeroState[] {
     }
     return states
 }
-
-export const hex = (value: number, digits = 8) =>
-    (value >>> 0).toString(16).toUpperCase().padStart(digits, '0')

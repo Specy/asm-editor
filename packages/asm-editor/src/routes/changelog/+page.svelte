@@ -10,20 +10,13 @@
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaBookOpen from '~icons/fa-solid/book-open'
     import { resolve } from '$app/paths'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
 </script>
 
-<svelte:head>
-    <title>Changelog - ASM Editor</title>
-    <meta
-        name="description"
-        content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
-    />
-    <meta
-        property="og:description"
-        content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
-    />
-    <meta property="og:title" content="Changelog - ASM Editor" />
-</svelte:head>
+<PageMeta
+    title="Changelog - ASM Editor"
+    description="What changed in each version of ASM Editor, the web IDE for M68K, MIPS, RISC-V, x86-64 and Z80 assembly: new features, instruction sets and fixes."
+/>
 
 <DefaultNavbar />
 

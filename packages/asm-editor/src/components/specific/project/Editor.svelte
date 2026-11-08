@@ -49,6 +49,7 @@
         pseudocodeViewStateFor
     } from '#lib/monaco/pseudocodeViewState.ts'
     import { openProjectResource } from '#lib/languages/service/navigation.ts'
+    import { rootFontSize } from '#src/styles/rem.ts'
 
     interface Props {
         disabled?: boolean
@@ -728,8 +729,8 @@
         const fontSize = monacoInstance
             ? editor?.getOption(monacoInstance.editor.EditorOption.fontSize)
             : undefined
-        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
-        if (!fontSize || !(rem > 0)) return chars
+        const rem = rootFontSize()
+        if (!fontSize) return chars
         const scale = Math.max(0.5, (fontSize - ADDRESS_GUTTER_SHRINK_REM * rem) / fontSize)
         return Math.max(2, Math.ceil(chars * scale))
     }
@@ -1252,9 +1253,14 @@
     :global(.monaco-editor .overlayWidgets .find-widget) {
         @include tray.surface;
     }
+    /* far enough above the editor that its shadow does not show while it is closed */
     :global(.find-widget) {
         top: 1rem !important;
         right: 2.4rem !important;
+        transform: translateY(calc(-100% - 3.5rem)) !important;
+    }
+    :global(.find-widget.visible) {
+        transform: translateY(0) !important;
     }
     /* its resize edge drew a square grey strip across the rounded corner; it still lights up on
        hover, where it can be dragged */
@@ -1369,15 +1375,6 @@
 
     :global(.monaco-hover tr:last-child td) {
         border-bottom: unset;
-    }
-
-    /* far enough above the editor that its shadow does not show while it is closed */
-    :global(.find-widget) {
-        transform: translateY(calc(-100% - 3.5rem)) !important;
-    }
-
-    :global(.find-widget.visible) {
-        transform: translateY(0) !important;
     }
 
     .mock-editor {

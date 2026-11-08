@@ -33,11 +33,6 @@
          * smaller one (`--r-control`), as the Tooltip and the hover cards over data have.
          */
         corner?: 'control' | 'overlay'
-        /**
-         * The corner in pixels, in place of `corner`, for the hover cards that still pass
-         * `tooltipRadius()` or `popoverElevation().radius` themselves; `corner` names the same two.
-         */
-        radius?: number
     }
 
     let {
@@ -47,15 +42,12 @@
         at,
         arrow = POPOVER_ARROW,
         solid = false,
-        corner = 'overlay',
-        radius
+        corner = 'overlay'
     }: Props = $props()
 
     const id = $props.id()
     const { shadow } = popoverElevation()
-    const rounding = $derived(
-        radius ?? (corner === 'control' ? tooltipRadius() : popoverElevation().radius)
-    )
+    const rounding = $derived(corner === 'control' ? tooltipRadius() : popoverElevation().radius)
     const size = $derived(at === undefined ? 0 : arrow)
     const shape = $derived({ radius: rounding, side, at: at ?? 0, arrow: size, offset: size })
     const path = $derived(outlinePath(width, height, shape))

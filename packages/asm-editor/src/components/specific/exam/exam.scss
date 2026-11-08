@@ -1,0 +1,10 @@
+// What the exam builder (routes/exam) and the student's exam page (routes/exam/session) share, so
+// the two keep it equal.
+
+// The width of the builder's part Card, and of the column the student reads a question or the
+// instructions in.
+$column: 52rem;
+
+// The width under which the builder is laid out for a phone (its title, outline and part one under
+// the other) and the student's bar takes three lines.
+$phone: 720px;

@@ -398,8 +398,9 @@
                         popupWidth={400}
                         listClass="region-list"
                         onToggle={(row) => foldChoices.set(String(row.key), !!row.expanded)}
-                        wrapperStyle="height: 100%;"
-                        style="padding: 0.4rem 0.6rem; height: 100%; gap: 0.4rem; font-size: 0.8rem; border: 1px solid var(--memory-control-border); border-radius: 0.4rem; background-color: var(--secondary); color: var(--secondary-text);"
+                        look="outlined"
+                        compact
+                        fill
                         onChange={(address) => {
                             if (address !== undefined) {
                                 error = ''
@@ -484,6 +485,7 @@
 
 <style lang="scss">
     @use '../../../../styles/radius.scss' as *;
+    @use '../../../../styles/type.scss';
 
     /* The address field, the region picker and its list keep the look they had before the
        design system, in the panel's own --secondary rather than a field's --tertiary (owner,
@@ -496,16 +498,14 @@
         width: 100%;
         min-width: 0;
     }
-    /* the region picker's list in the panel's colours, edged in --tertiary; --line is the edge
-       its header's separator and the swatches read. Under .region-picker, which outweighs the
-       Select's own Popover surface */
+    /* the region picker's list in the panel's colours, edged in --tertiary: --line is the edge
+       the Select's solid Popover surface draws, and its header's separator and the swatches read
+       it. Under .region-picker, which outweighs that surface */
     .region-picker :global(.region-list) {
         --line: var(--tertiary);
-        border: 1px solid var(--tertiary);
-        border-radius: 0.4rem;
+        --surface-radius: var(--r-control);
         background-color: var(--secondary);
         color: var(--secondary-text);
-        backdrop-filter: none;
     }
     /* the filter and the toggle above the options, opaque in the list's colour */
     .region-picker :global(.region-list > .popup-header) {
@@ -544,9 +544,7 @@
     .destination small {
         margin-left: auto;
         color: var(--text-muted);
-        font-family: var(--font-mono);
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
+        @include type.machine-value;
     }
     .data-label {
         padding-left: 1.3rem;
@@ -580,7 +578,7 @@
             left: calc(-1 * var(--reach-left));
             width: calc(var(--reach-left) + 1rem + var(--reach-right));
             /* the corners of the option it starts at the edge of, in the Select's list */
-            border-radius: nested-radius(var(--r-overlay), $border: 1px, $inset: 0.25rem);
+            border-radius: nested-radius(var(--surface-radius), $border: 1px, $inset: 0.25rem);
         }
         &:hover::before {
             background: color-mix(in srgb, currentColor 18%, transparent);
@@ -608,7 +606,11 @@
         border-radius: 0.2rem;
         flex-shrink: 0;
     }
+    /* an outlined Select in the panel's colours and edge, as the address box beside it is */
     .region-picker {
+        --select-edge: var(--memory-control-border);
+        --select-fill: var(--secondary);
+        --select-text: var(--secondary-text);
         flex: 0 1 11rem;
         min-width: 0;
         max-width: 45%;
@@ -665,10 +667,8 @@
     .hex-address-input,
     .address-completion {
         padding: 0.3rem 0.3rem 0.3rem 0;
+        @include type.machine-value;
         font-size: 1rem;
-        font-family: var(--font-mono);
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
     }
     .address-completion {
         position: absolute;

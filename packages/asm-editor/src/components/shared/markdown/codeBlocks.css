@@ -11,8 +11,8 @@ pre.code-block {
     padding: 0.4rem 1rem;
     border: var(--wb-card-edge, 1px solid var(--line));
     border-radius: var(--wb-radius, var(--r-control));
-    background: var(--secondary) !important;
-    color: var(--secondary-text) !important;
+    background: var(--secondary);
+    color: var(--secondary-text);
     box-shadow: none;
     overflow: auto;
     white-space: pre;

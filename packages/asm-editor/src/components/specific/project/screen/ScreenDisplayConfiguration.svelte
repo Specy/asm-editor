@@ -54,8 +54,6 @@
 
     let open = $state(false)
     let panel: HTMLDivElement | undefined = $state()
-    /** The popover's arrow, which stands out of it towards the button; $arrow in the styles. */
-    const ARROW = 6
     let buttonWidth = $state(0)
     let popoverWidth = $state(0)
     let popoverHeight = $state(0)
@@ -105,7 +103,6 @@
                 height={popoverHeight}
                 side="bottom"
                 at={popoverWidth - buttonWidth / 2}
-                arrow={ARROW}
             />
             <DisplayConfigurationForm {display} {onChange} {origin} {baseLabel} />
         </div>
@@ -141,7 +138,8 @@
         color: inherit;
     }
 
-    $arrow: 6px;
+    /* PopoverOutline's arrow, which stands out of it towards the button */
+    $arrow: popover.$arrow;
 
     /* a Popover, as the menus are: its outline, arrow and all, is drawn behind it, so it draws no
        surface of its own; the padding keeps the room the edge takes */
@@ -150,7 +148,7 @@
         position: absolute;
         top: calc(100% + 0.3rem + #{$arrow});
         right: 0;
-        z-index: 10;
+        z-index: var(--z-window);
         display: flex;
         flex-direction: column;
         gap: 0.4rem;

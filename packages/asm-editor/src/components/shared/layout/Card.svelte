@@ -1,7 +1,7 @@
 <script lang="ts">
     /**
      * The page **Card** (CONTEXT.md): a panel laid on a page, drawn on the Workbench's card tokens
-     * (`workbench.css`, design-system.md D1), the card surface inside a 1px hairline edge with the
+     * (`styles/cards.css`, design-system.md D1), the card surface inside a 1px hairline edge with the
      * Card radius, as a project card is. Given `href` it is a link, the whole card, and only then
      * does it take the hover, its surface a step lighter. A card that holds more than one action
      * marks its main link with the global class `card-cover`: that link stretches over the card,
@@ -15,7 +15,7 @@
     import type { Snippet } from 'svelte'
     import type { HTMLAttributes } from 'svelte/elements'
     import type { ResolvedPathname } from '$app/types'
-    import '#cmp/specific/workbench/workbench.css'
+    import '#src/styles/cards.css'
 
     interface Props extends HTMLAttributes<HTMLElement> {
         /** Where the card leads, resolved (`resolve()`, `resolveHref()`): the card is then one link. */
