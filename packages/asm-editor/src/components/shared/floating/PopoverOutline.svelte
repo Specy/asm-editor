@@ -46,13 +46,16 @@
     }: Props = $props()
 
     const id = $props.id()
-    const { shadow } = popoverElevation()
+    //derived, so read only once the outline is drawn: the root's font size is a computed style,
+    //and reading it as each of a register panel's hidden hover cards mounted forced a style
+    //recalculation per card, tens of milliseconds a Step
+    const shadow = $derived(popoverElevation().shadow)
     const rounding = $derived(corner === 'control' ? tooltipRadius() : popoverElevation().radius)
     const size = $derived(at === undefined ? 0 : arrow)
     const shape = $derived({ radius: rounding, side, at: at ?? 0, arrow: size, offset: size })
     const path = $derived(outlinePath(width, height, shape))
     //the shadow's room past the outline on every side, so neither the mask nor the filter cuts it off
-    const reach = shadow.y + shadow.blur * 3
+    const reach = $derived(shadow.y + shadow.blur * 3)
     const region = $derived({
         x: -reach,
         y: -reach,

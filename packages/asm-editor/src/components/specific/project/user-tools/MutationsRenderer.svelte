@@ -7,8 +7,6 @@
         statusRegisterNames: string[]
         /** The Target, which names the widths a written mutation reports. */
         language: AvailableLanguages
-        /** The processor the program is written for, which says why its cycles are an estimate. */
-        processor?: string
         /**
          * Fill a section on its surface, with contrasting entries and height left to the section.
          */
@@ -23,7 +21,6 @@
         steps,
         statusRegisterNames,
         language,
-        processor,
         docked = false,
         onUndo,
         onHighlight
@@ -51,7 +48,6 @@
         <MutationStep
             {docked}
             {language}
-            {processor}
             flags={statusRegisterNames}
             {step}
             undoBlocked={undoBlocked(i)}

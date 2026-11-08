@@ -479,7 +479,7 @@
                     <label {@attach tooltip(place.title)}>
                         <Switch
                             checked={lookIn[place.key]}
-                            size="xs"
+                            size="sm"
                             onChange={(checked) => search.setLookIn(place.key, checked)}
                         />
                         {place.label}
@@ -809,6 +809,14 @@
     }
 
     /* its fields shown: tinted as under the pointer, and in the panel's text */
+    /* Files to include and exclude, square and as tall as the field beside it (owner, 2026-11-09) */
+    .query-row > :global(.details) {
+        align-self: stretch;
+        width: auto;
+        height: auto;
+        aspect-ratio: 1;
+    }
+
     .query-row :global(.details[aria-expanded='true']) {
         color: inherit;
         background-color: var(--hover-bg);
@@ -938,9 +946,11 @@
         color: var(--text-muted);
     }
 
+    /* the instruction before a query, in the middle of the panel's width (owner, 2026-11-09) */
     .note {
         margin: 0;
         padding: 0.3rem var(--search-text-inset);
+        text-align: center;
         font-size: var(--fs-caption);
         line-height: 1.4;
         color: var(--hint);

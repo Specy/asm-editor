@@ -350,7 +350,7 @@
 {/snippet}
 
 {#snippet editorButton()}
-    <ButtonLink href={editorHref} style="gap: 0.6rem" {@attach tooltip('Open the editor')}>
+    <ButtonLink href={editorHref} {@attach tooltip('Open the editor')}>
         {#if shouldGoToCurrentProjects}
             <span class="icon" aria-hidden="true"><FaFolderOpen /></span>
             Go to your projects
@@ -398,19 +398,14 @@
                     </p>
                     <div class="actions">
                         {@render editorButton()}
-                        <ButtonLink href={coursesHref} kind="secondary" style="gap: 0.6rem">
+                        <ButtonLink href={coursesHref} kind="secondary">
                             <span class="icon" aria-hidden="true"><FaGraduationCap /></span>
                             Courses
                         </ButtonLink>
                     </div>
                     <!-- always takes its room, so the centred hero does not move when the browser offers the install -->
                     <div class="install actions" class:hidden={!installEvent}>
-                        <Button
-                            kind="secondary"
-                            style="gap: 0.6rem"
-                            onClick={install}
-                            disabled={!installEvent}
-                        >
+                        <Button kind="secondary" onClick={install} disabled={!installEvent}>
                             <span class="icon"><FaDownload /></span>
                             Install the app
                         </Button>
@@ -566,7 +561,7 @@
                             {/if}
                         {:else}
                             <span class="play">
-                                <ButtonLink href={demo.path} style="gap: 0.6rem">
+                                <ButtonLink href={demo.path}>
                                     <span class="icon"><FaPlay /></span>
                                     Play {demo.name}
                                 </ButtonLink>
@@ -592,7 +587,7 @@
                     </p>
                 </div>
                 <div class="head-links">
-                    <ButtonLink href={resolve('/documentation')} style="gap: 0.6rem">
+                    <ButtonLink href={resolve('/documentation')}>
                         Open the documentation
                         <span class="chevron"><FaChevronRight /></span>
                     </ButtonLink>
@@ -730,7 +725,6 @@
             <ButtonLink
                 href="https://doi.org/10.1109/EDUCON67543.2026.11574463"
                 kind="secondary"
-                style="gap: 0.6rem"
                 title="Read the EDUCON 2026 paper"
             >
                 Read the paper <span class="chevron"><FaExternalLinkAlt /></span>
@@ -748,7 +742,7 @@
             <p>Start from an empty Project, or open an example and change it.</p>
             <div class="actions">
                 {@render editorButton()}
-                <ButtonLink href={examplesHref} kind="secondary" style="gap: 0.6rem">
+                <ButtonLink href={examplesHref} kind="secondary">
                     <span class="icon" aria-hidden="true"><FaCode /></span>
                     Open an example
                 </ButtonLink>
@@ -1230,9 +1224,9 @@
             background: var(--hover-bg);
         }
 
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-        }
+        /* the keyboard's ring inside its round edge, as the other controls in the demo browser
+           draw theirs */
+        @include focus-ring($inset: true);
     }
 
     .address {

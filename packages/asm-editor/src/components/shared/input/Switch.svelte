@@ -3,8 +3,8 @@
      * An on/off control that slides rather than ticks: the track takes the accent color and the
      * knob crosses it. A button with the switch role, so it is focusable and toggles with Space and
      * Enter like a native checkbox, and the label around it stays free to be plain text. Its
-     * `size` is the room it sits in: `md`, a form's or a Settings row's; `sm`, a Popover's rows
-     * (the share menu); `xs`, a side panel's dense rows (the Search panel's Look in).
+     * `size` is the room it sits in: `md`, a form's or a Settings row's; `sm`, a dense row's, a
+     * Popover's (the share menu) or a side panel's (the Search panel's Look in).
      */
     import type { HTMLButtonAttributes } from 'svelte/elements'
 
@@ -12,7 +12,7 @@
     interface Props extends Omit<HTMLButtonAttributes, 'disabled' | 'style' | 'onchange'> {
         checked: boolean
         disabled?: boolean
-        size?: 'xs' | 'sm' | 'md'
+        size?: 'sm' | 'md'
         style?: string
         onChange?: (checked: boolean) => void
     }
@@ -74,11 +74,6 @@
     .switch.sm {
         --switch-width: 2.2rem;
         --switch-height: 1.2rem;
-    }
-    .switch.xs {
-        --switch-width: 1.9rem;
-        --switch-height: 1.05rem;
-        --switch-padding: 0.15rem;
     }
     /* exactly the room inside the padding and the edge, so it sits centred, and its travel when on,
        the width less the height, is the same as without the edge */

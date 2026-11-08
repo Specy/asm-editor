@@ -24,6 +24,7 @@
     import { type AvailableLanguages, makeProject } from '#lib/Project.svelte.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import { stuckToBottom } from '#lib/stuckToBottom.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import type { PageData } from './$types'
@@ -48,6 +49,8 @@
 
     let name = $state('')
     let description = $state('')
+    /** Whether the footer is held at the window's bottom over the fields, which raises it with a shadow. */
+    let footerStuck = $state(false)
     let language: AvailableLanguages = $state('RISC-V-64')
 
     /** The mark of each thing a set can do, as the owner's mockup draws them (2026-11-08). */
@@ -215,7 +218,11 @@
                         bind:value={description}
                     />
                 </div>
-                <div class="card-footer">
+                <div
+                    class="card-footer"
+                    class:stuck={footerStuck}
+                    {@attach stuckToBottom((stuck) => (footerStuck = stuck))}
+                >
                     <p class="summary">
                         <LanguageSquare {language} />
                         <!-- the set and the template apart by the row's gap, no mark between them -->
@@ -230,7 +237,7 @@
                         >
                             Cancel
                         </ButtonLink>
-                        <Button type="submit" style="gap: 0.45rem">
+                        <Button type="submit">
                             Create project
                             <Icon size="caption"><FaArrowRight /></Icon>
                         </Button>
@@ -354,6 +361,12 @@
 
     .summary {
         @include form-card.summary;
+    }
+    /* a phone keeps the footer to its actions: the set and the template are on the page above */
+    @media (max-width: form-card.$phone) {
+        .summary {
+            display: none;
+        }
     }
 
     .summary-language {

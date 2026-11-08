@@ -92,9 +92,18 @@ $phone: 600px;
     gap: 0.5rem 1rem;
     padding: 0.7rem var(--form-inset, 1.25rem);
     border-top: 1px solid var(--line);
-    background-color: var(--wb-surface);
+    /* a shade raised from the Card, as a surface over it is, so it reads as its own bar over the
+       fields passing under it (owner, 2026-11-09) */
+    background-color: color-mix(in srgb, var(--wb-surface) 55%, var(--tertiary));
     border-radius: 0 0 nested-radius($card-bottom, $border: 1px)
         nested-radius($card-bottom, $border: 1px);
+    transition: box-shadow var(--dur-base) ease;
+
+    /* while it is held over content (the caller's `stuck`, stuckToBottom.ts), a shadow cast up
+       over what scrolls under it; at the Card's end it sits flat in its place */
+    &.stuck {
+        box-shadow: 0 -0.4rem 1rem -0.35rem rgb(0 0 0 / 0.3);
+    }
 }
 
 // What will be made, in the footer: in Fira Code, muted, on one line, or wrapping with `$wrap`.

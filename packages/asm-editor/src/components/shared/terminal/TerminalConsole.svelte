@@ -475,6 +475,10 @@
         scrollbar-gutter: stable;
         padding: var(--terminal-padding, 0.5rem 0.5rem 0.5rem 0.8rem);
         font-family: var(--font-mono);
+        /* square unless its host's card rounds the corners it sits in (the bottom panel's lower
+           two), so its ring and its read's outline follow that card's curve rather than being cut
+           by it */
+        border-radius: var(--terminal-corners, 0);
     }
 
     .interactive {

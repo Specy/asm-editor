@@ -31,11 +31,12 @@
      * be chosen, Right unfolds it and Left folds it, and Enter, Space or a click toggles one that
      * cannot be chosen; the `item` snippet's `toggle` is for a chevron on one that can.
      */
-    import { tick, type Component, type Snippet } from 'svelte'
+    import { tick, type Snippet } from 'svelte'
     import { cubicOut } from 'svelte/easing'
     import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import type { HTMLButtonAttributes } from 'svelte/elements'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import RoundChevronDown from '~icons/ic/round-keyboard-arrow-down'
 
     type SelectOption = {
         key: string | number
@@ -74,8 +75,6 @@
         onToggle?: (option: SelectOption) => void
         /** Always opens the list above the control, as one at the bottom of the screen wants. */
         openAbove?: boolean
-        /** An icon drawn in place of the triangle, turned over while the list is open. */
-        chevron?: Component
         /** Smaller, for a panel's rows of settings. */
         compact?: boolean
         /**
@@ -118,7 +117,6 @@
         trigger,
         popupWidth,
         openAbove = false,
-        chevron,
         compact = false,
         look = 'field',
         fill = false,
@@ -402,14 +400,10 @@
         <span class="label ellipsis"
             >{#if trigger}{@render trigger()}{:else}{label}{/if}</span
         >
-        {#if chevron}
-            {@const Chevron = chevron}
-            <span class="chevron-icon" class:open aria-hidden="true"
-                ><Icon size="micro"><Chevron /></Icon></span
-            >
-        {:else}
-            <span class="chevron" aria-hidden="true"></span>
-        {/if}
+        <!-- a rounded chevron, turned over while the list is open (owner, 2026-11-09) -->
+        <span class="chevron" class:open aria-hidden="true"
+            ><Icon size="lead"><RoundChevronDown /></Icon></span
+        >
     </button>
 
     {#if open}
@@ -558,24 +552,17 @@
         min-width: 0;
     }
 
+    /* the glyph sits in the middle half of its box: the box reaches into the room round it, so
+       the chevron stands where the old triangle did and the control is no wider */
     .chevron {
-        flex-shrink: 0;
-        width: 0;
-        height: 0;
-        border-left: 0.32rem solid transparent;
-        border-right: 0.32rem solid transparent;
-        border-top: 0.36rem solid currentColor;
-        opacity: 0.8;
-    }
-
-    .chevron-icon {
         display: flex;
         flex-shrink: 0;
+        margin: -0.3rem -0.3rem -0.3rem -0.15rem;
         opacity: 0.8;
         transition: transform var(--dur-base) ease;
     }
 
-    .chevron-icon.open {
+    .chevron.open {
         transform: rotate(180deg);
     }
 

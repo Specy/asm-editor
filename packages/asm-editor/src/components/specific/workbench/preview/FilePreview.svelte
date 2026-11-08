@@ -316,8 +316,6 @@
     }
     /* the notice's two actions, Buttons (D5), their icons a little smaller than their words */
     .pdf-actions :global(.btn) {
-        gap: 0.45rem;
-
         :global(svg) {
             width: var(--fs-small);
             height: var(--fs-small);

@@ -1815,7 +1815,6 @@
     }
     .progress :global(.btn.step) {
         flex: none;
-        gap: 0.35rem;
         padding-inline: 0.55rem;
     }
     .progress :global(.btn.step svg) {

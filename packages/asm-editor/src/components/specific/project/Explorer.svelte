@@ -1152,6 +1152,7 @@
 
 <style lang="scss">
     @use '../../../styles/rows.scss';
+    @use '../../../styles/focus.scss' as *;
     @use '../../../styles/field.scss';
 
     /* at most a quarter of the panel each, their lists scrolling under their titles past that,
@@ -1391,6 +1392,9 @@
         font-size: inherit;
         text-align: left;
         cursor: pointer;
+        /* the row's keyboard ring inside its edge, as `rows.row` draws one: outside it, the tree
+           cut it off at the sides */
+        @include focus-ring($inset: true);
     }
 
     .editing .file-select {

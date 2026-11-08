@@ -603,15 +603,13 @@
         height: 100%;
         color: inherit;
     }
-    /* in line with the list under it: the same inset, and the same room kept for a scrollbar */
+    /* the same room on every side of the field, as round the search palette's (owner, 2026-11-09) */
     .search {
         display: flex;
         align-items: center;
         gap: 0.4rem;
         flex: none;
-        padding: 0.5rem var(--documentation-spacing);
-        overflow: hidden;
-        scrollbar-gutter: stable;
+        padding: 0.5rem;
     }
     .field {
         flex: 1;
@@ -801,6 +799,9 @@
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         box-shadow: var(--shadow-1);
+        /* the room under it the Chapter's last entry has under itself (0.5rem with the rows' gap),
+           so its first entry does not sit on the heading (owner, 2026-11-09) */
+        margin-bottom: 0.45rem;
     }
     /* a prose entry's title, brought back into view by Show less, lands below the pinned heading */
     .chapter :global(.prose-title) {

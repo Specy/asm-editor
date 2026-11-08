@@ -26,7 +26,7 @@
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { placeCard, type Box } from '#cmp/shared/floating/floating.ts'
-    import { POPOVER_ARROW, popoverElevation } from '#src/styles/elevation.ts'
+    import { POPOVER_ARROW, tooltipRadius } from '#src/styles/elevation.ts'
     import { remToPx } from '#src/styles/rem.ts'
     import { usesCommandKey } from '#stores/shortcutsStore.ts'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
@@ -563,7 +563,7 @@
                 side: 'bottom',
                 gap: 2,
                 arrow: POPOVER_ARROW,
-                radius: popoverElevation().radius,
+                radius: tooltipRadius(),
                 align: 'start',
                 margin: 4,
                 viewport: { width: area.clientWidth, height: area.clientHeight }
@@ -1055,6 +1055,7 @@
                                 height={hoverHeight}
                                 side={hoverPlace.side}
                                 at={hoverPlace.arrow}
+                                corner="control"
                                 solid
                             />
                         {/if}

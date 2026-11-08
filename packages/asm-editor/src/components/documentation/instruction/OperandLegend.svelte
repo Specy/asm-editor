@@ -169,6 +169,17 @@
         line-height: 1.5;
         overflow-wrap: anywhere;
     }
+    /* on a phone a symbol over its description, the description the whole width: beside it, the
+       widest symbol's column left room unused at the left of every short one (owner, 2026-11-09) */
+    @media (max-width: 600px) {
+        dl {
+            grid-template-columns: minmax(0, 1fr);
+            width: auto;
+        }
+        .line {
+            row-gap: 0.15rem;
+        }
+    }
     .more {
         margin-left: 0.4rem;
         font-size: 0.85em;

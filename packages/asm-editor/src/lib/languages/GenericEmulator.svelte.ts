@@ -380,11 +380,17 @@ export abstract class GenericEmulator<T, R extends string>
     /** Number of core operations currently in flight, see `duringCoreOperation`. */
     private coreOperations = 0
     /**
-     * The reactive twin of `coreOperations`, kept in step with it: the panels bind to `canPoke`,
-     * which has to re-evaluate when a Run, Step or input handler takes the Core and again when it
-     * gives it back, and a plain field would never tell them.
+     * The reactive twin of `coreOperations`: the panels bind to `canPoke`, which has to re-evaluate
+     * when a Run, Step or input handler takes the Core and again when it gives it back, and a plain
+     * field would never tell them. It is set only once an operation outlasts the task that started
+     * it (`announceCoreBusy`), so a Step that settles in its own task, nearly every Step, leaves it
+     * alone: each change of it draws every register value again, without its Poke button and then
+     * with it, which was most of what a Step cost. What refuses a Poke or an Undo meanwhile reads
+     * `coreOperations` itself.
      */
     private coreBusy = $state(false)
+    /** Whether `announceCoreBusy` has a look at `coreOperations` waiting for the next task. */
+    private coreBusyCheck = false
     private coreOperationTail: Promise<void> = Promise.resolve()
     private coreIdleWaiters: (() => void)[] = []
     protected readonly executionController = new ExecutionController(() => Prompt.cancel())
@@ -616,7 +622,7 @@ export abstract class GenericEmulator<T, R extends string>
      */
     private async duringCoreOperation<T>(operation: () => Promise<T>): Promise<T> {
         this.coreOperations += 1
-        this.coreBusy = true
+        this.announceCoreBusy()
         const previous = this.coreOperationTail
         let release!: () => void
         this.coreOperationTail = new Promise<void>((resolve) => {
@@ -628,13 +634,23 @@ export abstract class GenericEmulator<T, R extends string>
         } finally {
             release()
             this.coreOperations -= 1
-            this.coreBusy = this.coreOperations > 0
             if (this.coreOperations === 0) {
+                this.coreBusy = false
                 const waiters = this.coreIdleWaiters
                 this.coreIdleWaiters = []
                 for (const resolve of waiters) resolve()
             }
         }
+    }
+
+    /** Sets `coreBusy` in the next task if a Core operation is still in flight by then. */
+    private announceCoreBusy(): void {
+        if (this.coreBusy || this.coreBusyCheck) return
+        this.coreBusyCheck = true
+        setTimeout(() => {
+            this.coreBusyCheck = false
+            if (this.coreOperations > 0) this.coreBusy = true
+        })
     }
 
     private waitForIdleCore(): Promise<void> {
@@ -1796,7 +1812,7 @@ export abstract class GenericEmulator<T, R extends string>
      */
     protected relocateInstructions(): void {
         if (!this.getInstance() || !this.state.canExecute) return
-        if (this.coreBusy && !this.state.interrupt) return
+        if (this.coreOperations > 0 && !this.state.interrupt) return
         try {
             if (this.state.terminated) this.selectLastExecuted(this.state.line)
             else this.selectInstruction(this.stopInstruction())
@@ -2773,8 +2789,9 @@ export abstract class GenericEmulator<T, R extends string>
      * ([the design record](../../../../../docs/design/pokes.md)): after a Build, after a Step, at a
      * breakpoint or after a Pause, with no Interrupt pending and the program not terminated. A Poke
      * is a synchronous Core operation like Undo, so it is refused too while a Run, Step or input
-     * handler owns the Core. The Project's read-only flag is the caller's half of the rule; the
-     * Emulator knows nothing about Projects.
+     * handler owns the Core, which this says from the task after the one the operation started in
+     * (`coreBusy`); `pokeRegisters` and `pokeMemory` refuse from its start. The Project's
+     * read-only flag is the caller's half of the rule; the Emulator knows nothing about Projects.
      */
     get canPoke(): boolean {
         return (
@@ -2831,7 +2848,8 @@ export abstract class GenericEmulator<T, R extends string>
      * nothing.
      */
     pokeRegisters(fileId: string, writes: RegisterPoke[]): boolean {
-        if (!this.canPoke || writes.length === 0 || !this.getInstance()) return false
+        if (!this.canPoke || this.coreOperations > 0) return false
+        if (writes.length === 0 || !this.getInstance()) return false
         const file = this.state.registerFiles.find((candidate) => candidate.id === fileId)
         if (!file) return false
         if (!writes.every((write) => this.canPokeRegister(fileId, write.register))) return false
@@ -2902,7 +2920,8 @@ export abstract class GenericEmulator<T, R extends string>
      * already what memory holds.
      */
     pokeMemory(address: bigint, bytes: Uint8Array): boolean {
-        if (!this.canPoke || bytes.length === 0 || !this.getInstance()) return false
+        if (!this.canPoke || this.coreOperations > 0) return false
+        if (bytes.length === 0 || !this.getInstance()) return false
         //the memory view offers no Poke there, and the Core would refuse the write anyway
         if (readOnlyMemoryAt(this.readOnlyMemory, address, BigInt(bytes.length))) return false
         try {

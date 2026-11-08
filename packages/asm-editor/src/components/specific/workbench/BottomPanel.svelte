@@ -157,8 +157,14 @@
 </section>
 
 <style lang="scss">
+    @use '../../../styles/radius.scss' as *;
+
     .bottom-panel {
         --wb-output-padding: 0.7rem 0.9rem;
+        /* the Terminal sits in the card's lower corners: its focus ring rounds with them, inside
+           the card's 1px edge */
+        --terminal-corners: 0 0 #{nested-radius(var(--wb-radius), $border: 1px)}
+            #{nested-radius(var(--wb-radius), $border: 1px)};
         display: flex;
         flex-direction: column;
         min-height: 0;

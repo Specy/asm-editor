@@ -11,11 +11,6 @@
     import { sizeName } from '#lib/languages/sizeNames.ts'
     import { statusFlagsFromBits } from '#lib/languages/statusFlagBits.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import {
-        CYCLE_ESTIMATE_MARK,
-        cycleEstimateReason,
-        formatCycles
-    } from '#lib/languages/cycles.ts'
 
     interface Props {
         step: ExecutionStep
@@ -24,11 +19,6 @@
         flags: string[]
         /** The Target, which names the width a written mutation reports (`sizeNames.ts`). */
         language: AvailableLanguages
-        /**
-         * The processor the program is written for, as the panels name it, which says why its
-         * cycles are an estimate: `68020`, or `68000 with bit fields`.
-         */
-        processor?: string
         /** Contrast with the section surface when shown in a docked History panel. */
         docked?: boolean
         /** "Undo to here" was pressed. */
@@ -41,7 +31,6 @@
         step,
         flags,
         language,
-        processor,
         undoBlocked,
         docked = false,
         onUndo,
@@ -219,24 +208,6 @@
     }
 </script>
 
-<!--
-    what the step took on a Target that counts cycles, an M68K's with its processor's timing, marked
-    "≈ 8" where that is an estimate, the 68020's cache case or a bit field's under `opt bit`, which
-    the hover explains
--->
-{#snippet cyclesRow(cycles: number)}
-    <div class="row space-between">
-        <span> Cycles </span>
-        {#if step.cyclesEstimate}
-            <span class="cycles" {@attach tooltip(`An estimate. ${cycleEstimateReason(processor)}`)}
-                >{CYCLE_ESTIMATE_MARK} {formatCycles(cycles)}</span
-            >
-        {:else}
-            <span class="cycles">{formatCycles(cycles)}</span>
-        {/if}
-    </div>
-{/snippet}
-
 <div class="column step" class:docked>
     <div class="step-header column">
         <button
@@ -284,9 +255,6 @@
                     {step.title ?? 'IRQ'}
                 {/if}
             </div>
-            {#if step.cycles !== undefined}
-                {@render cyclesRow(step.cycles)}
-            {/if}
         {:else}
             <div class="row space-between">
                 <span> PC </span>
@@ -346,9 +314,6 @@
                         {/each}
                     </span>
                 </div>
-            {/if}
-            {#if step.cycles !== undefined}
-                {@render cyclesRow(step.cycles)}
             {/if}
         {/if}
     </div>
@@ -410,10 +375,6 @@
         font-size: var(--fs-small);
         overflow-wrap: anywhere;
         text-align: right;
-    }
-    .cycles {
-        font-family: var(--font-mono);
-        font-size: var(--fs-small);
     }
     .stretch {
         font-size: var(--fs-small);

@@ -20,7 +20,7 @@
     const feedback = new CopyFeedback()
 </script>
 
-<!-- the room between the label's icon and its words, which the caller's style may change -->
-<Button {...rest} style={`gap: 0.45rem; ${style}`} onClick={() => void feedback.run(copy)}>
+<!-- the room between the label's icon and its words is the Button's own gap (--btn-gap), which the caller's style may change -->
+<Button {...rest} {style} onClick={() => void feedback.run(copy)}>
     <CopyLabel copied={feedback.copied}>{@render children?.()}</CopyLabel>
 </Button>

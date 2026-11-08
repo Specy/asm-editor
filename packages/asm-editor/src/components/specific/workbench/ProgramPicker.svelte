@@ -11,7 +11,6 @@
      */
     import Select from '#cmp/shared/input/Select.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import FaChevronDown from '~icons/fa-solid/chevron-down'
     import { useWorkbench } from './workbenchContext'
 
     const { session, ui } = useWorkbench()
@@ -44,7 +43,6 @@
             ariaLabel="Program"
             popupWidth={240}
             openAbove
-            chevron={FaChevronDown}
             look="bare"
             compact={ui.deviceClass === 'phone'}
         >

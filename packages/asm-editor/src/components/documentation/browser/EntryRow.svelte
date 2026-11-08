@@ -241,6 +241,9 @@
     .in-panel > .body {
         --entry-text-size: var(--fs-body);
         --entry-caption-size: var(--fs-small);
+        /* half the room at its sides of the body on a page, so the text and the code get more of
+           the panel's width (owner, 2026-11-09) */
+        padding-inline: 0.875rem 0.35rem;
     }
     /* An expanded entry's name stays pinned while its body scrolls under it: just under the pinned
        Chapter and category headings (`--entry-head-top`, DocumentationBrowser), opaque in the row's

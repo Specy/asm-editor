@@ -4,12 +4,15 @@
     max-width: 62rem;
     padding: 1.5rem 0 3rem;
 }
+/* the paragraph under the title, as every content page's intro is (contentPages.css): its size,
+   its 1.65 lines in a 70ch measure, muted, a step smaller on a phone */
 .blog-lead {
     font-family: var(--font-ui);
     font-size: var(--fs-lead);
-    line-height: 1.5;
+    font-weight: 400;
+    line-height: 1.65;
     color: var(--text-muted);
-    max-width: 65ch;
+    max-width: 70ch;
 }
 .blog-tags {
     display: flex;
@@ -306,10 +309,6 @@
     line-height: 1.5;
     color: var(--text-muted);
 }
-.blog-article ._markdown h2,
-.blog-article ._markdown h3 {
-    scroll-margin-top: var(--anchor-offset);
-}
 .blog-article-footer {
     max-width: 70ch;
     margin: 3rem auto 0;
@@ -350,6 +349,9 @@
     }
 }
 @media (max-width: 600px) {
+    .blog-lead {
+        font-size: var(--fs-prose);
+    }
     .blog-intro {
         padding-top: 0.75rem;
     }

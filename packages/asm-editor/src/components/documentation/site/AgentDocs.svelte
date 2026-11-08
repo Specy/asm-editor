@@ -61,7 +61,7 @@
                 <CopyButton
                     kind="secondary"
                     size="sm"
-                    style={`${BUTTON_STYLE} padding: 0 0.75rem; gap: 0.4rem;`}
+                    style={`${BUTTON_STYLE} padding: 0 0.75rem;`}
                     copy={() => copyText(AGENT_MESSAGE, 'Message')}
                 >
                     <Icon size="small"><FaCopy /></Icon>

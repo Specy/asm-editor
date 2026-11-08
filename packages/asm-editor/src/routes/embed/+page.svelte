@@ -538,7 +538,7 @@
                                 </div>
                             </div>
                             <CopyButton
-                                style="width: 100%; gap: 0.5rem"
+                                style="width: 100%"
                                 disabled={!generatedCode}
                                 copy={() => copyText(shareText, shareName)}
                             >

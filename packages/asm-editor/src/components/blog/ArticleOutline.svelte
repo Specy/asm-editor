@@ -20,7 +20,10 @@
             frame = 0
             let current = headings[0]?.id ?? ''
             for (const heading of headings) {
-                if (heading.getBoundingClientRect().top > 100) break
+                //a heading is the current one once it reaches the line a jump to it lands on (its
+                //scroll margin, --anchor-offset), so following a link marks the section opened
+                const landing = parseFloat(getComputedStyle(heading).scrollMarginTop) || 0
+                if (heading.getBoundingClientRect().top > landing + 1) break
                 current = heading.id
             }
             if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) {

@@ -419,7 +419,8 @@
        palette's corner are named, since the field's clear button reaches across them to the
        palette's top edge, the rule and the palette's edge (SearchField's `bare`) */
     .top {
-        --band-pad-block: 0.3rem;
+        /* the same room above, below and at the sides of the field (owner, 2026-11-09) */
+        --band-pad-block: 0.5rem;
         --band-pad-end: 0.5rem;
         --band-corner: #{nested-radius(var(--r-overlay), $border: 1px)};
         display: flex;

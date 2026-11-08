@@ -777,7 +777,6 @@
     /* the bar's toggles, small ghost Buttons (D5) that keep the bar's height: a pressed one is the
        accent, as the drawing buffer shown in place of the visible one is */
     :global(.btn.ghost.sm.screen-action) {
-        gap: 0.3rem;
         padding: 0.15rem 0.4rem;
     }
 
