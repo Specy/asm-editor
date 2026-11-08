@@ -363,7 +363,7 @@
         <Page hasNavbar cropped="70rem" contentStyle="padding: 1rem">
             <div class="embed-page">
                 <header class="page-head">
-                    <Title style="margin-bottom: 0.5rem">Embed a program</Title>
+                    <Title>Embed a program</Title>
                     <p class="lead">Put a working editor with your program on any web page.</p>
                 </header>
 
@@ -643,11 +643,11 @@
         flex-direction: column;
         gap: 1rem;
         width: 100%;
-        padding-top: 1.5rem;
+        padding-top: 0.5rem;
         padding-bottom: 4rem;
 
         @media screen and (max-width: 650px) {
-            padding: 0.75rem 0 3rem;
+            padding: 0.5rem 0 3rem;
         }
 
         @media screen and (max-width: 359px) {
@@ -656,8 +656,12 @@
         }
     }
 
-    .page-head {
-        margin-bottom: 0.5rem;
+    /* the title a step of the scale down (`--fs-h2`, where the other pages' is `--fs-h1`), with
+       less room above and under it, as the exam builder's (O-92), so the Preview starts higher
+       (the owner's exception for this page) */
+    .page-head :global(h1) {
+        margin: 0 0 0.35rem;
+        font-size: var(--fs-h2);
     }
 
     .lead {

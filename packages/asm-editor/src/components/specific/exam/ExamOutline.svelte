@@ -263,11 +263,27 @@
         @include outline.row-control;
     }
 
+    /* in a column as wide as Add section's plus and centred in it, so the numbers stand over the
+       plus */
     .number {
         flex: none;
         min-width: 0.9rem;
         color: var(--text-muted);
         font-variant-numeric: tabular-nums;
+        text-align: center;
+    }
+
+    /* a section's arrows only while the pointer is on its row or the keyboard is in it (they keep
+       their room, so the names do not move); always where nothing hovers */
+    @media (hover: hover) {
+        .row :global([data-move]) {
+            opacity: 0;
+            transition: opacity var(--dur-fast);
+        }
+        .row:hover :global([data-move]),
+        .row:focus-within :global([data-move]) {
+            opacity: 1;
+        }
     }
 
     .names {
@@ -292,7 +308,8 @@
         justify-content: flex-start;
         gap: 0.6rem;
         width: 100%;
-        padding-inline: outline.$row-padding-inline;
+        /* the row's padding less the Button's 1px edge, so the plus stands where the numbers do */
+        padding-inline: calc(#{outline.$row-padding-inline} - 1px);
         border-radius: 0 var(--r-chip) var(--r-chip) 0;
     }
     .add-icon {

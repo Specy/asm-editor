@@ -1,7 +1,5 @@
 <script lang="ts">
     import { tick } from 'svelte'
-    import { languageLabel } from '#lib/languages/languageLabel.ts'
-    import { languageAccent } from '#lib/languages/languageColors.ts'
     import { LANGUAGE_ORDER } from '#lib/languages/languageCapabilities.ts'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
@@ -81,23 +79,9 @@
      *  section by its id. */
     let current = $state<string>(DETAILS)
     /** The section shown, when the part shown is one. */
-    const currentSection = $derived(sections.find((section) => section.id === current))
     /** The exam link just made, while the browser would not copy it: it is nowhere else to copy. */
     let uncopiedExamUrl = $state('')
     let unlockPasswordField = $state<HTMLInputElement>()
-
-    /** The footer's summary of the exam: the sets its coding sections are written in, in the order
-     *  they first come, and how many sections it has. */
-    const examLanguages = $derived([
-        ...new Set(
-            sections
-                .filter((section) => section.type === ExamSectionType.AssemblyCoding)
-                .map((section) => (section as AssemblyCodingSection).language)
-        )
-    ])
-    const sectionCount = $derived(
-        `${sections.length} ${sections.length === 1 ? 'section' : 'sections'}`
-    )
 
     function addSection(type: ExamSectionType) {
         const section = createDefaultExamSection(type)
@@ -244,7 +228,9 @@
         <div class="title-room">
             <Header>Exam builder</Header>
         </div>
-        <!-- Create exam link is the part Card's footer, so nothing stands under the outline -->
+        <!-- Create exam link at the outline's foot, under Add section (owner, 2026-11-08: the part
+             Card has no footer), with the link to copy by hand over it when the browser would not
+             copy it -->
         <ExamOutline
             {sections}
             {current}
@@ -252,11 +238,28 @@
             onMove={moveSection}
             onAdd={addSection}
         >
-            {#snippet footer()}{/snippet}
+            {#snippet footer()}
+                {#if uncopiedExamUrl}
+                    <div class="link-fallback">
+                        <p class="link-note">
+                            The browser did not let the page copy the exam link. Copy it from here:
+                        </p>
+                        <textarea
+                            class="exam-link"
+                            aria-label="Exam link"
+                            readonly
+                            value={uncopiedExamUrl}></textarea>
+                    </div>
+                {/if}
+                <CopyButton copy={createExamUrl}>
+                    Create exam link
+                    <Icon size="caption"><FaArrowRight /></Icon>
+                </CopyButton>
+            {/snippet}
         </ExamOutline>
 
         <!-- the create page's Card: its sections under header bands, the first band the part's
-             name, and a footer with the exam at the left and the actions at the right -->
+             name (a section's with Delete section at its right) -->
         <Card element="section" class="part-card" padding="0" aria-labelledby="exam-part-title">
             {#if current === DETAILS}
                 <header class="band first">
@@ -336,6 +339,15 @@
                     {#if section.id === current}
                         <header class="band first">
                             <h2 id="exam-part-title">Section {i + 1}</h2>
+                            <Button
+                                kind="ghost"
+                                size="sm"
+                                class="delete-section"
+                                disabled={sections.length <= 1}
+                                onClick={() => removeSection(section.id)}
+                            >
+                                Delete section
+                            </Button>
                             <!-- on a phone the outline's arrows are in its Select's place -->
                             <div class="phone-moves">
                                 <IconButton
@@ -533,51 +545,6 @@
                     {/if}
                 {/each}
             {/if}
-
-            <!-- the create page's footer: what the exam is at the left, the actions at the right,
-                 held at the window's bottom until the Card's end comes up -->
-            <footer class="card-footer">
-                {#if uncopiedExamUrl}
-                    <div class="link-fallback">
-                        <p class="link-note">
-                            The browser did not let the page copy the exam link. Copy it from here:
-                        </p>
-                        <textarea
-                            class="exam-link"
-                            aria-label="Exam link"
-                            readonly
-                            value={uncopiedExamUrl}></textarea>
-                    </div>
-                {/if}
-                <p class="summary">
-                    {#each examLanguages as language (language)}
-                        <span class="summary-language">
-                            <span
-                                class="language-square"
-                                style:background-color={languageAccent(language)}
-                                aria-hidden="true"
-                            ></span>
-                            {languageLabel(language)}
-                        </span>
-                    {/each}
-                    <span class="summary-count">{sectionCount}</span>
-                </p>
-                <div class="actions">
-                    {#if currentSection}
-                        <Button
-                            kind="ghost"
-                            disabled={sections.length <= 1}
-                            onClick={() => removeSection(currentSection.id)}
-                        >
-                            Delete section
-                        </Button>
-                    {/if}
-                    <CopyButton copy={createExamUrl}>
-                        Create exam link
-                        <Icon size="caption"><FaArrowRight /></Icon>
-                    </CopyButton>
-                </div>
-            </footer>
         </Card>
     </div>
 </Page>
@@ -622,11 +589,6 @@
         justify-self: end;
         width: var(--outline-width);
         margin-right: var(--outline-gap);
-    }
-    /* the outline's foot holds nothing now that Create exam link is the Card's footer: no rule
-       and no room for it */
-    .exam-builder > :global(.exam-outline .foot:not(:has(*))) {
-        display: none;
     }
     .exam-builder > :global(.part-card) {
         grid-area: card;
@@ -777,63 +739,12 @@
         margin-block: -0.2rem;
     }
 
-    /* a rule across the card over what the exam is at the left and the actions at the right; on a
-       phone the summary takes a line of its own over them. Held at the window's bottom while the
-       Card's end is below it, as the create page's is (O-43), in the Card's fill so what scrolls
-       under it does not show through, its lower corners inside the Card's 1px edge. Over the
-       editors' own layers that scroll under it (the code's 2, the Build dock's 5 and a failed
-       run's frame 6) and under the floating Testcases window (11) */
-    .card-footer {
-        position: sticky;
-        bottom: 0;
-        z-index: 7;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem 1rem;
-        padding: 0.7rem 1rem;
-        border-top: 1px solid var(--line);
-        background-color: var(--wb-surface);
-        border-radius: 0 0 nested-radius(var(--wb-radius), $border: 1px)
-            nested-radius(var(--wb-radius), $border: 1px);
-    }
-
-    /* the create page's summary: each set's square and name, then the number of sections, apart
-       by the row's gap in muted Fira Code, wrapping onto another line when the sections use many
-       sets */
-    .summary {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem 0.75rem;
-        min-width: 0;
-        margin: 0;
-        font: var(--fs-small) / 1.4 var(--font-mono);
-        color: var(--text-muted);
-    }
-    .summary-language,
-    .summary-count {
-        display: flex;
-        flex: none;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    /* drawn as the home page's instruction-set bar draws its squares */
-    .language-square {
-        flex: none;
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 2px;
-    }
-
-    .actions {
-        display: flex;
-        gap: 0.5rem;
+    /* Delete section at the right of a section's band, in its line */
+    .band :global(.delete-section) {
         margin-left: auto;
     }
 
-    /* the link to copy by hand, over the summary and the actions, the whole footer's width */
+    /* the link to copy by hand, over Create exam link in the outline's foot */
     .link-fallback {
         display: flex;
         flex-basis: 100%;
@@ -874,16 +785,13 @@
         }
         .phone-moves {
             display: flex;
-            margin-left: auto;
+            margin-left: 0.25rem;
         }
         .band {
             padding: 0.55rem 0.75rem;
         }
         .section {
             padding: 0.8rem 0.75rem 0.75rem;
-        }
-        .card-footer {
-            padding: 0.7rem 0.75rem;
         }
         .markdown-field.instructions {
             height: 20rem;
