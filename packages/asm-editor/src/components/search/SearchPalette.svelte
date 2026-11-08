@@ -337,6 +337,7 @@
 
 <style lang="scss">
     @use '../shared/button/tray.scss';
+    @use '../../styles/radius.scss' as *;
 
     /* lighter than a modal's: the palette is a tray over the page, as the prompts are, and the page
        stays readable around it, dimmed by the scrim and blurred by 2px (the bands below); the
@@ -344,7 +345,7 @@
     .backdrop {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: var(--z-palette);
         background-color: var(--scrim);
     }
 
@@ -355,7 +356,7 @@
     .place {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: var(--z-palette);
         display: grid;
         grid-template-columns:
             round(down, calc((100% - min(42rem, 100% - 2rem)) / 2), 1px)
@@ -414,12 +415,18 @@
         pointer-events: auto;
     }
 
+    /* the field across the palette's top, ruled off from the results. Its padding and the
+       palette's corner are named, since the field's clear button reaches across them to the
+       palette's top edge, the rule and the palette's edge (SearchField's `bare`) */
     .top {
+        --band-pad-block: 0.3rem;
+        --band-pad-end: 0.5rem;
+        --band-corner: #{nested-radius(var(--r-overlay), $border: 1px)};
         display: flex;
         flex: none;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.3rem 0.5rem;
+        padding: var(--band-pad-block) var(--band-pad-end);
         border-bottom: 1px solid var(--tray-line);
     }
 
@@ -567,6 +574,13 @@
     }
 
     @media (max-width: 600px) {
+        /* the sheet fills the screen without corners, its Cancel after the field, so the field's
+           clear button stops at the field's own end, square */
+        .top > :global(.search-field) {
+            --band-pad-end: 0px;
+            --band-corner: 0px;
+        }
+
         /* the sheet covers the page, so there is nothing round it to blur */
         .place {
             display: flex;

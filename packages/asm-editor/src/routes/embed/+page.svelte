@@ -367,7 +367,7 @@
                     <p class="lead">Put a working editor with your program on any web page.</p>
                 </header>
 
-                <Card element="section" padding="0" aria-labelledby="preview-title">
+                <Card element="section" aria-labelledby="preview-title">
                     <div class="card-head">
                         <h2 id="preview-title">Preview</h2>
                         <p class="hint">
@@ -390,7 +390,7 @@
                     <!-- the create page's look (its mockup of 2026-11-08): each group under a
                          header band, the instruction sets as its tiles, the switches on its
                          fields' fill -->
-                    <Card element="section" padding="0" aria-labelledby="settings-title">
+                    <Card element="section" aria-labelledby="settings-title">
                         <div class="card-head">
                             <h2 id="settings-title">Settings</h2>
                         </div>
@@ -435,7 +435,6 @@
                                         <Button
                                             kind="secondary"
                                             size="sm"
-                                            style="gap: 0.4rem"
                                             aria-label={testcases.length > 0
                                                 ? 'Edit Testcases'
                                                 : 'Add Testcases'}
@@ -483,7 +482,7 @@
                         </section>
                     </Card>
 
-                    <Card element="section" padding="0" aria-labelledby="share-title">
+                    <Card element="section" aria-labelledby="share-title">
                         <div class="card-head">
                             <h2 id="share-title">Share</h2>
                         </div>

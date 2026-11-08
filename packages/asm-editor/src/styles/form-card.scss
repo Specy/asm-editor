@@ -1,0 +1,126 @@
+// A form laid out in a Card, the create page's (the owner's mockup of 2026-11-08), which the embed
+// builder's Settings and the exam builder's part follow: sections under header bands, the first
+// band the Card's top, and a footer held at the window's bottom with what will be made at the left
+// and the actions at the right. Every part is inset from the Card's sides by `--form-inset`, which
+// `inset` sets on the Card or the form round the parts, smaller on a phone; under the phone's
+// breakpoint the bands and the sections are a little tighter above and below too.
+//
+//     @use '../styles/form-card.scss';
+//     .form { @include form-card.inset; }
+//     h2 { @include form-card.band; }
+//     h2.first { @include form-card.band-first; }
+//     .section { @include form-card.section; }
+//     .card-footer { @include form-card.sticky-footer; }
+//     .summary { @include form-card.summary; }
+//     .actions { @include form-card.actions; }
+//     .field { @include form-card.labelled; }
+//
+// The create page's numbers are the defaults. The exam builder's are `inset(1rem, 0.75rem,
+// 720px)`, `band(720px)` and `section(1rem, 720px, 0.75rem)`; the embed builder's first band is
+// under its Card's own head, `band-first(null)`.
+
+@use 'radius' as *;
+
+// The width under which a form is a phone's: the create page's and the embed builder's.
+$phone: 600px;
+
+// The parts' side inset, on the element that holds them: `$inset`, or `$phone-inset` under
+// `$phone`.
+@mixin inset($inset: 1.25rem, $phone-inset: 1rem, $phone: $phone) {
+    --form-inset: #{$inset};
+
+    @media (max-width: $phone) {
+        --form-inset: #{$phone-inset};
+    }
+}
+
+// A section's header: a band a shade lighter than the Card over a rule, as the Workbench's folding
+// sections draw theirs (CollapsibleSection); the ones after the first are ruled off above too.
+@mixin band($phone: $phone) {
+    margin: 0;
+    padding: 0.6rem var(--form-inset, 1.25rem);
+    background-color: var(--wb-section-header);
+    border-block: 1px solid var(--line);
+    font: 700 var(--fs-small) / 1.4 var(--font-ui);
+    color: var(--secondary-text);
+
+    @media (max-width: $phone) {
+        padding-block: 0.55rem;
+    }
+}
+
+// The first band, the Card's top: no rule above, its corners inside the Card's 1px edge on the
+// Card's corner `$card-top`; `null` for a band under a head of the Card's own, which has the
+// corners.
+@mixin band-first($card-top: var(--wb-radius)) {
+    border-top: none;
+
+    @if $card-top {
+        border-radius: nested-radius($card-top, $border: 1px) nested-radius($card-top, $border: 1px)
+            0 0;
+    }
+}
+
+// What a band heads: a column `$gap` apart, a little more room under it than over it; under
+// `$phone` a little less over it, and `$phone-end` under it.
+@mixin section($gap: 0.75rem, $phone: $phone, $phone-end: 1rem) {
+    display: flex;
+    flex-direction: column;
+    gap: $gap;
+    padding: 0.85rem var(--form-inset, 1.25rem) 1rem;
+
+    @media (max-width: $phone) {
+        padding-top: 0.8rem;
+        padding-bottom: $phone-end;
+    }
+}
+
+// The Card's footer, a rule across it over what will be made at the left and the actions at the
+// right, the summary taking a line of its own over the actions where both do not fit. Held at the
+// window's bottom while the Card's end is below it, so a form can be filled and sent at once, and
+// back in its place once the page reaches it (owner, 2026-11-08): on `$z` over what scrolls under
+// it, in the Card's fill so that does not show through, its lower corners inside the Card's 1px
+// edge on the Card's corner `$card-bottom`.
+@mixin sticky-footer($z: 1, $card-bottom: var(--wb-radius)) {
+    position: sticky;
+    bottom: 0;
+    z-index: $z;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.7rem var(--form-inset, 1.25rem);
+    border-top: 1px solid var(--line);
+    background-color: var(--wb-surface);
+    border-radius: 0 0 nested-radius($card-bottom, $border: 1px)
+        nested-radius($card-bottom, $border: 1px);
+}
+
+// What will be made, in the footer: in Fira Code, muted, on one line, or wrapping with `$wrap`.
+@mixin summary($wrap: false) {
+    display: flex;
+    @if $wrap {
+        flex-wrap: wrap;
+    }
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    margin: 0;
+    font: var(--fs-small) / 1.4 var(--font-mono);
+    color: var(--text-muted);
+}
+
+// The footer's buttons, at its right end.
+@mixin actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+// A label over its control, as the shared fields draw theirs (TextField's `labelled`).
+@mixin labelled {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}

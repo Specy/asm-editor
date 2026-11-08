@@ -1,0 +1,30 @@
+// A grid of tiles: the instruction sets' (InstructionSetPicker) and the settings laid out under
+// them as tiles too (the embed builder's panels). Three to a row, or two in a box narrower than
+// `$narrow`, where three would cut "RISC-V-64" (a tile needs about 7.4rem: its padding, its
+// colour square, the gap and nine characters of Fira Code), which is most phones; `$gap` apart.
+// The rows are counted against the nearest box of inline size round the grid, which the caller
+// declares (`container-type: inline-size`).
+//
+//     @use '../styles/tiles.scss';
+//     .picker { container-type: inline-size; }
+//     .tiles { @include tiles.grid; }
+//     .setting-row { min-height: tiles.$height; }   as tall as a tile beside it
+
+$gap: 0.4rem;
+$narrow: 23.5rem;
+
+// A tile's room above and below its line, and that line: a tile is `$height` tall with its 1px
+// edges, which a row of another kind among the tiles takes as its least height.
+$padding-block: 0.75rem;
+$line-height: 1.3;
+$height: calc(#{$padding-block * 2} + var(--fs-small) * #{$line-height} + 2px);
+
+@mixin grid($columns: 3, $narrow-columns: 2) {
+    display: grid;
+    grid-template-columns: repeat($columns, minmax(0, 1fr));
+    gap: $gap;
+
+    @container (max-width: #{$narrow}) {
+        grid-template-columns: repeat($narrow-columns, minmax(0, 1fr));
+    }
+}

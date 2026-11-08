@@ -7,6 +7,10 @@
 // (`md`, `sm`) weigh only `.btn` and the scoping class, the rest behind `:where()` (owner,
 // 2026-11-08): a page that sizes its buttons with `.something :global(.btn)` outweighs them
 // whichever stylesheet loads last, where it used to tie and win or lose by load order.
+//
+// An icon beside the words stands the size's gap from them: `--btn-gap`, 0.5rem at `md` and
+// 0.4rem at `sm` when nothing sets it, which a caller sets on the button or on what holds its
+// buttons. An icon that is the button's own child, not in an `<Icon>`, is the size of the words.
 
 @mixin button($disabled) {
     position: relative;
@@ -18,6 +22,12 @@
     text-align: center;
     user-select: none;
     cursor: pointer;
+
+    > :global(svg) {
+        flex: none;
+        width: 1em;
+        height: 1em;
+    }
 
     // the roles (D5): the accent; a field's fill and text (styles/field.scss), as a Select's
     // (owner, 2026-11-08); nothing until hovered
@@ -71,10 +81,12 @@
     }
 
     &:where(.workbench.md) {
+        gap: var(--btn-gap, 0.5rem);
         padding: 0.5rem 0.9rem;
         font-size: 0.95rem;
     }
     &:where(.workbench.sm) {
+        gap: var(--btn-gap, 0.4rem);
         padding: 0.3rem 0.75rem;
         font-size: var(--fs-small);
     }
@@ -101,7 +113,6 @@
     }
     &:where(.workbench).active:hover:not(#{$disabled}) {
         background-color: color-mix(in srgb, var(--accent) 85%, white);
-        background-image: none;
     }
     // a ghost's ring is drawn inside it (tray.scss, `tool-face`), where the accent would vanish on
     // the accent fill: in the accent's text, as `tray.primary`'s is

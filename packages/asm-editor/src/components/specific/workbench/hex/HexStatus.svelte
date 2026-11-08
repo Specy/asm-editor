@@ -92,8 +92,7 @@
             class="tool"
             aria-label="Inspector"
             {@attach tooltip('Data inspector: the bytes at the caret as numbers')}
-            aria-pressed={inspectorOpen}
-            active={inspectorOpen}
+            pressed={inspectorOpen}
             onClick={onToggleInspector}
         >
             <FaMicroscope /><span>Inspector</span>

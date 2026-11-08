@@ -55,6 +55,7 @@
         <div class="instructions">
             {#each group.names as name (name)}
                 <Card
+                    direction="row"
                     class={['instruction', code && 'code']}
                     href={resolveHref(`/documentation/${language}/instruction/${name}`)}
                 >
@@ -88,9 +89,8 @@
         align-items: center;
     }
 
-    /* a link Card each, laid out in a row (as specific as it must be to win over Card's column) */
-    .instructions > :global(a.card.instruction) {
-        flex-direction: row;
+    /* a link Card each, laid out in a row */
+    .instructions > :global(.instruction) {
         padding: 1rem 1rem 1rem 2rem;
         align-items: center;
         width: 15rem;
@@ -109,7 +109,7 @@
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-        .instructions > :global(a.card.instruction) {
+        .instructions > :global(.instruction) {
             min-width: 0;
             width: 100%;
             justify-content: center;

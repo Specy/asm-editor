@@ -36,7 +36,7 @@
     <p>Send this message to an AI assistant so they can search the docs of each Instruction Set.</p>
     <!-- the slot keeps the one-line height, so the whole message opens over what follows -->
     <div class="slot">
-        <Card class={['message', expanded && 'expanded']}>
+        <Card direction="row" class={['message', expanded && 'expanded']}>
             <span class="text ellipsis" class:expanded id={`${id}-message`}>{AGENT_MESSAGE}</span>
             <div class="actions">
                 <Button
@@ -100,20 +100,19 @@
         max-width: 34rem;
         height: calc(var(--button) + 2 * var(--pad) + 2px);
     }
-    /* a Card, in a row (as specific as it must be to win over Card's column) */
-    .slot > :global(div.card.message) {
+    /* a Card, in a row */
+    .slot > :global(.message) {
         position: absolute;
         top: 0;
         left: 0;
         right: 0;
-        flex-direction: row;
         align-items: flex-start;
         gap: 0.5rem;
         padding: var(--pad) var(--pad) var(--pad) 0.8rem;
     }
     /* it opens upward, over the text above it, so the buttons stay under the pointer and a
        section that clips what overflows its bottom, as the home page's do, cuts nothing off */
-    .slot > :global(div.card.message.expanded) {
+    .slot > :global(.message.expanded) {
         top: auto;
         bottom: 0;
         align-items: flex-end;

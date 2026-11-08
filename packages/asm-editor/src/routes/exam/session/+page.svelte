@@ -914,7 +914,7 @@
             activeSectionId={activeSection.id}
             visibleAnswer={activeVisibleAnswer}
             emulatorInstance={emulator}
-            style="border-radius: 0; border: none; box-shadow: none; flex: 1; min-height: 0;"
+            style="flex: 1; min-height: 0;"
         />
     {/if}
 {/snippet}
@@ -956,12 +956,7 @@
 {/snippet}
 
 {#snippet promptCard(section: ExamSection, number: number)}
-    <Card
-        element="section"
-        class="part-card prompt-card"
-        padding="0"
-        aria-labelledby="exam-part-title"
-    >
+    <Card element="section" class="part-card prompt-card" aria-labelledby="exam-part-title">
         {@render sectionHead(section, number)}
         <div class="part-body prompt-body">
             <MarkdownRenderer source={section.prompt} disableLinks monacoColors centered={false} />
@@ -1009,7 +1004,6 @@
             <Card
                 element="section"
                 class="start-card"
-                padding="0"
                 aria-labelledby="exam-start-title"
                 aria-busy={status === 'loading'}
             >
@@ -1109,12 +1103,7 @@
                             {/if}
                         </div>
                         <footer class="card-foot">
-                            <Button
-                                type="submit"
-                                disabled={starting}
-                                aria-busy={starting}
-                                style="gap: 0.5rem;"
-                            >
+                            <Button type="submit" disabled={starting} aria-busy={starting}>
                                 {#if starting}<Spinner />{/if}
                                 {exam.submission ? 'Open submission' : 'Start exam'}
                             </Button>
@@ -1152,7 +1141,6 @@
                 <Card
                     element="section"
                     class="notice"
-                    padding="0"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="exam-notice-title"
@@ -1192,7 +1180,6 @@
                 <Card
                     element="section"
                     class="notice"
-                    padding="0"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="exam-notice-title"
@@ -1380,12 +1367,7 @@
             <div class="part" class:coding={isCodingSection} bind:this={partElement}>
                 {#if isOnInstructions && hasInstructions}
                     <div class="reading">
-                        <Card
-                            element="section"
-                            class="part-card"
-                            padding="0"
-                            aria-labelledby="exam-part-title"
-                        >
+                        <Card element="section" class="part-card" aria-labelledby="exam-part-title">
                             <header class="part-head">
                                 <h2 id="exam-part-title" class="part-title">Instructions</h2>
                             </header>

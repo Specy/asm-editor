@@ -90,6 +90,7 @@
     {/snippet}
     {#if session.groups.length === 1}
         <IconButton
+            fill
             class="group-action"
             label="Split editor"
             {@attach tooltip('Split editor')}
@@ -99,6 +100,7 @@
     {/if}
     {#if session.groups.length > 1 && !group.tabs.paths.length}
         <IconButton
+            fill
             class="group-action"
             label="Close editor"
             {@attach tooltip('Close editor')}
@@ -124,19 +126,13 @@
 
     /* the strip itself is TabStrip's; this is what a File's tab and the editor's own end of the
        strip add to it */
-    /* the editor's own end of the strip: a square as tall as the strip, edge to edge in it and
-       square-cornered, in the panel's text. Its bottom border is the strip's rule (TabStrip gives
-       it to everything after the tabs), which its hover fill stops at rather than tinting it. In
-       the card's top-right corner its own corner follows the card's curve (EditorArea). The class
-       twice, to outweigh IconButton's own size, corner and `color: inherit` whichever stylesheet
-       loads last */
-    :global(.icon-button.group-action.group-action) {
-        align-self: stretch;
-        width: var(--tab-strip-height);
-        height: auto;
-        border-radius: 0;
-        background-clip: padding-box;
-        color: var(--secondary-text);
+    /* the editor's own end of the strip: a filling IconButton, a square as tall as the strip, edge
+       to edge in it and square-cornered, in the strip's text. Its bottom border is the strip's rule
+       (TabStrip gives it to everything after the tabs), which its hover fill stops at rather than
+       tinting it. In the card's top-right corner its own corner follows the card's curve
+       (EditorArea) */
+    :global(.group-action) {
+        --icon-button-cell: var(--tab-strip-height);
     }
 
     .name {

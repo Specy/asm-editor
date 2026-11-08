@@ -578,8 +578,7 @@
             kind="ghost"
             size="sm"
             class="screen-action"
-            active={showingDrawingBuffer}
-            aria-pressed={showingDrawingBuffer}
+            pressed={showingDrawingBuffer}
             {@attach tooltip(
                 showingDrawingBuffer
                     ? 'Show the visible buffer again'
@@ -597,8 +596,7 @@
         kind="ghost"
         size="sm"
         class="screen-action"
-        active={integerScaling}
-        aria-pressed={integerScaling}
+        pressed={integerScaling}
         {@attach tooltip(
             integerScaling
                 ? 'Integer scaling is on. Click to turn it off and fill the available space.'

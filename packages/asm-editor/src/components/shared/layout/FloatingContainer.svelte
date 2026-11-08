@@ -11,7 +11,7 @@
     import FaTimes from '~icons/fa-solid/times'
     import { beforeNavigate } from '$app/navigation'
     import { lockPageScroll } from '#lib/scrollLock.ts'
-    import '#cmp/specific/workbench/workbench.css'
+    import '#src/styles/cards.css'
     interface Props {
         visible: boolean
         title: string
@@ -68,13 +68,14 @@
     @use '../button/tray.scss';
 
     /* the search palette's backdrop (SearchPalette.svelte): the page dimmed by --scrim and blurred
-       by 2px (the bands), over everything else on the page, the navbar and a floating Screen (10)
-       too, under the prompts and toasts (20); the window, after it at the same level, over it. It
-       fades with the window and lets clicks through once it starts to go */
+       by 2px (the bands), over the page and the navbar, on the layer of what floats over the page
+       (--z-float), which a floating Screen shares, so the later of the two in the page is on top;
+       under the prompts and toasts (--z-tray). The window, after it on the same layer, is over it.
+       It fades with the window and lets clicks through once it starts to go */
     .floating-backdrop {
         position: fixed;
         inset: 0;
-        z-index: 11;
+        z-index: var(--z-float);
         background-color: var(--scrim);
         opacity: 1;
         transition: opacity var(--dur-base);
@@ -86,18 +87,19 @@
         }
     }
 
-    /* where the window sits, in the middle of the screen (of the whole width, as 50vw) and at
-       least 1rem from its sides, in the middle cell of a grid whose other cells are the bands that
-       blur the page round it; clicks go through to the scrim */
+    /* where the window sits, in the middle of the screen (of its whole width, --screen-width, which
+       a box standing for the screen sets to its own) and at least 1rem from its sides, in the
+       middle cell of a grid whose other cells are the bands that blur the page round it; clicks go
+       through to the scrim */
     .floating-place {
         position: fixed;
         top: 0;
         left: 0;
-        z-index: 11;
+        z-index: var(--z-float);
         display: grid;
         grid-template-columns: minmax(1rem, 1fr) auto minmax(1rem, 1fr);
         grid-template-rows: 1fr auto 1fr;
-        width: 100vw;
+        width: var(--screen-width);
         height: var(--screen-height);
         pointer-events: none;
     }
@@ -167,7 +169,7 @@
         flex-direction: column;
         width: 30rem;
         overflow: hidden;
-        max-width: calc(100vw - 2rem);
+        max-width: calc(var(--screen-width) - 2rem);
         transform: none;
         pointer-events: auto;
         background-color: var(--wb-surface);

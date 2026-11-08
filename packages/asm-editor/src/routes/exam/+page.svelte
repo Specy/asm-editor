@@ -260,7 +260,7 @@
 
         <!-- the create page's Card: its sections under header bands, the first band the part's
              name (a section's with Delete section at its right) -->
-        <Card element="section" class="part-card" padding="0" aria-labelledby="exam-part-title">
+        <Card element="section" class="part-card" aria-labelledby="exam-part-title">
             {#if current === DETAILS}
                 <header class="band first">
                     <h2 id="exam-part-title">Details</h2>
@@ -476,7 +476,6 @@
                                     <Button
                                         kind="secondary"
                                         onClick={() => createOption(multipleChoiceSection)}
-                                        style="gap: 0.5rem;"
                                     >
                                         <Icon size="small">
                                             <FaPlus />

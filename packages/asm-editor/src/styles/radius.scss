@@ -5,3 +5,43 @@
 @function nested-radius($parent, $border: 0px, $inset: 0px) {
     @return max(0px, calc(#{$parent} - #{$border} - #{$inset}));
 }
+
+// The surface outside an element's two rounded top corners painted over, for a header pinned
+// over what it heads (a Workbench section's sticky header, a Documentation Chapter's title, an
+// expanded entry's head): what it heads, square-cornered under it, would otherwise show its side
+// edges and its fill round the header's curves while the body scrolls under it (owner,
+// 2026-11-08). Each corner is a square of `$radius` at the element's outer edge, `$edge` (its
+// border's width) outside its padding box, clear inside the curve and `$outside` (the surface the
+// header sits on) beyond it, with a pixel's blend so the curve stays smooth. It draws on the
+// element's `::before` and `::after`, which must be free, and the element must be positioned.
+//
+//     .section-header { @include outside-corners(0.5rem, var(--wb-surface), $edge: 1px); }
+@mixin outside-corners($radius, $outside, $edge: 0px) {
+    &::before,
+    &::after {
+        content: '';
+        position: absolute;
+        top: calc(-1 * #{$edge});
+        width: $radius;
+        height: $radius;
+        pointer-events: none;
+    }
+
+    &::before {
+        left: calc(-1 * #{$edge});
+        background: radial-gradient(
+            circle at 100% 100%,
+            transparent calc(#{$radius} - 0.5px),
+            #{$outside} calc(#{$radius} + 0.5px)
+        );
+    }
+
+    &::after {
+        right: calc(-1 * #{$edge});
+        background: radial-gradient(
+            circle at 0 100%,
+            transparent calc(#{$radius} - 0.5px),
+            #{$outside} calc(#{$radius} + 0.5px)
+        );
+    }
+}

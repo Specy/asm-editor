@@ -25,12 +25,13 @@
     let latestExampleSignature = $state<string | null>(null)
     let agentVisible = $derived(!editorLanguage || agentOpen || isMobile)
 
+    //alone on the page the chat keeps a hairline edge and a shadow, square-cornered
     let agentStyle = $derived(
         editorLanguage
             ? isMobile
-                ? 'border-radius: 0; border: none; box-shadow: none;'
-                : 'border-radius: 0; border: none; box-shadow: none; opacity: 0.82;'
-            : 'min-height: 100%; border-radius: 0'
+                ? ''
+                : 'opacity: 0.82;'
+            : 'min-height: 100%; border: solid 1px var(--wb-line, var(--tertiary)); box-shadow: var(--shadow-2);'
     )
 
     $effect(() => {

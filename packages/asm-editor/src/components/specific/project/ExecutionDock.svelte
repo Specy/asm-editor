@@ -592,10 +592,6 @@
     .tool {
         user-select: none;
         @include tray.tool(0.8rem, 0.95rem);
-
-        :global(.icon) {
-            cursor: inherit;
-        }
     }
 
     /* sunk into the tray, in its own colours rather than see-through as other tools are */
@@ -704,10 +700,6 @@
         font-size: 0.95rem;
         font-weight: 500;
         user-select: none;
-
-        :global(.icon) {
-            cursor: inherit;
-        }
     }
 
     .optimization,

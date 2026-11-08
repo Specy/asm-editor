@@ -6,10 +6,9 @@
      * popover in the top layer, with an arrow pointing at the button, closed by Escape, a press
      * outside it, or the page scrolling or resizing under it.
      */
-    import { tick, type Snippet } from 'svelte'
+    import type { Snippet } from 'svelte'
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
-    import { placeCard, type Side } from '#cmp/shared/floating/floating.ts'
-    import { popoverElevation } from '#src/styles/elevation.ts'
+    import { AnchoredPopover } from '#cmp/shared/floating/anchoredPopover.svelte.ts'
     import Switch from '#cmp/shared/input/Switch.svelte'
     import type { ShareStartAction } from '#lib/shareStart.ts'
 
@@ -26,6 +25,13 @@
     let build = $state(false)
     let run = $state(false)
 
+    //placed, focused and closed as every Popover opened at a point is; its button toggles it
+    const popover = new AnchoredPopover({
+        point: () => at!,
+        onClose: () => (at = null),
+        trigger: () => triggerElement
+    })
+
     function open(event: MouseEvent) {
         if (at) {
             at = null
@@ -37,74 +43,8 @@
     }
 
     function copy() {
-        at = null
+        popover.close()
         onShare(run ? 'buildAndRun' : build ? 'build' : undefined)
-    }
-
-    const EDGE = 4
-    const ARROW = 6
-    /** The corner the outline is drawn with, which the arrow keeps clear of. */
-    const RADIUS = popoverElevation().radius
-    let panel = $state<HTMLDivElement>()
-    let left = $state(0)
-    let top = $state(0)
-    let width = $state(0)
-    let height = $state(0)
-    let side = $state<Side>('bottom')
-    let arrowAt = $state(0)
-
-    function place(point: { x: number; y: number }) {
-        if (!panel) return
-        width = panel.offsetWidth
-        height = panel.offsetHeight
-        const placed = placeCard(
-            { left: point.x, top: point.y, width: 0, height: 0 },
-            { width, height },
-            {
-                side: 'bottom',
-                gap: 0,
-                arrow: ARROW,
-                radius: RADIUS,
-                align: 'start',
-                margin: EDGE,
-                viewport: { width: window.innerWidth, height: window.innerHeight }
-            }
-        )
-        left = placed.left
-        top = placed.top
-        side = placed.side
-        arrowAt = placed.arrow
-    }
-
-    function mount(node: HTMLDivElement) {
-        const point = at!
-        const previousFocus = document.activeElement
-        node.showPopover()
-        place(point)
-        void tick().then(() =>
-            node.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
-        )
-        const close = () => (at = null)
-        const onPointerDown = (event: PointerEvent) => {
-            //the trigger toggles it itself
-            const target = event.target as Node
-            if (!node.contains(target) && !triggerElement?.contains(target)) close()
-        }
-        const onScroll = (event: Event) => {
-            if (!node.contains(event.target as Node)) close()
-        }
-        window.addEventListener('pointerdown', onPointerDown, true)
-        window.addEventListener('scroll', onScroll, true)
-        window.addEventListener('resize', close)
-        window.addEventListener('blur', close)
-        return () => {
-            window.removeEventListener('pointerdown', onPointerDown, true)
-            window.removeEventListener('scroll', onScroll, true)
-            window.removeEventListener('resize', close)
-            window.removeEventListener('blur', close)
-            if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
-                previousFocus.focus({ preventScroll: true })
-        }
     }
 </script>
 
@@ -116,22 +56,26 @@
         tabindex="-1"
         aria-label="Share options"
         popover="manual"
-        style:left="{left}px"
-        style:top="{top}px"
-        bind:this={panel}
-        {@attach mount}
+        style:left="{popover.left}px"
+        style:top="{popover.top}px"
+        {@attach popover.attach}
         onkeydown={(event) => {
             if (event.key !== 'Escape') return
             event.preventDefault()
-            at = null
+            popover.close()
         }}
     >
-        <PopoverOutline {width} {height} {side} at={arrowAt} arrow={ARROW} />
+        <PopoverOutline
+            width={popover.width}
+            height={popover.height}
+            side={popover.side}
+            at={popover.at}
+        />
         <label class="row">
             <span>Build on open</span>
             <Switch
                 bind:checked={build}
-                style="--switch-width: 2.2rem; --switch-height: 1.2rem;"
+                size="sm"
                 onChange={(on) => {
                     if (!on) run = false
                 }}
@@ -141,7 +85,7 @@
             <span>Run after building</span>
             <Switch
                 bind:checked={run}
-                style="--switch-width: 2.2rem; --switch-height: 1.2rem;"
+                size="sm"
                 onChange={(on) => {
                     if (on) build = true
                 }}
@@ -154,22 +98,15 @@
 <style lang="scss">
     @use '../../../styles/popover.scss';
 
-    /* a Popover, as ContextMenu is: the outline draws the tint, edge, shadow and arrow as one
-       shape */
+    /* a Popover, as ContextMenu is (popover.anchored): the outline draws the tint, edge, shadow
+       and arrow as one shape */
     .share-menu {
-        @include popover.content;
-        position: fixed;
-        inset: auto;
-        z-index: 100;
+        @include popover.anchored;
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
         min-width: 13rem;
-        margin: 0;
         padding: 0.6rem;
-        overflow: visible;
-        border: 0;
-        background: transparent;
         font-size: var(--fs-small);
         outline: none;
     }

@@ -41,6 +41,6 @@
         {additionalInstructions}
         {workflows}
         {searchPlace}
-        style="border-radius: 0; border: none; box-shadow: none; opacity: 0.82;"
+        style="opacity: 0.82;"
     />
 </AgentSidebarFrame>

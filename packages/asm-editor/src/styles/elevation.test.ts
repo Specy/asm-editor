@@ -1,13 +1,6 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vite-plus/test'
-import { POPOVER_RADIUS_REM, POPOVER_SHADOW, TOOLTIP_RADIUS_REM } from './elevation'
-
-const tokens = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8')
-
-/** A token's value as `tokens.css` declares it on `:root`, the first declaration of the name. */
-function token(name: string) {
-    return tokens.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim()
-}
+import { sassVariable, token } from './tokens.testing'
+import { POPOVER_ARROW, POPOVER_RADIUS_REM, POPOVER_SHADOW, TOOLTIP_RADIUS_REM } from './elevation'
 
 describe('the Popover numbers PopoverOutline draws with', () => {
     it('are the corner of --r-overlay', () => {
@@ -21,5 +14,9 @@ describe('the Popover numbers PopoverOutline draws with', () => {
 
     it('are, for a Tooltip, the corner of --r-control', () => {
         expect(token('--r-control')).toBe(`${TOOLTIP_RADIUS_REM}rem`)
+    })
+
+    it('are the arrow the hover cards placed by CSS leave room for, popover.scss $arrow', () => {
+        expect(sassVariable('popover.scss', 'arrow')).toBe(`${POPOVER_ARROW}px`)
     })
 })

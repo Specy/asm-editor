@@ -126,7 +126,7 @@
         </MaskedScroll>
         <Column style="margin-top: auto;" padding="0.5rem" gap="0.5rem">
             <ButtonLink
-                style="width: 100%; gap: 0.5rem"
+                style="width: 100%;"
                 kind="secondary"
                 href="/donate"
                 {@attach tooltip('Donate to the project')}

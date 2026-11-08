@@ -131,7 +131,7 @@
             <div class="top-row">
                 <Header noMargin>Your projects</Header>
                 <div class="top-row-buttons">
-                    <Button kind="secondary" bordered style="gap: 0.5rem" onClick={pickAndImport}>
+                    <Button kind="secondary" bordered onClick={pickAndImport}>
                         <Icon size="small">
                             <FaUpload />
                         </Icon>
@@ -154,7 +154,6 @@
                     {/if}
                     <ButtonLink
                         href={resolve('/projects/create')}
-                        style="gap: 0.5rem"
                         {@attach tooltip('Create a new project')}
                     >
                         <Icon size="small">

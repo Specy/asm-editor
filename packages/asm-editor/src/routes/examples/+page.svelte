@@ -248,10 +248,8 @@
                         <ButtonLink
                             href={editorPath}
                             disabled={!editorPath}
-                            aria-disabled={!editorPath}
                             target="_blank"
                             rel="noopener"
-                            style="gap: 0.5rem"
                         >
                             <span class="button-icon" aria-hidden="true"><FaExternalLinkAlt /></span
                             >

@@ -19,6 +19,7 @@
 <header class="top-bar">
     <IconButton
         size="lg"
+        fill
         class="rail-width"
         label="Open the menu"
         {@attach tooltip('Open the menu')}
@@ -35,7 +36,7 @@
             bg="var(--accent2)"
             color="var(--accent2-text)"
             size="sm"
-            style="padding: 0 0.7rem; height: 1.9rem; gap: 0.4rem; flex: none; font-size: 0.9rem;"
+            style="padding: 0 0.7rem; height: 1.9rem; flex: none; font-size: 0.9rem;"
             {@attach tooltip('Save the Project')}
             onClick={() => session.save()}
         >
@@ -61,10 +62,8 @@
 
     /* the whole of the bar's height, as wide as the rail under it, with the corners it had */
     .top-bar :global(.rail-width) {
-        align-self: stretch;
-        width: var(--wb-rail-width);
-        height: auto;
-        border-radius: 0.3rem;
+        --icon-button-cell: var(--wb-rail-width);
+        --icon-button-radius: 0.3rem;
     }
 
     .title {

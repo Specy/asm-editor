@@ -44,7 +44,7 @@
                     {#if version.blogPost}
                         <ButtonLink
                             kind="secondary"
-                            style="gap: 0.5rem; margin-left: auto; white-space: nowrap"
+                            style="margin-left: auto; white-space: nowrap"
                             href={resolve('/blog/posts/[slug]', { slug: version.blogPost })}
                         >
                             <Icon><FaBookOpen /></Icon>

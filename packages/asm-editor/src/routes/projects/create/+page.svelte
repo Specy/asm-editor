@@ -160,7 +160,7 @@
         </header>
         <!-- the owner's mockup of 2026-11-08: two sections under header bands, then a footer with
              what will be created at the left and the actions at the right -->
-        <Card padding="0">
+        <Card>
             <Form onSubmit={create}>
                 <h2 class="band first">Instruction set</h2>
                 <div class="section">

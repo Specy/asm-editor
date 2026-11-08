@@ -7,6 +7,11 @@
      * with the rest of the props) is its description, never its name (ADR 0064). `pressed` makes
      * it a toggle, filled with the accent while on, as a toolbar's chosen tool is (D14);
      * `emphasis` fills it with the accent too, for a state it shows rather than one it toggles.
+     * `fill` makes it the square at a strip's or a bar's end, as tall as the row it sits in.
+     *
+     * Its look weighs only `.icon-button` and the scoping class, its size and `fill` behind
+     * `:where()`, as Button's sizes are (variants.scss): a caller's `.something :global(.x)`
+     * outweighs it whichever stylesheet loads last.
      */
     import type { Snippet } from 'svelte'
     import type { HTMLButtonAttributes } from 'svelte/elements'
@@ -26,6 +31,12 @@
         emphasis?: boolean
         /** Its icon dimmed to the surface's muted text until the pointer or the keyboard is on it. */
         quiet?: boolean
+        /**
+         * As tall as the row it sits in rather than square: `--icon-button-cell` wide (its size's
+         * square when unset) with `--icon-button-radius` corners (square when unset), which the
+         * caller sets on it. Its fill stops at a rule its row draws under it, as a tab strip's.
+         */
+        fill?: boolean
         /** The button itself, for what is placed against it, such as a popover it opens. */
         el?: HTMLElement
         children: Snippet
@@ -38,6 +49,7 @@
         pressed,
         emphasis = false,
         quiet = false,
+        fill = false,
         class: className,
         el = $bindable(),
         children,
@@ -52,6 +64,7 @@
     {...rest}
     class={['icon-button', size, className]}
     class:quiet
+    class:fill
     class:pressed
     class:emphasis
     aria-label={label}
@@ -98,19 +111,27 @@
         }
     }
 
-    .sm {
+    .icon-button:where(.sm) {
         --icon-button-size: 1.4rem;
         --icon-button-glyph: var(--fs-caption);
         border-radius: var(--r-chip);
     }
-    .md {
+    .icon-button:where(.md) {
         --icon-button-size: 1.8rem;
         --icon-button-glyph: var(--fs-small);
     }
-    .lg {
+    .icon-button:where(.lg) {
         --icon-button-size: 2.4rem;
         /* the prose step at its base size, which a reading page's or a phone's does not change */
         --icon-button-glyph: 1.1rem;
+    }
+
+    .icon-button:where(.fill) {
+        align-self: stretch;
+        width: var(--icon-button-cell, var(--icon-button-size));
+        height: auto;
+        border-radius: var(--icon-button-radius, 0);
+        background-clip: padding-box;
     }
 
     .quiet:not(:hover, :focus-visible, .pressed, .emphasis) {

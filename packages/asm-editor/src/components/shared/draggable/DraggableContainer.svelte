@@ -251,7 +251,7 @@
 
 {#snippet bar()}
     <span class="grip" aria-hidden="true">
-        <Icon size="small" style="cursor: inherit">
+        <Icon size="small">
             <FaGripHorizontal />
         </Icon>
     </span>
@@ -269,6 +269,7 @@
     <!-- in the bar's corner, whose curve its own follows (the .bar-end rules) -->
     <IconButton
         size="sm"
+        fill
         class="bar-end"
         label={onClose ? 'Close' : hidden ? `Show ${title}` : `Hide ${title}`}
         {@attach tooltip(onClose ? closeTitle : '', { shortcut: closeShortcut })}
@@ -399,31 +400,32 @@
         }
     }
 
-    /* the button at the bar's end fills its height in its corner, so its own corner there runs
-       parallel to the bar's, inside its edge (D12): its hover and its focus ring never cover the
-       bar's rounded border. Folded, the bar is round at the bottom too */
     /* the bar's two ends are squares as tall as the bar inside its edge, the grip's at its start
        and the eye's (or Close's) at its end, each glyph centred in its own: the eye's hover fills
        its square from the bar's top edge to its bottom one */
-    .grip,
-    .tab-header :global(.bar-end) {
+    $bar-cell: calc(1.6rem - 2px);
+    .grip {
         flex: none;
         align-self: stretch;
-        width: calc(1.6rem - 2px);
+        width: $bar-cell;
         height: auto;
-    }
-
-    .grip {
         display: grid;
         place-items: center;
         cursor: inherit;
     }
 
+    /* the button at the bar's end, a filling IconButton, whose corner in the bar's corner runs
+       parallel to the bar's, inside its edge (D12): its hover and its focus ring never cover the
+       bar's rounded border. Folded, the bar is round at the bottom too. Its other corners are a
+       small IconButton's */
     .tab-header :global(.bar-end) {
-        border-top-right-radius: nested-radius($corner, $border: 1px);
+        --icon-button-cell: #{$bar-cell};
+        --icon-button-radius: var(--r-chip) #{nested-radius($corner, $border: 1px)} var(--r-chip)
+            var(--r-chip);
     }
     .tab-header.hidden :global(.bar-end) {
-        border-bottom-right-radius: nested-radius($corner, $border: 1px);
+        --icon-button-radius: var(--r-chip) #{nested-radius($corner, $border: 1px)}
+            #{nested-radius($corner, $border: 1px)} var(--r-chip);
     }
 
     .header-info {

@@ -1657,13 +1657,12 @@
 
     /* ---- the navbar's Create project ---- */
 
-    /* `a.btn`, so this outweighs the Button's own size rule whichever stylesheet loads last (the
-       navbar's Donate and Star say why) */
+    /* outweighs the Button's own size rule, which weighs `.btn` and its scoping class only
+       (variants.scss), whichever stylesheet loads last */
     .create-project {
         display: flex;
 
-        :global(a.btn) {
-            gap: 0.5rem;
+        :global(.btn) {
             height: 2.2rem;
             padding: 0 1rem;
         }
@@ -1675,7 +1674,7 @@
     }
 
     @media (max-width: 760px) {
-        .create-project :global(a.btn) {
+        .create-project :global(.btn) {
             width: 2.2rem;
             padding: 0;
         }

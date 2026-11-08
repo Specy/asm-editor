@@ -2,8 +2,10 @@
    ones drawn from a theme colour (--line, --line-strong, --selected-bg) are written by
    themeCssVariables() beside the theme's colours, on every element that carries a theme, since a
    custom property that reads a colour resolves where it is declared. The Popover's radius and
-   shadow are drawn in SVG and named again in styles/elevation.ts, which has to agree with
-   --r-overlay and --shadow-3 here (elevation.test.ts checks it). */
+   shadow, and the Tooltip's radius, are drawn in SVG and named again in styles/elevation.ts,
+   which has to agree with --r-overlay, --shadow-3 and --r-control here (elevation.test.ts checks
+   it); the durations and the easing are named again in styles/motion.ts (motion.test.ts), and
+   the type scale in styles/iconSizes.ts (iconSizes.test.ts). */
 :root {
     /* D2: Rubik for interface and reference text, Noto Serif for long prose read from top to
        bottom, Fira Code only for code and machine values. Each falls back within its kind: the
@@ -51,6 +53,41 @@
     --dur-fast: 120ms;
     --dur-base: 160ms;
     --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+
+    /* D13: stacking. What stands over the page, lowest first, each layer named for what it holds,
+       so that what must stand over something else takes the layer above it rather than a number
+       picked to beat it. A layer is a z-index in the page's own stacking context; what is inside
+       a positioned box that isolates (a Card, an editor) stacks inside it and needs none of these.
+       A popover in the browser's top layer (a Select's list, a menu, a Tooltip) is over all of
+       them, and a z-index does nothing there */
+    /* the navbar, fixed over the page that scrolls under it */
+    --z-navbar: 4;
+    /* a window dragged about over its own view: the Debug windows (Draggable), the Screen's
+       display configuration */
+    --z-window: 10;
+    /* what floats over the whole page: the Testcases window over its scrim (FloatingContainer),
+       the Screen's floating window, the compact Workbench's backdrop. The Testcases window and
+       the Screen's share it, in the order they come in the page */
+    --z-float: 11;
+    /* over what floats: a maximized panel, the compact Workbench's drawer and its rail, the exam
+       session's notices */
+    --z-drawer: 12;
+    /* a drop's overlay over the page (FileDropZone), under what the drop then says */
+    --z-overlay: 15;
+    /* the prompts, the toasts and the dialogs */
+    --z-tray: 20;
+    /* the search palette and its scrim */
+    --z-palette: 50;
+    /* the agent's sidebar, over everything else on the page */
+    --z-agent: 100;
+
+    /* the navbar's height (DefaultNavbar: its 2.2rem controls and 0.5rem above and below them),
+       which a page under it starts below and a sidebar pinned under it starts at; and where a
+       link to a heading on the page lands it, clear of the navbar with room above (a heading's
+       scroll-margin-top). Resolved here, so a page that changes --navbar-height sets
+       --anchor-offset too */
+    --navbar-height: 3.2rem;
+    --anchor-offset: calc(var(--navbar-height) + 2.3rem);
 
     /* what is behind a dialog or a sheet */
     --scrim: rgb(0 0 0 / 0.35);

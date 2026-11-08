@@ -5,12 +5,18 @@
         DEFAULT_BUTTON_VARIANT,
         dataColours,
         type ButtonKind,
-        type ButtonSize,
-        type ButtonVariant
+        type ButtonSize
     } from './buttonVariant.ts'
 
-    /** The rest goes to the button, an attachment such as a Tooltip among them. */
-    interface Props extends Omit<HTMLButtonAttributes, 'color' | 'style' | 'disabled'> {
+    /**
+     * The rest goes to the button, an attachment such as a Tooltip among them. An icon beside its
+     * words takes the size's gap (`--btn-gap`, variants.scss) and, when it is the button's own
+     * child rather than in an `<Icon>`, the size of the words.
+     */
+    interface Props extends Omit<
+        HTMLButtonAttributes,
+        'color' | 'style' | 'disabled' | 'aria-pressed'
+    > {
         /** Its role (buttonVariant.ts): `primary` when left out. */
         kind?: ButtonKind
         size?: ButtonSize
@@ -20,10 +26,16 @@
         /** The text on `bg`. */
         color?: string
         style?: string
-        /** On, as a toggle that is pressed: filled with the accent, whatever its role. */
+        /**
+         * Filled with the accent, whatever its role, for a state it shows rather than one it
+         * toggles, such as the row being edited; `pressed` is a toggle's.
+         */
         active?: boolean
-        /** Its look; the app-wide default when left out (buttonVariant.ts). */
-        variant?: ButtonVariant
+        /**
+         * A toggle, on or off: filled with the accent while on, as `active` is, and announced as
+         * pressed or not (`aria-pressed`); left out, a plain button.
+         */
+        pressed?: boolean
         /** A hairline edge round it, the `--line` of the surface it sits on. */
         bordered?: boolean
         children?: Snippet
@@ -38,7 +50,7 @@
         color,
         style = '',
         active = false,
-        variant = DEFAULT_BUTTON_VARIANT,
+        pressed,
         bordered = false,
         class: className,
         onClick,
@@ -50,11 +62,12 @@
 <button
     type="button"
     {...rest}
-    class={['btn', variant, kind, size, className]}
+    class={['btn', DEFAULT_BUTTON_VARIANT, kind, size, className]}
     class:data-fill={bg !== undefined}
     class:data-text={color !== undefined}
     class:bordered
-    class:active
+    class:active={active || pressed}
+    aria-pressed={pressed}
     style={dataColours(bg, color, style)}
     {disabled}
     onclick={onClick}

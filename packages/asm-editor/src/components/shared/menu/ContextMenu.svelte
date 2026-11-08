@@ -27,10 +27,8 @@
      * screen, and slides left near the right edge, the arrow staying on the point (the Tooltips
      * design, decision 12).
      */
-    import { onMount, tick } from 'svelte'
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
-    import { placeCard, type Side } from '#cmp/shared/floating/floating.ts'
-    import { popoverElevation } from '#src/styles/elevation.ts'
+    import { AnchoredPopover } from '#cmp/shared/floating/anchoredPopover.svelte.ts'
 
     interface Props {
         /** The point it opens at, in viewport coordinates; it moves inwards to stay on screen. */
@@ -48,55 +46,21 @@
 
     let { x, y, items, label = 'Context menu', arrow = false, onClose }: Props = $props()
 
-    const EDGE = 4
-    const ARROW = 6
-    /** The corner the outline is drawn with, which the arrow keeps clear of. */
-    const RADIUS = popoverElevation().radius
+    //placed, focused and closed as every Popover opened at a point is
+    const popover = new AnchoredPopover({
+        point: () => ({ x, y }),
+        arrow: () => arrow,
+        onClose: () => onClose()
+    })
     let menu: HTMLDivElement
-    let left = $state(0)
-    let top = $state(0)
-    let width = $state(0)
-    let height = $state(0)
-    let side = $state<Side>('bottom')
-    let at = $state(0)
-    let previousFocus: Element | null = null
-
-    function place() {
-        width = menu.offsetWidth
-        height = menu.offsetHeight
-        const placed = placeCard(
-            { left: x, top: y, width: 0, height: 0 },
-            { width, height },
-            {
-                side: 'bottom',
-                gap: 0,
-                arrow: arrow ? ARROW : 0,
-                radius: RADIUS,
-                align: 'start',
-                margin: EDGE,
-                viewport: { width: window.innerWidth, height: window.innerHeight }
-            }
-        )
-        left = placed.left
-        top = placed.top
-        side = placed.side
-        at = placed.arrow
-    }
 
     function buttons(): HTMLButtonElement[] {
         return Array.from(menu?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
     }
 
-    function close() {
-        onClose()
-        if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
-            previousFocus.focus({ preventScroll: true })
-        }
-    }
-
     function pick(entry: Extract<ContextMenuEntry, { label: string }>) {
         if (entry.disabled) return
-        close()
+        popover.close()
         entry.onSelect()
     }
 
@@ -110,37 +74,12 @@
         else if (event.key === 'End') next = all[all.length - 1]
         else if (event.key === 'Escape' || event.key === 'Tab') {
             event.preventDefault()
-            close()
+            popover.close()
             return
         } else return
         event.preventDefault()
         next?.focus()
     }
-
-    onMount(() => {
-        previousFocus = document.activeElement
-        menu.showPopover()
-        place()
-        void tick().then(() => buttons()[0]?.focus({ preventScroll: true }))
-
-        const onPointerDown = (event: PointerEvent) => {
-            if (!menu.contains(event.target as Node)) close()
-        }
-        //a scroll inside the menu is not the page moving under it
-        const onScroll = (event: Event) => {
-            if (!menu.contains(event.target as Node)) close()
-        }
-        window.addEventListener('pointerdown', onPointerDown, true)
-        window.addEventListener('scroll', onScroll, true)
-        window.addEventListener('resize', close)
-        window.addEventListener('blur', close)
-        return () => {
-            window.removeEventListener('pointerdown', onPointerDown, true)
-            window.removeEventListener('scroll', onScroll, true)
-            window.removeEventListener('resize', close)
-            window.removeEventListener('blur', close)
-        }
-    })
 </script>
 
 <div
@@ -149,13 +88,19 @@
     role="menu"
     tabindex="-1"
     aria-label={label}
-    style:left="{left}px"
-    style:top="{top}px"
+    style:left="{popover.left}px"
+    style:top="{popover.top}px"
     bind:this={menu}
+    {@attach popover.attach}
     onkeydown={onKeydown}
     oncontextmenu={(event) => event.preventDefault()}
 >
-    <PopoverOutline {width} {height} {side} at={arrow ? at : undefined} arrow={ARROW} />
+    <PopoverOutline
+        width={popover.width}
+        height={popover.height}
+        side={popover.side}
+        at={popover.at}
+    />
     {#each items as entry, index (index)}
         {#if 'separator' in entry}
             <div class="separator" role="separator"></div>
@@ -181,24 +126,17 @@
     @use '../../../styles/popover.scss';
     @use '../../../styles/radius.scss' as *;
 
-    /* fixed, as Select's list is, and placed by hand rather than by the popover's centring; a
-       Popover, a translucent tint of the raised --tertiary surface, as Monaco's own menu is, that
-       blurs what is beneath. The outline draws that surface, its edge and its shadow as one shape
-       with the arrow, so the menu draws none of its own; the padding keeps the room the edge took */
+    /* placed by hand rather than by the popover's centring (popover.anchored); a Popover, a
+       translucent tint of the raised --tertiary surface, as Monaco's own menu is, that blurs what
+       is beneath. The outline draws that surface, its edge and its shadow as one shape with the
+       arrow, so the menu draws none of its own; the padding keeps the room the edge took */
     .context-menu {
-        @include popover.content;
-        position: fixed;
-        inset: auto;
-        z-index: 100;
+        @include popover.anchored;
         display: flex;
         flex-direction: column;
         min-width: 11rem;
         max-width: min(18rem, calc(100vw - 8px));
-        margin: 0;
         padding: calc(0.25rem + 1px);
-        overflow: visible;
-        border: 0;
-        background: transparent;
         font-size: var(--fs-small);
         outline: none;
     }

@@ -53,21 +53,22 @@
                             <FaDonate />
                         </Icon>
                     </a>
-                    <div class="icon">
-                        <Icon
-                            size="h2"
-                            label="Copyright"
-                            onClick={() => {
-                                toast.custom(
-                                    'Copyright',
-                                    `© ${new Date().getFullYear()} Specy. All rights reserved.`,
-                                    4000
-                                )
-                            }}
-                        >
+                    <button
+                        type="button"
+                        class="icon"
+                        aria-label="Copyright"
+                        onclick={() => {
+                            toast.custom(
+                                'Copyright',
+                                `© ${new Date().getFullYear()} Specy. All rights reserved.`,
+                                4000
+                            )
+                        }}
+                    >
+                        <Icon size="h2">
                             <FaCopyright />
                         </Icon>
-                    </div>
+                    </button>
                     <a
                         class="icon"
                         href="https://github.com/Specy/asm-editor"
@@ -121,6 +122,13 @@
             &:hover {
                 transform: rotate(25deg) scale(1.1);
             }
+        }
+        /* Copyright, which shows a toast, drawn as the two links beside it */
+        > button.icon {
+            padding: 0;
+            border: none;
+            background: none;
+            font: inherit;
         }
     }
     .footer {
@@ -185,13 +193,6 @@
         }
         .footer-inner {
             padding: 3rem 1rem 1rem;
-            height: unset;
-        }
-        .logo-content {
-            > .logo {
-                width: 2rem;
-                height: 2rem;
-            }
         }
     }
 </style>

@@ -1,10 +1,13 @@
 /**
- * The Popover's corner and shadow as numbers, for `PopoverOutline`, which draws them in SVG with
- * its arrow where CSS cannot reach (design-system.md, D3 and D13; design-system-plan.md, planning
- * decision 4). They are `--r-overlay` and `--shadow-3` in `tokens.css`, which a Popover drawn by
- * CSS reads (`styles/popover.scss`); `elevation.test.ts` holds the two to the same values. A
- * Tooltip's outline is a Popover's on a control's corner, `--r-control`, which the test holds too.
+ * The Popover's corner, shadow and arrow as numbers, for `PopoverOutline`, which draws them in
+ * SVG with its arrow where CSS cannot reach, and for the scripts that place a Popover by hand
+ * (design-system.md, D3 and D13; design-system-plan.md, planning decision 4). They are
+ * `--r-overlay` and `--shadow-3` in `tokens.css`, which a Popover drawn by CSS reads, and `$arrow`
+ * in `styles/popover.scss`, which the hover cards placed by CSS read; `elevation.test.ts` holds
+ * them to the same values. A Tooltip's outline is a Popover's on a control's corner,
+ * `--r-control`, which the test holds too.
  */
+import { rootFontSize } from './rem'
 
 /** A Popover's corner, `--r-overlay`, in rem. */
 export const POPOVER_RADIUS_REM = 0.6
@@ -18,11 +21,11 @@ export const TOOLTIP_RADIUS_REM = 0.4
 /** A Popover's shadow, `--shadow-3`: its drop and softness in pixels at a 16px root, and its opacity. */
 export const POPOVER_SHADOW = { y: 8, blur: 24, opacity: 0.35 } as const
 
-/** The root's font size in pixels, which a rem is. */
-function rootFontSize(): number {
-    if (typeof document === 'undefined') return 16
-    return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-}
+/**
+ * How far a Popover's arrow stands out of its edge, in pixels, which is also half its base: the
+ * Tooltip's, the menus', the hover cards'. `$arrow` in `styles/popover.scss`.
+ */
+export const POPOVER_ARROW = 6
 
 /**
  * A Popover's corner and shadow in pixels at the root's font size, as `tokens.css`'s rem are, so

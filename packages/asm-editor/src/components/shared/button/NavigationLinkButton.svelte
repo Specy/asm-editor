@@ -12,7 +12,7 @@
     let { href, children }: Props = $props()
 </script>
 
-<Card {href} class="navigation-link">
+<Card {href} direction="row" class="navigation-link">
     {@render children?.()}
     <div class="arrow">
         <FaArrowRight />
@@ -20,9 +20,7 @@
 </Card>
 
 <style lang="scss">
-    /* as specific as it must be to lay the card out in a row over Card's own column */
-    :global(a.card.navigation-link) {
-        flex-direction: row;
+    :global(.navigation-link) {
         align-items: center;
         justify-content: space-between;
         gap: 1rem;

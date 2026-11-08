@@ -491,17 +491,17 @@
             <!-- filled, at the page's size, each with its mark (owner, 2026-11-08) -->
             <div class="toolbar">
                 {#if open.size > 0 || unfolded.size > 0}
-                    <Button kind="secondary" style="gap: 0.5rem" onClick={collapseAll}>
+                    <Button kind="secondary" onClick={collapseAll}>
                         <Icon size="small"><FaCompressAlt /></Icon>
                         Collapse all
                     </Button>
                 {:else}
-                    <Button kind="secondary" style="gap: 0.5rem" onClick={() => expandAll()}>
+                    <Button kind="secondary" onClick={() => expandAll()}>
                         <Icon size="small"><FaExpandAlt /></Icon>
                         Expand all
                     </Button>
                 {/if}
-                <Button kind="secondary" style="gap: 0.5rem" onClick={() => expandAll(true)}>
+                <Button kind="secondary" onClick={() => expandAll(true)}>
                     <Icon size="small"><FaPrint /></Icon>
                     Print as PDF
                 </Button>
