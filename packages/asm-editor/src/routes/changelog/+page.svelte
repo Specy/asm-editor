@@ -1,5 +1,6 @@
 <script lang="ts">
     import Page from '#cmp/shared/layout/Page.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import { versions } from './versions'
     import FaCircle from '~icons/fa-solid/circle'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
@@ -26,8 +27,10 @@
 
 <DefaultNavbar />
 
-<Page cropped contentStyle="padding: 1rem; padding-top: 4rem">
-    <h1 style="margin-top: 1rem; margin-bottom: 2rem;">Changelog</h1>
+<Page hasNavbar cropped="70rem" contentStyle="padding: 1rem">
+    <div class="title-room">
+        <Header>Changelog</Header>
+    </div>
     <Column gap="0.6rem">
         {#each versions as version (version.version)}
             <Column gap="0.6rem">
@@ -40,8 +43,7 @@
                     </p>
                     {#if version.blogPost}
                         <ButtonLink
-                            cssVar="tertiary"
-                            hasIcon
+                            kind="secondary"
                             style="gap: 0.5rem; margin-left: auto; white-space: nowrap"
                             href={resolve('/blog/posts/[slug]', { slug: version.blogPost })}
                         >
@@ -75,32 +77,41 @@
 </Page>
 
 <style lang="scss">
+    /* the title starts where the other index pages' titles do (contentPages.css' room above it) */
+    .title-room {
+        padding-top: 1.5rem;
+    }
+    @media (max-width: 600px) {
+        .title-room {
+            padding-top: 0.75rem;
+        }
+    }
     .fading {
-        width: 1rem;
-        height: 1rem;
+        width: var(--fs-body);
+        height: var(--fs-body);
         margin-left: 2.1rem;
         margin-top: -0.1rem;
         color: var(--accent);
     }
     .version-title {
-        font-weight: normal;
+        font-weight: 400;
         width: 5rem;
         text-align: center;
         padding: 0.3rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background-color: var(--accent);
         color: var(--accent-text);
-        font-size: 1.2rem;
+        font-size: var(--fs-lead);
     }
     .title {
-        font-size: 1.3rem;
+        font-size: var(--fs-h3);
         color: var(--accent);
         margin-bottom: 0.4rem;
     }
     .version-content {
-        border-left: solid 0.2rem var(--accent);
+        border-left: 3px solid var(--accent);
         margin-left: 2.5rem;
-        font-size: 1.1rem;
+        font-size: var(--fs-prose);
         padding: 0 0 1rem 2rem;
     }
     @media (max-width: 600px) {

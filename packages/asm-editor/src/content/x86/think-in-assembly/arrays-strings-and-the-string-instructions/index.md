@@ -1,13 +1,13 @@
 # Arrays, strings and the string instructions
 
-An **array** is a consecutive run of equal-size elements. If a qword array begins at `numbers`,
+An **array** stores elements of the same size at consecutive memory addresses. If a qword array begins at `numbers`,
 then its elements begin at `numbers + 0`, `numbers + 8`, `numbers + 16`, and so on. There are two
 common ways to walk it:
 
 - keep an index and calculate `base + index * element_size`;
 - keep a pointer to the current element and advance it by `element_size`.
 
-Both forms need a boundary so that they never read beyond the array.
+In both cases, the loop needs to check where the array ends before reading an element.
 
 ## Walking an array by index
 
@@ -85,8 +85,8 @@ pointer_done:
 ```
 
 The pointer takes the values `numbers`, `numbers + 8`, through `numbers + 40`. After the final
-element it becomes `numbers_end`. The pre-test happens before every load, including the first one,
-so this shape is safe for an empty array whose start and end labels have the same address.
+element it becomes `numbers_end`. The loop checks the pointer before every load, including the first one,
+so it also works for an empty array whose start and end labels have the same address.
 
 The index form keeps the element number available. The pointer form already holds the next address
 to use. x86 string instructions use the pointer form through implicit registers.
@@ -111,12 +111,12 @@ that byte to a quoted `db` value. The explicit `, 0` creates it.
 
 For the smaller declaration `message: db "Hi!", 0`, memory contains:
 
-| address       | byte | meaning    |
-| ------------- | ---- | ---------- |
-| `message + 0` | `48` | `H`        |
-| `message + 1` | `69` | `i`        |
-| `message + 2` | `21` | `!`        |
-| `message + 3` | `00` | terminator |
+| address       | byte (hex) | meaning    |
+| ------------- | ---------- | ---------- |
+| `message + 0` | `48`       | `H`        |
+| `message + 1` | `69`       | `i`        |
+| `message + 2` | `21`       | `!`        |
+| `message + 3` | `00`       | terminator |
 
 A byte-at-a-time walk examines offsets 0, 1, 2, and 3. The load at offset 3 reads the terminator;
 `test al, al` then sets `ZF`, and the loop stops without treating that byte as a character. A valid
@@ -135,7 +135,7 @@ operands:
 | `scasb`     | set flags for `al - [rdi]`    | `rdi += 1`                 | `rdi -= 1`                 |
 | `cmpsb`     | set flags for `[rsi] - [rdi]` | `rsi += 1`, `rdi += 1`     | `rsi -= 1`, `rdi -= 1`     |
 
-The **direction flag**, `DF`, is persistent processor state. `cld` clears it for forward movement;
+The **direction flag**, `DF`, keeps its value until an instruction changes it. `cld` clears it for forward movement;
 `std` sets it for backward movement. A string instruction does not restore the old direction when
 it finishes. Execute `cld` whenever code requires forward movement instead of relying on whatever
 some earlier code left in `DF`.
@@ -151,15 +151,15 @@ destination.
 
 ## Repeating a string instruction
 
-A repeat prefix uses `rcx` as a count. Before each possible iteration, a zero `rcx` stops the
-instruction. Each completed iteration decrements `rcx`.
+A repeat prefix uses `rcx` as a count. If `rcx` is zero before an iteration, the instruction stops.
+Each completed iteration decrements `rcx`.
 
 - As used here, `rep` repeats `movs` or `stos` while `rcx` is nonzero.
 - `repe` repeats a comparison while `rcx` is nonzero and, after each comparison, `ZF=1`.
 - `repne` repeats a comparison while `rcx` is nonzero and, after each comparison, `ZF=0`.
 
-Here a bounded `rep movsb` copies six bytes, including the terminator. A bounded `rep stosb` then
-fills four other bytes.
+Here `rep movsb` copies six bytes, including the terminator. Then `rep stosb` fills four other
+bytes. Each operation uses `rcx` to limit how many bytes it writes.
 
 ```x86|playground|memory|no-flags
 default rel
@@ -188,7 +188,7 @@ _start:
     syscall
 ```
 
-The resulting destination bytes are:
+The resulting destination bytes, in hexadecimal, are:
 
 ```
 68 65 6C 6C 6F 00 00 00   41 41 41 41 00 00 00 00
@@ -199,7 +199,7 @@ changes `rdi`; after the fill, it is `dest + 12` and `rcx` is zero again.
 
 ## Scanning within a capacity
 
-`repne scasb` can look for a byte, but it must have a real bound. This example searches an
+`repne scasb` can look for a byte. Set its count to the number of bytes it can safely read. This example searches an
 eight-byte accessible range for a zero terminator:
 
 ```x86|playground|no-flags
@@ -245,7 +245,7 @@ Subtracting the start gives six examined bytes; subtracting one more gives the f
 length.
 
 If all eight bytes were nonzero, the scan would finish with `rcx=0` and `ZF=0`. The immediate
-`jnz` distinguishes that exhausted-input case from a match. A zero capacity is handled before the
+`jnz` distinguishes a scan that reached the end without finding a zero from a match. A zero capacity is handled before the
 scan because no comparison would run and there would be no new `ZF` result from `scasb`.
 
 ## Comparing two bounded byte sequences

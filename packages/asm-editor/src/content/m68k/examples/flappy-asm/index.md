@@ -6,8 +6,7 @@ Enter or the up arrow to start and flap; clicking the Screen also flaps. Release
 a key or mouse button gives only one flap. After a collision, tap again to restart. Choose **Stop**
 when you are done.
 
-The listing is long because it draws the scene as well as running the game. Use this map before
-reading it:
+The program draws the scene as well as running the game. Use this map to find each part:
 
 | Follow this part           | What it does                                                       |
 | -------------------------- | ------------------------------------------------------------------ |
@@ -51,7 +50,7 @@ frame:
     tst.w   d7
     beq     draw
     move.b  #8,d0
-    trap    #15                 ; hundredths of a second since the run started
+    trap    #15                 ; hundredths of a second since local midnight
     move.w  d1,seed             ; so the course depends on when the player began
     bsr     newpipes
     move.w  #PLAYING,state
@@ -849,7 +848,7 @@ PAPER   equ     $00FFFFFF
 ## Follow one frame
 
 `state` tells `frame` which part of the game to run. In `READY`, the bird waits for the first flap.
-That flap seeds a new set of pipes, sets the upward speed and changes `state` to `PLAYING`. On later
+That flap chooses new pipe gaps, sets the upward speed and changes `state` to `PLAYING`. On later
 frames, `playing` applies gravity, moves the pipes and checks for a hit. A hit changes `state` to
 `DEAD`; the bird then falls to the ground and waits for another flap. Every path reaches `draw`,
 which shows the completed picture and loops back to `frame`.
@@ -866,7 +865,7 @@ frame:
     beq     dead
 ```
 
-`readflap` returns 1 in `d0` when a new flap begins. The loop copies that answer to `d7` before
+`readflap` returns 1 in `d0` when a new flap begins. The loop copies that result to `d7` before
 using `d0` to inspect `state`. The routines called later leave `d7` alone, so the state code can
 still test the flap after those calls.
 
@@ -889,9 +888,9 @@ pressed:
     rts
 ```
 
-When all inputs are released, `held` becomes 0. On the next pressed read, the code sets `held` to
-1 and returns a flap. Further reads while it stays pressed return 0. This is why you release and
-tap again for each lift.
+When all inputs are released, `held` becomes 0. The next time `readflap` detects a press, it sets
+`held` to 1 and returns a flap. While any flap input remains pressed, later calls return 0. This
+is why you release and tap again for each lift.
 
 ## Move in sixteenths of a pixel
 
@@ -930,7 +929,7 @@ again and its counted word is cleared. It therefore joins the end of the same th
 
 `randgap` changes a word called `seed` with multiplication and addition, then uses its high byte
 to choose the next gap centre. The offset is 0 through 179, so `GAPMIN = 120` puts the centre at
-**120 through 299**. The first flap gets a seed from task 8's elapsed time, making the course
+**120 through 299**. The first flap gets a seed from task 8's clock reading, making the course
 depend on when you start. `GAPH = 140` makes each opening 140 pixels high, with `HALFGAP = 70`
 above and below its centre. If you change the opening height, change its half-height too.
 
@@ -938,9 +937,9 @@ above and below its centre. If you change the opening height, change its half-he
 
 `hittest` checks the ground first. It uses the bird's full height: when `birdy / 16 + BIRDH`
 reaches `GROUNDY`, the bird hits the ground. For a pipe, it uses a smaller rectangle. `HITL` and
-`HITR` inset the bird's horizontal span by `HITIN = 6` pixels, and the tested top and bottom are
-also inset by 6. A pipe can cause a hit only while its X span overlaps this rectangle and the
-rectangle extends above or below the gap.
+`HITR` move the left and right edges of the bird's collision rectangle inward by `HITIN = 6`
+pixels. The tested top and bottom are also moved inward by 6 pixels. A pipe can cause a hit only
+while its X span overlaps this rectangle and the rectangle extends above or below the gap.
 
 Task 92 mode 17 sets up a hidden drawing image. `draw` paints sky, pipes, ground, bird and text
 in that order, then task 94 shows the completed image. The drawing helpers supply the clouds,

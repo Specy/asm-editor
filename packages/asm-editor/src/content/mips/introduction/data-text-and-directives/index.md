@@ -8,9 +8,8 @@ These lines are **directives**. A directive is an instruction for the assembler 
 program; it is not an instruction that the processor runs. The assembler gathers the contents of
 each section into its own memory area, even if a source file switches between `.data` and `.text`.
 
-When the program runs, the processor's next executed address must point to an instruction in the
-text area. The data area is there for the program to use, but it is not part of the instruction
-sequence.
+When the program runs, the processor executes instructions from the text area. The program can
+use the bytes in the data area, but the processor does not run them as instructions.
 
 ## Place instructions and data
 
@@ -81,7 +80,8 @@ Each comma-separated value produces another item. For example, `.word 10, 20` pl
 therefore uses eight bytes. `.byte 1, 2, 3` uses three bytes.
 
 The `z` in `.asciiz` is a reminder that the assembler adds a zero byte. You may also encounter
-`.ascii "Hi"`; it places only the two character bytes. In concrete size terms:
+`.ascii "Hi"`; it places only the two character bytes. The two declarations use different amounts
+of memory:
 
 | source         | bytes reserved |
 | -------------- | -------------- |
@@ -92,14 +92,13 @@ Use `.asciiz` for course strings unless an exercise explicitly asks for the vers
 extra zero.
 
 `.space` reserves a number of bytes without giving each byte a separate declaration. In this
-Playground those bytes initially appear as zeroes. The important fact is the size: `.space 8`
-reserves eight consecutive addresses.
+Playground those bytes initially appear as zeroes. `.space 8` reserves eight consecutive bytes.
 
 ## Keep words aligned
 
 A word occupies four bytes. A word is **aligned** when its first address is a multiple of four.
 The directive `.align 2` moves the next declaration forward, if necessary, to such an address.
-For this lesson, remember the practical pair:
+Use these two directives together to place a word at an aligned address:
 
 ```mips
 .align 2       # next declaration begins at a multiple of 4
@@ -182,10 +181,10 @@ main:
 ```
 
 In this Playground, a global label named `main` selects `main` as the program's starting point.
-That is all you need from `.globl` here. Calls between parts of a program and labels shared between
-files come later.
+You will learn more about `.globl` when you work with calls between parts of a program and labels
+shared between files.
 
-## Two to write
+## Practice with data and the starting instruction
 
 Write a data section holding the three words 100, 200, and 300 at `values`, followed by eight bytes
 of room at `room`. Then put the address of `room` in `$t0`. The starter already includes the stop
@@ -268,7 +267,7 @@ main:
 
 </details>
 
-Keep this short map nearby while writing programs:
+Use this list as a reminder while writing programs:
 
 - `.data` selects declarations of bytes; `.text` selects instructions.
 - A label such as `values:` names an address.

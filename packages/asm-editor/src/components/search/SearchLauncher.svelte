@@ -10,6 +10,7 @@
     import { shortcutLabel, shortcutsStore, ShortcutAction } from '#stores/shortcutsStore.ts'
     import { openSearchPalette } from './paletteState.svelte'
     import { SITE_SCOPE } from '#lib/search/scope.ts'
+    import Kbd from '#cmp/shared/misc/Kbd.svelte'
 
     interface Props {
         placeholder?: string
@@ -59,9 +60,9 @@
     {onkeydown}
 >
     <span class="icon" aria-hidden="true"><FaSearch /></span>
-    <span class="placeholder">{placeholder}</span>
+    <span class="placeholder ellipsis">{placeholder}</span>
     {#if key}
-        <kbd>{shortcutLabel(key)}</kbd>
+        <Kbd>{shortcutLabel(key)}</Kbd>
     {/if}
 </button>
 
@@ -73,7 +74,7 @@
         width: 100%;
         min-width: 0;
         border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
-        border-radius: 0.5rem;
+        border-radius: var(--r-control);
         background-color: var(--secondary);
         color: var(--secondary-text);
         font: inherit;
@@ -89,11 +90,11 @@
     }
     .compact {
         padding: 0.45rem 0.6rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
     .full {
         padding: 0.8rem 1rem;
-        font-size: 1.05rem;
+        font-size: var(--fs-prose);
     }
     .icon {
         display: flex;
@@ -102,21 +103,13 @@
         height: 0.95em;
         opacity: 0.7;
     }
+    /* as dim as the placeholder beside it */
+    .search-launcher :global(.kbd) {
+        color: var(--text-muted);
+    }
     .placeholder {
         flex: 1;
         min-width: 0;
-        opacity: 0.7;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    kbd {
-        flex: none;
-        padding: 0.05rem 0.4rem;
-        border-radius: 0.3rem;
-        border: 1px solid var(--tertiary);
-        font-family: inherit;
-        font-size: 0.75rem;
-        opacity: 0.8;
+        color: var(--text-muted);
     }
 </style>

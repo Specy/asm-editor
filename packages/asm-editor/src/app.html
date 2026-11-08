@@ -9,6 +9,11 @@
         />
         <meta name="theme-color" content="#f2a65a" />
         <meta name="author" content="Enrico Menichelli (Specy)" />
+        <!-- every page's interface text is in Rubik: fetched now rather than once the CSS asks for
+             it, by the same URL as its @font-face (styles/fonts.css), so it is fetched once. Fira
+             Code is preloaded only by the home page, the one that opens on it: elsewhere its 113 KB
+             would hold up the first paint on a slow connection for a font the page may not use -->
+        <link rel="preload" href="/fonts/Rubik-VF.woff2" as="font" type="font/woff2" crossorigin />
         %sveltekit.head%
         <link rel="icon" type="image/png" href="/favicon.png" />
         <link rel="manifest" href="/manifest.json" />

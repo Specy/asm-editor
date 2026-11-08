@@ -1,6 +1,6 @@
 {
     "name": "Length of a string",
-    "description": "Walk to a string's zero byte and subtract its starting address to find its length.",
+    "description": "Find the length of a zero-terminated string by subtracting its starting address from the address of its zero byte.",
     "order": 6,
     "topic": "string-length"
 }

@@ -90,8 +90,8 @@ main:
 ```
 
 Each pair of loads reads the same bits from memory. Only the new leading bits differ. Sign
-extension preserves the signed reading -16; zero extension produces the positive unsigned
-reading. A word already fills the entire register, so `lw` does not need signed and unsigned
+extension preserves the signed value -16. Zero extension gives 240 for the byte and 65520 for
+the half. A word already fills the entire register, so `lw` does not need signed and unsigned
 versions.
 
 ## Read `offset(base)` one part at a time
@@ -170,7 +170,7 @@ address, `0($t3)` means memory at exactly that address.
 
 ## Your turn
 
-The first exercise starts with `i = 2`. Leave `numbers[i]` in `$t0`. Calculate `i * 4` with two
+The first exercise starts with `i = 2`. Load the value of `numbers[i]` into `$t0`. Calculate `i * 4` with two
 `add` instructions rather than writing the fixed offset 8.
 
 ```mips|playground|memory|exercise

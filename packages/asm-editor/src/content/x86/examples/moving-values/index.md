@@ -25,7 +25,7 @@ _start:
     syscall
 ```
 
-Here `dq 7` reserves eight bytes for `value` and starts them at 7. Square brackets mean “use the
+Here `dq 7` reserves eight bytes for `value` and stores the number 7 in them. Square brackets mean “use the
 contents at this address”: `mov rdx, [value]` reads 7, and `mov [value], rdx` writes 105. Without
 the brackets, a label stands for its address.
 
@@ -33,7 +33,7 @@ Run the program. Then enter `402000` in the **address box** of the memory panel.
 playground, the data section starts at `0x402000`, so those are the eight bytes belonging to
 `value`. They should read `69 00 00 00 00 00 00 00`: `69` is hexadecimal for 105, and x86 keeps
 the lowest byte first. In the register panel, `rbx` holds 15 and `rdx` holds 105. `rax` no longer
-holds 10 because the exit code put 60 there. The panel shows `3C`, hexadecimal for 60. A register
+holds 10 because `mov rax, 60` put the exit syscall number there. The panel shows `3C`, hexadecimal for 60. A register
 shows the value most recently written to it.
 
 The two lines that access `value` each have one memory operand. In the ordinary two-operand `mov`

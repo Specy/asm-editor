@@ -1,6 +1,6 @@
 {
     "name": "Fill an array with the numbers from 1 to 10",
-    "description": "Fill ten qwords with a counting loop, inspect their bytes, and practice matching each store to its slot.",
+    "description": "Fill ten qwords with a counting loop and inspect their bytes in memory.",
     "order": 3,
     "topic": "counting-loop",
     "template": 2

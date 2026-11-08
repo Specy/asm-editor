@@ -5,7 +5,7 @@
      * editor with an Emulator of its own does not belong in a side panel. The lecture itself opens
      * in a new tab: the Workbench never navigates ([ADR 0024](../../../../../../docs/adr/0024-workbench-is-a-host-agnostic-shell.md)).
      */
-    import { prefersReducedMotion } from 'svelte/motion'
+    import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import { slide } from 'svelte/transition'
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import HighlightedText from '#cmp/search/HighlightedText.svelte'
@@ -26,14 +26,14 @@
 
 <div class="section-card" class:expanded>
     <button type="button" class="head" aria-expanded={expanded} onclick={ontoggle}>
-        <span class="where">{section.courseName} › {section.lectureName}</span>
+        <span class="where ellipsis">{section.courseName} › {section.lectureName}</span>
         <span class="title"><HighlightedText text={section.title} {terms} /></span>
         {#if !expanded}
             <span class="excerpt"><HighlightedText text={excerpt} {terms} /></span>
         {/if}
     </button>
     {#if expanded}
-        <div class="body" transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}>
+        <div class="body" transition:slide={{ duration: motion(DUR_BASE) }}>
             <MarkdownRenderer
                 source={section.markdown}
                 playgrounds="code"
@@ -70,25 +70,22 @@
         min-width: 0;
     }
     .head:hover {
-        background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
+        background-color: var(--hover-bg);
     }
     .head:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: -2px;
     }
     .where {
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--accent);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
     .title {
         font-weight: 600;
     }
     .excerpt {
-        font-size: 0.85rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
         display: -webkit-box;
         -webkit-line-clamp: 3;
         line-clamp: 3;
@@ -101,14 +98,14 @@
         gap: 0.5rem;
         padding: 0 0.7rem 0.7rem;
         min-width: 0;
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
     }
     .body :global(._markdown p),
     .body :global(._markdown ul),
     .body :global(._markdown ol) {
         font-family: inherit;
-        font-weight: normal;
-        font-size: 0.92rem;
+        font-weight: 400;
+        font-size: var(--fs-small);
         width: 100%;
         margin: 0;
     }
@@ -123,7 +120,7 @@
         align-items: center;
         gap: 0.4rem;
         align-self: flex-start;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         color: var(--accent);
         text-decoration: underline;
     }

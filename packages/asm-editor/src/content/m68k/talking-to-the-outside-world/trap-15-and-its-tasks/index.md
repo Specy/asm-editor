@@ -20,7 +20,7 @@ For each request:
 
 Task 14 prints the string whose address is in `a1`. It reads bytes until the first zero byte and
 prints no newline. Task 13 uses the same argument and adds a newline after the string. The zero
-byte ends the text being printed; it does not end the program.
+byte marks the end of the string. It does not end the program.
 
 The strings below use `dc.b` to place text in memory. For these ASCII characters, the quoted text
 emits one byte per character, including each space and punctuation mark. The `, 0` after the quote
@@ -70,12 +70,12 @@ answer for the selected task.
 { "input": ["21"] }
 ```
 
-In an interactive run, task 4 waits for you to type a number in the console, after its output,
-and press Enter. In this example, the supplied input line is `21`, so the program receives it
+In an interactive run, task 4 waits for you to type a number in the console and press Enter.
+In this example, the supplied input line is `21`, so the program receives it
 without waiting for typing and prints `42`.
 
-Task 17 is a handy combination: it prints a zero-terminated string from `a1`, then prints the
-signed decimal number in `d1.l`, with no newline added. It performs the same output as task 14
+Task 17 prints a zero-terminated string from `a1`, then prints the signed
+decimal number in `d1.l`, with no newline added. It performs the same output as task 14
 followed by task 3.
 
 Task 15 prints an **unsigned** number in the base selected by `d2.b`. Hexadecimal digits are
@@ -111,14 +111,17 @@ currency: dc.b '€ ', 0
 
 ## Read a key and control the echo
 
-Task 5 reads one key without waiting for a whole line. It writes the character's byte to `d1.b`;
+Task 5 reads one key without waiting for a whole line. It writes the character's byte to `d1.b`.
 Enter is `$0D` (13). Tasks 2, 4 and 18 instead read a line ended with Enter. Task 2 stores its
 first 79 characters at `a1`, followed by zero, and returns their count in the whole of `d1.l`.
 
 Task 12 controls whether typed input is shown: `d1.b = 0` turns echo off, and another value turns
-it on. Task 16 hides the waiting input prompt with 0, shows it with 1, turns the line feed after
-a key read of Enter off with 2, and on with 3. These settings start on for each Build, and Undo
-restores a setting changed by the program. With echo off, a line read still starts a new line
+it on. Task 16 uses `d1.b` to control two more settings:
+
+- 0 hides the prompt shown while waiting for input, and 1 shows it.
+- 2 turns off the line feed after task 5 reads Enter, and 3 turns it on.
+
+These settings start on for each Build, and Undo restores a setting changed by the program. With echo off, a line read still starts a new line
 when Enter finishes it. Scripted Testcase answers are never echoed.
 
 ```m68k|playground|console|no-flags
@@ -145,8 +148,8 @@ click that panel before typing.
 ## Timers, interrupts and the cycle counter
 
 Task 32 with `d1.b = 6` configures a timer that sends regular **interrupt requests**. Tasks 62
-and 60 enable requests from keyboard and mouse events in the screen panel. These requests let a
-device call a handler while the program runs. See
+and 60 enable requests from keyboard and mouse events in the screen panel. These requests cause
+the processor to run a handler while the program runs. See
 [Interrupts and cycles](/learn/courses/m68k/talking-to-the-outside-world/interrupts-and-cycles)
 for complete examples.
 
@@ -179,7 +182,7 @@ that asks for the reading. The Cycles line over the registers counts the same wa
 
 Tasks 50 to 59 access only the files shown in the editor's file explorer. File numbers start at 0,
 with at most eight open at once. Task 51 opens an existing file, 52 creates or empties one,
-53 reads bytes, 54 writes them, 55 changes the position, and 56 closes it.
+53 reads bytes, 54 writes them, 55 changes the position within the file, and 56 closes it.
 Task 50 closes all of them, 57 deletes a file, and 59 checks whether it exists. Task 58 asks for a
 path in a dialog, which you can cancel. The [trap reference](/documentation/m68k/traps#files) lists
 each task's input registers and result codes:
@@ -198,7 +201,7 @@ The task returns 1 in `d0.w` when playback starts. This standard player plays on
 it returns 0 if it is busy, or if an existing file cannot be played as a WAV. If the path does not
 exist, the task leaves `d0` unchanged.
 
-A sound file contains **samples**: successive numbers describing the sound level at successive
+A sound file contains **samples**: numbers describing the sound level at evenly spaced
 instants. This example uses one byte per sample. These 8-bit samples are unsigned, with `$80` as
 the middle level; repeating `$80` gives silence. The two levels used here, `$C0` and `$40`, are
 equally far above and below that middle.
@@ -338,8 +341,8 @@ Change the waveform number at `$11` to 3 to hear the same pitches with a sine wa
 
 ## Your turn
 
-Print `The answer is 42` and end the program. The string at `$2000` stops before the number; task
-17 can print both parts in one request.
+Print `The answer is 42` and end the program. The string at `$2000` contains only the text before
+the number. Task 17 can print both parts in one request.
 
 ```m68k|playground|console|exercise
 ; your code here

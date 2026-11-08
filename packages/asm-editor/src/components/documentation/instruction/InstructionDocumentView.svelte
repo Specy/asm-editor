@@ -17,6 +17,7 @@
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import type { InstructionLesson } from '#lib/content/lectureInstructions.ts'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import InstructionTagBadge from '#cmp/documentation/entries/InstructionTagBadge.svelte'
     import { codeBlockStyle } from '#lib/content/codeBlockStyle.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
@@ -29,6 +30,7 @@
         type InstructionDocument
     } from '#lib/documentation/instructions/document.ts'
     import FlagStrip from './FlagStrip.svelte'
+    import FoldToggle from './FoldToggle.svelte'
     import FormPatternRow from './FormPatternRow.svelte'
     import InstructionLessons from './InstructionLessons.svelte'
     import OperandLegend, { symbolSlug } from './OperandLegend.svelte'
@@ -45,6 +47,11 @@
         aliases?: string[]
         /** The Lectures whose code uses it, the header's last line on the page. */
         lessons?: readonly InstructionLesson[]
+        /**
+         * The Operands legend's and a folded Forms section's headings drawn as folding headers
+         * (`FoldToggle`): the Workbench's panel's (owner, 2026-11-08). `/all` keeps its plain ones.
+         */
+        foldingToggles?: boolean
     }
 
     let {
@@ -54,7 +61,8 @@
         example,
         language,
         aliases = [],
-        lessons = []
+        lessons = [],
+        foldingToggles = false
     }: Props = $props()
 
     // the editor's colours and font for the highlighted forms, as code samples take them
@@ -67,13 +75,16 @@
     let marked = $state<string | undefined>()
     let showAll = $state<Record<number, boolean>>({})
     let legendOpen = $state(false)
+    /** The folded sections opened with their folding header (`foldingToggles`). */
+    let unfolded = $state<Record<number, boolean>>({})
 
     //what the reader did on one instruction is not done on the next, which a route shows in this
-    //same view: nothing marked, no section shown whole, the legend closed
+    //same view: nothing marked, no section shown whole or unfolded, the legend closed
     $effect(() => {
         void document.name
         marked = undefined
         showAll = {}
+        unfolded = {}
         legendOpen = false
     })
 
@@ -146,7 +157,10 @@
         <header class="header">
             <div class="title-line">
                 {#if !panel}
-                    <h1 class="name">{document.name}</h1>
+                    <!-- the instruction's page's title, in the page title's style (D8) -->
+                    <Header noMargin style="color: var(--accent); overflow-wrap: anywhere;"
+                        >{document.name}</Header
+                    >
                 {/if}
                 {#if showLongName || document.tags.length > 0}
                     <p class="identity">
@@ -252,7 +266,23 @@
                         </button>
                     {/if}
                 {/snippet}
-                {#if section.collapsed}
+                {#if section.collapsed && foldingToggles}
+                    <section class="section">
+                        <h2 class="heading">
+                            <FoldToggle
+                                label={sectionHeading(section.tags)}
+                                count={`${rows} ${rows === 1 ? 'row' : 'rows'}`}
+                                bind:open={
+                                    () => !!unfolded[index],
+                                    (open) => (unfolded = { ...unfolded, [index]: open })
+                                }
+                            />
+                        </h2>
+                        {#if unfolded[index]}
+                            {@render body()}
+                        {/if}
+                    </section>
+                {:else if section.collapsed}
                     <details class="section">
                         <summary
                             ><span class="heading">{sectionHeading(section.tags)}</span>
@@ -278,6 +308,7 @@
                 {disableLinks}
                 compact={panel}
                 collapsible={panel && document.operands.length > PANEL_LEGEND_LINES}
+                folding={foldingToggles}
             />
         {/if}
 
@@ -309,8 +340,11 @@
         gap: 1.4rem;
         min-width: 0;
     }
+    /* the panel's sizes, a step larger in an entry the Workbench's panel has expanded, which sets
+       `--entry-text-size` (EntryRow; owner, 2026-11-08): its prose, headings, explanations and
+       notes at --fs-body */
     .panel {
-        --instruction-prose-size: 0.92rem;
+        --instruction-prose-size: var(--entry-text-size, 0.92rem);
         gap: 0.8rem;
     }
     .header {
@@ -327,14 +361,6 @@
         row-gap: 0.2rem;
         min-width: 0;
     }
-    .name {
-        margin: 0;
-        font-size: 3.5rem;
-        line-height: 1.05;
-        font-weight: 600;
-        color: var(--accent);
-        overflow-wrap: anywhere;
-    }
     .identity {
         display: flex;
         flex-wrap: wrap;
@@ -342,15 +368,14 @@
         gap: 0.3rem 0.7rem;
         margin: 0;
         min-width: 0;
-        font-size: 1.3rem;
-        color: var(--background-text-muted);
-        opacity: 0.85;
+        font-size: var(--fs-h3);
+        color: var(--text-muted);
     }
     .panel .identity {
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
     }
     .long-name {
-        font-weight: normal;
+        font-weight: 400;
     }
     .instruction-tags {
         display: inline-flex;
@@ -365,8 +390,8 @@
     .header-facts {
         max-width: 80ch;
         margin: 0;
-        font-size: 0.9rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
     }
     /* its own spaces, which Svelte would trim from the span's text */
     .fact-dot {
@@ -407,10 +432,10 @@
     }
     .heading {
         margin: 0;
-        font-size: 1.25rem;
+        font-size: var(--fs-lead);
     }
     .panel .heading {
-        font-size: 0.9rem;
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     details.section > summary {
         display: flex;
@@ -419,24 +444,29 @@
         gap: 0.6rem;
         cursor: pointer;
         font-weight: 600;
-        font-size: 1.25rem;
+        font-size: var(--fs-lead);
     }
     .panel details.section > summary {
-        font-size: 0.9rem;
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     details.section > summary .heading {
         font-size: inherit;
     }
     .count {
-        font-size: 0.8rem;
-        font-weight: normal;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        font-weight: 400;
+        color: var(--background-text-prose);
     }
+    /* a section's explanation and its boxes' notes a step larger on the page than in the panel,
+       as their rows are (FormPatternRow; owner, 2026-11-08) */
     .explanation {
         margin: 0;
         max-width: 80ch;
-        font-size: 0.88rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-body);
+        color: var(--background-text-prose);
+    }
+    .panel .explanation {
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     /* Boxes are drawn with rules, not fills: the box's edge, a rule under its note and one
        between its rows, so a row and its opened forms read apart without a block of colour. */
@@ -445,7 +475,7 @@
         flex-direction: column;
         min-width: 0;
         border: 1px solid var(--doc-rule);
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
     }
     /* the rule under the note spans its box; the words stop at a readable measure */
     .note-text {
@@ -456,11 +486,12 @@
         margin: 0;
         padding: 0.45rem 0.8rem;
         border-bottom: 1px solid var(--doc-rule);
-        font-size: 0.9rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-body);
+        color: var(--background-text-prose);
     }
     .panel .note {
         padding: 0.35rem 0.5rem;
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     .rows {
         display: flex;
@@ -480,11 +511,12 @@
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         font: inherit;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         cursor: pointer;
     }
+    /* the hover tint over its fill (D4) */
     .show-all:hover {
-        background-color: color-mix(in srgb, var(--accent) 25%, var(--tertiary));
+        background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
     }
     /* set apart from the reference above it and the example below it */
     .description {
@@ -502,8 +534,8 @@
     .description :global(._markdown p),
     .description :global(._markdown ul),
     .description :global(._markdown ol) {
-        font-family: inherit;
-        font-weight: normal;
+        font-family: var(--font-ui);
+        font-weight: 400;
         font-size: inherit;
     }
     .panel .description :global(._markdown p),

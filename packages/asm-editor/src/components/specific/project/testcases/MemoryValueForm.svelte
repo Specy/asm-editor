@@ -8,8 +8,9 @@
      */
     import { onMount, untrack } from 'svelte'
     import type { AvailableLanguages, MemoryValue } from '#lib/Project.svelte.ts'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     import {
         escapeText,
         formatHex,
@@ -181,14 +182,16 @@
     </div>
     <div class="line">
         <label class="caption" for="{id}-address">At</label>
-        <input
+        <TextField
             id="{id}-address"
-            class="field address"
-            bind:this={addressInput}
+            class="address"
+            size="sm"
+            mono
+            bind:el={addressInput}
             bind:value={form.address}
             placeholder="{prefix}0000"
+            invalid={addressError !== undefined}
             aria-invalid={addressError !== undefined}
-            spellcheck="false"
             autocomplete="off"
             {onkeydown}
         />
@@ -209,30 +212,34 @@
             >{form.mode === 'string-chunk' ? 'Text' : 'Value'}</label
         >
         {#if form.mode === 'string-chunk'}
-            <input
+            <TextField
                 id="{id}-value"
-                class="field value"
-                bind:this={valueInput}
+                class="value"
+                size="sm"
+                mono
+                bind:el={valueInput}
                 bind:value={form.text}
                 placeholder="hello\n"
                 title="\n, \t, \r, \0 and \xHH write those characters, \\ a backslash"
+                invalid={valueError !== undefined}
                 aria-invalid={valueError !== undefined}
-                spellcheck="false"
                 autocomplete="off"
                 {onkeydown}
             />
         {:else}
-            <input
+            <TextField
                 id="{id}-value"
-                class="field value"
-                bind:this={valueInput}
+                class="value"
+                size="sm"
+                mono
+                bind:el={valueInput}
                 bind:value={form.numbers}
                 placeholder={form.mode === 'number'
                     ? formatHex(0n, { prefix, bytes: form.bytes })
                     : `${prefix}01 ${prefix}02 ${prefix}03`}
                 title="Hex ({prefix}1F), binary (%101) or decimal (31)"
+                invalid={valueError !== undefined}
                 aria-invalid={valueError !== undefined}
-                spellcheck="false"
                 autocomplete="off"
                 {onkeydown}
             />
@@ -251,7 +258,7 @@
         <span class="spacer"></span>
         <button class="text-button" onclick={onCancel}>Cancel</button>
         <Button
-            style="padding: 0.35rem 0.95rem; font-size: 0.85rem; border-radius: 0.35rem"
+            size="sm"
             disabled={addressError !== undefined || valueError !== undefined}
             onClick={save}
         >
@@ -280,40 +287,34 @@
     }
 
     .caption {
-        font-size: 0.82rem;
+        font-size: var(--fs-small);
         color: var(--hint);
     }
 
-    .field {
-        @include field;
-        @include mono;
-        padding: 0.35rem 0.6rem;
-        font-size: 0.85rem;
-
-        &[aria-invalid='true'] {
-            border-color: var(--tc-fail);
-        }
+    /* its address and value, small fields (styles/field.scss) */
+    .line :global(.text-field) {
+        font-size: var(--fs-small);
     }
 
-    .address {
+    .line :global(.address) {
         width: 7rem;
     }
 
-    .value {
+    .line :global(.value) {
         flex: 1;
         min-width: 8rem;
     }
 
     .echo {
         @include mono;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--hint);
         white-space: nowrap;
     }
 
     .error {
         margin-top: -0.25rem;
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
         color: var(--tc-fail);
     }
 

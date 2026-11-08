@@ -145,8 +145,8 @@ configuration call before using its result.
 
 ## Computing the wave
 
-A **square wave** alternates between a positive level and a negative level. One complete visit
-to both levels is a cycle. At 440 Hz, the pattern repeats 440 times per second.
+A **square wave** alternates between a positive level and a negative level. Each repetition
+of this pattern is a cycle. At 440 Hz, the pattern repeats 440 times per second.
 
 `r15d` tracks the position in that cycle, called its **phase**. Only its low 16 bits matter:
 positions 0 through 32767 select the positive half, and 32768 through 65535 select the negative
@@ -198,7 +198,7 @@ is `NOTE / chosen rate` seconds. The phase calculation adjusts the pitch to the 
 subject to integer rounding. The fade also happens once per sample, so its speed in seconds
 depends on that rate.
 
-Undo takes back the samples the undone `write` put in the buffer that have not been heard yet.
+Undoing a `write` removes any of its samples still waiting in the playback buffer.
 **Stop** silences the device at once.
 
 ## Try it

@@ -1,6 +1,11 @@
 <script lang="ts">
+    /**
+     * A language's or a course's **Card** on `/documentation` and `/learn/courses`: its name in its
+     * colour, what it is, and its links, the main one filled with that colour and covering the card.
+     */
     import type { ResolvedPathname } from '$app/types'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
     import { ThemeStore } from '#stores/themeStore.svelte.ts'
 
     type Action = { label: string; href: ResolvedPathname }
@@ -17,18 +22,21 @@
     let { headingId, title, description, accent = null, primary, secondary }: Props = $props()
 </script>
 
-<section
+<Card
+    element="section"
     class="content-link-card"
     style={accent ? `--card-accent: ${accent}` : ''}
     aria-labelledby={headingId}
 >
-    <h2 id={headingId}>{title}</h2>
-    <p>{description}</p>
+    <div class="card-body">
+        <h2 id={headingId}>{title}</h2>
+        <p>{description}</p>
+    </div>
     <div class="card-footer">
         {#if secondary}
             <ButtonLink
                 href={secondary.href}
-                cssVar="secondary"
+                kind="ghost"
                 bordered
                 style="flex: 1 1 auto; min-width: 0; z-index: 1">{secondary.label}</ButtonLink
             >
@@ -36,40 +44,28 @@
         <div class="primary-action">
             <ButtonLink
                 href={primary.href}
+                class="card-cover"
                 bg={accent ?? 'var(--accent)'}
                 color={accent ? ThemeStore.textOfColor(accent) : 'var(--accent-text)'}
                 style="position: static; width: 100%; height: 100%">{primary.label}</ButtonLink
             >
         </div>
     </div>
-</section>
+</Card>
 
 <style>
-    .content-link-card {
-        position: relative;
-        isolation: isolate;
+    /* the content and the footer pad themselves, where the card did, so the footer's rule runs
+       edge to edge */
+    .card-body {
         display: flex;
         flex-direction: column;
-        min-width: 0;
         gap: 1rem;
-        padding: 1.2rem;
-        border: 1px solid var(--tertiary);
-        border-radius: 0.75rem;
-        background: var(--secondary);
-        transition: background-color 0.2s;
-    }
-
-    .content-link-card:hover {
-        background-color: color-mix(
-            in srgb,
-            var(--card-accent, var(--accent)) 3%,
-            var(--secondary)
-        );
+        padding: 1.2rem 1.2rem 0.75rem;
     }
 
     h2 {
         margin: 0;
-        font-size: 1.45rem;
+        font-size: var(--fs-h3);
         font-weight: 600;
         line-height: 1.3;
         letter-spacing: -0.015em;
@@ -78,17 +74,19 @@
 
     p {
         margin: 0;
-        font-size: 1rem;
+        font-size: var(--fs-body);
         line-height: 1.6;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
 
+    /* a rule across the card, its edge's hairline; the other link, a ghost in its edge, draws less
+       than the main one */
     .card-footer {
         display: flex;
         gap: 0.5rem;
         margin-top: auto;
-        padding-top: 1rem;
-        border-top: 1px solid var(--tertiary);
+        padding: 0.75rem;
+        border-top: 1px solid var(--line);
     }
 
     .primary-action {
@@ -97,29 +95,18 @@
         min-width: 0;
     }
 
-    /* The primary link covers the card; the secondary button sits above it. */
-    .primary-action :global(a)::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: 0.75rem;
-    }
-
     @media (max-width: 600px) {
-        .content-link-card {
-            padding: 0.9rem;
+        .card-body {
+            padding: 0.9rem 0.9rem 0.6rem;
+        }
+        .card-footer {
+            padding: 0.6rem;
         }
     }
 
     @media (max-width: 360px) {
-        .content-link-card .card-footer :global(.btn) {
+        .card-footer :global(.btn) {
             padding-inline: 0.65rem;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .content-link-card {
-            transition: none;
         }
     }
 </style>

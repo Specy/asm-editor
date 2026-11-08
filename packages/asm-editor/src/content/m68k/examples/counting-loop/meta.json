@@ -1,6 +1,6 @@
 {
     "name": "Fill an array with the numbers from 1 to 10",
-    "description": "A dbra loop that writes ten words into reserved room, stepping the pointer itself, with the result read in the memory panel.",
+    "description": "Use a dbra loop to fill an array, advance its pointer, and inspect the values in the memory panel.",
     "order": 3,
     "topic": "counting-loop",
     "template": 2

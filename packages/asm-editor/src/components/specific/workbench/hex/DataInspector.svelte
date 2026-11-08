@@ -1,5 +1,6 @@
 <script lang="ts">
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
     import { inspectBytes } from './dataInspector'
 
     /**
@@ -51,12 +52,14 @@
             {/each}
         </dl>
     {:else}
-        <p class="empty">The File is empty.</p>
+        <EmptyState>The File is empty.</EmptyState>
     {/if}
 </section>
 
 <style lang="scss">
     .data-inspector {
+        /* its own padding is an empty state's */
+        --empty-state-padding: 0;
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
@@ -64,7 +67,7 @@
         border-top: 1px solid var(--wb-line, var(--tertiary));
         background: var(--secondary);
         color: var(--secondary-text);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         min-width: 0;
     }
     .side {
@@ -81,9 +84,9 @@
         gap: 0.5rem;
     }
     h3 {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         font-weight: 500;
-        opacity: 0.85;
+        color: var(--text-muted);
     }
     /* a narrow pane lays the readings out in two columns, so the inspector stays short */
     dl {
@@ -105,22 +108,20 @@
         min-width: 0;
     }
     dt {
-        opacity: 0.65;
-        font-family: monospace;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
     }
     dd {
         margin-left: auto;
-        font-family: monospace;
+        font-family: var(--font-mono);
         text-align: right;
         overflow-wrap: break-word;
         min-width: 0;
         user-select: all;
     }
+    /* dimmer than the muted names beside it: there is no value */
     .missing {
         opacity: 0.45;
         user-select: none;
-    }
-    .empty {
-        opacity: 0.7;
     }
 </style>

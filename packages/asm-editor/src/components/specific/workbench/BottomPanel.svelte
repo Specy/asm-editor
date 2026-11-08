@@ -8,17 +8,19 @@
      * Programs or more ([programs.md](../../../../../../docs/design/programs.md), decision 10).
      */
     import { untrack } from 'svelte'
-    import FaSpinner from '~icons/fa-solid/spinner'
     import FaTerminal from '~icons/fa-solid/terminal'
     import FaListUl from '~icons/fa-solid/list-ul'
     import FaExclamationCircle from '~icons/fa-solid/exclamation-circle'
     import type { Component } from 'svelte'
     import ProblemsList from '#cmp/specific/project/user-tools/ProblemsList.svelte'
-    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import TabStrip from '#cmp/shared/input/TabStrip.svelte'
     import type { BottomTab } from '#lib/workbench/WorkbenchSession.svelte.ts'
     import TerminalView from './TerminalView.svelte'
     import LogView from './LogView.svelte'
     import ProgramPicker from './ProgramPicker.svelte'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { useWorkbench } from './workbenchContext'
 
     interface Props {
@@ -29,6 +31,15 @@
 
     const { session, ui } = useWorkbench()
     const problems = $derived(session.activeDiagnostics.length)
+    /**
+     * The Problems tab's count wears the worst problem's colour (design-system.md, D9): errors and
+     * warnings soft, which reads at 4.5:1; a suggestion's dark second accent and the zero count
+     * filled.
+     */
+    const SEVERITY_TONES = { error: 'danger', warning: 'warning', suggestion: 'info' } as const
+    const problemTone = $derived(
+        problems === 0 || !session.worstSeverity ? 'neutral' : SEVERITY_TONES[session.worstSeverity]
+    )
     const terminal = session.emulator.peripherals.terminal
     const interactive = $derived(session.emulator.canExecute && !session.emulator.terminated)
     const readWaiting = $derived(terminal.pendingRead?.source === 'terminal')
@@ -49,46 +60,59 @@
         { id: 'log', label: 'Log', icon: FaListUl },
         { id: 'problems', label: 'Problems', icon: FaExclamationCircle }
     ]
+    //each tab names the body it shows, for a screen reader
+    const panelIds = $props.id()
+    const panelId = (id: string) => `${panelIds}-${id}`
+    const shownTabs = $derived(
+        tabs.map((tab) => ({ ...tab, title: iconTabs ? tab.label : undefined }))
+    )
 </script>
 
 <section class="bottom-panel" {style}>
-    <div class="tab-strip" role="tablist" aria-label="Output">
-        {#each tabs as tab (tab.id)}
-            <button
-                class="tab"
-                class:active={session.bottomTab === tab.id}
-                class:icon-only={iconTabs}
-                role="tab"
-                aria-selected={session.bottomTab === tab.id}
-                aria-label={iconTabs ? tab.label : undefined}
-                {@attach tooltip(iconTabs ? tab.label : undefined)}
-                onclick={() => (session.bottomTab = tab.id)}
-            >
-                <span class="tab-icon"><tab.icon /></span>
-                {#if !iconTabs}{tab.label}{/if}
-                {#if tab.id === 'problems'}
+    <!-- the tabs keep their width, and the Program picker and the run info give way first -->
+    <TabStrip
+        tabs={shownTabs}
+        selected={session.bottomTab}
+        ariaLabel="Output"
+        scroll={false}
+        {panelId}
+        onselect={(id) => (session.bottomTab = id as BottomTab)}
+        tabAttributes={(item) =>
+            iconTabs ? { 'aria-label': item.label, style: 'padding: 0 0.75rem' } : {}}
+    >
+        {#snippet tab(item)}
+            <span class="tab-face" class:icon-only={iconTabs}>
+                <span class="tab-icon"><item.icon /></span>
+                {#if !iconTabs}{item.label}{/if}
+                {#if item.id === 'problems'}
                     {#if session.analysisSpinnerVisible}
-                        <span class="badge pending" title="Analyzing">
-                            <FaSpinner />
-                        </span>
+                        <span class="pending" title="Analyzing"><Spinner /></span>
                     {:else}
-                        <span
-                            class="badge {problems > 0 ? session.worstSeverity : 'none'}"
+                        <Badge
+                            tone={problemTone}
+                            solid={problemTone === 'neutral' || problemTone === 'info'}
                             title="{problems} problem{problems === 1 ? '' : 's'}"
-                            >{problems > 99 ? '99+' : problems}</span
+                            >{problems > 99 ? '99+' : problems}</Badge
                         >
                     {/if}
                 {/if}
-            </button>
-        {/each}
-        <div class="spacer"></div>
+            </span>
+        {/snippet}
         <ProgramPicker />
         <!-- a phone's strip has no room for it beside the tabs; the Log says it too -->
         {#if session.runInfo && ui.deviceClass !== 'phone'}
-            <span class="run-info" title={session.runInfo}><span>{session.runInfo}</span></span>
+            <span class="run-info" title={session.runInfo}
+                ><span class="ellipsis">{session.runInfo}</span></span
+            >
         {/if}
-    </div>
-    <div class="tab-body" class:hidden={session.bottomTab !== 'terminal'} role="tabpanel">
+    </TabStrip>
+    <div
+        class="tab-body"
+        class:hidden={session.bottomTab !== 'terminal'}
+        id={panelId('terminal')}
+        role="tabpanel"
+        aria-label="Terminal"
+    >
         <TerminalView
             {terminal}
             errors={session.errorStrings}
@@ -100,10 +124,22 @@
             commandLineFocus={session.commandLineFocus}
         />
     </div>
-    <div class="tab-body" class:hidden={session.bottomTab !== 'log'} role="tabpanel">
+    <div
+        class="tab-body"
+        class:hidden={session.bottomTab !== 'log'}
+        id={panelId('log')}
+        role="tabpanel"
+        aria-label="Log"
+    >
         <LogView entries={session.log} visible={session.bottomTab === 'log'} />
     </div>
-    <div class="tab-body" class:hidden={session.bottomTab !== 'problems'} role="tabpanel">
+    <div
+        class="tab-body"
+        class:hidden={session.bottomTab !== 'problems'}
+        id={panelId('problems')}
+        role="tabpanel"
+        aria-label="Problems"
+    >
         {#if problems > 0}
             <div class="problems">
                 <ProblemsList
@@ -112,11 +148,11 @@
                 />
             </div>
         {:else}
-            <p class="empty">
+            <EmptyState>
                 {session.sourceView === 'live'
                     ? 'No problems in the Files.'
                     : 'The Build reported no problems.'}
-            </p>
+            </EmptyState>
         {/if}
     </div>
 </section>
@@ -135,105 +171,34 @@
         overflow: hidden;
     }
 
-    /* the mockup's tab strip: a shade darker than the panel, ruled underneath, each tab ruled on
-       its right, and the shown tab in the panel's colour, open at the bottom onto the panel. The
-       rule is each part's own bottom border rather than the strip's with the tabs laid over it,
-       which at a fractional screen scale could land a pixel apart and draw it twice */
-    .tab-strip {
+    /* the strip is TabStrip's; a tab here is its icon, its name and, for the Problems, their
+       count */
+    .tab-face {
         display: flex;
-        align-items: stretch;
-        flex: none;
-        height: 2rem;
-        background-color: var(--wb-strip);
-
-        > :global(*) {
-            border-bottom: 1px solid var(--wb-line);
-        }
-    }
-
-    .tab {
-        display: flex;
-        flex: none;
         align-items: center;
         gap: 0.45rem;
-        padding: 0 1rem;
-        background: transparent;
-        color: var(--secondary-text);
-        font-size: 0.8rem;
         font-weight: 600;
-        border-right: 1px solid var(--wb-line);
-        cursor: pointer;
-
-        &:not(.active) {
-            color: color-mix(in srgb, var(--secondary-text) 60%, transparent);
-        }
-
-        &:not(.active):hover {
-            color: var(--secondary-text);
-        }
-
-        &.active {
-            background-color: var(--secondary);
-            border-bottom-color: var(--secondary);
-        }
 
         &.icon-only {
             gap: 0.35rem;
-            padding: 0 0.75rem;
         }
     }
 
     .tab-icon {
         display: grid;
         place-items: center;
-        width: 0.9rem;
-        height: 0.9rem;
+        width: var(--fs-small);
+        height: var(--fs-small);
     }
 
-    .badge {
+    /* the spinner in the count's place while the source is analysed, as large as the count */
+    .pending {
         display: grid;
         place-items: center;
-        min-width: 1.1rem;
+        width: 1.1rem;
         height: 1.1rem;
-        padding: 0 0.3rem;
-        border-radius: 999px;
-        font-size: 0.65rem;
-        font-weight: 700;
-        background-color: var(--accent2);
-        color: var(--accent2-text);
-
-        &.none {
-            background-color: var(--tertiary);
-            color: var(--tertiary-text);
-        }
-
-        &.error {
-            background-color: var(--red);
-            color: var(--red-text);
-        }
-
-        &.warning {
-            background-color: #d19a3f;
-            color: #181818;
-        }
-
-        &.pending {
-            background: transparent;
-            color: var(--hint);
-            padding: 0.15rem;
-            animation: spin 650ms linear infinite;
-        }
-    }
-
-    @keyframes spin {
-        to {
-            transform: rotate(360deg);
-        }
-    }
-
-    .spacer {
-        flex: 1;
-        min-width: 0;
+        color: var(--hint);
+        font-size: var(--fs-small);
     }
 
     .run-info {
@@ -241,18 +206,15 @@
         align-items: center;
         min-width: 0;
         padding: 0 0.9rem 0 0.6rem;
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
 
         /* one line, cut short rather than wrapped in a strip one line tall */
-        > span {
-            overflow: hidden;
-            white-space: nowrap;
-            text-overflow: ellipsis;
-        }
     }
 
     .tab-body {
+        /* an empty state in line with the Terminal's and the Log's text */
+        --empty-state-padding: var(--wb-output-padding);
         display: flex;
         flex-direction: column;
         flex: 1;
@@ -270,12 +232,5 @@
         overflow: auto;
         scrollbar-gutter: stable;
         padding: var(--wb-output-padding);
-    }
-
-    .empty {
-        margin: 0;
-        padding: var(--wb-output-padding);
-        font-size: 0.8rem;
-        color: var(--hint);
     }
 </style>

@@ -1,6 +1,13 @@
+<script module lang="ts">
+    //the first Page after the app starts is the one the reader landed on, which shows at once; only
+    //a Page a navigation brings in flies in. A property, which each later Page reads
+    const pages = { landed: false }
+</script>
+
 <script lang="ts">
     import { navigationStore } from '#stores/navigationStore.ts'
     import { fly } from 'svelte/transition'
+    import { motion } from '#src/styles/motion.ts'
     interface Props {
         cropped?: boolean | string
         style?: string
@@ -19,6 +26,9 @@
         hasNavbar,
         fillsScreen = false
     }: Props = $props()
+
+    const arriving = pages.landed
+    pages.landed = true
 </script>
 
 <main
@@ -28,7 +38,7 @@
     {style}
     in:fly|global={{
         y: $navigationStore.direction === 'back' ? 8 : -8,
-        duration: 500
+        duration: arriving ? motion(500) : 0
     }}
 >
     <div

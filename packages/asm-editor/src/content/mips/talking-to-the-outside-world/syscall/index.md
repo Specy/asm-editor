@@ -20,13 +20,13 @@ These five services are enough for the examples and exercises on this page:
 |      10 | end the program                | —                 | —      |
 |      11 | print one character            | low byte of `$a0` | —      |
 
-The registers are part of the Playground's contract for each service. Other services use different
+Each service expects its inputs and returns its results in specific registers. Other services use different
 registers. Floating-point services, for example, use `$f12` for an input and `$f0` for a result.
 
 In the MIPS architecture, `syscall` deliberately raises a **synchronous exception**: an event caused
 by the instruction being executed. The Playground handles that event by performing the selected
 service and then lets the program continue. The later **Exceptions and Coprocessor 0** lecture
-explains the exception mechanism; the service convention is all you need here.
+explains how exceptions work. For now, use the three steps above to request a service.
 
 ## Printing and exiting
 
@@ -112,10 +112,12 @@ Press Run, type a number in the console and press Enter. The program pauses at s
 input arrives, then continues from the instruction after `syscall`.
 
 Notice what happened to `$v0`: it held the service number 5 before `syscall`, and the read service
-replaced it with the integer that was entered. Any service result replaces the previous value in its
-result register. Playground services preserve all other general-purpose and floating-point
-registers; a service with a documented memory result can still change that memory. Move a register
-result somewhere safe before loading another service number into `$v0`.
+replaced it with the integer that was entered. Move that result to another register before loading
+another service number into `$v0`.
+
+A service result replaces the previous value in its result register. Playground services leave all
+other general-purpose and floating-point registers unchanged. Services that return data in memory
+can still change that memory.
 
 ## Making sound
 
@@ -165,7 +167,7 @@ main:
 ```
 
 The first three calls use service 33 to play the notes C, E and G one after another. The next
-three calls use service 31 to start those same notes within a few instructions of each other.
+three calls use service 31 to start those same notes a few instructions apart.
 They sound together as a **chord** and finish their one-second duration even though the program
 has already ended.
 
@@ -282,11 +284,12 @@ than 1 it writes nothing.
 ### Program control, time and less common services
 
 - Service 10 ends the run. Service 17 also ends it and takes an exit code in `$a0`.
-- Service 30 returns elapsed Playground program time in milliseconds, with the low 32 bits in `$a0`
-  and the high 32 bits in `$a1`. Service 32 takes milliseconds in `$a0` and waits before the next
-  instruction. The Playground stays responsive, and the service avoids a busy-wait loop that would
-  repeatedly spend the program's instruction budget. In a testcase, the clock starts at zero and
-  service 32 advances it immediately without a real delay.
+- Service 30 returns milliseconds since 1970-01-01 UTC, with the low 32 bits in `$a0` and the high
+  32 bits in `$a1`. In a Testcase, this clock starts at 2000-01-01 UTC.
+- Service 32 takes milliseconds in `$a0` and waits before the next instruction. The Playground
+  stays responsive, and the service avoids a busy-wait loop that would repeatedly spend the
+  program's instruction budget. In a Testcase, the wait finishes immediately and advances the
+  clock by the requested duration.
 - Services 31 and 33 play a note, as shown above.
 - Service 9 allocates bytes from the heap and returns their address in `$v0`. Under the Playground's
   default memory layout, that heap begins at `0x10040000`; a different memory layout can place it

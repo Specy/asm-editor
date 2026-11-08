@@ -82,7 +82,8 @@ example, 48879 divided by 16 is 3054 with 15 left over; 15 becomes the `F` at th
 digits afterwards, the program fills the buffer backwards. It starts with a zero terminator near
 `buffer_end`, then `dec de` places each new character in front of those already stored.
 
-The `divide` loop uses the shift and subtract method from Multiply and divide, with the remainder.
+The `divide` loop uses the shift and subtract method from Multiply and divide to find both the
+quotient and the remainder.
 Each division takes sixteen passes because `hl` holds a 16-bit number. Think of `hl` as unread
 dividend bits followed by quotient bits being built. `add hl, hl` shifts the next dividend bit out
 of the top of `hl` into the C flag and leaves a zero at the bottom. `rla` shifts that bit into the

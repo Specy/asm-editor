@@ -67,10 +67,10 @@ loop_end:
     syscall
 ```
 
-Once execution reaches `loop`, the body runs before the next test. That gives this shape a useful
-rule: the count is positive at the start of every pass. The `beq` before `loop` establishes that
-rule by handling zero separately. At the bottom, `bne` performs the test and the backward jump
-together.
+Once execution reaches `loop`, the body runs before the next test. The `beq` before `loop` is a
+**guard**: it skips the loop when the starting count is zero. With the starting count of 10 shown
+here, the count is positive at the start of every pass. At the bottom, `bne` performs the test and
+the backward jump together.
 
 Without the guard, a starting count of zero would still run the body once. The update would then
 change the count to -1, so the bottom test would send execution backwards again. A bottom-tested

@@ -1,5 +1,6 @@
-A string sits at `0x9000` with a zero byte after it. The program walks to that zero, then subtracts
-the starting address from the address it reached. The answer, 15, ends up in `hl`.
+A string sits at `0x9000` with a zero byte after it. This is called a zero-terminated string. The
+program scans the string until it finds that zero, then subtracts the starting address from the
+address of the zero byte. The length, 15, ends up in `hl`.
 
 There is no separate length or count for this string. Its zero byte marks where it ends. Open the
 program in the editor, choose **Build**, then use **Step** to watch `hl` move through memory. You

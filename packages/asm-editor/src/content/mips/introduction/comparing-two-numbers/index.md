@@ -39,7 +39,7 @@ The `pc`, or **program counter**, holds the address of the next instruction to e
 the example and watch it move to `equal` after the `beq`. The instruction that would put 99 in
 `$s0` does not run, so `$s0` stays 0. The code at `equal` runs and puts 1 in `$s1`.
 
-Equality only asks whether the bits match. Signed and unsigned readings do not change that answer,
+Equality only asks whether the bits match. Treating the values as signed or unsigned does not change that answer,
 so `beq` and `bne` do not need separate unsigned versions.
 
 ## Keep the answer with `slt`
@@ -100,8 +100,8 @@ main:
     syscall
 ```
 
-Use the signed family when negative values are meaningful, such as temperatures or coordinates.
-Use the unsigned family for values that represent nonnegative quantities such as addresses, byte
+Use signed comparisons when negative values are meaningful, such as temperatures or coordinates.
+Use unsigned comparisons for values that represent nonnegative quantities such as addresses, byte
 counts, and sizes. The `u` changes only how the comparison reads the bits; it does not change the
 bits in either source register.
 
@@ -160,8 +160,9 @@ The first exercise supplies three pairs of values. Write the four requested comp
 - `$s2`: signed `$t2 < $t3`;
 - `$s3`: signed `$t5 < $t4`.
 
-Use only `slt` and `sltu` for the comparisons. The test covers a signed/unsigned disagreement, equal
-values, and operands that must be read in the requested order.
+Use only `slt` and `sltu` for the comparisons. For the first pair, signed and unsigned comparisons
+give different results. The second pair contains equal values. For the third pair, check the order
+of the operands carefully.
 
 ```mips|playground|exercise
 .text
@@ -203,7 +204,8 @@ main:
 
 For the second exercise, leave the smaller signed value from each pair in `$s0`, `$s1`, and `$s2`.
 Use `slt` for each comparison, then use `beq` or `bne` to decide whether to replace the value you
-first copied. The three pairs make both branch outcomes occur and include an equal pair.
+first copied. With these three pairs, some branches will be taken and others will not. One pair
+contains equal values.
 
 ```mips|playground|exercise
 .text

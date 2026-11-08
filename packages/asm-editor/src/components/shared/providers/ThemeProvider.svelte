@@ -11,13 +11,26 @@
     let scrollbar = $derived(ThemeStore.theme.scrollbar)
     let background = $derived(ThemeStore.theme.background)
     let variables = $derived(themeCssVariables(ThemeStore.theme, ThemeStore.meta))
+    let text = $derived(
+        new TinyColor(background.color).isDark()
+            ? ThemeStore.meta.textForDark
+            : ThemeStore.meta.textForLight
+    )
+
+    //the page's own scrollbar belongs to the document's root, above <body> and the theme's element:
+    //its colour, and the text colour its thumb's hover mixes in, have to be there too
+    $effect(() => {
+        const root = document.documentElement
+        root.style.setProperty('--scroll-accent', scrollbar.color)
+        root.style.color = text
+    })
 </script>
 
 <Body
     style={`
 		--scroll-accent: ${scrollbar.color};
 		background-color: ${background.color};
-		color: ${new TinyColor(background.color).isDark() ? ThemeStore.meta.textForDark : ThemeStore.meta.textForLight};
+		color: ${text};
 	`}
 />
 

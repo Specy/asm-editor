@@ -83,7 +83,7 @@
             <div class="row" style="gap:0.3rem">
                 <Button
                     active={entry[1].id === selectedId}
-                    cssVar="tertiary"
+                    kind="secondary"
                     onClick={() => {
                         selectedId = entry[1].id
                     }}
@@ -92,26 +92,27 @@
                 </Button>
                 {#if entry[1].id === selectedId}
                     <Button
-                        hasIcon
                         style="min-height: 2.2rem"
+                        aria-label="Save the shortcut"
                         onClick={() => {
                             shortcutsStore.updateKey(entry[0], currentShortcut)
                             selectedId = -1
                         }}
                     >
-                        <Icon size={1}>
+                        <Icon size="body">
                             <FaCheck />
                         </Icon>
                     </Button>
                 {:else}
                     <Button
-                        hasIcon
                         style="min-height: 2.2rem"
-                        cssVar={entry[0] !== entry[1].defaultValue ? 'accent' : 'tertiary'}
+                        kind="secondary"
+                        active={entry[0] !== entry[1].defaultValue}
+                        aria-label="Reset to the default shortcut"
                         disabled={entry[0] === entry[1].defaultValue}
                         onClick={() => shortcutsStore.updateKey(entry[0], entry[1].defaultValue)}
                     >
-                        <Icon size={1}>
+                        <Icon size="body">
                             <FaUndo />
                         </Icon>
                     </Button>
@@ -127,13 +128,15 @@
         padding: 0.8rem;
         flex-direction: column;
         padding-top: 0;
-        gap: 0.4rem;
+        /* the same room either side of the rule between two shortcuts, 0.2rem more than the 0.4rem
+           that left the keys touching it */
+        gap: 0.6rem;
         overflow-y: auto;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
     .input-row {
         justify-content: space-between;
-        padding-bottom: 0.4rem;
+        padding-bottom: 0.6rem;
         align-items: center;
         padding-left: 0.4rem;
         border-bottom: 1px solid var(--wb-line, var(--secondary));

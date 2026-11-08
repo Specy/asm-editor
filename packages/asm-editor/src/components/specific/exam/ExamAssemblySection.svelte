@@ -8,14 +8,15 @@
      * The exam keeps the access it had in the old editor
      * ([the design record](../../../../../../docs/design/workbench.md), Layout and behaviour): no
      * Explorer, AI, Search or Settings, the Testcases read only, the documentation without its
-     * links (`EXAM_PANEL_ACCESS`). The prompt is a panel of the exam's own, open when the section
-     * opens, and in review mode the teacher's review agent is another.
+     * links (`EXAM_PANEL_ACCESS`). Its Debug tools are docked as sections of the debug column
+     * rather than floating windows, whatever the student's Preference, which the exam's missing
+     * Settings could not change. The prompt is the session's, a panel at the Workbench's left (over
+     * it on a phone), and in review mode the teacher's review agent is a panel of the exam's own.
      */
     import Workbench from '#cmp/specific/workbench/Workbench.svelte'
     import { EXAM_PANEL_ACCESS } from './examAccess'
-    import Header from '#cmp/shared/layout/Header.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
-    import FaFileAlt from '~icons/fa-solid/file-alt'
     import type { AssemblyCodingSection } from '#lib/exam.ts'
     import { makeProject } from '#lib/Project.svelte.ts'
     import type { Emulator } from '#lib/languages/Emulator.ts'
@@ -27,7 +28,6 @@
         /** The section's answer: read once when it opens, then written as the Entry file changes. */
         code: string
         readonly?: boolean
-        prompt: Snippet
         /** The teacher's review agent, in review mode, drawn with the section's Emulator. */
         review?: Snippet<[Emulator]>
         /** The Workbench's open panel, so the exam's header can open the review agent. */
@@ -38,7 +38,6 @@
         section,
         code = $bindable(),
         readonly = false,
-        prompt,
         review,
         activePanel = $bindable(null)
     }: Props = $props()
@@ -60,14 +59,6 @@
     })
 
     const hostPanels = $derived<WorkbenchHostPanel[]>([
-        {
-            id: 'prompt',
-            title: 'Exercise',
-            icon: FaFileAlt,
-            group: 'top',
-            content: promptPanel,
-            defaultOpen: true
-        },
         ...(review
             ? [
                   {
@@ -82,12 +73,6 @@
     ])
 </script>
 
-{#snippet promptPanel(_context: WorkbenchPanelContext)}
-    <div class="prompt">
-        {@render prompt()}
-    </div>
-{/snippet}
-
 {#snippet reviewPanel(context: WorkbenchPanelContext)}
     <div class="review">
         {@render review?.(context.emulator)}
@@ -99,13 +84,14 @@
         {project}
         {readonly}
         access={EXAM_PANEL_ACCESS}
+        debugTools="sections"
         documentationLinks={false}
         searchLectures={false}
         {hostPanels}
         bind:activePanel
     >
         {#snippet loading()}
-            <Header>Loading emulator...</Header>
+            <Spinner size="lg" label="Loading emulator…" />
         {/snippet}
     </Workbench>
 </div>
@@ -117,12 +103,6 @@
         flex: 1;
         min-height: 0;
         min-width: 0;
-    }
-
-    .prompt {
-        padding: 0.8rem 1rem;
-        overflow-y: auto;
-        flex: 1;
     }
 
     .review {

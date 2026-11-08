@@ -22,7 +22,6 @@
     .note {
         line-height: 1.5;
         max-width: 60rem;
-        color: var(--background-text-muted);
 
         a {
             color: var(--accent);

@@ -1,5 +1,6 @@
-Hold the left button and move the pointer over the Screen to paint. Turn the wheel to change
-colour, shown in the square at the top-left. Thirty seconds without a pointer event ends the program.
+Hold the left mouse button and move the pointer over the Screen to paint. Turn the wheel to change
+colour. The square at the top-left shows the chosen colour. The program ends after thirty seconds
+without a pointer event.
 
 This combines the framebuffer drawing from the earlier examples with the input-event loop from
 keyboard control. Three pieces are new:
@@ -311,9 +312,10 @@ from 0 through 9. Adding `'0'` produces that digit's character code, and writing
 
 `EVIOCGBIT(0, 4)` asks for four bytes of event-type bits in `types`. Event type number `n` has
 bit `n`: `EV_ABS` is 3, so its mask is `1 << 3`, or binary `1000`. The instruction
-`test dword [types], 1 << EV_ABS` checks that bit without changing the stored bits. `jnz` takes
-the device when the bit is set. Otherwise the program closes it and continues searching. This
-identifies the pointer among this Screen's devices, not every possible Linux input device.
+`test dword [types], 1 << EV_ABS` checks that bit without changing the stored bits. When the bit
+is set, `jnz` branches to `found_tablet` to use that device. Otherwise the program closes it and
+continues searching. This identifies the pointer among this Screen's devices, not every possible
+Linux input device.
 
 `EVIOCGBIT(0, 4)` and `EVIOCGABS(ABS_X)` are NASM macros supplied by the include file.
 Their arguments determine the request number at assembly time.
@@ -326,7 +328,7 @@ and `maximum` describe the range, and `value` is the current position. The listi
 structures but uses only their `maximum` and `value` fields: it assumes the zero minimum
 reported by this Screen.
 
-The Screen starts with a whole pixel coordinate and sends an integer in the tablet's range. For a
+The Screen starts with an integer pixel coordinate and sends an integer in the tablet's range. For a
 320-pixel-wide Screen, pixel 160 becomes `160 × 32767 ÷ 320`, rounded down: 16383. The program
 reverses that scaling by rounding **up**:
 
@@ -513,6 +515,6 @@ paths with `snprintf` and searches through `event31`. Its byte array of type bit
    including a repeat value of 2. At `SYN_REPORT`, call `paint` when either flag is nonzero.
    Inside `paint`, where it currently loads `r8d` from `colours`, choose `PAPER` instead when
    `erasing` is nonzero. Leave the wheel's chosen colour intact for the next left-button stroke.
-3. Add white, `0x00ffffff`, to `colours`. `COLOURS` follows, since NASM counts the table's bytes.
+3. Add white, `0x00ffffff`, to `colours`. `COLOURS` updates automatically, since NASM counts the table's bytes.
 4. Change `@screen` to `width=640 height=480` and paint again. The conversion now uses twice
    as many pixels on each axis, and the brush still lands under the pointer.

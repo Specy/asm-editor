@@ -14,6 +14,7 @@
     import FaBook from '~icons/fa-solid/book'
     import FaFileAlt from '~icons/fa-solid/file-alt'
     import { useWorkbench } from './workbenchContext'
+    import Kbd from '#cmp/shared/misc/Kbd.svelte'
 
     //`compact` is the variant for one of two side-by-side editors: less branding, same actions
     let { group, compact = false }: { group: EditorGroup; compact?: boolean } = $props()
@@ -129,7 +130,7 @@
                         <li>
                             <button class="link" onclick={() => ui.searchDocumentation()}>
                                 <FaBook /> Search documentation
-                                <kbd>Ctrl K</kbd>
+                                <Kbd class="shortcut">Ctrl K</Kbd>
                             </button>
                         </li>
                     {/if}
@@ -148,7 +149,8 @@
                                 >
                                     <FaFileAlt />
                                     <span class="file-name">{name(path)}</span>
-                                    {#if folder(path)}<span class="file-dir">{folder(path)}</span
+                                    {#if folder(path)}<span class="file-dir ellipsis"
+                                            >{folder(path)}</span
                                         >{/if}
                                 </button>
                             </li>
@@ -217,22 +219,22 @@
     }
     h1 {
         margin: 0;
-        font-size: 2.2rem;
+        font-size: var(--fs-h2);
         font-weight: 600;
         letter-spacing: -0.01em;
     }
     .tagline {
         margin: 0.2rem 0 0;
         font-size: 1.1rem;
-        opacity: 0.6;
+        color: var(--text-muted);
     }
     .status {
         margin: 0;
-        opacity: 0.85;
+        color: var(--text-muted);
     }
     h2 {
         margin: 0 0 0.5rem;
-        font-size: 1.05rem;
+        font-size: var(--fs-prose);
         font-weight: 600;
     }
     .columns {
@@ -268,12 +270,13 @@
         text-align: left;
         :global(svg) {
             flex-shrink: 0;
-            width: 1rem;
+            width: var(--fs-body);
         }
     }
     .link:hover,
     .inline-link:hover {
-        filter: brightness(1.2);
+        text-decoration: underline;
+        text-underline-offset: 0.15em;
     }
     .link:focus-visible,
     .inline-link:focus-visible {
@@ -284,27 +287,18 @@
     .file-name {
         white-space: nowrap;
     }
+    /* --text-muted's share of the panel's text, named here as the link around it is the accent */
     .file-dir {
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-        color: var(--secondary-text);
-        opacity: 0.55;
+        color: color-mix(in srgb, var(--secondary-text) 68%, transparent);
         font-size: 0.9em;
     }
-    kbd {
+    .link :global(.shortcut) {
         margin-left: auto;
-        padding: 0.05rem 0.35rem;
-        border-radius: 0.25rem;
-        background: var(--tertiary);
-        color: var(--tertiary-text);
-        font-size: 0.75rem;
-        font-family: inherit;
     }
     .hints ul {
         gap: 0.35rem;
-        opacity: 0.7;
-        font-size: 0.95rem;
+        color: var(--text-muted);
+        font-size: var(--fs-body);
     }
     .hint-action {
         padding: 0;
@@ -325,9 +319,10 @@
             border-radius: 0.2rem;
         }
     }
+    /* at the 70% the list's opacity gave them, as the words beside them are muted */
     .hints li::before {
         content: '›';
         margin-right: 0.5rem;
-        color: var(--accent);
+        color: color-mix(in srgb, var(--accent) 70%, transparent);
     }
 </style>

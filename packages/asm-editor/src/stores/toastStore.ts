@@ -5,6 +5,9 @@ enum Colors {
     Orange = '#FFA500',
     Hint = 'var(--accent)'
 }
+/** How long a pill shows, unless its caller says otherwise; a copy button's "Copied" lasts as long. */
+export const PILL_DURATION = 2000
+
 export enum ToastType {
     Toast,
     Pill
@@ -55,7 +58,7 @@ function Toast() {
     function warn(text: string, timeout = 3000) {
         execute(text, timeout, Colors.Orange, 'Warning')
     }
-    function logPill(text: string, timeout = 2000) {
+    function logPill(text: string, timeout = PILL_DURATION) {
         execute(text, timeout, Colors.Hint, '', ToastType.Pill)
     }
     function close() {

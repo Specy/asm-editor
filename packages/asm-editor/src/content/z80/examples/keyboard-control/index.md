@@ -1,4 +1,5 @@
-A square you steer. The arrow keys set its direction, and it keeps moving after you release them.
+This program draws a square that you steer with the arrow keys. The keys set its direction, and it
+keeps moving after you release them.
 When it leaves the play area, it reappears at the opposite edge. Choose **Build**, then **Run**,
 click the Screen panel so it has the keyboard focus, and press the arrows. A focus ring appears around
 the Screen. Press **Stop** when you are done; the program keeps running until you stop it.
@@ -204,9 +205,8 @@ the step was positive. The Z80 has no `jr p` form, so this condition uses `jp`.
 
 The play area starts at Y = `TOP = 16`, below two reserved 8-pixel text rows. The title occupies
 the first of those rows; the second stays blank. An upward step below 16 can still be a small byte,
-so Y needs one
-comparison with `TOP` and another with `BOTTOM + 1` to catch both edges. The title is printed
-before command 11 turns on double buffering. That command starts the off-screen image as a copy of
+so Y needs one comparison with `TOP` and another with `BOTTOM + 1` to catch both edges.
+The title is printed before command 11 turns on double buffering. That command starts the off-screen image as a copy of
 the visible one, and each frame clears only the rectangle from Y = 16 down. The title stays in
 place while the square is redrawn.
 

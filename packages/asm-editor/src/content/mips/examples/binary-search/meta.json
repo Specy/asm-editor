@@ -1,6 +1,6 @@
 {
     "name": "Binary search",
-    "description": "Search twelve sorted words by halving the candidate range; the result is an index or -1 when the value is absent.",
+    "description": "Use binary search to find a value in twelve sorted words and return its index, or -1 if it is absent.",
     "order": 15,
     "topic": "binary-search"
 }

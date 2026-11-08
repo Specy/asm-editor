@@ -31,15 +31,16 @@ In this editor, fresh memory is displayed as `00`, so the six reserved locations
 before the run. That is a property of the fresh emulator memory, not something `.ds` wrote. After
 the run they contain `01 02 03 04 05 06`, and `hl` is `9006`: one byte past the last location used.
 
-The pointer step must match the element size. For an array of 16-bit words, each element occupies two
-adjacent bytes, so a pointer walk needs two `inc hl` instructions per element. `(hl)` itself does not
+The pointer must advance by the element size. For an array of 16-bit words, each element occupies two
+adjacent bytes, so use two `inc hl` instructions to reach the next element. `(hl)` itself does not
 know what kind of value the byte belongs to.
 
 ## Reaching one element by its number
 
 Sometimes the program has an element number in a register and needs its address directly. The Z80 has
 no instruction that combines an array address and a register index, so build the address yourself.
-For a byte array, widen an unsigned index from `a` into `hl`, then add the array's starting address.
+For a byte array, copy the unsigned index from `a` into `l` and set `h` to zero. This gives `hl` the
+same index as a 16-bit value. Then add the array's starting address.
 
 ```z80|playground|memory
     .org 0x8000
@@ -78,14 +79,15 @@ address later because Z80 words in memory are little endian.
 words: .dw 100, 200, 300, 400
 ```
 
-When code uses every element in order, a pointer walk is usually simpler. Address calculation is for
-the occasions when the program genuinely needs one particular element.
+When code uses every element in order, advancing a pointer is usually simpler than calculating each
+address from an index. Use an index when the program needs to access a particular element directly.
 
 ## Strings end with a zero byte
 
 A **string** is a byte array whose bytes are character codes. A zero-terminated string uses a zero byte
 to mark the end of the text. `.asciz "hi"` defines exactly three bytes: the bytes for `h` and `i`,
 followed by a zero byte. The zero is the **terminator**; it is not a character in the text.
+The longer string `"hi z!"` has this layout:
 
 | address    | byte in hex | as a character |
 | ---------- | ----------- | -------------- |
@@ -170,9 +172,9 @@ players:
     .db 3, 30, 0
 ```
 
-`a` finishes at `0x3C`, or 60. `equ` keeps the field offsets used by code in one named place. If the
-layout changes, update those names and `SIZE`; the actual record definitions must also gain, remove,
-or reorder their bytes to match the new layout. In the loop, `ld de, SIZE` and `add ix, de` advance
+`a` finishes at `0x3C`, or 60. `equ` gives each field offset a name, so the code can use `Y` instead
+of repeating the number 1. If the layout changes, update the offset values and `SIZE`, then change
+the bytes in the record definitions to match. In the loop, `ld de, SIZE` and `add ix, de` advance
 `ix` by one record size.
 
 ## Practice: a string walk and a record walk

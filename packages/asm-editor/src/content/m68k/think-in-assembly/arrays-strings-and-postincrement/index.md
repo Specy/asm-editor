@@ -52,7 +52,7 @@ numbers: dc.l 10, 20, 30, 40, 50
 `d0` ends at 150. The body runs five times, and `a0` moves through `$2000`, `$2004`, `$2008`,
 `$200C`, and `$2010`. The last access then advances it to `$2014`, the address immediately after
 the array. This is called a **one-past-end pointer**. It is useful as a stopping position, but it
-does not point to an element of this array and must not be dereferenced as though it did.
+does not point to an element of this array, so do not use it to read another element.
 
 The test before the loop matters when an element count may be zero. Without it, the body would
 still run once before `dbra` could decide whether to repeat. For a fixed array whose count is known
@@ -111,11 +111,11 @@ message: dc.b $48, $69, $21, 0
 | `message + 2` | `$21` | `!`            |
 | `message + 3` | `$00` | the terminator |
 
-A sentinel loop does not receive a separate count. It keeps reading until it finds a special value,
-which is zero here. That traversal is safe only when a terminator is guaranteed to occur within
+A **sentinel loop** keeps reading until it finds a special value, which is zero here, instead of
+using a separate count. This loop is safe only when a terminator is guaranteed to occur within
 readable memory. Without that guarantee, the loop can continue beyond the intended bytes.
 
-The length is the number of payload bytes before the terminator:
+The length is the number of character bytes before the terminator:
 
 ```m68k|playground|memory|no-flags
     move.l #message, a0
@@ -136,8 +136,8 @@ length. After that read, `a0` is `$2004`, one byte past the terminator.
 
 ## Copy the terminator too
 
-A string copy must include the terminator. The destination must have capacity for every payload
-byte **plus one more byte** for that terminator. The source below has three payload bytes and a
+A string copy must include the terminator. The destination must have room for every character
+byte **plus one more byte** for that terminator. The source below has three character bytes and a
 terminator, and `copy` reserves exactly four bytes:
 
 ```m68k|playground|memory|no-flags
@@ -227,11 +227,11 @@ values: dc.l 10, 20, 30
 
 </details>
 
-### 2. Copy a terminated string into exact-size storage
+### 2. Copy a string with room for its terminator
 
-`source` contains the two payload bytes `$4F` and `$4B`, followed by a guaranteed zero terminator.
+`source` contains the two character bytes `$4F` and `$4B`, followed by a guaranteed zero terminator.
 Copy the complete string to `dest` with postincrement addressing. `dest` has capacity for exactly
-three bytes: two payload bytes plus the terminator. Do not change the guard byte after it.
+three bytes: two character bytes plus the terminator. Do not change the guard byte after it.
 
 ```m68k|playground|memory|exercise
 ; your code here

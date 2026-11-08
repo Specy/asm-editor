@@ -2,8 +2,8 @@ This program asks for two numbers and prints their sum. Open it in the editor, c
 then **Run**. At each prompt, type a number in the console and press Enter. The run waits at
 `in a, (P_NUM)` until you do.
 
-Port `0x11` handles decimal numbers in both directions: reading it parses the line you typed and
-puts the resulting byte in `a`; writing a byte to it prints that byte as an unsigned decimal
+Port `0x11` handles decimal input and output. Reading it parses the line you typed and
+puts the resulting byte in `a`. Writing a byte to it prints that byte as an unsigned decimal
 number. This program reads through `0x11`, then uses the 16-bit output port for a sum that might
 exceed 255.
 

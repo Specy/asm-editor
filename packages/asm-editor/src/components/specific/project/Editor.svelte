@@ -1,4 +1,5 @@
 <script lang="ts" generics="ViewZoneProps extends Record<string, unknown> = Record<string, never>">
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { type Component, mount, onDestroy, onMount, unmount, untrack } from 'svelte'
     import type monaco from 'monaco-editor'
     import type {
@@ -1185,7 +1186,10 @@
 
 <div bind:this={mockEditor} class="mock-editor">
     {#if !editor}
-        <h1 class="loading">Loading editor...</h1>
+        <!-- not announced: in a playground the emulator's wait before it already was -->
+        <div class="loading">
+            <Spinner size="lg" label="Loading editor…" announce={false} />
+        </div>
     {/if}
 </div>
 
@@ -1197,6 +1201,9 @@
 ></div>
 
 <style lang="scss">
+    @use '../../../styles/radius.scss' as *;
+    @use '../../shared/button/tray.scss';
+
     :global(.compiled-section, .compiled-section-margin) {
         background-color: color-mix(
             in srgb,
@@ -1231,27 +1238,21 @@
     }
 
     :global(.error-line) {
-        background-color: var(--red);
-        color: var(--red-text);
+        background-color: var(--danger);
+        color: var(--danger-text);
     }
 
     :global(.selected-line-text) {
         color: var(--accent-text) !important;
     }
 
-    /* the context menus' surface: a translucent tint of the widget's colour that blurs what is
-       beneath, edged with their hairline (menu.border) and lifted by their shadow. The standalone
-       editor defines no --vscode-widget-border or --vscode-shadow-lg, so Monaco's own were none */
+    /* Monaco's find widget, a Tray over the code's top right corner, as the Hex editor's find bar
+       is: under .overlayWidgets, where Monaco places it, the rule outweighs Monaco's own
+       `.monaco-editor .find-widget` */
+    :global(.monaco-editor .overlayWidgets .find-widget) {
+        @include tray.surface;
+    }
     :global(.find-widget) {
-        border: 1px solid var(--vscode-menu-border) !important;
-        border-radius: 0.4rem !important;
-        background-color: color-mix(
-            in srgb,
-            var(--vscode-editorWidget-background) 85%,
-            transparent
-        ) !important;
-        backdrop-filter: blur(4px);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35) !important;
         top: 1rem !important;
         right: 2.4rem !important;
     }
@@ -1278,14 +1279,19 @@
         border-radius: 0.2rem;
     }
 
-    :global(.monaco-resizable-hover),
-    :global(.monaco-hover) {
-        border-radius: 0.4rem !important;
+    /* Monaco's hover, a hover card over data drawn as the Tooltip is: a solid Popover, edged with
+       its line (editorHoverWidget.border, editorTheme.ts). The wrapper Monaco puts round the
+       content hover draws that edge, and the hover inside it rounds within the edge; a hover with
+       no wrapper draws it itself */
+    :global(.monaco-editor .monaco-resizable-hover),
+    :global(.monaco-editor .monaco-hover) {
+        border-radius: var(--r-overlay) !important;
+        box-shadow: var(--shadow-3) !important;
     }
 
-    :global(.monaco-hover) {
-        box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
-        border: 1px solid var(--accent2) !important;
+    :global(.monaco-editor .monaco-resizable-hover > .monaco-hover) {
+        border-radius: nested-radius(var(--r-overlay), $border: 1px) !important;
+        box-shadow: none !important;
     }
 
     :global(.monaco-overflow-widgets) {
@@ -1302,7 +1308,7 @@
     }
 
     :global(.monaco-editor .monaco-hover .hover-row:not(:first-child):not(:empty)) {
-        border-top: 1px solid var(--accent2) !important;
+        border-top: 1px solid var(--vscode-editorHoverWidget-border) !important;
     }
 
     :global(.monaco-editor .monaco-hover hr) {
@@ -1314,9 +1320,9 @@
         overflow-x: auto;
         display: block;
         margin: 0.5rem 0;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         border-radius: 0.5rem;
-        border: solid 0.1rem var(--primary);
+        border: solid 1px var(--primary);
         width: fit-content;
         max-width: 100%;
     }
@@ -1328,7 +1334,7 @@
 
     :global(.monaco-hover thead th) {
         padding: 0.2rem 0.4rem;
-        border-right: 0.1rem solid var(--secondary);
+        border-right: 1px solid var(--secondary);
     }
 
     :global(.monaco-hover thead th:first-child) {
@@ -1350,7 +1356,7 @@
 
     :global(.monaco-hover td) {
         padding: 0.2rem 0.4rem;
-        border: 0.1rem solid var(--tertiary);
+        border: 1px solid var(--tertiary);
     }
 
     :global(.monaco-hover td:first-child) {
@@ -1406,7 +1412,7 @@
         cursor: pointer;
         margin-left: 0.4rem;
         background-color: var(--accent);
-        border-radius: 1rem;
+        border-radius: var(--r-pill);
     }
 
     :global(.hovered-glyph) {
@@ -1421,7 +1427,7 @@
 
     //what runs when it is not what the line shows, after the line's text
     :global(.line-note) {
-        color: var(--warning, #d49a30);
+        color: var(--warning);
         font-style: italic;
     }
 
@@ -1430,10 +1436,10 @@
     :global(.patched-line-marker) {
         width: 3px !important;
         margin-left: 3px;
-        background-color: var(--warning, #d49a30);
+        background-color: var(--warning);
     }
     :global(.patched-line) {
-        background-color: color-mix(in srgb, var(--warning, #d49a30) 12%, transparent);
+        background-color: color-mix(in srgb, var(--warning) 12%, transparent);
     }
 
     :global(.selected-line-number) {
@@ -1441,7 +1447,7 @@
     }
 
     :global(.error-line-number) {
-        color: var(--red-text) !important;
+        color: var(--danger-text) !important;
     }
 
     //A breakpoint on the highlighted line would vanish into the same accent color.
@@ -1460,8 +1466,8 @@
         margin-left: 0.4rem;
         cursor: pointer;
         box-sizing: border-box;
-        border: 0.15rem solid var(--accent);
-        border-radius: 1rem;
+        border: 2px solid var(--accent);
+        border-radius: var(--r-pill);
     }
 
     .editor {
@@ -1470,7 +1476,6 @@
         inset: 0;
         flex: 1;
         z-index: 2;
-        box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
     }
 
     .loading {

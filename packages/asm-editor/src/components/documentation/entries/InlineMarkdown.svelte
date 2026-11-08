@@ -13,10 +13,10 @@
 
 <style>
     .inline-markdown :global(code) {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.9em;
         padding: 0.05rem 0.3rem;
-        border-radius: 0.3rem;
+        border-radius: var(--r-chip);
         background-color: var(--tertiary);
         color: var(--tertiary-text);
     }

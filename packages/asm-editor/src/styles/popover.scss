@@ -1,0 +1,29 @@
+// A Popover (CONTEXT.md; design-system.md, D3): raised `--tertiary` over what it is about, edged
+// with its own text at 15%, on `--r-overlay` and `--shadow-3`. One with an arrow draws that surface
+// with `PopoverOutline` (components/shared/floating/), one without with `surface` here; the two
+// agree through `styles/elevation.ts`.
+
+// What a Popover's content is drawn with, on its content root: the surface's text, and `--line`
+// redefined as that text at 15%, since the theme's line, a `--tertiary` tint, disappears on a
+// `--tertiary` fill (D7). Its separators read `--line`, and so does `PopoverOutline`'s edge.
+@mixin content {
+    --line: color-mix(in srgb, var(--tertiary-text) 15%, transparent);
+    color: var(--tertiary-text);
+}
+
+// A Popover drawn by CSS, for one with no arrow: the fill, edge, corner and shadow `PopoverOutline`
+// draws for one with an arrow. Translucent and blurring what is beneath, as the menus are, or
+// `$solid`, as the Tooltip and the hover cards over data are, so that their text reads over a busy
+// canvas (tooltips.md, decision 11).
+@mixin surface($solid: false) {
+    @include content;
+    border: 1px solid var(--line);
+    border-radius: var(--r-overlay);
+    box-shadow: var(--shadow-3);
+    @if $solid {
+        background-color: var(--tertiary);
+    } @else {
+        background-color: color-mix(in srgb, var(--tertiary) 85%, transparent);
+        backdrop-filter: blur(4px);
+    }
+}

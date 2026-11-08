@@ -1,6 +1,6 @@
 {
     "name": "The screen, keyboard and mouse through traps",
-    "description": "This M68K has no device at any address: the screen, the keyboard and the mouse are all trap #15 tasks. Drawing, colours, double buffering, key state and the pointer, each with a program you can run.",
+    "description": "Use trap #15 tasks to draw on the Screen and read the keyboard and mouse. Try colours, double buffering, held keys and mouse input in runnable programs.",
     "order": 1,
     "topic": "mmio"
 }

@@ -44,7 +44,7 @@
         onclick={() => preferencesStore.setValue('memoryPanelSize', DEFAULT_MEMORY_PANEL_SIZE)}
     >
         <FaMemory />
-        <span class="strip-label">Memory</span>
+        <span class="strip-label ellipsis">Memory</span>
     </button>
 </div>
 
@@ -68,8 +68,8 @@
 
         :global(svg) {
             flex: none;
-            width: 0.8rem;
-            height: 0.8rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
 
         &:hover {
@@ -77,7 +77,7 @@
         }
 
         &:focus-visible {
-            outline: solid 0.1rem var(--accent);
+            outline: solid 1px var(--accent);
             outline-offset: -0.2rem;
         }
     }
@@ -98,15 +98,12 @@
         gap: 0.6rem;
         min-height: 0;
         padding: 0.6rem 0;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
 
     .strip-label {
         writing-mode: vertical-rl;
-        white-space: nowrap;
         min-height: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        opacity: 0.85;
+        color: var(--text-muted);
     }
 </style>

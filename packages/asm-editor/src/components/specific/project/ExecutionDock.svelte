@@ -6,8 +6,11 @@
         label: string
         title: string
         icon: Component
-        /** A colour that says how the thing it opens went, such as failing Testcases in red. */
-        tone?: 'red' | 'green'
+        /**
+         * A colour that says how the thing it opens went, such as failing Testcases in the danger
+         * colour.
+         */
+        tone?: 'danger' | 'success'
         onClick: () => void
     }
 
@@ -97,19 +100,19 @@
      * one tray spans the bar and the buttons share its width.
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
-    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
+    import { tooltip, type TooltipContent } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaPlay from '~icons/fa-solid/play'
     import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'
     import FaStepForward from '~icons/fa-solid/step-forward'
-    import FaRegClock from '~icons/fa-regular/clock'
+    import FaClock from '~icons/fa-solid/clock'
     import FaStop from '~icons/fa-solid/stop'
     import FaFastBackward from '~icons/fa-solid/fast-backward'
     import FaUndo from '~icons/fa-solid/undo'
     import FaFlask from '~icons/fa-solid/flask'
     import FaCode from '~icons/fa-solid/code'
-    import FaSpinner from '~icons/fa-solid/spinner'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import FaVolumeUp from '~icons/fa-solid/volume-up'
     import FaVolumeMute from '~icons/fa-solid/volume-mute'
 
@@ -160,6 +163,11 @@
         onUndo: () => void
         onStep: () => void
         onTest?: () => void
+        /**
+         * The dock as a picture, for a backdrop nothing can point at (the home page's): the same
+         * buttons, words and states, without their Tooltips.
+         */
+        decorative?: boolean
     }
 
     let {
@@ -191,8 +199,12 @@
         onPause,
         onUndo,
         onStep,
-        onTest
+        onTest,
+        decorative = false
     }: Props = $props()
+
+    /** A control's Tooltip, which a decorative dock leaves out. */
+    const tip = (content: TooltipContent) => !decorative && tooltip(content)
 
     const hasEnd = $derived(showExecution && (hasTests || actions.length > 0 || !!sound))
     /** Whether anything precedes the view switch in its tray, which a divider then sets apart. */
@@ -274,15 +286,15 @@
                     class:progress={!!progress}
                     onclick={onBuild}
                     disabled={buildDisabled || building || running}
-                    {@attach tooltip(progress?.phase ?? buildButton.title)}
+                    {@attach tip(progress?.phase ?? buildButton.title)}
                     aria-label={buildButton.label}
                     aria-busy={building}
                 >
-                    <Icon size={1}>
+                    <Icon size="body">
                         {#if progress}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <Spinner />
                         {:else if building}
-                            <FaRegClock />
+                            <FaClock />
                         {:else}
                             <FaWrench />
                         {/if}
@@ -293,7 +305,7 @@
                     <button
                         type="button"
                         class="tool"
-                        {@attach tooltip('Stop building and go back to editing')}
+                        {@attach tip('Stop building and go back to editing')}
                         aria-label="Cancel the Build"
                         onclick={progress.onCancel}>Cancel</button
                     >
@@ -307,15 +319,15 @@
                     disabled={compilation.disabled}
                     aria-label={compilation.label}
                     aria-busy={compilation.busy}
-                    {@attach tooltip(
+                    {@attach tip(
                         compilation.warning ??
                             'Compile the source and the Files it includes with Compiler Explorer'
                     )}
                     onclick={compilation.onCompile}
                 >
-                    <Icon size={0.9}>
+                    <Icon size="small">
                         {#if compilation.busy}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <Spinner />
                         {:else}
                             <FaCode />
                         {/if}
@@ -329,7 +341,7 @@
                     <select
                         class="tool optimization"
                         aria-label="Optimization"
-                        {@attach tooltip('Compiler optimization')}
+                        {@attach tip('Compiler optimization')}
                         value={compilation.optimization.value}
                         disabled={compilation.busy || compilation.disabled}
                         onchange={(event) =>
@@ -345,7 +357,7 @@
                     <select
                         class="tool compiler"
                         aria-label="Source compiler"
-                        {@attach tooltip('Source compiler')}
+                        {@attach tip('Source compiler')}
                         value={compilation.compiler.value}
                         disabled={compilation.busy || compilation.disabled}
                         onchange={(event) =>
@@ -360,7 +372,7 @@
                     <button
                         type="button"
                         class="tool"
-                        {@attach tooltip('Cancel source compilation')}
+                        {@attach tip('Cancel source compilation')}
                         aria-label="Cancel source compilation"
                         onclick={compilation.onCancel}>Cancel</button
                     >
@@ -372,10 +384,10 @@
                 type="button"
                 class="tool"
                 onclick={onStop}
-                {@attach tooltip('End the Debug session')}
+                {@attach tip('End the Debug session')}
                 aria-label="Stop"
             >
-                <Icon size={0.8}>
+                <Icon size="small">
                     <FaStop />
                 </Icon>
                 <span class="label">Stop</span>
@@ -388,7 +400,7 @@
                 class:primary={!restartable}
                 onclick={() => (restartable ? onRestart?.() : running ? onPause() : onRun())}
                 disabled={restartable ? buildDisabled || building : executionDisabled || building}
-                {@attach tooltip(
+                {@attach tip(
                     restartable
                         ? 'Reset the program to the start'
                         : running
@@ -403,7 +415,7 @@
                         class:reserved={face.word !== runFace}
                         aria-hidden={face.word !== runFace}
                     >
-                        <Icon size={0.8}>
+                        <Icon size="small">
                             <face.icon />
                         </Icon>
                         <span class="label">{face.word}</span>
@@ -416,10 +428,10 @@
                 class="tool"
                 disabled={undoDisabled || running || !canUndo}
                 onclick={onUndo}
-                {@attach tooltip('Undo the last step')}
+                {@attach tip('Undo the last step')}
                 aria-label="Undo"
             >
-                <Icon size={0.8}>
+                <Icon size="small">
                     <FaUndo />
                 </Icon>
                 <span class="label">Undo</span>
@@ -429,10 +441,10 @@
                 class="tool emphasis"
                 disabled={executionDisabled || running || building}
                 onclick={onStep}
-                {@attach tooltip('Run one instruction')}
+                {@attach tip('Run one instruction')}
                 aria-label="Step"
             >
-                <Icon size={0.8}>
+                <Icon size="small">
                     <FaStepForward />
                 </Icon>
                 <span class="label">Step</span>
@@ -456,7 +468,7 @@
                     {#snippet face(option)}
                         <span class="view">
                             {#if option.icon}
-                                <Icon size={0.85}>
+                                <Icon size="small">
                                     <option.icon />
                                 </Icon>
                             {/if}
@@ -477,7 +489,7 @@
                     class:playing={sound.playing && !sound.muted}
                     onclick={sound.onToggle}
                     aria-pressed={!sound.muted}
-                    {@attach tooltip(
+                    {@attach tip(
                         sound.loading
                             ? 'Loading sounds…'
                             : sound.muted
@@ -486,9 +498,9 @@
                     )}
                     aria-label="Sound"
                 >
-                    <Icon size={0.9}>
+                    <Icon size="small">
                         {#if sound.loading}
-                            <span class="busy-spinner"><FaSpinner /></span>
+                            <Spinner />
                         {:else if sound.muted}
                             <FaVolumeMute />
                         {:else}
@@ -504,14 +516,14 @@
                     class="tool"
                     onclick={() => onTest?.()}
                     disabled={buildDisabled || building || running}
-                    {@attach tooltip(
+                    {@attach tip(
                         debugging
                             ? 'End the Debug session and run the Testcases'
                             : 'Run the Testcases'
                     )}
                     aria-label="Test"
                 >
-                    <Icon size={0.9}>
+                    <Icon size="small">
                         <FaFlask />
                     </Icon>
                     <span class="label">Test</span>
@@ -522,10 +534,10 @@
                     type="button"
                     class="tool action {action.tone ?? ''}"
                     onclick={action.onClick}
-                    {@attach tooltip(action.title)}
+                    {@attach tip(action.title)}
                     aria-label={action.label}
                 >
-                    <Icon size={0.9}>
+                    <Icon size="small">
                         <action.icon />
                     </Icon>
                     <span class="label">{action.label}</span>
@@ -549,21 +561,18 @@
         /* the tray's colour, which a disabled control sinks into: the code's darker shade where it
            floats over the editor, the cards' own where a layout lays it out among them */
         --tray: var(--execution-tray, var(--primary));
-        --dock-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
     }
 
     /* each end one opaque tray lifted off the code by a shadow, its buttons sunk into it: the one
        action that moves the program on filled, the rest only their label */
     .toolbar {
+        @include tray.frame;
         display: flex;
         align-items: center;
         gap: 0.2rem;
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
-        border: 1px solid var(--dock-line);
-        border-radius: 0.6rem;
         background-color: var(--tray);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
         pointer-events: auto;
     }
 
@@ -573,7 +582,7 @@
         width: 1px;
         height: 60%;
         margin: 0 0.2rem;
-        background-color: var(--dock-line);
+        background-color: var(--line);
     }
 
     .fill-only {
@@ -589,25 +598,29 @@
         }
     }
 
+    /* sunk into the tray, in its own colours rather than see-through as other tools are */
     .tool:disabled {
+        opacity: 1;
         color: color-mix(in srgb, var(--primary-text) 35%, var(--tray));
         cursor: not-allowed;
     }
 
-    .emphasis:not(:disabled) {
+    /* a tool in a colour of its own gives it to its icon and label, and keeps the tray's text for
+       its hover (tray.tool-look) */
+    .emphasis:not(:disabled) > :global(*) {
         color: var(--accent);
     }
 
-    .red {
-        color: var(--red);
+    .danger > :global(*) {
+        color: var(--danger);
     }
 
-    .sound.playing {
+    .sound.playing > :global(*) {
         color: var(--accent);
     }
 
-    .green {
-        color: var(--green);
+    .success > :global(*) {
+        color: var(--success);
     }
 
     .primary {
@@ -699,7 +712,7 @@
 
     .optimization,
     .compiler {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         background: var(--tray);
     }
 
@@ -711,27 +724,14 @@
         line-height: 1.2;
     }
 
-    .busy-spinner {
-        display: flex;
-        animation: compile-spin 1s linear infinite;
-    }
-
-    @keyframes compile-spin {
-        to {
-            transform: rotate(360deg);
-        }
-    }
-
     /* in the compact layouts one tray across the bar, every button an equal share of it, Test and
        the caller's actions with the others behind a divider */
     .fill {
+        @include tray.frame;
         gap: 0.2rem;
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
-        border: 1px solid var(--dock-line);
-        border-radius: 0.6rem;
         background-color: var(--tray);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
         pointer-events: auto;
 
         .toolbar {
@@ -775,7 +775,6 @@
             border-bottom: none;
             border-radius: 0;
             backdrop-filter: blur(4px);
-            box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
         }
 
         .optimization,
@@ -800,10 +799,9 @@
 
     .attached.fill {
         border: none;
-        border-top: 1px solid var(--dock-line);
+        border-top: 1px solid var(--line);
         border-radius: 0;
         backdrop-filter: blur(4px);
-        box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
     }
 
     .attached.rounded-start {

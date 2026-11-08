@@ -1,15 +1,25 @@
 <script lang="ts">
     import { languageLabel } from '#lib/languages/languageLabel.ts'
+    import { languageAccent } from '#lib/languages/languageColors.ts'
+    import {
+        LANGUAGE_ORDER,
+        languageCapabilities,
+        type LanguageCapability
+    } from '#lib/languages/languageCapabilities.ts'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
+    import type { Component } from 'svelte'
 
     import Button from '#cmp/shared/button/Button.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
-    import Input from '#cmp/shared/input/Input.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
+    import InstructionSetPicker from '#cmp/shared/input/InstructionSetPicker.svelte'
     import Textarea from '#cmp/shared/input/Textarea.svelte'
     import Title from '#cmp/shared/layout/Header.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
     import Form from '#cmp/shared/layout/Form.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
     import { toast } from '#stores/toastStore.ts'
     import { type AvailableLanguages, makeProject } from '#lib/Project.svelte.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
@@ -17,11 +27,19 @@
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import type { PageData } from './$types'
-    import { isCompilationTarget } from '#lib/sourceCompilation/records.ts'
     import { warmUpMonaco } from '#lib/monaco/warmUp.ts'
     import { onMount } from 'svelte'
     import FileDropZone from '#cmp/shared/fileImporter/FileDropZone.svelte'
     import { IMPORTABLE_FILES, importFiles } from '#lib/projectImport.ts'
+    import FaDesktop from '~icons/fa-solid/desktop'
+    import FaKeyboard from '~icons/fa-solid/keyboard'
+    import FaMouse from '~icons/fa-solid/mouse'
+    import FaVolumeDown from '~icons/fa-solid/volume-down'
+    import FaFolder from '~icons/fa-solid/folder'
+    import FaCode from '~icons/fa-solid/code'
+    import FaAlignLeft from '~icons/fa-solid/align-left'
+    import FaFileCode from '~icons/fa-solid/file-code'
+    import FaArrowRight from '~icons/fa-solid/arrow-right'
 
     let { data }: { data: PageData } = $props()
 
@@ -31,41 +49,27 @@
     let name = $state('')
     let description = $state('')
     let language: AvailableLanguages = $state('RISC-V-64')
-    const languageOptions: Array<{ key: string; value: AvailableLanguages }> = [
-        { key: 'M68K', value: 'M68K' },
-        { key: 'MIPS', value: 'MIPS' },
-        { key: languageLabel('X86'), value: 'X86' },
-        { key: 'RISC-V', value: 'RISC-V' },
-        { key: 'RISC-V-64', value: 'RISC-V-64' },
-        { key: 'Z80', value: 'Z80' }
-    ]
 
-    /** The simulator each Instruction set follows, for a course that teaches with that tool. */
-    const COMPATIBLE_WITH: Partial<Record<AvailableLanguages, string>> = {
-        M68K: 'EASy68K',
-        MIPS: 'MARS',
-        'RISC-V': 'RARS',
-        'RISC-V-64': 'RARS'
+    /** The mark of each thing a set can do, as the owner's mockup draws them (2026-11-08). */
+    const CAPABILITY_ICONS: Record<LanguageCapability, Component> = {
+        screen: FaDesktop,
+        keyboard: FaKeyboard,
+        mouse: FaMouse,
+        sound: FaVolumeDown,
+        fileSystem: FaFolder,
+        compile: FaCode,
+        disassemble: FaAlignLeft,
+        decompile: FaFileCode
     }
-
-    /** What an Instruction set can do that some others cannot, shown beside it in the picker. */
-    function languageTags(language: AvailableLanguages): string[] {
-        const tags: string[] = []
-        const compatible = COMPATIBLE_WITH[language]
-        if (compatible) tags.push(compatible)
-        //only an x86 Project runs Linux executables, so only it disassembles and decompiles them
-        if (language === 'X86') tags.push('Disassemble', 'Decompile')
-        //last, so the C/C++ tags line up at the right edge of the list
-        if (isCompilationTarget(language)) tags.push('C/C++')
-        return tags
-    }
+    const capabilities = $derived(languageCapabilities(language))
 
     const LANGUAGE_STORAGE_KEY = 'asm-editor_new-project-isa'
     onMount(() => {
         try {
-            const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY)
-            const option = languageOptions.find((option) => option.value === stored)
-            if (option) language = option.value
+            const stored = LANGUAGE_ORDER.find(
+                (value) => value === localStorage.getItem(LANGUAGE_STORAGE_KEY)
+            )
+            if (stored) language = stored
         } catch {
             // Project creation still works when browser storage is unavailable.
         }
@@ -77,6 +81,11 @@
         } catch {
             // Keep the selected ISA for this form even if it cannot be saved.
         }
+    }
+
+    function pickLanguage(value: AvailableLanguages) {
+        language = value
+        rememberLanguage(value)
     }
 
     const BAREBONES = 'barebones'
@@ -96,6 +105,7 @@
     const selected = $derived(
         templates.find((template) => template.id === templateId) ?? templates[0]
     )
+    const templateDescriptionId = $props.id()
 
     async function create() {
         const project = makeProject({
@@ -133,68 +143,105 @@
 </svelte:head>
 
 <DefaultNavbar />
-<Page cropped="40rem" style="padding-top: 3rem">
+<!-- the other index pages' column and title height, with this page's own narrower column centred
+     in it, its title over it: the owner's call of 2026-11-08 (design-system.md, D8) -->
+<Page hasNavbar cropped="70rem" contentStyle="padding: 1rem">
     <div class="create-project">
-        <div class="row top-title">
-            <Title>Create new project</Title>
-        </div>
-        {#if data.gettingStarted}
-            <p style="margin: 0.8rem 0; line-height: 1.6">
-                New to ASM Editor? <a
-                    href={resolve('/blog/posts/[slug]', { slug: data.gettingStarted })}
-                    style="color: var(--accent)">Follow the getting-started guide</a
-                >.
-            </p>
-        {/if}
-        <Form
-            style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; margin:0.5rem 0"
-            onSubmit={create}
-        >
-            <Input title="Name" placeholder="Name" bind:value={name} />
-            <Textarea title="Description" bind:value={description} />
-            <Select
-                title="Instruction Set"
-                options={languageOptions}
-                bind:value={language}
-                onChange={rememberLanguage}
-            >
-                {#snippet item(option)}
-                    {@const tags = languageTags(option.value)}
-                    <span class="language-option">
-                        <span>{option.key}</span>
-                        {#if tags.length}
-                            <span class="language-badges">
-                                {#each tags as tag (tag)}
-                                    <span class="language-badge">{tag}</span>
-                                {/each}
+        <header class="page-head">
+            <Title style="margin-bottom: 0.5rem">Create new project</Title>
+            {#if data.gettingStarted}
+                <p class="guide">
+                    New to ASM Editor? <a
+                        href={resolve('/blog/posts/[slug]', { slug: data.gettingStarted })}
+                        >Follow the getting-started guide</a
+                    >.
+                </p>
+            {/if}
+        </header>
+        <!-- the owner's mockup of 2026-11-08: two sections under header bands, then a footer with
+             what will be created at the left and the actions at the right -->
+        <Card padding="0">
+            <Form onSubmit={create}>
+                <h2 class="band first">Instruction set</h2>
+                <div class="section">
+                    <InstructionSetPicker selected={language} onSelect={pickLanguage} />
+                    <ul class="capabilities" aria-label="Features">
+                        {#each capabilities as capability (capability.id)}
+                            {@const CapabilityIcon = CAPABILITY_ICONS[capability.id]}
+                            <li class="capability" class:unavailable={!capability.available}>
+                                <span class="capability-icon" aria-hidden="true"
+                                    ><CapabilityIcon /></span
+                                >
+                                {capability.label}{#if !capability.available}<span
+                                        class="visually-hidden">, not available</span
+                                    >{/if}
+                            </li>
+                        {/each}
+                    </ul>
+                </div>
+                <h2 class="band">Details</h2>
+                <div class="section fields">
+                    <div class="field">
+                        <Select
+                            title="Template"
+                            options={templateOptions}
+                            bind:value={templateId}
+                            aria-describedby={selected ? templateDescriptionId : undefined}
+                        >
+                            {#snippet item(option)}
+                                <span class="template-option-name">{option.key}</span>
+                                <span class="template-option-description ellipsis">
+                                    {templates.find((template) => template.id === option.value)
+                                        ?.description ?? ''}
+                                </span>
+                            {/snippet}
+                        </Select>
+                        {#if selected}
+                            <span class="template-description" id={templateDescriptionId}>
+                                {selected.description}
                             </span>
                         {/if}
-                    </span>
-                {/snippet}
-            </Select>
-            <div class="template-field">
-                <Select title="Template" options={templateOptions} bind:value={templateId}>
-                    {#snippet item(option)}
-                        <span class="template-option-name">{option.key}</span>
-                        <span class="template-option-description">
-                            {templates.find((template) => template.id === option.value)
-                                ?.description ?? ''}
-                        </span>
-                    {/snippet}
-                </Select>
-                {#if selected && selected.id !== BAREBONES}
-                    <span class="template-description">{selected.description}</span>
-                {/if}
-            </div>
-        </Form>
-        <div
-            style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
-        >
-            <ButtonLink href="/projects" cssVar="primary" {@attach tooltip('Cancel new project')}
-                >Cancel
-            </ButtonLink>
-            <Button onClick={create}>Create</Button>
-        </div>
+                    </div>
+                    <TextField
+                        label="Name"
+                        hint="Optional"
+                        placeholder="Unnamed"
+                        bind:value={name}
+                    />
+                    <Textarea
+                        title="Description"
+                        hint="Optional"
+                        placeholder="What this program does"
+                        bind:value={description}
+                    />
+                </div>
+                <div class="card-footer">
+                    <p class="summary">
+                        <span
+                            class="language-square"
+                            style:background-color={languageAccent(language)}
+                            aria-hidden="true"
+                        ></span>
+                        <!-- the set and the template apart by the row's gap, no mark between them -->
+                        <span class="summary-language">{languageLabel(language)}</span>
+                        {#if selected}<span class="ellipsis">{selected.name}</span>{/if}
+                    </p>
+                    <div class="actions">
+                        <ButtonLink
+                            href={resolve('/projects')}
+                            kind="ghost"
+                            {@attach tooltip('Cancel new project')}
+                        >
+                            Cancel
+                        </ButtonLink>
+                        <Button type="submit" style="gap: 0.45rem">
+                            Create project
+                            <Icon size="caption"><FaArrowRight /></Icon>
+                        </Button>
+                    </div>
+                </div>
+            </Form>
+        </Card>
         <div class="import-drop">
             <FileDropZone
                 title="Already have a program? Drop it here"
@@ -207,52 +254,118 @@
 </Page>
 
 <style lang="scss">
-    /* room between the form and the footer */
+    @use '../../../styles/field.scss';
+    @use '../../../styles/radius.scss' as *;
+
+    /* centred in the page's column (a flex column, where auto margins would shrink it to its
+       content without the width); the title starts where the other index pages' titles do, and
+       room between the drop zone and the footer */
     .create-project {
-        padding-top: 2rem;
+        width: 100%;
+        max-width: 40rem;
+        margin: 0 auto;
+        padding-top: 1.5rem;
         padding-bottom: 4rem;
 
         @media screen and (max-width: 650px) {
-            padding: 1rem 1rem 3rem;
+            padding: 0.75rem 0 3rem;
         }
     }
 
-    .top-title {
-        align-items: center;
+    .page-head {
+        margin-bottom: 1.5rem;
+        text-align: center;
     }
 
-    .import-drop {
-        margin-top: 2.5rem;
+    .guide {
+        margin: 0;
+        line-height: 1.6;
+        color: var(--text-muted);
+
+        a {
+            color: var(--accent);
+        }
     }
 
-    .template-field {
+    /* a section's header, a band a shade lighter than the Card over a rule, as the Workbench's
+       folding sections draw theirs (CollapsibleSection); the second one is ruled off above too */
+    .band {
+        margin: 0;
+        padding: 0.6rem 1.25rem;
+        background-color: var(--wb-section-header);
+        border-block: 1px solid var(--line);
+        font: 700 var(--fs-small) / 1.4 var(--font-ui);
+        color: var(--secondary-text);
+    }
+    /* the first band is the Card's top, its corners inside the Card's 1px edge */
+    .band.first {
+        border-top: none;
+        border-radius: nested-radius(var(--wb-radius), $border: 1px)
+            nested-radius(var(--wb-radius), $border: 1px) 0 0;
+    }
+
+    .section {
         display: flex;
         flex-direction: column;
-        gap: 0.4rem;
-    }
-
-    .language-option {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
         gap: 0.75rem;
+        padding: 0.85rem 1.25rem 1rem;
     }
 
-    .language-badges {
+    /* drawn as the home page's instruction-set bar draws its squares */
+    .language-square {
+        flex: none;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 2px;
+    }
+
+    .capabilities {
         display: flex;
         flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 0.3rem;
+        gap: 0.4rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
     }
 
-    .language-badge {
-        padding: 0.15rem 0.45rem;
-        border-radius: 0.3rem;
-        background: color-mix(in srgb, var(--accent) 12%, transparent);
-        color: var(--accent);
-        font-size: 0.7rem;
-        font-weight: normal;
+    /* a pill in a field's fill and edge; one the set cannot do is only outlined, dashed, its words
+       dimmed and struck through, and says so to a screen reader in words */
+    .capability {
+        @include field.surface;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.25rem 0.65rem;
+        border-radius: var(--r-pill);
+        font-size: var(--fs-caption);
+        line-height: 1.3;
         white-space: nowrap;
+
+        &.unavailable {
+            background-color: transparent;
+            border-style: dashed;
+            color: color-mix(in srgb, field.$text 45%, transparent);
+            text-decoration: line-through;
+        }
+    }
+
+    .capability-icon {
+        display: flex;
+        flex: none;
+        width: 0.8rem;
+        height: 0.8rem;
+        opacity: 0.75;
+    }
+
+    .fields {
+        gap: 1.1rem;
+    }
+
+    /* a label over its control, as the shared fields draw theirs */
+    .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
     }
 
     .template-option-name {
@@ -262,15 +375,71 @@
     /* one row, clipped: a description is a hint at what the program does, not the program */
     .template-option-description {
         display: block;
-        overflow: hidden;
-        font-size: 0.85rem;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        opacity: 0.75;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
     }
 
     .template-description {
-        font-size: 0.85rem;
-        opacity: 0.8;
+        margin-top: 0.1rem;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
+    }
+
+    /* a rule across the card, its edge's hairline, over what will be created at the left and the
+       actions at the right; on a phone the summary takes a line of its own over the actions.
+       Held at the window's bottom while the Card's end is below it, so a set can be picked and
+       created at once, and back in its place in the Card once the page reaches it (owner,
+       2026-11-08): the Card's fill, so what scrolls under it does not show through, and its
+       lower corners inside the Card's 1px edge */
+    .card-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+        padding: 0.7rem 1.25rem;
+        border-top: 1px solid var(--line);
+        background-color: var(--wb-surface);
+        border-radius: 0 0 nested-radius(var(--wb-radius), $border: 1px)
+            nested-radius(var(--wb-radius), $border: 1px);
+    }
+
+    .summary {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+        margin: 0;
+        font: var(--fs-small) / 1.4 var(--font-mono);
+        color: var(--text-muted);
+    }
+
+    .summary-language {
+        flex: none;
+    }
+
+    .actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-left: auto;
+    }
+
+    @media (max-width: 600px) {
+        .band {
+            padding: 0.55rem 1rem;
+        }
+        .section {
+            padding: 0.8rem 1rem 1rem;
+        }
+        .card-footer {
+            padding: 0.7rem 1rem;
+        }
+    }
+
+    .import-drop {
+        margin-top: 1.5rem;
     }
 </style>

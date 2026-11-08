@@ -1,6 +1,6 @@
 `sum_of_squares(a, b)` takes its two arguments on the stack, calls a second subroutine twice to
 square them, and returns their sum in `d0`. It needs a local variable to hold the first square while
-the second call runs, and that local lives on the stack too, in a frame `link` builds for it.
+the second call runs. The `link` instruction creates a stack frame with space for that local variable.
 
 The first call to `square` leaves its answer in `d0`. The second call uses `d0` for its own input
 and answer, so `sum_of_squares` saves the first answer in its stack frame between calls. The
@@ -38,7 +38,7 @@ end:
 ```
 
 `link a6, #-4` pushes the caller's `a6`, copies `sp` into `a6`, then reserves four bytes for one
-local long. That space has no value until `move.l d0, -4(a6)` writes the first square to it. The
+local long. That space is uninitialized until `move.l d0, -4(a6)` writes the first square to it. The
 arguments sit above `a6` because the caller pushed them before `bsr`; the local sits below it.
 
 ## Step through the stack frame

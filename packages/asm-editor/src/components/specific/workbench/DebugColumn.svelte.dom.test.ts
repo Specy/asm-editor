@@ -19,8 +19,9 @@ import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 //`browser` as true; jsdom has none, and nothing here goes near it
 vi.mock('#lib/storage/db', () => ({ db: { getProjects: async () => [] } }))
 
-//svelte/motion, which the side panel beside it in the harness loads, reads the reduced motion
-//query as it loads, before any hook runs
+// jsdom has no window.matchMedia, which these components read before any hook runs (the
+// reduced-motion setting through styles/motion.ts among them); answering yes also ends every
+// transition at once
 vi.hoisted(() => {
     window.matchMedia = (() => ({
         matches: true,

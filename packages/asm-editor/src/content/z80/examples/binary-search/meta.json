@@ -1,6 +1,6 @@
 {
     "name": "Binary search",
-    "description": "Search twelve ascending unsigned bytes by halving a half-open range; e receives the index or 0xFF, while the middle index is saved on the stack for address calculation.",
+    "description": "Use binary search to find an unsigned byte in a sorted array. Store the matching index or 0xFF in e, and use the stack to save the middle index.",
     "order": 15,
     "topic": "binary-search"
 }

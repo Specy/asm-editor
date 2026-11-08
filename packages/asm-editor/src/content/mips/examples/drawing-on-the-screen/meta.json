@@ -1,6 +1,6 @@
 {
     "name": "Drawing shapes on the screen",
-    "description": "A house, a sun and a sky drawn onto the bitmap display with sw and nothing else, by two subroutines that work out which word each pixel is.",
+    "description": "Draw a house, sun, sky and ground on the Screen using two subroutines that calculate cell addresses and store colours with sw.",
     "order": 20,
     "topic": "drawing-on-the-screen",
     "template": 6

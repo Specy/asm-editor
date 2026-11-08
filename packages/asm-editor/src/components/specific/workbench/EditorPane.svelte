@@ -1,6 +1,7 @@
 <script lang="ts">
     import Editor from '#cmp/specific/project/Editor.svelte'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import BelowLineContent from '#cmp/specific/project/user-tools/BelowLineContent.svelte'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
@@ -47,6 +48,8 @@
         controls = false,
         fill = false
     }: { group: EditorGroup; share?: number; controls?: boolean; fill?: boolean } = $props()
+    //the editor body, the panel every one of the pane's file tabs shows its File in
+    const codeAreaId = $props.id()
     const workbench = useWorkbench()
     const { session, ui } = workbench
     const emulator = session.emulator
@@ -370,8 +373,13 @@
     ondropcapture={drop}
     onfocusin={() => session.focusEditorGroup(group)}
 >
-    <FileTabs {group} />
-    <div class="code-area">
+    <FileTabs {group} panelId={codeAreaId} />
+    <div
+        class="code-area"
+        id={codeAreaId}
+        role="tabpanel"
+        aria-label={group.displayedPath ?? 'No file open'}
+    >
         {#if group.displayedListing}
             <ListingNotice
                 document={group.displayedListing}
@@ -585,7 +593,7 @@
             <!-- a Pseudocode is decompiled from the Listing, which comes first -->
             {@const progress = pendingListing.progress}
             <div class="file-notice">
-                <h2>Generating the Listing…</h2>
+                <Spinner size="lg" label="Generating the Listing…" />
                 <p>
                     Disassembling {pendingListing.name}{progress === undefined
                         ? ''
@@ -694,8 +702,9 @@
         font-weight: 600;
         text-align: center;
         :global(svg) {
-            width: 1.6rem;
-            height: 1.6rem;
+            /* the h2 step at its size on :root, as Icon draws it (styles/iconSizes.ts) */
+            width: 1.8rem;
+            height: 1.8rem;
         }
         span {
             padding: 0.3rem 0.7rem;
@@ -734,7 +743,7 @@
     }
     .file-notice p {
         max-width: 30rem;
-        opacity: 0.72;
+        color: var(--text-muted);
     }
     /* a failure's card brings its own spacing */
     .missing {

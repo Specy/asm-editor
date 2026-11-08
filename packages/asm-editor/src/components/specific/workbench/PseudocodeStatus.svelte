@@ -7,6 +7,8 @@
      */
     import type { EditorGroup } from '#lib/workbench/EditorGroup.svelte.ts'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
 
     let { group, onRetry }: { group: EditorGroup; onRetry: () => void } = $props()
@@ -34,8 +36,9 @@
 {#if group.pseudocodeListing?.status === 'ready'}
     {#if !fn}
         <div class="pseudocode-status" role="status">
-            <h2>No Pseudocode</h2>
-            <p>The Listing of {group.pseudocodeListing.name} has no function to decompile.</p>
+            <EmptyState class="no-function" title="No Pseudocode">
+                The Listing of {group.pseudocodeListing.name} has no function to decompile.
+            </EmptyState>
         </div>
     {:else if document?.status === 'failed'}
         <div class="pseudocode-status failed">
@@ -49,7 +52,7 @@
     {:else if document?.status !== 'ready' && !kept}
         <!-- shown only once it takes a moment, so a quick function does not flash it -->
         <div class="pseudocode-status waiting" role="status">
-            <h2>Decompiling…</h2>
+            <Spinner size="lg" label="Decompiling…" announce={false} />
             <p>
                 {document?.stage === 'loading' ? 'Loading the decompiler…' : `Decompiling ${name}…`}
             </p>
@@ -76,7 +79,12 @@
     }
     p {
         max-width: 30rem;
-        opacity: 0.72;
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+    }
+    /* the empty state's line, as wide as the waiting card's, a long Listing name broken anywhere */
+    .pseudocode-status :global(.no-function) {
+        max-width: 30rem;
         overflow-wrap: anywhere;
     }
     progress {

@@ -8,7 +8,10 @@
      */
     import { copyText } from '#lib/utils.ts'
     import Button from '#cmp/shared/button/Button.svelte'
+    import CopyLabel from '#cmp/shared/button/CopyLabel.svelte'
+    import { CopyFeedback } from '#cmp/shared/button/copyFeedback.svelte.ts'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import FaRedo from '~icons/fa-solid/redo'
     import FaCopy from '~icons/fa-solid/copy'
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
@@ -31,6 +34,9 @@
         compact?: boolean
         /** `start` for a notice in a box of the page's own, read from its edge as the box's others are. */
         align?: 'center' | 'start'
+        /** The title as the page's own `<h1>`, in the page title's style, for a page that is only
+         * this notice (the error page). */
+        pageTitle?: boolean
     }
 
     let {
@@ -41,8 +47,12 @@
         reload = false,
         actions,
         compact = false,
-        align = 'center'
+        align = 'center',
+        pageTitle = false
     }: Props = $props()
+
+    /** The error card's Copy, a header tool rather than a Button, says "Copied" as CopyButton does. */
+    const copyFeedback = new CopyFeedback()
 
     const message = $derived(
         error === undefined
@@ -74,8 +84,12 @@
     <div class="content">
         <header>
             {#if code}<span class="code">{code}</span>{/if}
-            <!-- a heading by role, so a page's own heading styles leave it alone -->
-            <div class="title" role="heading" aria-level="2">{title}</div>
+            {#if pageTitle}
+                <Header noMargin>{title}</Header>
+            {:else}
+                <!-- a heading by role, so a page's own heading styles leave it alone -->
+                <div class="title" role="heading" aria-level="2">{title}</div>
+            {/if}
         </header>
         {#if children}
             <div class="description">{@render children()}</div>
@@ -84,8 +98,8 @@
         {#if reload || actions}
             <div class="actions">
                 {#if reload}
-                    <Button hasIcon onClick={() => location.reload()}>
-                        <Icon size={0.85}>
+                    <Button onClick={() => location.reload()}>
+                        <Icon size="small">
                             <FaRedo />
                         </Icon>
                         Reload the page
@@ -99,9 +113,15 @@
             <section class="error-card" aria-label="Error">
                 <div class="error-header">
                     <span>Error</span>
-                    <button class="copy" onclick={() => copyText(message, 'Error')}>
-                        <FaCopy />
-                        Copy
+                    <button
+                        type="button"
+                        class="copy"
+                        onclick={() => void copyFeedback.run(() => copyText(message, 'Error'))}
+                    >
+                        <CopyLabel copied={copyFeedback.copied}>
+                            <FaCopy />
+                            Copy
+                        </CopyLabel>
                     </button>
                 </div>
                 <pre class="error-message">{message}</pre>
@@ -159,6 +179,7 @@
         display: flex;
         flex-direction: column;
     }
+    /* a display size, above the type scale's page title (design-system-changes.md, S4-39) */
     .code {
         align-self: center;
         margin-bottom: 2rem;
@@ -166,7 +187,7 @@
         font-weight: 700;
         line-height: 1;
         letter-spacing: -0.02em;
-        color: var(--red);
+        color: var(--danger);
     }
     .compact .code {
         margin-bottom: 1rem;
@@ -175,21 +196,21 @@
     .title {
         min-width: 0;
         margin: 0;
-        font-size: 1.6rem;
+        font-size: var(--fs-h2);
         font-weight: 600;
         letter-spacing: -0.01em;
     }
     .compact .title {
-        font-size: 1.05rem;
+        font-size: var(--fs-prose);
     }
     .description {
         margin: 0;
         line-height: 1.5;
-        opacity: 0.85;
+        color: var(--text-muted);
         overflow-wrap: anywhere;
     }
     .compact .description {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
     .actions {
         display: flex;
@@ -203,7 +224,7 @@
     }
     .error-state.compact .actions > :global(.btn) {
         padding: 0.35rem 0.7rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
     /* a Workbench card (workbench.css): the error under a header band a shade lighter */
     .error-card {
@@ -221,7 +242,7 @@
         justify-content: space-between;
         min-height: 2rem;
         padding: 0 0.3rem 0 0.7rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         font-weight: 600;
         background: var(--wb-section-header);
         border-bottom: 1px solid var(--wb-line);
@@ -240,10 +261,10 @@
         cursor: pointer;
 
         :global(svg) {
-            width: 0.8rem;
+            width: var(--fs-small);
         }
         &:hover {
-            background: color-mix(in srgb, var(--tertiary) 60%, transparent);
+            background: var(--hover-bg);
         }
         &:focus-visible {
             outline: 2px solid var(--accent);
@@ -255,8 +276,8 @@
         max-height: 10rem;
         overflow: auto;
         padding: 0.7rem;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         line-height: 1.5;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
@@ -265,12 +286,12 @@
     }
     .compact .error-message {
         max-height: 6rem;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
     }
     .report {
         margin: 0;
-        font-size: 0.9rem;
-        opacity: 0.75;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
 
         a {
             display: inline-flex;
@@ -280,7 +301,7 @@
             text-decoration: none;
 
             :global(svg) {
-                width: 0.7rem;
+                width: var(--fs-caption);
             }
             &:hover {
                 text-decoration: underline;
@@ -288,7 +309,7 @@
         }
     }
     .compact .report {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
     /* a narrow column: the title shrinks and the actions take the full width */
     @container (max-width: 26rem) {
@@ -296,10 +317,10 @@
             font-size: 3rem;
         }
         .title {
-            font-size: 1.25rem;
+            font-size: var(--fs-lead);
         }
         .compact .title {
-            font-size: 1rem;
+            font-size: var(--fs-body);
         }
         .actions > :global(*) {
             flex: 1;

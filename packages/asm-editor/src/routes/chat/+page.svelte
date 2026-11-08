@@ -5,6 +5,7 @@
     } from '#cmp/shared/agent/DefaultCodingAgent.svelte'
     import FaTimes from '~icons/fa-solid/times'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
+    import AgentSidebarFrame from '#cmp/shared/agent/AgentSidebarFrame.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
@@ -92,11 +93,13 @@
         {/if}
     </DefaultNavbar>
 
-    <div
-        class="agent-shell"
-        class:floating={editorLanguage}
-        class:open={agentVisible}
-        aria-hidden={!agentVisible}
+    <!-- the page's whole width until an example opens, then floating over it from the right, and
+         on a phone above the example -->
+    <AgentSidebarFrame
+        open={agentVisible}
+        floating={!!editorLanguage}
+        stackOnPhones
+        verticalOffset="var(--nav-height)"
     >
         <DefaultCodingAgent
             {project}
@@ -107,7 +110,7 @@
             {emulatorInstance}
             style={agentStyle}
         />
-    </div>
+    </AgentSidebarFrame>
 
     {#if editorLanguage}
         <div class="emulator-stage">
@@ -151,8 +154,7 @@
 <style lang="scss">
     .chat-page {
         --nav-height: 3.2rem;
-        --agent-sidebar-width: 28rem;
-        --mobile-agent-height: min(75dvh, calc(100dvh - var(--nav-height)));
+        --agent-phone-height: min(75dvh, calc(100dvh - var(--nav-height)));
         position: fixed;
         inset: 0;
         width: 100vw;
@@ -175,48 +177,13 @@
         padding: 0.5rem;
     }
 
-    .agent-shell {
-        position: relative;
-        flex: 1;
-        min-width: 0;
-        height: 100%;
-        transition:
-            transform 0.3s ease,
-            box-shadow 0.3s ease;
-    }
-
-    .agent-shell.floating {
-        position: fixed;
-        top: var(--nav-height);
-        right: 0;
-        width: min(var(--agent-sidebar-width), 100vw);
-        height: calc(100dvh - var(--nav-height));
-        z-index: 100;
-        background-color: color-mix(in srgb, var(--tertiary) 20%, transparent);
-        backdrop-filter: blur(0.7rem);
-        border: solid 0.1rem var(--tertiary);
-        border-right: none;
-        border-top-left-radius: 1rem;
-        border-bottom-left-radius: 1rem;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        padding: 0;
-        transform: translateX(100%);
-    }
-
-    .agent-shell.floating.open {
-        transform: translateX(0);
-        box-shadow: -4px 0 3rem 2rem rgba(0, 0, 0, 0.3);
-    }
-
     .nav-agent-toggle {
         height: 2.2rem;
         padding: 0.3rem 0.8rem;
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         border-radius: 1.5rem;
         border-bottom-right-radius: 0.4rem;
-        font-weight: bold;
+        font-weight: 700;
         border: none;
         gap: 0.5rem;
         background-color: var(--accent);
@@ -255,28 +222,6 @@
             height: calc(100dvh - var(--nav-height) + 30.5rem);
             flex: 0 0 calc(100dvh - var(--nav-height) + 30.5rem);
             min-height: 0;
-        }
-
-        .agent-shell.floating {
-            position: relative;
-            top: auto;
-            right: auto;
-            bottom: auto;
-            left: auto;
-            width: 100vw;
-            height: var(--mobile-agent-height);
-            flex: 0 0 var(--mobile-agent-height);
-            background-color: var(--background);
-            backdrop-filter: none;
-            border: none;
-            border-bottom: solid 0.1rem var(--tertiary);
-            border-radius: 0;
-            transform: none;
-        }
-
-        .agent-shell.floating.open {
-            transform: none;
-            box-shadow: none;
         }
 
         .nav-agent-toggle {

@@ -1,13 +1,13 @@
-A complete game in one program. A snake of green squares crosses a board of 15 by 11 cells, the
-arrow keys steer it, it grows by one segment every time it reaches the food, and it ends when its
-head leaves the board or runs into its own body. The score sits above the board while you play and
-the last one goes into the transcript when you lose.
+This program plays Snake on a board of 15 by 11 cells. Use the arrow keys to steer the green
+snake towards the food. It grows by one segment each time it eats, up to 48 segments. The game
+ends when its head leaves the board or runs into its body. The score appears above the board
+while you play, and the final score appears in the transcript when you lose.
 
-**Click the Screen panel before you press a key**, the same as in Move a square with the keyboard,
-and press Run again to play another game.
+**Click the Screen panel before you press a key**, as in Move a square with the keyboard.
+Press Run again to play another game.
 
-The program is 360 lines, so the sections below take it a piece at a time and the whole thing is at
-the bottom, ready to build and play.
+The sections below explain the program a piece at a time. The whole program is at the bottom,
+ready to build and play.
 
 ## A cell is one byte
 
@@ -16,14 +16,14 @@ four bits and the row in the low four, so `0x35` is column 3, row 5. Four bits h
 15, which is enough for this board. Fifteen columns of 16 pixels make the Screen 240 pixels wide;
 eleven rows of 16 pixels sit below two text rows of 8 pixels each.
 
-Packing it this way is what makes the game cheap to write. Comparing two positions is a single `cp`.
-A position that took a whole pair would need an `or a` and an `sbc hl, de` every time the snake
-checked whether it had hit itself, and that `sbc` destroys one of the two values it is comparing.
+Packing both coordinates into one byte lets the program compare two positions with a single `cp`.
+Comparing positions stored in 16-bit register pairs would take `or a` followed by `sbc hl, de`.
+The subtraction would also overwrite one of the positions being compared.
 
-The packing pays again in the drawing. A column sitting in the high four bits **is** the column
-times 16 already, so `and 0xF0` is the whole of the x arithmetic, and the row needs four `rlca` and
-the offset of the two text rows above the board. No multiplication happens anywhere in `draw_cell`,
-which matters on a machine that has none.
+The packed position also simplifies drawing. The column in the high four bits is already
+multiplied by 16, so `and 0xF0` gives its pixel x coordinate. Four `rlca` instructions multiply
+the row by 16, then the program adds the height of the two text rows above the board.
+This uses masks and rotations because the Z80 has no multiplication instruction.
 
 ```z80
 P_CHAR  equ 0x10        ; a character, on the Screen and in the transcript
@@ -75,7 +75,7 @@ is painted off screen and shown in one go.
 A frame is always the same six things: poll the arrows, move the snake, check whether it hit itself,
 check whether it reached the food, draw, and wait. Port `0x50` sets the pace: put a number of
 hundredths in `b`, read the port, and the program waits that long without freezing the editor, so
-Stop still answers while the snake is between cells.
+you can still press Stop while the snake is between cells.
 
 ```z80
     .org 0x8000
@@ -101,12 +101,12 @@ frame:
 ## The arrows, and the turn you are not allowed to make
 
 The arrows do not move the snake. They call `try_direction`, which writes `dx` and `dy`, and the
-move happens later in the frame from whatever those two say. The pair means a step in cells:
+move happens later in the frame using those two values. The pair means a step in cells:
 left is (-1, 0), up is (0, -1), right is (1, 0), and down is (0, 1).
 
 `try_direction` refuses one thing: a direction that is the exact opposite of the way the snake is
 already going. `dx + nx` and `dy + ny` are both zero only when the new direction is backwards, and
-`or h` asks about the two of them in one test. Without that refusal, turning back would mean eating
+`or h` tests whether both sums are zero. Without that refusal, turning back would mean eating
 your own neck on the very next frame.
 
 ```z80
@@ -218,8 +218,8 @@ moved:
 
 ## Hitting yourself, and finding the food
 
-The self collision is the single `cp` the packing bought: walk the body from the second segment on
-and compare each one against the head. If the head reaches the food, increase the score, copy the
+To check for a collision, the program walks through the body from the second segment onwards
+and compares each position with the head using `cp`. If the head reaches the food, increase the score, copy the
 last segment into a new slot if there is room, and choose another food cell.
 
 ```z80
@@ -265,8 +265,8 @@ no_room:
 ## Drawing the frame
 
 The board is wiped with a rectangle that starts at `TOP` rather than with command 9, which would
-clear the whole image including the score. Then one red square for the food, one green square per
-segment, and command 13 to show the lot.
+clear the whole image including the score. The program then draws one red square for the food and one green square per
+segment, and uses command 13 to show the frame.
 
 The score goes out through the character and number ports, the same ones Print a string used, so it
 appears on the Screen and in the transcript at once. The cursor ports put it in the two 8-pixel text
@@ -452,8 +452,8 @@ print:
 
 ## The state, in memory
 
-Thirty-odd bytes hold the whole game. `body` is an array of cells with `length` saying how much of
-it is in use, and `.ds MAXLEN-3` reserves the room the snake will grow into.
+The game state is stored in memory. `body` is an array of packed cell positions, and `length`
+holds the number of segments in use. `.ds MAXLEN-3` reserves space for the snake to grow.
 
 ```z80
     .org 0x9000

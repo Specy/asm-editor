@@ -6,7 +6,7 @@ A label names a place in the program. It does not run an instruction, and it doe
 of a block. These simple rules are enough to build the shapes that higher-level languages call
 `if`, `if/else`, and `else if`.
 
-## A one-armed if
+## An if without else
 
 Suppose `$s0` should become 1 only when `$t0` and `$t1` are equal. Start `$s0` at 0, then branch
 around the assignment when the values are not equal:
@@ -29,8 +29,7 @@ through and writes 1. Change either value and the branch is taken; execution con
 leaving `$s0` at 0.
 
 The source-level condition was “when the values are equal,” but the branch asks when to skip that
-work: “when the values are not equal.” Writing the skip condition is a useful habit for one-armed
-decisions.
+work: “when the values are not equal.” Writing the skip condition is useful when an `if` has no `else` block.
 
 ## Compare and branch
 
@@ -56,8 +55,8 @@ look these forms up as you work; there is no need to memorize the table now.
 
 ## An if/else shape
 
-An `if/else` chooses exactly one of two arms. The conditional branch sends execution to the second
-arm, while `j` skips that arm after the first one has run:
+An `if/else` runs one of two blocks of instructions. The conditional branch sends execution to the
+`else` block, while `j` skips that block after the `if` block has run:
 
 ```mips|playground
 .text
@@ -75,7 +74,7 @@ end:
 ```
 
 With 50 in `$t0`, `ble` is not taken and execution falls through to the first assignment. The
-instruction `j end` is an unconditional jump, so execution then skips the `else` arm. `$s0`
+instruction `j end` is an unconditional jump, so execution then skips the `else` block. `$s0`
 finishes at 100.
 
 Change the first value to 5. Now the condition `$t0 <= $t1` is true, so `ble` moves execution to
@@ -83,7 +82,7 @@ Change the first value to 5. Now the condition `$t0 <= $t1` is true, so `ble` mo
 
 Try deleting `j end` and run the original version with 50 again. The first assignment runs, then
 execution falls through the `else` label and the second assignment overwrites it. A label does not
-stop fall-through; the jump is what keeps the two arms separate.
+stop fall-through; the jump is what keeps the two blocks separate.
 
 ## An ordered else-if chain
 
@@ -119,8 +118,8 @@ For a score of 75, the first branch is not taken and the second one is taken, so
 through both tests and receives `'C'`.
 
 The 90 test must come before the 60 test. If the 60 test came first, a score of 95 would match it and
-reach the wrong arm. Each selected arm must also finish at `done` instead of falling into another
-arm. `grade_b` is already directly above `done`, so it reaches the finish by ordinary fall-through.
+receive the wrong grade. Each grade assignment must also reach `done` instead of falling into
+another assignment. `grade_b` is already directly above `done`, so it reaches the finish by ordinary fall-through.
 
 ## Your turn
 
@@ -196,12 +195,12 @@ done:
 
 For the second exercise, assign grades to three scores:
 
-- score `$t0` goes in `$s0`;
-- score `$t1` goes in `$s1`;
-- score `$t2` goes in `$s2`.
+- store the grade for `$t0` in `$s0`;
+- store the grade for `$t1` in `$s1`;
+- store the grade for `$t2` in `$s2`.
 
 Use `'A'` for a score of 90 or more, `'B'` for a score of 60 through 89, and `'C'` for a score below 60. Load 90 and 60 into registers once, then use register-to-register branches. The supplied scores
-exercise all three arms, including the boundary at 60.
+cover all three grades, including the boundary at 60.
 
 ```mips|playground|exercise
 .text

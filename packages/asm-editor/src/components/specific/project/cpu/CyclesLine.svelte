@@ -49,27 +49,33 @@
         overflow: hidden;
     }
 
-    /* the fonts of the PC's row under it: its name's for the label, its value's for the count */
+    /* the fonts of the PC's row under it: its name's for the label, in capitals as the name is
+       (owner, 2026-11-08), its value's for the count */
     .label {
-        font-family: Rubik;
+        font-family: var(--font-ui);
         font-size: 0.9rem;
-        font-weight: bold;
+        font-weight: 700;
         text-transform: uppercase;
         color: var(--secondary-text);
     }
 
+    /* both in Fira Code at the size and weight of the PC's value (MemoryRenderer's .memory-grid) */
     .count {
-        font-family: monospace;
-        font-size: 1rem;
-        opacity: 0.8;
+        font-family: var(--font-mono);
+        font-size: var(--fs-body);
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
+        color: var(--text-muted);
     }
 
     /* the newest step's cost, in the colour the panels give what the newest step changed, at the
        right end, where neither the count before it nor its own width moves the rest */
     .last {
         margin-left: auto;
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: 0.9rem;
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         color: var(--accent);
     }
 </style>

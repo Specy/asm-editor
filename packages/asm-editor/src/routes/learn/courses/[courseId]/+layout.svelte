@@ -32,6 +32,11 @@
     let { children, data }: Props = $props()
 
     let currentLectureName = $derived(`${page.params.moduleId}-${page.params.lectureId}`)
+    // the course's own page, which its name at the sidebar's top links to
+    let coursePath = $derived(resolve('/learn/courses/[courseId]', { courseId: data.course.slug }))
+    let onCoursePage = $derived(
+        page.url.pathname.replace(/\/$/, '') === coursePath.replace(/\/$/, '')
+    )
 
     let menuOpen = $state(false)
 
@@ -72,7 +77,8 @@
         <Column padding="0 1rem 0" gap="1rem">
             <a
                 onclick={() => (menuOpen = false)}
-                href={resolve('/learn/courses/[courseId]', { courseId: data.course.slug })}
+                href={coursePath}
+                aria-current={onCoursePage ? 'page' : undefined}
             >
                 <!-- Sidebar chrome, not the document's subject: each page under this layout
                      titles itself with its own <Header>. Matches the module headings below. -->
@@ -82,37 +88,46 @@
             </a>
             <SearchLauncher {placeholder} />
         </Column>
+        <!-- the chapters as the exam builder's outline draws its groups (styles/outline.scss):
+             each lecture a row run out to the sidebar's left edge (the content's -0.5rem undoes
+             the section's padding), so the current lecture's accent edge is the sidebar's side,
+             the rows edge to edge with their own padding the rhythm, their text under the
+             chapter's name (2.2rem: the arrow's 1.4rem, its 0.4rem gap and the section's 0.5rem,
+             less the title's -0.1rem) -->
         <MaskedScroll gap="0">
             {#each data.course.modules as module (module.slug)}
+                <!-- under the course's name, the sidebar's h2 -->
                 <TogglableSection
                     open={true}
-                    sectionStyle="margin-left: 0; padding-left: 0.4rem;"
-                    style="padding: 0.5rem;"
+                    level={3}
+                    sticky
+                    inset="0.5rem"
+                    sectionStyle="margin-left: -0.5rem; padding-left: 0; border-left: none; gap: 0;"
+                    style="padding-block: 0.5rem; gap: 0.3rem;"
                 >
                     {#snippet title()}
-                        <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                        <span style="font-size: 1rem; margin-left: -0.1rem">
                             {module.name}
-                        </h2>
+                        </span>
                     {/snippet}
-                    <Column>
-                        <LecturesMenu
-                            currentLecture={module.lectures.find(
-                                (l) => `${module.slug}-${l.slug}` === currentLectureName
-                            )}
-                            lectures={module.lectures}
-                            lectureStyle="padding-left: 1rem"
-                            onClick={() => (menuOpen = false)}
-                            courseId={data.course.slug}
-                            moduleId={module.slug}
-                        />
-                    </Column>
+                    <LecturesMenu
+                        outline
+                        currentLecture={module.lectures.find(
+                            (l) => `${module.slug}-${l.slug}` === currentLectureName
+                        )}
+                        lectures={module.lectures}
+                        lectureStyle="padding-left: 2.2rem"
+                        onClick={() => (menuOpen = false)}
+                        courseId={data.course.slug}
+                        moduleId={module.slug}
+                    />
                 </TogglableSection>
             {/each}
         </MaskedScroll>
         <Column style="margin-top: auto;" padding="0.5rem" gap="0.5rem">
             <ButtonLink
                 style="width: 100%; gap: 0.5rem"
-                cssVar="tertiary"
+                kind="secondary"
                 href="/donate"
                 {@attach tooltip('Donate to the project')}
             >

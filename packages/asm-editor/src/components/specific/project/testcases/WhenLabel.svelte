@@ -53,7 +53,7 @@
     .when-icon {
         display: flex;
         flex: none;
-        width: 0.65rem;
-        height: 0.65rem;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
     }
 </style>

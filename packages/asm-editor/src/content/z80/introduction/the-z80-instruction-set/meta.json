@@ -1,6 +1,6 @@
 {
     "name": "The Z80 instruction set",
-    "description": "Read Z80 instructions as mnemonics and operands, see how the assembler encodes them as bytes, and use ldir to copy a run of memory.",
+    "description": "Read Z80 instructions as mnemonics and operands, see how the assembler encodes them as bytes, and use ldir to copy a block of memory.",
     "order": 5,
     "topic": "instruction-set"
 }

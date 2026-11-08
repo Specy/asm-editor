@@ -1,6 +1,7 @@
 <script lang="ts">
     import RegisterFileRows from '#cmp/specific/project/cpu/RegisterFileRows.svelte'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
+    import TabStrip from '#cmp/shared/input/TabStrip.svelte'
     import SizeSelector from '#cmp/specific/project/cpu/SizeSelector.svelte'
     import StatusCodesRenderer from '#cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import {
@@ -49,6 +50,10 @@
         onPoke?: (fileId: string, writes: RegisterPoke[]) => void
         /** The menu a right click on an integer register's value opens, see `RegisterFileRows`. */
         valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
+        /** Integers in hexadecimal or decimal whatever the Preference says, see `RegisterFileRows`. */
+        hex?: boolean
+        /** The rows as a picture, with nothing to hover, see `RegisterFileRows`. */
+        decorative?: boolean
     }
 
     let {
@@ -67,7 +72,9 @@
         pokeable = false,
         canPokeRegister,
         onPoke,
-        valueMenu
+        valueMenu,
+        hex,
+        decorative = false
     }: Props = $props()
 
     const FORMAT_LABELS: Record<RegisterFormat, string> = {
@@ -136,6 +143,9 @@
     const maxGroupSize = $derived(file ? maxGroupSizeOf(file) : systemSize)
     const groupSize = $derived(file ? groupSizeOf(file) : systemSize)
     const tabs = $derived(files.map((candidate) => ({ id: candidate.id, label: candidate.label })))
+    const hasTabs = $derived(!withoutHeader && files.length > 1)
+    //the rows, the panel the tabs switch
+    const rowsId = $props.id()
     const formats = $derived(
         (file?.formats ?? []).map((offered) => ({ id: offered, label: FORMAT_LABELS[offered] }))
     )
@@ -150,17 +160,19 @@
         -->
         {#if !withoutHeader || file.flags.length > 0}
             <div class="registers-top">
-                {#if !withoutHeader && files.length > 1}
+                {#if hasTabs}
                     <!--
                         the tabs run the whole width of the panel, touching its edges and squared off
                         where they meet the rows, so the strip reads as the tabs of the thing below
                         it rather than as one more option control floating in the header
                     -->
-                    <SegmentedControl
-                        tabs
-                        options={tabs}
+                    <TabStrip
+                        look="panel"
+                        ariaLabel="Register files"
+                        {tabs}
                         selected={file.id}
-                        onSelect={(id) => (pickedId = id)}
+                        onselect={(id) => (pickedId = id)}
+                        panelId={() => rowsId}
                     />
                 {/if}
                 {#if !withoutHeader}
@@ -200,7 +212,12 @@
                 {/if}
             </div>
         {/if}
-        <div class="registers-scroll">
+        <div
+            class="registers-scroll"
+            id={rowsId}
+            role={hasTabs ? 'tabpanel' : undefined}
+            aria-label={hasTabs ? file.label : undefined}
+        >
             <RegisterFileRows
                 {file}
                 registers={file.registers}
@@ -218,12 +235,16 @@
                     : undefined}
                 onPoke={onPoke ? (writes) => onPoke(file.id, writes) : undefined}
                 {valueMenu}
+                {hex}
+                {decorative}
             />
         </div>
     {/if}
 </div>
 
 <style lang="scss">
+    @use '../../../../styles/radius.scss' as *;
+
     .registers-wrapper {
         display: flex;
         flex-direction: column;
@@ -272,6 +293,16 @@
     //counts on this gutter being there. A language with a single file has no tab to pick
     .several-files .registers-scroll {
         scrollbar-gutter: stable;
+    }
+
+    //a panel first in a Card, nothing above it (a Playground or an embed with no flags, PC or
+    //cycles), puts its tabs' bar at the Card's top: the bar's corners are the Card's less its edge,
+    //so they run along the Card's curve. With a line above it the bar keeps its own 0.5rem
+    :global(.card) > .registers-wrapper:first-child {
+        --tab-strip-radius: #{nested-radius(
+                var(--wb-radius, 0.5rem),
+                $border: var(--wb-card-inset, 0px)
+            )};
     }
 
     //the tabs, the selectors and the flags row are above the scrolling region rather than sticky

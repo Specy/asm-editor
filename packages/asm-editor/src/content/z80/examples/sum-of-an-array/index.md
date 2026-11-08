@@ -1,6 +1,6 @@
 Six numbers are placed in memory by the assembler. The program reads them one at a time, adds them,
-and leaves the total in `a`. The loop runs a fixed six times; on each pass, `hl` says which element
-comes next.
+and leaves the total in `a`. The loop runs six times. On each pass, `hl` holds the address of the
+next element to add.
 
 Open the program in the editor, choose **Build**, then **Run**. The registers panel shows `a` as
 `6C`, which is 108 in decimal, and `hl` as `9006`. In the memory panel, enter `9000` to see the six
@@ -37,7 +37,7 @@ each array element is one byte wide. After six passes, `hl` is `9006`, one addre
 it is not zero, so the three instructions in the loop run exactly six times. If you use **Step**,
 watch `a` grow and `hl` advance once for every pass.
 
-`a` is an 8-bit accumulator, so it retains totals from 0 through 255. These values add to 108, so
+`a` is an 8-bit accumulator, so it can hold totals from 0 through 255. These values add to 108, so
 the final `a` is `6C`: the hexadecimal form of 108. A total above 255 wraps around to its low byte.
 
 Try two runs. First append `, 100` to the `.db` line and change nothing else. `100` is decimal; after

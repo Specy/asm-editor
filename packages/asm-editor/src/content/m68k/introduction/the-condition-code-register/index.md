@@ -26,7 +26,8 @@ smaller operation's flags.
 register still contains nonzero upper bits.
 
 `N` copies the highest bit within the selected size. For a byte, that is bit 7; for a word, bit 15;
-for a long, bit 31. In two's-complement signed reading, a 1 in that position marks a negative value.
+for a long, bit 31. When you read the result as a signed two's-complement number, a 1 in that
+position marks a negative value.
 
 Each playground on this page begins with its registers at zero and all five displayed flags clear.
 The following instructions then give both registers explicit values before the byte operations.
@@ -47,12 +48,12 @@ The following instructions then give both registers explicit values before the b
 
 After the subtraction, the selected byte result is `$00`, so `Z` is set. The upper three bytes of
 `d0` remain `$A5A500`, but they do not affect a byte instruction's flags. The last instruction
-moves the byte `$80`. Its highest bit is 1, so `N` is set even though the full register begins with
-the positive-looking long-sized pattern `$11`.
+moves the byte `$80`. Its highest bit is 1, so `N` is set even though the full 32-bit register
+contains a positive signed value.
 
 ## Carry and overflow
 
-`C` and `V` describe the same fixed-width calculation from two different numeric readings:
+`C` and `V` describe what happens when you interpret the same calculation as unsigned or signed:
 
 - `C` records an **unsigned** carry out of an addition or borrow from a subtraction.
 - `V` records a result outside the **signed** range for the selected size.
@@ -149,19 +150,19 @@ It sets `N` and `Z` from the selected byte, word or long, clears `V` and `C`, an
 The byte `$80` has its highest bit set, so the byte test sets `N`. The low word of `d1` is `$0000`,
 so the word test sets `Z`. In both cases, `tst` leaves the register itself unchanged.
 
-## Which familiar instructions update the CCR
+## Which instructions update the CCR
 
 A flag describes the most recent instruction that updates it. Different instructions update
 different parts of the CCR.
 
-| instruction from this working set   | effect on `X`         | effect on `N Z V C`                    |
-| ----------------------------------- | --------------------- | -------------------------------------- |
-| `add`, `sub` with a data result     | set from carry/borrow | set from the sized arithmetic result   |
-| `move` to a data register or memory | preserved             | set `N`/`Z` from value; clear `V`/`C`  |
-| `ext`                               | preserved             | set `N`/`Z` from result; clear `V`/`C` |
-| `move` to an address register       | preserved             | preserved                              |
-| `cmp`                               | preserved             | set from a subtraction                 |
-| `tst`                               | preserved             | set `N`/`Z` from value; clear `V`/`C`  |
+| instruction                         | effect on `X`         | effect on `N Z V C`                      |
+| ----------------------------------- | --------------------- | ---------------------------------------- |
+| `add`, `sub` with a data result     | set from carry/borrow | set from the result at the selected size |
+| `move` to a data register or memory | preserved             | set `N`/`Z` from value; clear `V`/`C`    |
+| `ext`                               | preserved             | set `N`/`Z` from result; clear `V`/`C`   |
+| `move` to an address register       | preserved             | preserved                                |
+| `cmp`                               | preserved             | set from a subtraction                   |
+| `tst`                               | preserved             | set `N`/`Z` from value; clear `V`/`C`    |
 
 The `move` spelling used with an address-register destination performs an address-register copy and
 preserves the CCR. For a memory operand such as `4(a0)`, `0(a0,d1.w)`, `(a0)+` or `-(a0)`, the
@@ -186,7 +187,7 @@ Here the zero byte written to memory sets `Z`. The address setup preserves that 
 | `move.l #$2000, a0`    | `a0=$00002000`; flags preserved |   0 |   0 |   1 |   0 |   0 |
 | `move.b (a0)+, d0`     | `d0=$00000000`, `a0=$00002001`  |   0 |   0 |   1 |   0 |   0 |
 
-Stepping one instruction at a time keeps the current row visible in the flags panel.
+Step through the instructions one at a time and compare the flags panel with each row in the table.
 
 ## Check your understanding
 

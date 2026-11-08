@@ -1,14 +1,14 @@
 # cmp and the conditional jumps
 
-A conditional jump lets a program choose which instructions run. The dependable pattern is:
+A conditional jump lets a program choose which instructions run. Use this pattern:
 
 ```x86
     cmp left, right       ; record flags for left - right
     jcc somewhere         ; jump when one condition is true
 ```
 
-`jcc` is a placeholder for a real condition mnemonic such as `je` or `jl`, not an instruction
-spelled literally. `cmp` subtracts only to set flags. It does not store the subtraction result, and
+`jcc` is a placeholder for a conditional jump such as `je` or `jl`. Replace it with the jump
+you need. `cmp` subtracts only to set flags. It does not store the subtraction result, and
 it does not change either operand. The following **conditional jump** reads those flags. If its
 condition is true, it puts the target label's address in `rip`. Otherwise execution **falls
 through** to the next instruction.
@@ -56,13 +56,14 @@ The unconditional `jmp if_done` prevents the true path from continuing into the 
 is no `}` to stop it. A label only names the address of the instruction that follows it.
 
 The comparison uses `jle` even though the source condition is `x > y`. This inverted jump works
-because the true path occupies the fall-through position: jump away when signed `x <= y`, then let
+because execution falls through to the true path: jump away when signed `x <= y`, then let
 signed `x > y` fall through.
 
 ## Choosing the condition
 
 The same fixed-width bit pattern can represent a signed or unsigned integer. `cmp` records enough
-flags for either reading; the conditional jump chooses the reading.
+flags for either interpretation. The conditional jump determines whether the comparison is signed
+or unsigned.
 
 These are the comparison conditions used in this lesson:
 
@@ -79,7 +80,7 @@ These are the comparison conditions used in this lesson:
 | above, unsigned          | `ja`          | `CF = 0` and `ZF = 0`  |
 | above or equal, unsigned | `jae` / `jnc` | `CF = 0`               |
 
-Equality has no signed or unsigned version. Equal bit patterns make the hypothetical subtraction
+Equality has no signed or unsigned version. Subtracting equal bit patterns gives
 zero, so `cmp` sets `ZF`.
 
 For unsigned order, `CF` records whether `left - right` needed a borrow. A borrow means `left` is
@@ -99,7 +100,7 @@ same `cmp`.
 
 ## Valid `cmp` operands
 
-The operands must have the same width, and the forms used here permit at most one memory operand.
+The operands must have the same width. At most one operand can be in memory.
 A register makes the width clear:
 
 ```x86
@@ -108,8 +109,8 @@ A register makes the width clear:
     cmp rax, 0              ; register with an immediate
 ```
 
-Memory can also be compared directly with an immediate when its width is explicit or otherwise
-inferable:
+You can also compare a value in memory directly with an immediate. The assembler must know the
+width of the value in memory:
 
 ```x86
     cmp qword [x], 0        ; legal: explicit qword width
@@ -126,7 +127,7 @@ first:
 ## Short-circuiting two conditions
 
 For a logical AND, jump to the false result as soon as either condition is false. This example asks
-whether `rax` is strictly between 0 and 100, signed:
+whether the signed value in `rax` is strictly between 0 and 100:
 
 ```x86|playground
 default rel
@@ -197,16 +198,17 @@ greater_path:
 compare_done:
 ```
 
-Both jumps read the flags from the same `cmp`; `jl` itself does not change them. Keeping each jump
-next to the comparison makes the dependency easy to see.
+Both jumps read the flags from the same `cmp`. The first jump, `jl`, does not change them. Keeping
+the jumps together after the comparison makes it easy to see which flags they read.
 
 ## Your turn
 
 Each pair below contains signed qwords. Leave the larger value from `r8` and `r9` in `rbx`, the
 larger from `r10` and `r12` in `rbp`, and the larger from `r13` and `r14` in `r15`.
 
-The three pairs cover left-less, left-greater, and equal inputs. The first pair is also a reminder
-that signed -5 is less than 3 even though its qword bit pattern is above 3 when read as unsigned.
+The left value is smaller in the first pair, larger in the second, and equal in the third. The
+first pair is also a reminder that signed -5 is less than 3 even though its qword bit pattern is
+above 3 when read as unsigned.
 
 ```x86|playground|exercise
 default rel

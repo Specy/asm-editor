@@ -29,7 +29,9 @@ import { workbenchRail } from './workbenchRail'
 import type { ProgramSymbols } from '#lib/languages/programSymbols.ts'
 import type { AvailableLanguages } from '#lib/Project.svelte.ts'
 
-// svelte/motion reads the reduced motion query as it loads, before any hook runs
+// jsdom has no window.matchMedia, which these components read before any hook runs (the
+// reduced-motion setting through styles/motion.ts among them); answering yes also ends every
+// transition at once
 vi.hoisted(() => {
     window.matchMedia = (() => ({
         matches: true,
@@ -114,7 +116,7 @@ function symbolsPanel(
         rows().map((row) =>
             [...row.querySelectorAll('span')].map((span) => span.textContent!.trim())
         )
-    const filterInput = () => target.querySelector<HTMLInputElement>('.filter input')!
+    const filterInput = () => target.querySelector<HTMLInputElement>('.search-field input')!
     const typeFilter = (text: string) => {
         filterInput().value = text
         filterInput().dispatchEvent(new Event('input', { bubbles: true }))
@@ -670,7 +672,7 @@ describe('the Symbols panel of a program the editor built', () => {
                 flushSync()
             },
             typeFilter: (text: string) => {
-                const input = target.querySelector<HTMLInputElement>('.filter input')!
+                const input = target.querySelector<HTMLInputElement>('.search-field input')!
                 input.value = text
                 input.dispatchEvent(new Event('input', { bubbles: true }))
                 flushSync()

@@ -100,8 +100,8 @@
         top: 50%;
         right: 0.5rem;
         line-height: 1;
-        opacity: 0.5;
-        font-size: 0.8rem;
+        color: var(--text-muted);
+        font-size: var(--fs-small);
         transform: translateY(-50%);
     }
 
@@ -125,7 +125,7 @@
             //the marker is drawn over the row rather than inset into it, so being the executing
             //instruction does not shift the text sideways
             &.current {
-                background: rgba(var(--RGB-accent), 0.16);
+                background: color-mix(in srgb, var(--accent) 16%, transparent);
 
                 &::before {
                     content: '';

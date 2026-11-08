@@ -1,6 +1,6 @@
 This array-filling loop tracks three things: the address for the next word, the next value to
 write, and how many writes remain. Each has its own register. On each pass, the program stores one
-word, then moves all three values forward.
+word, advances the address and value, and decreases the remaining count.
 
 ```mips|playground|memory|allow-open
 .eqv COUNT 10
@@ -32,9 +32,8 @@ done:
 The `beq` above `fill` skips the store when `COUNT` is zero. Otherwise `sw` writes the current
 `$t1` at the address in `$t0`. The next three instructions advance the address by four bytes,
 increase the value by one, and reduce the remaining count by one. At the bottom, `bne` returns to
-`fill` while that count is not zero. This countdown pattern requires `COUNT >= 0` (zero or
-positive): a negative count keeps storing past the buffer instead of stopping after a valid number
-of writes.
+`fill` while that count is not zero. `COUNT` must be zero or positive. A negative count keeps
+decreasing, so the loop stores past the buffer instead of stopping after a valid number of writes.
 
 Here are the first two passes. Each row shows the store and the state _after_ the updates:
 
@@ -43,13 +42,13 @@ Here are the first two passes. Each row shows the store and the state _after_ th
 | 1          | `numbers + 4`       | 2                 | 9                |
 | 2          | `numbers + 8`       | 3                 | 8                |
 
-Open the memory panel, enter `10010000` in its address box, select **W** for word-sized values,
-then select **Build** and **Run**. In this Playground, `numbers` is the first item in the data
-area, so it starts at `0x10010000`. The ten words should contain 1 through 10. The register panel
+Select **Build** and **Run**, then enter `10010000` in the memory panel's address box. In this
+Playground, `numbers` is the first item in the data area, so it starts at `0x10010000`. Drag across
+each group of four bytes to read its decimal value. The ten words should contain 1 through 10. The register panel
 shows hexadecimal by default: `$t0` ends at `10010028`, `$t1` at `0000000B` (11), and `$t2` at
 `00000000`. `$t0` points one word past the last store because it always holds the _next_ address.
 
-Ten stores, four bytes apart, need `10 * 4 = 40` bytes; that is the space reserved for `numbers`.
+Ten stores, four bytes apart, need `10 * 4 = 40` bytes. That is the space reserved for `numbers`.
 If you increase `COUNT`, reserve at least `4 * COUNT` bytes as well. `.space` reserves bytes but
 does not initialize their values. Do not rely on it to fill an array with zero, even though this
 Playground currently displays newly reserved memory as zero.

@@ -8,8 +8,8 @@ coloured cell. With 8 display pixels per cell and a 256 by 256 display, the grid
 32 rows. A rectangle at `(x, y)` begins at byte address `display + (y * 32 + x) * 4`.
 
 `fill_rect` takes `x`, `y`, width and height in `$a0`–`$a3`. It reads the colour from `$s0` and
-the address of `display` from `$s1`. It returns immediately for a nonpositive width or height; for
-a positive size, the caller must keep the whole rectangle inside the grid.
+the address of `display` from `$s1`. It returns immediately if the width or height is zero or
+negative. Otherwise, the caller must keep the whole rectangle inside the grid.
 
 ```mips|playground|open-screen|no-registers|allow-open
 # @screen unit=8 width=256 height=256 base=display
@@ -65,6 +65,10 @@ main:
     li $s4, 1               # dx
     li $s5, 1               # dy
 
+    li $v0, 30
+    syscall
+    move $s7, $a0           # starting clock reading
+
 frame:
     li $s0, BACKGROUND      # erase the ball where it was
     move $a0, $s2
@@ -97,10 +101,11 @@ y_done:
     li $a3, BALL
     jal fill_rect
 
-    li $v0, 30              # service 30: elapsed milliseconds in $a0
+    li $v0, 30              # service 30: milliseconds since 1970-01-01 UTC
     syscall
+    subu $t5, $a0, $s7      # elapsed milliseconds since the animation started
     li $t4, 100
-    div $a0, $t4
+    div $t5, $t4
     mflo $t5                # tenths of a second
     li $t4, SIDE
     div $t5, $t4
@@ -133,9 +138,9 @@ no_bar:
 
 The loop erases the old ball, moves its upper-left corner, draws it again, updates the bar, and
 waits. The background is painted once before the loop. Later frames change the moving ball and the
-bottom row, leaving the rest of the grid alone. Stores to `display` appear on the Screen as they
-happen, so the ball can briefly be partly erased or drawn. Touching fewer cells makes that interval
-shorter.
+bottom row, leaving the rest of the grid alone. The Screen can refresh while the program is
+storing colours to `display`, so the ball can briefly be partly erased or drawn. Touching fewer
+cells makes that interval shorter.
 
 `$s2` and `$s3` hold the ball's upper-left column and row. `$s4` and `$s5` hold its steps, each
 either `1` or `-1`. The ball is four cells wide, so its left edge can reach column 28 and still
@@ -144,9 +149,11 @@ bar. These are the reasons for `LIMIT_X` and `LIMIT_Y`. After a step crosses eit
 reverses that step; the two following `add` instructions undo the crossing and take one step back
 into the play area. For example, moving right from `x = 28` first gives 29, then reflects to 27.
 
-The bar uses two clock services. Put `30` in `$v0` and call `syscall` to receive elapsed program
-milliseconds in `$a0`. `div $a0, $t4` divides by 100; `mflo` copies the quotient from `lo`, giving
-tenths of a second. A second `div` divides that count by 32, and `mfhi` copies the remainder from
+The program uses two clock services to update the bar and delay each frame. Service 30 returns
+milliseconds since 1970-01-01 UTC, with the low 32 bits in `$a0`. Before the loop, the program saves
+that starting reading in `$s7`. Each frame, `subu $t5, $a0, $s7` subtracts it from the current
+reading to get elapsed milliseconds. `div $t5, $t4` divides by 100; `mflo` copies the quotient
+from `lo`, giving tenths of a second. A second `div` divides that count by 32, and `mfhi` copies the remainder from
 `hi` into `$s6`. That remainder is a width from 0 to 31, so the bar grows and then starts again.
 When it is zero, `beqz` skips drawing the coloured bar. `fill_rect` would also do nothing with a
 zero width, but skipping the call avoids needless setup. Put `32` in `$v0` and the frame delay in

@@ -62,9 +62,10 @@
         margin: 0;
         min-width: 0;
     }
+    /* the entry's text size where a Chapter's page sets one (EntryBody) */
     figcaption {
-        font-size: 0.8rem;
-        color: var(--background-text-muted);
+        font-size: var(--entry-text-size, var(--fs-small));
+        color: var(--background-text-prose);
     }
     .fill {
         flex: 1;

@@ -16,6 +16,7 @@
     import InlineMarkdown from '#cmp/documentation/entries/InlineMarkdown.svelte'
     import type { OperandSymbol } from '#lib/documentation/instructions/document.ts'
     import { resolveHref } from '#lib/hrefs.ts'
+    import FoldToggle from './FoldToggle.svelte'
 
     interface Props {
         operands: readonly OperandSymbol[]
@@ -26,6 +27,11 @@
         compact?: boolean
         /** Starts closed, behind its heading: a long legend in the narrow panel. */
         collapsible?: boolean
+        /**
+         * The collapsible legend's heading drawn as a folding header (`FoldToggle`): the
+         * Workbench's panel's. `/all` keeps its plain one.
+         */
+        folding?: boolean
         /** Whether the collapsible legend is open, which a symbol tapped in a row does. */
         open?: boolean
     }
@@ -37,6 +43,7 @@
         disableLinks = false,
         compact = false,
         collapsible = false,
+        folding = false,
         open = $bindable(false)
     }: Props = $props()
 </script>
@@ -61,7 +68,14 @@
     </dl>
 {/snippet}
 
-{#if collapsible}
+{#if collapsible && folding}
+    <section class="legend" class:compact aria-label="Operands">
+        <h3><FoldToggle label="Operands" count={`${operands.length}`} bind:open /></h3>
+        {#if open}
+            {@render lines()}
+        {/if}
+    </section>
+{:else if collapsible}
     <details class="legend" class:compact aria-label="Operands" bind:open>
         <summary
             ><h3>Operands</h3>
@@ -83,9 +97,11 @@
         gap: 0.4rem;
         min-width: 0;
     }
+    /* the size of the Forms heading above it (InstructionDocumentView's `.heading`; owner,
+       2026-11-08), the panel's own size in the panel */
     h3 {
         margin: 0;
-        font-size: 1rem;
+        font-size: var(--fs-lead);
     }
     summary {
         display: flex;
@@ -97,13 +113,16 @@
         display: inline;
     }
     .count {
-        font-size: 0.8rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
     }
+    /* the panel's own size, a step larger in an entry the Workbench's panel has expanded
+       (`--entry-text-size`, EntryRow; owner, 2026-11-08) */
     .compact h3 {
-        font-size: 0.85rem;
+        font-size: var(--entry-text-size, var(--fs-small));
     }
-    /* one line a symbol, ruled apart, the text kept to a readable measure */
+    /* one line a symbol, ruled apart, the text kept to a readable measure; on the page a step
+       larger than the panel's, at --fs-body (owner, 2026-11-08) */
     dl {
         display: grid;
         grid-template-columns: max-content minmax(0, 80ch);
@@ -111,11 +130,11 @@
         max-width: 100%;
         margin: 0;
         border: 1px solid var(--doc-rule, var(--tertiary));
-        border-radius: var(--wb-radius, 0.4rem);
-        font-size: 0.92rem;
+        border-radius: var(--wb-radius, var(--r-control));
+        font-size: var(--fs-body);
     }
     .compact dl {
-        font-size: 0.85rem;
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     .line {
         display: grid;
@@ -124,7 +143,7 @@
         column-gap: 1rem;
         padding: 0.45rem 0.8rem;
         border-top: 1px solid var(--doc-rule, var(--tertiary));
-        transition: background-color 0.3s ease;
+        transition: background-color var(--dur-base) ease;
     }
     .compact .line {
         padding: 0.35rem 0.5rem;
@@ -140,7 +159,7 @@
         margin: 0;
     }
     dt code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
         color: var(--accent);
         white-space: nowrap;

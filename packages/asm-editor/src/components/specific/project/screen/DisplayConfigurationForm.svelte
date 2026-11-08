@@ -1,6 +1,7 @@
 <script lang="ts">
     import { tick } from 'svelte'
     import Select from '#cmp/shared/input/Select.svelte'
+    import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
     /**
      * A Program's Display configuration: the form of the Screen header's Display popover and of the
      * Workbench's Display section. `disabled` makes it a read-only summary, which is what it is
@@ -92,8 +93,6 @@
     /** The sizes whose Custom entry was picked, which keep their field open on a listed size too. */
     let customPicked = $state<Partial<Record<SizeField, boolean>>>({})
     const fields: Partial<Record<SizeField, HTMLInputElement>> = {}
-    const selectStyle =
-        'padding: 0.4rem 0.6rem; background: var(--tertiary); color: var(--tertiary-text)'
 
     /**
      * A `base=<label>` resolves to wherever the assembler put that label, which is never one of the
@@ -160,14 +159,14 @@
     }
 
     /** A typed size, brought to one the framebuffer takes: a width down to a multiple of 8. */
-    function commitX86(field: X86Field, input: HTMLInputElement) {
+    function commitX86(field: X86Field, typed: number) {
         x86CustomPicked = true
-        const typed = input.value.trim() === '' ? Number.NaN : Number(input.value)
         const size =
             field === 'width'
                 ? snapX86DisplayWidth(typed, x86Current.width)
                 : snapX86DisplayHeight(typed, x86Current.height)
-        input.value = String(size)
+        const input = x86Fields[field]
+        if (input) input.value = String(size)
         if (size !== x86Current[field]) onChange({ ...x86Current, [field]: size })
     }
 
@@ -176,15 +175,11 @@
      * stays open whatever was typed, a size on MARS's list included, as it would after picking
      * Custom: it should not vanish under the cursor.
      */
-    function commit(
-        field: SizeField,
-        input: HTMLInputElement,
-        sizes: { min: number; max: number }
-    ) {
+    function commit(field: SizeField, typed: number, sizes: { min: number; max: number }) {
         customPicked[field] = true
-        const typed = input.value.trim() === '' ? Number.NaN : Number(input.value)
         const size = clampSize(typed, sizes.min, sizes.max, current[field])
-        input.value = String(size)
+        const input = fields[field]
+        if (input) input.value = String(size)
         if (size !== current[field]) change(field, size)
     }
 </script>
@@ -213,7 +208,7 @@
                 ]}
                 value={x86Custom ? CUSTOM : x86Choice}
                 ariaLabel="Screen size in pixels"
-                style={selectStyle}
+                compact
                 wrapperStyle="min-width: 5rem; max-width: 10rem"
                 onChange={(value) => pickX86Size(value)}
             />
@@ -222,16 +217,19 @@
             {#each x86Dimensions as dimension (dimension.field)}
                 <label class="display-setting custom-size">
                     <span>{dimension.text}</span>
-                    <input
-                        bind:this={x86Fields[dimension.field]}
-                        type="number"
+                    <NumberStepper
+                        bind:el={x86Fields[dimension.field]}
                         min={X86_DISPLAY_SIZE_MIN}
                         max={X86_DISPLAY_SIZE_MAX}
                         step={dimension.step}
+                        snap={(typed) =>
+                            dimension.field === 'width'
+                                ? snapX86DisplayWidth(typed, x86Current.width)
+                                : snapX86DisplayHeight(typed, x86Current.height)}
                         {disabled}
                         value={x86Current[dimension.field]}
-                        aria-label="{dimension.title}, custom"
-                        onchange={(event) => commitX86(dimension.field, event.currentTarget)}
+                        ariaLabel="{dimension.title}, custom"
+                        onchange={(typed) => commitX86(dimension.field, typed)}
                     />
                 </label>
             {/each}
@@ -258,7 +256,7 @@
                 ]}
                 value={custom ? CUSTOM : current[dimension.field]}
                 ariaLabel={dimension.title}
-                style={selectStyle}
+                compact
                 wrapperStyle="min-width: 5rem; max-width: 10rem"
                 onChange={(value) => pick(dimension.field, value)}
             />
@@ -266,17 +264,14 @@
         {#if custom}
             <label class="display-setting custom-size">
                 <span>Any size from {dimension.sizes.min} to {dimension.sizes.max}</span>
-                <input
-                    bind:this={fields[dimension.field]}
-                    type="number"
+                <NumberStepper
+                    bind:el={fields[dimension.field]}
                     min={dimension.sizes.min}
                     max={dimension.sizes.max}
-                    step="1"
                     {disabled}
                     value={current[dimension.field]}
-                    aria-label="{dimension.title}, custom"
-                    onchange={(event) =>
-                        commit(dimension.field, event.currentTarget, dimension.sizes)}
+                    ariaLabel="{dimension.title}, custom"
+                    onchange={(typed) => commit(dimension.field, typed, dimension.sizes)}
                 />
             </label>
         {/if}
@@ -288,7 +283,7 @@
             options={baseChoices.map((choice) => ({ key: choice.text, value: choice.address }))}
             value={current.baseAddress}
             ariaLabel="Base address for display"
-            style={selectStyle}
+            compact
             wrapperStyle="min-width: 5rem; max-width: 10rem"
             onChange={(value) => change('baseAddress', value)}
         />
@@ -307,7 +302,7 @@
         gap: 0.4rem;
     }
     .hint code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
 
     .source-note {
@@ -317,8 +312,8 @@
     }
 
     h3 {
-        font-size: 0.95rem;
-        font-weight: bold;
+        font-size: var(--fs-body);
+        font-weight: 700;
     }
 
     .display-setting {
@@ -326,26 +321,17 @@
         align-items: center;
         justify-content: space-between;
         gap: 0.5rem;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
 
     .custom-size {
         span {
             color: var(--hint);
         }
-
-        input {
-            width: 6rem;
-            padding: 0.4rem 0.6rem;
-            border-radius: 0.4rem;
-            background: var(--tertiary);
-            color: var(--tertiary-text);
-            font-size: 0.8rem;
-        }
     }
 
     .hint {
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
         line-height: 1.4;
     }
@@ -356,7 +342,7 @@
 
         .display-setting {
             padding: 0.2rem 0.4rem;
-            font-size: 0.9rem;
+            font-size: var(--fs-small);
         }
 
         .hint {

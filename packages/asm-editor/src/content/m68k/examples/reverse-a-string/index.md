@@ -26,7 +26,7 @@ text: dc.b 'Assembly', 0
 ```
 
 The `subq.l #2, a1` takes two steps back because `(a1)+` advances even when it reads the zero byte.
-For `Assembly`, the end of memory looks like this:
+For `Assembly`, the bytes at the end of the string look like this:
 
 ```text
 $2007  'y'   last character; a1 after subq.l #2, a1
@@ -35,9 +35,10 @@ $2009        a1 after tst.b (a1)+ reads the terminator
 ```
 
 The swap needs both bytes in registers before either is written, which is why `d0` and `d1` are both
-loaded first. `move.b d1, (a0)+` writes and steps the left pointer in one instruction, and the right
-pointer is written with a plain `(a1)` and moved by the `subq` under it, because `-(a1)` would
-subtract **before** the write and put the byte in the wrong place.
+loaded first. `move.b d1, (a0)+` writes the right byte at the left pointer, then advances that
+pointer. `move.b d0, (a1)` writes the left byte at the right pointer, and the following `subq`
+moves that pointer back one byte. Using `-(a1)` would subtract **before** the write and put the
+byte in the wrong place.
 
 `cmp.l a0, a1` compares the two addresses, and `bls` stops the loop when `a1` is at or before
 `a0`. It uses an unsigned comparison, which is appropriate for addresses. For an odd number of

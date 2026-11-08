@@ -17,16 +17,16 @@ read and write them:
     out dx, al              ; write one byte to that port
 ```
 
-A port number and a memory address name different spaces. For example, `in al, dx` with `dx` equal
+Port numbers and memory addresses belong to separate address spaces. For example, `in al, dx` with `dx` equal
 to `0x60` accesses port `0x60`; `mov al, [0x60]` accesses memory address `0x60`.
 
 Older PC designs assigned ports `0x60` and `0x64` to the legacy keyboard-controller interface and
 `0x3F8` to the first serial-port interface. These are historical PC conventions; current machines
 may expose different hardware or emulate the old interfaces.
 
-Ports are an older, distinct I/O mechanism that x86 has kept. A hardware design may expose control,
+x86 still supports this older port I/O mechanism. A hardware design may expose control,
 status, and data registers through ports, through memory addresses, or through both. Performance
-depends on the device and platform, so the separate address space is the useful distinction here.
+depends on the device and platform. Port I/O uses its own address space.
 
 ## Memory-mapped devices
 
@@ -55,8 +55,8 @@ When permission is absent, attempting `in` or `out` raises an x86 general-protec
 Linux normally turns that exception into a signal for the process; if the signal is not handled,
 the process terminates.
 
-The following program is specifically an experiment for this playground. `r9` starts with a known
-sentinel value, so we can see whether execution passed the `in` instruction.
+Run the following program in the Playground. `r9` starts at 1 and changes to 2 only if execution
+passes the `in` instruction.
 
 ```x86|playground|no-flags
 default rel
@@ -78,9 +78,9 @@ _start:
 { "endsWithSignal": "SIGSEGV" }
 ```
 
-Here the playground stops on `in` and leaves `r9` equal to 1. That is how this emulator presents the
-failed instruction. On Linux, the CPU exception and the signal chosen by the kernel are separate
-steps between the instruction and an unhandled signal terminating a process.
+The Playground stops on `in` and leaves `r9` equal to 1. This is how the Emulator reports the
+failed instruction. On Linux, the CPU raises an exception, then the kernel delivers a signal.
+If the process does not handle that signal, it terminates.
 
 Memory-mapped device access is controlled through **page tables**. A page table records which
 virtual addresses a process may access and what physical memory or device range lies behind them.
@@ -89,8 +89,7 @@ Linux commonly manages memory in 4096-byte units called **pages**.
 Device ranges are normally absent from an application's mappings. Accessing an unmapped virtual
 address raises an x86 page-fault exception; Linux normally delivers a signal, and an unhandled
 signal terminates the process. A driver can also map an allowed device range into a process after
-checking permissions. The kernel's chosen mappings enforce the protection while still allowing
-approved device mappings.
+checking permissions. The kernel controls which device ranges each process can access through these mappings.
 
 ## Asking the kernel
 
@@ -110,7 +109,7 @@ permissions depend on the particular file or device.
 ## Anonymous `mmap`: a page-mapping experiment
 
 `mmap` can also create memory with no file or device behind it. Such an **anonymous mapping** gives
-the process a range of zero-filled bytes. This is the form we can explore safely in the playground.
+the process a range of zero-filled bytes. You can try an anonymous mapping in the Playground.
 
 The previous lesson's system-call rules apply: `rax` selects the call, the arguments begin in
 `rdi`, `rsi`, and `rdx`, and Linux returns a result in `rax`. The fourth argument uses `r10` because
@@ -178,7 +177,7 @@ munmap_failed:
 On the successful path, `r13` becomes `0x1234` and `r14` becomes 0. `munmap` removes the mapping, so
 the program does not access that address again.
 
-This playground uses the fixed address `0x7ffff7ffe000` for its first anonymous mapping. The
+This Playground uses the fixed address `0x7ffff7ffe000` for its first anonymous mapping. The
 exercise test uses that address. Normal Linux may choose a different address each time; programs
 must use the address returned in `rax`.
 
@@ -192,7 +191,7 @@ the returned address in `r12`. Write `0xAA` into the requested page's final byte
 into `r13`. Finally, call `munmap`, preserve its result in `r14`, and check it before exiting.
 
 The first byte is at offset 0, so the final byte of a 4096-byte page is at offset 4095. Successfully
-reading back that byte checks that the final byte of the requested page is mapped.
+reading back that byte checks that the program can access the end of the requested page.
 
 ```x86|playground|exercise
 default rel

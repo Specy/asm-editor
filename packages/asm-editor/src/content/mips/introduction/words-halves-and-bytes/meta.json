@@ -1,6 +1,6 @@
 {
     "name": "Words, halves and bytes",
-    "description": "Byte, half and word sizes, decimal and hexadecimal values, and signed and unsigned readings of fixed-width two's-complement patterns.",
+    "description": "Bytes, halves and words, decimal and hexadecimal notation, and how to read the same bits as signed or unsigned numbers.",
     "order": 4,
     "topic": "numbers"
 }

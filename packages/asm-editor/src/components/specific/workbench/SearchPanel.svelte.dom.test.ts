@@ -33,7 +33,9 @@ import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 import type { RailEntry } from './workbenchContext'
 import { workbenchRail } from './workbenchRail'
 
-// svelte/motion reads the reduced motion query as it loads, before any hook runs
+// jsdom has no window.matchMedia, which these components read before any hook runs (the
+// reduced-motion setting through styles/motion.ts among them); answering yes also ends every
+// transition at once
 vi.hoisted(() => {
     window.matchMedia = (() => ({
         matches: true,
@@ -327,7 +329,7 @@ function searchPanel(
     const tick = (label: string) => {
         const box = [...target.querySelectorAll<HTMLLabelElement>('.look-in label')]
             .find((item) => item.textContent?.trim() === label)!
-            .querySelector('input')!
+            .querySelector<HTMLButtonElement>('[role="switch"]')!
         box.click()
         flushSync()
     }
@@ -635,7 +637,8 @@ describe('searching', () => {
         const view = searchPanel()
         const ticks = () =>
             [...view.target.querySelectorAll<HTMLLabelElement>('.look-in label')].map(
-                (label) => `${label.textContent!.trim()} ${label.querySelector('input')!.checked}`
+                (label) =>
+                    `${label.textContent!.trim()} ${label.querySelector('[role="switch"]')!.getAttribute('aria-checked')}`
             )
         expect(ticks()).toEqual(['Files true', 'Listings true', 'Pseudocode true'])
         view.tick('Files')
@@ -651,10 +654,10 @@ describe('searching', () => {
         })
         const next = searchPanel()
         expect(
-            [...next.target.querySelectorAll<HTMLLabelElement>('.look-in label')].map(
-                (label) => label.querySelector('input')!.checked
+            [...next.target.querySelectorAll<HTMLLabelElement>('.look-in label')].map((label) =>
+                label.querySelector('[role="switch"]')!.getAttribute('aria-checked')
             )
-        ).toEqual([false, true, false])
+        ).toEqual(['false', 'true', 'false'])
         //and nothing is searched with nothing ticked
         next.tick('Listings')
         expect(next.target.querySelector('.note')?.textContent).toContain('Nothing to search')

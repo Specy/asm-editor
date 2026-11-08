@@ -154,11 +154,11 @@
         width: 100%;
         padding: 1.2rem 2.5rem;
         cursor: pointer;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.95rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-body);
         letter-spacing: 0.02em;
-        color: var(--muted);
-        transition: color 0.2s;
+        color: var(--text-muted);
+        transition: color var(--dur-fast);
 
         &:hover {
             color: var(--background-text);
@@ -174,8 +174,8 @@
         cursor: default;
         padding-top: 2.2rem;
         padding-bottom: 0.6rem;
-        font-family: 'Noto Serif', Georgia, serif;
-        font-size: 1.35rem;
+        font-family: var(--font-read);
+        font-size: var(--fs-h3);
         letter-spacing: 0;
         color: var(--background-text);
     }
@@ -187,11 +187,11 @@
 
     .plus {
         display: flex;
-        width: 0.65rem;
+        width: var(--fs-micro);
         opacity: 0.7;
         transition:
-            opacity 0.2s,
-            transform 0.3s;
+            opacity var(--dur-base),
+            transform var(--dur-base);
     }
 
     .open .plus {
@@ -239,11 +239,11 @@
     }
 
     p {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.95rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-body);
         line-height: 1.75;
         letter-spacing: 0.02em;
-        color: var(--muted);
+        color: var(--text-muted);
         max-width: 34rem;
     }
 
@@ -253,8 +253,8 @@
         gap: 0.4rem;
         margin-top: 1.2rem;
         color: var(--accent);
-        font-family: 'Fira Code', monospace;
-        font-size: 0.95rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-body);
         text-decoration: underline;
         text-underline-offset: 0.25em;
         text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
@@ -266,7 +266,7 @@
 
     .chevron {
         display: flex;
-        width: 0.55rem;
+        width: var(--fs-micro);
     }
 
     .inline-shot {

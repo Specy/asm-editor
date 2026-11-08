@@ -1,6 +1,6 @@
 {
     "name": "Moving values around",
-    "description": "Place values in registers, preserve the inputs while computing a perimeter, copy a result, and observe subtraction order.",
+    "description": "Compute a rectangle's perimeter, copy values between registers, and see how operand order affects subtraction.",
     "order": 0,
     "topic": "moving-values",
     "template": 1

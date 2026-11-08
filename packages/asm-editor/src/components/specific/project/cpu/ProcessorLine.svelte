@@ -31,17 +31,17 @@
         align-items: center;
         gap: 0.4rem;
         min-width: 0;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
 
     .label {
-        opacity: 0.8;
+        color: var(--text-muted);
     }
 
     .processor {
         padding: 0 0.35rem;
         border-radius: 0.3rem;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         line-height: 1.5;
         background-color: var(--accent2);
         color: var(--accent2-text);

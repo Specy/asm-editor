@@ -1,10 +1,10 @@
 Build and play Snake on a board of 32 columns by 24 rows. Choose **Build**, then **Run**. Click
 inside the **Screen** so it has keyboard focus, then use the arrow keys to steer. The snake keeps
-moving after you release a key. Reaching food adds one point and grows the snake; hitting a wall or
-its own body ends the game. **Game over** appears on the Screen and the final score appears in the
+moving after you release a key. Reaching food adds one point and grows the snake, up to 64 segments.
+Hitting a wall or its own body ends the game. **Game over** appears on the Screen and the final score appears in the
 console. Choose **Run** again to restart, or **Stop** when you are done.
 
-The listing is long because it includes input, movement, drawing and a score. Read it first as one
+The listing is long because it includes input, movement, drawing and a score. Start by following one
 pass through `frame`:
 
 | Part     | What happens each frame                                                      |
@@ -314,7 +314,7 @@ tail at `$030C` disappears.
 
 The code unpacks the old head into X and Y before adding `dx` and `dy`. It tests the new coordinates
 against columns 0–31 and rows 0–23 before packing them again. A negative coordinate must be caught
-here: squeezing -1 into an eight-bit coordinate would lose the fact that it crossed an edge.
+here: packing -1 into an eight-bit coordinate would turn it into 255.
 After writing the new head, the collision loop starts at `body+2`, which is `body[1]`. It compares
 the head with each body segment and skips `body[0]` because that is the head itself.
 
@@ -324,9 +324,9 @@ for this frame; the next backward shift separates them as the snake moves.
 
 ## Arrow keys and food
 
-Task 19 receives the packed key codes `$25262728`: left, up, right and down, one byte each. Its
-answer uses the same byte order, with `$FF` for a held key and `$00` otherwise. The four `btst`
-instructions inspect bits 24, 16, 8 and 0 of that answer. For instance, a held left arrow sets bit 24. A direction remains in `dx` and `dy` until an accepted arrow changes it.
+Task 19 receives the packed key codes `$25262728`: left, up, right and down, one byte each. The result in `d1`
+uses the same byte order, with `$FF` for a held key and `$00` otherwise. The four `btst`
+instructions inspect bits 24, 16, 8 and 0 of that result. For instance, a held left arrow sets bit 24. A direction remains in `dx` and `dy` until an accepted arrow changes it.
 
 `try_direction` rejects a turn straight back. While the snake moves right, its direction is
 `(dx, dy) = (1, 0)`. A left press proposes `(-1, 0)`. Both sums, `1 + (-1)` and `0 + 0`, are

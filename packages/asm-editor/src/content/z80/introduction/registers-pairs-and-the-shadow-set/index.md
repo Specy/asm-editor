@@ -4,9 +4,9 @@ In the first program, `a` held one number, `b` held another, and `add a, b` left
 
 ## Seven places for a byte
 
-The Z80 has seven everyday registers that each hold one byte: `a`, `b`, `c`, `d`, `e`, `h` and `l`. You can put a number into any of them with `ld`. You can also copy a byte between them: `ld c, b` copies the value in `b` into `c`; it does not empty `b`.
+The Z80 has seven general-purpose registers that each hold one byte: `a`, `b`, `c`, `d`, `e`, `h` and `l`. You can put a number into any of them with `ld`. You can also copy a byte between them: `ld c, b` copies the value in `b` into `c`. The value in `b` stays the same.
 
-`a` is called the **accumulator**. The addition you have seen uses it as the place for the answer. Subtraction does too, though its spelling is shorter: `sub b` means subtract `b` from `a` and leave the answer in `a`.
+`a` is called the **accumulator**. The `add a, b` instruction stores its answer in `a`. Subtraction does too, but you omit `a` when writing the instruction: `sub b` means subtract `b` from `a` and leave the answer in `a`.
 
 ```z80|playground|no-flags
     .org 0x8000
@@ -36,7 +36,7 @@ The pair is another view of the same registers, not an extra place to store a va
 
 `inc` adds one and `dec` subtracts one. Written with a pair, they change the _whole_ two-byte value. Try changing `ld c, 0x56` to `ld c, 0xFF`, then step through `inc bc`: the low byte rolls over to `00` and the high byte goes up by one.
 
-A pair can hold a larger number than a single byte. It can also hold a memory address, since the Z80 uses two-byte addresses. `hl` is especially useful for visiting a byte in memory.
+A pair can hold a larger number than a single byte. It can also hold a memory address, since the Z80 uses two-byte addresses. You can use `hl` to read and write bytes in memory.
 
 ## A byte at the address in `hl`
 
@@ -59,7 +59,7 @@ With **Step**, watch `hl` and the memory view as well as `a`. `inc hl` changes t
 
 ## A second set you can swap in
 
-There is a hidden second copy of each of the three pairs: `bc'`, `de'` and `hl'`. The apostrophe means “the other copy.” You cannot write `ld bc', 5` to use one directly. Instead, `exx` swaps all three visible pairs with their hidden copies at once.
+Each of the three pairs has a second copy, called a **shadow register**: `bc'`, `de'` and `hl'`. The apostrophe means “the other copy.” You cannot write `ld bc', 5` to use one directly. Instead, `exx` swaps `bc`, `de` and `hl` with their shadow registers at once.
 
 | After this instruction | Visible `bc` | Other `bc'` |
 | ---------------------- | ------------ | ----------- |

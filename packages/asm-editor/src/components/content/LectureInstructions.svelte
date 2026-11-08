@@ -53,12 +53,12 @@
         margin: 0;
     }
     .language {
-        font-weight: bold;
+        font-weight: 700;
         margin-right: 0.3rem;
     }
     /* the lecture's own inline code, as a link */
     code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         background: var(--secondary);
         padding: 0.2rem 0.4rem;
         border-radius: 0.3rem;

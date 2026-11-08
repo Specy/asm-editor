@@ -17,6 +17,7 @@
     import NumberCell from './NumberCell.svelte'
     import WhenLabel from './WhenLabel.svelte'
     import FaTimes from '~icons/fa-solid/times'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import FaCaretDown from '~icons/fa-solid/caret-down'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
@@ -195,7 +196,7 @@
                                 onCommit={(value) => setValue('startingRegisters', row.name, value)}
                             />
                         {:else}
-                            <span class="value" class:empty={row.start === undefined}>
+                            <span class="value ellipsis" class:empty={row.start === undefined}>
                                 {show(row.start, row.name)}
                             </span>
                         {/if}
@@ -210,7 +211,7 @@
                                 onCommit={(value) => setValue('expectedRegisters', row.name, value)}
                             />
                         {:else}
-                            <span class="value" class:empty={row.expected === undefined}>
+                            <span class="value ellipsis" class:empty={row.expected === undefined}>
                                 {show(row.expected, row.name)}
                             </span>
                         {/if}
@@ -226,20 +227,22 @@
                                   ? 'As expected'
                                   : 'Not the expected value'}
                         >
-                            <span class="value" class:empty={actual === undefined}>
+                            <span class="value ellipsis" class:empty={actual === undefined}>
                                 {show(actual?.value, row.name)}
                             </span>
                         </td>
                     {/if}
                     {#if editable}
                         <td class="remove">
-                            <button
-                                aria-label="Remove {row.name}"
+                            <IconButton
+                                size="sm"
+                                quiet
+                                label="Remove {row.name}"
                                 {@attach tooltip(`Remove ${row.name}`)}
-                                onclick={() => remove(row.name)}
+                                onClick={() => remove(row.name)}
                             >
                                 <FaTimes />
-                            </button>
+                            </IconButton>
                         </td>
                     {/if}
                 </tr>
@@ -269,7 +272,7 @@
         table-layout: fixed;
         border-collapse: separate;
         border-spacing: 0;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
 
     .name-column {
@@ -318,7 +321,7 @@
             padding: 0.45rem 0.8rem 0.45rem 0;
             appearance: none;
             font-weight: 600;
-            font-size: 0.85rem;
+            font-size: var(--fs-small);
             background-color: transparent;
             color: var(--secondary-text);
             cursor: pointer;
@@ -335,7 +338,7 @@
         top: 50%;
         right: 0.45rem;
         display: flex;
-        width: 0.45rem;
+        width: var(--fs-micro);
         transform: translateY(-50%);
         color: var(--hint);
         opacity: 0.5;
@@ -350,13 +353,9 @@
         @include mono;
         display: block;
         padding: 0.45rem 0.7rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
 
         &.empty {
             color: var(--hint);
-            opacity: 0.6;
         }
     }
 
@@ -374,11 +373,14 @@
         }
     }
 
-    .remove button {
-        @include remove-button;
-        width: 100%;
+    /* the row's ×, in the middle of a cell as tall as the others */
+    .remove {
         height: 2.1rem;
-        padding: 0 0.6rem;
+
+        :global(.icon-button) {
+            @include remove-button;
+            margin: 0 auto;
+        }
     }
 
     .add-cell {

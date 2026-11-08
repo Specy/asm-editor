@@ -16,7 +16,9 @@ import { editorGroupsFixture } from '#lib/workbench/__fixtures__/editorGroups.sv
 import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 import type { RailEntry } from './workbenchContext'
 
-// svelte/motion reads the reduced motion query as it loads, before any hook runs
+// jsdom has no window.matchMedia, which these components read before any hook runs (the
+// reduced-motion setting through styles/motion.ts among them); answering yes also ends every
+// transition at once
 vi.hoisted(() => {
     window.matchMedia = (() => ({
         matches: true,

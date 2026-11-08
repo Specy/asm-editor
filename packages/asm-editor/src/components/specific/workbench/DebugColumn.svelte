@@ -128,7 +128,7 @@
             onclick={() => setCollapsed(false)}
         >
             <FaAngleDoubleLeft />
-            <span class="strip-label">{stripLabel}</span>
+            <span class="strip-label ellipsis">{stripLabel}</span>
         </button>
     </div>
 {/if}
@@ -166,7 +166,6 @@
                     <div class="memory-controls">
                         <MemoryControls
                             {emulator}
-                            buttonVar="secondary"
                             systemSize={emulator.systemSize}
                             bytesPerPage={emulator.memory.global.pageSize}
                             memorySize={MEMORY_SIZE[language]}
@@ -297,13 +296,13 @@
         background: transparent;
         color: var(--secondary-text);
         font: inherit;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         cursor: pointer;
 
         :global(svg) {
             flex: none;
-            width: 0.8rem;
-            height: 0.8rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
 
         &:hover {
@@ -311,7 +310,7 @@
         }
 
         &:focus-visible {
-            outline: solid 0.1rem var(--accent);
+            outline: solid 1px var(--accent);
             outline-offset: -0.2rem;
         }
     }
@@ -320,11 +319,8 @@
        ellipsis when the column is shorter than all it names */
     .strip-label {
         writing-mode: vertical-rl;
-        white-space: nowrap;
         min-height: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        opacity: 0.85;
+        color: var(--text-muted);
     }
 
     /* the column's own control, ruled off from memory's page buttons before it so that its
@@ -345,8 +341,8 @@
         cursor: pointer;
 
         :global(svg) {
-            width: 0.8rem;
-            height: 0.8rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
 
         &:hover {
@@ -354,7 +350,7 @@
         }
 
         &:focus-visible {
-            outline: solid 0.1rem var(--accent);
+            outline: solid 1px var(--accent);
             outline-offset: -0.1rem;
         }
     }

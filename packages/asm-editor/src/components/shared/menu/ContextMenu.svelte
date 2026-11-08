@@ -28,8 +28,9 @@
      * design, decision 12).
      */
     import { onMount, tick } from 'svelte'
-    import CardOutline from '#cmp/shared/floating/CardOutline.svelte'
+    import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { placeCard, type Side } from '#cmp/shared/floating/floating.ts'
+    import { popoverElevation } from '#src/styles/elevation.ts'
 
     interface Props {
         /** The point it opens at, in viewport coordinates; it moves inwards to stay on screen. */
@@ -49,8 +50,8 @@
 
     const EDGE = 4
     const ARROW = 6
-    /** 0.4rem, the corner the outline is drawn with. */
-    const RADIUS = 6.4
+    /** The corner the outline is drawn with, which the arrow keeps clear of. */
+    const RADIUS = popoverElevation().radius
     let menu: HTMLDivElement
     let left = $state(0)
     let top = $state(0)
@@ -154,18 +155,7 @@
     onkeydown={onKeydown}
     oncontextmenu={(event) => event.preventDefault()}
 >
-    <CardOutline
-        {width}
-        {height}
-        radius={RADIUS}
-        {side}
-        at={arrow ? at : undefined}
-        arrow={ARROW}
-        fill="color-mix(in srgb, var(--tertiary) 85%, transparent)"
-        stroke="color-mix(in srgb, var(--tertiary-text) 15%, transparent)"
-        blur
-        shadow={{ y: 8, blur: 24, opacity: 0.35 }}
-    />
+    <PopoverOutline {width} {height} {side} at={arrow ? at : undefined} arrow={ARROW} />
     {#each items as entry, index (index)}
         {#if 'separator' in entry}
             <div class="separator" role="separator"></div>
@@ -181,19 +171,22 @@
                 <span class="icon" aria-hidden="true">
                     {#if Icon}<Icon />{/if}
                 </span>
-                <span class="label">{entry.label}</span>
+                <span class="label ellipsis">{entry.label}</span>
             </button>
         {/if}
     {/each}
 </div>
 
 <style lang="scss">
+    @use '../../../styles/popover.scss';
+    @use '../../../styles/radius.scss' as *;
+
     /* fixed, as Select's list is, and placed by hand rather than by the popover's centring; a
-       translucent tint of the raised --tertiary surface, as Monaco's own menu is, that blurs what
-       is beneath, as the app's prompts are. The outline draws that surface, its edge and its shadow
-       as one shape with the arrow, so the menu draws none of its own; the padding keeps the room
-       the edge took */
+       Popover, a translucent tint of the raised --tertiary surface, as Monaco's own menu is, that
+       blurs what is beneath. The outline draws that surface, its edge and its shadow as one shape
+       with the arrow, so the menu draws none of its own; the padding keeps the room the edge took */
     .context-menu {
+        @include popover.content;
         position: fixed;
         inset: auto;
         z-index: 100;
@@ -206,8 +199,7 @@
         overflow: visible;
         border: 0;
         background: transparent;
-        color: var(--tertiary-text);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         outline: none;
     }
 
@@ -222,26 +214,30 @@
         height: 28px;
         padding: 0 0.6rem;
         border: 0;
-        border-radius: 0.3rem;
+        /* inside the menu's 1px edge and 0.25rem padding, its curve parallel to the menu's */
+        border-radius: nested-radius(var(--r-overlay), $border: 1px, $inset: 0.25rem);
         color: inherit;
         background: transparent;
         font: inherit;
         text-align: left;
         cursor: pointer;
 
+        /* the row the pointer or the arrow keys are on: the menu's text at 10% */
         &:hover:not(:disabled),
         &:focus-visible {
-            background-color: rgba(var(--RGB-accent), 0.25);
+            background-color: var(--hover-bg);
             outline: none;
         }
 
         &:disabled {
             cursor: not-allowed;
-            opacity: 0.4;
+            opacity: 0.5;
         }
 
-        &.danger:not(:disabled) {
-            color: var(--red);
+        /* in the danger colour through its icon and label, the row keeping the menu's text,
+           which its hover is drawn from */
+        &.danger:not(:disabled) > span {
+            color: var(--danger);
         }
     }
 
@@ -254,16 +250,13 @@
         opacity: 0.85;
 
         :global(svg) {
-            width: 0.8rem;
-            height: 0.8rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
     }
 
     .label {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     /* edge to edge through the menu's padding, as Monaco's are, and 8px tall with its margins */
@@ -271,6 +264,6 @@
         flex-shrink: 0;
         height: 1px;
         margin: 4px -0.25rem 3px;
-        background-color: color-mix(in srgb, var(--tertiary-text) 15%, transparent);
+        background-color: var(--line);
     }
 </style>

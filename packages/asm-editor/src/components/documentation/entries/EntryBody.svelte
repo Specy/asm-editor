@@ -13,9 +13,11 @@
         entry: DocumentationEntry
         /** Off in an Exam: links into the Documentation stay, as marks the panel follows. */
         disableLinks?: boolean
+        /** An instruction's toggles drawn as folding headers: the Workbench's panel's. */
+        foldingToggles?: boolean
     }
 
-    let { entry, disableLinks = false }: Props = $props()
+    let { entry, disableLinks = false, foldingToggles = false }: Props = $props()
 
     const view = $derived(entry.view)
 
@@ -38,6 +40,7 @@
             document={view.document}
             density="panel"
             {disableLinks}
+            {foldingToggles}
             language={EXAMPLE_LANGUAGES[entry.language]}
         >
             {#snippet example()}
@@ -131,6 +134,10 @@
 </div>
 
 <style>
+    /* The text's size is --entry-text-size where the entry's place sets one, --fs-small otherwise:
+       a Chapter's page reads its cards a step larger, at --fs-body, and so does an entry expanded
+       in the Workbench's Documentation panel (EntryRow), where the panel's other rows stay dense
+       (owner, 2026-11-08). The code samples keep their own size */
     .entry-body {
         /* Keep positioned entry content beneath the sticky chapter and category headings. */
         isolation: isolate;
@@ -145,9 +152,9 @@
     .entry-body :global(._markdown p),
     .entry-body :global(._markdown ul),
     .entry-body :global(._markdown ol) {
-        font-family: inherit;
-        font-weight: normal;
-        font-size: 0.92rem;
+        font-family: var(--font-ui);
+        font-weight: 400;
+        font-size: var(--entry-text-size, var(--fs-small));
         width: 100%;
         margin: 0;
     }
@@ -168,27 +175,29 @@
     .entry-body :global(blockquote) {
         margin: 0.2rem 0;
         padding: 0.4rem 0.7rem;
-        border-left: 0.2rem solid var(--accent);
+        border-left: 3px solid var(--accent);
         border-radius: 0.3rem;
         background-color: color-mix(in srgb, var(--accent) 8%, transparent);
     }
+    /* a table's own size where the entry's place sets one: a Chapter's page reads every table at
+       --fs-body, its prose entries' as well as its cards' (owner, 2026-11-08) */
     .entry-body :global(._markdown table) {
-        font-size: 0.85rem;
+        font-size: var(--entry-table-size, var(--entry-text-size, var(--fs-small)));
     }
     .entry-body :global(._markdown td),
     .entry-body :global(._markdown th) {
-        font-family: inherit;
+        font-family: var(--font-ui);
     }
     .fields {
         display: grid;
         grid-template-columns: max-content 1fr;
         gap: 0.3rem 0.8rem;
         margin: 0;
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
     }
     dt {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.9rem;
+        font-family: var(--font-mono);
+        font-size: var(--entry-text-size, var(--fs-small));
         color: var(--accent);
         white-space: nowrap;
     }
@@ -225,8 +234,8 @@
         text-overflow: ellipsis;
     }
     .swatches code {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
-        color: var(--background-text-muted);
+        font-family: var(--font-mono);
+        font-size: var(--entry-text-size, var(--fs-small));
+        color: var(--background-text-prose);
     }
 </style>

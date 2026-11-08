@@ -8,13 +8,13 @@ waiting screen. Play the game to try the controls and collisions.
 
 The Screen is a grid of 192 × 256 words. The `@screen` line asks for a 384 × 512 pixel display with
 `unit=2`, so each word is drawn as a 2 × 2 square. Word `(x, y)` is at
-`display + (y * 192 + x) * 4`, and adding `ROWBYTES`, 768, moves straight down one row.
+`display + (y * 192 + x) * 4`, and adding `ROWBYTES` (768 bytes) moves to the same column in the next row.
 
 Use this map as you read the program. Read `frame` through `draw` first, then `new_pipes`,
 `move_pipes`, and `hit_test`. Leave the drawing helpers until you want to see how the picture is
 painted. The colour tables and the sprites are at the end, in a second `.data` section.
 
-- `$s4` is `READY` (waiting) → `PLAYING` (moving) → `DEAD` (falling and waiting for a reset).
+- `$s4` holds the game state: `READY` (waiting), `PLAYING` (moving), or `DEAD` (falling and waiting for a reset).
   A flap in `DEAD` calls `new_game`, returning to `READY`. The next flap starts play.
 - `$s2` is bird height and `$s3` is vertical speed, both in sixteenths of a row. A smaller row
   number is higher on the Screen. `$s5` is the score, `$s6` the best score, `$s7` counts frames,
@@ -24,8 +24,8 @@ painted. The colour tables and the sprites are at the end, in a second `.data` s
 - Rows are 0–255, and the ground begins at row 216. A bird at top row `top` occupies
   `[top, top + BIRDH)`, and a pipe at `x` occupies `[x, x + PIPEW)`. With gap middle `m`, the open
   rows are `[m - HALFGAP, m + HALFGAP)`. The right endpoint is excluded in each interval. The pipes
-  test a box `HITIN`, 2 pixels, inside the bird's picture: columns `[HITX, HITR)`, which is
-  `[50, 63)`, and rows `[top + 2, top + 10)`.
+  use a collision box inset by `HITIN` (2 grid cells) on each side of the bird's picture. Its
+  columns are `[HITX, HITR)`, or `[50, 63)`, and its rows are `[top + 2, top + 10)`.
 - Each frame reads all queued characters and handles the current state. While playing, it updates
   speed and height, moves the pipe records and checks collisions. Then it paints what changed,
   each pixel once: the pipe columns the move changed, the grass stripes, the bird and the score.
@@ -127,7 +127,7 @@ main:
     li $s7, 0               # frames since the program started
     jal make_backdrop
     jal new_game
-    li $v0, 30              # service 30: milliseconds since the run started
+    li $v0, 30              # service 30: milliseconds since 1970-01-01 UTC
     syscall
     sw $a0, next_frame      # the first frame starts now
 
@@ -1328,14 +1328,14 @@ accumulate even when the drawn row stays the same. Reaching the top clamps heigh
 `move_pipes` moves each left edge one column left. Once an edge moves past `-PIPEW` (`-30`), it
 adds `CYCLE` (`312`), chooses a new gap, and clears that record's counted flag. Since there are
 three pipes spaced 104 columns apart, `CYCLE = 3 × SPACING` keeps their spacing. When a pipe's
-right edge is strictly left of `BIRDX` (48), its flag changes to 1 and the score goes up. It only
-changes the records: `repaint_pipes` paints the move later in the frame.
+right edge is strictly left of `BIRDX` (48), its flag changes to 1 and the score goes up. `move_pipes` only
+changes the records. `repaint_pipes` redraws the affected columns later in the frame.
 
 `hit_test` compares edges using the half-open intervals in the map. For example, with gap middle
 120 and `HALFGAP = 40`, open rows are `[80, 160)`, meaning rows 80 through 159. A bird with top row
 150 has the box `[152, 160)` and fits vertically. Top row 151 gives `[153, 161)`, which touches the
-lower pipe if their columns overlap. The box leaves out the picture's see-through corners and
-forgives a near miss. The ground stops the whole picture: it begins at row 216, so a bird occupying
+lower pipe if their columns overlap. The smaller collision box excludes the picture's transparent corners and
+allows near misses. The ground stops the whole picture: it begins at row 216, so a bird occupying
 `[204, 216)` is still clear, while `[205, 217)` touches it. A collision changes `$s4` to `DEAD` and prints the
 final and best scores in the Console. The dead bird then falls to its resting height.
 
@@ -1345,9 +1345,10 @@ service 32. It adds `FRAME` to the deadline for the following frame. If there is
 wait, it resets the schedule from the current time.
 
 The routine always sleeps for at least a millisecond, giving the Screen time to show the drawing.
-The Screen can also refresh between sleeps, while a frame is still being drawn. Because each pixel
-is painted once, with the colour it ends the frame in, such a frame is only an earlier version of
-the picture: the bird and the score never disappear from it. Drawing time and browser scheduling
+The Screen can also refresh between sleeps, while a frame is still being drawn. Each pixel
+is painted once with its final colour for that frame. A refresh during drawing can therefore
+show a mixture of the previous and current frames, without an intermediate step that erases
+the bird or the score. Drawing time and browser scheduling
 affect the actual time between frames.
 
 ### Read the drawing helpers
@@ -1381,9 +1382,9 @@ has few colour changes because each repaints about 110 rows; each cap change rep
 stripe row has changed colour, so only those are stored. `paint_world` paints the full Screen at
 the start of a game.
 
-The bird and the score are drawn over the world, and each pixel is painted once a frame. So
-`repaint_pipes` leaves out the rows the bird takes this frame, in the bird's columns, and the
-score's rows in the score's columns, noting in `score_covered` that the score needs drawing again.
+The bird and the score are drawn over the world, and each pixel is painted once a frame.
+`repaint_pipes` skips the area occupied by the bird and the area occupied by the score. When it
+skips part of the score, it sets `score_covered` to record that the score needs drawing again.
 `sprite_column` then paints one column of a sprite and the world around it: walking down the rows,
 it paints the world with `world_column` up to each pixel of the sprite that is not see-through,
 then that pixel. `draw_bird` calls it for the bird's 17 columns, from the higher of its old and new
@@ -1394,9 +1395,9 @@ The bird and the digits are sprites: blocks of words in the Screen's own `0x00RR
 per pixel, row after row. `bird_sprites` holds three pictures of 17 × 12 words, for the wing up,
 level and down, and `digit_sprites` ten digits of 12 × 16. A word of 0, black, is see-through.
 `draw_bird` picks a picture from the frame count, so the wing goes up, level, down, level.
-`place_score` puts the score's digits into `digit_buf`, highest first, and works out the columns
-they take this frame. `draw_score` draws them when the score has changed or a pipe column went
-around it. In the Flappy ASM example Project, the sprites are the BMP pictures `assets/bird.bmp`
+`place_score` puts the score's digits into `digit_buf`, most significant first, and works out the
+columns they occupy this frame. `draw_score` draws them when the score has changed or
+`repaint_pipes` has skipped part of the score. In the Flappy ASM example Project, the sprites are the BMP pictures `assets/bird.bmp`
 and `assets/digits.bmp` instead, which the program reads with the file services when it starts
 and which you can edit in the Pixels view.
 

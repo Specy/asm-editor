@@ -1,5 +1,19 @@
+import type { Side } from '#cmp/shared/floating/floating.ts'
+
+export interface BoundedValueHoverOptions {
+    /** The panel the card stays inside; without it the card is placed by its own styles. */
+    boundary?: HTMLElement
+    /**
+     * Where the card went, for its outline: the side of the value it is on and where along its
+     * facing edge the value's middle is, which its arrow points at; no `at` when it had to cover
+     * the value, and nothing while it is hidden.
+     */
+    onPlace?: (place: { side: Side; at?: number } | undefined) => void
+}
+
 /** Position a value's tooltip within its panel and any enclosing scroll areas. */
-export function boundedValueHover(node: HTMLElement, boundary?: HTMLElement) {
+export function boundedValueHover(node: HTMLElement, options: BoundedValueHoverOptions = {}) {
+    let { boundary, onPlace } = options
     const popup = node.querySelector<HTMLElement>('.hover-element')!
     const content = popup.querySelector<HTMLElement>('.hover-content')!
     const anchor = node.querySelector<HTMLElement>('.tooltip-base')!
@@ -39,6 +53,7 @@ export function boundedValueHover(node: HTMLElement, boundary?: HTMLElement) {
             target.top >= bottom
         ) {
             popup.style.visibility = 'hidden'
+            onPlace?.(undefined)
             return
         }
         left += 5
@@ -72,12 +87,12 @@ export function boundedValueHover(node: HTMLElement, boundary?: HTMLElement) {
         const origin = node.getBoundingClientRect()
         popup.style.left = `${x - origin.left}px`
         popup.style.top = `${y - origin.top}px`
-        popup.style.setProperty(
-            '--hover-notch-x',
-            `${Math.max(6, Math.min(center - x, box.width - 6))}px`
-        )
-        popup.dataset.side = side
-        popup.classList.toggle('overlapping', overlaps)
+        //the arrow on the value's middle, which the outline keeps off its corners; none on a card
+        //that covers the value
+        onPlace?.({
+            side: side === 'above' ? 'top' : 'bottom',
+            at: overlaps ? undefined : center - x
+        })
         popup.style.visibility = 'visible'
     }
 
@@ -94,6 +109,7 @@ export function boundedValueHover(node: HTMLElement, boundary?: HTMLElement) {
         cancelAnimationFrame(frame)
         frame = 0
         popup.classList.remove('shown')
+        onPlace?.(undefined)
         observer?.disconnect()
         window.removeEventListener('resize', schedule)
         window.removeEventListener('scroll', schedule, true)
@@ -115,8 +131,8 @@ export function boundedValueHover(node: HTMLElement, boundary?: HTMLElement) {
     node.addEventListener('pointerenter', show)
     node.addEventListener('pointerleave', hide)
     return {
-        update(next?: HTMLElement) {
-            boundary = next
+        update(next: BoundedValueHoverOptions = {}) {
+            ;({ boundary, onPlace } = next)
             if (!boundary) hide()
             else if (active) schedule()
         },

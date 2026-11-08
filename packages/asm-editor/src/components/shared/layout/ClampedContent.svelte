@@ -7,7 +7,7 @@
      * panel's open entries, passes `expanded` with `ontoggle`; otherwise it is kept here.
      */
     import { tick, type Snippet } from 'svelte'
-    import { prefersReducedMotion } from 'svelte/motion'
+    import { prefersLessMotion } from '#src/styles/motion.ts'
     import FaChevronDown from '~icons/fa-solid/chevron-down'
 
     interface Props {
@@ -62,7 +62,7 @@
         await tick()
         ;(anchor ?? top)?.scrollIntoView({
             block: 'nearest',
-            behavior: prefersReducedMotion.current ? 'instant' : 'smooth'
+            behavior: prefersLessMotion() ? 'instant' : 'smooth'
         })
     }
 
@@ -119,7 +119,7 @@
     .clip {
         overflow: hidden;
         min-width: 0;
-        transition: max-height 0.25s ease;
+        transition: max-height var(--dur-base) ease;
     }
 
     /* mostly gone by its middle, so the text left behind the button does not compete with its label */
@@ -140,11 +140,11 @@
         align-self: center;
         padding: 0.3rem 0.85rem;
         border: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         background-color: var(--background);
         color: var(--accent);
         font: inherit;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         font-weight: 600;
         cursor: pointer;
 
@@ -164,14 +164,14 @@
         left: 50%;
         bottom: calc(var(--fade) / 4);
         transform: translate(-50%, 50%);
-        box-shadow: 0 0.25rem 0.75rem color-mix(in srgb, black 40%, transparent);
+        box-shadow: var(--shadow-2);
     }
 
     .chevron {
         display: flex;
         width: 0.65rem;
         height: 0.65rem;
-        transition: transform 0.15s ease;
+        transition: transform var(--dur-base) ease;
 
         &.open {
             transform: rotate(180deg);

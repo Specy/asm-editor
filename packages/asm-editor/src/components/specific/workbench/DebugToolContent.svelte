@@ -62,6 +62,5 @@
         pokeable={session.pokeable}
         onPoke={(address, bytes) => session.pokeMemory(address, bytes)}
         cellMenu={(cell) => memoryCellMenu(session, ui, cell)}
-        controlsVar={docked ? 'secondary' : 'primary'}
     />
 {/if}

@@ -1,13 +1,13 @@
-A playable Flappy ASM. The bird waits for your first tap, then gravity pulls it down and each new
+Flappy ASM is a game in which you guide a bird through gaps between pipes. The bird waits for your first tap, then gravity pulls it down and each new
 press gives it one flap upwards. Pipes scroll in from the right, with gap positions chosen from a
-clock-seeded sequence. The game ends when the bird touches a pipe or the ground; another tap starts
-the next one.
+clock-seeded sequence. The game ends when the bird touches a pipe or the ground. Another tap starts
+a new game.
 
 **Click the Screen panel before you press a key**, the same as in Move a square with the keyboard.
 You can also click on the drawing itself, since the mouse counts as a flap too.
 
-The program is about 800 lines, so read one trip through it first. The smaller excerpts below follow
-that trip; the complete program at the bottom is ready to build and play.
+The program is about 800 lines. Start by following one frame through the main loop. The smaller
+excerpts below follow that order, and the complete program at the bottom is ready to build and play.
 
 ## A route through one frame
 
@@ -45,10 +45,10 @@ The `equ` lines give names to the sizes, speeds, ports and colours used througho
 `HALFGAP equ 32` controls the gap width: both drawing and collision measure 32 pixels from the
 centre in each direction. Change it to 24 and both routines use the narrower gap.
 
-Two of these groups repay a closer look. The `S_` values are the three states a game can be in, and
-they are `equ`s rather than labels because the assembler ignores case, so a constant called
-`PLAYING` and a label called `playing` would be the same name written twice. The colours are 3-3-2
-bytes: three bits of red at the top, three of green, and two of blue at the bottom.
+The `S_` constants name the three game states. Their names have a prefix because the assembler
+ignores case: a constant called `PLAYING` and a label called `playing` would define the same name
+twice. The colours use the 3-3-2 format: three bits of red at the top of each byte, three of green,
+and two of blue at the bottom.
 
 ```z80
 P_CHAR  equ 0x10        ; a character, on the Screen and in the transcript
@@ -138,12 +138,12 @@ WHITE   equ 0xFF
 
 ## Setting the Screen up
 
-The Screen is resized first, then cleared, and only then is double buffering turned on. The order
-matters: the fill colour a clear uses also becomes the background the text rows are painted on, so
-the `INK` clear is what makes the score row dark for the rest of the run.
+The program resizes the Screen, clears it, then turns on double buffering. Clearing also sets the
+background colour of the text rows to the current fill colour. Using `INK` for this clear gives the
+score row a dark background for the rest of the run.
 
-After `C_BUF_ON` nothing the program draws appears until it asks for it, which is what stops the
-player seeing half-painted frames.
+After `C_BUF_ON`, the program draws each frame off screen. `C_PRESENT` shows the completed frame
+so the player does not see it being drawn.
 
 ```z80
     .org 0x8000
@@ -275,7 +275,7 @@ draw:
 
 ## Counting one flap per press
 
-`readflap` answers 1 only on the frame a press **begins**, and that is harder than it sounds.
+`readflap` returns 1 only on the frame a press **begins**.
 
 Port `0x31` and port `0x42` both report what is held down _right now_. A key held for twenty frames
 reads as pressed on all twenty of them, which would be twenty flaps from one tap. `held` is the byte
@@ -487,9 +487,9 @@ shift7:
 
 ## Falling, scrolling and hitting
 
-`birdy` is a sixteen bit value counting **sixteenths of a pixel**, and that is not fussiness. A bird
-that can only move in whole pixels cannot accelerate smoothly: the slowest fall it could manage is
-one pixel a frame, which is already too fast. Sixteenths give the gravity somewhere to accumulate.
+`birdy` is a 16-bit value measured in **sixteenths of a pixel**. This fixed-point representation lets
+gravity increase the speed in steps smaller than one pixel per frame. If the speed were stored in
+whole pixels per frame, the smallest nonzero speed would already be one pixel per frame.
 
 `birdv` is one signed byte, and `add a, a` then `sbc a, a` widens it into `d` by filling that
 register with the sign bit, so the pair can be added to `hl` in a single `add hl, de`. `birdtop`
@@ -497,9 +497,9 @@ turns the sixteenths back into pixels by shifting right four times, through `srl
 the bit leaving the high byte arrives at the top of the low one, and what falls off the end is the
 fraction the next frame keeps.
 
-The scrolling is byte arithmetic doing the wrapping by itself. A pipe walks from 208 down to 0, and
-then 1 minus `SPEED` is 255, plus `CYCLE` is 239, which is exactly where the pipe belongs. No
-comparison is needed to notice it went off the edge.
+`movepipes` uses byte arithmetic to wrap each pipe around. For example, subtracting `SPEED` (2)
+from world x 1 produces 255 and sets the carry flag. Adding `CYCLE` (240) then produces 239 because
+the byte wraps at 256. The routine tests the carry flag to detect that the pipe has left the world.
 
 For a collision trace, suppose an active pipe has world x `72` and gap centre `96`. Subtracting
 `MARGIN` puts its left edge at screen x `40`, so it occupies x `40` through `63`. The bird occupies
@@ -659,7 +659,7 @@ btnext:
 
 Every shape goes through `rect` or `ellipse`, which take their two corners in `de` and `hl`; callers
 set the pen and fill with `bothcolours`. Painting happens back to front: sky, then pipes, then ground,
-then the bird, and finally command 13 to show the lot. Drawing the ground after the pipes covers
+then the bird, and finally `C_PRESENT` (command 13) to show the completed frame. Drawing the ground after the pipes covers
 their lower ends at the ground line.
 
 What byte coordinates cannot express is a pipe that is half off the left edge, because its x would
@@ -958,9 +958,9 @@ print:
 
 ## The state, in memory
 
-Everything the game remembers is here, and it is thirty-odd bytes. Each pipe is a four byte record,
-and `pipes` is three of them end to end, walked with `hl` and `add hl, de` the way the records
-lecture walks any array of records.
+The variables below hold the game state in about thirty bytes. Each pipe is a four-byte record,
+and `pipes` contains three consecutive records. The routines move from one record to the next with
+`hl` and `add hl, de`, as in the records lecture.
 
 ```z80
 ; State

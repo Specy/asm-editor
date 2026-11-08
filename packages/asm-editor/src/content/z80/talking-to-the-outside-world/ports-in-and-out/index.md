@@ -19,7 +19,7 @@ is the low byte. With `out (n), a`, the bus and the byte being sent look like th
 
 ```
 address bus:  high byte = a  |  low byte = n
-data written: a              |  port number = n
+data written: a
 ```
 
 With `in a, (n)`, the old value of `a` likewise supplies the high address byte before the device's
@@ -45,8 +45,8 @@ The complete port map is on the [Z80 I/O documentation page](/documentation/z80/
 
 ## Printing a string
 
-The character port accepts one byte at a time, so printing a string uses the string loop you already
-know with an `out` in the middle.
+The character port accepts one byte at a time. To print a string, use the string loop you already
+know and send each byte with `out`.
 
 ```z80|playground|console|no-registers|no-flags
     .org 0x8000
@@ -99,7 +99,7 @@ One byte cannot hold values above 255, so port `0x14` uses two bytes. This needs
   At the same time, `b` supplies the high byte of the address bus.
 
 For this playground, `c` still selects the port. Port `0x14` treats `b` as the high byte of the
-number and the byte sent as data as its low byte:
+number. The byte sent as data supplies the low byte:
 
 ```z80|playground|console|no-flags
     .org 0x8000
@@ -318,7 +318,7 @@ In this playground, writing to an unconnected port has no effect and reading one
 
 The console shows `FF`.
 
-## Two to print
+## Practice printing and reading
 
 Print `The answer is 42` with no newline after it. The string is stored at `0x9000`; print it one
 character at a time, then print 42 through the unsigned-number port.

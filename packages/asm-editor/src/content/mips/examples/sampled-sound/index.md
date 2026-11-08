@@ -3,7 +3,7 @@ and plays it at eight pitches. MARS does not have the Synth. Choose **Build**, t
 your sound on.
 
 A **sample** is a number giving the sound's level at one instant. Here each sample occupies one
-signed byte, with values from -128 to 127; 0 is the centre level. The `pluck` buffer reserves
+signed byte, with values from -128 to 127. A value of 0 is the centre level. The `pluck` buffer reserves
 4,000 bytes in the program's memory, one per sample.
 
 The `fill` loop makes a square wave that fades. `$t1` counts sample positions from 0 to 3,999.
@@ -85,17 +85,17 @@ done:
 
 The upload uses four device registers, all at offsets from the Synth base in `$s0`:
 
-| Offset  | Write                 | Meaning                                            |
-| ------- | --------------------- | -------------------------------------------------- |
-| `0x180` | word from `$t0`       | Source address: `pluck` in the program's memory.   |
-| `0x184` | halfword from `$t6`   | Length: 4,000 bytes.                               |
-| `0x186` | halfword from `$zero` | Destination: offset 0 in Sample memory.            |
-| `0x188` | byte from `$zero`     | Start the copy now; any written value triggers it. |
+| Offset  | Write                 | Meaning                                          |
+| ------- | --------------------- | ------------------------------------------------ |
+| `0x180` | word from `$t0`       | Source address: `pluck` in the program's memory. |
+| `0x184` | halfword from `$t6`   | Length: 4,000 bytes.                             |
+| `0x186` | halfword from `$zero` | Destination: offset 0 in Sample memory.          |
+| `0x188` | byte from `$zero`     | Start the copy. Writing any value triggers it.   |
 
 The copy captures the buffer at that moment. Changing `pluck` afterwards leaves the uploaded
 sound unchanged until another upload replaces it.
 
-Channel 0 starts at Sample-memory offset 0 and plays 4,000 samples. Sustain 127 holds the
+Channel 0 starts at offset 0 in Sample memory and plays 4,000 samples. A sustain value of 127 holds the
 channel's envelope at full level, leaving the shrinking sample values to make the fade. Build
 starts the other Synth registers at 0, so attack, decay, and release are immediate and looping
 is off. At the buffer's end, playback becomes silent. Switching the gate off and on restarts

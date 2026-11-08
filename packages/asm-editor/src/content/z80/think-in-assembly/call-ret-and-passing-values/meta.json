@@ -1,6 +1,6 @@
 {
     "name": "call, ret and passing values",
-    "description": "How call and ret use the stack, how a subroutine contract passes values and preserves registers, and how ix gives stack arguments stable offsets.",
+    "description": "Use call and ret, pass arguments in registers or on the stack, and preserve registers in a subroutine.",
     "order": 5,
     "topic": "subroutines"
 }

@@ -1,0 +1,2 @@
+# No providers. MARS and RARS run in CheerpJ, which looks for this file next to the jar on every
+# launch: present and empty, it is fetched once and cached instead of answered by a 404 each time.

@@ -3,8 +3,8 @@
 A **subroutine** is a piece of code that can be called from several places and then return to the
 place that called it. It is also called a function, procedure, or routine.
 
-Returning is the interesting part. The same subroutine may have many callers, so it needs the
-return address for this particular call. x86 keeps that address on the stack.
+The same subroutine may have many callers, so each call needs its own **return address**: the
+address where execution should resume. x86 keeps that address on the stack.
 
 ## What `call` and `ret` do
 
@@ -74,9 +74,9 @@ The convention also assigns responsibility for preserving general-purpose regist
 | kind         | registers                                     | responsibility                                              |
 | ------------ | --------------------------------------------- | ----------------------------------------------------------- |
 | caller-saved | `rax`, `rcx`, `rdx`, `rsi`, `rdi`, `r8`–`r11` | the caller saves any value it needs after a call            |
-| callee-saved | `rbx`, `rbp`, `r12`–`r15`                     | a function that changes one restores the value it inherited |
+| callee-saved | `rbx`, `rbp`, `r12`–`r15`                     | a function that changes one must restore its original value |
 
-`rsp` is special stack state. At the point just before `ret`, a function must have restored `rsp`
+`rsp` holds the stack pointer. At the point just before `ret`, a function must have restored `rsp`
 to its entry value, where the return address is waiting. The `ret` then removes that address and
 restores the caller's pre-call `rsp`. Do not use `rsp` as an ordinary register for a long-lived
 value.
@@ -274,7 +274,7 @@ _start:
     syscall
 ```
 
-`rdi` is caller-saved. Each non-base invocation needs its own `n` after the recursive call, so it
+`rdi` is caller-saved. Each invocation that makes a recursive call needs its own `n` afterward, so it
 pushes `rdi`. Function entry has `rsp` at 8 modulo 16; the push makes it divisible by 16 for
 `call fact`. The matching pop restores both `n` and the entry value of `rsp` before `ret`.
 
@@ -282,14 +282,15 @@ If the push and pop were removed, `fact(5)` would return 1. The recursion reache
 with `rdi = 1`, and that invocation leaves `rdi` equal to 1. Every invocation unwinding from it
 would therefore multiply by 1 instead of by its own saved value.
 
-Each non-base recursive step adds 16 bytes while the next invocation is active: eight for the
-saved `rdi` and eight for the next return address. Enough recursive levels exhaust the available
-stack and fault.
+Each recursive call keeps another 16 bytes on the stack: eight for the saved `rdi` and eight for
+the next return address. If the recursion goes deep enough, it exhausts the available stack and
+the program stops with an error.
 
 ## Your turn
 
 Write `maximum(a, b)` using the System V convention. Treat both arguments as signed qwords and
-return the larger one in `rax`. The three calls cover left-less, left-greater, and equal inputs.
+return the larger one in `rax`. The three calls check that the first argument is smaller, larger,
+or equal to the second.
 The first pair, -5 and 3, also distinguishes signed comparison from unsigned comparison because
 the qword bit pattern for -5 is above 3 when read as unsigned. Keep the three results in
 `r12`–`r14`.

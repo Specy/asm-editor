@@ -28,7 +28,7 @@
     import FaPlay from '~icons/fa-solid/play'
     import FaDownload from '~icons/fa-solid/download'
     import FaGithub from '~icons/fa-brands/github'
-    import GoLinkExternal from '~icons/octicon/link-external-16'
+    import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import { onMount } from 'svelte'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
@@ -336,6 +336,15 @@
     {@html jsonLdScriptTag(softwareApplicationLd())}
     <!-- eslint-disable-next-line svelte/no-at-html-tags -->
     {@html jsonLdScriptTag(websiteLd())}
+    <!-- the page's body, its lede and its first screen's code are in Fira Code: fetched with the
+         page, as Rubik is (app.html), by the same URL as its @font-face (styles/fonts.css) -->
+    <link
+        rel="preload"
+        href="/fonts/FiraCode-VF.woff2"
+        as="font"
+        type="font/woff2"
+        crossorigin=""
+    />
 </svelte:head>
 
 <svelte:window onmessage={receiveFrameMessage} />
@@ -407,7 +416,7 @@
                     </p>
                     <div class="actions">
                         {@render editorButton()}
-                        <ButtonLink href={coursesHref} cssVar="tertiary" style="gap: 0.6rem">
+                        <ButtonLink href={coursesHref} kind="secondary" style="gap: 0.6rem">
                             <span class="icon" aria-hidden="true"><FaGraduationCap /></span>
                             Courses
                         </ButtonLink>
@@ -415,7 +424,7 @@
                     <!-- always takes its room, so the centred hero does not move when the browser offers the install -->
                     <div class="install actions" class:hidden={!installEvent}>
                         <Button
-                            cssVar="tertiary"
+                            kind="secondary"
                             style="gap: 0.6rem"
                             onClick={install}
                             disabled={!installEvent}
@@ -710,7 +719,7 @@
                     <span class="tile-title">
                         <span class="icon"><FaGithub /></span>
                         GitHub
-                        <span class="arrow" aria-hidden="true"><GoLinkExternal /></span>
+                        <span class="arrow" aria-hidden="true"><FaExternalLinkAlt /></span>
                     </span>
                     <span class="tile-text">Read the source, report a bug or star the project.</span
                     >
@@ -740,22 +749,27 @@
             </p>
             <ButtonLink
                 href="https://doi.org/10.1109/EDUCON67543.2026.11574463"
-                cssVar="tertiary"
+                kind="secondary"
                 style="gap: 0.6rem"
                 title="Read the EDUCON 2026 paper"
             >
-                Read the paper <span class="chevron"><GoLinkExternal /></span>
+                Read the paper <span class="chevron"><FaExternalLinkAlt /></span>
             </ButtonLink>
         </section>
 
         {@render rule()}
 
         <section class="frame closing" aria-labelledby="closing-title">
+            <!-- the dividers' bytes, much fainter, behind the whole section -->
+            <div class="closing-hex" aria-hidden="true">
+                {#each hexStrip(200, 1200) as segment, i (i)}{#if segment.hot}<b>{segment.text}</b
+                        >{:else}{segment.text}{/if}{/each}
+            </div>
             <h2 id="closing-title">Write your first program</h2>
             <p>Start from an empty Project, or open an example and change it.</p>
             <div class="actions">
                 {@render editorButton()}
-                <ButtonLink href={examplesHref} cssVar="tertiary" style="gap: 0.6rem">
+                <ButtonLink href={examplesHref} kind="secondary" style="gap: 0.6rem">
                     <span class="icon" aria-hidden="true"><FaCode /></span>
                     Open an example
                 </ButtonLink>
@@ -767,13 +781,10 @@
 </Page>
 
 <style lang="scss">
+    @use '../styles/visually-hidden.scss' as *;
+
     .landing {
         --inner: min(100% - 2rem, 76rem);
-        --line: color-mix(in srgb, var(--background-text) 11%, transparent);
-        --line-strong: color-mix(in srgb, var(--background-text) 20%, transparent);
-        --muted: color-mix(in srgb, var(--background-text) 68%, transparent);
-        --serif: 'Noto Serif', Georgia, serif;
-        --mono: 'Fira Code', monospace;
         --lit:
             radial-gradient(
                 ellipse 80% 70% at 50% 0%,
@@ -811,15 +822,17 @@
     .rule {
         position: relative;
         z-index: 3;
-        height: 1px;
-        background: var(--line);
+        /* a border, drawn a whole device pixel thick as the frame's lines are, where a box 1px
+           high came out one or two pixels thick on a scaled screen */
+        border-top: 1px solid var(--line);
     }
 
+    /* over the rule's line, which is its border, taking no room below it */
     .rule-frame {
         position: relative;
         width: var(--inner);
         height: 1px;
-        margin: 0 auto;
+        margin: -1px auto 0;
 
         /* 5px over a 1px line: two pixels each side */
         i {
@@ -858,7 +871,7 @@
 
     .hex {
         white-space: pre;
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         line-height: 1.3;
         letter-spacing: 0.08em;
@@ -872,7 +885,7 @@
 
     .chevron {
         display: inline-flex;
-        width: 0.6rem;
+        width: var(--fs-micro);
         opacity: 0.8;
     }
 
@@ -909,7 +922,7 @@
     .isas {
         display: flex;
         border: 1px solid var(--line-strong);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background: color-mix(in srgb, var(--background) 60%, transparent);
         backdrop-filter: blur(8px);
         overflow: hidden;
@@ -921,8 +934,8 @@
             gap: 0.5rem;
             padding: 0.4rem 0.9rem;
             cursor: pointer;
-            font-family: var(--mono);
-            font-size: 0.9rem;
+            font-family: var(--font-mono);
+            font-size: var(--fs-small);
             color: var(--background-text);
 
             &::before {
@@ -969,13 +982,12 @@
     @media (max-width: 480px) {
         .isas button {
             padding-inline: 0.6rem;
-            font-size: 0.8rem;
         }
     }
 
     /* the app's own face */
     h1 {
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         font-weight: 500;
         font-size: clamp(2.5rem, 5.5vw, 4rem);
         line-height: 1.08;
@@ -989,17 +1001,17 @@
     }
 
     .lede {
-        font-family: var(--mono);
-        font-size: 1rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-body);
         line-height: 1.7;
         letter-spacing: 0.02em;
-        color: color-mix(in srgb, var(--background-text) 82%, transparent);
+        color: var(--text-muted);
         max-width: 29rem;
     }
 
     .actions .icon {
         display: flex;
-        width: 0.9rem;
+        width: var(--fs-small);
     }
 
     .actions {
@@ -1029,7 +1041,7 @@
         position: absolute;
         inset: 0;
         overflow: hidden;
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         line-height: 1.45;
         letter-spacing: 0.08em;
@@ -1065,8 +1077,9 @@
         color: var(--background-text);
         transition: none;
         margin: -1px 0 0 -1px;
-        border-top: 1px solid color-mix(in srgb, var(--background-text) 11%, var(--background));
-        border-left: 1px solid color-mix(in srgb, var(--background-text) 11%, var(--background));
+        /* the hairline drawn solid over the page, so the bytes do not show through it */
+        border-top: 1px solid color-mix(in srgb, var(--tertiary) 60%, var(--background));
+        border-left: 1px solid color-mix(in srgb, var(--tertiary) 60%, var(--background));
 
         &:hover {
             background: color-mix(in srgb, var(--accent) 14%, var(--background));
@@ -1079,11 +1092,11 @@
     .card p,
     .tile-text,
     .closing p {
-        font-family: var(--mono);
-        font-size: 0.92rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         line-height: 1.7;
         letter-spacing: 0.02em;
-        color: var(--muted);
+        color: var(--text-muted);
     }
 
     /* ---- the editor in a browser window ---- */
@@ -1095,10 +1108,10 @@
 
     .browser {
         --chrome: color-mix(in srgb, var(--background) 55%, var(--tertiary));
-        border-radius: 0.6rem;
+        border-radius: var(--r-overlay);
         border: 1px solid var(--line-strong);
         background: var(--chrome);
-        box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.45);
+        box-shadow: var(--shadow-3);
         overflow: hidden;
     }
 
@@ -1153,12 +1166,12 @@
         padding: 0 0.8rem;
         border-radius: 0.5rem 0.5rem 0 0;
         cursor: pointer;
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         font-size: 0.82rem;
-        color: var(--muted);
+        color: var(--text-muted);
         transition:
-            background-color 0.15s,
-            color 0.15s;
+            background-color var(--dur-fast),
+            color var(--dur-fast);
 
         img {
             width: 1rem;
@@ -1228,11 +1241,11 @@
         justify-content: center;
         width: 2rem;
         margin-left: 0.2rem;
-        border-radius: 0.4rem;
-        color: var(--muted);
+        border-radius: var(--r-control);
+        color: var(--text-muted);
 
         :global(svg) {
-            width: 0.75rem;
+            width: var(--fs-caption);
         }
 
         &:hover {
@@ -1248,9 +1261,9 @@
     .loading {
         align-self: center;
         justify-self: center;
-        font-family: var(--mono);
-        font-size: 0.9rem;
-        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
+        color: var(--text-muted);
     }
 
     .browser-toolbar {
@@ -1276,10 +1289,10 @@
         width: 1.9rem;
         height: 1.9rem;
         border-radius: 50%;
-        color: var(--muted);
+        color: var(--text-muted);
 
         :global(svg) {
-            width: 0.75rem;
+            width: var(--fs-caption);
         }
 
         &:is(button) {
@@ -1287,8 +1300,8 @@
         }
 
         &:is(button):hover {
-            background: color-mix(in srgb, var(--secondary-text) 10%, transparent);
             color: var(--secondary-text);
+            background: var(--hover-bg);
         }
 
         &:focus-visible {
@@ -1304,11 +1317,11 @@
         gap: 0.55rem;
         height: 1.85rem;
         padding: 0 0.85rem;
-        border-radius: 1rem;
+        border-radius: var(--r-pill);
         background: color-mix(in srgb, var(--background) 65%, var(--secondary));
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: 0.8rem;
-        color: var(--muted);
+        color: var(--text-muted);
 
         .lock {
             flex: none;
@@ -1374,7 +1387,7 @@
 
         &:hover,
         &:focus-visible {
-            background: rgb(0 0 0 / 0.55);
+            background: var(--scrim);
         }
 
         &:hover .activate-hint,
@@ -1386,17 +1399,17 @@
 
     .activate-hint {
         padding: 0.7rem 1.2rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background: var(--secondary);
         color: var(--secondary-text);
         border: 1px solid var(--line-strong);
-        font-size: 1rem;
-        box-shadow: 0 0.6rem 1.6rem rgb(0 0 0 / 0.45);
+        font-size: var(--fs-body);
+        box-shadow: var(--shadow-3);
         opacity: 0;
         transform: translateY(0.3rem);
         transition:
-            opacity 0.2s,
-            transform 0.2s;
+            opacity var(--dur-base),
+            transform var(--dur-base);
     }
 
     .play {
@@ -1406,7 +1419,7 @@
 
         .icon {
             display: flex;
-            width: 0.75rem;
+            width: var(--fs-caption);
         }
     }
 
@@ -1427,14 +1440,14 @@
         padding: 2.75rem 2.5rem;
 
         h2 {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-size: clamp(1.8rem, 3.5vw, 2.3rem);
             line-height: 1.2;
             margin-bottom: 0.7rem;
         }
 
         p {
-            font-size: 1rem;
+            font-size: var(--fs-body);
             max-width: 36rem;
         }
     }
@@ -1465,8 +1478,8 @@
         align-items: center;
         gap: 0.4rem;
         color: var(--accent);
-        font-family: var(--mono);
-        font-size: 0.9rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         text-decoration: underline;
         text-underline-offset: 0.25em;
         text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
@@ -1483,12 +1496,25 @@
 
     /* ---- the instruction sets ---- */
 
+    /* the lines between the cells are each cell's own top and left border, pulled back a pixel so
+       those along the grid's edges fall outside it and are cut off, as the quick links' are: a
+       border is drawn a whole device pixel wide, as the frame's lines are, where a 1px gap
+       showing the grid's background came out one or two pixels wide on a scaled screen */
     .targets,
     .cards,
     .tiles {
         display: grid;
-        gap: 1px;
-        background: var(--line);
+        overflow: hidden;
+        /* the hairline over the page, solid, so a hovered tile does not tint its own two lines */
+        --grid-line: color-mix(in srgb, var(--tertiary) 60%, var(--background));
+    }
+
+    .target,
+    .card,
+    .tile-link {
+        margin: -1px 0 0 -1px;
+        border-top: 1px solid var(--grid-line);
+        border-left: 1px solid var(--grid-line);
     }
 
     .targets {
@@ -1516,7 +1542,7 @@
         box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.18);
 
         span {
-            font-family: var(--mono);
+            font-family: var(--font-mono);
             font-size: 1.35rem;
             color: var(--ink);
             padding: 0.2rem 0.45rem;
@@ -1533,7 +1559,7 @@
 
         p {
             flex: 1;
-            font-size: 0.85rem;
+            font-size: var(--fs-small);
         }
     }
 
@@ -1545,9 +1571,9 @@
         margin-bottom: 0.3rem;
 
         h3 {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-weight: 500;
-            font-size: 1.3rem;
+            font-size: var(--fs-h3);
         }
     }
 
@@ -1559,8 +1585,8 @@
             display: inline-flex;
             align-items: center;
             gap: 0.4rem;
-            font-family: var(--mono);
-            font-size: 0.85rem;
+            font-family: var(--font-mono);
+            font-size: var(--fs-small);
             /* the tile's colour, pulled towards the text so it reads on light and dark themes */
             color: color-mix(in srgb, var(--tile) 70%, var(--background-text));
 
@@ -1598,9 +1624,9 @@
         background: var(--background);
 
         h3 {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-weight: 500;
-            font-size: 1.3rem;
+            font-size: var(--fs-h3);
             margin: 1.4rem 0 0.8rem;
         }
 
@@ -1631,10 +1657,12 @@
 
     /* ---- the navbar's Create project ---- */
 
+    /* `a.btn`, so this outweighs the Button's own size rule whichever stylesheet loads last (the
+       navbar's Donate and Star say why) */
     .create-project {
         display: flex;
 
-        :global(.btn) {
+        :global(a.btn) {
             gap: 0.5rem;
             height: 2.2rem;
             padding: 0 1rem;
@@ -1643,22 +1671,17 @@
 
     .create-icon {
         display: flex;
-        width: 0.75rem;
+        width: var(--fs-caption);
     }
 
     @media (max-width: 760px) {
-        .create-project :global(.btn) {
+        .create-project :global(a.btn) {
             width: 2.2rem;
             padding: 0;
         }
 
         .create-label {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            overflow: hidden;
-            clip-path: inset(50%);
-            white-space: nowrap;
+            @include visually-hidden;
         }
     }
 
@@ -1674,10 +1697,12 @@
         gap: 0.5rem;
         padding: 1.8rem 2rem;
         background: var(--background);
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
+        /* the row tint (design-system.md, D4, the text at 10%) mixed into the tile's own fill, which
+           hides the grid's lines, so it fades in as a colour does */
         &:hover {
-            background: color-mix(in srgb, var(--background-text) 4%, var(--background));
+            background-color: color-mix(in srgb, currentColor 10%, var(--background));
 
             .arrow {
                 transform: translateX(3px);
@@ -1695,42 +1720,42 @@
         display: flex;
         align-items: center;
         gap: 0.55rem;
-        font-family: var(--serif);
-        font-size: 1.15rem;
+        font-family: var(--font-read);
+        font-size: var(--fs-lead);
 
         .icon {
             display: flex;
-            width: 1rem;
+            width: var(--fs-body);
         }
     }
 
     .arrow {
         display: flex;
-        width: 0.75rem;
+        width: var(--fs-caption);
         opacity: 0.5;
         transition:
-            transform 0.2s,
-            opacity 0.2s;
+            transform var(--dur-fast),
+            opacity var(--dur-fast);
     }
 
     .tile-text {
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
     }
 
     .agents {
         padding: 2.5rem;
 
         :global(section .heading) {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-weight: 400;
-            font-size: 1.3rem;
+            font-size: var(--fs-h3);
         }
 
         :global(.agents > p) {
-            font-family: var(--mono);
-            font-size: 0.92rem;
+            font-family: var(--font-mono);
+            font-size: var(--fs-small);
             letter-spacing: 0.02em;
-            color: var(--muted);
+            color: var(--text-muted);
         }
     }
 
@@ -1745,27 +1770,27 @@
         padding: 4.5rem 1.5rem;
 
         h2 {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-size: clamp(1.7rem, 3.2vw, 2.1rem);
         }
 
         p {
-            font-family: var(--serif);
-            font-size: 1.1rem;
+            font-family: var(--font-read);
+            font-size: var(--fs-prose);
             line-height: 1.75;
             max-width: 40rem;
         }
 
         .kicker {
-            font-family: var(--mono);
-            font-size: 0.8rem;
-            color: var(--muted);
+            font-family: var(--font-mono);
+            font-size: var(--fs-small);
+            color: var(--text-muted);
         }
 
         .reference {
             font-style: italic;
-            font-size: 0.98rem;
-            color: var(--muted);
+            font-size: var(--fs-body);
+            color: var(--text-muted);
         }
     }
 
@@ -1785,21 +1810,47 @@
         gap: 1rem;
         padding: 5rem 1.5rem;
         background: var(--lit);
+        /* the bytes go under the section's content and over its background */
+        isolation: isolate;
 
         /* the hero title's face */
         h2 {
-            font-family: Rubik, sans-serif;
+            font-family: var(--font-ui);
             font-weight: 500;
             font-size: clamp(2rem, 5vw, 3.2rem);
             color: var(--background-text);
         }
 
-        p {
-            color: color-mix(in srgb, var(--background-text) 82%, transparent);
-        }
-
         .actions {
             margin-top: 0.8rem;
+        }
+    }
+
+    /* the bytes of the dividers, wrapping to fill the section, far fainter than the bands' so the
+       text over them reads as on a plain background; faded at the sides as the bands are, and
+       towards the rules above and below */
+    .closing-hex {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        letter-spacing: 0.08em;
+        word-spacing: 0.1em;
+        text-align: justify;
+        color: color-mix(in srgb, var(--background-text) 6%, transparent);
+        pointer-events: none;
+        user-select: none;
+        mask-image:
+            linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent),
+            linear-gradient(180deg, transparent, #000 25%, #000 75%, transparent);
+        mask-composite: intersect;
+
+        b {
+            font-weight: 400;
+            color: color-mix(in srgb, var(--accent) 18%, transparent);
         }
     }
 
@@ -1871,7 +1922,7 @@
         }
 
         .tile span {
-            font-size: 1rem;
+            font-size: var(--fs-body);
         }
 
         .tile-link {
@@ -1880,10 +1931,6 @@
 
         .showcase {
             padding: 0.5rem;
-        }
-
-        .lede {
-            font-size: 0.95rem;
         }
 
         .browser-nav,

@@ -66,8 +66,8 @@ Equal values produce a zero difference, so equality needs only the `Z` flag:
 | `beq`  | `Z = 1`    | the values are equal |
 | `bne`  | `Z = 0`    | the values differ    |
 
-Here is a forward if/else shape. The comparison is equal, so `beq equal` is taken and the first
-assignment to `d2` is skipped:
+This example uses branches to implement an if/else. The compared values are equal, so `beq equal`
+is taken and the first assignment to `d2` is skipped:
 
 ```m68k|playground|pc
     move.l #7, d0
@@ -83,7 +83,7 @@ done:
 ```
 
 `d2` ends at 1. If the values differed, `beq` would fall through, set `d2` to 0, and `bra done`
-would skip the true side. This is the basic if/else shape:
+would skip the true side. This is the basic structure of an if/else:
 
 ```text
     prepare flags
@@ -131,8 +131,8 @@ produces zero. Use `cmp.l d1, d0` when both input values must remain unchanged.
 
 ## Signed relational conditions
 
-For signed values, the highest bit can look negative even when a subtraction has overflowed. The
-signed relational branches therefore read `N` together with `V`:
+When a signed subtraction overflows, its result can have the wrong sign. Signed relational branches
+therefore read `N` together with `V`:
 
 | relationship after `cmp`                    | branch | condition in the CCR |
 | ------------------------------------------- | ------ | -------------------- |
@@ -422,9 +422,10 @@ second_done:
 
 </details>
 
-### 4. Trace a clobbered comparison
+### 4. Trace an overwritten comparison result
 
-Without running the code, answer these questions about the flag-clobbering example above:
+Without running the code, answer these questions about the example in “Keep the flags next to the
+branch”:
 
 1. What value does the `cmp` place in `Z`?
 2. What value does the following `move.l #7, d1` place in `Z`?

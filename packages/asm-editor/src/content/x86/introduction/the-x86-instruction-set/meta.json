@@ -1,6 +1,6 @@
 {
     "name": "The x86-64 instruction set",
-    "description": "How x86 mnemonics combine register, immediate, and memory operands, how widths select operation sizes, and how to check the forms each instruction supports.",
+    "description": "Learn about mnemonics, register, immediate, and memory operands, and how NASM determines operand sizes. Check which operand forms each instruction accepts.",
     "order": 4,
     "topic": "instruction-set"
 }

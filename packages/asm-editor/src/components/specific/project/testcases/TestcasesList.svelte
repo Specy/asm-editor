@@ -7,6 +7,7 @@
      * `TestcasesSummary` in the panel's header; `TestcasesEditor` puts both in a floating window
      * for the Interactive editor.
      */
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import type { AvailableLanguages, Testcase, TestcaseResult } from '#lib/Project.svelte.ts'
     import type { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import {
@@ -68,9 +69,9 @@
 
 <div class="testcases" {style}>
     {#if testcases.length === 0}
-        <p class="empty">
+        <EmptyState>
             {editable ? 'You have not added any testcases yet.' : 'There are no testcases.'}
-        </p>
+        </EmptyState>
     {/if}
     <!-- keyed by the Testcase itself, so an unfolded one stays unfolded when one above it goes -->
     {#each testcases as testcase, i (testcase)}
@@ -95,21 +96,28 @@
 
 <style lang="scss">
     .testcases {
-        // the colours every part of a Testcase is drawn in, from the theme
+        // the colours every part of a Testcase is drawn in, from the theme; the list's own fill,
+        // which a Testcase's pinned row is drawn on too
+        --tc-surface: var(--secondary);
         --tc-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 75%, transparent));
-        --tc-field: color-mix(in srgb, var(--secondary) 80%, var(--tertiary));
         --tc-table: color-mix(in srgb, var(--secondary) 92%, var(--tertiary));
         --tc-head: color-mix(in srgb, var(--background) 55%, var(--secondary));
         --tc-form: color-mix(in srgb, var(--secondary) 70%, var(--tertiary));
-        --tc-hover: color-mix(in srgb, var(--tertiary) 35%, transparent);
-        //the theme's green brightened as the Log brightens its marks, where the browser can
-        --tc-pass: color-mix(in srgb, var(--green), white 40%);
-        --tc-pass: rgb(from var(--green) calc(r * 1.6) calc(g * 1.6) calc(b * 1.6));
-        --tc-fail: var(--red);
-        --tc-fail-bg: color-mix(in srgb, var(--red) 15%, transparent);
+        --tc-hover: var(--hover-bg);
+        //passed is the theme's success colour as text (`--success-ink`: the dark green brightened
+        //1.6 times on a dark theme, #55aa8e on every built-in theme, 5:1 or more on the testcase
+        //surfaces; the green itself on a light one), failed the danger colour mixed with the text,
+        //so that a verdict, a value that differs and the text on the failed output's tint read at
+        //4.5:1 or more (design-system.md, D9)
+        --tc-pass: var(--success-ink);
+        --tc-fail: color-mix(in srgb, var(--danger) 75%, var(--secondary-text));
+        --tc-fail-bg: color-mix(in srgb, var(--danger) 15%, transparent);
         --tc-start: color-mix(in srgb, var(--accent2) 40%, #7ab8f5);
         --tc-expect: var(--accent);
-        --tc-string: color-mix(in srgb, #e5c07b 85%, var(--secondary-text));
+        //a text value in a memory table: a data colour of its own, not a warning (D9's note of
+        //2026-11-08)
+        --tc-string-yellow: #e5c07b;
+        --tc-string: color-mix(in srgb, var(--tc-string-yellow) 85%, var(--secondary-text));
         display: flex;
         flex-direction: column;
         min-width: 0;
@@ -117,14 +125,8 @@
         overflow-y: auto;
         // Keep the content width steady when unfolding a testcase makes the list scroll.
         scrollbar-gutter: stable;
-        background-color: var(--secondary);
+        background-color: var(--tc-surface);
         color: var(--secondary-text);
-    }
-
-    .empty {
-        padding: 1rem;
-        font-size: 0.9rem;
-        color: var(--hint);
     }
 
     // outlined in its own colour, so it reads as the one thing to press under the list
@@ -132,14 +134,14 @@
         margin: 0.8rem 1rem;
         padding: 0.55rem 1rem;
         border: 1px solid var(--accent);
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         text-align: center;
-        font-family: Rubik, sans-serif;
-        font-size: 0.9rem;
+        font-family: var(--font-ui);
+        font-size: var(--fs-small);
         color: var(--accent);
         background-color: transparent;
         cursor: pointer;
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
         &:hover,
         &:focus-visible {

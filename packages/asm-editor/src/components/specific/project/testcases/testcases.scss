@@ -3,13 +3,15 @@
 // component only takes the rules it uses. The colours are the custom properties `TestcasesList`
 // sets on its root.
 
+@use '../../../../styles/field.scss';
+
 @mixin mono {
-    font-family: 'Fira Code', monospace;
+    font-family: var(--font-mono);
 }
 
 @mixin frame {
     border: 1px solid var(--tc-line);
-    border-radius: 0.4rem;
+    border-radius: var(--r-control);
     overflow: hidden;
     background-color: var(--tc-table);
 }
@@ -17,29 +19,18 @@
 @mixin head {
     background-color: var(--tc-head);
     color: var(--hint);
-    font-size: 0.75rem;
+    font-size: var(--fs-caption);
     font-weight: 400;
     text-align: left;
 }
 
+// a box of text in a Testcase, its outputs: the field look (styles/field.scss), the global ring
+// inside its edge where it is typed into
 @mixin field {
+    @include field.input;
     width: 100%;
     padding: 0.45rem 0.7rem;
-    border-radius: 0.4rem;
-    border: 1px solid var(--tc-line);
-    background-color: var(--tc-field);
-    color: var(--secondary-text);
-    font-size: 0.9rem;
-    transition: border-color 0.15s;
-
-    &::placeholder {
-        color: var(--hint);
-        opacity: 0.7;
-    }
-
-    &:focus {
-        border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-    }
+    font-size: var(--fs-small);
 }
 
 @mixin add-row {
@@ -47,14 +38,14 @@
     width: 100%;
     padding: 0.5rem 0.7rem;
     text-align: left;
-    font-family: Rubik, sans-serif;
-    font-size: 0.82rem;
+    font-family: var(--font-ui);
+    font-size: var(--fs-small);
     color: var(--hint);
     background-color: transparent;
     cursor: pointer;
     transition:
-        color 0.15s,
-        background-color 0.15s;
+        color var(--dur-fast),
+        background-color var(--dur-fast);
 
     &:hover {
         color: var(--secondary-text);
@@ -62,38 +53,24 @@
     }
 }
 
-// a row's ×, faint until it is pointed at, then the colour of a failure
+// a row's ×, a quiet small IconButton, in the colour of a failure when it is pointed at, its
+// hover tint drawn from that colour
 @mixin remove-button {
-    display: grid;
-    place-items: center;
-    color: var(--hint);
-    background-color: transparent;
-    cursor: pointer;
-    opacity: 0.6;
-    transition:
-        color 0.15s,
-        opacity 0.15s;
-
-    :global(svg) {
-        width: 0.55rem;
-    }
-
     &:hover,
     &:focus-visible {
         color: var(--tc-fail);
-        opacity: 1;
     }
 }
 
 // a button that reads as text until it is pointed at
 @mixin text-button {
     padding: 0.2rem 0;
-    font-family: Rubik, sans-serif;
-    font-size: 0.82rem;
+    font-family: var(--font-ui);
+    font-size: var(--fs-small);
     color: var(--hint);
     background-color: transparent;
     cursor: pointer;
-    transition: color 0.15s;
+    transition: color var(--dur-fast);
 
     &:hover {
         color: var(--secondary-text);

@@ -2,9 +2,8 @@
 
 Run this program and inspect `r8` through `r15` in the register panel. It performs two divisions
 and two multiplications. Each division saves both its quotient and remainder; the final
-multiplication saves the two halves of its full product. No result goes to `r11`: the `syscall`
-that ends the program overwrites `rcx` and `r11`, so a value left there is gone by the time the
-program stops.
+multiplication saves the two halves of its full product. The program skips `r11` when saving
+results because the `syscall` that ends it overwrites `rcx` and `r11`.
 
 ```x86|playground|allow-open
 default rel
@@ -44,7 +43,8 @@ _start:
 ## Read the saved results
 
 `div` reads the unsigned dividend from `rdx:rax`, although its instruction line names only
-`rbx`. Clearing `rdx` makes that dividend 200. The quotient 28 is saved in `r8`, and the
+`rbx`, the divisor. The notation `rdx:rax` means a 128-bit value with `rdx` as its high half
+and `rax` as its low half. Clearing `rdx` makes that dividend 200. The quotient 28 is saved in `r8`, and the
 remainder 4 in `r9`: `200 = 28 × 7 + 4`.
 
 `idiv` also reads `rdx:rax`, but treats the pair as signed. `cqo` copies the sign of -200 into
@@ -63,7 +63,7 @@ the low half, `FFFFFFFFFFFFFFFE`. Read them together, high half first, as
 In the first program, remove only the `cqo` line immediately before `idiv rbx`, then run it
 again. The earlier `div` left its remainder, 4, in `rdx`. Loading -200 into `rax` leaves
 that old high half in place. `idiv` therefore receives a different, large positive
-`rdx:rax` dividend; its quotient cannot fit in a signed qword, so the run ends with a divide
+`rdx:rax` dividend. Its quotient cannot fit in a signed 64-bit integer, so the run ends with a divide
 error before the later results are saved. Restore `cqo` and run again to see `r10 = -28`
 and `r12 = -4`.
 
@@ -73,10 +73,10 @@ Fill in the three marked blocks below. Compute unsigned `205 / 8` and save its q
 `r8` and remainder in `r9`. Then compute signed `-205 / 8` and save its quotient in `r10`
 and remainder in `r12`. Prepare `rdx:rax` for each division. Finally, use one-operand `mul`
 to multiply unsigned `0x8000000000000000` by 2; save the low half in `r13` and the high
-half in `r14`. The `mov rax, 60` at the end is the exit setup, so save your answers before it.
+half in `r14`. The `mov rax, 60` at the end sets up the program's exit, so save your answers before it.
 
 Predict the six registers, then press **Test**. It expects `r8 = 25`, `r9 = 5`,
-`r10 = -25`, `r12 = -5`, `r13 = 0`, and `r14 = 1`. The testcase writes the two
+`r10 = -25`, `r12 = -5`, `r13 = 0`, and `r14 = 1`. The test case writes the two
 negative results as hexadecimal bit patterns; the register panel can show them as signed
 decimal values. The product's low half is zero because its single set bit moves into the
 high half.

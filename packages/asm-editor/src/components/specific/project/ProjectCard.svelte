@@ -11,6 +11,7 @@
     import timeAgo from 's-ago'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import { ThemeStore } from '#stores/themeStore.svelte.ts'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import FaTrashAlt from '~icons/fa-solid/trash-alt'
     import FaDownload from '~icons/fa-solid/download'
     import FaShareAlt from '~icons/fa-solid/share-alt'
@@ -73,7 +74,7 @@
 <article class="project-card">
     <header class="card-header">
         <div
-            class="name editable"
+            class="name editable ellipsis"
             title={textContent}
             contenteditable
             bind:textContent
@@ -84,34 +85,37 @@
             onblur={save}
         ></div>
         <div class="card-actions">
-            <button
+            <IconButton
                 class="card-action"
+                quiet
+                label="Share this project"
                 {@attach tooltip('Share this project')}
-                aria-label="Share this project"
-                onclick={() => dispatcher('share', project)}
+                onClick={() => dispatcher('share', project)}
             >
                 <FaShareAlt />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
                 class="card-action"
+                quiet
+                label="Download this project"
                 {@attach tooltip(
                     singleSource
                         ? 'Download this project as a source file'
                         : 'Download this project as an archive'
                 )}
-                aria-label="Download this project"
-                onclick={() => dispatcher('download', project)}
+                onClick={() => dispatcher('download', project)}
             >
                 <FaDownload />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
                 class="card-action delete"
+                quiet
+                label="Delete this project"
                 {@attach tooltip('Delete this project')}
-                aria-label="Delete this project"
-                onclick={deleteProject}
+                onClick={deleteProject}
             >
                 <FaTrashAlt />
-            </button>
+            </IconButton>
         </div>
     </header>
     <div class="card-body">
@@ -140,11 +144,12 @@
             bg={accent}
             color={ThemeStore.textOfColor(accent)}
             href={resolve('/projects/[project]', { project: project.id })}
-            style="gap: 0.45rem; padding: 0.3rem 0.75rem; font-size: 0.85rem"
+            size="sm"
+            style="gap: 0.45rem"
             title="Open this project"
         >
             Open
-            <Icon size={0.7}>
+            <Icon size="caption">
                 <FaArrowRight />
             </Icon>
         </ButtonLink>
@@ -185,11 +190,11 @@
         outline: 1px solid transparent;
         outline-offset: 0;
         transition:
-            background-color 0.15s,
-            outline-color 0.15s;
+            background-color var(--dur-fast),
+            outline-color var(--dur-fast);
 
         &:hover {
-            background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
+            background-color: var(--hover-bg);
         }
 
         &:focus {
@@ -203,11 +208,8 @@
         min-width: 0;
         padding: 0.2rem 0.3rem;
         margin-left: -0.3rem;
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
 
         &:focus {
             text-overflow: clip;
@@ -221,42 +223,10 @@
         flex: none;
     }
 
-    .card-action {
-        display: grid;
-        place-items: center;
-        width: 1.75rem;
-        height: 1.75rem;
-        padding: 0.42rem;
-        border-radius: 0.25rem;
-        background: transparent;
-        color: inherit;
-        opacity: 0.75;
-        cursor: pointer;
-        transition:
-            background-color 0.15s,
-            color 0.15s,
-            opacity 0.15s;
-
-        :global(svg) {
-            width: 100%;
-            height: 100%;
-        }
-
-        &:hover {
-            opacity: 1;
-            background-color: var(--tertiary);
-        }
-
-        &:focus-visible {
-            opacity: 1;
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
-
-        &.delete:hover {
-            color: var(--red);
-            background-color: color-mix(in srgb, var(--red) 15%, transparent);
-        }
+    /* Delete turns red under the pointer, over a red tint */
+    .card-actions :global(.card-action.delete:hover) {
+        color: var(--danger);
+        background-color: color-mix(in srgb, var(--danger) 15%, transparent);
     }
 
     .card-body {
@@ -272,15 +242,14 @@
         min-height: 2.6rem;
         padding: 0.25rem 0.3rem;
         margin: -0.25rem -0.3rem;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         line-height: 1.45;
-        color: var(--secondary-text-muted, var(--secondary-text));
+        color: var(--secondary-text-prose, var(--secondary-text));
         overflow-wrap: anywhere;
 
         &:empty::before {
             content: attr(data-placeholder);
             color: var(--hint);
-            opacity: 0.7;
         }
     }
 
@@ -297,14 +266,14 @@
     .edited {
         align-self: flex-end;
         max-width: 100%;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
     }
 
     .language {
         flex: none;
         color: var(--hint);
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         font-weight: 500;
         white-space: nowrap;
     }

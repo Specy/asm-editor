@@ -445,10 +445,25 @@ _Avoid_: inspectors, trackers, user tools, floating panels
 The menu a right click on a register's value or on a memory byte opens during a **Debug session**, which reads the value as an address: Show in memory, which moves the memory view to it and marks the byte until the view is moved by hand; Show in Listing, while the program is an **Executable** and the address is in its own code; Copy as hex and Copy as decimal; and for a byte, Follow pointer, which reads the address stored there at the **Target**'s register width and in its byte order. A click still edits the value, as a **Poke**.
 _Avoid_: context menu (any right-click menu), address menu, value menu
 
+## Card
+
+A panel laid on a page or in the **Workbench** in the Cards surface style: the editor card, the registers card, a project card, a documentation tile. Distinct from a **Tray** and a **Popover**, which float over what is beneath them.
+_Avoid_: tile, box, panel (for the page kind)
+
+## Tray
+
+A surface that floats free or docks to an edge, tinted from the theme's `--primary` and blurring what is beneath it: a prompt, a toast, the execution dock, the search palette, a dialog, the floating **Debug tools**, a find bar.
+_Avoid_: overlay, sheet, modal (for the surface)
+
+## Popover
+
+A surface anchored to the element or point it is about, raised `--tertiary`, with an arrow when it is about one item, holding controls: a menu (the **Pointer menu** among them), the `Select` list, a tool's popover opened from a button. A **Tooltip** and a hover card over data are drawn the same way but hold no controls, so they are not Popovers.
+_Avoid_: card, dropdown, flyout
+
 ## Tooltip
 
-The small card with an arrow that explains a control (a button, link, switch or select) while the pointer rests on it, keyboard focus is on it or a finger holds it, given to that element in Svelte code with the `tooltip` attachment. It is always the element's description and never its name: an icon-only control carries its own `aria-label` beside it ([ADR 0064](./docs/adr/0064-tooltips-are-opt-in-attachments-that-describe-and-never-name.md)). Distinct from a `title`, which stays for text that only repeats or completes what is shown (a path, a long name); from a hover card that follows the pointer over data, as the **Hex editor**'s byte card and the memory view's do; from Monaco's hovers; and from a **Hint**, which belongs to a **Diagnostic**.
-_Avoid_: hint, title (for the card), popover (which can hold controls), hover (Monaco's)
+The small surface with an arrow, drawn as a **Popover** is, that explains a control (a button, link, switch or select) while the pointer rests on it, keyboard focus is on it or a finger holds it, given to that element in Svelte code with the `tooltip` attachment. It is always the element's description and never its name: an icon-only control carries its own `aria-label` beside it ([ADR 0064](./docs/adr/0064-tooltips-are-opt-in-attachments-that-describe-and-never-name.md)). Distinct from a `title`, which stays for text that only repeats or completes what is shown (a path, a long name); from a hover card that follows the pointer over data, as the **Hex editor**'s byte card and the memory view's do; from Monaco's hovers; and from a **Hint**, which belongs to a **Diagnostic**.
+_Avoid_: hint, title (for the surface), popover (which holds controls), hover (Monaco's)
 
 ## Memory region
 

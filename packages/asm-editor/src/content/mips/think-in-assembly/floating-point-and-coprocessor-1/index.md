@@ -26,8 +26,8 @@ main:
 ```
 
 `l.s` loads each input into a floating point register, `add.s` adds them, and `s.s` stores the
-answer. Open the FPU register tab and `$f4` reads 3.75. In Hex format it reads `40700000`: the same
-bits, displayed with a different interpretation.
+answer. Open the FPU register tab and choose Single to see 3.75 in `$f4`. Choose Hex to see
+`40700000`: the same bits, displayed with a different interpretation.
 
 The floating point unit is traditionally called **Coprocessor 1** in MIPS. Early MIPS systems could
 put floating point work on a separate coprocessor chip; modern implementations usually integrate
@@ -66,7 +66,7 @@ encodes positive or negative **infinity**. A nonzero fraction encodes **NaN** (n
 Infinity is a value distinct from NaN. NaN is _unordered_: the ordinary comparisons in this lesson
 are false when either operand is NaN.
 
-Many instructions that interpret floating point encodings carry a format suffix. `.s` means single
+Many floating point instructions have a format suffix. `.s` means single
 and `.d` means double, so `add.s` adds singles and `add.d` adds doubles. Bit-copy instructions such
 as `mtc1` and branch instructions such as `bc1t` do not use that suffix.
 
@@ -124,7 +124,9 @@ and `s.d`; adjacent doubles are 8 bytes apart.
 
 ## Copying bits and converting values
 
-There are two different ways for a value to cross between the CPU and FPU register files.
+Copying bits between CPU and FPU registers is different from converting a numeric value.
+The copy instructions move bits unchanged. The conversion instructions read a value in one format
+and write it in another, using FPU registers for both the input and the result.
 
 - `mtc1 $t0, $f0` copies 32 bits from `$t0` to `$f0` unchanged.
 - `mfc1 $t0, $f0` copies 32 bits from `$f0` to `$t0` unchanged.
@@ -187,7 +189,7 @@ common forms are `c.eq.s` for equal and `c.le.s` for less than or equal. Their d
 forms end in `.d`.
 
 A false ordered comparison does not always mean “greater than or equal.” If either operand is NaN,
-`c.eq.s`, `c.lt.s`, and `c.le.s` all produce false. That rule gives a compact NaN check:
+`c.eq.s`, `c.lt.s`, and `c.le.s` all produce false. You can use that rule to check for NaN:
 
 ```mips
     c.eq.s $f0, $f0         # every non-NaN value equals itself
@@ -295,7 +297,7 @@ main:
 
 </details>
 
-The second exercise checks both outcomes of an ordinary comparison and then checks a supplied NaN.
+In this exercise, compare two pairs of values and check whether a supplied value is NaN.
 For each comparison, follow the branch on one outcome and fall through on the other:
 
 - leave 11 in `$t0` when `low < high`, otherwise leave 22;

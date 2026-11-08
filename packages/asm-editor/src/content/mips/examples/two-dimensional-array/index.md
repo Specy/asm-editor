@@ -60,12 +60,12 @@ column:
 `$t4` changes roles as the lookup proceeds: first it holds the flat index 9, then the byte offset
 36, then the address `grid + 36`. `lw` reads the word at that address into `$t5`. In the
 Playground's default layout, `grid` starts at `0x10010000`, so the word is at `0x10010024`.
-Select **Build**, enter `10010024` in the Memory panel's address box, and select **W** to view
-whole words. That word is `000000C8` in hexadecimal, or 200 in decimal. Then select **Run** and
+Select **Build**, enter `10010024` in the Memory panel's address box, and drag across the four
+bytes at that address to read the word as 200 in decimal. Then select **Run** and
 check `$t5` in the register panel; it should hold the same value.
 
-The second loop sums a whole column. It starts at `grid[0][1]`, four bytes after the base.
-Each move to the next row crosses `COLS` words, or `COLS * 4` bytes. The `sll` puts that **row
+The `column` loop sums a whole column. It starts at `grid[0][1]`, four bytes after the base.
+Each move to the next row crosses `COLS` words, or `COLS * 4` bytes. The `sll` instruction puts that **row
 stride**, 16 bytes here, in `$t3`; the loop adds it to `$t6` after every load.
 
 | Row read | Offset from `grid` | Word added | Total after load |

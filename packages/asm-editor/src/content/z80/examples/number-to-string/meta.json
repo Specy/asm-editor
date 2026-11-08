@@ -1,6 +1,6 @@
 {
-    "name": "Print a number in any base without help",
-    "description": "The division routine run once per digit, a buffer filled backwards from its end, and the same number printed in base 16, 10 and 2.",
+    "name": "Convert a number to a string in any base",
+    "description": "Convert a number to digits by repeated division, fill a buffer backwards, and print the same number in bases 16, 10 and 2.",
     "order": 19,
     "topic": "number-to-string"
 }

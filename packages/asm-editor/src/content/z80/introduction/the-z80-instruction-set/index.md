@@ -1,14 +1,14 @@
 # The Z80 instruction set
 
-The Z80 has many instruction forms, but they are not hundreds of unrelated ideas. An instruction
-usually combines a familiar operation with particular places for its values. For example, both
+The Z80 has many instruction forms. Each form specifies an operation and where its values come
+from or go. For example, both
 `ld a, b` and `ld a, 5` are forms of `ld`: one copies a byte from `b`, while the other puts the
 constant 5 in `a`.
 
-You do not need to memorise the whole instruction set. This page gives you a way to read an
-instruction and its bytes, then introduces one useful instruction that copies a run of memory.
-The [instruction reference](/documentation/z80/instruction) is the place to look up the forms that
-are allowed for a particular mnemonic.
+You do not need to memorise the whole instruction set. You can read an instruction by identifying
+its operation and operands, then look up the allowed forms in the
+[instruction reference](/documentation/z80/instruction). Below, you will see how instructions are
+encoded as bytes and use `ldir` to copy a block of memory.
 
 ## Mnemonics, operands, and forms
 
@@ -19,7 +19,7 @@ it are its **operands**. In this line, `ld` is the mnemonic; `a` and `5` are ope
     ld a, 5
 ```
 
-The operands say which form of the instruction you mean. They can name a register, a pair, a
+The operands say which form of the instruction you mean. They can name a register, a register pair, a
 constant written in the source, or a memory location such as `(hl)`. Parentheses still mean the
 byte in memory at the address held in `hl`.
 
@@ -88,10 +88,10 @@ then check the reference when you need an exact form or encoding.
 ## Copy a block with `ldir`
 
 `ldir` is a two-byte instruction (`ED B0`) for copying a sequence of bytes forwards in memory. It
-uses three pairs with fixed roles:
+uses three register pairs with fixed roles:
 
 - `hl` holds the address of the next source byte.
-- `de` holds the address where the next copy goes.
+- `de` holds the address of the next destination byte.
 - `bc` holds the number of bytes still to copy.
 
 For each byte, `ldir` copies the byte at `(hl)` to `(de)`, increases both addresses by one, and

@@ -1,6 +1,7 @@
 <script lang="ts">
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import ValueDiff from '#cmp/specific/project/user-tools/ValueDiffer.svelte'
+    import RegisterValueCard from './RegisterValueCard.svelte'
     import {
         defaultRegisterKind,
         type Register,
@@ -64,6 +65,19 @@
          * A click on the value still pokes it.
          */
         valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
+        /**
+         * Integers in hexadecimal (`true`) or decimal (`false`) whatever the reader's Preference
+         * says, for a page drawn the same on the server as in the browser, which the Preference,
+         * kept in the browser's storage, cannot be: the home page's backdrop. Left out, the
+         * Preference decides.
+         */
+        hex?: boolean
+        /**
+         * The rows as a picture, for a backdrop nothing can point at (the home page's): the same
+         * names, values and change highlights, without the hover cards of the values and of the
+         * whole register beside its name, and without the names' Tooltips.
+         */
+        decorative?: boolean
     }
 
     let {
@@ -80,7 +94,9 @@
         pokeable = false,
         canPokeRegister,
         onPoke,
-        valueMenu
+        valueMenu,
+        hex,
+        decorative = false
     }: Props = $props()
 
     const fileKind = $derived(defaultRegisterKind(file.formats))
@@ -90,7 +106,7 @@
     const isCompact = $derived(
         compact || Number(file.size) > RegisterSize.Double || fileKind === 'float'
     )
-    const usesHex = $derived(!preferencesStore.values.useDecimalAsDefault.value)
+    const usesHex = $derived(hex ?? !preferencesStore.values.useDecimalAsDefault.value)
     /** The hex digits one group takes, which is what the lines of a wide row are counted in. */
     const groupDigits = $derived(2 * Math.max(1, Math.min(Number(groupSize), Number(file.size))))
     //only a hexadecimal reading falls into lines of whole groups, because only it is counted in
@@ -336,17 +352,15 @@
     {@const group = chunk.group}
     {@const lines = hoverLines(row, chunk)}
     <ValueDiff
+        {decorative}
         monospaced
-        hoverElementStyle="left: 50%; transform: translateX(-50%);{rowPosition === 'bottom'
-            ? 'bottom: var(--top); top: unset;'
-            : ''}"
+        hoverSide={rowPosition === 'bottom' ? 'below' : 'above'}
         style="{chunkStyle}{row.rendered.blank ? ' opacity: 0.4;' : ''}"
         hoverValueElementStyle={group && group.bytes * 2 > RegisterSize.Long * 2
             ? 'font-size: 0.95rem'
             : ''}
         value={chunkText(chunk)}
         diff={chunkPrevText(chunk)}
-        hoverElementOffset={`${-1.25 * Math.max(1, lines.length)}rem`}
     >
         {#snippet hoverValue()}
             <div class="column">
@@ -375,29 +389,31 @@
         -->
         {@const rowPosition = rowIndex === 0 ? 'bottom' : position}
         <div class="register-wrapper">
-            <div class="hover-register-value">
-                {#if !row.hexadecimal}
-                    0x{row.register.toHex()}
-                {:else if usesHex}
-                    {row.register.value}
-                {:else}
-                    <!-- masked to the register's width: MIPS and RISC-V hand registers back signed -->
-                    {row.register.toHex()}
-                {/if}
-            </div>
+            {#if !decorative}
+                <RegisterValueCard>
+                    {#if !row.hexadecimal}
+                        0x{row.register.toHex()}
+                    {:else if usesHex}
+                        {row.register.value}
+                    {:else}
+                        <!-- masked to the register's width: MIPS and RISC-V hand registers back signed -->
+                        {row.register.toHex()}
+                    {/if}
+                </RegisterValueCard>
+            {/if}
             <!-- what a register the file describes is, on its name: the M68K 68020's ISP -->
             {#if row.integer && onRegisterClick}
                 <button
                     class="register-name"
                     onclick={() => onRegisterClick(row.register)}
-                    {@attach tooltip(file.layout[row.index]?.description)}
+                    {@attach !decorative && tooltip(file.layout[row.index]?.description)}
                 >
                     {row.register.name.toUpperCase()}
                 </button>
             {:else}
                 <span
                     class="register-name register-name-static"
-                    {@attach tooltip(file.layout[row.index]?.description)}
+                    {@attach !decorative && tooltip(file.layout[row.index]?.description)}
                 >
                     {row.register.name.toUpperCase()}
                 </span>
@@ -465,6 +481,8 @@
 {/if}
 
 <style lang="scss">
+    @use '../../../../styles/field.scss';
+
     .registers {
         height: fit-content;
         display: grid;
@@ -473,7 +491,7 @@
         flex-direction: column;
         gap: 0.22rem;
         padding: 0.4rem 0.2rem;
-        font-size: 1rem;
+        font-size: var(--fs-body);
         @media screen and (max-width: 1000px) {
             width: unset;
         }
@@ -510,34 +528,12 @@
     //the panel already have. The column is sized by what it holds, so a wider tab would move the
     //memory panel beside it every time it was picked
     .wide {
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
 
         .register-hex {
             display: grid;
             grid-template-columns: repeat(var(--wide-columns, 2), auto);
         }
-    }
-
-    .hover-register-value {
-        display: none;
-        min-width: 100%;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        border-radius: 0.2rem;
-        position: absolute;
-        cursor: text;
-        user-select: all;
-        font-family: monospace;
-        font-size: 1rem;
-        box-shadow: rgba(0, 0, 0, 0.4) 0px 0px 6px;
-        left: 100%;
-        z-index: 3;
-        top: 0;
-        height: 100%;
-        padding: 0 0.3rem;
-        align-items: center;
-        font-weight: normal;
-        white-space: nowrap;
     }
 
     .register-wrapper {
@@ -547,13 +543,13 @@
         align-items: center;
         position: relative;
 
-        &:hover .hover-register-value {
+        &:hover :global(.hover-register-value) {
             display: flex;
         }
     }
 
     .register-name {
-        font-weight: bold;
+        font-weight: 700;
         //a shade under the digits beside it, and in `em` rather than `rem` so it still shrinks with
         //the row: a button does not inherit the font size on its own (the browser gives it one of
         //its own), and without that a `.compact` file kept full-sized names beside its shrunken
@@ -565,7 +561,7 @@
         justify-content: center;
         //Rubik's capitals sit a little above the middle of their line
         padding: 0.25rem 0.2rem 0.15rem;
-        font-family: Rubik;
+        font-family: var(--font-ui);
         border-radius: 0.2rem;
         border: none;
         min-width: 1.6rem;
@@ -598,7 +594,14 @@
         gap: 0.1rem;
         flex: 1;
         height: 100%;
-        border-left: solid 0.1rem var(--wb-line, var(--tertiary));
+        border-left: solid 1px var(--wb-line, var(--tertiary));
+    }
+
+    //a decorative row's value is the cell alone, without the hover's wrapper around it: it keeps
+    //the place the wrapper gave it, at the top of the row and only as tall as its digits, so a
+    //change highlight covers what it always covered
+    .register-hex > :global(.tooltip-base) {
+        align-self: flex-start;
     }
 
     /* the value a pointer menu is open for, outlined as the Symbols panel outlines its row */
@@ -621,36 +624,37 @@
         }
 
         &:focus-visible {
-            outline: solid 0.1rem var(--accent);
+            outline: solid 1px var(--accent);
         }
     }
 
     //the input the chunk becomes while it is being poked, drawn in the row's own monospace so the
     //digits stay where they were
     .chunk-input {
-        font-family: monospace;
+        font-family: var(--font-mono);
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         font-size: inherit;
         text-align: center;
         //the box the read-only cell has, digit for digit: `box-sizing: border-box` is global, so
         //the padding the widths below carry is inside them and the text still gets its own `ch` per
-        //character. The frame is an outline drawn inside that box rather than a border, because a
-        //border is layout and would widen the cell and shift the row the moment the input opened.
+        //character. The frame is drawn inside that box rather than as a border, because a border
+        //is layout and would widen the cell and shift the row the moment the input opened.
         padding: 0.1rem;
         min-width: calc(2ch + 0.2rem);
         //the cap the read-only cell beside it gets, for the same reason: the register column is as
         //wide as what it holds, so an input that grew with a long typed value would push the memory
         //panel sideways
         max-width: calc(16ch + 0.2rem);
-        outline: solid 0.1rem var(--accent);
-        outline-offset: -0.1rem;
-        border-radius: 0.2rem;
-        background-color: var(--primary);
-        color: var(--primary-text);
+        //an inline editor (styles/field.scss): its edge drawn inside it, so the row does not move,
+        //and the global ring inside that while it is typed in
+        @include field.inline;
     }
 
     //a commit the helper refused: the input keeps what was typed and says why in its title
     .refused {
-        outline-color: var(--red);
+        outline: 2px solid var(--danger);
+        outline-offset: -2px;
     }
 
     .blank-register {
@@ -659,6 +663,8 @@
         justify-content: center;
         flex: 1;
         opacity: 0.4;
-        font-family: monospace;
+        font-family: var(--font-mono);
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
     }
 </style>

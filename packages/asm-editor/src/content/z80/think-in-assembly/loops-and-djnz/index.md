@@ -1,6 +1,6 @@
 # Loops and `djnz`
 
-A program normally goes from one written instruction to the next. A **loop** repeats a section by
+A program normally executes one instruction after another. A **loop** repeats a section by
 jumping back to a label before that section. The instructions between the label and the backward
 jump are the **body** of the loop.
 
@@ -39,8 +39,8 @@ The Z80 has an instruction for this common pattern:
 ```
 
 `djnz` means **decrement `b`, then jump to `label` if `b` is not zero**. It always uses `b` as its
-counter. Keep the count in `b` for the loop, and do not change `b` in the body unless changing the
-count is the job of that instruction.
+counter. Keep the count in `b` for the loop. If an instruction in the body changes `b`, it also
+changes how many times the loop runs.
 
 Here is the same five additions with `djnz`:
 
@@ -84,7 +84,7 @@ done:
 ```
 
 `ld a, b` copies the count so that `or a` can set `Z`. With the shown starting value, the jump goes
-to `done` and `c` stays 0. Change the first line to `ld b, 4`: the body runs four times, leaving
+to `done` and `c` stays 0. Change `ld b, 0` to `ld b, 4`: the body runs four times, leaving
 `c` at 4 and `b` at 0.
 
 ## Try it yourself

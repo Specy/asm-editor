@@ -1,6 +1,7 @@
 <script lang="ts">
     import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import PostCard from '#cmp/blog/PostCard.svelte'
     import FaArrowLeft from '~icons/fa-solid/arrow-left'
     import type { PageData } from './$types'
@@ -16,7 +17,7 @@
         <span class="blog-link-icon" aria-hidden="true"><FaArrowLeft /></span>
         All articles
     </a>
-    <h1>{data.tag.label}</h1>
+    <Header>{data.tag.label}</Header>
     <p class="blog-lead">{data.tag.description}</p>
 </header>
 <div class="blog-grid">

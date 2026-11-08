@@ -1,6 +1,6 @@
 {
     "name": "jp, jr and the conditions",
-    "description": "Use flags from a comparison or zero test to choose the next instruction with conditional and unconditional jp or jr.",
+    "description": "Use jp and jr to jump to a label, and add conditions to choose a path after a comparison or zero test.",
     "order": 0,
     "topic": "branching"
 }

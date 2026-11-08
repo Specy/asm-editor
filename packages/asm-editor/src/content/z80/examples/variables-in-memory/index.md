@@ -23,8 +23,9 @@ shipping:   .dw 35
 total:      .ds 2
 ```
 
-A **word** is a two-byte value. Here `price`, `shipping`, and `total` are words, so `.dw` puts the
-first two into memory and the register pairs `hl` and `de` hold them while `add hl, de` adds them.
+A **word** is a two-byte value. Here `price`, `shipping`, and `total` are words. The `.dw`
+directive stores the initial values of `price` and `shipping` in memory. The register pairs `hl`
+and `de` hold the values while `add hl, de` adds them.
 `ld de, (shipping)` reads the word stored at the address named `shipping`. Later, `ld de, TAX`
 loads the number 20 directly into `de`.
 

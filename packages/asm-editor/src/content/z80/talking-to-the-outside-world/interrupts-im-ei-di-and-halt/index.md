@@ -4,7 +4,7 @@ simple, but the CPU spends time checking even when nothing has happened.
 
 An **interrupt** turns the question around. A device sends the CPU an interrupt request when it needs
 attention. The Z80 finishes its current instruction and transfers control according to its interrupt
-mode. The usual routes save the address of the next instruction on the stack and jump to an
+mode. In the usual cases, the CPU saves the address of the next instruction on the stack and jumps to an
 **interrupt handler**. When the handler returns, the interrupted program can continue as though
 nothing happened, provided the handler restored every part of the program's state that it changed.
 
@@ -29,8 +29,8 @@ as the end of the run. That is why the runnable examples in this course finish w
 ## Choosing when an interrupt may run
 
 The ordinary Z80 interrupt input is **maskable**: a program may temporarily refuse requests from it.
-`di` disables their acceptance, and `ei` enables it again. A program uses a short disabled region
-when a handler must not see some shared value halfway through an update.
+`di` prevents the CPU from accepting these requests, and `ei` enables them again. A program can
+briefly disable interrupts when a handler must not see a shared value halfway through an update.
 
 There is one important timing rule. After `ei`, maskable interrupts are still not accepted until the
 instruction immediately following it has executed. A handler can therefore finish like this:
@@ -54,8 +54,8 @@ Like `ret`, it continues at the address it popped; it also tells compatible Z80 
 that the interrupt service is complete.
 
 An interrupt may land between any two instructions. The handler must therefore preserve every
-register and flag that the interrupted code may still rely on. This example's contract is to
-preserve `af`, `bc`, `de` and `hl`, because it uses all four pairs.
+register and flag that the interrupted code may still rely on. The handler in this example uses
+`af`, `bc`, `de` and `hl`, so it saves and restores all four pairs.
 
 `af` is the 16-bit pair made from the accumulator `a` and the flags register `f`. Saving `af` with
 `push af` therefore saves both the accumulator and the condition flags. Pairs must be popped in the
@@ -92,13 +92,13 @@ handler:
 ```
 
 After the call, the four pairs have their original values and the zero flag set by `cp` is still
-set. On hardware, the same save/work/restore body would be entered by the CPU and would end with
-`ei` followed by `reti` instead of the demonstration's `ret`.
+set. On hardware, the CPU would enter this handler when it accepts an interrupt. The handler would
+end with `ei` followed by `reti` instead of the demonstration's `ret`.
 
 The Z80 also has a shadow `af'` pair, just as it has the shadow `bc'`, `de'` and `hl'` pairs from the
 registers lecture. `ex af, af'` swaps `af` with `af'`; `exx` swaps the other three pairs. Real
-handlers often use those fast swaps instead of the stack. The explicit pushes above make the
-preservation contract easier to see: flags travel with `a` in `af`, and every saved pair is restored.
+handlers often use those fast swaps instead of the stack. In the example above,
+`push af` saves both `a` and the flags, and the matching pops restore every saved pair.
 
 An NMI handler returns with `retn`. NMI has slightly different enable-state rules; for ordinary
 device handlers, the `ei` and `reti` sequence above is the pattern to recognise.
@@ -118,13 +118,13 @@ interrupt. It does not enable interrupts; that is `ei`'s job.
 
 Mode 1 is the simplest when one handler can deal with every device. Mode 2 provides a **vector
 table**, so different supplied bytes can lead to different handlers. Since the playground never
-accepts an interrupt, it never performs any of these three dispatches.
+accepts an interrupt, it never uses these modes to call a handler.
 
 ## One to write
 
 Complete the demonstration handler so that it preserves every pair it changes. The caller also
 leaves the zero flag set before the call. If that flag survives, `ix` becomes 1; if the handler
-damages it, `ix` becomes 0.
+changes it, `ix` becomes 0.
 
 Save and restore `af`, `bc`, `de` and `hl`. Remember to pop them in the opposite order from the
 pushes.

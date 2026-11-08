@@ -3,10 +3,11 @@
      * The choice of one of a few options, drawn as a rounded strip whose highlight slides to the one
      * picked, after genshin-music's `MultipleOptionSlider`. It is every such choice in the editor: the
      * Testcases' memory form, the execution dock's view switch, the Hex editor's byte order and
-     * Find kind, and the strips of the Register file panel's header, where `SizeSelector` is this
-     * control with the Target's widths baked in, so every strip there is the same control at the
-     * same size. `tabs` draws the Register file panel's tabs instead, where the picked option is a
-     * tab running into the panel under it.
+     * Find kind, the create page's instruction set, and the strips of the Register file panel's
+     * header, where `SizeSelector` is this control with the Target's widths baked in, so every
+     * strip there is the same control at the same size. What switches what a panel shows is a
+     * `TabStrip`, not this
+     * ([design-system.md](../../../../../../docs/design/design-system.md), D14).
      */
     import type { Component, Snippet } from 'svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
@@ -31,15 +32,22 @@
         /** Names the choice as a whole, such as "Byte order", for a reader of the page. */
         ariaLabel?: string
         /**
-         * Draws the strip as the tabs of what is under it: the picked button keeps its bottom square
-         * so it runs into the panel below instead of ending in a corner of its own.
-         */
-        tabs?: boolean
-        /**
          * The strip takes the whole box it is given, an equal share for each option, as the compact
          * layouts' one tray across the bar shares its width among its buttons.
          */
         fill?: boolean
+        /**
+         * The strip takes the whole width it is given, in equal columns, one per option, or as
+         * many as the `--segmented-columns` property round it asks for, the options wrapping onto
+         * more rows: the create page's six instruction sets go two rows of three on a phone. A
+         * column is never narrower than its label.
+         */
+        wrap?: boolean
+        /**
+         * `sm` for a panel's or a tray's dense rows, `md` for a form, a little taller than its
+         * `TextField`.
+         */
+        size?: 'sm' | 'md'
         /**
          * Draws an option's face in place of its icon and label, for a host whose buttons must read
          * as its own: the execution dock's view switch, whose narrow layouts drop the words and keep
@@ -54,18 +62,24 @@
         onSelect,
         style = '',
         ariaLabel,
-        tabs = false,
         fill = false,
+        wrap = false,
+        size = 'sm',
         face
     }: Props = $props()
 
     let root: HTMLDivElement | undefined = $state()
-    /** Where the highlight sits, under the picked button: unknown until that button has a box. */
-    let highlight = $state<{ left: number; width: number } | null>(null)
+    /**
+     * Where the highlight sits, under the picked button: unknown until that button has a box. Its
+     * top and height only count when the strip wraps; on one row it spans the strip's height.
+     */
+    let highlight = $state<{ left: number; width: number; top: number; height: number } | null>(
+        null
+    )
 
     $effect(() => {
         const index = options.findIndex((option) => option.id === selected)
-        if (tabs || !root) return
+        if (!root) return
         const control = root
         const buttons = [...control.querySelectorAll<HTMLButtonElement>(':scope > button')]
         const button = buttons[index]
@@ -76,7 +90,12 @@
         const place = () => {
             //a control in a hidden panel has no box, and keeps its last place until it shows again
             if (button.offsetWidth === 0) return
-            highlight = { left: button.offsetLeft, width: button.offsetWidth }
+            highlight = {
+                left: button.offsetLeft,
+                width: button.offsetWidth,
+                top: button.offsetTop,
+                height: button.offsetHeight
+            }
         }
         place()
         //jsdom, which the component tests run in, has no ResizeObserver
@@ -89,14 +108,15 @@
 </script>
 
 <div
-    class="segmented-control"
-    class:tabs
-    class:slider={!tabs}
+    class="segmented-control slider"
     class:measured={highlight !== null}
-    class:fill={fill && !tabs}
+    class:fill
+    class:wrap
+    class:md={size === 'md'}
     role={ariaLabel ? 'group' : undefined}
     aria-label={ariaLabel}
     {style}
+    style:--segmented-count={wrap ? options.length : undefined}
     bind:this={root}
 >
     {#each options as option (option.id)}
@@ -121,16 +141,21 @@
             {/if}
         </button>
     {/each}
-    {#if !tabs && highlight}
+    {#if highlight}
         <span
             class="segmented-control-highlight"
             style:left="calc({highlight.left}px + 0.1rem)"
             style:width="calc({highlight.width}px - 0.2rem)"
+            style:top={wrap ? `calc(${highlight.top}px + 0.1rem)` : undefined}
+            style:height={wrap ? `calc(${highlight.height}px - 0.2rem)` : undefined}
         ></span>
     {/if}
 </div>
 
 <style lang="scss">
+    @use '../../../styles/focus.scss' as *;
+    @use '../../../styles/radius.scss' as *;
+
     .segmented-control {
         height: fit-content;
     }
@@ -140,16 +165,16 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        font-family: Rubik;
-        font-size: 0.8rem;
+        font-family: var(--font-ui);
+        font-size: var(--fs-small);
         white-space: nowrap;
     }
 
     .segmented-control-icon {
         display: flex;
         flex: none;
-        width: 0.7rem;
-        height: 0.7rem;
+        width: var(--fs-caption);
+        height: var(--fs-caption);
         margin-right: 0.35rem;
     }
 
@@ -163,8 +188,8 @@
         grid-auto-flow: column;
         grid-auto-columns: auto;
         width: fit-content;
-        border: 0.1rem solid var(--accent2);
-        border-radius: 0.4rem;
+        border: 1px solid var(--accent2);
+        border-radius: var(--r-control);
         background-color: var(--primary);
         isolation: isolate;
 
@@ -173,18 +198,15 @@
             z-index: 1;
             padding: 0.25rem 0.6rem;
             border-radius: 0.2rem;
-            color: color-mix(in srgb, var(--primary-text) 70%, transparent);
+            color: var(--text-muted);
             background-color: transparent;
-            transition: color 0.2s;
+            transition: color var(--dur-fast);
 
             &:hover {
                 color: var(--primary-text);
             }
 
-            &:focus-visible {
-                outline: 2px solid var(--accent);
-                outline-offset: -2px;
-            }
+            @include focus-ring($inset: true);
         }
 
         .segmented-control-button-selected,
@@ -209,67 +231,48 @@
         }
     }
 
+    // a form's height, a little taller than its field: 40px for a row, the buttons 38px inside the
+    // strip's edge with the same small label centred in them; the highlight, inset 0.1rem, follows
+    .slider.md .segmented-control-button {
+        min-height: 2.375rem;
+    }
+
+    // equal columns that never squeeze a label, so a strip too narrow for all of them in a row
+    // wants fewer columns from its host rather than clipped words; a button is as wide as its
+    // column, so its side padding only sets how narrow a column can be
+    .slider.wrap {
+        width: 100%;
+        grid-auto-flow: row;
+        grid-template-columns: repeat(
+            var(--segmented-columns, var(--segmented-count)),
+            minmax(max-content, 1fr)
+        );
+
+        .segmented-control-button {
+            padding-inline: 0.35rem;
+        }
+
+        // placed on its button's row, from the top and height measured
+        .segmented-control-highlight {
+            bottom: auto;
+        }
+    }
+
     .segmented-control-highlight {
         position: absolute;
         top: 0.1rem;
         bottom: 0.1rem;
-        border-radius: 0.2rem;
+        border-radius: nested-radius(var(--r-control), $border: 1px, $inset: 0.1rem);
         background-color: var(--accent2);
         pointer-events: none;
         transition:
-            left 0.15s ease-out,
-            width 0.15s ease-out;
+            left var(--dur-base) ease-out,
+            width var(--dur-base) ease-out,
+            top var(--dur-base) ease-out,
+            height var(--dur-base) ease-out;
 
         @media (prefers-reduced-motion: reduce) {
             transition: none;
-        }
-    }
-
-    //the strip of tabs is its own bar: the page's own colour warmed towards the panel it sits on,
-    //outlined so it reads as the band the tabs belong to rather than as part of the registers. Its
-    //corners follow the panel's, which the bar is the top of
-    .tabs {
-        display: flex;
-        //a strip stays whole: the header around it is what wraps
-        flex-wrap: nowrap;
-        overflow: hidden;
-        background-color: color-mix(in srgb, var(--background) 85%, var(--secondary));
-        border: 0.1rem solid var(--wb-line, var(--tertiary));
-        border-bottom: 0;
-        border-radius: 0.5rem 0.5rem 0 0;
-
-        .segmented-control-button {
-            flex: 1;
-            padding: 0.25rem 0.45rem;
-            //a tab that is not the picked one has no fill of its own, so the strip carries that
-            //colour rather than sitting on it as a block of buttons
-            background-color: transparent;
-            color: var(--secondary-text);
-            transition: background-color 0.2s;
-        }
-
-        .segmented-control-button:hover:not(.segmented-control-button-selected):not(:active) {
-            background-color: rgba(var(--RGB-tertiary), 0.4);
-        }
-
-        //the picked tab curves at the top and runs square into whatever is under it. It is
-        //tertiary and not the accent the option strips use: an accent tab would read as a
-        //highlight sitting on the bar, where a tab is meant to read as the piece of the bar that
-        //the panel below belongs to
-        .segmented-control-button-selected,
-        .segmented-control-button:active {
-            border-radius: 0.4rem 0.4rem 0 0;
-            transition: background-color 0s;
-            background-color: var(--tertiary);
-            color: var(--tertiary-text);
-        }
-
-        .segmented-control-button-selected:first-child {
-            border-top-left-radius: 0;
-        }
-
-        .segmented-control-button-selected:last-child {
-            border-top-right-radius: 0;
         }
     }
 </style>

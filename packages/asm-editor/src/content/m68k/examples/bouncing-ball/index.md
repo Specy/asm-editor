@@ -38,7 +38,7 @@ frame:
     trap #15                ; a filled ellipse in that box
 
     move.b #8, d0
-    trap #15                ; elapsed hundredths of a second in d1.l
+    trap #15                ; hundredths of a second since local midnight in d1.l
     divu #640, d1
     swap d1
     andi.l #$FFFF, d1       ; keep the remainder: a width from 0 to 639
@@ -94,14 +94,14 @@ stepy:  dc.w 3
 
 ## One complete frame at a time
 
-Before the loop, task 92 with mode 17 makes drawing go to a hidden image. In each pass through
+Before the loop, task 92 with mode 17 directs drawing to a hidden image. In each pass through
 `frame`, task 11 with `d1.w = $FF00` clears that image, including both graphics and text. The
 program then draws the ball and the bar on it. Task 94 shows the completed image all at once.
 Clearing and drawing happen while the previous frame remains visible, so you do not see the ball
 disappear between frames.
 
-After showing the frame, task 23 lets `d1.l` hundredths of a second pass before the program
-continues. Here `2` means at least **0.02 seconds** between frames. This is program time: the editor
+After showing the frame, task 23 waits for the number of hundredths of a second in `d1.l` before
+the program continues. Here `2` means at least **0.02 seconds** between frames. This is program time: the editor
 remains responsive to **Stop** during the wait. Drawing and running the instructions also take
 time, so the code does not promise an exact number of frames per second.
 
@@ -113,26 +113,27 @@ box's left edge range from 0 to `640 - 40 = 600`; its top edge can range from 0 
 `480 - 40 = 440`.
 
 If a proposed coordinate is within those bounds, the program saves it as the ball's new position.
-If it crosses an edge, `neg.w` changes the sign of that step in memory and leaves the saved
-position alone. For example, with `ballx = 600` and `stepx = 5`, the proposed X is 605. The
+If it crosses an edge, `neg.w` changes the sign of that step in memory and keeps the saved
+position. For example, with `ballx = 600` and `stepx = 5`, the proposed X coordinate is 605. The
 program keeps X at 600, changes `stepx` to -5, and tries 595 on the following frame. The same
 logic handles the top and bottom edges using `bally` and `stepy`.
 
 ## A bar measured by the clock
 
-Task 8 returns the elapsed program time in hundredths of a second in `d1.l`. The bar uses that
-number as a width. `divu #640, d1` divides it by 640; as in the division example, the remainder
-lands in the high word of `d1`. `swap` moves that remainder to the low word, and `andi.l #$FFFF`
+Task 8 returns hundredths of a second since local midnight in `d1.l`. `divu #640, d1` divides
+that number by 640. As in the division example, the remainder
+is stored in the high word of `d1`. `swap` moves that remainder to the low word, and `andi.l #$FFFF`
 clears the other word. The resulting width runs from 0 to 639, then starts again at 0. One full
-cycle takes 640 hundredths, or 6.4 seconds of program time.
+cycle takes 640 hundredths, or 6.4 seconds. The bar's starting width depends on the time you run
+the program.
 
 The width goes into `d3` for task 87. Its rectangle corners are `d1 = 0` (left), `d2 = 0` (top),
 `d3 = width` (right), and `d4 = 8` (bottom). The right and bottom edges are excluded, so the gray
 bar is eight pixels high and its visible width is exactly the remainder. If task 8 returned 645,
 the remainder after dividing by 640 would be 5, and the rectangle would run from X 0 through X 4.
 
-The bar follows elapsed time; the ball moves a fixed number of pixels _per frame_. If frames take
-longer, the ball covers fewer pixels in the same amount of time, while the bar still reflects the
+The bar follows the clock. The ball moves a fixed number of pixels _per frame_. If frames take
+longer, the ball travels fewer pixels in the same amount of time, while the bar still reflects the
 clock reading.
 
 ## Try a slower pace
@@ -146,7 +147,7 @@ Use **Stop** when you have watched enough, then restore `2`.
 
 Each delay is now at least 0.05 seconds. The ball still moves 5 pixels horizontally and 3
 vertically on each frame, so it generally travels more slowly across the Screen. More clock time
-passes between frames, so the bar generally grows farther between pictures. The exact spacing
+passes between frames, so the bar generally grows more between frames. The exact spacing
 can vary because drawing and instruction execution take time too.
 
 </details>

@@ -1,7 +1,7 @@
 A zero-terminated string has no stored character count. To find its length, read bytes until the
-first zero. This example does that twice: an ordinary loop leaves its answer in `r8`, and
-`repne scasb` leaves the same answer in `r9`. Both searches are limited to the bytes declared
-for `text`.
+first zero. This example finds the length with an ordinary loop and with `repne scasb`. The
+program leaves the loop's result in `r8` and the scan's result in `r9`. Both searches are limited
+to the bytes declared for `text`.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -63,9 +63,9 @@ bytes without an explicit size.
 
 For the second search, `scasb` compares `al` with the byte at `rdi` and then advances `rdi` by
 one because `cld` cleared the direction flag. `repne` repeats that comparison while `rcx` is
-nonzero and the last byte was unequal. It decrements `rcx` after every comparison. Here it
+nonzero and the compared byte does not match `al`. It decrements `rcx` after every comparison. Here it
 examines nine bytes, including the zero: on the match, `rdi = text + 9`, `rcx = 0`, and the
-zero flag is set. `rdi - text` is therefore 9 bytes examined; subtracting one excludes the
+zero flag is set. `rdi - text` therefore gives the number of bytes examined, 9. Subtracting one excludes the
 terminator and gives the length 8. The `jnz` checks the comparison result immediately after
 the scan. If the capacity runs out on a nonzero byte, it takes the missing-terminator path.
 
@@ -81,10 +81,10 @@ starts reading.
 Complete the two ordinary loops below. For each string, check its capacity before reading a
 byte, count the nonzero bytes, and put **-1** in the result register if no zero occurs within
 that capacity. `first` contains `"Hi!"` and a zero, so `r10` should be **3**. `second` has five
-nonzero bytes and no terminator, so `r12` should have the **-1** bit pattern
-`0xFFFFFFFFFFFFFFFF`. Use **Test** to check both values,
-then inspect the registers. The second string is safe to scan because its five-byte capacity
-stops the loop before it reads beyond `second_end`.
+nonzero bytes and no terminator, so `r12` should contain **-1**, represented as
+`0xFFFFFFFFFFFFFFFF`. Use **Test** to check both values, then inspect the registers.
+Checking the five-byte capacity before each read keeps the second loop from reading at or
+beyond `second_end`.
 
 ```x86|playground|memory|exercise
 default rel

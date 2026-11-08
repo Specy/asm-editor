@@ -10,8 +10,8 @@ those ranges. Start with the map we can build using `org`, `dc` and `ds` in this
 `ds.b` reserves bytes without specifying their contents. A label names the address where its
 following instruction or data begins. Labels themselves occupy no bytes.
 
-The example stores a greeting, a score initially equal to 10, and a 16-byte buffer: space for the
-program to fill. In `dc.b "Hi",0`, the text supplies one byte per character; the final `0` is an
+The example stores a greeting, a score initially equal to 10, and a 16-byte buffer for the
+program to fill. In `dc.b "Hi",0`, the text supplies one byte per character. The final `0` is an
 additional zero byte marking the text's end. A padding byte makes the following long start at an
 even address, as required by the 68000.
 
@@ -34,7 +34,8 @@ score:    dc.l 10
 buffer:   ds.b 16
 ```
 
-Build resolves labels and places instructions and declared bytes directly at their chosen addresses.
+When you select Build, the assembler resolves labels and places instructions and declared bytes
+directly at their chosen addresses.
 Run starts at the first assembled instruction, here at `$1000`. After the fourth instruction it
 reaches untouched memory, which ends the run. Directives guide the assembler and do not execute.
 No `main` label or separate executable file is required.
@@ -54,13 +55,13 @@ After Run, `a0`, `a1` and `a2` hold `$3000`, `$3004` and `$3008`; `d0` holds 10.
 where the bytes are, while the bytes hold the value. The score's address is `$3004`, not 10.
 
 With this editor's default settings, untouched buffer bytes appear as `FF`, from the simulator's
-initial memory contents. `ds` still promises no initial value: write a reserved byte before
-relying on it.
+initial memory contents. `ds` still promises no initial value. Write to a reserved byte before
+relying on its value.
 
 ## Storage during execution
 
 The greeting, score and buffer have **static storage**: their space lasts throughout execution,
-with sizes fixed during Build. The score can change; "static" describes the storage's lifetime.
+with sizes fixed during Build. The score can change. "Static" describes the storage's lifetime.
 
 The **stack** is working space for temporary values, such as saved registers. The **stack pointer**,
 called `sp` or `a7`, tracks its current position. This simulator initially sets it to `$1000000`,
@@ -95,8 +96,8 @@ purpose. These conventional names describe the kinds of contents we just placed:
 | `.bss`    | writable storage supplied as zeroes during loading | space for a buffer         |
 
 These names are not replacement directives for this editor's M68K assembler. Here, `org` selects
-addresses, `dc` supplies bytes, and `ds` reserves space. `ds` does not acquire the zero-filling
-behavior of ELF `.bss`.
+addresses, `dc` supplies bytes, and `ds` reserves space. Unlike ELF `.bss`, `ds` does not fill
+the reserved space with zeroes.
 
 ## From source to an executable file
 

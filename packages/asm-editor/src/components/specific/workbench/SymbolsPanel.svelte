@@ -22,9 +22,11 @@
      * source does not say, and its menu shows it in memory or copies its address. The label the
      * cursor of a pane is under is marked.
      */
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
-    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
+    import SearchField from '#cmp/search/SearchField.svelte'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import { functionAtLine } from '#lib/listing/listing.ts'
     import type { ListingDocument } from '#lib/listing/listingDocuments.svelte.ts'
@@ -62,11 +64,12 @@
     import FaEllipsisH from '~icons/fa-solid/ellipsis-h'
     import FaFilter from '~icons/fa-solid/filter'
     import FaPen from '~icons/fa-solid/pen'
-    import FaTimes from '~icons/fa-solid/times'
     import FaUndo from '~icons/fa-solid/undo'
     import AnnotationPromptView from './AnnotationPrompt.svelte'
     import { copyToClipboard, showInMemory } from './pointerMenu'
     import { useWorkbench } from './workbenchContext'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
 
     interface Props {
         /** Whether the panel is the one shown; a hidden one starts no Listing. */
@@ -449,7 +452,7 @@
         >
             <strong class="ellipsis">{path}</strong>
             {#if entry}
-                <span class="entry-mark">ENTRY</span>
+                <Badge class="entry-mark" tone="accent">ENTRY</Badge>
             {/if}
         </div>
         <div class="symbols-controls">
@@ -460,43 +463,29 @@
                 onSelect={(id) => (kind = id as Kind)}
                 fill
             />
-            <div class="filter">
-                <span class="filter-icon" aria-hidden="true"><FaFilter /></span>
-                <input
-                    bind:this={filterInput}
-                    bind:value={filter}
-                    type="search"
-                    spellcheck="false"
-                    autocomplete="off"
-                    aria-label={`Filter the ${name}s`}
-                    placeholder={kind === 'names'
-                        ? 'Filter by name or address'
-                        : 'Filter by text or address'}
-                    onkeydown={onFilterKeydown}
-                />
-                {#if filter}
-                    <button
-                        type="button"
-                        class="clear"
-                        {@attach tooltip('Clear the filter')}
-                        aria-label="Clear the filter"
-                        onclick={() => {
-                            filter = ''
-                            filterInput?.focus()
-                        }}
-                    >
-                        <FaTimes />
-                    </button>
-                {/if}
-            </div>
+            <SearchField
+                size="sm"
+                icon={FaFilter}
+                bind:el={filterInput}
+                bind:value={filter}
+                label={`Filter the ${name}s`}
+                placeholder={kind === 'names'
+                    ? 'Filter by name or address'
+                    : 'Filter by text or address'}
+                clearLabel="Clear the filter"
+                onkeydown={onFilterKeydown}
+            />
         </div>
         {#if executable && (!listingDocument || listingDocument.status === 'generating')}
             {@const progress = listingDocument?.progress}
             <div class="note" role="status">
                 <p>
-                    Generating the Listing{progress === undefined
-                        ? '…'
-                        : `: ${Math.round(progress * 100)}%`}
+                    <Spinner
+                        announce={false}
+                        label="Generating the Listing{progress === undefined
+                            ? '…'
+                            : `: ${Math.round(progress * 100)}%`}"
+                    />
                 </p>
                 <progress max="1" value={progress} aria-label="Listing generated so far"></progress>
             </div>
@@ -505,13 +494,13 @@
                 The Listing could not be generated: {listingDocument.error}
             </ErrorState>
         {:else if total === 0}
-            <p class="note">No {name}s found.</p>
+            <EmptyState>No {name}s found.</EmptyState>
         {:else}
             <p class="count" role="status">
                 {count === total ? `${total} ${noun}` : `${count} of ${total} ${noun}`}
             </p>
             {#if count === 0}
-                <p class="note">Nothing matches “{filter.trim()}”.</p>
+                <EmptyState>Nothing matches “{filter.trim()}”.</EmptyState>
             {/if}
             <ul
                 class="symbol-list"
@@ -541,7 +530,7 @@
                                         'Label actions'
                                     )}
                             >
-                                <span class="symbol-name">{label.display}</span>
+                                <span class="symbol-name ellipsis">{label.display}</span>
                                 <span class="symbol-kind">{label.kind}</span>
                                 <span class="symbol-address"
                                     >{symbolAddress(label.address, prefix)}</span
@@ -549,16 +538,17 @@
                                 <span class="symbol-size">{label.size} B</span>
                             </button>
                             {#if !ui.viewport.canHover}
-                                <button
-                                    type="button"
+                                <IconButton
+                                    size="sm"
+                                    quiet
                                     class="row-menu"
                                     title={`Show ${label.display} in memory or copy its address`}
-                                    aria-label={`Show ${label.display} in memory or copy its address`}
-                                    tabindex="-1"
-                                    onclick={(event) =>
+                                    label={`Show ${label.display} in memory or copy its address`}
+                                    tabindex={-1}
+                                    onClick={(event) =>
                                         openMenu(
                                             event,
-                                            event.currentTarget
+                                            (event.currentTarget as HTMLElement)
                                                 .previousElementSibling as HTMLElement,
                                             key,
                                             programItems(label.address),
@@ -566,7 +556,7 @@
                                         )}
                                 >
                                     <FaEllipsisH />
-                                </button>
+                                </IconButton>
                             {/if}
                         </li>
                     {/each}
@@ -591,7 +581,7 @@
                                         'String actions'
                                     )}
                             >
-                                <span class="symbol-name"
+                                <span class="symbol-name ellipsis"
                                     >"{string.escaped.length > SHOWN_STRING
                                         ? `${string.escaped.slice(0, SHOWN_STRING)}…`
                                         : string.escaped}"</span
@@ -601,16 +591,17 @@
                                 >
                             </button>
                             {#if !ui.viewport.canHover}
-                                <button
-                                    type="button"
+                                <IconButton
+                                    size="sm"
+                                    quiet
                                     class="row-menu"
                                     title={`Show ${string.label} in memory or copy its address`}
-                                    aria-label={`Show ${string.label} in memory or copy its address`}
-                                    tabindex="-1"
-                                    onclick={(event) =>
+                                    label={`Show ${string.label} in memory or copy its address`}
+                                    tabindex={-1}
+                                    onClick={(event) =>
                                         openMenu(
                                             event,
-                                            event.currentTarget
+                                            (event.currentTarget as HTMLElement)
                                                 .previousElementSibling as HTMLElement,
                                             key,
                                             programItems(string.address),
@@ -618,7 +609,7 @@
                                         )}
                                 >
                                     <FaEllipsisH />
-                                </button>
+                                </IconButton>
                             {/if}
                         </li>
                     {/each}
@@ -637,26 +628,27 @@
                                 oncontextmenu={(event) =>
                                     openFunctionMenu(event, fn, event.currentTarget as HTMLElement)}
                             >
-                                <span class="symbol-name">{fn.display}</span>
+                                <span class="symbol-name ellipsis">{fn.display}</span>
                                 <span class="symbol-address">{symbolAddress(fn.address)}</span>
                                 <span class="symbol-size">{fn.size} B</span>
                             </button>
                             {#if !ui.viewport.canHover}
                                 <!-- a touch screen has no right click: the row's menu is a button -->
-                                <button
-                                    type="button"
+                                <IconButton
+                                    size="sm"
+                                    quiet
                                     class="row-menu"
                                     title={`Rename or comment on ${fn.display}`}
-                                    aria-label={`Rename or comment on ${fn.display}`}
-                                    tabindex="-1"
-                                    onclick={(event) => {
-                                        const row = event.currentTarget
+                                    label={`Rename or comment on ${fn.display}`}
+                                    tabindex={-1}
+                                    onClick={(event) => {
+                                        const row = (event.currentTarget as HTMLElement)
                                             .previousElementSibling as HTMLElement
                                         openFunctionMenu(event, fn, row)
                                     }}
                                 >
                                     <FaEllipsisH />
-                                </button>
+                                </IconButton>
                             {/if}
                         </li>
                     {/each}
@@ -671,7 +663,7 @@
                                 onclick={() => reveal(string.line)}
                                 onkeydown={onRowKeydown}
                             >
-                                <span class="symbol-name"
+                                <span class="symbol-name ellipsis"
                                     >"{string.escaped.length > SHOWN_STRING
                                         ? `${string.escaped.slice(0, SHOWN_STRING)}…`
                                         : string.escaped}"</span
@@ -710,19 +702,21 @@
 </section>
 
 <style lang="scss">
+    @use '../../../styles/rows.scss';
+
     .symbols {
         position: relative;
         display: flex;
         flex-direction: column;
         flex: 1;
         min-height: 0;
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
     }
 
     .note {
         margin: 0;
         padding: 0.8rem;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         line-height: 1.4;
         color: var(--hint);
 
@@ -744,32 +738,20 @@
         gap: 0.4rem;
         height: 1.8rem;
         padding: 0 0.5rem 0 0.8rem;
-        font-size: 0.75rem;
+        font-size: var(--fs-caption);
         background: color-mix(in srgb, var(--tertiary) 42%, transparent);
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
     }
 
+    /* the global class cuts the text short; a flex item has to be let shrink for it to */
     .ellipsis {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     /* the Explorer's mark of an Entry file, in the accent colour of the Selected program's */
-    .entry-mark {
-        flex: none;
+    .symbols-file :global(.entry-mark) {
         margin-left: auto;
-        padding: 0.02rem 0.3rem;
-        color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 12%, transparent);
-        border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-        border-radius: 999px;
-        font-size: 0.48rem;
-        font-weight: 700;
-        line-height: 0.72rem;
-        letter-spacing: 0.04em;
     }
 
     .symbols-controls {
@@ -780,70 +762,12 @@
         padding: 0.5rem;
     }
 
-    .filter {
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-        min-height: 2rem;
-        padding: 0.25rem 0.3rem 0.25rem 0.6rem;
-        border-radius: 0.5rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-
-        &:focus-within {
-            outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
-        }
-
-        input {
-            flex: 1;
-            min-width: 0;
-            padding: 0;
-            border: none;
-            outline: none;
-            background: transparent;
-            color: inherit;
-            font: inherit;
-
-            &::-webkit-search-cancel-button {
-                display: none;
-            }
-        }
-    }
-
-    .filter-icon {
-        display: flex;
-        flex: none;
-        width: 0.75rem;
-        height: 0.75rem;
-        opacity: 0.7;
-    }
-
-    .clear {
-        display: grid;
-        place-items: center;
-        flex: none;
-        width: 1.4rem;
-        height: 1.4rem;
-        padding: 0.32rem;
-        border: none;
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
-        opacity: 0.7;
-        cursor: pointer;
-
-        &:hover {
-            opacity: 1;
-            background-color: color-mix(in srgb, var(--tertiary-text) 12%, transparent);
-        }
-    }
-
     .count {
         flex: none;
         margin: 0;
         padding: 0 0.8rem 0.25rem;
-        font-size: 0.7rem;
-        opacity: 0.65;
+        font-size: var(--fs-caption);
+        color: var(--text-muted);
     }
 
     .symbol-list {
@@ -873,14 +797,14 @@
         border: 0;
         color: inherit;
         background: transparent;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.72rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-caption);
         text-align: left;
         cursor: pointer;
 
         &:hover,
         &:focus-visible {
-            background: var(--tertiary);
+            background: var(--hover-bg);
         }
 
         &:focus-visible {
@@ -888,9 +812,9 @@
             outline-offset: -2px;
         }
 
+        /* the row the cursor is in, the one opened */
         &.current {
-            background: color-mix(in srgb, var(--accent) 24%, var(--tertiary));
-            box-shadow: inset 2px 0 0 var(--accent);
+            @include rows.selected;
         }
 
         &.menu-open {
@@ -911,33 +835,20 @@
     }
 
     /* a touch screen's way to a row's menu, beside its size */
-    .row-menu {
-        display: grid;
-        place-items: center;
-        flex: none;
-        width: 1.9rem;
-        height: 1.55rem;
-        padding: 0.4rem;
-        border: none;
-        background: transparent;
-        color: inherit;
-        opacity: 0.7;
-        cursor: pointer;
+    .function-item :global(.row-menu) {
+        margin-right: 0.25rem;
     }
 
     .symbol-name {
         flex: 1;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     /* a built program's label: code or data, quieter than its address */
     .symbol-kind {
         flex: none;
         width: 4ch;
-        opacity: 0.45;
+        color: var(--text-muted);
     }
 
     .symbol-address,
@@ -945,7 +856,7 @@
         flex: none;
         text-align: right;
         white-space: nowrap;
-        opacity: 0.65;
+        color: var(--text-muted);
     }
 
     .symbol-address {

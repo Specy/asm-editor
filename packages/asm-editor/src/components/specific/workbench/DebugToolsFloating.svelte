@@ -100,15 +100,9 @@
 {/each}
 
 <style lang="scss">
-    /* the Stack pointer window's own body, as the editor drew it, with no padding: the view pads its
-       own controls and page, ruled apart from edge to edge of the window */
+    /* the Stack pointer window's body, with no padding: the view pads its own controls and page,
+       ruled apart from edge to edge of the window, on the window's own tray */
     .window-body {
-        background-color: var(--primary);
-        color: var(--primary-text);
         max-width: 16rem;
-        border-radius: 0.7rem;
-        box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
-        border-top-left-radius: 0;
-        border-top-right-radius: 0;
     }
 </style>

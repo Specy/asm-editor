@@ -1,7 +1,7 @@
 # jp, jr and the conditions
 
-Until a jump changes the plan, the CPU executes instructions in their written order. After one instruction,
-it moves to the next; `halt` stops execution in this editor. Indentation makes source easier for
+The CPU normally executes instructions in their written order, moving from one instruction to the next.
+In this editor, `halt` stops execution. Indentation makes source easier for
 people to read, but it does not control what the CPU does. A jump chooses a different next
 instruction.
 
@@ -43,13 +43,13 @@ There are two possible instruction sequences:
     jr done ----------------------------------->
 ```
 
-The unconditional `jr done` is part of the two-way choice. On the at-least-10 path, it selects
+The unconditional `jr done` is part of the two-way choice. When `a` is at least 10, it selects
 `done` as the next instruction. Without it, execution would continue into `smaller` and replace
 100 with 200.
 
-The comparison must be used while its flags are still current. `ld` does not change flags, so the
-loads in this example are safe. Arithmetic and logic instructions can replace the flags, so put the
-conditional jump straight after the test when possible.
+The conditional jump must read the flags before another instruction changes them. The `ld`
+instructions in this example preserve the comparison result. Arithmetic and logic
+instructions can change the flags, so put the conditional jump straight after the test when possible.
 
 ## The conditions used here
 
@@ -76,7 +76,7 @@ is taken, `a` is larger:
 The first jump matters because equal values leave `C` clear. A jump on `nc` would include the equal
 case as well as the larger case.
 
-`or a` gives a different kind of test you already know. It keeps `a` unchanged and sets `Z` when
+You can also use `or a` to test for zero. It keeps `a` unchanged and sets `Z` when
 `a` is zero. A conditional jump can use that flag immediately:
 
 ```z80|playground
@@ -109,7 +109,7 @@ For `jr`, the distance is measured from the address immediately after the `jr` i
 not calculate that distance yourself: write the label and let the assembler do it. Use `jr` when
 the target is nearby, as the labels in the examples are. Use `jp` when the target is farther away.
 
-The same conditions work with either spelling:
+These four conditions work with both instructions:
 
 ```z80
     jp z, finished

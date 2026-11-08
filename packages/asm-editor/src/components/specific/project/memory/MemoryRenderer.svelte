@@ -13,7 +13,7 @@
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import ValueDiff from '#cmp/specific/project/user-tools/ValueDiffer.svelte'
-    import MdTextFields from '~icons/ic/baseline-text-fields'
+    import FaFont from '~icons/fa-solid/font'
     import FaTimes from '~icons/fa-solid/times'
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { onMount } from 'svelte'
@@ -82,6 +82,12 @@
         cellMenu?: (cell: MemoryCell) => ContextMenuEntry[]
         /** A byte to mark while its page is shown: where a pointer menu last moved the view. */
         markedAddress?: bigint
+        /**
+         * The page as a picture, for a backdrop nothing can point at (the home page's): the same
+         * bytes in the same colours, the change highlight among them, with no hover card on a
+         * byte, no Tooltip, and no selection, Poke or menu to listen for.
+         */
+        decorative?: boolean
     }
 
     let {
@@ -103,7 +109,8 @@
         pokeable = false,
         onPoke,
         cellMenu,
-        markedAddress
+        markedAddress,
+        decorative = false
     }: Props = $props()
     const annotations = $derived.by(() => {
         //with each byte's hover, and what a region the machine defines means there: a ROM's
@@ -147,6 +154,7 @@
     )
 
     onMount(() => {
+        if (decorative) return
         const deselect = () => {
             selectingAddresses = false
         }
@@ -462,25 +470,29 @@
             style="height:2rem; min-width: var(--address-header-width); padding-bottom: 0; padding-right: 0.25rem;"
         >
             <Button
-                {@attach tooltip(type === DisplayType.Hex ? 'Show as character' : 'Show as hex')}
+                {@attach !decorative &&
+                    tooltip(type === DisplayType.Hex ? 'Show as character' : 'Show as hex')}
                 aria-label={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
                 style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
                 onClick={() =>
                     (type = type === DisplayType.Hex ? DisplayType.Char : DisplayType.Hex)}
                 active={type === DisplayType.Char}
-                cssVar="accent2"
+                bg="var(--accent2)"
+                color="var(--accent2-text)"
             >
-                <Icon size={dense ? 0.8 : 1}>
-                    <MdTextFields />
+                <Icon size={dense ? 'small' : 'body'}>
+                    <FaFont />
                 </Icon>
             </Button>
             {#if selectedAddressesIndexes.start !== -1}
                 <Button
-                    cssVar="green"
+                    bg="var(--success)"
+                    color="var(--success-text)"
+                    aria-label="Clear the selection"
                     style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
                     onClick={clearSelection}
                 >
-                    <Icon size={dense ? 0.8 : 1}>
+                    <Icon size={dense ? 'small' : 'body'}>
                         <FaTimes />
                     </Icon>
                 </Button>
@@ -496,9 +508,9 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="memory-numbers"
-        onpointerdown={onPointerDown}
-        oncontextmenu={onContextMenu}
-        ondragstart={(e) => e.preventDefault()}
+        onpointerdown={decorative ? undefined : onPointerDown}
+        oncontextmenu={decorative ? undefined : onContextMenu}
+        ondragstart={decorative ? undefined : (e) => e.preventDefault()}
         onpointermove={selectingAddresses ? handlePointerMove : undefined}
     >
         {#each memory.current as word, i (currentAddress + BigInt(i))}
@@ -586,9 +598,13 @@
                 {/if}
                 <!-- a byte in hex is always two digits, `0F` and not `F`, as the Hex editor and the
                      selection's popup write it, so that bytes read side by side make the word -->
+                <!-- a decorative byte is the cell alone, which `.memory-number` holds as it held the
+                     hover's wrapper: nothing points at it, so it needs neither the hover nor the id
+                     a pointer finds it by -->
                 <ValueDiff
+                    {decorative}
                     value={unreadableByte ? '??' : getTextFromValue(BigInt(word), 2, type)}
-                    id={`${id}-${i}`}
+                    id={decorative ? undefined : `${id}-${i}`}
                     diff={unreadableByte
                         ? '??'
                         : getTextFromValue(
@@ -613,7 +629,7 @@
                                                 selectedAddressesIndexes.start,
                                                 selectedAddressesIndexes.len
                                             )
-                                                ? 'background-color: var(--green); color: var(--green-text);'
+                                                ? 'background-color: var(--success); color: var(--success-text);'
                                                 : ''
                                         }
                     ${frameColor ? `color: ${frameColor}` : ''}
@@ -630,19 +646,21 @@
                                     {/each}
                                 </div>
                             {/if}
-                            {#if unreadableByte}
-                                <div class="byte-value">??</div>
-                                <div class="byte-error">{unreadable?.reason}</div>
-                            {:else}
-                                {#if BigInt(word) !== signed}
-                                    <div class="byte-value" style="user-select: all;">
-                                        {signed}
+                            <div class="byte-values">
+                                {#if unreadableByte}
+                                    <div class="byte-value">??</div>
+                                    <div class="byte-error">{unreadable?.reason}</div>
+                                {:else}
+                                    {#if BigInt(word) !== signed}
+                                        <div class="byte-value" style="user-select: all;">
+                                            {signed}
+                                        </div>
+                                    {/if}
+                                    <div class="byte-value" style="user-select: all">
+                                        {word}
                                     </div>
                                 {/if}
-                                <div class="byte-value" style="user-select: all">
-                                    {word}
-                                </div>
-                            {/if}
+                            </div>
                         </div>
                     {/snippet}
                 </ValueDiff>
@@ -651,7 +669,7 @@
     </div>
     {#if unreadable && unreadableCount > 0}
         <div class="memory-unreadable" class:partial={unreadableCount < pageSize} role="status">
-            <Icon size={0.9}>
+            <Icon size="small">
                 <FaExclamationTriangle />
             </Icon>
             <span>
@@ -675,6 +693,9 @@
 {/if}
 
 <style lang="scss">
+    @use '../../../shared/button/tray.scss';
+    @use '../../../../styles/field.scss';
+
     //the value fills its cell, so that in a page stretched taller than its rows need, a
     //Playground's, it is centred beside its address and a highlighted byte still covers the cell
     .memory-number {
@@ -715,16 +736,23 @@
             flex: 1;
         }
         :global(.hover-element) {
-            --memory-hover-border: color-mix(in srgb, var(--tertiary-text) 28%, var(--tertiary));
-            border: 1px solid var(--memory-hover-border);
             pointer-events: none;
         }
     }
 
+    /* the byte's region above its values, its line from edge to edge of the card: it reaches
+       over the card's 0.3rem room ($pad in ValueDiffer) and takes the same room inside, so the
+       card has as much room above and below what it holds as beside it */
     .region-block {
-        border-bottom: 1px solid var(--memory-hover-border);
-        padding: 0.2rem 0.4rem;
-        margin-bottom: 0.2rem;
+        border-bottom: 1px solid var(--line);
+        margin: -0.3rem -0.3rem 0.3rem;
+        padding: 0.3rem;
+    }
+
+    /* each part's lines cut to the text, as the card's are (ValueDiffer) */
+    .region-block,
+    .byte-values {
+        text-box: trim-both cap alphabetic;
     }
 
     .region-hover {
@@ -735,16 +763,12 @@
         max-width: 16rem;
         margin-top: 0.15rem;
         font-size: 0.85em;
-        opacity: 0.85;
+        color: var(--text-muted);
         white-space: normal;
     }
 
-    .byte-value {
-        padding: 0 0.3rem 0.2rem;
-    }
-
     .byte-error {
-        padding: 0.2rem 0.4rem;
+        margin-top: 0.2rem;
         overflow-wrap: anywhere;
     }
 
@@ -762,25 +786,25 @@
     //the input the selection popup becomes while it is being poked, in the panel's own monospace
     //so the digits sit where the popup drew them
     .selection-input {
-        font-family: monospace;
+        font-family: var(--font-mono);
         font-size: inherit;
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         text-align: center;
         align-self: center;
         //`box-sizing: border-box` is global, so the padding is inside the width the popup sets and
-        //the text keeps its own `ch` per character. The frame is an outline drawn inside that box
-        //rather than a border, which is layout and would squeeze the digits it draws around.
+        //the text keeps its own `ch` per character. An inline editor (styles/field.scss): its
+        //frame is drawn inside that box rather than as a border, which is layout and would squeeze
+        //the digits it draws around, and the global ring inside it while it is typed in
         padding: 0 0.1rem;
         min-width: calc(2ch + 0.2rem);
-        outline: solid 0.1rem var(--accent);
-        outline-offset: -0.1rem;
-        border-radius: 0.2rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        @include field.inline;
     }
 
     //a commit that does not fit the selection: the input keeps what was typed and says why
     .refused {
-        outline-color: var(--red);
+        outline: 2px solid var(--danger);
+        outline-offset: -2px;
     }
 
     .memory-grid {
@@ -789,8 +813,16 @@
         //Keep the table around its cells so a smaller host scrolls the whole table.
         min-width: min-content;
         min-height: min-content;
-        font-family: monospace;
+        //Fira Code at the size and weight the bytes had in the system's monospace before the design
+        //system (owner, 2026-11-08): the sizes below are the old ones, Fira Code scaled to the
+        //x-height of Windows' Consolas, which it is about a tenth larger than at a size, and drawn
+        //at its regular 400, which global.css raises to 500 for the rest of the app's code. The
+        //register views (RegisterFileRows, ValueDiffer, RegisterValueCard, CyclesLine) and the
+        //memory controls draw their values the same way
+        font-family: var(--font-mono);
         font-size: 1rem;
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         grid-template-columns: min-content;
         grid-template-rows: min-content;
         grid-template-areas:
@@ -825,8 +857,10 @@
     //why the Core refused bytes on this page, floating over the bottom of the bytes rather than
     //taking a row of its own, so moving to or from such a page never changes the panel's size.
     //It takes no pointer: the bytes under it stay selectable, and while the pointer is over a
-    //page that still has readable bytes it fades so the row it covers can be read
+    //page that still has readable bytes it fades so the row it covers can be read. A Tray, its
+    //danger in its icon
     .memory-unreadable {
+        @include tray.surface;
         position: absolute;
         z-index: 1;
         left: 0.6rem;
@@ -838,20 +872,16 @@
         width: fit-content;
         margin: 0 auto;
         padding: 0.45rem 0.6rem;
-        border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
-        border-radius: 0.4rem;
-        background: color-mix(in srgb, var(--tertiary) 65%, transparent);
-        backdrop-filter: blur(6px);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25);
-        font-family: sans-serif;
-        font-size: 0.85rem;
-        color: var(--tertiary-text);
+        font-size: var(--fs-small);
+        //in the interface's font, which the grid's adjustments to Fira Code are not for
+        font-size-adjust: none;
+        font-variation-settings: normal;
         overflow-wrap: anywhere;
         pointer-events: none;
-        transition: opacity 0.15s;
+        transition: opacity var(--dur-fast);
 
         :global(svg) {
-            color: var(--red);
+            color: var(--danger);
             flex-shrink: 0;
             margin-top: 0.1rem;
         }
@@ -863,7 +893,6 @@
 
     .memory-numbers {
         grid-area: c;
-        color: var(--text-layered);
         display: grid;
         background-color: var(--secondary);
         color: var(--secondary-text);
@@ -891,7 +920,7 @@
     }
 
     .memory-grid-address {
-        font-family: monospace;
+        font-family: var(--font-mono);
         padding: 0 0.5rem;
         display: flex;
         align-items: center;

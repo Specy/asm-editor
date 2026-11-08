@@ -1,6 +1,6 @@
-This program reverses the zero-terminated string at `0x9000` in the same memory it already
-occupies. `hl` starts at the left end, `de` is set to the right end, and each pass swaps their two
-bytes before the pointers move inwards.
+This program reverses the zero-terminated string at `0x9000` in place: the result occupies the
+same memory as the original string. During the swap loop, `hl` points at the left end and `de`
+points at the right end. Each pass swaps the two bytes before moving the pointers inwards.
 
 Open the program in the editor, choose **Build**, then **Run**. In the memory panel, enter `9000`.
 After execution, the eight bytes are `79 6C 62 6D 65 73 73 41`, which spell `ylbmessA`.
@@ -42,19 +42,19 @@ done:
 text:   .asciz "Assembly"
 ```
 
-The first loop is the usual scan for a zero byte. `.asciz` places that zero after the last
+The first loop scans for a zero byte. `.asciz` places that zero after the last
 character. When `find_end` finishes, `hl` holds the terminator's address, `9008`; copying it to
-`de` and decreasing `de` makes `de` point at the last character, `y`, at `9007`.
+`de` and decrementing `de` makes `de` point at the last character, `y`, at `9007`.
 
 The program also uses that terminator address to find the length. `hl` currently holds the
 terminator address, so subtracting `text` gives the number of characters: `9008 - 9000 = 0008`.
 `sbc hl, bc` calculates `hl - bc - C`, so its carry input must be zero. The `or a` immediately
-before it clears C while leaving the useful address in `hl` untouched. The result is eight in
+before it clears C without changing the address in `hl`. The result is eight in
 `hl`; `ld a, l` takes its low byte, and `srl a` halves it to four swaps.
 
 This version is for strings shorter than 256 characters: it takes the length from `l`. Four swaps
 are enough because each one fixes a pair of positions, one at each end. For an odd length, the
-shift drops the leftover one: five characters need two swaps, leaving the middle character alone.
+shift rounds the count down: five characters need two swaps, leaving the middle character alone.
 
 At the start of `swap`, both old bytes are read before either memory location is written. `a` first
 holds the right byte and `c` saves it; `a` then receives the left byte. The two stores put those

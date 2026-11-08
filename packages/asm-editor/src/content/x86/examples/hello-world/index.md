@@ -38,8 +38,8 @@ Hello, world!
 The answer is 42
 ```
 
-`syscall` takes no written operands. Before each `write`, `rax` holds call number 1, `rdi` holds
-standard output descriptor 1, `rsi` points to the first byte, and `rdx` holds the requested byte
+`syscall` takes no operands in the instruction itself. Before each `write`, `rax` holds call number 1,
+`rdi` holds file descriptor 1 (standard output), `rsi` points to the first byte, and `rdx` holds the requested byte
 count. The second request uses the same setup with `answer` and `ALEN`.
 
 `write` requests **up to** `rdx` bytes; its result in `rax` says how many were actually written and
@@ -47,7 +47,7 @@ can be smaller. For these short messages in the playground, the requested bytes 
 console. `write` uses the byte count rather than searching for an ending byte, and it adds no line
 break. The `10` after each message is its newline byte. `GLEN equ $ - greeting` counts the bytes
 from `greeting` to the current position, including that newline. Remove `, 10` from the first
-message and its length loses one byte too: the console then shows
+message and its length decreases by one byte too. The console then shows
 `Hello, world!The answer is 42` on one line.
 
 The second message already contains the characters `4` and `2`. This program sends those stored

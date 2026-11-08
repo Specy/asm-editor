@@ -49,7 +49,7 @@ it is a 64-bit register, so that store writes eight bytes.
 
 Complete the program below. Read `height`, multiply it by `WIDTH`, and store the answer in
 `area`. Then put 42 in the eight-byte `stamp` variable using an immediate store with an explicit
-size. Before running, predict the three qwords. After running, the memory panel at `402000`
+size. Before running, predict the values of the three variables. After running, the memory panel at `402000`
 should show `height = 7`, `area = 63` (`3F` in its first byte), and `stamp = 42` (`2A` in its
 first byte). Use **Test** to check both writes.
 

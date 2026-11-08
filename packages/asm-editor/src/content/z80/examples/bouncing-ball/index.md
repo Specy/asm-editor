@@ -1,10 +1,9 @@
 A ball moves across the Screen and turns at each edge. A bar along the top grows as time passes,
 then starts again when its one-byte time value wraps to zero. Choose **Build**, then **Run** to
-watch the animation in the Screen panel. Press **Stop** when you are done; the program keeps running
-until you stop it.
+watch the animation in the Screen panel. The program keeps running until you press **Stop**.
 
-Drawing shapes on the screen made one picture. This program repeats four steps for each new
-picture, or **frame**:
+An animation displays a sequence of pictures, called **frames**. This program repeats four steps
+for each frame:
 
 1. Clear the off-screen image.
 2. Draw the ball and the time bar on it.
@@ -12,8 +11,7 @@ picture, or **frame**:
 4. Wait for the next display frame before moving the ball and starting again.
 
 Command 11 turns on **double buffering**, so drawing goes to an off-screen image. Command 13
-presents that image. The viewer sees complete pictures instead of the clear and the partly drawn
-ball.
+presents that image. You see each complete picture without seeing the image being cleared or the ball being drawn.
 
 ```z80|playground|open-screen|no-registers|no-flags|allow-open
 P_PEN   equ 0x20
@@ -127,8 +125,8 @@ share one image. The ball's X and Y coordinates are its upper-left corner. Both 
 bounding box use `SIZE`, so command 6 draws a circular ellipse. The rectangle command adds the
 bar, and command 13 presents the completed frame.
 
-`in a, (P_FRAME)` paces the loop. Reading port `0x51` waits for the next display frame and returns 0. One read per pass prevents a fast machine from racing through the animation. The editor stays
-responsive while the program waits, so Stop still works. In a testcase the read returns at once,
+`in a, (P_FRAME)` paces the loop. Reading port `0x51` waits for the next display frame and returns 0. One read per pass keeps the animation in time with the display. The editor stays
+responsive while the program waits, so **Stop** still works. In a testcase the read returns at once,
 letting an animation test finish without waiting for real time.
 
 Port `0x52` gives the elapsed time in hundredths of a second. This read uses the Z80's `in a, (c)`
@@ -150,8 +148,7 @@ negates the step and keeps the old X for this frame.
 
 The same test catches the left edge. If X is 1 and the step is `-3`, the byte addition is
 `1 + 253 = 254`: the proposed position has wrapped around from below zero. As an unsigned byte,
-254 is also above the limit, so the code
-negates the step back to `+3` and leaves X at 1. The Y test works in the same way with `LIMITY`,
+254 is also above the limit, so the code negates the step back to `+3` and leaves X at 1. The Y test works in the same way with `LIMITY`,
 which is `192 - SIZE`, or 168. Keeping each proposed coordinate below its limit also lets the
 second corner, position plus `SIZE`, fit in one byte.
 

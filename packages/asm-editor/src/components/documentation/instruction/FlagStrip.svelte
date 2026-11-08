@@ -124,8 +124,8 @@
         width: fit-content;
         max-width: 100%;
         overflow-x: auto;
-        border: var(--wb-card-edge, 1px solid color-mix(in srgb, var(--tertiary) 60%, transparent));
-        border-radius: var(--wb-radius, 0.4rem);
+        border: var(--wb-card-edge, 1px solid var(--line));
+        border-radius: var(--wb-radius, var(--r-control));
         background: var(--secondary);
         color: var(--secondary-text);
     }
@@ -133,12 +133,12 @@
     .mark {
         padding: 0.15rem 0.5rem;
         text-align: center;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
     }
     .name {
-        font-size: 0.8rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
         border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
     }
     .name.read {
@@ -146,7 +146,7 @@
         text-underline-offset: 0.2em;
     }
     .mark {
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         cursor: help;
     }
     .glyph[data-kind='changed'],
@@ -155,8 +155,7 @@
     }
     .glyph[data-kind='unchanged'],
     .mark[data-kind='unchanged'] {
-        color: var(--background-text-muted);
-        opacity: 0.7;
+        color: var(--text-muted);
     }
     .glyph[data-kind='undefined'],
     .mark[data-kind='undefined'] {
@@ -169,8 +168,8 @@
         margin: 0;
         padding: 0;
         list-style: none;
-        font-size: 0.8rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
     }
     .legend-item {
         display: inline-flex;
@@ -178,35 +177,35 @@
         gap: 0.35rem;
         padding: 0.1rem 0.55rem;
         border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
-        border-radius: 999px;
+        border-radius: var(--r-pill);
         background-color: color-mix(in srgb, var(--tertiary) 30%, transparent);
     }
     .glyph {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
     .reads {
         color: var(--secondary-text);
     }
     .read-flags {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
     }
     .varies {
         margin: 0;
-        font-size: 0.8rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
     }
     .notes {
         margin: 0;
         padding-left: 1rem;
-        font-size: 0.85rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-small);
+        color: var(--background-text-prose);
     }
     .compact {
         display: inline-flex;
         flex-wrap: wrap;
         gap: 0.1rem 0.45rem;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-variant-ligatures: none;
     }
     .compact-flag {

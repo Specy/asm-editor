@@ -1,0 +1,75 @@
+// A field a person types into (design-system-plan.md, stage 3, item 5): `TextField`, and the
+// boxes that hold a field with marks of their own, a search icon, an `0x`, a clear button
+// (`SearchField`, the memory view's address). One fill, a step from the panel's `--secondary`
+// towards `--tertiary`, in the panel's text; one edge, the surface's `--line`, so that the field
+// still reads on a `--tertiary` surface such as a Popover, which redefines it; one corner,
+// `--r-control`; the placeholder in `--hint` at 70%. The colours are the Testcase fields' from
+// before the design system (owner, 2026-11-08), where the fill was the search field's `--tertiary`.
+
+$fill: color-mix(in srgb, var(--secondary) 80%, var(--tertiary));
+$text: var(--secondary-text);
+
+@mixin surface {
+    border: 1px solid var(--line);
+    border-radius: var(--r-control);
+    background-color: $fill;
+    color: $text;
+}
+
+@mixin placeholder {
+    &::placeholder {
+        color: var(--hint);
+        opacity: 0.7;
+    }
+}
+
+// The field itself, an `<input>` or a `<textarea>`, which takes the font round it as every form
+// control does (global.css): the keyboard's ring is the global one, drawn inside it as on every
+// text field.
+@mixin input {
+    @include surface;
+    @include placeholder;
+    min-width: 0;
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+// A box round a field and its marks: the ring goes round the box while its field is typed into,
+// and the field inside draws no surface or ring of its own. Its font and colour are the box's
+// already (global.css), which the field's own rules can change.
+@mixin box($field: 'input') {
+    @include surface;
+
+    &:has(#{$field}:focus-visible) {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
+
+    &:has(#{$field}:disabled) {
+        opacity: 0.5;
+    }
+
+    #{$field} {
+        @include placeholder;
+        min-width: 0;
+        border: none;
+        outline: none;
+        background: transparent;
+    }
+}
+
+// An editor that opens in place of the text it edits, in a row or a line (the Explorer's rename,
+// the register and memory Pokes, the command line's arguments): the field's fill and colour, its
+// edge drawn inside it so that opening it moves nothing, a chip's corner for its line's height,
+// the placeholder in `--hint`, and the global ring inside its edge while it is typed into.
+@mixin inline {
+    @include placeholder;
+    border: none;
+    border-radius: var(--r-chip);
+    box-shadow: inset 0 0 0 1px var(--line);
+    background-color: $fill;
+    color: $text;
+}

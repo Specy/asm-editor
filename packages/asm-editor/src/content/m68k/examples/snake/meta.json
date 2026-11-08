@@ -1,6 +1,6 @@
 {
     "name": "The snake game",
-    "description": "Play Snake while tracing packed board cells, a body shifted by a loop, arrow key steering, food placement, and a score drawn each frame.",
+    "description": "Build and play Snake, then follow how the program handles movement, arrow keys, food and drawing.",
     "order": 23,
     "topic": "snake"
 }

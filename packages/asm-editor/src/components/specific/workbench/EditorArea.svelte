@@ -77,6 +77,8 @@
 </div>
 
 <style lang="scss">
+    @use '../../../styles/radius.scss' as *;
+
     .editor-area {
         display: flex;
         flex-direction: column;
@@ -115,6 +117,13 @@
             box-shadow: inset 1px 0 0 var(--wb-line);
         }
     }
+    /* the button at the end of a tab strip (FileTabs' Split editor or Close editor), when it is the
+       strip's last part in the card's top-right corner, has its own corner follow the card's curve
+       inside its edge (D12), so its hover and its focus ring keep inside the card: the last pane's
+       strip, or the first's where the panes stack on a phone */
+    .editor-frame > :global(.editor-pane:last-child .group-action:last-child) {
+        border-top-right-radius: nested-radius(var(--wb-radius), $border: var(--wb-card-inset));
+    }
     .editor-area :global(.monaco-editor .scroll-decoration) {
         display: none;
     }
@@ -130,7 +139,7 @@
         z-index: 4;
         content: '';
         inset: 0;
-        border: 0.2rem solid var(--red);
+        border: 3px solid var(--danger);
         pointer-events: none;
     }
     @media (max-width: 700px) {
@@ -146,6 +155,12 @@
         .editor-frame.split :global(.editor-pane) {
             flex: 1 !important;
             min-height: 12rem;
+        }
+        .editor-frame.split > :global(.editor-pane:last-child .group-action:last-child) {
+            border-top-right-radius: 0;
+        }
+        .editor-frame.split > :global(.editor-pane:first-child .group-action:last-child) {
+            border-top-right-radius: nested-radius(var(--wb-radius), $border: var(--wb-card-inset));
         }
     }
 </style>

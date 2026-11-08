@@ -1,6 +1,6 @@
 # Addressing on the Z80
 
-An instruction needs to say where its values come from and, when it writes a value, where it goes. An **addressing mode** is the spelling an instruction uses to tell the CPU that. The spellings you need most often are a number, a register, memory at an address in `hl`, and memory at a fixed address.
+An instruction needs to say where its values come from and, when it writes a value, where it goes. An **addressing mode** is the way an instruction specifies where to find or store a value. The forms you need most often are a number, a register, memory at an address in `hl`, and memory at a fixed address.
 
 For example, these two instructions both put a byte in `a`:
 
@@ -39,7 +39,7 @@ The following program uses each of these ideas. Build it, open the memory panel,
 place: .db 0
 ```
 
-At the end, `a` and `b` both hold 7, and the byte at `place` is 7. `hl` holds the address of `place`; `(hl)` means the byte at that address. The pair itself is not memory and is unchanged by the read or write.
+At the end, `a` and `b` both hold 7, and the byte at `place` is 7. `hl` holds the address of `place`; `(hl)` means the byte at that address. Reading or writing `(hl)` leaves the address in `hl` unchanged.
 
 ## A fixed address and an address in a pair
 
@@ -83,7 +83,7 @@ source:      .db 0x2A
 destination: .db 0
 ```
 
-After it runs, `a` and the byte at `destination` are `2A`. Here `(bc)` and `(de)` use the addresses held in those pairs, just as `(hl)` does. For ordinary byte work, `(hl)` is the flexible form you will use most; `(bc)` and `(de)` are useful for this read-through-`a`, write-through-`a` pattern.
+After it runs, `a` and the byte at `destination` are `2A`. Here `(bc)` and `(de)` use the addresses held in those pairs, just as `(hl)` does. For ordinary byte work, `(hl)` is the flexible form you will use most. With `(bc)` and `(de)`, use `a` to hold the byte between reading and writing it, as this example does.
 
 ## Try it yourself
 
@@ -116,7 +116,7 @@ The runner starts `hl` at `0x9000` and puts the byte `0x3C` at that address. Rea
 
 </details>
 
-This exercise includes a label in the source itself. The byte at `total` starts as `0x19`. Read it into `a` using the label.
+The next exercise includes a label in the source. The byte at `total` starts as `0x19`. Read it into `a` using the label.
 
 ```z80|playground|exercise|memory
     .org 0x8000

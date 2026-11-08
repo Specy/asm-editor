@@ -31,9 +31,10 @@ gcd_done:
 end:
 ```
 
-The comment above `gcd` gives its register agreement. The routine changes `d1` as it updates `b`
-and uses `d3` for temporary work, so a caller that needs their original values must save them. Such
-agreements between a caller and a subroutine form a **calling convention**.
+The comment above `gcd` states which registers hold the inputs and answer, and which registers
+the routine overwrites. The routine changes `d1` as it updates `b` and uses `d3` for temporary work,
+so a caller that needs their original values must save them. These agreements between a caller
+and a subroutine form a **calling convention**.
 
 `divu` packs the remainder in the high word of `d3` and the quotient in the low word. On the first
 pass, `84 = 36 × 2 + 12`, so `d3` becomes `000C0002`. `swap d3` moves the remainder into the low

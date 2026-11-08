@@ -109,15 +109,15 @@ label:  .asciz "A HOUSE IN ELEVEN COMMANDS"
 ```
 
 Every coordinate is one byte, so the Screen is at most 256 by 256 pixels, and no coordinate can hold
-the number 256 itself. The first command resizes it to **240 by 192**, which is a size whose right and
-bottom edges a byte can name, and after that a rectangle can reach every pixel there is. A rectangle
-**excludes its right and bottom edges**, so a rectangle from row 0 to row 192 paints rows 0 to 191
-and the ground really does reach the last row of the Screen.
+the number 256 itself. The first command resizes it to **240 by 192**, so both dimensions fit in a
+byte. A rectangle **excludes its right and bottom edges**. Using 240 and 192 as those edges lets a
+rectangle reach the last column and row. The ground ends at row 192, so it paints through row 191,
+the last row of the Screen.
 
 A colour is one byte in a **3-3-2** layout: three bits of red in bits 7 to 5, three of green in bits
-4 to 2 and two of blue in bits 1 and 0. `SKY equ 0x9B` is `100 110 11`, which is four of the seven
-reds, six of the seven greens and all three of the blues, and comes out a pale blue. Two bits of
-blue is what was left over, which is why the greys on this machine are not exactly neutral.
+4 to 2 and two of blue in bits 1 and 0. `SKY equ 0x9B` is `100 110 11`: red is 4 out of a maximum
+of 7, green is 6 out of 7, and blue is 3 out of 3. This gives a pale blue. Blue has fewer levels than
+red and green, so shades of grey are not always exactly neutral.
 
 Each table row holds one command and six values. `CMD` through `SY2` name the offsets of those
 seven bytes, and `SHAPE_SIZE` is the number of bytes in a whole row. `(ix+FILL)` reads the fill
@@ -143,11 +143,10 @@ inside that outline. The flood row's fill field matters, which is why it says `R
 rows say `WALL`.
 
 The label goes through the console character port, the same port Print a string used, because **the
-Screen has no text command of its own**. Text lands at the text cursor, which is counted in 8 by 8
-character cells, so a 240 pixel Screen is 30 columns wide and the label can only start on a cell
-boundary: there is no way to put text at an arbitrary pixel. The characters are painted in the pen
-colour on the background colour, and the background is whatever
-the last clear filled the Screen with, which is why white on the sky looks right.
+Screen has no text command of its own**. The text cursor uses 8 by 8 character cells, so a 240 pixel Screen is 30 columns wide.
+The label can only start on a cell boundary, rather than at an arbitrary pixel. Characters use the
+pen colour and the Screen's background colour. `C_CLEAR` sets that background to its fill colour,
+so the label appears in white on sky blue.
 
 Try adding a window. Copy the door's `C_RECT` row to the end of the table, before `shapes_end`.
 Choose two corners inside the house wall and set its fill and pen colours. Build and Run again;

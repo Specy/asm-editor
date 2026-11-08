@@ -2,6 +2,7 @@
     import '#cmp/content/contentPages.css'
     import type { Component } from 'svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
@@ -67,24 +68,25 @@
         </div>
         <div class="platforms">
             {#each platforms as platform (platform.id)}
-                <section class="platform" aria-labelledby={`donate-${platform.id}`}>
+                <Card element="section" aria-labelledby={`donate-${platform.id}`}>
                     <div class="platform-name">
                         <h2 id={`donate-${platform.id}`}>{platform.name}</h2>
-                        <Icon size={1.8}>
+                        <Icon size="h2">
                             <platform.icon />
                         </Icon>
                     </div>
-                    <p>{platform.about}</p>
+                    <p class="about">{platform.about}</p>
                     <div class="platform-footer">
                         <ButtonLink
                             href={platform.href}
+                            class="card-cover"
                             target="_blank"
                             style="position: static; width: 100%"
                         >
                             {platform.action}
                         </ButtonLink>
                     </div>
-                </section>
+                </Card>
             {/each}
         </div>
     </Page>
@@ -95,7 +97,6 @@
         display: flex;
         flex-direction: column;
         gap: 0.8rem;
-        color: var(--background-text-muted);
     }
     .intro p {
         margin: 0;
@@ -110,22 +111,11 @@
         gap: 1rem;
     }
 
-    /* The same card as the documentation and course lists, with the platform's logo across from its name. */
-    .platform {
-        position: relative;
-        isolation: isolate;
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
+    /* A Card as the documentation and course lists have, with the platform's logo across from its
+       name; its button's link covers the whole card. */
+    .platforms > :global(.card) {
         gap: 1rem;
         padding: 1.2rem;
-        border: 1px solid var(--tertiary);
-        border-radius: 0.75rem;
-        background: var(--secondary);
-        transition: background-color 0.2s;
-    }
-    .platform:hover {
-        background-color: color-mix(in srgb, var(--accent) 3%, var(--secondary));
     }
     .platform-name {
         display: flex;
@@ -135,41 +125,28 @@
     }
     h2 {
         margin: 0;
-        font-size: 1.45rem;
+        font-size: var(--fs-h3);
         font-weight: 600;
         line-height: 1.3;
         letter-spacing: -0.015em;
     }
-    .platform p {
+    .about {
         margin: 0;
-        font-size: 1rem;
+        font-size: var(--fs-body);
         line-height: 1.6;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
+    /* a rule inside the card, its edge's hairline */
     .platform-footer {
         display: flex;
         margin-top: auto;
         padding-top: 1rem;
-        border-top: 1px solid var(--tertiary);
-    }
-
-    /* The button's link covers the whole card. */
-    .platform-footer :global(a)::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: 0.75rem;
+        border-top: 1px solid var(--line);
     }
 
     @media (max-width: 600px) {
-        .platform {
+        .platforms > :global(.card) {
             padding: 0.9rem;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .platform {
-            transition: none;
         }
     }
 </style>

@@ -1,5 +1,5 @@
 This program prints 48879 in three bases: `BEEF` in base 16, `48879` in base 10, and
-`1011111011101111` in base 2. The `print_in_base` subroutine makes the digits itself, stores them
+`1011111011101111` in base 2. The `print_in_base` subroutine converts the number to digits, stores them
 as a string, and asks service 4 to print that string.
 
 Pass a nonnegative signed 32-bit integer (0 through 2147483647) in `$a0` and a base from 2 through
@@ -65,22 +65,22 @@ BEEF
 1011111011101111
 ```
 
-Dividing by the base and keeping the remainder gives you one digit, and it is the **lowest** one:
-48879 divided by 16 is 3054 with 15 left over, and 15 is the `F` at the right hand end of `BEEF`. So
+Dividing by the base and keeping the remainder gives you the rightmost digit:
+48879 divided by 16 is 3054 with a remainder of 15, and 15 is the `F` at the right end of `BEEF`. So
 the digits arrive rightmost first. This program stores them from the end of the buffer toward its
 beginning, leaving them in the order service 4 must print.
 
-`div` is exactly the right instruction for this, because one pass of the loop needs both of its
-answers: the remainder is the digit and the quotient is what you carry on dividing. One `div`, one
-`mfhi` and one `mflo`, and the pass has everything it needs.
+Each pass of the loop needs both results of `div`: the remainder is the digit and the quotient
+is the number to divide on the next pass. `mfhi` reads the remainder from `hi`, and `mflo` reads
+the quotient from `lo`.
 
 `sb` writes one character byte at a time. The `addi` before it moves `$t0` to the next free byte;
 `sb` itself does not move the pointer. At the end, `$t0` points to the first digit. Service 4
 starts there and prints bytes until it reaches the zero terminator placed at the end.
 
-A digit is a number from 0 to `base - 1` and it has to become a character. `'0'` is 48, so adding it
-turns 0 to 9 into `'0'` to `'9'`; `'A'` is 65 and a 10 has to become that, so the amount added
-is 55. This assembler does not accept `'A' - 10` as the operand here, so the code uses 55 and
+A digit is a number from 0 to `base - 1` and it has to become a character. The character code for
+`'0'` is 48, so adding 48 turns 0 to 9 into `'0'` to `'9'`. The character code for `'A'` is 65,
+so adding 55 turns 10 into `'A'`. This assembler does not accept `'A' - 10` as the operand here, so the code uses 55 and
 explains it in the comment. `blt $t1, 10, number` picks between numbers and letters, allowing
 digits up to `Z` for base 36.
 

@@ -1,6 +1,6 @@
 {
     "name": "Variables in memory and constants",
-    "description": "Two longs the assembler writes into memory, a constant that never leaves the instruction, and the total written back where you can see it.",
+    "description": "Add a price and shipping cost stored in memory, add a constant tax amount, and store the total back in memory.",
     "order": 1,
     "topic": "variables-in-memory"
 }

@@ -1,6 +1,6 @@
 {
     "name": "Masks, shifts, popcount, and leading zeroes",
-    "description": "Answer five questions about one 32-bit pattern with masks, shifts, a fixed 32-pass popcount, and clz.",
+    "description": "Use masks, shifts, a loop that counts 1 bits, and clz to answer five questions about a 32-bit pattern.",
     "order": 9,
     "topic": "bit-tricks"
 }

@@ -1,6 +1,6 @@
 {
     "name": "Loads, stores and immediates",
-    "description": "Use register, immediate, and memory operands; move bytes, halves, and words with loads and stores; and calculate array addresses with offset(base).",
+    "description": "Use register, immediate, and memory operands. Load and store bytes, halves, and words, and calculate array addresses with offset(base).",
     "order": 6,
     "topic": "addressing-modes"
 }

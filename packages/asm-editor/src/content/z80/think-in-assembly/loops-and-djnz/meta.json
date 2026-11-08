@@ -1,6 +1,6 @@
 {
     "name": "Loops and djnz",
-    "description": "Use a backward jump to repeat a block of instructions, then djnz to count down in b and jump in one step. Learn its zero-count edge case and a guard for a count that may be zero.",
+    "description": "Repeat instructions with a backward jump, then use djnz to count down in b. Check for a zero count before the loop to skip its body.",
     "order": 1,
     "topic": "loops"
 }

@@ -16,6 +16,7 @@
      */
     import type { Processor } from '@specy/s68k'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaTimes from '~icons/fa-solid/times'
     import FaExpand from '~icons/fa-solid/expand'
@@ -33,7 +34,7 @@
     import EditHistoryPanel from './EditHistoryPanel.svelte'
     import SearchPanel from './SearchPanel.svelte'
     import { useWorkbench } from './workbenchContext'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
     import {
         M68K_PROCESSORS,
         m68kLookAhead,
@@ -155,33 +156,30 @@
             />
         {/if}
         {#if active?.maximizable && allowMaximize}
-            <button
-                class="panel-action"
+            <IconButton
+                label={ui.maximized ? 'Restore the panel' : 'Maximize the panel'}
                 {@attach tooltip(ui.maximized ? 'Restore the panel' : 'Maximize the panel')}
-                aria-label={ui.maximized ? 'Restore the panel' : 'Maximize the panel'}
-                aria-pressed={ui.maximized}
-                onclick={() => ui.toggleMaximized()}
+                onClick={() => ui.toggleMaximized()}
             >
                 {#if ui.maximized}
                     <FaCompress />
                 {:else}
                     <FaExpand />
                 {/if}
-            </button>
+            </IconButton>
         {/if}
-        <button
-            class="panel-action"
+        <IconButton
+            label="Close the panel"
             {@attach tooltip('Close the panel')}
-            aria-label="Close the panel"
-            onclick={() => {
+            onClick={() => {
                 if (phone) ui.drawerOpen = false
                 else ui.close()
             }}
         >
-            <Icon size={0.9}>
+            <Icon size="small">
                 <FaTimes />
             </Icon>
-        </button>
+        </IconButton>
     </header>
     {#each mounted as entry (entry.id)}
         {@const shown = entry.id === ui.activePanel}
@@ -319,20 +317,22 @@
         border: var(--wb-card-edge);
     }
 
+    /* the Close button as far from the header's right edge as from its top and from the rule
+       under it: half of what the bar's height leaves round a button (an md IconButton, 1.8rem) */
     .panel-header {
         display: flex;
         align-items: center;
         gap: 0.2rem;
         flex: none;
         height: 2.2rem;
-        padding: 0 0.3rem 0 0.8rem;
+        padding: 0 calc((2.2rem - 1px - 1.8rem) / 2) 0 0.8rem;
         border-bottom: 1px solid var(--wb-line);
     }
 
     .panel-title {
         flex: 1;
         min-width: 0;
-        font-size: 0.72rem;
+        font-size: var(--fs-caption);
         font-weight: 600;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -347,26 +347,9 @@
     .no-program {
         margin: 0;
         padding: 0.8rem;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         line-height: 1.4;
         color: var(--hint);
-    }
-
-    .panel-action {
-        display: grid;
-        place-items: center;
-        flex: none;
-        width: 1.7rem;
-        height: 1.7rem;
-        padding: 0.4rem;
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-
-        &:hover {
-            background-color: var(--tertiary);
-        }
     }
 
     /* the scrollbar's room is kept whether the content scrolls or not, so a section opened in
@@ -405,11 +388,13 @@
         margin-inline: auto;
     }
 
+    /* its rows 0.3rem from the edges, the Close button as far from the right one */
     .phone .panel-header {
         flex-wrap: wrap;
         height: auto;
         min-height: 2.2rem;
         padding-block: 0.3rem;
+        padding-right: 0.3rem;
     }
 
     .phone .panel-content {

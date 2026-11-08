@@ -1,0 +1,7 @@
+// The radius of an element close inside a rounded parent (design-system.md, D12): the parent's
+// radius less the parent's border and the element's inset from the parent's padding edge, never
+// below 0, so that the two curves run parallel. Name the parent's token, so that changing it moves
+// every child with it: `nested-radius(var(--r-overlay), $border: 1px, $inset: 0.25rem)`.
+@function nested-radius($parent, $border: 0px, $inset: 0px) {
+    @return max(0px, calc(#{$parent} - #{$border} - #{$inset}));
+}

@@ -1,8 +1,11 @@
 <script lang="ts">
     /**
      * The panel an agent slides in from the right in, over the page: kept mounted once opened so
-     * the conversation survives closing it. `FloatingAgentSidebar` and `ExamReviewAgentSidebar` put
-     * their agents in it; the Workbench shows agents in its side panel instead.
+     * the conversation survives closing it, and inert while closed, so neither the keyboard nor a
+     * screen reader reaches it off screen. `FloatingAgentSidebar` and `ExamReviewAgentSidebar` put
+     * their agents in it, and the chat page, which shows its agent in place, filling the page,
+     * until an example opens beside it and the agent floats over it. The Workbench shows agents
+     * in its side panel instead.
      */
     import type { Snippet } from 'svelte'
 
@@ -10,10 +13,21 @@
         open: boolean
         openSize?: string
         verticalOffset?: string
+        /** Over the page from the right edge; otherwise in place, filling its parent. */
+        floating?: boolean
+        /** On a phone, in the flow at the full width and `--agent-phone-height` tall, not over it. */
+        stackOnPhones?: boolean
         children: Snippet
     }
 
-    let { open = $bindable(), openSize, verticalOffset = '0px', children }: Props = $props()
+    let {
+        open = $bindable(),
+        openSize,
+        verticalOffset = '0px',
+        floating = true,
+        stackOnPhones = false,
+        children
+    }: Props = $props()
 
     let hasBeenOpened = $state(false)
     let showOpen = $state(false)
@@ -40,40 +54,69 @@
 {#if hasBeenOpened}
     <div
         use:animateIn
-        class="floating-sidebar"
+        class="agent-frame"
+        class:floating
+        class:stack-on-phones={stackOnPhones}
         style:--open-size={openSize ?? '28rem'}
         class:open={showOpen}
-        style:top={verticalOffset}
-        style:height="calc(100% - {verticalOffset})"
+        style:--frame-top={verticalOffset}
+        inert={!open}
     >
         {@render children()}
     </div>
 {/if}
 
 <style>
-    .floating-sidebar {
+    /* in place, as the chat page shows its agent before an example opens */
+    .agent-frame {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+    }
+
+    .floating {
         position: fixed;
         right: 0;
-        top: 0;
+        top: var(--frame-top);
         width: min(var(--open-size), 100vw);
         background-color: color-mix(in srgb, var(--tertiary) 20%, transparent);
         backdrop-filter: blur(0.7rem);
-        height: 100dvh;
+        height: calc(100% - var(--frame-top));
         z-index: 100;
-        border: solid 0.1rem var(--tertiary);
+        border: solid 1px var(--tertiary);
         border-right: none;
         transform: translateX(100%);
-        transition: transform 0.3s ease;
+        transition: transform var(--dur-base) ease;
         box-shadow: none;
         display: flex;
         flex-direction: column;
-        border-top-left-radius: 1rem;
-        border-bottom-left-radius: 1rem;
+        border-top-left-radius: var(--r-overlay);
+        border-bottom-left-radius: var(--r-overlay);
         overflow: hidden;
     }
 
-    .floating-sidebar.open {
+    .floating.open {
         transform: translateX(0);
-        box-shadow: -4px 0 3rem 2rem rgba(0, 0, 0, 0.3);
+        box-shadow: var(--shadow-2);
+    }
+
+    /* the chat page's phone layout: the agent above the example, in the page's own colour */
+    @media (max-width: 900px) {
+        .floating.stack-on-phones {
+            position: relative;
+            top: auto;
+            right: auto;
+            width: 100vw;
+            height: var(--agent-phone-height, 75dvh);
+            flex: 0 0 var(--agent-phone-height, 75dvh);
+            background-color: var(--background);
+            backdrop-filter: none;
+            border: none;
+            border-bottom: 1px solid var(--tertiary);
+            border-radius: 0;
+            transform: none;
+            box-shadow: none;
+        }
     }
 </style>

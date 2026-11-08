@@ -1,6 +1,6 @@
-This program sorts eight signed words from smallest to largest in the same memory where they start,
-at `$2000`. It compares neighbouring words and swaps them when the left one is larger. The inner
-loop makes one pass across the unsorted part of the array; the outer loop sends it back to the
+This program uses bubble sort to sort eight signed words from smallest to largest. It keeps the
+words in the original array at `$2000`. It compares neighbouring words and swaps them when the
+left one is larger. The inner loop makes one pass across the unsorted part of the array; the outer loop sends it back to the
 start for another pass. Seven passes are enough for eight words.
 
 ```m68k|playground|memory|no-flags|allow-open

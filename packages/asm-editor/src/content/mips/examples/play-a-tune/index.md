@@ -53,8 +53,8 @@ once and advances the virtual clock instead.
 
 ## Try it
 
-Change `li $a2, 0` to `li $a2, 73` and run the program again: the same tune on a flute. 40 is a
-violin and 56 a trumpet.
+Change `li $a2, 0` to `li $a2, 73` and run the program again to hear the same tune on a flute.
+Instrument 40 is a violin, and instrument 56 is a trumpet.
 
 Then change service 33 to 31. Service 31 starts a note and continues at once, so all fifteen notes
 start almost together and overlap.

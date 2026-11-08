@@ -1,8 +1,8 @@
 # The stack, -(sp) and movem
 
 The **stack** is a region of memory used for temporary values. The stack pointer, `sp` (another
-name for `a7`), tracks its current position. You add a value at the top, called a **push**, and
-take the top value back, called a **pop**. The last value pushed is the first one popped: **last in,
+name for `a7`), tracks its current position. Adding a value to the top is called a **push**.
+Taking the top value back is called a **pop**. The last value pushed is the first one popped: **last in,
 first out** (LIFO).
 
 On M68K, the stack grows toward lower addresses. Pushing moves `sp` down to make room and writes
@@ -55,7 +55,7 @@ Other address registers advance by the access size: `move.b d0, -(a0)` decreases
 
 `movem` moves a **register list** between registers and memory. A hyphen selects a range, so
 `d0-d2` means `d0`, `d1`, and `d2`; a slash joins parts, so `d0-d1/a0` names three registers.
-`movem.l d0-d1/a0, -(sp)` saves their full long values on the stack. The matching
+`movem.l d0-d1/a0, -(sp)` saves all four bytes of each register on the stack. The matching
 `movem.l (sp)+, d0-d1/a0` restores them and brings `sp` back.
 
 ```m68k|playground|memory|no-flags
@@ -70,7 +70,7 @@ Other address registers advance by the access size: `move.b d0, -(a0)` decreases
     movem.l (sp)+, d0-d1/a0     ; restore them; sp = $1000000
 ```
 
-The hardware uses a fixed save order; changing the spelling order of the list does not change
+The processor uses a fixed save order. Changing the order of registers in the list does not change
 where values go. With predecrement, it saves selected address registers from `a7` down to `a0`,
 then selected data registers from `d7` down to `d0`. Here each long moves `sp` down by 4:
 

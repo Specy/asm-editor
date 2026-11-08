@@ -5,9 +5,8 @@ Hello, world!
 The answer is 42
 ```
 
-Open it in the editor, choose **Build**, then **Run** to see the output. Earlier examples left
-their results in registers or memory. Here, the CPU sends bytes to console ports. A reminder:
-`out (port), a` sends the byte in register `a` to the named port. Port `0x10` displays that byte
+Earlier examples left their results in registers or memory. Here, the CPU sends bytes to
+console ports. `out (port), a` sends the byte in register `a` to the named port. Port `0x10` displays that byte
 as a character; port `0x11` displays it as an unsigned decimal number.
 
 ```z80|playground|console|no-registers|no-flags|allow-open
@@ -45,7 +44,7 @@ question: .asciz "The answer is "
 `print` starts with `hl` pointing to the first byte of a zero-terminated string. `ld a, (hl)` reads
 that byte; `or a` sets the Z flag if it is zero. When it is zero, `ret z` returns to the instruction
 after `call print`. Otherwise, `out (P_CHAR), a` sends the character to the console, `inc hl` moves
-to the next byte, and `jr print` repeats the read, test, output, and advance. Each `out` sends one
+to the next byte, and `jr print` repeats the loop. Each `out` sends one
 byte, so the loop prints the string one character at a time. `.asciz` adds the zero byte that ends
 each string.
 

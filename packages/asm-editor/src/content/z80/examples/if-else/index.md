@@ -1,6 +1,6 @@
 Two unsigned numbers are in `b` and `c`. This program leaves the larger one in `d` and the
-distance between them in `e`. A subtraction that needs to borrow tells the program which route to
-take.
+distance between them in `e`. The program uses conditional jumps to choose which instructions
+run after comparing or subtracting the numbers.
 
 Open the program in the editor, choose **Build**, then use **Step**. Watch whether each `jr nc`
 jumps, which value reaches `d`, and whether `neg` runs.
@@ -30,10 +30,12 @@ positive_distance:
 
 `cp c` subtracts `c` from `a` to set the flags, then keeps the value already in `a`. Put `b` into
 `a` first, so the comparison is `x - y`. A **borrow** is needed when the first unsigned byte is
-smaller than the second. In that case the C flag is set. `jr nc` means “jump if there was no
-borrow,” so it jumps to `x_is_at_least_y` when `x` is at least `y`.
+smaller than the second. In that case the carry flag (C) is set. `jr nc` means “jump if C is
+clear.” After this comparison, that means no borrow was needed, so it jumps to
+`x_is_at_least_y` when `x` is at least `y`.
 
-With the values shown, `b` is `25` and `c` is `40` in the registers panel. `cp c` needs a borrow,
+The registers panel shows hexadecimal values: 37 appears as `25` and 64 as `40`.
+With the values shown, `cp c` needs a borrow,
 so the first `jr nc` falls through to `ld d, c`; `d` becomes `40`. The following `jr done` skips
 the labelled `x` route. Without that jump, `ld d, b` would run next and replace the answer.
 

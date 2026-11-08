@@ -1,5 +1,5 @@
 This program prints the same number in three bases: `BEEF` in base 16, `48879` in base 10, and
-`1011111011101111` in base 2. The subroutine makes the characters itself. It uses `trap #15` only
+`1011111011101111` in base 2. The subroutine converts the number into digit characters. It uses `trap #15` only
 to print the finished string.
 
 ```m68k|playground|console|no-flags|allow-open

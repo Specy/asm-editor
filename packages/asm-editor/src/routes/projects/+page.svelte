@@ -1,4 +1,5 @@
 <script lang="ts">
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { IMPORTABLE_FILES, importFiles, importFromData } from '#lib/projectImport.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import ProjectCard from '#cmp/specific/project/ProjectCard.svelte'
@@ -10,12 +11,14 @@
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { scale } from 'svelte/transition'
+    import { motion } from '#src/styles/motion.ts'
     import FileDropZone from '#cmp/shared/fileImporter/FileDropZone.svelte'
     import { blobDownloader, copyText, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import FaUpload from '~icons/fa-solid/upload'
     import { toast } from '#stores/toastStore.ts'
     import { goto } from '$app/navigation'
     import Page from '#cmp/shared/layout/Page.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
     import { projectDownload } from '#lib/projectArchive.ts'
@@ -126,10 +129,10 @@
     <div class="project-display wb-cards">
         <div class="content">
             <div class="top-row">
-                <h1 class="page-title">Your projects</h1>
+                <Header noMargin>Your projects</Header>
                 <div class="top-row-buttons">
-                    <Button cssVar="secondary" bordered style="gap: 0.5rem" onClick={pickAndImport}>
-                        <Icon size={0.85}>
+                    <Button kind="secondary" bordered style="gap: 0.5rem" onClick={pickAndImport}>
+                        <Icon size="small">
                             <FaUpload />
                         </Icon>
                         Import
@@ -154,7 +157,7 @@
                         style="gap: 0.5rem"
                         {@attach tooltip('Create a new project')}
                     >
-                        <Icon size={0.85}>
+                        <Icon size="small">
                             <FaPlus />
                         </Icon>
                         Create
@@ -184,21 +187,24 @@
             {:else if !ProjectStore.inited}
                 <!-- the list is read each time the page opens, which takes a moment for large
                      Projects: until then nothing is known, not that there are none -->
-                <div class="empty reading" role="status">Reading your projects…</div>
+                <div class="empty reading-projects" role="status">Reading your projects…</div>
             {:else if ProjectStore.projects.length === 0}
                 <div class="empty">
-                    <div class="empty-title">No projects yet</div>
-                    <div class="empty-hint">
+                    <EmptyState title="No projects yet">
                         Create one from a language and a template, or import a file.
-                    </div>
+                    </EmptyState>
                 </div>
             {/if}
             <div class="project-grid">
                 {#each ProjectStore.projects as project, i (project.id)}
                     <div
                         class="project-cell"
-                        in:scale|global={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
-                        out:scale={{ duration: 300, start: 0.8 }}
+                        in:scale|global={{
+                            duration: motion(200),
+                            delay: motion(i * 50 + 150),
+                            start: 0.9
+                        }}
+                        out:scale={{ duration: motion(300), start: 0.8 }}
                     >
                         <ProjectCard
                             {project}
@@ -251,19 +257,15 @@
 </Page>
 
 <style lang="scss">
+    /* the title starts where the other index pages' titles do (contentPages.css' room above it
+       and Header's margin) */
     .top-row {
         display: flex;
-        margin-top: 2rem;
+        margin-top: 2.25rem;
         justify-content: space-between;
         align-items: center;
         gap: 1rem;
         margin-bottom: 1.2rem;
-    }
-
-    .page-title {
-        margin: 0;
-        font-size: 1.8rem;
-        white-space: nowrap;
     }
 
     .top-row-buttons {
@@ -276,6 +278,7 @@
     }
 
     .empty {
+        --empty-state-padding: 0;
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
@@ -291,24 +294,16 @@
     }
 
     /* shown only once the read takes long enough to notice, so a quick one does not flash it */
-    .reading {
+    /* not .reading, the reading pages' type scale (styles/tokens.css) */
+    .reading-projects {
         opacity: 0;
-        animation: appear 0.2s ease-out 0.3s forwards;
+        animation: appear var(--dur-base) var(--ease-out) 0.3s forwards;
     }
 
     @keyframes appear {
         to {
             opacity: 1;
         }
-    }
-
-    .empty-title {
-        font-weight: 600;
-    }
-
-    .empty-hint {
-        font-size: 0.85rem;
-        color: var(--hint);
     }
 
     /* nothing on the page is selected by a click on its empty space: Chrome would otherwise put the
@@ -347,11 +342,8 @@
             flex-direction: column;
             align-items: stretch;
             gap: 0.8rem;
-            margin-top: 1rem;
+            margin-top: 1.5rem;
             margin-bottom: 0.8rem;
-        }
-        .page-title {
-            font-size: 1.5rem;
         }
         .top-row-buttons > :global(*) {
             flex: 1;

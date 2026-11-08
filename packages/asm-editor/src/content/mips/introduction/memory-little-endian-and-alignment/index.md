@@ -20,7 +20,7 @@ address `0x10010000`. The `0x` prefix marks a number as hexadecimal; the registe
 prefix out. In the memory panel, each two-digit entry such as `78` or `FF` is one byte written in
 hexadecimal.
 
-## The part of the address map we need
+## Where instructions and data begin
 
 This Playground places the two sections you already know at fixed starting addresses:
 
@@ -83,11 +83,12 @@ occupies addresses `0x10010000` through `0x10010004`. The next free address is `
 `.align 2` advances it to `0x10010008`. After Run, `$t0` contains `10010000` and `$t1` contains
 `10010008`. The three skipped bytes are padding between the string and `buffer`.
 
-This Playground automatically aligns a `.word` declaration. An explicit `.align 2` immediately
-before `.word` is therefore redundant for the assembler, but it makes the four-byte boundary clear
-to a reader. Strings and `.space` use exactly their stated number of bytes; they do not by
-themselves align a following byte-data label such as `buffer`. Use `.align 2` when that label must
-begin on a word boundary.
+This Playground automatically aligns a `.word` declaration. You do not need `.align 2` immediately
+before `.word`, but writing it there makes the four-byte boundary clear to a reader.
+
+Strings and `.space` do not add padding to align the next declaration. In the example above,
+`buffer` would begin immediately after the string without `.align 2`. Use `.align 2` when
+`buffer` must begin on a word boundary.
 
 Bytes reserved by `.space` initially appear as `00` in this Playground. The source-level meaning
 of `.space 8` is simply “reserve eight bytes.” Treat those bytes as room for future data rather

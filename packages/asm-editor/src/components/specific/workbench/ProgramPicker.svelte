@@ -45,11 +45,10 @@
             popupWidth={240}
             openAbove
             chevron={FaChevronDown}
-            listStyle="border: 1px solid var(--tertiary);"
             wrapperStyle="height: 100%; min-width: 0;"
             style="height: 100%; padding: {ui.deviceClass === 'phone'
                 ? '0 0.6rem 0 0.5rem'
-                : '0 0.9rem 0 0.6rem'}; gap: 0.45rem; border-radius: 0; background: transparent; color: var(--secondary-text); font-size: 0.78rem; font-weight: 600;"
+                : '0 0.9rem 0 0.6rem'}; gap: 0.45rem; border: none; border-radius: 0; background: transparent; color: var(--secondary-text); font-size: var(--fs-caption); font-weight: 600;"
         >
             {#snippet trigger()}
                 {#if ui.deviceClass !== 'phone'}<span class="caption">Program</span>{/if}
@@ -58,7 +57,7 @@
             {/snippet}
             {#snippet item(option)}
                 {@const choice = choices.find((candidate) => candidate.entry === option.value)}
-                <span class="choice" class:missing={choice?.missing} title={option.value}>
+                <span class="choice ellipsis" class:missing={choice?.missing} title={option.value}>
                     {choice?.label ?? option.value}{choice?.missing ? ' — missing' : ''}
                 </span>
             {/snippet}
@@ -74,7 +73,7 @@
         flex: 0 1 auto;
         min-width: 0;
         max-width: 16rem;
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
 
         &.phone {
             max-width: 9rem;
@@ -93,8 +92,5 @@
 
     .choice {
         display: block;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 </style>

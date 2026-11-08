@@ -11,10 +11,10 @@ grows down. Individual pixels have `x = 0..639` and `y = 0..479`. Drawing outsid
 clipped without an error. A rectangle's _exclusive_ right and bottom boundaries may be `640` and
 `480`, even though those are not pixel positions.
 
-Two colours are kept for you: the **pen**, which draws lines, outlines, pixels and text, and the
-**fill**, which fills the insides of rectangles and ellipses. A colour is a long written
-`$00BBGGRR`: the highest byte is unused `$00`, followed by the blue byte, the green byte and the
-red byte. Readers who know CSS may notice that this puts the colour bytes in the opposite order
+The simulator keeps two drawing colours: the **pen** colour for lines, outlines, pixels and text,
+and the **fill** colour for the insides of rectangles and ellipses. A colour is a long written
+`$00BBGGRR`: the highest byte is unused and written as `$00`, followed by the blue byte, the green
+byte and the red byte. Readers who know CSS may notice that this puts the colour bytes in the opposite order
 from CSS's `#RRGGBB`.
 
 | colour | value       |     | colour | value       |
@@ -24,8 +24,8 @@ from CSS's `#RRGGBB`.
 | gray   | `$00808080` |     | blue   | `$00FF0000` |
 | yellow | `$0000FFFF` |     | aqua   | `$00FFFF00` |
 
-Here are the drawing requests the first program uses. Each reads its arguments when `trap #15`
-runs; setting a colour or pen width changes later drawing, while drawing tasks change the screen.
+The first program uses these drawing tasks. Each task reads its arguments when `trap #15` runs.
+Setting a colour or pen width changes how later tasks draw.
 
 | task in `d0.b` | inputs                                                               | effect                                             |
 | -------------: | -------------------------------------------------------------------- | -------------------------------------------------- |
@@ -211,8 +211,8 @@ The arrows used below have codes left `$25`, up `$26`, right `$27`, down `$28`. 
 that order gives the request `$25262728`; the returned high byte answers for left, and the low
 byte answers for down.
 
-**Click the Screen panel before you press a key**: the screen only gets the keyboard when it has the
-focus, and a ring around it says so while it does.
+**Click the Screen panel before you press a key** so it receives keyboard input. A ring around the
+Screen shows when it has focus.
 
 The next program uses task 95 for its label. It draws directly on the screen at `(8, 8)` each time
 the frame is cleared, without adding another line to the transcript. Run it and hold an arrow key:
@@ -319,7 +319,7 @@ in `$00`. The other `btst` instructions test the corresponding bits in the other
 
 ## The mouse
 
-Task **61** reads the mouse. Put `61` in `d0.b` and choose a view in `d1.b`: **0** for the current
+Task **61** reads the mouse. Put `61` in `d0.b` and choose a mode in `d1.b`: **0** for the current
 pointer position and buttons, **1** for the latest button-release snapshot, or **2** for the latest
 button-press snapshot. It returns:
 
@@ -334,7 +334,7 @@ the current state and can miss a complete click between polls. This program uses
 while the left button is held, so a very fast click or pointer movement between polls may leave no
 mark at some positions.
 
-Task **14**, already used for printed strings, reads the zero-terminated address in `a1`. On this
+Task **14**, already used for printed strings, reads a zero-terminated string whose address is in `a1`. On this
 screen it puts text both at the text cursor and in the transcript. The mouse program uses it once
 for its starting title. Run it and drag with the left button: aqua discs follow the pointer. Hold
 Shift while dragging for red; hold the right button to clear the image, including the title. The

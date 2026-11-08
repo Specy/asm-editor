@@ -1,6 +1,6 @@
-Factorial and Fibonacci both call themselves, but they leave different work waiting. `fact(n)` makes
-one call for `fact(n - 1)`, then multiplies by `n` as the calls return: a chain. `fib(n)` needs both
-`fib(n - 1)` and `fib(n - 2)`: each non-base call splits into two more branches.
+The factorial and Fibonacci subroutines both use recursion: they call themselves. `fact(n)` calls
+`fact(n - 1)`, then multiplies the result by `n`. These calls form a chain. `fib(n)` needs both
+`fib(n - 1)` and `fib(n - 2)`, so each call that has not reached a base case splits into two branches.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -75,8 +75,8 @@ Each invocation pushes at its current stack position, so its saved `n` stays sep
 values saved by deeper calls.
 
 `rdi` is caller-saved. A call may change it, so `fact` saves its `n` before calling and restores it
-before multiplying. Its one `push` also changes the entry stack alignment from 8 modulo 16 to 0,
-as required immediately before `call`.
+before multiplying. On entry, dividing `rsp` by 16 leaves a remainder of 8. The `push` subtracts 8 from `rsp`,
+making it divisible by 16 as required immediately before `call`.
 
 ## Following both branches of `fib(3)`
 
@@ -85,8 +85,8 @@ belonging to this invocation. It keeps the first answer in `rbx` while the secon
 Because `rbx` is callee-saved, each invocation of `fib` saves the `rbx` it inherited and restores
 it before returning. The next invocation of `fib` makes the same promise to this one.
 
-Here is the outer `fib(3)` invocation. The stack column shows **its own** saved values; deeper
-calls temporarily put their frames below them. `B` stands for the `rbx` value inherited from its
+Here is the outer `fib(3)` invocation. The stack column shows **its own** saved values. Deeper
+calls temporarily put their stack frames below them. `B` stands for the `rbx` value inherited from its
 caller.
 
 | Moment in `fib(3)`           |                `rdi` | `rbx` | This invocation's stack                           | `rax` |
@@ -102,8 +102,8 @@ that answer. `mov rdi, [rsp]` recovers 3 from this invocation's local space, the
 call `fib(1)`. The second answer arrives in `rax`, while the first is still in `rbx`. After adding
 them, this invocation releases its local space, restores `B`, and returns 2.
 
-The stack arithmetic matters for both nested calls. On entry, `rsp` is 8 modulo 16. `push rbx`
-makes it divisible by 16; reserving 16 more bytes keeps it that way. Only eight of those local
+The stack arithmetic matters for both nested calls. On entry, dividing `rsp` by 16 leaves a
+remainder of 8. `push rbx` makes it divisible by 16. Reserving 16 more bytes keeps it that way. Only eight of those local
 bytes hold `n`; the other eight are padding. Both calls therefore meet the System V alignment rule.
 
 ## Try it

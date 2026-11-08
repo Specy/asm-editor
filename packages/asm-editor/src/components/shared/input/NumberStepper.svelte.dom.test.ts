@@ -75,6 +75,37 @@ describe('the number stepper', () => {
         expect(stepper.field.value).toBe('4')
     })
 
+    it('snaps what is typed with its own rule, and puts back what that rule refuses', () => {
+        const target = document.createElement('div')
+        document.body.append(target)
+        const settled: number[] = []
+        const stepper = mount(NumberStepper, {
+            target,
+            props: {
+                value: 640,
+                min: 0,
+                max: 1024,
+                step: 8,
+                ariaLabel: 'Width',
+                //down to a multiple of 8, where rounding to the step would go up; none below 320
+                snap: (next: number) => (next < 320 ? Number.NaN : Math.floor(next / 8) * 8),
+                onchange: (next: number) => settled.push(next)
+            }
+        })
+        mounted.push(() => unmount(stepper))
+        flushSync()
+        const field = target.querySelector<HTMLInputElement>('input[aria-label="Width"]')!
+        field.value = '645'
+        field.dispatchEvent(new Event('change', { bubbles: true }))
+        flushSync()
+        expect(field.value).toBe('640')
+        field.value = '100'
+        field.dispatchEvent(new Event('change', { bubbles: true }))
+        flushSync()
+        expect(field.value).toBe('640')
+        expect(settled).toEqual([640, 640])
+    })
+
     it('is its field to a label around it, so the label never presses − or +', () => {
         const label = document.createElement('label')
         const text = document.createElement('span')

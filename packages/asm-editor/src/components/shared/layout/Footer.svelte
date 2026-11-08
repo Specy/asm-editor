@@ -1,6 +1,6 @@
 <script lang="ts">
     import FaGithub from '~icons/fa-brands/github'
-    import FaRegCopyright from '~icons/fa-regular/copyright'
+    import FaCopyright from '~icons/fa-solid/copyright'
     import Icon from './Icon.svelte'
     import { toast } from '#stores/toastStore.ts'
     import { page } from '$app/state'
@@ -49,13 +49,14 @@
                         {@attach tooltip('Donate and support me')}
                         aria-label="Donate"
                     >
-                        <Icon size={1.6}>
+                        <Icon size="h2">
                             <FaDonate />
                         </Icon>
                     </a>
                     <div class="icon">
                         <Icon
-                            size={1.6}
+                            size="h2"
+                            label="Copyright"
                             onClick={() => {
                                 toast.custom(
                                     'Copyright',
@@ -64,7 +65,7 @@
                                 )
                             }}
                         >
-                            <FaRegCopyright />
+                            <FaCopyright />
                         </Icon>
                     </div>
                     <a
@@ -75,7 +76,7 @@
                         {@attach tooltip('Visit on github')}
                         aria-label="GitHub"
                     >
-                        <Icon size={1.6}>
+                        <Icon size="h2">
                             <FaGithub />
                         </Icon>
                     </a>
@@ -95,12 +96,12 @@
             margin-right: 0.5rem;
         }
         > div {
-            font-size: 1rem;
+            font-size: var(--fs-body);
         }
     }
     a {
         color: var(--primary-text);
-        transition: all 0.2s ease-in-out;
+        transition: color var(--dur-fast) ease-in-out;
     }
     a:hover {
         color: var(--accent);
@@ -116,7 +117,7 @@
             color: var(--primary-text);
             margin-left: 1rem;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: transform var(--dur-base);
             &:hover {
                 transform: rotate(25deg) scale(1.1);
             }
@@ -136,8 +137,8 @@
         inset: 0;
         overflow: hidden;
         white-space: pre;
-        font-family: 'Fira Code', monospace;
-        font-size: 1.05rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-prose);
         line-height: 1.3;
         letter-spacing: 0.08em;
         color: color-mix(in srgb, var(--background-text) 9%, transparent);

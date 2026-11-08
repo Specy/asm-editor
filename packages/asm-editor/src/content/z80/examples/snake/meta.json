@@ -1,6 +1,6 @@
 {
     "name": "The snake game",
-    "description": "Build and play Snake with packed board cells, a body moved by a loop, keys polled every frame, pseudorandom food placement, and a score on the Screen and in the transcript.",
+    "description": "Build and play Snake using packed cell positions, a loop to move the body, keyboard polling, and pseudorandom food placement.",
     "order": 23,
     "topic": "snake"
 }

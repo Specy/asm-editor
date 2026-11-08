@@ -1,6 +1,6 @@
 {
     "name": "Arrays and strings",
-    "description": "Calculate array addresses from a base, index, and element size; walk and copy zero-terminated strings; and flatten row-major grids into linear memory.",
+    "description": "Calculate array addresses from a base, index, and element size. Walk and copy zero-terminated strings, and locate elements in row-major grids.",
     "order": 3,
     "topic": "data-in-memory"
 }

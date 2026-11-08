@@ -1,6 +1,6 @@
-A green snake moves across a 32 by 32 board. Reach the orange food to score and grow; hitting a wall
-or your own body ends the game. After 64 segments, food still raises the score, but the snake cannot
-grow any longer. The board turns dark red on game over.
+A green snake moves across a 32 by 32 board. Reach the orange food to score and grow. Hitting a wall
+or your own body ends the game. Once the snake reaches 64 segments, food still raises the score,
+but the snake cannot grow any longer. The board turns dark red on game over.
 
 Select **Open in editor**, then **Build** and **Run**. Click the **Screen** before typing lowercase
 `w`, `a`, `s` or `d` to steer. Click it again if you return to the editor. Press **Run** again for a
@@ -291,8 +291,7 @@ body, computes a new head, checks for a crash or food, and updates the Screen. T
 `body` is an array of words, one cell per segment. `body[0]` is the head, and `length` says how many
 entries are occupied. Bits 8–15 hold column `x`; bits 0–7 hold row `y`. For example, `0x050C`
 decodes to column `0x05` (5), row `0x0C` (12). The next two initial entries, `0x040C` and
-`0x030C`, put the body immediately to its left. One packed word is enough to compare two cells with
-`beq`.
+`0x030C`, put the body immediately to its left. Because each cell fits in one word, `beq` can compare two cells directly.
 
 The shift loop starts at `body[length - 1]` and copies each preceding entry toward the tail. If
 the three entries are `[H, A, T]`, shifting produces `[H, H, A]`; writing the next head `N` at
@@ -301,7 +300,7 @@ the shift, the code saves the old tail `T` in `$s3`. It has disappeared from the
 array**, but its old cell is still coloured on the **Screen** until `erase_tail` paints it with the
 background colour.
 
-If `N` reaches food and `length` is below `MAXLEN`, the program appends saved `T`, giving
+If `N` reaches food and `length` is below `MAXLEN`, the program appends the saved tail `T`, giving
 `[N, H, A, T]`, and increments `length`. `$s5` tells the drawing code to skip erasing that tail
 cell. At `MAXLEN`, a meal still increases `score` and moves the food, but the body stays the same
 length and the old tail is erased.
@@ -316,9 +315,9 @@ positive bit pattern and lose its useful meaning as an out-of-bounds coordinate.
 `draw_cell` turns a packed cell into a word address: `display + (y * 32 + x) * 4`. For the starting
 head at `(5, 12)`, the offset is `(12 * 32 + 5) * 4 = 1556` bytes. Each word stores a colour. The
 program paints all 1024 background cells once, then draws the starting snake and food. An ordinary
-frame stores the background at the old tail, green at the new head, and orange at the food (the
-last store usually repaints an unchanged cell). A growing frame skips the tail store, so it makes
-two Screen stores. At maximum length, a meal makes all three stores again.
+frame writes the background colour to the old tail cell, green to the new head cell, and orange to
+the food cell. The last write usually repaints an unchanged cell. When the snake grows, the frame
+skips the tail cell, so it writes only two cells. At maximum length, a meal updates all three cells again.
 
 ### Keys and food
 
@@ -329,17 +328,17 @@ pressed. The keys set `(dx, dy)` to left `(-1, 0)`, right `(1, 0)`, up `(0, -1)`
 `try_direction` rejects a reverse turn: while moving right `(1, 0)`, pressing `a` requests
 `(-1, 0)`. The sums `1 + (-1)` and `0 + 0` are both zero, so the old direction stays in place.
 
-The first food is hand-written at `0x140C`, or `(20, 12)`. After a meal, `next_random` changes the
+The first food is set in the source at `0x140C`, or `(20, 12)`. After a meal, `next_random` changes the
 stored `seed` with shifts and `xor` operations. A zero seed would produce only zeros, so the routine
-replaces it with the nonzero starting seed before taking the next step. This is a repeatable
-sequence of numbers, not a fresh physical source of randomness. `place_food` calls it once to
+replaces it with the nonzero starting seed before taking the next step. This pseudorandom generator produces the same sequence of numbers each time it starts with the
+same seed. `place_food` calls it once to
 choose a column and again to choose a row. After each call, `andi` with 31 keeps the coordinate in
 the range 0–31. The routine then checks the packed candidate
 against every occupied `body` entry. If it finds a match, it generates another pair. Since the
 snake has at most 64 segments on a 1024-cell board, there are always free cells available.
 
 The score prints to the Console after each meal and at game over. The bitmap Screen draws coloured
-cells; it has no built-in service to place text, so displaying digits there would require drawing
+cells. It has no built-in service to place text, so displaying digits there would require drawing
 their shapes from cells. `fill_grid` and `draw_cell` use the colour in `$s0` and the grid base in
 `$s1`. `draw_cell` changes only `$t0` and `$t1`, allowing the starting-body loop to keep its pointer
 in `$s2` across calls. `place_food` saves `$ra` on the stack because it calls `next_random` and must
@@ -354,7 +353,7 @@ snake reaches it. The next food is placed by `place_food`. Return to `0x140C` if
 original starting board.
 
 For a second experiment, change only `seed: .word 0x1F123BB5`, then run the same starting board
-twice. The first food remains at its hand-written location; after eating it, both runs with the
+twice. The first food remains at the location set in the source. After eating it, both runs with the
 same seed place the next food in the same cell. Changing the seed changes the generated sequence.
 You can steer the snake while it runs; the fixed `testcase` has no typed input, so it only exercises
 the default rightward path.

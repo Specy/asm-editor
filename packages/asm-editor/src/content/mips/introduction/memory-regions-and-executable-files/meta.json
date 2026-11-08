@@ -1,6 +1,6 @@
 {
     "name": "Memory regions and executable files",
-    "description": "Connect MIPS declarations to the Playground memory map, distinguish static data from stack and heap space, and compare Build with ELF loading.",
+    "description": "Learn where MIPS instructions and data live in memory, how the stack and heap differ from static storage, and how Build compares with loading an ELF executable.",
     "order": 8,
     "topic": "memory-layout"
 }

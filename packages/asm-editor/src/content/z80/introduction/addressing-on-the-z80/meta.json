@@ -1,6 +1,6 @@
 {
     "name": "Addressing on the Z80",
-    "description": "How Z80 operands name immediate values, registers, memory through an address in a pair, and memory at a fixed labelled address.",
+    "description": "Use immediate values, registers, and memory addresses in Z80 instructions.",
     "order": 6,
     "topic": "addressing-modes"
 }

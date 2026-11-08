@@ -13,12 +13,17 @@
      * panel leaves out what a later processor brought, from the Chapters and from the results
      * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
      */
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { tick, untrack } from 'svelte'
-    import { prefersReducedMotion } from 'svelte/motion'
+    import { DUR_BASE, motion, prefersLessMotion } from '#src/styles/motion.ts'
     import { SvelteSet } from 'svelte/reactivity'
-    import { slide } from 'svelte/transition'
+    import { cubicOut } from 'svelte/easing'
     import FaArrowLeft from '~icons/fa-solid/arrow-left'
     import FaChevronRight from '~icons/fa-solid/chevron-right'
+    import FaCompressAlt from '~icons/fa-solid/compress-alt'
+    import FaExpandAlt from '~icons/fa-solid/expand-alt'
+    import FaPrint from '~icons/fa-solid/print'
     import SearchField from '#cmp/search/SearchField.svelte'
     import {
         documentationFor,
@@ -38,6 +43,9 @@
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    // the card tokens `/all` draws its Chapters on, as the Workbench's panel has them (`.wb-cards`)
+    import '#cmp/specific/workbench/workbench.css'
 
     interface Props {
         language: DocumentationLanguage
@@ -150,16 +158,42 @@
         new Map((chapters ?? []).map((chapter) => [chapter.id, categoryGroups(chapter)]))
     )
 
-    /** Clip the slide without creating a new scroll container for sticky category headings. */
-    function slideChapter(node: HTMLElement, options: { duration: number }) {
-        const transition = slide(node, options)
+    /**
+     * Slide a Chapter open or shut, clipped without creating a new scroll container for the sticky
+     * category headings. Its height is measured on every frame, not once when the slide starts as
+     * `slide` does: its rows lay themselves out only once they are on screen
+     * (`content-visibility: auto`, a prose entry 6rem tall until then) and a long prose entry cuts
+     * itself to its Show all height only once it has measured itself, both after the slide has
+     * begun, so a height read at the start was wrong and the slide ended with a jump.
+     */
+    function slideChapter(node: HTMLElement, { duration }: { duration: number }) {
+        const style = getComputedStyle(node)
+        const paddingTop = parseFloat(style.paddingTop)
+        const paddingBottom = parseFloat(style.paddingBottom)
         return {
-            ...transition,
-            css: (t: number, u: number) => `${transition.css?.(t, u) ?? ''}; overflow: clip;`
+            duration,
+            easing: cubicOut,
+            tick: (t: number) => {
+                if (t >= 1) {
+                    for (const property of ['height', 'padding-top', 'padding-bottom', 'overflow'])
+                        node.style.removeProperty(property)
+                    return
+                }
+                node.style.overflow = 'clip'
+                node.style.paddingTop = `${t * paddingTop}px`
+                node.style.paddingBottom = `${t * paddingBottom}px`
+                node.style.removeProperty('height')
+                // the rows' height now, without the padding this frame gives the Chapter
+                const rows = node.offsetHeight - t * (paddingTop + paddingBottom)
+                node.style.height = `${t * (rows + paddingTop + paddingBottom)}px`
+            }
         }
     }
 
-    /** Exact border-box sizes, including fractional pixels, so pinned headings meet without a gap. */
+    /**
+     * Exact border-box sizes, including fractional pixels, so pinned headings meet without a gap: a
+     * Chapter's heading by its id, a category's by `<chapter>/<category>`.
+     */
     const titleSizes = $state<Record<string, ResizeObserverSize[]>>({})
 
     const byId = $derived(
@@ -295,7 +329,7 @@
         const wasFolded = !unfolded.has(id)
         unfolded.add(id)
         await tick()
-        if (!wasFolded || !wasRendered || prefersReducedMotion.current) finishChapterScroll(id)
+        if (!wasFolded || !wasRendered || prefersLessMotion()) finishChapterScroll(id)
     }
 
     /** Wait for a folded Chapter to finish opening before positioning it in the scroll area. */
@@ -311,7 +345,7 @@
             )
             ?.scrollIntoView({
                 block: entry ? 'nearest' : 'start',
-                behavior: prefersReducedMotion.current ? 'instant' : 'smooth'
+                behavior: prefersLessMotion() ? 'instant' : 'smooth'
             })
     }
 
@@ -392,6 +426,7 @@
             {/if}
             <div class="field">
                 <SearchField
+                    semantic
                     bind:value={() => query, setQuery}
                     bind:el={input}
                     placeholder="Search the documentation"
@@ -410,11 +445,11 @@
             {/snippet}
         </ErrorState>
     {:else if !chapters}
-        <p class="note">Loading the documentation…</p>
+        <p class="note"><Spinner label="Loading the documentation…" /></p>
     {:else if searching && variant === 'panel'}
         <div class="scroll results" bind:this={scroller}>
             {#if shown.length === 0 && searched === query.trim()}
-                <p class="note">Nothing matches “{query.trim()}”.</p>
+                <EmptyState>Nothing matches “{query.trim()}”.</EmptyState>
             {/if}
             {#each shown as result ('pinnedEntry' in result ? `pinned:${result.pinnedEntry.id}` : result.key)}
                 {#if 'pinnedEntry' in result}
@@ -426,6 +461,7 @@
                         {disableLinks}
                         showCategory
                         clampProse
+                        panel
                     />
                 {:else if result.kind === 'entry'}
                     {@const entry = byId.get(result.entry.id) ?? fromIndex(result.entry)}
@@ -437,6 +473,7 @@
                         {disableLinks}
                         showCategory
                         clampProse
+                        panel
                     />
                 {:else}
                     <LectureSectionCard
@@ -451,20 +488,26 @@
         </div>
     {:else}
         {#if variant === 'page'}
+            <!-- filled, at the page's size, each with its mark (owner, 2026-11-08) -->
             <div class="toolbar">
                 {#if open.size > 0 || unfolded.size > 0}
-                    <button type="button" class="tool" onclick={collapseAll}> Collapse all </button>
+                    <Button kind="secondary" style="gap: 0.5rem" onClick={collapseAll}>
+                        <Icon size="small"><FaCompressAlt /></Icon>
+                        Collapse all
+                    </Button>
                 {:else}
-                    <button type="button" class="tool" onclick={() => expandAll()}>
+                    <Button kind="secondary" style="gap: 0.5rem" onClick={() => expandAll()}>
+                        <Icon size="small"><FaExpandAlt /></Icon>
                         Expand all
-                    </button>
+                    </Button>
                 {/if}
-                <button type="button" class="tool" onclick={() => expandAll(true)}>
+                <Button kind="secondary" style="gap: 0.5rem" onClick={() => expandAll(true)}>
+                    <Icon size="small"><FaPrint /></Icon>
                     Print as PDF
-                </button>
+                </Button>
             </div>
         {/if}
-        <div class="scroll" bind:this={scroller}>
+        <div class="scroll" class:wb-cards={variant === 'page'} bind:this={scroller}>
             {#each chapters as chapter (chapter.id)}
                 {@const isFolded = !unfolded.has(chapter.id)}
                 {@const groups = groupsByChapter.get(chapter.id) ?? null}
@@ -494,15 +537,22 @@
                         <div
                             class="chapter-entries"
                             class:categorized={!!groups}
-                            transition:slideChapter={{
-                                duration: prefersReducedMotion.current ? 0 : 200
-                            }}
+                            transition:slideChapter={{ duration: motion(DUR_BASE) }}
                             onintroend={() => finishChapterScroll(chapter.id)}
                         >
                             {#if groups}
                                 {#each groups as group (group.category)}
-                                    <div class="category-group">
-                                        <h4 class="category-title">
+                                    {@const titleKey = `${chapter.id}/${group.category}`}
+                                    <div
+                                        class="category-group"
+                                        style:--category-title-height={titleSizes[titleKey]?.[0]
+                                            ? `${titleSizes[titleKey][0].blockSize}px`
+                                            : undefined}
+                                    >
+                                        <h4
+                                            class="category-title small-heading"
+                                            bind:borderBoxSize={titleSizes[titleKey]}
+                                        >
                                             {categoryLabel(group.category)}
                                         </h4>
                                         {#each group.items as entry (entry.id)}
@@ -513,6 +563,7 @@
                                                 {disableLinks}
                                                 pageLink={variant === 'page'}
                                                 clampProse={variant === 'panel'}
+                                                panel={variant === 'panel'}
                                             />
                                         {/each}
                                     </div>
@@ -526,6 +577,7 @@
                                         {disableLinks}
                                         pageLink={variant === 'page'}
                                         clampProse={variant === 'panel'}
+                                        panel={variant === 'panel'}
                                     />
                                 {/each}
                             {/if}
@@ -537,7 +589,9 @@
     {/if}
 </div>
 
-<style>
+<style lang="scss">
+    @use '../../../styles/field.scss';
+
     .documentation-browser {
         --documentation-spacing: 0.35rem;
         display: flex;
@@ -562,8 +616,11 @@
         flex: 1;
         min-width: 0;
     }
-    /* as tall as the search field beside it, and as wide as the field's own height */
+    /* as tall as the search field beside it, and as wide as the field's own height, in the field's
+       fill, edge and corner (styles/field.scss), so the two read as one group of controls (owner,
+       2026-11-08); the hover tint over its fill (D4) */
     .back {
+        @include field.surface;
         display: flex;
         flex: none;
         align-self: stretch;
@@ -571,39 +628,29 @@
         justify-content: center;
         width: calc(1.4rem + 0.9rem);
         padding: 0;
-        border: none;
-        border-radius: 0.5rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
         cursor: pointer;
     }
+    .back:hover {
+        background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
+    }
+    .back:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
     .back :global(svg) {
-        width: 0.9rem;
-        height: 0.9rem;
+        width: var(--fs-small);
+        height: var(--fs-small);
     }
     .note {
         margin: 0;
         padding: 0.8rem;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .toolbar {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.5rem;
         padding-bottom: 0.6rem;
-    }
-    .tool {
-        padding: 0.35rem 0.8rem;
-        border: none;
-        border-radius: 0.4rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        font: inherit;
-        font-size: 0.9rem;
-        cursor: pointer;
-    }
-    .tool:hover {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
     }
     @media print {
         .toolbar {
@@ -617,17 +664,50 @@
         scrollbar-gutter: stable;
         padding: 0 var(--documentation-spacing) 0.8rem;
     }
+    /* `/all`: the Chapters on a panel of their own, as the Settings panel's sections sit on theirs
+       (CollapsibleSection.svelte, `outlined`): the card surface inside its edge, so that each
+       Chapter's header band and its open body, a well darker than the panel, read as they do
+       there (owner, 2026-11-08) */
     .page .scroll {
+        display: flex;
+        flex-direction: column;
+        gap: var(--documentation-spacing);
         overflow: visible;
-        padding: 0;
+        padding: 0.4rem;
+        background-color: var(--wb-surface);
+        color: var(--secondary-text);
+        border: var(--wb-card-edge);
+        border-radius: var(--wb-radius);
     }
+    .page .chapter {
+        margin-bottom: 0;
+    }
+    /* on paper the Chapters alone, without the panel round them */
+    @media print {
+        .page .scroll {
+            padding: 0;
+            border: none;
+            background: none;
+        }
+        .page .chapter-title::before,
+        .page .chapter-title::after {
+            display: none;
+        }
+    }
+    /* the results sit on the panel's surface, which a pinned name is opaque over (EntryRow) */
     .results {
+        --entry-row-under: var(--wb-surface, var(--secondary));
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
     }
     .chapter {
         --chapter-border-width: 1px;
+        --chapter-radius: 0.5rem;
+        /* a whole number of pixels wide, as Settings' sections are (CollapsibleSection.svelte):
+           with a fraction of a pixel in its left edge and its width, the pinned title ended a pixel
+           to the right of the body under it */
+        width: round(down, 100%, 1px);
         display: flex;
         flex-direction: column;
         margin-bottom: var(--documentation-spacing);
@@ -639,27 +719,67 @@
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         /* The sticky heading carries the top border so it stays visible while scrolling. */
         border-top: none;
-        border-radius: 0.5rem;
+        border-radius: var(--chapter-radius);
+        /* an expanded entry's name, pinned in the Workbench's panel, sits under the Chapter's
+           heading, opaque over the well (EntryRow); a pixel under its edge, as the heading is
+           drawn on a layer of its own (`will-change`) and a fraction of a pixel apart the body
+           going by showed in a hairline between them */
+        --entry-head-top: calc(var(--chapter-title-height, 2.2rem) - 1px);
+        --entry-row-under: var(--background);
     }
     .chapter.folded {
         border-bottom: none;
     }
+    /* over the category headings, which are over the pinned names of expanded entries (EntryRow),
+       so that each goes under the one above it as its own part of the list ends */
     .chapter-title {
         position: sticky;
         top: 0;
-        z-index: 2;
+        z-index: 3;
         will-change: transform;
         margin: 0 calc(-1 * var(--chapter-border-width));
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         background-color: var(--wb-section-header, var(--tertiary));
         color: var(--secondary-text);
         border: var(--chapter-border-width) solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
-        border-radius: 0.5rem 0.5rem 0 0;
-        box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+        border-radius: var(--chapter-radius) var(--chapter-radius) 0 0;
+        box-shadow: var(--shadow-1);
+    }
+    /* The frame's top corners are the heading's alone: past its rounded corners the panel's
+       surface is painted over what the Chapter has there, its side edges and its well, which
+       otherwise showed round the curve, most of all while the heading is pinned over the body
+       scrolling under it (owner, 2026-11-08). Each corner is a square of the radius at the
+       heading's outer edge, clear inside the curve and the panel outside it, with a pixel's
+       blend so the curve stays smooth */
+    .chapter-title::before,
+    .chapter-title::after {
+        content: '';
+        position: absolute;
+        top: calc(-1 * var(--chapter-border-width));
+        width: var(--chapter-radius);
+        height: var(--chapter-radius);
+        pointer-events: none;
+        --corner-outside: var(--wb-surface, var(--secondary));
+    }
+    .chapter-title::before {
+        left: calc(-1 * var(--chapter-border-width));
+        background: radial-gradient(
+            circle at 100% 100%,
+            transparent calc(var(--chapter-radius) - 0.5px),
+            var(--corner-outside) calc(var(--chapter-radius) + 0.5px)
+        );
+    }
+    .chapter-title::after {
+        right: calc(-1 * var(--chapter-border-width));
+        background: radial-gradient(
+            circle at 0 100%,
+            transparent calc(var(--chapter-radius) - 0.5px),
+            var(--corner-outside) calc(var(--chapter-radius) + 0.5px)
+        );
     }
     .chapter.folded .chapter-title {
-        border-radius: 0.5rem;
+        border-radius: var(--chapter-radius);
         box-shadow: none;
     }
     .chapter.categorized .chapter-title {
@@ -675,7 +795,11 @@
     .chapter-entries.categorized {
         padding-top: 0;
     }
+    /* an expanded entry's pinned name under its category's heading as well */
     .category-group {
+        --entry-head-top: calc(
+            var(--chapter-title-height, 2.2rem) + var(--category-title-height, 1.8rem) - 1px
+        );
         display: flex;
         flex-direction: column;
         gap: 0.05rem;
@@ -689,20 +813,16 @@
     .category-title {
         position: sticky;
         top: var(--chapter-title-height, 2.2rem);
-        z-index: 1;
+        z-index: 2;
         will-change: transform;
         margin: 0 -0.5rem;
         padding: 0.35rem 1rem;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
         color: var(--secondary-text);
         background-color: var(--wb-section-header, var(--tertiary));
         border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
-        box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+        box-shadow: var(--shadow-1);
     }
     /* a prose entry's title, brought back into view by Show less, lands below the pinned heading */
     .chapter :global(.prose-title) {
@@ -733,22 +853,22 @@
     .chevron {
         display: flex;
         align-self: center;
-        width: 0.6rem;
-        height: 0.6rem;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
         opacity: 0.6;
         transform: rotate(90deg);
-        transition: transform 0.15s ease;
+        transition: transform var(--dur-base) ease;
     }
     .chevron.folded {
         transform: rotate(0deg);
     }
     .page .chapter-title {
         top: 3.2rem;
-        font-size: 1.1rem;
+        font-size: var(--fs-prose);
     }
     .page .category-title {
         top: calc(3.2rem + var(--chapter-title-height, 2.6rem));
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
     .page .category-group :global(.entry-row) {
         scroll-margin-top: calc(3.2rem + var(--chapter-title-height, 2.6rem) + 2rem);

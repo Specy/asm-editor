@@ -11,11 +11,11 @@ This lesson uses four arithmetic status flags:
 | `ZF` | The result used to compute the flags is zero.                                              |
 | `SF` | The top bit of the result used to compute the flags is 1.                                  |
 | `CF` | An unsigned addition carried out of the chosen width, or an unsigned subtraction borrowed. |
-| `OF` | The mathematical signed result is outside the signed range for the chosen width.           |
+| `OF` | The mathematical result is outside the signed range for the chosen width.                  |
 
 `ZF` is the **zero flag**, `SF` the **sign flag**, `CF` the **carry flag**, and `OF` the
 **overflow flag**. The panel also displays other flags, including `PF` and `AF`. They may change
-too, but the tables, comments, and explanations here report only the four flags above.
+too. In this lesson, watch `ZF`, `SF`, `CF`, and `OF`.
 
 ## Flags use the operation's width
 
@@ -32,9 +32,8 @@ flags:
 | `0xFF + 1` | `0x00`      |    1 |    0 |    1 |    0 |
 
 In the first row, signed 127 plus 1 is outside the signed byte range, so `OF` is 1. The unsigned
-answer 128 fits, so `CF` is 0. In the second row, unsigned 255 plus 1 needs a ninth bit, so `CF` is
-
-1. Read as signed, `0xFF` is -1, and -1 plus 1 is 0, so `OF` is 0.
+answer 128 fits, so `CF` is 0. In the second row, unsigned 255 plus 1 needs a ninth bit, so `CF` is 1.
+Read as signed, `0xFF` is -1, and -1 plus 1 is 0, so `OF` is 0.
 
 Subtraction gives `CF` the related unsigned meaning of a borrow. A qword calculation of `3 - 5`
 cannot be represented as an unsigned qword without wrapping, so it sets `CF`. Its retained result
@@ -68,9 +67,9 @@ _start:
     syscall
 ```
 
-Inspect the four focus flags immediately after each `sub` or `add`, before stepping over the next
-arithmetic instruction. After the final `add`, the two exit-setup `mov` instructions still preserve
-the flags; inspect them before stepping over `syscall`. The `mov` instructions between arithmetic
+Inspect `ZF`, `SF`, `CF`, and `OF` immediately after each `sub` or `add`, before stepping over the
+next arithmetic instruction. After the final `add`, the two `mov` instructions that prepare the
+exit syscall preserve the flags. Inspect the flags before stepping over `syscall`. The `mov` instructions between arithmetic
 operations also preserve the existing flags. For example, after `sub rbx, 5`, the following
 `mov rcx, 0x7F` does not erase the subtraction's `SF` and `CF` values.
 
@@ -119,7 +118,7 @@ _start:
 ```
 
 After `test rax, rax`, bit 63 of the qword result is clear, so `SF` is 0. After `test al, al`, bit 7
-of the byte result is set, so `SF` is 1. Then `cmp rbx, 9` sets `ZF` because the subtraction used to
-compute its flags would produce zero; `rbx` remains 9 because `cmp` discards that result. Inspect
+of the byte result is set, so `SF` is 1. Then `cmp rbx, 9` sets `ZF` because 9 minus 9 is zero. The value in `rbx` remains 9 because
+`cmp` discards the subtraction result. Inspect
 after the first `test` before stepping over the second, after the second `test` before stepping over
 `cmp`, and after `cmp` before stepping over `syscall`.

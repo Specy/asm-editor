@@ -40,7 +40,10 @@ no_sub:
 For multiplication, `24` is `00011000` in binary. `srl a` sends its lowest bit into the **C
 flag** (the carry flag). `jr nc` means “jump if C is zero.” The first three bits are zero, so
 there is no addition on those passes. On the fourth pass, `de` has doubled three times from 365
-to 2920, and the multiplier bit is one, so `add hl, de` adds 2920. The fifth pass adds 5840. That gives 8760. `sla e` shifts the low byte of `de` first and places its outgoing bit in the C flag;
+to 2920, and the multiplier bit is one, so `add hl, de` adds 2920. The fifth pass adds 5840.
+That gives 8760.
+
+`sla e` shifts the low byte of `de` first and places its outgoing bit in the C flag;
 `rl d` brings that bit into the high byte. Together they double the 16-bit value. After eight
 passes, `ex de, hl` moves the product to `de` so the division can use `hl`.
 

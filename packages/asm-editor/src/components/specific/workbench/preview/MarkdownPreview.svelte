@@ -184,7 +184,7 @@
         width: min(100%, 70ch);
         margin: 0 var(--md-inline-margin, auto);
         padding: 0.4rem 0.8rem;
-        border-left: 0.2rem solid var(--accent);
+        border-left: 3px solid var(--accent);
         border-radius: 0.3rem;
         background-color: color-mix(in srgb, var(--accent) 8%, transparent);
     }

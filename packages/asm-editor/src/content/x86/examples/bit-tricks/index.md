@@ -2,7 +2,7 @@
 
 We will answer four questions about 37 (`0b100101`): is it even, how many bits are set, what is
 37 × 10, and is bit 5 set? Run the program, then inspect `r8`, `r9`, `r10`, and `r13` in the
-register panel. The exit code at the end changes `rax`, so the answers are saved elsewhere.
+register panel. The instructions that exit the program change `rax`, so the answers are saved elsewhere.
 
 ```x86|playground|allow-open
 default rel
@@ -73,10 +73,14 @@ and `r13 = 1`. In a hexadecimal register view, these are `0x0`, `0x3`, `0x172`, 
 
 ## Your turn
 
-Use the same four patterns for 30 (`0b11110`). Write the instructions in the marked blocks.
-Leave 1 in `r8` if the number is even and 0 otherwise; count its set bits in `r9`; form
-30 × 10 in `r10` using shifts and addition; and leave bit 5's value in `r13`. Initialize
-the full `r8` and `r13` registers before writing their low bytes. Save every answer before
+Use the same four patterns for 30 (`0b11110`). Write the instructions in the marked blocks:
+
+- Leave 1 in `r8` if the number is even and 0 otherwise.
+- Count its set bits in `r9`.
+- Calculate 30 × 10 in `r10` using shifts and addition.
+- Leave bit 5's value in `r13`.
+
+Initialize the full `r8` and `r13` registers before writing their low bytes. Save every answer before
 the exit setup changes `rax`.
 
 Predict the results, then press **Test**. It expects `r8 = 1`, `r9 = 4`, `r10 = 300`

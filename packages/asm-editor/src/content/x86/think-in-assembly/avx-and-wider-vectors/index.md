@@ -90,8 +90,8 @@ as in `vaddpd ymm2, ymm0, [b]`; the destination and the first source are registe
 
 ## What an XMM write does to the high half
 
-An instruction that names an `xmm` register writes only bits 0 to 127 of the YMM register. What
-happens to bits 128 to 255 depends on how the instruction is encoded:
+When an instruction writes to an `xmm` register, its result goes into bits 0 to 127 of the YMM
+register. What happens to bits 128 to 255 depends on how the instruction is encoded:
 
 | instruction               | bits 0..127 | bits 128..255 |
 | ------------------------- | ----------- | ------------- |
@@ -150,8 +150,8 @@ _start:
     syscall
 ```
 
-Lane 0 of `ymm3` is `2.0 + 1.0`; lanes 1 to 3 are the 2.0s of `xmm2`; the four 1.0s that were in
-`ymm3` are gone.
+Lane 0 of `ymm3` is `2.0 + 1.0`. Lanes 1 to 3 contain the 2.0 values copied from `xmm2`, and lanes
+4 to 7 are zero. None of the old values in `ymm3` remain.
 
 `vzeroupper` sets bits 128 to 255 of all sixteen YMM registers to zero, and `vzeroall` sets all 256
 bits of all sixteen to zero. Because a legacy SSE instruction must keep the high halves it does not
@@ -220,8 +220,8 @@ and `vaddps` instructions round the product and then the sum, so the two can dif
 bit. The FMA instructions are a separate extension from AVX, and this emulator runs both.
 
 The three digits in an FMA mnemonic say which operands are multiplied and which is added. Number
-the operands 1, 2 and 3 from left to right; the first two digits are the factors, the third is the
-addend, and the result always goes to operand 1:
+the operands 1, 2 and 3 from left to right. The first two digits identify the operands to multiply,
+and the third identifies the operand to add. The result always goes to operand 1:
 
 | instruction              | computes            |
 | ------------------------ | ------------------- |
@@ -357,7 +357,7 @@ AVX code:
 2. Run `xgetbv` with `ecx = 0` and verify that bits 1 and 2 of `eax` are set, confirming that the
    operating system saves and restores the `xmm` and `ymm` registers across context switches.
 
-Note that in this emulator, AVX instructions run directly without any setup, even though `cpuid`
+In this emulator, AVX instructions run directly without any setup, even though `cpuid`
 reports a baseline SSE2 processor with those feature bits clear.
 
 ## Your turn: scale and offset eight values

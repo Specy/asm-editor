@@ -23,7 +23,7 @@ numbers: .ds count
 
 `numbers: .ds count` reserves `count` bytes beginning at `0x9000`. The label `numbers` names that
 starting address, but it does not put values into the reserved bytes. The editor shows unused bytes
-as `00`, so that is what the ten bytes show before you run the program.
+as `00`, so all ten bytes contain `00` before you run the program.
 
 `ld hl, numbers` places the address `9000` in the register pair `hl`. Parentheses mean “the byte
 at this address”: `(hl)` is the byte in memory at the address currently held by `hl`. On the first
@@ -35,7 +35,7 @@ address from `9000` to `9001`, ready for the next element. `inc a` changes the n
 leaves `b` at `00` and continues to `halt`. If you use **Step**, you can watch `hl` move from
 `9000` to `900A`, one address after the reserved bytes.
 
-Try a smaller, safe array: change only `count equ 10` to `count equ 5`. The same name is used by
+Try a smaller array: change only `count equ 10` to `count equ 5`. The same name is used by
 both the loop and `.ds count`, so the program still reserves exactly as many bytes as it writes.
 Before you build and run, predict the five bytes at `9000`.
 

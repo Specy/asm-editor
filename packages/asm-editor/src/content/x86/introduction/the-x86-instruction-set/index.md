@@ -4,7 +4,7 @@ x86 has a large instruction set, but useful programs begin with a small core. Th
 that core move values, calculate, compare, and choose which instruction runs next. Each instruction
 has a short name called a **mnemonic**, followed by the operands it uses.
 
-The assembler turns that source into machine-code bytes. Its
+The assembler turns these instructions into machine-code bytes. The
 [instruction reference](/documentation/x86/instruction) lists the operand forms that NASM accepts
 for each mnemonic.
 
@@ -26,10 +26,10 @@ For common two-operand data instructions in NASM syntax, the destination comes f
     add rax, rbx                ; rax receives rax + rbx
 ```
 
-This common shape has exceptions. For example, `cmp rax, rbx` reads both registers and records their
-relationship in the flags; it leaves both registers unchanged. The mnemonic's documented forms
-tell you how many operands it takes, where each kind of operand may appear, and what the instruction
-writes.
+Some two-operand instructions do not write to either operand. For example, `cmp rax, rbx` reads both
+registers and records their relationship in the flags. It leaves both registers unchanged. The
+instruction reference tells you how many operands each instruction takes, which operands it accepts,
+and what it writes.
 
 ## Three common kinds of operand
 
@@ -39,8 +39,7 @@ The instructions in this course often use:
 - An **immediate**, a value written directly in the instruction, such as `5`, `0x40`, or `'A'`.
 - A **memory reference** in square brackets, such as `[total]` or `[rbx]`.
 
-In the ordinary explicit two-operand forms shown here, at most one operand can be a memory
-reference:
+In the following two-operand forms, at most one operand can be a memory reference:
 
 ```x86
     mov rax, [source]           ; memory to register
@@ -61,9 +60,8 @@ Use a register as a temporary:
     mov [destination], rax
 ```
 
-The one-memory-operand guideline covers many familiar two-operand instructions, including these
-forms of `mov`, `add`, and `cmp`. Each mnemonic still has its own permitted forms. A form shown in
-the instruction reference is the authority when the general pattern is not enough.
+This limit also applies to two-operand forms of `add` and `cmp`. Other instructions have their own
+operand rules. Check the instruction reference to see which forms an instruction accepts.
 
 ## Operand width selects the operation width
 
@@ -83,8 +81,8 @@ register name supplies that width:
 When a memory operand is paired with a register, the register usually provides the memory width.
 In `mov [total], rax`, NASM therefore knows to store eight bytes.
 
-An immediate has no register name from which to infer a width. An immediate-to-memory store needs
-an explicit size:
+When you store an immediate in memory, there is no register to tell NASM the width. Write the size
+explicitly:
 
 ```x86
     mov byte [total], 5         ; store one byte
@@ -92,9 +90,9 @@ an explicit size:
     mov qword [total], 5        ; store eight bytes
 ```
 
-Writing `mov [total], 5` leaves the size ambiguous, so NASM rejects it. Widths are also part of an
-instruction's supported forms: two operands that make sense separately may still be an invalid
-pair if their widths or positions do not match a documented form.
+Writing `mov [total], 5` leaves the size ambiguous, so NASM rejects it. Each instruction also has
+rules about operand widths and positions. NASM rejects an operand pair that does not match one of
+the instruction's supported forms.
 
 ## A map of the main families
 
@@ -115,7 +113,8 @@ transfers a value. The instruction reference gives the precise behavior of each 
 ## One bit pattern, two comparisons
 
 A comparison can treat the same bits as signed or unsigned. `cmp left, right` records the relation
-between its operands. A following condition instruction chooses which interpretation to use.
+between its operands in the flags. The instruction that checks those flags chooses which
+interpretation to use.
 
 ```x86|playground
 default rel
@@ -141,7 +140,7 @@ _start:
 `setg` and `seta` each write a one-byte answer: 1 when the requested relation is true and 0 when it
 is false. The full results are `r8 = 0xAAAAAAAAAAAAAA00` and
 `r9 = 0xBBBBBBBBBBBBBB01`. Both answers came from the same `cmp`; the condition selected the signed
-or unsigned reading.
+or unsigned interpretation.
 
 ## Your turn
 

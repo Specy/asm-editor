@@ -84,7 +84,7 @@ M0 comes first. M1 and M2 are independent and run in parallel against the interf
 ### M4: Exam builder editor
 
 - `MarkdownEditor.svelte` rebuilt: `Editor.svelte` with `language="markdown"` bound to the value, and a `MarkdownRenderer` preview with `disableLinks` and `monacoColors`.
-- `layout: 'split' | 'switch' | 'auto'` (default `auto`). `split` shows the text and the preview side by side; `switch` shows one with a Text · Preview `SegmentedControl` (`components/specific/project/cpu/SegmentedControl.svelte`); `auto` is a container query on the editor's own width, side by side from 768 px.
+- `layout: 'split' | 'switch' | 'auto'` (default `auto`). `split` shows the text and the preview side by side; `switch` shows one with a Text · Preview `SegmentedControl` (`components/shared/input/SegmentedControl.svelte`); `auto` is a container query on the editor's own width, side by side from 768 px.
 - `md.scss` is deleted; the Exam builder keeps its box heights.
 - Done when: both Exam builder fields edit, preview and save as before, in both layouts.
 

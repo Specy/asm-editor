@@ -1,6 +1,6 @@
 {
     "name": "Flappy ASM",
-    "description": "A game with a state machine in it: three states, gravity counted in sixteenths of a pixel, a press that only counts on the frame it began, and pipes clipped by hand because a coordinate is one byte.",
+    "description": "Build a game with three states, fixed-point gravity, one flap per press, and pipe clipping for byte-sized coordinates.",
     "order": 24,
     "topic": "flappy-asm"
 }

@@ -246,7 +246,7 @@
             class="undo-to-here"
             onclick={() => onUndo?.()}
         >
-            <Icon size={0.75}>
+            <Icon size="caption">
                 <FaUndo />
             </Icon>
         </button>
@@ -291,7 +291,9 @@
             <div class="row space-between">
                 <span> PC </span>
                 <span class="pc">
-                    <span style="opacity: 0.6"> 0x </span>{step.pc.toString(16).toUpperCase()}
+                    <span style="color: var(--text-muted)"> 0x </span>{step.pc
+                        .toString(16)
+                        .toUpperCase()}
                     <button
                         {@attach tooltip('Go to line')}
                         class="go-to-line"
@@ -338,7 +340,7 @@
             {#if flags.length !== 0}
                 <div class="row space-between ccr">
                     <span> CCR </span>
-                    <span class="flags">
+                    <span class="flags ellipsis">
                         {#each flags as flag, i (flag)}
                             <span class="flag" class:flag-active={ccr[i]}>{flag}</span>
                         {/each}
@@ -401,19 +403,21 @@
 </div>
 
 <style lang="scss">
+    @use '../../../../styles/radius.scss' as *;
+
     .disassembly {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.8rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         overflow-wrap: anywhere;
         text-align: right;
     }
     .cycles {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
     }
     .stretch {
-        font-size: 0.8rem;
-        opacity: 0.85;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
         overflow-wrap: anywhere;
     }
     .undo-to-here {
@@ -431,9 +435,9 @@
         pointer-events: none;
         align-items: center;
         justify-content: center;
-        font-size: 0.8rem;
-        transition: all 0.2s;
-        font-family: Rubik;
+        font-size: var(--fs-small);
+        transition: opacity var(--dur-fast);
+        font-family: var(--font-ui);
         border-radius: 0.2rem;
     }
 
@@ -450,8 +454,8 @@
         cursor: pointer;
         background-color: var(--accent);
         color: var(--accent-text);
-        font-size: 0.8rem;
-        font-family: Rubik;
+        font-size: var(--fs-small);
+        font-family: var(--font-ui);
         border-radius: 0.2rem;
         opacity: 0;
     }
@@ -480,14 +484,16 @@
         }
     }
 
+    /* inside the floating History's 0.4rem padding, its corner parallel to the window's (D12) */
     .step {
-        border-radius: 0.4rem;
+        border-radius: nested-radius(var(--r-overlay), $inset: 0.4rem);
         padding: 0.4rem;
         background-color: var(--secondary);
         color: var(--secondary-text);
     }
 
     .step.docked {
+        border-radius: var(--r-control);
         padding: 0.3rem;
         background-color: var(--primary);
         color: var(--primary-text);
@@ -503,9 +509,6 @@
 
     .flags {
         min-width: 0;
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
     }
 
     .flag {
@@ -518,7 +521,7 @@
 
         &.flag-active {
             opacity: 1;
-            font-weight: bold;
+            font-weight: 700;
             color: var(--accent);
         }
     }
@@ -531,23 +534,23 @@
     }
 
     .poke-write {
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         overflow-wrap: anywhere;
     }
 
     .poke-title {
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         font-weight: 500;
         overflow-wrap: anywhere;
     }
 
     .poke-value {
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     //an IRQ's heading: the request and its handler, the whole of what the row is about
     .irq-title {
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         font-weight: 500;
         padding: 0.15rem 0.3rem;
     }
@@ -561,7 +564,7 @@
         gap: 0.1rem;
         margin-top: 0.3rem;
         padding-top: 0.3rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         border-top: var(--wb-line, var(--tertiary)) solid 2px;
     }
 
@@ -578,7 +581,7 @@
     }
 
     .handler {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
         font-size: 0.85em;
     }
 
@@ -593,7 +596,7 @@
         background-color: transparent;
         cursor: pointer;
         overflow-wrap: anywhere;
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
         &:hover {
             background-color: color-mix(in srgb, var(--accent) 12%, transparent);

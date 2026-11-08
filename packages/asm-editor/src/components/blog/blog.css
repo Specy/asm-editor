@@ -1,24 +1,14 @@
-/* With the layout's 1rem padding and the title's 0.75rem margin, the title starts where
-   contentPages.css starts the /documentation and /learn/courses ones. */
+/* With the layout's 1rem padding and the title's 0.75rem margin (Header.svelte), the title starts
+   where the /documentation and /learn/courses ones start. */
 .blog-intro {
     max-width: 62rem;
     padding: 1.5rem 0 3rem;
 }
-.blog-intro h1,
-.blog-article-header h1 {
-    font-family: Rubik, sans-serif;
-    font-size: 3.2rem;
-    line-height: 1.12;
-    letter-spacing: -0.035em;
-    margin: 0.75rem 0 1.25rem;
-    font-weight: 700;
-    text-wrap: balance;
-}
 .blog-lead {
-    font-family: Rubik, sans-serif;
-    font-size: 1.4rem;
+    font-family: var(--font-ui);
+    font-size: var(--fs-lead);
     line-height: 1.5;
-    opacity: 0.85;
+    color: var(--text-muted);
     max-width: 65ch;
 }
 .blog-tags {
@@ -29,10 +19,10 @@
 }
 .blog-tag {
     padding: 0.3rem 0.65rem;
-    border-radius: 1.2rem;
+    border-radius: var(--r-pill);
     background: color-mix(in srgb, var(--accent) 9%, var(--secondary));
     border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
-    font-size: 0.75rem;
+    font-size: var(--fs-caption);
     color: var(--background-text);
     text-decoration: none;
 }
@@ -41,11 +31,11 @@
     width: fit-content;
     margin-bottom: 0.6rem;
     padding: 0.2rem 0.6rem;
-    border-radius: 1.2rem;
+    border-radius: var(--r-pill);
     background: var(--accent);
     color: var(--accent-text);
-    font-size: 0.75rem;
-    font-weight: bold;
+    font-size: var(--fs-caption);
+    font-weight: 700;
 }
 .blog-article-header .blog-draft {
     margin-top: 0.6rem;
@@ -67,25 +57,25 @@
     align-items: baseline;
     gap: 0.75rem 1.5rem;
 }
+/* a section of cards, a step above the cards' titles */
 .blog-section-heading h2 {
-    font-size: 1.5rem;
+    font-size: var(--fs-h2);
 }
+/* a Card (shared/layout/Card.svelte), its title's link covering it */
 .blog-card {
-    position: relative;
-    isolation: isolate;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    border-radius: 1rem;
-    background: var(--secondary);
-    border: 1px solid var(--tertiary);
     overflow: hidden;
 }
+/* the card's picture, its colours muted until the pointer is on the card (the card's surface keeps
+   its colour: the picture coming to life is the hover) */
+/* under the body, so the title draws over it (its opacity would otherwise paint it as a positioned
+   layer, over the body), and under the title link's cover, which keeps its pointer on the picture
+   too: below the card's content, still above its surface (the card isolates) */
 .blog-card-image {
     display: block;
-    height: 10rem;
+    position: relative;
+    z-index: -1;
+    height: 11rem;
     overflow: hidden;
-    background: var(--secondary);
 }
 .blog-card-image img {
     display: block;
@@ -93,12 +83,13 @@
     height: 100%;
     object-fit: cover;
     object-position: top;
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 5.5rem, rgb(0 0 0 / 0.5) 7.2rem, transparent);
     opacity: 0.8;
-    transition: opacity 0.2s;
+    filter: saturate(0.35);
+    transition: filter var(--dur-base);
 }
 .blog-card:hover .blog-card-image img {
-    opacity: 1;
+    filter: none;
 }
 .blog-card-body {
     padding: 1.2rem;
@@ -106,16 +97,28 @@
     flex-direction: column;
     flex: 1;
 }
+/* the title over the picture's fading end, the card the shorter for it */
 .blog-card-image + .blog-card-body {
-    margin-top: -1rem;
+    margin-top: -4rem;
 }
 .blog-date,
 .blog-byline {
-    font-size: 0.8rem;
-    opacity: 0.7;
+    font-size: var(--fs-small);
+    color: var(--text-muted);
+}
+/* the title and the description over the picture's fading end: a halo in the card's own surface
+   colour, so they stand off the picture on a dark theme and a light one alike */
+.blog-card h3,
+.blog-card p {
+    text-shadow:
+        0 0 0.15rem var(--wb-surface),
+        0 0 0.4rem var(--wb-surface),
+        0 0 0.4rem var(--wb-surface),
+        0 0 0.9rem var(--wb-surface),
+        0 0 1.5rem var(--wb-surface);
 }
 .blog-card h3 {
-    font-size: 1.35rem;
+    font-size: var(--fs-h3);
     line-height: 1.35;
     margin: 0 0 0.8rem;
     text-wrap: balance;
@@ -125,11 +128,7 @@
     text-decoration: none;
 }
 .blog-card h3 a::after {
-    content: '';
-    position: absolute;
-    inset: 0;
     z-index: 1;
-    border-radius: 1rem;
 }
 .blog-card h3 a:focus-visible {
     outline: none;
@@ -138,11 +137,8 @@
     outline: 2px solid var(--accent);
     outline-offset: -2px;
 }
-.blog-card h3 a:hover {
-    color: var(--accent);
-}
 .blog-card p {
-    opacity: 0.8;
+    color: var(--text-muted);
     line-height: 1.6;
     margin-bottom: auto;
 }
@@ -160,16 +156,17 @@
 }
 .blog-post-layout {
     display: grid;
-    /* Match the reading column to the paragraph font's 70ch measure. */
-    font-family: 'Noto Serif', Rubik, sans-serif;
-    font-size: 1.2rem;
+    /* Match the reading column to the paragraph font's 70ch measure, at the reading page's prose
+       size (.reading, styles/tokens.css). */
+    font-family: var(--font-read);
+    font-size: var(--fs-prose);
     font-weight: 500;
     grid-template-columns: minmax(1.25rem, 1fr) minmax(0, 70ch) minmax(1.25rem, 1fr);
 }
 .blog-article,
 .blog-outline {
-    font-family: Rubik, sans-serif;
-    font-size: 1rem;
+    font-family: var(--font-ui);
+    font-size: var(--fs-body);
     font-weight: 400;
 }
 .blog-article {
@@ -183,46 +180,21 @@
 .blog-outline {
     display: none;
 }
-.blog-outline-title {
-    font-size: 0.8rem;
-    font-weight: 600;
-    margin-bottom: 0.8rem;
-    color: var(--background-text-muted);
-}
+/* the heading and rows are the outline's (ArticleOutline.svelte, styles/outline.scss) */
 .blog-outline nav {
     min-height: 0;
     overflow-y: auto;
 }
-.blog-outline ol {
-    list-style: none;
-    border-left: 1px solid var(--tertiary);
-}
-.blog-outline li a {
-    display: block;
-    padding: 0.55rem 0.9rem;
-    margin-left: -1px;
-    border-left: 2px solid transparent;
-    font-size: 0.85rem;
-    line-height: 1.45;
-    color: var(--background-text-muted);
-    text-decoration: none;
-}
-.blog-outline li a:hover,
-.blog-outline li a[aria-current='location'] {
-    border-left-color: var(--accent);
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 7%, transparent);
-}
 .blog-outline .blog-try-button {
     flex-shrink: 0;
-    font-size: 0.9rem;
+    font-size: var(--fs-small);
 }
 .blog-article-header {
     max-width: 70ch;
     margin: 1rem auto 3.5rem;
 }
 .blog-back {
-    font-size: 0.85rem;
+    font-size: var(--fs-small);
     color: var(--accent);
     text-decoration: none;
 }
@@ -234,8 +206,8 @@
 }
 .blog-link-icon {
     display: inline-flex;
-    width: 0.9rem;
-    height: 0.9rem;
+    width: var(--fs-small);
+    height: var(--fs-small);
 }
 .blog-link-icon svg {
     width: 100%;
@@ -251,31 +223,32 @@
     color: inherit;
 }
 .blog-article ._markdown {
-    font-size: 1.2rem;
+    font-size: var(--fs-prose);
 }
 .blog-article ._markdown p,
 .blog-article ._markdown li {
-    font-family: 'Noto Serif', Rubik, sans-serif;
-    font-size: 1.2rem;
+    font-family: var(--font-read);
+    font-size: var(--fs-prose);
     font-weight: 500;
     letter-spacing: 0.01em;
     line-height: 1.5;
 }
+/* as a lecture's headings are (contentPages.css): a reading page differs only by its font and size */
 .blog-article ._markdown h2,
 .blog-article ._markdown h3 {
-    font-family: Rubik, sans-serif;
-    font-weight: 800;
-    letter-spacing: 0.02em;
+    font-family: var(--font-ui);
+    font-weight: 700;
+    letter-spacing: -0.015em;
 }
 .blog-article ._markdown h2 {
-    font-size: 2.2rem;
+    font-size: var(--fs-h2);
     margin-top: 4rem;
 }
 .blog-article ._markdown h2:first-child {
     margin-top: 0;
 }
 .blog-article ._markdown h3 {
-    font-size: 1.8rem;
+    font-size: var(--fs-h3);
     margin-top: 2rem;
 }
 .blog-article ._markdown a:not(.blog-try-button) {
@@ -297,17 +270,17 @@
     border-radius: 0.6rem;
     background: var(--accent);
     color: var(--accent-text);
-    font-family: Rubik, sans-serif;
-    font-size: 1rem;
+    font-family: var(--font-ui);
+    font-size: var(--fs-body);
     font-weight: 500;
     line-height: 1.4;
     text-decoration: none;
 }
+/* the primary Button's hover (shared/button/variants.scss) */
 .blog-try-button:hover {
-    filter: brightness(1.1);
+    background-color: color-mix(in srgb, var(--accent) 85%, white);
 }
 .blog-try-button:focus-visible,
-.blog-outline li a:focus-visible,
 .blog-article ._markdown a:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
@@ -316,8 +289,8 @@
     display: block;
     max-width: 100%;
     height: auto;
-    border-radius: 0.7rem;
-    border: 1px solid var(--tertiary);
+    border-radius: var(--r-overlay);
+    border: 1px solid var(--line);
     margin: 1rem auto;
 }
 .blog-article ._markdown figure {
@@ -327,9 +300,9 @@
 .blog-article ._markdown figcaption {
     max-width: 70ch;
     margin: 0.75rem auto;
-    font-size: 0.85rem;
+    font-size: var(--fs-small);
     line-height: 1.5;
-    opacity: 0.75;
+    color: var(--text-muted);
 }
 .blog-article ._markdown h2,
 .blog-article ._markdown h3 {
@@ -339,7 +312,7 @@
     max-width: 70ch;
     margin: 3rem auto 0;
     padding-top: 1.5rem;
-    border-top: 1px solid var(--tertiary);
+    border-top: 1px solid var(--line);
     line-height: 1.7;
 }
 .blog-article-footer a {
@@ -376,16 +349,6 @@
 @media (max-width: 600px) {
     .blog-intro {
         padding-top: 0.75rem;
-    }
-    .blog-intro h1,
-    .blog-article-header h1 {
-        font-size: 2.3rem;
-    }
-    .blog-post-layout,
-    .blog-article ._markdown,
-    .blog-article ._markdown p,
-    .blog-article ._markdown li {
-        font-size: 1.1rem;
     }
 }
 @media (max-width: 650px) {

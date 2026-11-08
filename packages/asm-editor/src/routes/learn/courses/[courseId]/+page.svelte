@@ -46,8 +46,8 @@
     {jsonLd}
 />
 
-<Page cropped contentStyle="padding: 1rem; gap: 2rem">
-    <Header noMargin>
+<Page cropped="70rem" contentStyle="padding: 1rem; gap: 2rem">
+    <Header>
         {data.course.name}
     </Header>
     <!-- what the course is, under its title and at its left edge, before the search -->
@@ -64,20 +64,21 @@
         {#each data.course.modules as module (module.slug)}
             <TogglableSection
                 open={true}
+                level={2}
                 sectionStyle="margin-left: 0.6rem; padding-left: 0.6rem;"
                 style="gap: 0.2rem"
             >
                 {#snippet title()}
-                    <h4 style="font-weight: normal; margin-left: -0.1rem">
+                    <span style="margin-left: -0.1rem">
                         {module.name}
-                    </h4>
+                    </span>
                 {/snippet}
-                <Card background="secondary" style="overflow: hidden">
+                <Card style="overflow: hidden">
                     <LecturesMenu
                         lectures={module.lectures}
                         courseId={data.course.slug}
                         moduleId={module.slug}
-                        lectureStyle="padding: 0.6rem 1rem"
+                        lectureStyle="padding: 0.6rem 1rem 0.6rem 1.2rem"
                     />
                 </Card>
             </TogglableSection>

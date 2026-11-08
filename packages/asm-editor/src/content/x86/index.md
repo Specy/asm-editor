@@ -1,7 +1,6 @@
-This course is about one architecture, x86-64, and about writing programs for it.
+Write x86-64 assembly programs in NASM syntax and run them in the editor's Linux environment.
 
 If you have never written assembly before, read
-[Assembly basics](/learn/courses/assembly-basics) first. It goes through registers, memory,
-branching and the stack once and quickly. This course takes all of that for granted and covers the
-same ground again in far more depth, in NASM syntax, with every program running as a real Linux
-process.
+[Assembly basics](/learn/courses/assembly-basics) first. It introduces registers, memory,
+branching and the stack. This course builds on those ideas with detailed explanations and
+runnable x86-64 programs.

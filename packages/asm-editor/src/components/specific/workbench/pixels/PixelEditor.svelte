@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { prefersLessMotion } from '#src/styles/motion.ts'
     import { onDestroy, tick, untrack } from 'svelte'
     import { fileBytes, type ProjectFile } from '#lib/projectFiles.ts'
     import type { CellGrid } from '#lib/Project.svelte.ts'
@@ -36,10 +37,16 @@
         ZOOM_FACTOR
     } from '#lib/pixels/zoom.ts'
     import { CELL_GRID_MAX } from '#lib/Project.svelte.ts'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
     import { ScopedTheme, ThemeStore, themeCssVariables } from '#stores/themeStore.svelte.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
+    import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
+    import { placeCard, type Placement } from '#cmp/shared/floating/floating.ts'
+    import { popoverElevation } from '#src/styles/elevation.ts'
     import FileStatusLine from '../FileStatusLine.svelte'
     import FaPencilAlt from '~icons/fa-solid/pencil-alt'
     import FaSlash from '~icons/fa-solid/slash'
@@ -47,6 +54,8 @@
     import FaSquare from '~icons/fa-solid/square'
     import FaCircle from '~icons/fa-solid/circle'
     import FaChevronDown from '~icons/fa-solid/chevron-down'
+    //the one icon from another set: fa-solid has no ring, and its dot-circle reads as a radio
+    //button or a record mark (design-system-changes.md, S4-44)
     import FaRegularCircle from '~icons/fa-regular/circle'
     import FaFillDrip from '~icons/fa-solid/fill-drip'
     import FaEyeDropper from '~icons/fa-solid/eye-dropper'
@@ -254,9 +263,7 @@
     function glideZoom(next: number, centreTo?: [number, number]) {
         next = clampZoom(next)
         stopGlide()
-        const reduced =
-            typeof requestAnimationFrame === 'undefined' ||
-            window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        const reduced = typeof requestAnimationFrame === 'undefined' || prefersLessMotion()
         if (reduced) {
             zoom = next
             if (centreTo) centre = centreTo
@@ -1084,7 +1091,11 @@
     /** The card open under its button, if any. */
     let dropdown = $state<Dropdown>()
     let dropdownCard = $state<HTMLDivElement>()
-    let dropdownPlace = $state({ top: 0, left: 0 })
+    let dropdownPlace = $state<Placement>({ top: 0, left: 0, side: 'bottom', arrow: 0 })
+    let dropdownWidth = $state(0)
+    let dropdownHeight = $state(0)
+    /** The card's arrow, which stands out of it towards its button. */
+    const DROPDOWN_ARROW = 6
     /** The button each card opens under; read when it is placed. */
     const anchors: Partial<Record<Dropdown, HTMLElement>> = {}
 
@@ -1128,17 +1139,26 @@
     }
 
     /**
-     * The card under its button, kept inside the window: from the button's left edge, or for one
-     * at the toolbar's right end, which a card would run off, to its right edge.
+     * The card under its button, its arrow on the button, kept inside the window: from about the
+     * button's left edge, or for one at the toolbar's right end, which a card would run off, slid
+     * left with the arrow still on the button.
      */
     function placeDropdown() {
         const anchor = dropdown && anchors[dropdown]
         if (!anchor || !dropdownCard) return
-        const rect = anchor.getBoundingClientRect()
-        const margin = 8
-        const width = dropdownCard.offsetWidth
-        const left = rect.left + width > window.innerWidth - margin ? rect.right - width : rect.left
-        dropdownPlace = { top: rect.bottom + 4, left: Math.max(margin, left) }
+        dropdownPlace = placeCard(
+            anchor.getBoundingClientRect(),
+            { width: dropdownCard.offsetWidth, height: dropdownCard.offsetHeight },
+            {
+                side: 'bottom',
+                gap: 4,
+                arrow: DROPDOWN_ARROW,
+                radius: popoverElevation().radius,
+                align: 'start',
+                margin: 8,
+                viewport: { width: window.innerWidth, height: window.innerHeight }
+            }
+        )
     }
 
     //settings of tools that cannot draw now are of no use, nor Canvas size; the cell grid still is
@@ -1151,6 +1171,40 @@
         if (dropdown !== next) closeDropdown()
         gesture = cancelGesture(gesture)
         tool = next
+    }
+
+    /**
+     * The arrow keys, Home and End move along the toolbar's controls, as a toolbar's do
+     * (WAI-ARIA), wrapped lines included; Tab still stops at each of them, as it always did.
+     */
+    function toolbarKeydown(event: KeyboardEvent) {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+        //a field that takes text keeps these keys for its caret
+        const target = event.target as HTMLElement
+        if (
+            target.matches?.(
+                'textarea, [contenteditable], input:not([type="color"], [type="checkbox"], [type="radio"], [type="button"])'
+            )
+        )
+            return
+        const controls = [
+            ...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(
+                'button:not(:disabled), input:not([tabindex="-1"])'
+            )
+        ].filter((control) => control.getClientRects().length > 0)
+        const at = controls.indexOf(document.activeElement as HTMLElement)
+        if (at === -1) return
+        const next =
+            event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? controls.length - 1
+                  : Math.max(
+                        0,
+                        Math.min(controls.length - 1, at + (event.key === 'ArrowRight' ? 1 : -1))
+                    )
+        event.preventDefault()
+        controls[next].focus()
     }
 
     function onkeydown(event: KeyboardEvent) {
@@ -1368,30 +1422,31 @@
                 {/if}
             {/if}
             {#if readOnly}
-                <span class="fact badge read-only" {@attach tooltip(readOnly)}>read-only</span>
+                <Badge class="read-only" tone="warning" {@attach tooltip(readOnly)}>read-only</Badge
+                >
             {/if}
         {/snippet}
     </FileStatusLine>
     <!-- Undo and Redo at the left, the tools and colours in the middle, the view at the right,
      as a drawing program's toolbar has them -->
-    <div class="pixel-toolbar" role="toolbar" aria-label="Pixel tools">
+    <!-- the focus is on its controls, which its arrow keys move between, never on the toolbar -->
+    <!-- svelte-ignore a11y_interactive_supports_focus -->
+    <div class="pixel-toolbar" role="toolbar" aria-label="Pixel tools" onkeydown={toolbarKeydown}>
         <div class="toolbar-row">
             <div class="group history">
-                <button
-                    type="button"
+                <IconButton
                     class="tool"
+                    label="Undo"
                     {@attach tooltip('Undo', { shortcut: 'Mod+KeyZ' })}
-                    aria-label="Undo"
                     disabled={locked || !canUndo}
-                    onclick={() => undo()}><FaUndo /></button
+                    onClick={() => undo()}><FaUndo /></IconButton
                 >
-                <button
-                    type="button"
+                <IconButton
                     class="tool"
+                    label="Redo"
                     {@attach tooltip('Redo', { shortcut: 'Mod+Shift+KeyZ' })}
-                    aria-label="Redo"
                     disabled={locked || !canRedo}
-                    onclick={() => undo(true)}><FaRedo /></button
+                    onClick={() => undo(true)}><FaRedo /></IconButton
                 >
             </div>
             <!-- a palette too large for the row puts the colours under the tools rather than
@@ -1412,20 +1467,19 @@
                                         class:open={dropdown === entry.tool}
                                         bind:this={anchors[entry.tool]}
                                     >
-                                        <button
-                                            type="button"
+                                        <IconButton
                                             class="tool"
+                                            label={entry.label}
                                             {@attach tooltip(
                                                 `${entry.label}: ${entry.description}.${tool === entry.tool ? ' Click again for settings.' : ''}`,
                                                 { shortcut: entry.key }
                                             )}
-                                            aria-label={entry.label}
-                                            aria-pressed={tool === entry.tool}
+                                            pressed={tool === entry.tool}
                                             disabled={locked && drawing}
-                                            onclick={() => pressTool(entry.tool)}
+                                            onClick={() => pressTool(entry.tool)}
                                         >
                                             <Icon />
-                                        </button>
+                                        </IconButton>
                                         <button
                                             type="button"
                                             class="caret"
@@ -1440,19 +1494,18 @@
                                         </button>
                                     </div>
                                 {:else}
-                                    <button
-                                        type="button"
+                                    <IconButton
                                         class="tool"
+                                        label={entry.label}
                                         {@attach tooltip(`${entry.label}: ${entry.description}.`, {
                                             shortcut: entry.key
                                         })}
-                                        aria-label={entry.label}
-                                        aria-pressed={tool === entry.tool}
+                                        pressed={tool === entry.tool}
                                         disabled={locked && drawing}
-                                        onclick={() => pressTool(entry.tool)}
+                                        onClick={() => pressTool(entry.tool)}
                                     >
                                         <Icon />
-                                    </button>
+                                    </IconButton>
                                 {/if}
                             {/if}
                         {/each}
@@ -1575,51 +1628,46 @@
                 </div>
             </div>
             <div class="group view">
-                <button
-                    type="button"
+                <IconButton
                     class="tool"
+                    label="Zoom out"
                     {@attach tooltip('Zoom out', { shortcut: '-' })}
-                    aria-label="Zoom out"
-                    onclick={() => zoomStep(true)}><FaSearchMinus /></button
+                    onClick={() => zoomStep(true)}><FaSearchMinus /></IconButton
                 >
-                <button
-                    type="button"
+                <IconButton
                     class="tool"
+                    label="Zoom in"
                     {@attach tooltip('Zoom in', { shortcut: '+' })}
-                    aria-label="Zoom in"
-                    onclick={() => zoomStep()}><FaSearchPlus /></button
+                    onClick={() => zoomStep()}><FaSearchPlus /></IconButton
                 >
-                <button
-                    type="button"
+                <IconButton
                     class="tool"
+                    label="Fit image"
                     {@attach tooltip('Fit the whole image in the editor', { shortcut: '0' })}
-                    aria-label="Fit image"
-                    onclick={() => fit(true)}><FaCompress /></button
+                    onClick={() => fit(true)}><FaCompress /></IconButton
                 >
                 <!-- pressed while its lines are drawn; its card turns them on and off and sizes them -->
-                <button
-                    type="button"
+                <IconButton
                     class="tool"
+                    label="Cell grid"
                     {@attach tooltip('Configure the grid for sprite frames or tiles')}
-                    aria-label="Cell grid"
-                    aria-pressed={!!grid}
+                    pressed={!!grid}
                     aria-haspopup="dialog"
                     aria-expanded={dropdown === 'grid'}
-                    bind:this={anchors.grid}
-                    onclick={() => toggleViewCard('grid')}><FaBorderAll /></button
+                    bind:el={anchors.grid}
+                    onClick={() => toggleViewCard('grid')}><FaBorderAll /></IconButton
                 >
-                <button
-                    type="button"
+                <IconButton
                     class="tool"
+                    label="Canvas size"
                     {@attach tooltip(
                         'Crop or expand the canvas, keeping existing pixels at the top left'
                     )}
-                    aria-label="Canvas size"
                     aria-haspopup="dialog"
                     aria-expanded={dropdown === 'canvas'}
                     disabled={locked || !doc}
-                    bind:this={anchors.canvas}
-                    onclick={() => toggleViewCard('canvas')}><FaCropAlt /></button
+                    bind:el={anchors.canvas}
+                    onClick={() => toggleViewCard('canvas')}><FaCropAlt /></IconButton
                 >
             </div>
         </div>
@@ -1657,9 +1705,18 @@
                   ? 'Canvas size'
                   : `${TOOLS.find((entry) => entry.tool === of)?.label} settings`}
             bind:this={dropdownCard}
+            bind:offsetWidth={dropdownWidth}
+            bind:offsetHeight={dropdownHeight}
             style:top="{dropdownPlace.top}px"
             style:left="{dropdownPlace.left}px"
         >
+            <PopoverOutline
+                width={dropdownWidth}
+                height={dropdownHeight}
+                side={dropdownPlace.side}
+                at={dropdownPlace.arrow}
+                arrow={DROPDOWN_ARROW}
+            />
             {#if of === 'pencil' || of === 'erase'}
                 <div class="setting">
                     <span>Size (px)</span>
@@ -1763,13 +1820,13 @@
                         {canvasProblem ?? 'Crops or adds space on the right and bottom.'}
                     </p>
                     <div class="card-actions">
-                        <button type="button" class="action" onclick={closeCanvasForm}
-                            >Cancel</button
+                        <Button kind="ghost" size="sm" bordered onClick={closeCanvasForm}
+                            >Cancel</Button
                         >
-                        <button
+                        <Button
                             type="submit"
-                            class="action primary"
-                            disabled={!!canvasProblem || canvasUnchanged}>Resize</button
+                            size="sm"
+                            disabled={!!canvasProblem || canvasUnchanged}>Resize</Button
                         >
                     </div>
                 </form>
@@ -1811,8 +1868,9 @@
 </div>
 
 <style lang="scss">
+    @use '../../../../styles/popover.scss';
+
     .pixel-editor {
-        --pixel-line: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
         /* what the toolbar's buttons sit on, which the rule within a split button is cut in */
         --toolbar-surface: var(--secondary);
         --toolbar-pad: 0.3rem;
@@ -1831,8 +1889,8 @@
     }
     /* numbers that change under the pointer, in figures of one width, each with its room */
     .number {
-        font-family: 'Fira Code', monospace;
-        font-size: 0.75rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-caption);
     }
     .zoom {
         min-width: 5ch;
@@ -1844,23 +1902,22 @@
         gap: 0.3rem;
     }
     .axis {
-        opacity: 0.65;
+        color: var(--text-muted);
     }
     .coordinate {
         display: inline-block;
         min-width: 4ch;
     }
     /* at the far end, so the facts before it moving never move it */
-    .read-only {
+    .pixel-editor :global(.read-only) {
         margin-left: auto;
-        background: color-mix(in srgb, var(--warning, var(--accent)) 22%, transparent);
     }
     .pixel-toolbar {
         container: pixel-toolbar / inline-size;
         background: var(--toolbar-surface);
         padding: var(--toolbar-pad) 0.4rem;
-        border-bottom: 1px solid var(--pixel-line);
-        font-size: 0.8rem;
+        border-bottom: 1px solid var(--line);
+        font-size: var(--fs-small);
     }
     /* Undo and Redo at the left edge and the view at the right, the tools and colours centred
        between them in the room left, wrapping there rather than scrolling sideways */
@@ -1923,44 +1980,44 @@
     /* a tool with settings: the tool and the arrow that opens them, one button ruled in two */
     .split {
         display: flex;
-        border-radius: 0.3rem;
+        border-radius: var(--r-control);
 
-        .tool {
-            border-radius: 0.3rem 0 0 0.3rem;
+        :global(.tool) {
+            border-radius: var(--r-control) 0 0 var(--r-control);
         }
-        &.pressed .tool,
         &.pressed .caret {
             background: var(--accent);
             color: var(--accent-text);
         }
     }
+    /* as tall as the tools, an IconButton's medium size */
     .caret {
         display: grid;
         place-items: center;
         width: 0.95rem;
-        height: 1.9rem;
+        height: 1.8rem;
         padding: 0;
         border: none;
         border-left: 1px solid var(--toolbar-surface);
-        border-radius: 0 0.3rem 0.3rem 0;
+        border-radius: 0 var(--r-control) var(--r-control) 0;
         background: transparent;
         color: inherit;
         cursor: pointer;
 
         :global(svg) {
-            width: 0.45rem;
-            height: 0.45rem;
-            transition: transform 0.15s;
+            width: var(--fs-micro);
+            height: var(--fs-micro);
+            transition: transform var(--dur-base);
         }
         &:hover:not(:disabled) {
-            background: color-mix(in srgb, var(--tertiary) 55%, transparent);
+            background: var(--hover-bg);
         }
         &:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: -2px;
         }
         &:disabled {
-            opacity: 0.4;
+            opacity: 0.5;
             cursor: default;
         }
     }
@@ -1969,7 +2026,7 @@
         background: var(--accent);
     }
     /* the tools as buttons on the toolbar, so that a split one reads as one button cut in two */
-    .tool-set .tool:not([aria-pressed='true']),
+    .tool-set :global(.tool:not(.pressed)),
     .tool-set .split:not(.pressed) .caret {
         background: var(--tertiary);
         color: var(--tertiary-text);
@@ -1981,7 +2038,11 @@
     .split.open .caret :global(svg) {
         transform: rotate(180deg);
     }
+    /* a Popover, as the menus are, the raised colour of the tools' buttons, which it opens from:
+       its outline, arrow and all, is drawn behind it, so it draws no surface of its own; the
+       padding keeps the room the edge takes */
     .tool-settings {
+        @include popover.content;
         position: fixed;
         inset: auto;
         z-index: 100;
@@ -1990,14 +2051,11 @@
         gap: 0.5rem;
         min-width: 13rem;
         margin: 0;
-        padding: 0.6rem 0.7rem;
-        /* the raised colour of the tools' buttons, which it opens from */
-        border: 1px solid color-mix(in srgb, var(--tertiary-text) 15%, transparent);
-        border-radius: 0.5rem;
-        background: var(--tertiary);
-        color: var(--tertiary-text);
-        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
-        font-size: 0.8rem;
+        padding: calc(0.6rem + 1px) calc(0.7rem + 1px);
+        overflow: visible;
+        border: 0;
+        background: transparent;
+        font-size: var(--fs-small);
     }
     .setting {
         display: flex;
@@ -2008,7 +2066,7 @@
     .setting-hint {
         margin: 0;
         max-width: 15rem;
-        font-size: 0.72rem;
+        font-size: var(--fs-caption);
         line-height: 1.35;
         color: var(--hint);
     }
@@ -2018,8 +2076,8 @@
         padding: 0 0.15rem;
 
         :global(svg) {
-            width: 0.75rem;
-            height: 0.75rem;
+            width: var(--fs-caption);
+            height: var(--fs-caption);
         }
     }
     .current-swatch {
@@ -2049,38 +2107,6 @@
         flex-wrap: wrap;
         align-items: center;
         gap: var(--toolbar-pad);
-    }
-    .tool {
-        display: grid;
-        place-items: center;
-        width: 1.9rem;
-        height: 1.9rem;
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-
-        :global(svg) {
-            width: 0.85rem;
-            height: 0.85rem;
-        }
-        &:hover:not(:disabled) {
-            background: color-mix(in srgb, var(--tertiary) 55%, transparent);
-        }
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
-        /* the tool chosen keeps its colour under the pointer too */
-        &[aria-pressed='true'],
-        &[aria-pressed='true']:hover:not(:disabled) {
-            background: var(--accent);
-            color: var(--accent-text);
-        }
-        &:disabled {
-            opacity: 0.4;
-            cursor: default;
-        }
     }
     .size {
         display: flex;
@@ -2121,7 +2147,7 @@
         width: 1.25rem;
         height: 1.25rem;
         padding: 0;
-        border: 1px solid var(--pixel-line);
+        border: 1px solid var(--line);
         border-radius: 0.2rem;
         background:
             linear-gradient(var(--swatch), var(--swatch)),
@@ -2190,25 +2216,6 @@
         justify-content: flex-end;
         gap: 0.4rem;
     }
-    .action {
-        height: 1.8rem;
-        padding: 0 0.8rem;
-        border: 1px solid var(--pixel-line);
-        border-radius: 0.35rem;
-        background: var(--primary);
-        color: var(--primary-text);
-        font: inherit;
-        cursor: pointer;
-    }
-    .action:disabled {
-        opacity: 0.5;
-        cursor: default;
-    }
-    .action.primary {
-        border-color: transparent;
-        background: var(--accent);
-        color: var(--accent-text);
-    }
     .pixel-body {
         position: relative;
         flex: 1;
@@ -2230,13 +2237,13 @@
         margin: 2rem auto;
         max-width: 26rem;
         text-align: center;
-        opacity: 0.8;
+        color: var(--text-muted);
     }
     .probes {
         display: none;
     }
     .probe-line {
-        color: var(--pixel-line);
+        color: var(--line);
     }
     .probe-accent {
         color: var(--accent);

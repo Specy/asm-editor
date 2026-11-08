@@ -12,7 +12,7 @@
 <div class="status-codes" {style}>
     {#each statusCodes as el, i (i)}
         <div class="column flag">
-            <div style="opacity: 0.8;">
+            <div style="color: var(--text-muted);">
                 {el.name}
             </div>
             <div class="flag-value" class:edited={el.prev !== el.value}>
@@ -30,7 +30,7 @@
         gap: 0.3rem;
         justify-content: space-around;
         padding: 0.3rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
     }
     .edited {
         color: var(--accent);

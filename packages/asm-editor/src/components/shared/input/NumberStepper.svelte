@@ -16,8 +16,15 @@
         step?: number
         /** Names the number, its field's label, and its buttons' as "Less" and "More" of it. */
         ariaLabel: string
+        /** Its field's id, for a `<label for>` beside it. */
+        id?: string
         title?: string
         disabled?: boolean
+        /**
+         * Brings a number typed, or stepped to with − or +, onto the values the field takes; a
+         * whole number of `step`s when left out. What is not a number puts the field back.
+         */
+        snap?: (next: number) => number
         /** Each value it settles on: a press of − or +, or what was typed once committed. */
         onchange?: (value: number) => void
         el?: HTMLInputElement
@@ -29,16 +36,19 @@
         max = Infinity,
         step = 1,
         ariaLabel,
+        id,
         title,
         disabled = false,
+        snap = (next: number) => Math.round(next / step) * step,
         onchange,
         el = $bindable()
     }: Props = $props()
 
-    /** `next` as a whole number of steps within the limits; what was there for no number at all. */
+    /** `next` snapped and within the limits; what was there for no number at all. */
     function within(next: number) {
-        if (!Number.isFinite(next)) return value
-        return Math.min(max, Math.max(min, Math.round(next / step) * step))
+        const snapped = Number.isFinite(next) ? snap(next) : Number.NaN
+        if (!Number.isFinite(snapped)) return value
+        return Math.min(max, Math.max(min, snapped))
     }
 
     function settle(next: number) {
@@ -55,6 +65,7 @@
      drawn before it all the same -->
 <div class="stepper" class:disabled {title}>
     <input
+        {id}
         type="number"
         {min}
         {max}
@@ -65,7 +76,8 @@
         bind:this={el}
         oninput={(event) => {
             const typed = event.currentTarget.valueAsNumber
-            if (Number.isFinite(typed)) value = typed
+            //a number its snap refuses is never the value, so leaving the field puts back the last
+            if (Number.isFinite(typed) && Number.isFinite(snap(typed))) value = typed
         }}
         onchange={(event) => settle(event.currentTarget.valueAsNumber)}
     />
@@ -88,15 +100,14 @@
 </div>
 
 <style lang="scss">
-    /* one control: the field and its buttons inside one rounded box, which a host whose own
-       surface is --primary recolours to its fields' */
+    @use '../../../styles/field.scss';
+
+    /* one control: the field and its buttons inside one box, a field's (styles/field.scss), as a
+       Select is, each button set off from the number by the field's edge */
     .stepper {
+        @include field.surface;
         display: inline-flex;
         align-items: stretch;
-        height: 1.75rem;
-        border-radius: 0.35rem;
-        background: var(--stepper-background, var(--primary));
-        color: var(--stepper-text, var(--primary-text));
         overflow: hidden;
 
         /* ringed while the number is typed into, not after a press of − or + */
@@ -117,27 +128,33 @@
         background: transparent;
         color: inherit;
         cursor: pointer;
+        transition: background-color var(--dur-fast);
 
         :global(svg) {
-            width: 0.55rem;
-            height: 0.55rem;
+            width: var(--fs-micro);
+            height: var(--fs-micro);
         }
+        /* the hover every row and tool takes (D4), as a Select's */
         &:hover:not(:disabled) {
-            background: color-mix(in srgb, currentColor 12%, transparent);
+            background-color: var(--hover-bg);
         }
         &:disabled {
-            opacity: 0.35;
+            opacity: 0.5;
             cursor: default;
         }
     }
     .less {
         order: -1;
     }
+    /* between − and +, so it is edged on both sides, at full strength while a button beside it is
+       disabled and faded; a compact Select's height (Select.svelte, `compact`), its padding above
+       and below the text */
     input {
         width: 3.2rem;
         min-width: 0;
-        padding: 0;
+        padding: 0.4rem 0;
         border: none;
+        border-inline: 1px solid var(--line);
         background: transparent;
         color: inherit;
         font: inherit;

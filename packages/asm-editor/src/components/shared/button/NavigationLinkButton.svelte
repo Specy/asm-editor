@@ -1,68 +1,44 @@
 <script lang="ts">
+    /** A page's tile in a list of pages: a link **Card** with its title and an arrow shown on hover. */
     import FaArrowRight from '~icons/fa-solid/arrow-right'
     import type { ResolvedPathname } from '$app/types'
+    import Card from '#cmp/shared/layout/Card.svelte'
 
     interface Props {
         href: ResolvedPathname
-        /**
-         * Marks what the link leads to, for a list where each entry stands for something with a
-         * colour of its own. Left out, the button is the neutral one every other list uses.
-         */
-        color?: string | undefined
         children?: import('svelte').Snippet
     }
 
-    let { href, color = undefined, children }: Props = $props()
+    let { href, children }: Props = $props()
 </script>
 
-<a
-    class="link"
-    class:coloured={color !== undefined}
-    style={color ? `--link-accent: ${color}` : ''}
-    {href}
->
+<Card {href} class="navigation-link">
     {@render children?.()}
     <div class="arrow">
         <FaArrowRight />
     </div>
-</a>
+</Card>
 
 <style lang="scss">
-    .link {
-        padding: 1rem 2rem;
-        padding-right: 1rem;
+    /* as specific as it must be to lay the card out in a row over Card's own column */
+    :global(a.card.navigation-link) {
+        flex-direction: row;
         align-items: center;
-        border-radius: 0.5rem;
-        width: 100%;
-        display: flex;
-        gap: 1rem;
-        font-size: 1.2rem;
         justify-content: space-between;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        transition: all 0.2s;
-        &:hover {
-            background-color: var(--tertiary);
-            color: var(--tertiary-text);
-        }
-    }
-    .link.coloured {
-        border-left: 0.3rem solid var(--link-accent);
-        background-color: color-mix(in srgb, var(--link-accent) 8%, var(--secondary));
-        &:hover {
-            background-color: color-mix(in srgb, var(--link-accent) 18%, var(--secondary));
-        }
-    }
-    .link.coloured .arrow {
-        color: var(--link-accent);
+        gap: 1rem;
+        width: 100%;
+        padding: 1rem 1rem 1rem 2rem;
+        font-size: var(--fs-lead);
     }
     .arrow {
         opacity: 0;
         height: 1.5rem;
-        transition: all 0.2s;
+        transition:
+            opacity var(--dur-fast),
+            transform var(--dur-fast);
         transform: translateX(-1rem);
     }
-    .link:hover .arrow {
+    :global(.navigation-link:hover) .arrow {
         opacity: 1;
         transform: translateX(0);
     }

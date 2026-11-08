@@ -9,6 +9,7 @@
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { carriesComputerFiles, droppedFiles } from '#lib/fileDrops.ts'
     import { fade } from 'svelte/transition'
+    import { DUR_FAST, motion } from '#src/styles/motion.ts'
     import FaUpload from '~icons/fa-solid/upload'
 
     interface Props {
@@ -72,7 +73,7 @@
     title={hint?.replaceAll('**', '')}
     onclick={() => (onBrowse ? onBrowse() : input?.click())}
 >
-    <Icon size={1.8}>
+    <Icon size="h2">
         <FaUpload />
     </Icon>
     <span class="drop-zone-copy">
@@ -91,10 +92,10 @@
         class="drop-overlay"
         role="presentation"
         ondragleave={leave}
-        transition:fade={{ duration: 120 }}
+        transition:fade={{ duration: motion(DUR_FAST) }}
     >
         <div class="drop-overlay-frame">
-            <Icon size={2.6}>
+            <Icon size="h1">
                 <FaUpload />
             </Icon>
             <div class="drop-overlay-title">{dropLabel}</div>
@@ -114,16 +115,16 @@
         width: 100%;
         padding: 1rem;
         border: 1px dashed color-mix(in srgb, var(--hint) 35%, transparent);
-        border-radius: 0.5rem;
+        border-radius: var(--r-overlay);
         background-color: transparent;
         color: var(--hint);
         font: inherit;
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         text-align: left;
         cursor: pointer;
         transition:
-            border-color 0.2s,
-            color 0.2s;
+            border-color var(--dur-fast),
+            color var(--dur-fast);
 
         &:hover,
         &:focus-visible,
@@ -147,9 +148,9 @@
     }
 
     .drop-zone-hint {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         line-height: 1.5;
-        opacity: 0.8;
+        color: var(--text-muted);
     }
 
     .browse {
@@ -178,20 +179,20 @@
         height: 100%;
         padding: 1rem;
         border: 3px dashed var(--accent);
-        border-radius: 1rem;
+        border-radius: var(--r-overlay);
         background-color: color-mix(in srgb, var(--accent) 8%, transparent);
         color: var(--accent);
         text-align: center;
     }
 
     .drop-overlay-title {
-        font-size: 1.6rem;
-        font-weight: bold;
+        font-size: var(--fs-h2);
+        font-weight: 700;
     }
 
     .drop-overlay-hint {
         max-width: 32rem;
-        color: var(--background-text);
-        opacity: 0.8;
+        /* --text-muted's share of the page's text, named here as the frame around it is the accent */
+        color: color-mix(in srgb, var(--background-text) 68%, transparent);
     }
 </style>

@@ -13,8 +13,9 @@ import { toast } from '#stores/toastStore.ts'
 import WorkbenchPartHarness from './__fixtures__/WorkbenchPartHarness.svelte'
 import type { RailEntry } from './workbenchContext'
 
-//svelte/motion, which the side panel beside it in the harness loads, reads the reduced motion
-//query as it loads, before any hook runs
+// jsdom has no window.matchMedia, which these components read before any hook runs (the
+// reduced-motion setting through styles/motion.ts among them); answering yes also ends every
+// transition at once
 vi.hoisted(() => {
     window.matchMedia = (() => ({
         matches: true,

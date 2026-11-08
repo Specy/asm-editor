@@ -18,7 +18,7 @@ main:
     syscall
 ```
 
-Arithmetic instructions use the destination-first shape
+Arithmetic instructions put the destination first:
 `instruction destination, source, source`. The first `add` reads `$t0` and `$t1` but writes only
 `$t2`, so the original width and height remain available. The second `add` doubles their sum.
 
@@ -30,7 +30,7 @@ Subtraction makes source order visible. `sub $t5, $t0, $t1` means `$t5 = $t0 - $
 the last two operands would produce `12 - 30 = -18` instead.
 
 Once the program stops after the exit syscall, the registers panel shows hexadecimal values by
-default. The decimal column gives the corresponding numbers used in the calculation:
+default. The table below also gives each value in decimal:
 
 | Register | Meaning             | Shown in panel | Decimal |
 | -------- | ------------------- | -------------- | ------: |
@@ -44,15 +44,16 @@ default. The decimal column gives the corresponding numbers used in the calculat
 
 Now compute the same two results for inputs supplied by the test: leave twice the sum of `$t0` and
 `$t1` in `$t2`, and `$t0 - $t1` in `$t3`. Keep `$t0` and `$t1` unchanged. For `$t0 = 7` and
-`$t1 = 4`, what values will the three arithmetic instructions leave in `$t2` and `$t3`? Write them
+`$t1 = 4`, what values should end up in `$t2` and `$t3`? Write the three arithmetic instructions
 in the exercise editor, then select **Test** to check the final values of `$t0`, `$t1`, `$t2`, and
 `$t3`.
 
 After your program passes, you can try another pair. Select **Open in editor** on the exercise,
 then **Testcases**, then **+ New testcase**. Add a row with **+ Add register** for each of `$t0`,
 `$t1`, `$t2`, `$t3` and `$v0`, picking the register in the row's first column. Type the new `$t0`
-and `$t1` values under **Start** and the values you expect under **Expected**, in decimal or in hex
-such as `0x16` (10 for `$v0`, the exit service). Then select **Run all**.
+and `$t1` values under **Start** and the values you expect under **Expected**. You can enter values
+in decimal or in hex, such as `0x16`. Set the expected value of `$v0` to 10, the exit service
+number. Then select **Run all**.
 
 ```mips|playground|exercise|allow-open
 .text

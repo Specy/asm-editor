@@ -41,7 +41,7 @@
             aria-expanded={drawerOpen}
             onclick={onToggleMenu}
         >
-            <Icon size={1.2}><FaBars /></Icon>
+            <Icon size="lead"><FaBars /></Icon>
         </button>
     {:else}
         <a
@@ -66,11 +66,11 @@
         </a>
     {/if}
     <button type="button" class="action back" title="Go back to your projects" onclick={onBack}>
-        <Icon size={0.8}><FaAngleLeft /></Icon>
+        <Icon size="small"><FaAngleLeft /></Icon>
         <span class="label">Go back to your projects</span>
     </button>
     <button type="button" class="action donate" onclick={onDonate}>
-        <Icon size={0.7}><FaHeart /></Icon>
+        <Icon size="caption"><FaHeart /></Icon>
         Donate
     </button>
     <ShareMenu {onShare}>
@@ -82,14 +82,16 @@
                 aria-haspopup="dialog"
                 aria-expanded={expanded}
             >
-                <Icon size={0.75}><FaShareAlt /></Icon>
+                <Icon size="caption"><FaShareAlt /></Icon>
                 Share
             </button>
         {/snippet}
     </ShareMenu>
 </nav>
 
-<style>
+<style lang="scss">
+    @use '../../../styles/focus.scss' as *;
+
     .project-top-bar {
         display: flex;
         align-items: stretch;
@@ -118,6 +120,8 @@
         border-right: 1px solid var(--wb-line);
     }
 
+    /* the bar's own buttons, the logo among them: square cells the bar's whole height, edge to
+       edge, which take the hover tint (D4) as a whole */
     .action {
         display: inline-flex;
         align-items: center;
@@ -130,11 +134,15 @@
         font: inherit;
         white-space: nowrap;
         cursor: pointer;
-        transition:
-            background-color 0.15s ease,
-            color 0.15s ease;
+        transition: background-color var(--dur-fast);
+        @include focus-ring($inset: true);
+
+        &:hover {
+            background-color: var(--hover-bg);
+        }
     }
 
+    /* the logo, or on a phone the menu: as wide as the rail under it */
     .brand {
         flex: none;
         justify-content: center;
@@ -145,16 +153,6 @@
 
     :global(.workbench[data-device='desktop']) .brand {
         width: calc(var(--wb-rail-width) + 2 * var(--wb-gap));
-    }
-
-    .action:hover {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-    }
-
-    .action:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
     }
 
     .back,
@@ -174,11 +172,5 @@
 
     .share {
         margin-left: auto;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .action {
-            transition: none;
-        }
     }
 </style>

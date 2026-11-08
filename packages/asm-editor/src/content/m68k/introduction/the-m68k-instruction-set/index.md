@@ -10,7 +10,7 @@ in the previous lesson.
 
 ## A map of the instruction set
 
-M68K instructions have several broad kinds of job:
+M68K instructions perform several kinds of work:
 
 - **Moving data** copies values between the places where a program keeps them.
 - **Arithmetic** performs calculations such as addition and subtraction.
@@ -19,8 +19,7 @@ M68K instructions have several broad kinds of job:
 - **Changing execution order** chooses which instruction the processor carries out next.
 - **Processor and system operations** control parts of the machine beyond an ordinary calculation.
 
-These categories organize instructions by the kind of work they perform. A practical starting set
-has three instructions for calculating with register values: `move`, `add` and `sub`.
+Start with three instructions for working with register values: `move`, `add` and `sub`.
 
 ## Instructions have different shapes
 
@@ -95,8 +94,8 @@ and a long calculation updates all 32 bits:
     add.l #$00000100, d2    ; d2 becomes $11223410
 ```
 
-The upper 24 bits of `d0` survive the byte addition, and the upper 16 bits of `d1` survive the word
-addition. When a sum needs more room than the chosen size provides, the destination keeps the part
+The upper 24 bits of `d0` stay unchanged after the byte addition. The upper 16 bits of `d1` stay
+unchanged after the word addition. When a sum needs more room than the chosen size provides, the destination keeps the part
 that fits within the selected byte, word or long. The upper part outside that size remains unchanged.
 
 For example, when `d0` starts at `$AABBCCF0`, adding `$20` as a byte makes the low byte `$10` while

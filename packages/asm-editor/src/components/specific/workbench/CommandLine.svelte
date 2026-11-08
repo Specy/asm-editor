@@ -77,6 +77,8 @@
 </div>
 
 <style lang="scss">
+    @use '../../../styles/field.scss';
+
     /* a terminal's line, ruled off from the transcript under it; one line however long, scrolled
        sideways where the panel is narrower than it */
     .command-line {
@@ -85,7 +87,7 @@
         overflow-y: hidden;
         padding: 0.2rem 0.8rem;
         border-bottom: 1px solid var(--wb-line, color-mix(in srgb, var(--hint) 30%, transparent));
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     .line {
@@ -104,44 +106,37 @@
 
     .program {
         color: var(--accent);
-        font-weight: bold;
     }
 
-    /* the input reads as the rest of the line: no box, only an underline that shows it is typed in */
+    /* an inline editor in the line (styles/field.scss), its text the line's own, the ring inside
+       its edge while it is typed in */
     .arguments {
+        @include field.inline;
         min-width: 0;
-        padding: 0 0.1rem;
-        border: none;
-        border-bottom: 1px dashed color-mix(in srgb, var(--hint) 60%, transparent);
-        border-radius: 0;
-        background: transparent;
-        color: inherit;
+        padding: 0 0.3rem;
         font: inherit;
         field-sizing: content;
 
-        &:focus {
-            outline: none;
-            border-bottom: 1px solid var(--accent);
-        }
-
-        &::placeholder {
-            color: var(--hint);
-            opacity: 0.6;
-        }
-
         &.invalid {
-            border-bottom: 1px solid var(--red);
+            box-shadow: inset 0 0 0 1px var(--danger);
+        }
+
+        &.invalid:focus-visible {
+            outline-color: var(--danger);
         }
     }
 
+    /* while it runs, the line reads as the line it ran */
     .locked .arguments {
-        border-bottom-color: transparent;
+        box-shadow: none;
+        background: transparent;
+        color: inherit;
         cursor: default;
     }
 
     .problem {
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         font-size: 0.78em;
-        color: var(--red);
+        color: var(--danger);
     }
 </style>

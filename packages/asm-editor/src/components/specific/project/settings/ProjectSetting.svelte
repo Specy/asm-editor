@@ -6,9 +6,11 @@
         ProjectSettingValues
     } from '#lib/projectSettings.ts'
     import FaUndo from '~icons/fa-solid/undo'
-    import Icon from '#cmp/shared/layout/Icon.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import Switch from '#cmp/shared/input/Switch.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
+    import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     /**
@@ -58,16 +60,14 @@
     {/if}
     <div class="row value" style="gap: 0.4rem; align-items: center">
         {#if decided}
-            <button
+            <IconButton
                 class="reset"
+                label="Reset"
                 {@attach tooltip('Back to the default')}
-                aria-label="Reset"
-                onclick={onReset}
+                onClick={onReset}
             >
-                <Icon size={0.9}>
-                    <FaUndo />
-                </Icon>
-            </button>
+                <FaUndo />
+            </IconButton>
         {/if}
         {#if declaration.type === 'boolean'}
             <Switch
@@ -77,24 +77,23 @@
             />
         {:else if declaration.type === 'enum'}
             <Select
+                compact
                 {options}
                 value={String(value)}
                 ariaLabel={declaration.name}
-                style="padding: 0.4rem 0.6rem; background: var(--tertiary); color: var(--tertiary-text)"
                 wrapperStyle="min-width: 9rem; max-width: 12rem"
                 onChange={(value) => {
                     if (declaration.accepts(value)) onDecide(value)
                 }}
             />
         {:else if declaration.type === 'text'}
-            <input
+            <TextField
                 id="{id}-field"
                 class="text"
-                class:invalid={problem}
-                type="text"
+                mono
+                invalid={!!problem}
                 bind:value={textDraft}
                 placeholder={declaration.placeholder}
-                spellcheck="false"
                 autocomplete="off"
                 autocapitalize="off"
                 aria-invalid={problem ? 'true' : undefined}
@@ -105,15 +104,16 @@
                 }}
             />
         {:else}
-            <input
+            <!-- any number from 0, a fraction too, as the field took before; one that is not
+                 puts the field back, and only a value that changes is a decision -->
+            <NumberStepper
                 id="{id}-field"
-                class="number"
-                type="number"
-                min="0"
-                bind:value={draft}
-                onchange={() => {
-                    if (Number.isFinite(draft) && draft >= 0) onDecide(draft)
-                    else draft = typeof value === 'number' ? value : 0
+                min={0}
+                snap={(next) => (next >= 0 ? next : Number.NaN)}
+                value={draft}
+                ariaLabel={declaration.name}
+                onchange={(next) => {
+                    if (next !== value) onDecide(next)
                 }}
             />
         {/if}
@@ -124,7 +124,7 @@
 </div>
 
 <style lang="scss">
-    /* at least as tall as the reset button and the padding, so the button turning up beside a
+    /* at least as tall as a 2rem control and the padding, so the reset button turning up beside a
        switch the moment it is changed moves nothing */
     .settings-value {
         justify-content: space-between;
@@ -132,23 +132,12 @@
         gap: 0.4rem;
         min-height: calc(2rem + 0.4rem);
         padding: 0.2rem 0.4rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
     .name {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-    }
-    .reset {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 2rem;
-        height: 2rem;
-        border-radius: 0.4rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        cursor: pointer;
     }
     /* a line of text takes the width the row has, and its problem goes on a line of its own */
     .wide {
@@ -160,33 +149,16 @@
             min-width: 10rem;
         }
     }
-    .text {
+    .value :global(.text) {
         flex: 1;
-        min-width: 0;
         max-width: 16rem;
-        padding: 0.6rem 0.8rem;
-        border-radius: 0.4rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
-
-        &.invalid {
-            outline: 1px solid var(--red);
-        }
+        font-size: var(--fs-small);
     }
     .problem {
         flex-basis: 100%;
         margin: 0;
-        font-size: 0.75rem;
-        color: var(--red);
+        font-size: var(--fs-caption);
+        color: var(--danger);
         text-align: right;
-    }
-    .number {
-        padding: 0.6rem 1rem;
-        border-radius: 0.4rem;
-        width: 7rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
     }
 </style>

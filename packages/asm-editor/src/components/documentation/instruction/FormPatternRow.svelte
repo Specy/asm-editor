@@ -174,7 +174,7 @@
         padding: 0.25rem 0.5rem 0.25rem 0.3rem;
     }
     .pattern-head.expandable:hover {
-        background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
+        background-color: var(--hover-bg);
     }
     .pattern-head:has(.toggle:focus-visible) {
         outline: 2px solid var(--accent);
@@ -209,7 +209,7 @@
         border: none;
         border-radius: 0.3rem;
         background: transparent;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
         cursor: pointer;
     }
     .toggle:focus-visible {
@@ -217,24 +217,28 @@
     }
     .chevron {
         display: flex;
-        width: 0.6rem;
-        height: 0.6rem;
-        transition: transform 0.15s ease;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
+        transition: transform var(--dur-base) ease;
     }
     .expanded .chevron {
         transform: rotate(90deg);
     }
+    /* On the page everything in a row reads a step larger than in the panel (owner, 2026-11-08):
+       the syntax a step above the editor's 16px, at --fs-prose; the facts, notes, details and
+       forms at --fs-body; the size chips at --fs-small. The panel keeps its dense sizes */
     .syntax {
         min-width: 0;
-        font-family: var(--example-font-family, 'Fira Code', monospace);
-        font-size: var(--example-font-size, 1rem);
-        line-height: var(--example-line-height, 1.4);
+        font-family: var(--example-font-family, var(--font-mono));
+        font-size: var(--fs-prose);
+        line-height: 1.4;
         font-variant-ligatures: none;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
     }
     .compact .syntax {
-        font-size: 0.9rem;
+        font-size: var(--entry-text-size, var(--fs-small));
+        line-height: var(--example-line-height, 1.4);
     }
     .symbol {
         padding: 0;
@@ -260,11 +264,14 @@
     .chip {
         padding: 0 0.35rem;
         border-radius: 0.3rem;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.75rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         line-height: 1.5;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
+    }
+    .compact .chip {
+        font-size: var(--entry-caption-size, var(--fs-caption));
     }
     .chip[title] {
         cursor: help;
@@ -275,22 +282,22 @@
         align-items: baseline;
         gap: 0.1rem 0.4rem;
         margin-left: auto;
-        font-size: 0.85rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-body);
+        color: var(--background-text-prose);
     }
     /* In the narrow panel the fact line sits under the syntax, past the toggle */
     .compact .pattern-facts {
         flex-basis: 100%;
         margin-left: 1.8rem;
-        font-size: 0.8rem;
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     .dot {
-        opacity: 0.6;
+        color: var(--text-muted);
     }
     .row-note {
         margin: -0.15rem 0.8rem 0.35rem 2.3rem;
-        font-size: 0.85rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-body);
+        color: var(--background-text-prose);
     }
     .body {
         display: flex;
@@ -309,7 +316,7 @@
         align-items: baseline;
         gap: 0.35rem 0.6rem;
         padding: 0.2rem 0;
-        font-size: 0.85rem;
+        font-size: var(--fs-body);
     }
     .detail-label {
         min-width: 11rem;
@@ -317,7 +324,7 @@
     }
     .detail-name {
         margin-left: 0.3em;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .modes {
         display: flex;
@@ -326,9 +333,9 @@
     }
     .mode {
         padding: 0.1rem 0.4rem;
-        border-radius: 0.25rem;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.8rem;
+        border-radius: var(--r-chip);
+        font-family: var(--font-mono);
+        font-size: var(--fs-body);
         font-variant-ligatures: none;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
@@ -361,7 +368,7 @@
         gap: 0.3rem;
         padding: 0.5rem 0;
         list-style: none;
-        font-size: 0.88rem;
+        font-size: var(--fs-body);
         min-width: 0;
     }
     .form-line {
@@ -390,18 +397,29 @@
     .form-note {
         max-width: 80ch;
         margin: 0;
-        font-size: 0.82rem;
-        color: var(--background-text-muted);
+        font-size: var(--fs-body);
+        color: var(--background-text-prose);
+    }
+    /* the panel's dense sizes, a step larger in an entry the Workbench's panel has expanded, which
+       sets `--entry-text-size` and `--entry-caption-size` (EntryRow; owner, 2026-11-08): the syntax
+       then at the editor's 16px, as the entry's code samples are */
+    .compact :is(.row-note, .detail, .mode, .form, .form-note) {
+        font-size: var(--entry-text-size, var(--fs-small));
     }
     .form-facts {
         margin-left: 0.5rem;
     }
     .arrow {
         display: flex;
-        width: 0.75rem;
-        height: 0.75rem;
+        width: var(--fs-small);
+        height: var(--fs-small);
+        margin-top: 0.5rem;
+        color: var(--background-text-prose);
+    }
+    .compact .arrow {
+        width: var(--entry-caption-size, var(--fs-caption));
+        height: var(--entry-caption-size, var(--fs-caption));
         margin-top: 0.45rem;
-        color: var(--background-text-muted);
     }
     .expansion {
         flex: 0 1 auto;

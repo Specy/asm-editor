@@ -1,43 +1,111 @@
-// The `workbench` variant of `Button` and `ButtonLink` (buttonVariant.ts), included inside their
-// `.btn` rule. `$disabled` is how each marks a disabled button: the attribute on a button, a class
-// on a link.
+@use './tray.scss';
+@use '../../../styles/field.scss';
 
+// `Button` and `ButtonLink` (buttonVariant.ts), included in their `.btn` rule. `$disabled` is how
+// each marks a disabled button: the attribute on a button, a class on a link. A rule that sets a
+// fill is as specific as `.btn` and one class, as the old `.btn.workbench` was. The size rules
+// (`md`, `sm`) weigh only `.btn` and the scoping class, the rest behind `:where()` (owner,
+// 2026-11-08): a page that sizes its buttons with `.something :global(.btn)` outweighs them
+// whichever stylesheet loads last, where it used to tie and win or lose by load order.
+
+@mixin button($disabled) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    border: none;
+    text-align: center;
+    user-select: none;
+    cursor: pointer;
+
+    // the roles (D5): the accent; a field's fill and text (styles/field.scss), as a Select's
+    // (owner, 2026-11-08); nothing until hovered
+    &.primary {
+        background-color: var(--accent);
+        color: var(--accent-text);
+    }
+    &.secondary {
+        background-color: field.$fill;
+        color: field.$text;
+    }
+    &.ghost {
+        background-color: transparent;
+        color: inherit;
+    }
+    // a fill or text that is data, in place of the role's (planning decision 7)
+    &.data-fill {
+        background-color: var(--btn-color);
+    }
+    &.data-text {
+        color: var(--btn-text);
+    }
+
+    &#{$disabled} {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    @include workbench($disabled);
+}
+
+// The `workbench` look (buttonVariant.ts): its radius, sizes, weight and hovers, behind
+// `:where()`, which adds nothing to a rule's weight. The ghost's face is a tray tool's (tray.scss),
+// so the two cannot drift (planning decision 6).
 @mixin workbench($disabled) {
-    &.workbench {
-        padding: 0.5rem 0.9rem;
+    &:where(.workbench) {
         border: 1px solid transparent;
-        border-radius: var(--wb-radius, 0.4rem);
-        font-size: 0.95rem;
+        border-radius: var(--r-control);
         font-weight: 500;
         transition:
-            background-color 0.15s,
-            border-color 0.15s,
-            color 0.15s;
+            background-color var(--dur-fast),
+            border-color var(--dur-fast),
+            color var(--dur-fast);
+    }
+    &:where(.workbench).ghost {
+        @include tray.tool-face;
+    }
+    // a link has no :disabled, which the tool's hover leaves out
+    &:where(.workbench).ghost#{$disabled}:hover {
+        background-color: transparent;
+    }
 
-        &:hover {
-            filter: none;
-            background-color: color-mix(in srgb, var(--btn-color) 85%, white);
-        }
+    &:where(.workbench.md) {
+        padding: 0.5rem 0.9rem;
+        font-size: 0.95rem;
+    }
+    &:where(.workbench.sm) {
+        padding: 0.3rem 0.75rem;
+        font-size: var(--fs-small);
+    }
 
-        &.surface:hover {
-            background-color: color-mix(in srgb, var(--tertiary) 55%, var(--btn-color));
-        }
+    &:where(.workbench).bordered {
+        border-color: var(--line);
+    }
 
-        &.active:hover {
-            background-color: color-mix(in srgb, var(--accent) 85%, white);
-        }
+    // the accent and a data fill lighten toward white; a secondary takes the hover tint over its
+    // own, as a hovered row does (D4), mixed into its fill so that it fades in; the ghost's is the
+    // tray tool's
+    &:where(.workbench).primary:hover:not(#{$disabled}),
+    &:where(.workbench).data-fill:hover:not(#{$disabled}) {
+        background-color: color-mix(in srgb, var(--btn-color, var(--accent)) 85%, white);
+    }
+    &:where(.workbench).secondary:where(:not(.data-fill)):hover:not(#{$disabled}) {
+        background-color: color-mix(in srgb, currentColor 10%, #{field.$fill});
+    }
 
-        &#{$disabled}:hover {
-            background-color: var(--btn-color);
-        }
-
-        &.bordered {
-            border-color: var(--wb-line, color-mix(in srgb, var(--tertiary) 60%, transparent));
-        }
-
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-        }
+    // on, as a toggle that is pressed, whatever its role
+    &.active {
+        background-color: var(--accent);
+        color: var(--accent-text);
+    }
+    &:where(.workbench).active:hover:not(#{$disabled}) {
+        background-color: color-mix(in srgb, var(--accent) 85%, white);
+        background-image: none;
+    }
+    // a ghost's ring is drawn inside it (tray.scss, `tool-face`), where the accent would vanish on
+    // the accent fill: in the accent's text, as `tray.primary`'s is
+    &:where(.workbench).ghost.active:focus-visible {
+        outline-color: var(--accent-text);
     }
 }

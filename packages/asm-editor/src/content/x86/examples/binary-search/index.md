@@ -7,7 +7,8 @@ but `high` is the first position outside it. `rsi` holds `low`, `rdi` holds `hig
 `rcx` holds the middle position. Initially the range is `[0, COUNT)`. When `low == high`,
 no positions remain.
 
-Run this program with target 23. Its index goes in `r8`, or **-1** if the target is absent.
+Run this program to search for 23. The program stores its index in `r8`, or **-1** if the
+target is absent.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -66,7 +67,7 @@ between the bounds. Calculating the distance first avoids adding the bounds toge
 which could overflow for a very large array.
 
 Both updates discard a middle position already found to be wrong. If its value is too
-large, `high = mid` keeps positions below it. If too small, `low = mid + 1` keeps
+large, `high = mid` keeps positions below it. If its value is too small, `low = mid + 1` keeps
 positions above it. Either way, the range shrinks.
 
 Try target **3**, below the first value. The ranges go `[0, 6)`, `[0, 3)`,
@@ -78,7 +79,8 @@ becomes 0. The next `jae` ends the search with `r8 = -1`. No bound becomes negat
 Replace the two placeholder range updates in `search`. Set `high` to `mid` when the middle
 value is too large, or set `low` to `mid + 1` when it is too small. Before
 pressing **Test**, predict the answers for 23, 9, and 3. The program saves them in
-`r9`, `r10`, and `r12`. The last search checks the index-0 boundary case.
+`r9`, `r10`, and `r12`. The last search checks that the range becomes empty when the
+target is below the value at index 0.
 
 ```x86|playground|exercise
 default rel

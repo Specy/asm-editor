@@ -1,4 +1,4 @@
-A program's instructions, greeting and score all occupy bytes with different jobs. Instructions
+A program's instructions, greeting and score all occupy memory, but serve different purposes. Instructions
 need to be executable. The greeting can stay unchanged, while the score needs writable storage.
 A buffer needs room before it holds any input.
 
@@ -57,14 +57,14 @@ Use the address in each register to locate its bytes in the memory panel:
 | `r14`           | sixteen `00` bytes            | the reserved buffer             |
 
 The score's lowest byte comes first because x86 is little endian. Use these register-held addresses
-for inspection: changing the sections or their sizes can change where the linker places them.
+for inspection. Changing the sections or their sizes can change where the linker places them.
 
 The greeting, score and buffer have **static storage**. Their space lasts for the program's
 execution, and their sizes are established when it is built. The score can change; “static”
 describes the storage's lifetime.
 
 The executable stores the greeting's bytes and the score's initial bytes. For `.bss`, it records how
-much space to supply without carrying a payload of zero bytes. The loader supplies the buffer's
+much space to supply without storing all those zero bytes in the file. The loader supplies the buffer's
 sixteen zero-filled bytes in memory.
 
 ## Working space and the running memory map
@@ -73,8 +73,8 @@ The **stack** holds temporary values, such as saved registers. The stack pointer
 tracks its current position as work begins and ends.
 
 The **heap** provides storage requested during execution. A program can request room for an image
-whose size it learns from input, then release the storage when finished. Storage size alone does not
-decide its category: a fixed-size buffer can also occupy the stack.
+whose size it learns from input, then release the storage when finished. The size of a buffer does not
+determine where it is stored: a fixed-size buffer can also occupy the stack.
 
 Here is a possible map of a running program. The letters name ranges, not specific addresses; the
 table does not prescribe their order, sizes or gaps.
@@ -91,7 +91,7 @@ Two source sections, `.data` and `.bss`, contribute to region C. Stack and heap 
 even though their working contents do not come from those source sections.
 
 The Linux environment used for this course gives the program a **virtual address space**: its own
-view of memory addresses. The execution environment controls which storage those addresses reach
+view of memory addresses. The execution environment controls which storage those addresses refer to
 and whether a range may be read, written or executed.
 
 ## Some addresses reach devices
@@ -105,7 +105,7 @@ waiting character, so a second read could produce a different result. Reading or
 such as `score`, leaves its value in place.
 
 The operating system controls access to device ranges. This x86 playground runs a Linux user
-program, which has no device range until it asks the kernel for one: the system-call lesson shows
+program, which has no device range until it asks the kernel for one. The system-call lesson shows
 how a program maps the Screen's pixels into its memory.
 
 ## Build turns source into an executable
@@ -150,7 +150,7 @@ permissions and the execution environment provide the protection that prevents a
 A **file offset** counts bytes from the start of the file. A **virtual address** identifies a position
 in the running program's address space. An instruction's file offset alone cannot give its virtual
 address; the loading information connects them. The `.bss` buffer occupies memory without a
-corresponding payload of zero bytes in the file.
+corresponding sequence of zero bytes in the file.
 
 <details>
 <summary>Other executable formats</summary>
@@ -167,7 +167,7 @@ The [ELF specification](https://gabi.xinuos.com/elf/01-intro.html) documents ELF
 1. Which sections contain this program's instructions, greeting, score and buffer?
 2. What is the difference between the values in `r13` and `r15` after execution? Why do the score's
    bytes start with `0A`?
-3. Does `resb 16` add sixteen zero bytes as a payload to the executable? What space does it require
+3. Does `resb 16` store sixteen zero bytes in the executable? What space does it require
    when the program runs?
 4. Could one loadable segment prepare both the score and buffer? Does that make the stack another
    source section? Can a file offset alone tell you a running address?
@@ -180,7 +180,7 @@ The [ELF specification](https://gabi.xinuos.com/elf/01-intro.html) documents ELF
 1. `.text`, `.rodata`, `.data` and `.bss`, respectively.
 2. `r13` holds the address of `score`; `r15` holds the value 10 read there. Ten is hexadecimal `0A`,
    and little-endian order puts that lowest byte first, followed by seven zero bytes.
-3. No. The file records the space requirement rather than a payload of sixteen zero bytes. The
+3. No. The file records how much space is needed without storing sixteen zero bytes. The
    running program needs sixteen bytes of zero-filled memory for the buffer.
 4. Yes, one loadable segment can include `.data` and `.bss`. The stack is a runtime region supplied
    for execution. A file offset needs loading information to connect it to a virtual address.

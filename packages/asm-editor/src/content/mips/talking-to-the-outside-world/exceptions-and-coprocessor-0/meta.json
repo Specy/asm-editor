@@ -1,6 +1,6 @@
 {
     "name": "Exceptions and coprocessor 0",
-    "description": "How this Playground records synchronous exceptions in coprocessor 0, enters a handler, and returns with eret. EPC may be advanced when the handler chooses to skip the faulting instruction.",
+    "description": "Read the exception cause in coprocessor 0 and write a handler that skips a failed instruction and returns with eret.",
     "order": 2,
     "topic": "interrupts"
 }

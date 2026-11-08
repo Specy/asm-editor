@@ -2,7 +2,7 @@
     import Draggable from '#cmp/shared/draggable/Draggable.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaGripHorizontal from '~icons/fa-solid/grip-horizontal'
-    import Button from '#cmp/shared/button/Button.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import FaEye from '~icons/fa-solid/eye'
     import FaEyeSlash from '~icons/fa-solid/eye-slash'
     import FaWindowRestore from '~icons/fa-solid/window-restore'
@@ -250,11 +250,11 @@
 </script>
 
 {#snippet bar()}
-    <Icon
-        style="cursor:inherit; padding: 0.2rem 0.4rem; height: 1.4rem; width: 1.6rem; min-width: 1.6rem"
-    >
-        <FaGripHorizontal />
-    </Icon>
+    <span class="grip" aria-hidden="true">
+        <Icon size="small" style="cursor: inherit">
+            <FaGripHorizontal />
+        </Icon>
+    </span>
     <div class="ellipsis">{title}</div>
     {#if headerInfo}
         <div class="header-info row">
@@ -266,18 +266,19 @@
             {@render headerActions()}
         </div>
     {/if}
-    <Button
-        style="padding: 0.2rem 0.3rem; height: 1.4rem; border-radius: 0.3rem"
-        cssVar="secondary"
+    <!-- in the bar's corner, whose curve its own follows (the .bar-end rules) -->
+    <IconButton
+        size="sm"
+        class="bar-end"
+        label={onClose ? 'Close' : hidden ? `Show ${title}` : `Hide ${title}`}
         {@attach tooltip(onClose ? closeTitle : '', { shortcut: closeShortcut })}
-        aria-label={onClose ? 'Close' : undefined}
         onClick={(e) => {
             e.stopPropagation()
             if (onClose) return onClose()
             hidden = !hidden
         }}
     >
-        <Icon size={1.1}>
+        <Icon size="prose">
             {#if onClose}
                 <FaWindowRestore />
             {:else if !hidden}
@@ -286,7 +287,7 @@
                 <FaEyeSlash />
             {/if}
         </Icon>
-    </Button>
+    </IconButton>
 {/snippet}
 
 <Draggable {hiddenOnMobile} bind:left bind:top>
@@ -347,36 +348,82 @@
 </Draggable>
 
 <style lang="scss">
+    @use '../button/tray.scss';
+    @use '../../../styles/radius.scss' as *;
+
+    /* A Tray floating free over the Workbench (D3): its bar, the title strip it is dragged by, and
+       its body below, one frame round both with the tray's lift. The frame is the window's own
+       rather than the tray's hairline and corner: an --accent2 edge, which the hairline was too
+       faint to show against the Workbench, on a control's corner rather than an overlay's, as the
+       windows always had (owner, 2026-11-08). The edge is 1px, which screenWindow.ts measures the
+       Screen's window by */
+    $frame: var(--accent2);
+    $corner: var(--r-control);
+
     .tab-header {
         display: flex;
         min-width: 12rem;
         width: 100%;
         color: var(--secondary-text);
+        /* over the body's 1px top edge, by the 0.1rem screenWindow.ts counts the bar short by */
         margin-bottom: -0.1rem;
-        box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+        box-shadow: var(--shadow-2);
         justify-content: space-between;
         gap: 0.3rem;
         z-index: 2;
         height: 1.6rem;
-        transition: all 0.2s cubic-bezier(0, 1, 1, 1);
+        transition-property: width, min-width, border-radius;
+        transition-duration: var(--dur-base);
+        transition-timing-function: cubic-bezier(0, 1, 1, 1);
         align-items: center;
         cursor: move;
         background-color: var(--secondary);
         color: var(--secondary-text);
-        font-family: Rubik;
+        font-family: var(--font-ui);
         /* a button's own default, written down so the bar reads the same as a div */
-        font-size: 0.85rem;
+        font-size: var(--fs-small);
         position: relative;
-        border-top-left-radius: 0.4rem;
-        border-top-right-radius: 0.4rem;
-        border: 0.1rem solid transparent;
-        border-color: var(--accent2);
+        border-top-left-radius: $corner;
+        border-top-right-radius: $corner;
+        border: 1px solid $frame;
         &.hidden {
             width: 0;
             min-width: 9rem;
-            border-bottom-left-radius: 0.4rem;
-            border-bottom-right-radius: 0.4rem;
+            border-bottom-left-radius: $corner;
+            border-bottom-right-radius: $corner;
         }
+        /* over an open body its shadow falls round the window's top and sides only: the body
+           casts the rest, and nothing falls from the bar into it */
+        &:not(.hidden) {
+            clip-path: inset(-2rem -2rem 0 -2rem);
+        }
+    }
+
+    /* the button at the bar's end fills its height in its corner, so its own corner there runs
+       parallel to the bar's, inside its edge (D12): its hover and its focus ring never cover the
+       bar's rounded border. Folded, the bar is round at the bottom too */
+    /* the bar's two ends are squares as tall as the bar inside its edge, the grip's at its start
+       and the eye's (or Close's) at its end, each glyph centred in its own: the eye's hover fills
+       its square from the bar's top edge to its bottom one */
+    .grip,
+    .tab-header :global(.bar-end) {
+        flex: none;
+        align-self: stretch;
+        width: calc(1.6rem - 2px);
+        height: auto;
+    }
+
+    .grip {
+        display: grid;
+        place-items: center;
+        cursor: inherit;
+    }
+
+    .tab-header :global(.bar-end) {
+        border-top-right-radius: nested-radius($corner, $border: 1px);
+    }
+    .tab-header.hidden :global(.bar-end) {
+        border-bottom-right-radius: nested-radius($corner, $border: 1px);
     }
 
     .header-info {
@@ -393,18 +440,25 @@
         margin-left: auto;
     }
 
+    /* the tray's tint, which blurs what is beneath, under what the window shows, in the window's
+       frame, its top edge under the bar's */
     .draggable-container-content {
+        @include tray.surface;
         interpolate-size: allow-keywords; /* 👈 */
-        border: 0.1rem solid var(--accent2);
-        border-bottom-left-radius: 0.8rem;
-        border-bottom-right-radius: 0.8rem;
+        border-width: 1px;
+        border-color: $frame;
+        border-radius: 0 0 $corner $corner;
         height: auto;
-        transition: all 0.2s;
+        transition-property: height, background-color, border-color, box-shadow, backdrop-filter;
+        transition-duration: var(--dur-base);
         overflow: hidden;
         &.hidden {
-            border: 0.1rem solid transparent;
+            border: 1px solid transparent;
+            background-color: transparent;
+            backdrop-filter: none;
+            box-shadow: none;
             height: 0;
-            transition: all 0s;
+            transition: none;
         }
         /* the body follows the pointer, not the pointer's position a fifth of a second ago */
         &.resizing {
@@ -444,7 +498,7 @@
         position: absolute;
         left: 0.8rem;
         right: 0.8rem;
-        /* centred on the body's 0.1rem bottom border, whose outer edge is the window's bottom */
+        /* centred on the body's 1px bottom border, whose outer edge is the window's bottom */
         bottom: -0.2rem;
         height: 0.5rem;
         cursor: ns-resize;
@@ -460,8 +514,8 @@
             border-radius: 0.125rem;
             transform: translate(-50%, -50%);
             /* the frame's own colour, a thickening of the border, until the pointer is on it */
-            background-color: var(--accent2);
-            transition: background-color 0.15s;
+            background-color: $frame;
+            transition: background-color var(--dur-fast);
         }
 
         &:hover::after,

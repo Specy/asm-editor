@@ -4,47 +4,76 @@
 // the one action that goes on, filled with the accent. Mixins, as `variants.scss` is, since each
 // tray sits, sizes and pads itself.
 
-// A tray floating over what is beneath, which it blurs through a tint holding `$tint` of
-// `--primary`. `--tray-line`, its hairline edge's colour, is for what inside is ruled the same.
-@mixin surface($tint: 80%) {
-    --tray-line: color-mix(in srgb, var(--tertiary) 60%, transparent);
-    color: var(--primary-text);
+// A tray's frame, over whatever fill it has: its hairline edge, its corner and its lift (D3, D13).
+// `--tray-line`, the edge's colour, is for what inside is ruled the same: the design system's
+// `--line`, under the trays' older name.
+@mixin frame {
+    --tray-line: var(--line);
     border: 1px solid var(--tray-line);
-    border-radius: 0.6rem;
-    background-color: color-mix(in srgb, var(--primary) #{$tint}, transparent);
-    backdrop-filter: blur(4px);
-    box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
-    font-family: Rubik;
+    border-radius: var(--r-overlay);
+    box-shadow: var(--shadow-2);
 }
 
-// A button in a tray's row, as tall as the row: its label, tinted on hover.
-@mixin tool($padding: 0.9rem, $font-size: 0.9rem) {
+// A tray floating over what is beneath, which it blurs through a tint holding `$tint` of
+// `--primary`, in its frame.
+@mixin surface($tint: 80%) {
+    @include frame;
+    color: var(--primary-text);
+    background-color: color-mix(in srgb, var(--primary) #{$tint}, transparent);
+    backdrop-filter: blur(4px);
+    font-family: var(--font-ui);
+}
+
+// A tool's face, wherever it sits, which the `ghost` Button wears too (variants.scss, planning
+// decision 6): its label alone, until the pointer takes it, then the surface's own text at 10%
+// (`--hover-bg`, D4), as every hovered row is. That is drawn from the button's colour, so a tool in
+// a colour of its own gives it to what is inside it and keeps the surface's text, or its hover
+// would be tinted with it (design-system-plan.md, Risks).
+@mixin tool-face {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100%;
-    padding: 0 $padding;
-    border: none;
-    border-radius: 0.4rem;
+    border-radius: var(--r-control);
     background-color: transparent;
-    color: var(--primary-text);
-    font-family: Rubik;
-    font-size: $font-size;
+    font-family: var(--font-ui);
     font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
     transition:
-        background-color 0.15s,
-        color 0.15s;
+        background-color var(--dur-fast),
+        color var(--dur-fast);
 
     &:hover:not(:disabled) {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
+        background-color: var(--hover-bg);
     }
 
+    // inside its edge; a tool filled with the accent draws it in the accent's text instead
+    // (`primary` below, a pressed ghost Button in variants.scss)
     &:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: -2px;
     }
+
+    // as every disabled control is; the execution dock draws its own, sunk into the tray
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+// A tool's look: its face, with no edge and its padding and size of text.
+@mixin tool-look($padding: 0.9rem, $font-size: 0.9rem) {
+    padding: 0 $padding;
+    border: none;
+    font-size: $font-size;
+    @include tool-face;
+}
+
+// A button in a tray's row, as tall as the row and in the tray's text.
+@mixin tool($padding: 0.9rem, $font-size: 0.9rem) {
+    @include tool-look($padding, $font-size);
+    height: 100%;
+    color: var(--primary-text);
 }
 
 // The tool that moves things on, filled with the accent; `null` leaves it as wide as its label.

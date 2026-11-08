@@ -67,7 +67,7 @@ exit:
 }
 ```
 
-The first element seeds the result: `$t1` becomes 12 and `$t2` becomes 0. This also works for an
+The first element sets the initial result: `$t1` becomes 12 and `$t2` becomes 0. This also works for an
 all-negative array, where starting the maximum at zero would give the wrong answer. Before the first
 loop check, `$t3` changes from 0 to 1. A one-element array exits at that check without trying to
 read index 1. On every later pass, the check happens before the address calculation and load. When
@@ -86,14 +86,14 @@ The update uses a strict comparison: `slt $t7, $t1, $t6` produces 1 only when th
 larger than the saved maximum. An equal value does not replace the result, so ties keep the first
 maximum's index.
 
-Because this example also keeps the index, it walks by **index**. A pointer plus a counter would
+Because this example also keeps the index, it uses that index to find each element's address. A pointer plus a counter would
 work too. Here `sll` turns the index into a byte offset, `addu` combines that offset with the base
 address, and `addiu` advances the index without signed-overflow traps.
 
 `slt` treats both operands as signed 32-bit integers. If the comparison is changed to
 `sltu $t7, $t1, $t6`, `$t1` ends with the same bits as `-4`. Interpreted unsigned, that result is
 4294967292 (`0xFFFFFFFC`), at index 1. Both instructions compare the same bits; the final `u`
-changes their meaning.
+changes how the operands are interpreted.
 
 Try these replacements for `COUNT` and `numbers`, predicting the five checked registers before each
 run. Use **Run** to inspect each edited case; the embedded **Test** expects the original array.

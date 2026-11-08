@@ -41,8 +41,8 @@
     {/if}
     {#if onClear}
         <Button
-            cssVar="tertiary"
-            style="padding: 0.25rem 0.65rem; font-size: 0.8rem; border-radius: 0.3rem"
+            kind="secondary"
+            size="sm"
             disabled={results.length === 0}
             {@attach tooltip('Clear the results of the last test run')}
             onClick={onClear}
@@ -52,8 +52,9 @@
     {/if}
     {#if onRun}
         <Button
-            cssVar="accent2"
-            style="padding: 0.25rem 0.65rem; font-size: 0.8rem; border-radius: 0.3rem"
+            bg="var(--accent2)"
+            color="var(--accent2-text)"
+            size="sm"
             disabled={disabled || testcases.length === 0}
             {@attach tooltip('Run every Testcase')}
             onClick={onRun}
@@ -69,7 +70,7 @@
         align-items: center;
         gap: 0.4rem;
         flex: none;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         font-weight: 400;
         letter-spacing: normal;
         text-transform: none;

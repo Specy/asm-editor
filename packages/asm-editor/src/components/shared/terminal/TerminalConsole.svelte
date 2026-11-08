@@ -450,7 +450,7 @@
            the panel's own text colour keeps its contrast on a dark panel and on a light one, and
            the bright half leans further towards it */
         --terminal-0: color-mix(in srgb, #000 55%, var(--secondary-text));
-        --terminal-1: var(--red);
+        --terminal-1: var(--danger);
         --terminal-2: color-mix(in srgb, #3fa65a 80%, var(--secondary-text));
         --terminal-3: color-mix(in srgb, #c9a227 80%, var(--secondary-text));
         --terminal-4: color-mix(in srgb, #3f82d8 80%, var(--secondary-text));
@@ -458,7 +458,7 @@
         --terminal-6: color-mix(in srgb, #2aa5b8 80%, var(--secondary-text));
         --terminal-7: color-mix(in srgb, #fff 35%, var(--secondary-text));
         --terminal-8: var(--hint);
-        --terminal-9: color-mix(in srgb, var(--red) 65%, var(--secondary-text));
+        --terminal-9: color-mix(in srgb, var(--danger) 65%, var(--secondary-text));
         --terminal-10: color-mix(in srgb, #3fa65a 55%, var(--secondary-text));
         --terminal-11: color-mix(in srgb, #c9a227 55%, var(--secondary-text));
         --terminal-12: color-mix(in srgb, #3f82d8 55%, var(--secondary-text));
@@ -474,7 +474,7 @@
            shift sideways */
         scrollbar-gutter: stable;
         padding: var(--terminal-padding, 0.5rem 0.5rem 0.5rem 0.8rem);
-        font-family: monospace;
+        font-family: var(--font-mono);
     }
 
     .interactive {
@@ -507,13 +507,13 @@
 
     .placeholder,
     .hint {
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         color: var(--hint);
         user-select: none;
     }
 
     .placeholder {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         font-style: italic;
     }
 
@@ -545,7 +545,7 @@
     }
 
     .bold {
-        font-weight: bold;
+        font-weight: 700;
     }
 
     @for $color from 0 through 15 {
@@ -629,15 +629,16 @@
         border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
         background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
         color: var(--secondary-text);
-        font-family: Rubik, sans-serif;
-        font-size: 0.75rem;
+        font-family: var(--font-ui);
+        font-size: var(--fs-caption);
         font-weight: 500;
         white-space: nowrap;
         cursor: pointer;
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
+        /* the hover tint over its fill (D4) */
         &:hover {
-            background-color: var(--tertiary);
+            background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
         }
 
         &:focus-visible {
@@ -649,14 +650,5 @@
             font-family: inherit;
             color: var(--hint);
         }
-    }
-
-    .visually-hidden {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
     }
 </style>

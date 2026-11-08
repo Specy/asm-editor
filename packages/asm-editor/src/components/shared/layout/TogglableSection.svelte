@@ -1,50 +1,115 @@
 <script lang="ts">
+    /**
+     * A section that folds under its heading, drawn as a disclosure: the heading holds the button
+     * that folds it (`<hN><button aria-expanded>`), so the title is in the page's outline at its
+     * `level` and the button says whether the section is open.
+     */
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     interface Props {
         open?: boolean
+        /** The heading's level in the page's outline. */
+        level?: 2 | 3 | 4
         style?: string
         sectionStyle?: string
+        /** The heading's text, which the button holds; no heading of its own. */
         title?: import('svelte').Snippet
+        /**
+         * A sidebar's section (the documentation's and the course's): its heading stays at the
+         * top of the box it scrolls in while its rows scroll under it, and its button is the
+         * whole row, out across the section's `inset` to the box's sides.
+         */
+        sticky?: boolean
+        /** A `sticky` section's room at its sides, which its heading's button spans. */
+        inset?: string
         children?: import('svelte').Snippet
     }
 
-    let { open = $bindable(true), style = '', sectionStyle = '', title, children }: Props = $props()
+    let {
+        open = $bindable(true),
+        level = 2,
+        style = '',
+        sectionStyle = '',
+        title,
+        sticky = false,
+        inset = '0rem',
+        children
+    }: Props = $props()
     let cantAnimate = $state(true)
+    const id = $props.id()
 </script>
 
-<section class="section" class:open {style}>
-    <button
-        class="section-title"
-        onclick={() => {
-            open = !open
-            cantAnimate = false
-        }}
-    >
-        <Icon
-            style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s cubic-bezier(.54,.9,0,.97); color: var(--accent); `}
-            size={1.4}
+<section class="section" class:open class:sticky style="--inset: {inset}; {style}">
+    <svelte:element this={`h${level}`} class="section-heading">
+        <button
+            class="section-title"
+            aria-expanded={open}
+            aria-controls={id}
+            onclick={() => {
+                open = !open
+                cantAnimate = false
+            }}
         >
-            <FaAngleRight />
-        </Icon>
-        {@render title?.()}
-    </button>
-    <div class="column sub-section-content" class:open class:cantAnimate style={sectionStyle}>
+            <Icon
+                style={`transform: rotate(${open ? 90 : 0}deg); transition: transform var(--dur-base) cubic-bezier(.54,.9,0,.97); color: var(--accent); `}
+                size="h3"
+            >
+                <FaAngleRight />
+            </Icon>
+            {@render title?.()}
+        </button>
+    </svelte:element>
+    <div {id} class="column sub-section-content" class:open class:cantAnimate style={sectionStyle}>
         {@render children?.()}
     </div>
 </section>
 
 <style lang="scss">
+    @use '../../../styles/focus.scss' as *;
+
+    /* the button draws the title; the heading only names its level */
+    .section-heading {
+        margin: 0;
+        font: inherit;
+    }
+
+    /* A sidebar's section (owner, 2026-11-08). Its heading is pinned at the top of the content of
+       the box it scrolls in, below that box's padding, where MaskedScroll's faded edge (as tall as
+       that padding, --mask-size) ends, on the sidebar's fill; its shadow, a copy of it moved up by
+       that edge, covers the band above it, so the rows that scroll on under it are hidden there
+       too. It stays inside its section, so it leaves with the section's
+       last row as the next heading comes up. It is drawn above the rows, which their fade-in
+       leaves a layer of their own. Its button is the whole row: out across the section's sides,
+       and 0.3rem under the title, which its margin gives back so nothing below moves. */
+    .sticky {
+        padding-inline: var(--inset);
+    }
+    .sticky > .section-heading {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        margin: 0 calc(-1 * var(--inset)) -0.3rem;
+        background-color: var(--secondary);
+        box-shadow: 0 calc(-1 * var(--mask-size, 0rem)) 0 var(--secondary);
+    }
+    .sticky .section-title {
+        width: 100%;
+        padding: 0 var(--inset) 0.3rem;
+        /* the ring inside the row: the box's sides would clip it */
+        @include focus-ring($inset: true);
+    }
+
     .section-title {
-        font-size: 1.5rem;
+        font-size: var(--fs-h3);
         display: flex;
         gap: 0.4rem;
         cursor: pointer;
         text-align: left;
         background-color: transparent;
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-ui);
         color: var(--secondary-text);
-        font-weight: bold;
+        /* the heft the titles had in Fira Code at 500: Rubik's 500 is a step heavier */
+        font-weight: 400;
         align-items: center;
     }
     .section {
@@ -57,11 +122,11 @@
         padding-left: 0.8rem;
         margin-left: 0.6rem;
         gap: 0.8rem;
-        border-left: 0.2rem solid var(--secondary);
+        border-left: 3px solid var(--secondary);
         opacity: 0;
         &.open {
             display: flex;
-            animation: fade-in 0.2s forwards;
+            animation: fade-in var(--dur-base) forwards;
         }
     }
 

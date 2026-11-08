@@ -77,6 +77,14 @@ export default defineConfig({
         sveltekit({
             preprocess: [vitePreprocess(), mdsvex()],
             extensions: ['.svelte', '.svx'],
+            // A page's stylesheets up to 50 KB inside its HTML, so a prerendered page paints
+            // without waiting for them: they shared the line with about 100 modulepreloads. That
+            // is every one a page links today (the root layout's is 19 KB, the Workbench look's
+            // viewport.css 44 KB); the Workbench's own (80 KB) and Monaco's (87 and 99 KB) stay
+            // files. On a production build with Slow 4G throttling a lecture painted at 1.02 s
+            // with its CSS inlined, 3.68 s with viewport.css linked (a 30 KB threshold), for 7 KB
+            // more of HTML (brotli).
+            inlineStyleThreshold: 50_000,
             // Written to the repository root, where the deploy picks it up.
             adapter: adapter({ pages: '../../build', assets: '../../build', fallback: '404.html' })
         }),

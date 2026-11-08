@@ -17,13 +17,13 @@
 <DefaultNavbar />
 <Page hasNavbar fillsScreen>
     {#if missing}
-        <ErrorState code="404" title="This page doesn't exist">
+        <ErrorState code="404" title="This page doesn't exist" pageTitle>
             Nothing is at <code>{page.url.pathname}</code>. The link may be out of date, or the
             address mistyped.
             {#snippet actions()}
                 <ButtonLink href={resolve('/')}>Home</ButtonLink>
-                <ButtonLink href={resolve('/projects')} cssVar="tertiary">Your projects</ButtonLink>
-                <ButtonLink href={resolve('/documentation')} cssVar="tertiary">
+                <ButtonLink href={resolve('/projects')} kind="secondary">Your projects</ButtonLink>
+                <ButtonLink href={resolve('/documentation')} kind="secondary">
                     Documentation
                 </ButtonLink>
             {/snippet}
@@ -32,12 +32,13 @@
         <ErrorState
             code={String(page.status)}
             title="Something went wrong"
+            pageTitle
             error={page.error?.message}
             reload
         >
             This page failed to load. Reloading it usually fixes that.
             {#snippet actions()}
-                <ButtonLink href={resolve('/')} cssVar="tertiary">Home</ButtonLink>
+                <ButtonLink href={resolve('/')} kind="secondary">Home</ButtonLink>
             {/snippet}
         </ErrorState>
     {/if}

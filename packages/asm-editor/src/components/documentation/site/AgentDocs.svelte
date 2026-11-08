@@ -6,7 +6,9 @@
      * with a button that copies it. On `/documentation` and in the home page's Documentation section.
      */
     import Button from '#cmp/shared/button/Button.svelte'
+    import CopyButton from '#cmp/shared/button/CopyButton.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
     import FaCopy from '~icons/fa-solid/copy'
     import FaExpandAlt from '~icons/fa-solid/expand-alt'
     import FaCompressAlt from '~icons/fa-solid/compress-alt'
@@ -34,12 +36,11 @@
     <p>Send this message to an AI assistant so they can search the docs of each Instruction Set.</p>
     <!-- the slot keeps the one-line height, so the whole message opens over what follows -->
     <div class="slot">
-        <div class="message" class:expanded>
-            <span class="text" class:expanded id={`${id}-message`}>{AGENT_MESSAGE}</span>
+        <Card class={['message', expanded && 'expanded']}>
+            <span class="text ellipsis" class:expanded id={`${id}-message`}>{AGENT_MESSAGE}</span>
             <div class="actions">
                 <Button
-                    cssVar="tertiary"
-                    hasIcon
+                    kind="secondary"
                     style={`${BUTTON_STYLE} width: var(--button); padding: 0;`}
                     aria-label={expanded
                         ? 'Show the message on one line'
@@ -51,21 +52,21 @@
                     )}
                     onClick={() => (expanded = !expanded)}
                 >
-                    <Icon size={0.85}>
+                    <Icon size="small">
                         {#if expanded}<FaCompressAlt />{:else}<FaExpandAlt />{/if}
                     </Icon>
                 </Button>
-                <Button
-                    cssVar="tertiary"
-                    hasIcon
-                    style={`${BUTTON_STYLE} padding: 0 0.75rem; font-size: 0.85rem; gap: 0.4rem;`}
-                    onClick={() => void copyText(AGENT_MESSAGE, 'Message')}
+                <CopyButton
+                    kind="secondary"
+                    size="sm"
+                    style={`${BUTTON_STYLE} padding: 0 0.75rem; gap: 0.4rem;`}
+                    copy={() => copyText(AGENT_MESSAGE, 'Message')}
                 >
-                    <Icon size={0.9}><FaCopy /></Icon>
+                    <Icon size="small"><FaCopy /></Icon>
                     Copy
-                </Button>
+                </CopyButton>
             </div>
-        </div>
+        </Card>
     </div>
 </section>
 
@@ -80,18 +81,17 @@
     }
     .heading {
         margin: 0;
-        font-size: 2rem;
+        font-size: var(--fs-h2);
     }
     .nested .heading {
-        font-size: 1.3rem;
+        font-size: var(--fs-h3);
     }
     p {
         margin: 0;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     .nested p {
-        color: inherit;
-        opacity: 0.85;
+        color: var(--text-muted);
     }
     .slot {
         --pad: 0.35rem;
@@ -100,27 +100,25 @@
         max-width: 34rem;
         height: calc(var(--button) + 2 * var(--pad) + 2px);
     }
-    .message {
+    /* a Card, in a row (as specific as it must be to win over Card's column) */
+    .slot > :global(div.card.message) {
         position: absolute;
         top: 0;
         left: 0;
         right: 0;
-        display: flex;
+        flex-direction: row;
         align-items: flex-start;
         gap: 0.5rem;
         padding: var(--pad) var(--pad) var(--pad) 0.8rem;
-        border: 1px solid var(--tertiary);
-        border-radius: 0.6rem;
-        background-color: var(--secondary);
     }
     /* it opens upward, over the text above it, so the buttons stay under the pointer and a
        section that clips what overflows its bottom, as the home page's do, cuts nothing off */
-    .message.expanded {
+    .slot > :global(div.card.message.expanded) {
         top: auto;
         bottom: 0;
         align-items: flex-end;
         z-index: 5;
-        box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.35);
+        box-shadow: var(--shadow-3);
     }
     .actions {
         display: flex;
@@ -131,17 +129,14 @@
         flex: 1;
         min-width: 0;
         color: var(--secondary-text);
-        font-family: 'Fira Code', monospace;
-        font-size: 0.85rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         /* one line is exactly a button high, so it sits level with them, and 1px lower than
            half the leading, since Fira Code draws its letters high in the line */
-        --line: 1.25rem;
-        --half: calc((var(--button) - var(--line)) / 2);
-        line-height: var(--line);
+        --line-height: 1.25rem;
+        --half: calc((var(--button) - var(--line-height)) / 2);
+        line-height: var(--line-height);
         padding: calc(var(--half) + 1px) 0 calc(var(--half) - 1px);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
     .text.expanded {
         white-space: normal;

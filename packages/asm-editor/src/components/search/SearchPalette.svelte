@@ -8,13 +8,16 @@
      *
      * The layout mounts it beside its sidebar, inside its theme scope: a fixed element inside the
      * sidebar, the navbar or a page would be broken by their transforms, and the theme's colours
-     * live on the scope rather than on the document.
+     * live on the scope rather than on the document. While it is open the page under it holds
+     * still (`lockPageScroll`); leaving the page closes it.
      */
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { tick, untrack } from 'svelte'
     import { cubicOut } from 'svelte/easing'
+    import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
-    import { goto } from '$app/navigation'
+    import { beforeNavigate, goto } from '$app/navigation'
     import type { ResolvedPathname } from '$app/types'
     import { hasCodeName } from '#lib/documentation/entries.ts'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
@@ -27,8 +30,10 @@
     import type { SearchScope } from '#lib/search/scope.ts'
     import HighlightedText from './HighlightedText.svelte'
     import SearchField from './SearchField.svelte'
+    import Kbd from '#cmp/shared/misc/Kbd.svelte'
     import { closeSearchPalette, openSearchPalette, searchPalette } from './paletteState.svelte'
     import { listenForSearchKey, typedInEditor } from './searchHotkey'
+    import { lockPageScroll } from '#lib/scrollLock.ts'
 
     interface Props {
         scope: SearchScope
@@ -85,6 +90,16 @@
         })
     })
 
+    $effect(() => {
+        if (!shown) return
+        return lockPageScroll()
+    })
+
+    // Back, or a link reached some other way, leaves the palette behind with the page it was over
+    beforeNavigate(() => {
+        if (shown) closeSearchPalette()
+    })
+
     let generation = 0
     $effect(() => {
         const text = query.trim()
@@ -113,27 +128,26 @@
         return () => clearTimeout(timer)
     })
 
-    function reducedMotion(): boolean {
-        return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    }
-
     function backdropFade(_node: HTMLElement) {
-        return { duration: 150, easing: cubicOut, css: (t: number) => `opacity: ${t};` }
+        return {
+            duration: motion(DUR_BASE),
+            easing: cubicOut,
+            css: (t: number) => `opacity: ${t};`
+        }
     }
 
     /**
-     * Drops in from just above where it settles and shrinks back into it; on a phone the sheet rises
-     * from just below instead. Reduced motion keeps the fade and drops the movement. Both ways run
-     * the same transition, so reopening while it closes turns it around rather than starting over.
+     * Drops in from just above where it settles and shrinks back into it, in a Tray's time
+     * (`--dur-base`); on a phone the sheet rises from just below instead. Reduced motion makes it
+     * come and go at once (`motion()`), as the backdrop does. Both ways run the same transition, so
+     * reopening while it closes turns it around rather than starting over.
      */
     function paletteMotion(_node: HTMLElement) {
-        const still = reducedMotion()
         const phone = window.matchMedia('(max-width: 600px)').matches
         return {
-            duration: 160,
+            duration: motion(DUR_BASE),
             easing: cubicOut,
             css: (t: number) => {
-                if (still) return `opacity: ${t};`
                 const u = 1 - t
                 return phone
                     ? `opacity: ${t}; transform: translateY(${u * 1.5}rem);`
@@ -192,8 +206,17 @@
 {/snippet}
 
 {#if shown}
+    <!-- the scrim, a sibling under the palette rather than around it -->
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-    <div class="backdrop" onclick={close} transition:backdropFade>
+    <div class="backdrop" onclick={close} transition:backdropFade></div>
+    <div class="place">
+        <!-- the scrim's blur, in four bands round the palette rather than under it: a blur is
+             worked out again over its whole area whenever anything over it changes, so one under
+             the palette blurred the whole page in every frame of a scroll through the results -->
+        <div class="band band-above" transition:backdropFade></div>
+        <div class="band band-left" transition:backdropFade></div>
+        <div class="band band-right" transition:backdropFade></div>
+        <div class="band band-below" transition:backdropFade></div>
         <div
             class="palette"
             transition:paletteMotion
@@ -201,11 +224,11 @@
             aria-modal="true"
             aria-label="Search"
             tabindex="-1"
-            onclick={(event) => event.stopPropagation()}
         >
             <div class="top">
                 <SearchField
                     bare
+                    semantic
                     bind:value={query}
                     bind:el={input}
                     {placeholder}
@@ -219,7 +242,7 @@
                     {onkeydown}
                 />
                 <!-- a phone has no Esc key and no backdrop around the sheet to tap -->
-                <button type="button" class="close" onclick={close}>Cancel</button>
+                <button type="button" class="close" onclick={close}><span>Cancel</span></button>
             </div>
             {#if !query.trim()}
                 <p class="hint">Write the name of an instruction, directive or any question.</p>
@@ -246,7 +269,7 @@
                                             ),
                                             languageLabel(result.entry.language.toUpperCase())
                                         )}<span class="dot" aria-hidden="true">·</span>{/if}<span
-                                        class="where"
+                                        class="where ellipsis"
                                         >{result.entry.category
                                             ? `${result.entry.chapterTitle} · ${categoryLabel(result.entry.category)}`
                                             : result.entry.chapterTitle}</span
@@ -261,16 +284,18 @@
                                         ><HighlightedText text={result.entry.title} {terms} /></span
                                     >
                                     {#if result.entry.signature}
-                                        <span class="signature">{result.entry.signature}</span>
+                                        <span class="signature ellipsis"
+                                            >{result.entry.signature}</span
+                                        >
                                     {/if}
                                 </span>
-                                <span class="line"
+                                <span class="line ellipsis"
                                     ><HighlightedText text={result.entry.summary} {terms} /></span
                                 >
                             {:else}
                                 <span class="kind"
                                     >{@render language(courseAccent(result.section.course))}<span
-                                        class="where"
+                                        class="where ellipsis"
                                         >{result.section.courseName} › {result.section
                                             .lectureName}</span
                                     ></span
@@ -284,25 +309,27 @@
                                         /></span
                                     ></span
                                 >
-                                <span class="line"
+                                <span class="line ellipsis"
                                     ><HighlightedText text={result.excerpt} {terms} /></span
                                 >
                             {/if}
                         </li>
                     {/each}
                     {#if results.length === 0 && searched === query.trim()}
-                        <li class="empty" role="presentation">Nothing matches “{query.trim()}”.</li>
+                        <li class="empty" role="presentation">
+                            <EmptyState>Nothing matches “{query.trim()}”.</EmptyState>
+                        </li>
                     {/if}
                 </ul>
             {/if}
             <footer>
                 <span
-                    ><kbd aria-label="Up"><FaArrowUp /></kbd><kbd aria-label="Down"
-                        ><FaArrowDown /></kbd
+                    ><Kbd aria-label="Up"><FaArrowUp /></Kbd><Kbd aria-label="Down"
+                        ><FaArrowDown /></Kbd
                     > to move</span
                 >
-                <span><kbd>Enter</kbd> to open</span>
-                <span><kbd>Esc</kbd> to close</span>
+                <span><Kbd>Enter</Kbd> to open</span>
+                <span><Kbd>Esc</Kbd> to close</span>
             </footer>
         </div>
     </div>
@@ -312,35 +339,79 @@
     @use '../shared/button/tray.scss';
 
     /* lighter than a modal's: the palette is a tray over the page, as the prompts are, and the page
-       stays readable around it */
+       stays readable around it, dimmed by the scrim and blurred by 2px (the bands below); the
+       floating Testcases window has the same (FloatingContainer.svelte) */
     .backdrop {
         position: fixed;
         inset: 0;
         z-index: 50;
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-        padding: 12vh 1rem 1rem;
-        background-color: rgb(0 0 0 / 35%);
+        background-color: var(--scrim);
     }
 
-    /* drawn as the app's trays (prompts, toasts, the execution dock): a translucent tint that blurs
-       what is beneath, a hairline edge, lifted by a shadow; denser and blurrier than a prompt's, as
-       it holds a page of text over a page of text. The field is its top, ruled off from the results
-       and the keys with the tray's own line */
+    /* where the palette sits over the scrim, which takes the clicks around it: 12vh from the top,
+       at most 42rem wide and 1rem from the sides, in the middle cell of a grid whose other cells
+       are the bands that blur the page round it. Its top and sides fall on whole pixels, so that
+       the bands meet there on a pixel's edge rather than sharing one */
+    .place {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        grid-template-columns:
+            round(down, calc((100% - min(42rem, 100% - 2rem)) / 2), 1px)
+            min(42rem, 100% - 2rem) 1fr;
+        grid-template-rows: round(12vh, 1px) auto minmax(1rem, 1fr);
+        pointer-events: none;
+    }
+
+    /* above and below the palette the whole width, beside it its height: edge to edge with it and
+       with each other, never over one another or over the palette, or the scroll's every frame
+       would blur them again */
+    .band {
+        backdrop-filter: blur(2px);
+    }
+
+    .band-above {
+        grid-area: 1 / 1 / 2 / 4;
+    }
+
+    .band-left {
+        grid-area: 2 / 1;
+    }
+
+    .band-right {
+        grid-area: 2 / 3;
+    }
+
+    .band-below {
+        grid-area: 3 / 1 / 4 / 4;
+    }
+
+    /* in a tray's frame (prompts, toasts, the execution dock): a hairline edge lifted by a shadow,
+       but on a solid fill rather than a tint that blurs what is beneath, which would be worked out
+       again in every frame of a scroll through the results. The fill is what its 94% tint of
+       --primary came to over the dimmed page: --primary with 2% of black. The field is its top,
+       ruled off from the results and the keys with the tray's own line. Over the bands, its
+       shadow too */
     .palette {
-        @include tray.surface(94%);
-        backdrop-filter: blur(16px);
+        @include tray.frame;
+        grid-area: 2 / 2;
+        position: relative;
+        z-index: 1;
+        color: var(--primary-text);
+        background-color: color-mix(in srgb, var(--primary) 98%, black);
+        font-family: var(--font-ui);
         display: flex;
         flex-direction: column;
         width: min(42rem, 100%);
-        /* the same box whether there are results or not, so it does not jump as they arrive */
-        min-height: min(26rem, 70vh);
-        max-height: 70vh;
+        /* the same box whether there are results or not, so it does not jump as they arrive; in
+           whole pixels, so that its bottom edge falls on one too */
+        min-height: round(min(26rem, 70vh), 1px);
+        max-height: round(70vh, 1px);
         overflow: hidden;
-        box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 0.4);
         outline: none;
         transform-origin: top center;
+        pointer-events: auto;
     }
 
     .top {
@@ -356,12 +427,17 @@
         flex: 1;
     }
 
+    /* its word in the accent, the button in the tray's text, which its hover is drawn from
+       (tray.tool-look) */
     .close {
         @include tray.tool(0.6rem);
         display: none;
         flex: none;
         height: 2rem;
-        color: var(--accent);
+
+        span {
+            color: var(--accent);
+        }
     }
 
     .results {
@@ -372,11 +448,14 @@
         padding: 0.35rem;
         list-style: none;
         overflow-y: auto;
+        /* its end is not the page's: a scroll past it stays here */
+        overscroll-behavior: contain;
         min-height: 0;
     }
 
-    /* a menu's rows: no surface until pointed at or chosen with the arrows, then the tint the tray's
-       buttons take on hover, with an accent edge so the chosen one reads at a glance */
+    /* a menu's rows: no surface until pointed at or reached with the arrows, then the tint every
+       hovered row takes, the palette's text at 10%; no accent, since the palette has no current
+       item */
     li {
         position: relative;
         display: flex;
@@ -389,18 +468,7 @@
     }
 
     li.selected {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-
-        &::before {
-            content: '';
-            position: absolute;
-            top: 0.45rem;
-            bottom: 0.45rem;
-            left: 0;
-            width: 2px;
-            border-radius: 1px;
-            background-color: var(--accent);
-        }
+        background-color: var(--hover-bg);
     }
 
     .kind {
@@ -408,8 +476,8 @@
         align-items: center;
         gap: 0.4rem;
         min-width: 0;
-        font-size: 0.72rem;
-        color: color-mix(in srgb, var(--primary-text) 60%, transparent);
+        font-size: var(--fs-caption);
+        color: var(--text-muted);
     }
 
     /* the square the home page's instruction sets wear */
@@ -434,14 +502,11 @@
 
     .dot {
         flex: none;
-        opacity: 0.6;
+        color: var(--text-muted);
     }
 
     .where {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     .title {
@@ -453,41 +518,35 @@
     }
 
     .code {
-        font-family: 'Fira Code', monospace;
+        font-family: var(--font-mono);
     }
 
     .signature {
         min-width: 0;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.8rem;
-        font-weight: normal;
-        opacity: 0.65;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
+        font-weight: 400;
+        color: var(--text-muted);
     }
 
     .line {
-        font-size: 0.85rem;
-        opacity: 0.75;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
     }
 
+    /* not a row: the empty state's own padding, at the rows' sides, in place of a row's */
     .empty {
-        padding: 0.8rem 0.7rem;
+        --empty-state-padding: 0.8rem 0.7rem;
+        padding: 0;
         cursor: default;
-        opacity: 0.65;
-        font-size: 0.9rem;
     }
 
     .hint {
         flex: 1;
         margin: 0;
         padding: 0.9rem 1.05rem;
-        opacity: 0.6;
-        font-size: 0.9rem;
+        color: var(--text-muted);
+        font-size: var(--fs-small);
     }
 
     footer {
@@ -497,8 +556,8 @@
         margin-top: auto;
         padding: 0.45rem 0.85rem;
         border-top: 1px solid var(--tray-line);
-        font-size: 0.75rem;
-        color: color-mix(in srgb, var(--primary-text) 65%, transparent);
+        font-size: var(--fs-caption);
+        color: var(--text-muted);
 
         span {
             display: inline-flex;
@@ -507,28 +566,14 @@
         }
     }
 
-    /* the keys the Tooltips show */
-    kbd {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 1.2rem;
-        height: 1.2rem;
-        padding: 0 0.3rem;
-        border: 1px solid color-mix(in srgb, var(--primary-text) 25%, transparent);
-        border-radius: 0.25rem;
-        font-family: inherit;
-        font-size: 0.7rem;
-
-        :global(svg) {
-            width: 0.55rem;
-            height: 0.55rem;
-        }
-    }
-
     @media (max-width: 600px) {
-        .backdrop {
-            padding: 0;
+        /* the sheet covers the page, so there is nothing round it to blur */
+        .place {
+            display: flex;
+        }
+
+        .band {
+            display: none;
         }
 
         .palette {

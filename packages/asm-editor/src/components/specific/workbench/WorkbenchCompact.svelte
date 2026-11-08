@@ -10,8 +10,7 @@
      * drawer from the left. Each editor keeps its file tabs; the Debug tools are sections.
      */
     import { untrack } from 'svelte'
-    import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
-    import { prefersReducedMotion } from 'svelte/motion'
+    import { prefersLessMotion } from '#src/styles/motion.ts'
     import Splitter from '#cmp/shared/layout/Splitter.svelte'
     import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
@@ -30,7 +29,6 @@
     import SidePanel from './SidePanel.svelte'
     import EditorArea from './EditorArea.svelte'
     import BottomPanel from './BottomPanel.svelte'
-    import ExecutionControls from './ExecutionControls.svelte'
     import RegistersArea from './RegistersArea.svelte'
     import MemoryStrip from './MemoryStrip.svelte'
     import SectionScreen from './SectionScreen.svelte'
@@ -103,7 +101,7 @@
 
     $effect(() => {
         const maximized = ui.maximized && !phone && !!ui.activePanel
-        if (maximized || !ui.activePanel || phone || prefersReducedMotion.current) restoring = false
+        if (maximized || !ui.activePanel || phone || prefersLessMotion()) restoring = false
         else if (wasMaximized) restoring = true
         wasMaximized = maximized
     })
@@ -113,14 +111,6 @@
         if (ui.screenWindowRequested && hasScreen && !screenOpen)
             workbenchLayout.setCollapsed('compact:screen', false)
     })
-    //the bar builds the controls group's Program (programs-plan.md, decision 8), so it is there
-    //while that pane shows an Entry file that is no C or C++, whose pane has Compile instead
-    const executionBar = $derived(
-        session.debugSession ||
-            session.restarting ||
-            (session.controlsGroup.displayedProgram !== undefined &&
-                !sourceLanguage(session.controlsGroup.displayedPath))
-    )
     //the Debug session's sections are built at the first Build and only hidden after a Stop
     let debugged = false
     const debugSectionsBuilt = $derived.by(() => {
@@ -144,7 +134,7 @@
     }
 </script>
 
-<div class="compact" class:phone class:no-controls-bar={!executionBar}>
+<div class="compact" class:phone>
     {#if phone && !externalMenu}
         <TopBar />
     {/if}
@@ -155,22 +145,14 @@
             <div class="rail-slot" class:joined={panelShown}><IconRail withBack withSave /></div>
         {/if}
         <div class="scroll" style:--compact-bottom-height="{bottomHeight}px">
-            <!-- a phone's controls are inside the editor, along its bottom edge -->
+            <!-- the execution controls are inside the editor, as on a desktop: along its bottom
+                 edge on a phone, at its corner on a tablet (owner, 2026-11-08; a tablet had them
+                 in a bar of their own under the editor) -->
             <EditorArea
-                controls={phone}
+                controls
                 fill={phone}
                 style="height: var(--compact-editor-height); flex: none;"
             />
-            {#if !phone && executionBar}
-                <div class="controls-bar">
-                    <ExecutionControls
-                        fill
-                        group={session.controlsGroup}
-                        showCompilation={false}
-                        showViews={false}
-                    />
-                </div>
-            {/if}
             <div class="bottom-room" aria-hidden="true" bind:clientHeight={bottomRoom}></div>
             <!-- the gap above the bottom panel, which the handle's margins take back from the
                  column; in Lines it is the rule from the editor and the controls -->
@@ -216,7 +198,6 @@
                                     <div class="memory-controls">
                                         <MemoryControls
                                             {emulator}
-                                            buttonVar="secondary"
                                             systemSize={emulator.systemSize}
                                             bytesPerPage={emulator.memory.global.pageSize}
                                             memorySize={MEMORY_SIZE[language]}
@@ -331,23 +312,15 @@
         }
     }
 
-    /* Before a Build the editor, the controls bar, the handle and the open bottom panel fill the
-       column exactly, so nothing scrolls while writing; the editor keeps that height after a Build,
+    /* Before a Build the editor, the handle and the open bottom panel fill the column exactly, so nothing scrolls while writing; the editor keeps that height after a Build,
        the Debug session's sections going below it. The column is a size container so the height
        comes from the room actually left under whatever bars sit above the Workbench, not from
        guessing them. */
     .scroll {
-        --compact-controls-height: calc(var(--wb-control-height) + 0.4rem);
-        /* the controls bar and the gap under it */
-        --compact-controls-room: calc(var(--compact-controls-height) + var(--wb-gap));
         --compact-editor-min: 14rem;
         --compact-editor-height: max(
             var(--compact-editor-min),
-            calc(
-                100cqh - var(--compact-controls-room) - var(--splitter-size) - var(
-                        --compact-bottom-height
-                    )
-            )
+            calc(100cqh - var(--splitter-size) - var(--compact-bottom-height))
         );
         container-type: size;
         display: flex;
@@ -363,36 +336,14 @@
         overscroll-behavior: contain;
     }
 
-    /* a phone's controls are inside the editor, so the column has no bar to leave room for */
-    .phone .scroll,
-    .no-controls-bar .scroll {
-        --compact-controls-room: 0px;
-    }
-
     /* the most the bottom panel may take, which leaves the editor its least, as a length the
        script reads */
     .bottom-room {
         position: absolute;
         width: 0;
-        height: calc(
-            100cqh - var(--compact-controls-room) - var(--splitter-size) - var(--compact-editor-min)
-        );
+        height: calc(100cqh - var(--splitter-size) - var(--compact-editor-min));
         visibility: hidden;
         pointer-events: none;
-    }
-
-    /* the execution controls, stuck in reach as the column scrolls: no card of their own, only the
-       buttons, whose gaps let the clicks through to what scrolls under them */
-    .controls-bar {
-        position: sticky;
-        top: var(--wb-gap);
-        z-index: 4;
-        flex: none;
-        height: var(--compact-controls-height);
-        padding: 0.2rem 0;
-        pointer-events: none;
-        /* out among the cards rather than over the code */
-        --execution-tray: var(--wb-surface);
     }
 
     .debug-sections.hidden {
@@ -491,7 +442,7 @@
         position: absolute;
         inset: 0;
         z-index: 11;
-        background-color: rgb(0 0 0 / 0.4);
+        background-color: var(--scrim);
         backdrop-filter: blur(1px);
         cursor: default;
     }
@@ -525,15 +476,15 @@
             pointer-events: none;
             transform: translateX(-100%);
             transition:
-                transform 0.2s ease,
-                visibility 0s 0.2s;
+                transform var(--dur-base) ease,
+                visibility 0s var(--dur-base);
 
             &.shown {
                 visibility: visible;
                 pointer-events: auto;
                 transform: translateX(0);
                 transition:
-                    transform 0.2s ease,
+                    transform var(--dur-base) ease,
                     visibility 0s;
             }
 
@@ -544,11 +495,11 @@
 
         &.maximized {
             width: calc(100% - var(--wb-rail-width) - 2 * var(--wb-gap));
-            animation: expand-panel-width 0.2s ease;
+            animation: expand-panel-width var(--dur-base) ease;
         }
 
         &.restoring {
-            animation: restore-panel-width 0.2s ease forwards;
+            animation: restore-panel-width var(--dur-base) ease forwards;
         }
     }
 

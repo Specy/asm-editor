@@ -21,8 +21,8 @@ Memory references need a width too, but the way it is written depends on the ins
 
 - In an ordinary move between a register and memory, the register selects the memory width.
   `mov eax, [value]` loads a dword, while `mov [value], ax` stores a word.
-- An extension instruction has two different widths. Its destination register supplies the wider
-  destination, and a memory source needs `byte`, `word`, or `dword` to state the narrower source:
+- An extension instruction has two different widths. Its destination register selects the wider
+  result size. A memory source needs `byte`, `word`, or `dword` to select the narrower source size:
   `movsx rbx, byte [value]`.
 - A numeric immediate has no register width. An immediate-to-memory store therefore needs an
   explicit memory size, as in `mov word [value], 5`.
@@ -80,8 +80,7 @@ The mathematical sum `200 + 100` is 300, whose binary form is `1_0010_1100`. The
 keeps `0010_1100`, so `r8b` becomes `0x2C`, or 44. Because only the low byte participated, the full
 `r8` becomes `0x112233445566772C`.
 
-The unsigned reading crossed its boundary: 255 is the largest unsigned byte, and 300 is 44 after
-one wrap. The signed reading is different. In a byte, the starting pattern for 200 is signed -56,
+As an unsigned addition, the result exceeds 255, the largest unsigned byte, and wraps to 44. The signed reading is different. In a byte, the starting pattern for 200 is signed -56,
 so that same addition is -56 + 100 = 44, which fits the signed byte range.
 
 The processor records those two views separately immediately after arithmetic. `CF` reports that an
@@ -97,8 +96,8 @@ stop the program.
 ## Widening a small value
 
 Loading a byte with `mov bl, [value]` makes that byte available for 8-bit work, but it replaces only
-the low byte of `rbx`. The other 56 bits keep their previous contents. To use the byte as a clean
-wider value, choose how its meaning should be preserved:
+the low byte of `rbx`. The other 56 bits keep their previous contents. To use the byte in a wider
+operation, choose how to preserve its signed or unsigned value:
 
 - **`movzx`** zero-extends. It fills the new high bits with zero, preserving the unsigned reading.
 - **`movsx`** sign-extends. It copies the old sign bit into the new high bits, preserving the signed
@@ -126,15 +125,14 @@ _start:
     syscall
 ```
 
-The destination names select 64-bit results. The keywords before the brackets select how many bytes
+The destination register names select 64-bit results. The keywords before the brackets select how many bytes
 to read before extending them. In the first two lines, the same memory byte `FD` becomes 253 after
 zero extension and -3 after sign extension.
 
 Changing `byte [sb]` to `word [sb]` would deliberately read two adjacent bytes starting at `sb`.
-Here that word would be `FDFD`: the `FD` at `sb`, followed by the first `FD` byte of `sw`. This
-crosses from one declaration into the next. It is useful for seeing that a label carries no size,
-but real code should depend on neighboring layout only when it intentionally defines the bytes as
-one larger object.
+Here that word would be `FDFD`: the `FD` at `sb`, followed by the first `FD` byte of `sw`. The load
+crosses from one declaration into the next because a label carries no size. Only read across
+declarations when you intend to treat their bytes as one larger object.
 
 ## Your turn
 

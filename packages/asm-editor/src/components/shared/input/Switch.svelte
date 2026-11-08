@@ -60,8 +60,8 @@
         background-color: var(--secondary);
         cursor: pointer;
         transition:
-            background-color 0.2s ease,
-            border-color 0.2s ease;
+            background-color var(--dur-fast) ease,
+            border-color var(--dur-fast) ease;
         &:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: 2px;
@@ -81,8 +81,8 @@
         background-color: var(--secondary-text);
         transform: translateX(0);
         transition:
-            transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-            background-color 0.2s ease;
+            transform var(--dur-fast) cubic-bezier(0.4, 0, 0.2, 1),
+            background-color var(--dur-fast) ease;
     }
     .on {
         background-color: var(--accent);

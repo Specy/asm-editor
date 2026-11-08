@@ -62,11 +62,12 @@
 <aside class="blog-outline">
     {#if sections.length}
         <nav aria-label="On this page">
-            <p class="blog-outline-title">On this page</p>
-            <ol>
+            <p class="group-title">On this page</p>
+            <ol class="rows">
                 {#each sections as section (section.id)}
                     <li>
                         <a
+                            class="row"
                             href={`#${section.id}`}
                             aria-current={(activeId || sections[0]?.id) === section.id
                                 ? 'location'
@@ -79,3 +80,35 @@
     {/if}
     <TryEditorLink />
 </aside>
+
+<style lang="scss">
+    @use '../../styles/outline.scss';
+    @use '../../styles/focus.scss' as *;
+
+    /* the course sidebar's and the exam builder's outline (styles/outline.scss): the heading as
+       its group title, level with the rows' text, no room above it so it stays level with the
+       article's back link (the aside's padding gives that room) */
+    .group-title {
+        @include outline.group-title;
+        padding-top: 0;
+    }
+
+    /* the sections as the outline's rows along the list's 1px rule: each row starts on the rule
+       (-1px), so the section being read lays its accent edge over it; edge to edge with no gap,
+       their own padding the rhythm, the row under the pointer in the hover tint, the keyboard's
+       ring inside the row (the list scrolls, so a ring outside it would be cut) */
+    .rows {
+        @include outline.rows;
+        border-left: 1px solid var(--line);
+    }
+    .row {
+        @include outline.row('[aria-current="location"]');
+        @include outline.row-padding;
+        @include focus-ring($inset: true);
+        margin-left: -1px;
+        font-size: var(--fs-small);
+        line-height: 1.45;
+        color: var(--background-text-prose);
+        text-decoration: none;
+    }
+</style>

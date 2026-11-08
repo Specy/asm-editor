@@ -1,6 +1,6 @@
-This program adds six qwords by walking from the address of the first one to the address just after
-the last one. `rsi` holds the address to read next, `rdi` holds the stopping address, and `rax` holds
-the running sum.
+This program adds six qwords by moving a pointer through an array. The pointer starts at the first
+element and stops just after the last one. `rsi` holds the address to read next, `rdi` holds the
+stopping address, and `rax` holds the running sum.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -42,7 +42,7 @@ condition is then false. The program compares with this end address but never re
 Run the program and inspect the registers. `r8` holds the answer, **108**: the program copies the
 sum there before setting `rax` to 60 for the exit syscall. `r9` saves the end address before the
 exit setup clears `rdi`. At the end, `rsi` and `r9` both show `0x402030`, 48 bytes past `numbers`
-at `0x402000`. This loop shape assumes the array has at least one qword, as it reads before
+at `0x402000`. This loop assumes the array has at least one qword, as it reads before
 checking whether it has reached the end.
 
 ## Your turn

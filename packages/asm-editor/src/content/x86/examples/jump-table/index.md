@@ -1,6 +1,6 @@
 A jump table chooses a case by using an index to read a code address from an array. A chain of
 `cmp` and conditional jumps may check several cases before finding a match. Here, one unsigned
-bounds check protects the table, then one indexed read and one indirect jump choose among the
+bounds check rejects invalid indices, then one indexed read and one indirect jump choose among the
 valid cases. Adding more cases does not add more comparisons to that path.
 
 Run this program first. In the register panel, check that `r8` is **30** when it finishes: `rcx`
@@ -49,7 +49,7 @@ qwords at `table` are therefore an array of instruction addresses. `lea rbx, [ta
 the address of `case2`.
 
 The brackets on `jmp [rbx + rcx*8]` mean that the instruction reads the qword at that memory
-address. Unlike `mov`, this load becomes the address of the **next instruction** (`rip`), so
+address. The jump uses the value it reads as the address of the **next instruction** (`rip`), so
 execution continues at `case2`. Each case jumps to `done` after setting `r8`; otherwise it
 would fall through into the next case.
 
@@ -63,7 +63,7 @@ to `out_of_range`, leaving `r8 = -1`. Restore `rcx` to 2 when you are done.
 
 The next program has five cases, numbered 0 through 4. Add **case 5**: append `case5` to the
 `table` declaration and write a `case5:` handler that puts **60** in `r8` and returns. Keep the
-indexed `jmp` as the dispatch. `CASES` is calculated from the table's byte length, so adding
+indexed `jmp` to select the case. `CASES` is calculated from the table's byte length, so adding
 one qword changes it from 5 to 6 without editing the `equ` line.
 
 The program calls `dispatch` twice. First, `rcx = 5` should select your new case; `_start`

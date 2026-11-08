@@ -1,8 +1,9 @@
-These two subroutines call themselves. `factorial(8)` returns 40320 in `$s0`, and `fib(10)`
-returns 55 in `$s1`. Both take a nonnegative integer in `$a0` and return a result in `$v0`.
+These two subroutines use recursion: they call themselves. Both take a nonnegative integer
+in `$a0` and return a result in `$v0`. The program calls `factorial(8)` and saves its result,
+40320, in `$s0`. It then calls `fib(10)` and saves its result, 55, in `$s1`.
 For factorial, `0!` and `1!` are both 1. For Fibonacci, `fib(0)` is 0 and `fib(1)` is 1.
-Negative inputs are outside these routines' contract. For a correct result, it must fit in 32 bits;
-we will try an input that exceeds that limit below.
+These routines do not support negative inputs. The result must fit in a signed 32-bit integer to be correct.
+You will try an input that exceeds that limit below.
 
 Each call reserves its own stack frame. When `factorial` calls itself, `$sp` moves down again,
 so `0($sp)` reaches a different saved `n` in each active call.

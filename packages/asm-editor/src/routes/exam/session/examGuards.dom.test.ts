@@ -1,8 +1,9 @@
 /**
- * The guards an exam session runs under: leaving fullscreen or the tab pauses the exam, and the
- * browser's find and print shortcuts are held back. Unlocking a finished exam with the teacher's
- * password reopens it under the same guards it started with. The Cores it warms up as it opens
- * are no reason to stop it when they fail to load.
+ * The guards an exam session runs under, once the student has started it from the start Card:
+ * leaving fullscreen or the tab pauses the exam, and the browser's find and print shortcuts are
+ * held back. Unlocking a finished exam with the teacher's password reopens it under the same
+ * guards it started with. The Cores it warms up as it opens are no reason to stop it when they
+ * fail to load.
  */
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test'
@@ -12,7 +13,8 @@ import { makeHash } from '#lib/utils.ts'
 import { Prompt } from '#stores/promptStore.svelte.ts'
 import { toast } from '#stores/toastStore.ts'
 
-// svelte/motion reads the reduced motion query as it loads, before any hook runs
+// jsdom has no window.matchMedia, which these components read before any hook runs (the
+// reduced-motion setting through styles/motion.ts among them)
 vi.hoisted(() => {
     window.matchMedia = (() => ({
         matches: false,
@@ -40,7 +42,6 @@ Element.prototype.animate ??= function () {
 Element.prototype.getAnimations ??= () => []
 
 beforeEach(() => {
-    vi.spyOn(Prompt, 'askText').mockResolvedValue('Ada')
     vi.spyOn(Prompt, 'confirm').mockResolvedValue(true)
     vi.spyOn(toast, 'logPill').mockImplementation(() => undefined)
     vi.spyOn(toast, 'error').mockImplementation(() => undefined)
@@ -57,7 +58,8 @@ afterEach(() => {
     localStorage.clear()
 })
 
-/** An exam session of one multiple-choice question, once the student has started it. */
+/** An exam session of one multiple-choice question, once the student has started it: their name
+ *  typed on the start Card and Start exam pressed. */
 async function startExam(unlockPassword: string) {
     const exam: ExamPayload = {
         version: 2,
@@ -87,6 +89,14 @@ async function startExam(unlockPassword: string) {
         [...target.querySelectorAll('button')].find(
             (button) => button.textContent?.trim() === label
         )
+    const name = await vi.waitFor(() => {
+        const field = target.querySelector<HTMLInputElement>('input[autocomplete="name"]')
+        expect(field).not.toBeNull()
+        return field!
+    })
+    name.value = 'Ada'
+    name.dispatchEvent(new Event('input', { bubbles: true }))
+    button('Start exam')!.click()
     await vi.waitFor(() => expect(button('Finish exam')).toBeDefined())
     return {
         button,
@@ -107,7 +117,7 @@ it('puts the guards back on a finished exam the teacher unlocks', async () => {
     expect(holdsBackFind()).toBe(true)
 
     session.button('Finish exam')!.click()
-    await vi.waitFor(() => expect(session.heading()).toBe('Exam Finished'))
+    await vi.waitFor(() => expect(session.heading()).toBe('Exam finished'))
     expect(holdsBackFind()).toBe(false)
 
     const password = document.querySelector<HTMLInputElement>(
@@ -124,6 +134,29 @@ it('puts the guards back on a finished exam the teacher unlocks', async () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     window.dispatchEvent(new Event('blur'))
     await vi.waitFor(() => expect(session.heading()).toBe('Exam disabled'))
+    await session.dispose()
+})
+
+//the session is inert under the notice, which would leave focus on the page's body both times
+it('moves focus into the disabled notice and gives it back on unlock', async () => {
+    const session = await startExam('teacher')
+    const choice = document.querySelector<HTMLInputElement>('input[type="radio"]')!
+    choice.focus()
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    window.dispatchEvent(new Event('blur'))
+    await vi.waitFor(() => expect(session.heading()).toBe('Exam disabled'))
+    const password = document.querySelector<HTMLInputElement>(
+        'input[placeholder="Unlock password"]'
+    )!
+    await vi.waitFor(() => expect(document.activeElement).toBe(password))
+
+    vi.mocked(document.hasFocus).mockReturnValue(true)
+    password.value = 'teacher'
+    password.dispatchEvent(new Event('input', { bubbles: true }))
+    session.button('Unlock')!.click()
+    await vi.waitFor(() => expect(session.heading()).toBeUndefined())
+    await vi.waitFor(() => expect(document.activeElement).toBe(choice))
     await session.dispose()
 })
 

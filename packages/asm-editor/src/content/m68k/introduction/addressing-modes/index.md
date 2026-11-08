@@ -1,7 +1,7 @@
 # Addressing modes
 
-An instruction needs to know where each operand comes from. An **addressing mode** is the rule an
-operand uses to obtain a value or name a place that an instruction can change.
+An instruction needs to know where to read or write each operand. An **addressing mode** specifies
+whether an operand is a value in the instruction, a register or a location in memory.
 
 Some modes name a value already in the instruction or a register. Other modes access memory. For a
 memory operand, the CPU may have to calculate an address first. The final memory address produced by
@@ -126,7 +126,7 @@ last line reads the long at `$2008` and puts 30 in `d0`.
 
 An index is a byte offset, not an element number. The four longs above begin 0, 4, 8 and 12 bytes
 after `$2000`. That is why the offset for the third long is 8 rather than 2. The read leaves the base
-register `a0` and index register `d1` unchanged; it changes the destination register `d0` to 30.
+register `a0` and index register `d1` unchanged. It changes the destination register `d0` to 30.
 
 A nonzero displacement can be combined with the index. With the same register values,
 `4(a0,d1.w)` has the effective address `$200C`.
@@ -178,17 +178,17 @@ changes `a0` first and then accesses memory at the new address.
 
 ## Recap
 
-| mode                       | example      | how it obtains its value or location                 |
-| -------------------------- | ------------ | ---------------------------------------------------- |
-| immediate                  | `#7`         | the number in the instruction                        |
-| data-register direct       | `d0`         | data register `d0`                                   |
-| address-register direct    | `a0`         | address register `a0`                                |
-| absolute                   | `$2000`      | memory at the fixed address `$2000`                  |
-| address-register indirect  | `(a0)`       | memory at the address in `a0`                        |
-| indirect with displacement | `4(a0)`      | memory at `a0 + 4`                                   |
-| indexed                    | `0(a0,d1.w)` | memory at `a0 +` the signed low word of `d1 + 0`     |
-| postincrement              | `(a0)+`      | memory at `a0`, then increase it by the access size  |
-| predecrement               | `-(a0)`      | decrease `a0` by the access size, then access memory |
+| mode                       | example      | how it obtains its value or location                   |
+| -------------------------- | ------------ | ------------------------------------------------------ |
+| immediate                  | `#7`         | the number in the instruction                          |
+| data-register direct       | `d0`         | data register `d0`                                     |
+| address-register direct    | `a0`         | address register `a0`                                  |
+| absolute                   | `$2000`      | memory at the fixed address `$2000`                    |
+| address-register indirect  | `(a0)`       | memory at the address in `a0`                          |
+| indirect with displacement | `4(a0)`      | memory at `a0 + 4`                                     |
+| indexed                    | `0(a0,d1.w)` | memory at `a0` plus the signed low word of `d1` plus 0 |
+| postincrement              | `(a0)+`      | memory at `a0`, then increase it by the access size    |
+| predecrement               | `-(a0)`      | decrease `a0` by the access size, then access memory   |
 
 Each instruction allows particular modes for each operand. One dependable rule is that an immediate
 operand can be a source but cannot be a destination: an instruction can use a written number, but it
@@ -207,7 +207,7 @@ The exercise starts with this memory:
 | `$2008` |                30 |
 | `$200C` |                40 |
 
-It also starts `a0` at `$2000`, puts the byte offset 8 in `d1`, and gives `d0` the sentinel value
+It also starts `a0` at `$2000`, puts the byte offset 8 in `d1`, and gives `d0` the initial value
 `$DEADBEEF`. Write one indexed `move.l` that reads the long at `a0 + d1` into `d0`. Leave `a0` and
 `d1` unchanged.
 
@@ -255,7 +255,7 @@ The exercise starts with byte `$7A` at `$2000` and long `$11223344` at `$2004`. 
 1. Use byte-sized postincrement through `a0` to read `$7A` into `d0`.
 2. Use long-sized predecrement through `a1` to read `$11223344` into `d1`.
 
-The sentinel in `d0` makes the partial byte write visible. After both instructions, `a0` should be
+The initial value `$AABBCCDD` in `d0` makes the partial byte write visible. After both instructions, `a0` should be
 `$2001` and `a1` should be `$2004`.
 
 ```m68k|playground|memory|exercise

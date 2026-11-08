@@ -6,6 +6,7 @@
      * every page of the site.
      */
     import Page from '#cmp/shared/layout/Page.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
     import { chapters } from '#lib/documentation/m68k/m68k.ts'
 </script>
@@ -22,7 +23,7 @@
     />
 </svelte:head>
 
-<Page cropped contentStyle="padding: 1rem; gap: 1rem;">
-    <h1>M68K Complete Documentation</h1>
+<Page cropped="70rem" contentStyle="padding: 1rem; gap: 1rem;">
+    <Header>M68K Complete Documentation</Header>
     <DocumentationBrowser language="m68k" chapters={chapters()} variant="page" />
 </Page>

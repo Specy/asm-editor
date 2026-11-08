@@ -152,7 +152,7 @@
         min-width: 0;
         background-color: var(--wb-surface, var(--secondary));
         color: var(--secondary-text);
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
         border: var(--wb-card-edge, none);
         border-bottom: var(--wb-section-rule, none);
         overflow: hidden;
@@ -165,6 +165,10 @@
        would sink into the well and vanish */
     .outlined {
         --outline-edge: 1px solid var(--wb-line, var(--tertiary));
+        /* a whole number of pixels wide: the pinned header is drawn from its left edge rounded to
+           a pixel plus its width rounded, the frame from both edges rounded, and with a fraction
+           of a pixel in each the header ended a pixel to the right of the body under it */
+        width: round(down, 100%, 1px);
         background-color: var(--background);
         background-clip: padding-box;
         border: var(--outline-edge);
@@ -186,7 +190,37 @@
             margin: 0 -1px;
             border: var(--outline-edge);
             border-radius: 0.5rem 0.5rem 0 0;
-            box-shadow: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
+            box-shadow: var(--shadow-1);
+        }
+
+        /* the frame's top corners are the header's alone: past its rounded corners the panel's
+           surface covers the section's side edges and its well, which otherwise showed round the
+           curve while the header was pinned, as on a Documentation Chapter's (DocumentationBrowser;
+           owner, 2026-11-08) */
+        .section-header::before,
+        .section-header::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            width: 0.5rem;
+            height: 0.5rem;
+            pointer-events: none;
+        }
+        .section-header::before {
+            left: -1px;
+            background: radial-gradient(
+                circle at 100% 100%,
+                transparent calc(0.5rem - 0.5px),
+                var(--wb-surface, var(--secondary)) calc(0.5rem + 0.5px)
+            );
+        }
+        .section-header::after {
+            right: -1px;
+            background: radial-gradient(
+                circle at 0 100%,
+                transparent calc(0.5rem - 0.5px),
+                var(--wb-surface, var(--secondary)) calc(0.5rem + 0.5px)
+            );
         }
 
         &.collapsed .section-header {
@@ -196,7 +230,7 @@
 
         .toggle {
             padding: 0.45rem 0.5rem;
-            font-size: 0.95rem;
+            font-size: var(--fs-body);
             font-weight: 600;
 
             &:hover {
@@ -210,8 +244,8 @@
         }
 
         .chevron {
-            width: 0.6rem;
-            height: 0.6rem;
+            width: var(--fs-micro);
+            height: var(--fs-micro);
             opacity: 0.6;
         }
     }
@@ -242,13 +276,13 @@
         padding: 0 0.7rem;
         background: transparent;
         color: inherit;
-        font-weight: bold;
-        font-size: 0.85rem;
+        font-weight: 700;
+        font-size: var(--fs-small);
         text-align: left;
         cursor: pointer;
 
         &:hover {
-            background-color: color-mix(in srgb, var(--tertiary) 35%, transparent);
+            background-color: var(--hover-bg);
         }
     }
 
@@ -259,7 +293,7 @@
         width: 0.8rem;
         height: 0.8rem;
         opacity: 0.7;
-        transition: transform 0.15s;
+        transition: transform var(--dur-base);
 
         &.open {
             transform: rotate(90deg);
@@ -272,7 +306,7 @@
         align-items: center;
         gap: 0.3rem;
         flex: none;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
 
     /* the toggle runs to the header's right end, so only controls keep some room from it */
@@ -282,7 +316,7 @@
 
     /* beside the title, inside the toggle, and read as a detail of it */
     .info {
-        font-weight: normal;
+        font-weight: 400;
         color: var(--hint);
     }
 
@@ -294,14 +328,14 @@
         min-height: 0;
         visibility: hidden;
         transition:
-            grid-template-rows 0.2s ease,
-            visibility 0s 0.2s;
+            grid-template-rows var(--dur-base) ease,
+            visibility 0s var(--dur-base);
 
         &.shown {
             grid-template-rows: 1fr;
             visibility: visible;
             transition:
-                grid-template-rows 0.2s ease,
+                grid-template-rows var(--dur-base) ease,
                 visibility 0s;
         }
 

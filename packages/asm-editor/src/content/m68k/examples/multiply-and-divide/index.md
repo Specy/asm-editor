@@ -18,9 +18,9 @@ leave the minutes in `d2` and the remaining seconds in `d3`.
 `mulu` and `divu` are **unsigned**: they treat their inputs as zero or positive values. `mulu`
 multiplies the low word of `d0` by the word in `d1`, then writes the full 32-bit product to `d0`.
 Here that is 365 × 24 = 8760. The source and the part of the destination it reads are each one
-word (16 bits), even though the product takes a long (32 bits).
+word (16 bits), even though the product is stored in a longword (32 bits).
 
-`divu` reads the whole long in `d2` and divides it by the word-sized divisor 60. Since
+`divu` reads the whole longword in `d2` and divides it by the word-sized divisor 60. Since
 1000 = 60 × 16 + 40, the **quotient** is 16 whole minutes and the **remainder** is 40 seconds.
 `divu` stores both in one register: the remainder in the high word and the quotient in the low
 word. A word is four hexadecimal digits, so read `d2` from left to right like this:

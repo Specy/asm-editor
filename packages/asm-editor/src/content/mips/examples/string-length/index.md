@@ -1,5 +1,5 @@
-A zero-terminated string stores its end as a zero byte. To find its **byte length**, walk a pointer
-from the first byte to that zero, then subtract the starting address from the ending address.
+A zero-terminated string ends with a zero byte. To find its **byte length**, move a pointer
+from the first byte to that zero, then subtract the starting address from the address of the zero.
 
 ```mips|playground|memory|allow-open
 .data
@@ -54,7 +54,7 @@ The pointer advances fifteen times before it finds the zero. `$t1` still holds t
 so `subu $t3, $t0, $t1` gives the number of one-byte advances: **15**. The zero does not count,
 because the branch stops the loop before another advance.
 
-Now make the loop your own in the Playground. Change the declaration to
+Try rewriting the loop in the Playground. Change the declaration to
 `text: .asciiz "Hi MIPS"`. Before running, predict the byte length. Then erase the four instructions
 after `scan:` and the `subu` instruction after `at_end:`, leaving the labels and exit instructions
 in place. Write those five instructions again. Keep `$t0` as the current address, `$t1` as the saved
@@ -72,7 +72,7 @@ ends there while `$t1` remains at `0x10010000`. The register display shows these
 For an empty-string check, replace the declaration with `text: .asciiz ""` and use **Run**. The
 first loaded byte is already zero, so `$t0` never advances and `$t3` is 0.
 
-For a controlled demonstration of the terminator, restore the original string and change only
+To see why the terminator matters, restore the original string and change only
 `text: .asciiz` to `text: .ascii`. Predict the result, then use **Run**. `.ascii` leaves out the
 zero, so this loop continues into the adjacent `after` declaration. It counts the 15 bytes of
 `text` and the 12 bytes of `after`, stopping at `after`'s zero: `$t3` is 27. Restore `.asciiz`

@@ -1,6 +1,6 @@
 {
     "name": "Variables in memory and constants",
-    "description": "Load two initialized words, add a named constant, and store the result in reserved memory while tracing addresses and little-endian bytes.",
+    "description": "Load values from memory, add them and a named constant, then store the result. Follow the addresses and little-endian bytes.",
     "order": 1,
     "topic": "variables-in-memory"
 }

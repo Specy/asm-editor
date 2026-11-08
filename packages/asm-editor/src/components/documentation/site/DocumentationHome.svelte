@@ -9,6 +9,7 @@
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
     import NavigationLinkButton from '#cmp/shared/button/NavigationLinkButton.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import type { DocumentationLanguage } from '#lib/search/scope.ts'
     import {
         DOCUMENTATION_INTROS,
@@ -38,11 +39,13 @@
 </script>
 
 <PageMeta {title} {description} type="website" {jsonLd} />
-<Page cropped contentStyle="padding: 1rem; gap: 1rem">
-    <h1 style="margin-top: 1rem; gap: 1rem; flex-wrap: wrap" class="row">
-        {site.label} Documentation
-    </h1>
-    <SearchLauncher size="full" placeholder={`Search the ${site.label} docs and courses`} />
+<!-- the 70rem column every documentation index has, so the titles start at one x; what is under
+     the title keeps its 60rem at its left (design-system.md, D8) -->
+<Page cropped="70rem" contentStyle="padding: 1rem; gap: 1rem">
+    <Header>{site.label} Documentation</Header>
+    <div class="search">
+        <SearchLauncher size="full" placeholder={`Search the ${site.label} docs and courses`} />
+    </div>
     {#each intro as paragraph, index (index)}
         <p class="intro"><InlineMarkdown source={paragraph} /></p>
     {/each}
@@ -56,11 +59,13 @@
 </Page>
 
 <style lang="scss">
+    .search {
+        max-width: 60rem;
+    }
     .intro {
         line-height: 1.5;
         max-width: 60rem;
         margin: 0;
-        color: var(--background-text-muted);
     }
     .intro :global(code) {
         background-color: var(--secondary);

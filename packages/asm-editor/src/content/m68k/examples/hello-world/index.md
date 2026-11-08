@@ -1,7 +1,7 @@
 So far, you have read a program's result from a register or memory panel. This program puts its
 result in the console: a greeting on one line and a number on the next. The editor's M68K simulator
 provides printing through `trap #15`. Before each `trap #15`, the program puts a task number in the
-low byte of `d0` and any text or number that task needs in other registers.
+low byte of `d0`. Other registers hold the string address or number that the task needs.
 
 ```m68k|playground|console|no-flags|allow-open
     lea greeting, a1    ; a1 gets the address of the first character

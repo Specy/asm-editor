@@ -1,6 +1,6 @@
 {
     "name": "A jump table",
-    "description": "Choose among code labels with a bounds-checked table of addresses and an indexed indirect jump.",
+    "description": "Use a jump table to select a case, and check that the index is in range before jumping.",
     "order": 14,
     "topic": "jump-table"
 }

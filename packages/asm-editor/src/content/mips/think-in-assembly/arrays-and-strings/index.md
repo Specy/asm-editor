@@ -13,12 +13,12 @@ right element size and keep the index within the array.
 The product `i * element_size` is a **byte offset** from the base. The offsets for the first four
 elements show how the element width changes the arithmetic:
 
-| element index `i` | word array, 4 bytes each | half array, 2 bytes each | byte array, 1 byte each |
-| ----------------: | -----------------------: | -----------------------: | ----------------------: |
-|                 0 |                        0 |                        0 |                       0 |
-|                 1 |                        4 |                        2 |                       1 |
-|                 2 |                        8 |                        4 |                       2 |
-|                 3 |                       12 |                        6 |                       3 |
+| element index `i` | word array, 4 bytes each | halfword array, 2 bytes each | byte array, 1 byte each |
+| ----------------: | -----------------------: | ---------------------------: | ----------------------: |
+|                 0 |                        0 |                            0 |                       0 |
+|                 1 |                        4 |                            2 |                       1 |
+|                 2 |                        8 |                            4 |                       2 |
+|                 3 |                       12 |                            6 |                       3 |
 
 For example, if a word array begins at `0x10010000`, element 3 is 12 bytes after the base, at
 `0x1001000C`. The load still uses offset 0 because the calculation has already produced the exact
@@ -42,7 +42,7 @@ main:
 ```
 
 Here `mul $t2, $t0, $t1` multiplies the two source registers and puts the product in `$t2`. The same
-base-plus-offset rule works at every width: use `lw` for words, `lh` for halves, and `lbu` for byte
+base-plus-offset rule works at every width: use `lw` for words, `lh` for halfwords, and `lbu` for byte
 values. For a byte array, the index is already a byte offset because multiplying by 1 changes
 nothing.
 

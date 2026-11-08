@@ -68,9 +68,9 @@
         --rule: color-mix(in srgb, var(--tertiary) 85%, transparent);
         max-width: 80ch;
         min-width: 0;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         line-height: 1.5;
-        color: var(--background-text-muted);
+        color: var(--background-text-prose);
     }
     ul {
         display: inline;
@@ -133,7 +133,7 @@
         max-width: 100%;
         margin: 0.45rem 0;
         border: 1px solid var(--rule);
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
     }
     .open li {
         display: grid;

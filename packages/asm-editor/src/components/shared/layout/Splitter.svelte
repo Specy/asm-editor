@@ -168,7 +168,7 @@
         touch-action: none;
         outline: none;
         background-color: var(--splitter-line, transparent);
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
         //the visible handle is thin; the pointer gets a few pixels more on each side
         &::before {
@@ -189,7 +189,7 @@
             opacity: 0.4;
             transform: translate(-50%, -50%);
             pointer-events: none;
-            transition: opacity 0.15s;
+            transition: opacity var(--dur-fast);
         }
 
         &:hover,
