@@ -13,7 +13,7 @@
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import ValueDiff from '#cmp/specific/project/user-tools/ValueDiffer.svelte'
-    import MdTextFields from '~icons/ic/baseline-text-fields'
+    import FaFont from '~icons/fa-solid/font'
     import FaTimes from '~icons/fa-solid/times'
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { onMount } from 'svelte'
@@ -471,8 +471,8 @@
                 bg="var(--accent2)"
                 color="var(--accent2-text)"
             >
-                <Icon size={dense ? 0.8 : 1}>
-                    <MdTextFields />
+                <Icon size={dense ? 'small' : 'body'}>
+                    <FaFont />
                 </Icon>
             </Button>
             {#if selectedAddressesIndexes.start !== -1}
@@ -483,7 +483,7 @@
                     style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
                     onClick={clearSelection}
                 >
-                    <Icon size={dense ? 0.8 : 1}>
+                    <Icon size={dense ? 'small' : 'body'}>
                         <FaTimes />
                     </Icon>
                 </Button>
@@ -654,7 +654,7 @@
     </div>
     {#if unreadable && unreadableCount > 0}
         <div class="memory-unreadable" class:partial={unreadableCount < pageSize} role="status">
-            <Icon size={0.9}>
+            <Icon size="small">
                 <FaExclamationTriangle />
             </Icon>
             <span>

@@ -1,10 +1,10 @@
 /* Public docs and courses follow the blog's heading scale, with compact reference material.
    Keep these rules inside the route layouts so editor panels keep their own density. The sizes are
-   the page end of the type scale (styles/tokens.css), which steps down on phones by itself. */
+   the page end of the type scale (styles/tokens.css), which steps down on phones by itself and a
+   step up on a reading page (`.reading`, design-system.md D11). The page's title is
+   Header.svelte's (D8). */
 .content-pages {
-    --content-title-size: var(--fs-h1);
-    --content-heading-size: var(--fs-h2);
-    --content-subheading-size: var(--fs-h3);
+    /* the prose size an instruction's page reads, which the Documentation panel has none of */
     --content-prose-size: var(--fs-prose);
     display: flex;
     flex-direction: column;
@@ -13,28 +13,8 @@
     width: 100%;
 }
 
-.learn-pages {
-    --content-title-size: 2.9rem;
-    --content-heading-size: 2rem;
-    --content-subheading-size: 1.55rem;
-    --content-prose-size: 1.15rem;
-}
-
 .content-pages main.content {
     padding-block: 1.5rem 4rem;
-}
-
-.content-pages main.content h1 {
-    font-family: var(--font-ui);
-    font-size: var(--content-title-size);
-    font-weight: 700;
-    line-height: 1.16;
-    letter-spacing: -0.03em;
-    text-wrap: balance;
-}
-
-.content-pages main.content > .column > h1 {
-    margin: 0.75rem 0 1.5rem;
 }
 
 .content-pages main.content .intro,
@@ -56,7 +36,7 @@
 }
 
 .content-pages main.content .reading-copy ._markdown {
-    font-size: var(--content-prose-size);
+    font-size: var(--fs-prose);
     line-height: 1.6;
 }
 
@@ -75,12 +55,12 @@
 }
 
 .content-pages main.content .reading-copy ._markdown h2 {
-    font-size: var(--content-heading-size);
+    font-size: var(--fs-h2);
     margin-top: 2rem;
 }
 
 .content-pages main.content .reading-copy ._markdown h3 {
-    font-size: var(--content-subheading-size);
+    font-size: var(--fs-h3);
     margin-top: 1rem;
 }
 
@@ -89,26 +69,19 @@
 }
 
 .docs-pages main.content .chapter > .entry.prose > header .title {
-    font-size: 1.6rem;
+    font-size: var(--fs-h2);
     font-weight: 700;
     line-height: 1.3;
     letter-spacing: -0.015em;
 }
 
 @media (max-width: 600px) {
-    .learn-pages {
-        --content-title-size: 2.2rem;
-        --content-heading-size: 1.75rem;
-        --content-subheading-size: 1.4rem;
-        --content-prose-size: 1.1rem;
-    }
-
     .content-pages main.content {
         padding-block: 0.75rem 2.5rem;
     }
 
     .content-pages main.content .intro,
     .content-pages main.content > .column > p:not(.topic-links) {
-        font-size: 1.1rem;
+        font-size: var(--fs-prose);
     }
 }

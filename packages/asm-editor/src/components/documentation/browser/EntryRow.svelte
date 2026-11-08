@@ -175,8 +175,8 @@
         grid-row: 1;
         align-self: center;
         display: flex;
-        width: 0.6rem;
-        height: 0.6rem;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
         opacity: 0.55;
         transition: transform var(--dur-base) ease;
     }

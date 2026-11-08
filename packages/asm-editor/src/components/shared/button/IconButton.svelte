@@ -100,15 +100,16 @@
 
     .sm {
         --icon-button-size: 1.4rem;
-        --icon-button-glyph: 0.7rem;
+        --icon-button-glyph: var(--fs-caption);
         border-radius: var(--r-chip);
     }
     .md {
         --icon-button-size: 1.8rem;
-        --icon-button-glyph: 0.85rem;
+        --icon-button-glyph: var(--fs-small);
     }
     .lg {
         --icon-button-size: 2.4rem;
+        /* the prose step at its base size, which a reading page's or a phone's does not change */
         --icon-button-glyph: 1.1rem;
     }
 

@@ -1,6 +1,7 @@
 <script lang="ts">
     import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import PostCard from '#cmp/blog/PostCard.svelte'
     import TagLink from '#cmp/blog/TagLink.svelte'
     import type { PageData } from './$types'
@@ -13,7 +14,7 @@
 />
 
 <header class="blog-intro">
-    <h1>ASM Editor blog</h1>
+    <Header>ASM Editor blog</Header>
     <p class="blog-lead">
         Guides to running and debugging assembly, compiling C/C++, teaching, and reverse
         engineering.

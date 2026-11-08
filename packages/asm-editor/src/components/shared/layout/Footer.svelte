@@ -1,6 +1,6 @@
 <script lang="ts">
     import FaGithub from '~icons/fa-brands/github'
-    import FaRegCopyright from '~icons/fa-regular/copyright'
+    import FaCopyright from '~icons/fa-solid/copyright'
     import Icon from './Icon.svelte'
     import { toast } from '#stores/toastStore.ts'
     import { page } from '$app/state'
@@ -49,13 +49,14 @@
                         {@attach tooltip('Donate and support me')}
                         aria-label="Donate"
                     >
-                        <Icon size={1.6}>
+                        <Icon size="h2">
                             <FaDonate />
                         </Icon>
                     </a>
                     <div class="icon">
                         <Icon
-                            size={1.6}
+                            size="h2"
+                            label="Copyright"
                             onClick={() => {
                                 toast.custom(
                                     'Copyright',
@@ -64,7 +65,7 @@
                                 )
                             }}
                         >
-                            <FaRegCopyright />
+                            <FaCopyright />
                         </Icon>
                     </div>
                     <a
@@ -75,7 +76,7 @@
                         {@attach tooltip('Visit on github')}
                         aria-label="GitHub"
                     >
-                        <Icon size={1.6}>
+                        <Icon size="h2">
                             <FaGithub />
                         </Icon>
                     </a>

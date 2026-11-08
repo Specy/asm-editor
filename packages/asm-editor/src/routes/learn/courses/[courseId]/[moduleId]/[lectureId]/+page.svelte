@@ -11,7 +11,6 @@
     import FaChevronRight from '~icons/fa-solid/chevron-right'
     import { page } from '$app/state'
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import Card from '#cmp/shared/layout/Card.svelte'
     import FloatingAgentSidebar from '#cmp/shared/agent/FloatingAgentSidebar.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
@@ -129,34 +128,41 @@
 {/snippet}
 
 <Page cropped="110ch" contentStyle="padding: 1rem; gap: 1rem;">
-    <Card padding="1.5rem 0" gap="1rem">
-        <Header noMargin style="width: min(100%, var(--lecture-text-width)); margin: 0 auto">
-            {data.lecture.name}
-        </Header>
-    </Card>
-    {#if topicLinks && !inGeneralCourse}
-        <p class="topic-links">
-            {#if isExample}
-                The same program in {@render topicList(topicLinks.siblings)}.
-            {:else}
-                {#if topicLinks.overview}
-                    The overview of this topic is in {@render topicList([topicLinks.overview])}.
+    <!-- a reading page: its title, body and topic links a step larger (design-system.md, D11) -->
+    <div class="reading">
+        <div class="lecture-title">
+            <Header noMargin style="width: min(100%, var(--lecture-text-width)); margin: 0 auto">
+                {data.lecture.name}
+            </Header>
+        </div>
+        {#if topicLinks && !inGeneralCourse}
+            <p class="topic-links">
+                {#if isExample}
+                    The same program in {@render topicList(topicLinks.siblings)}.
+                {:else}
+                    {#if topicLinks.overview}
+                        The overview of this topic is in {@render topicList([topicLinks.overview])}.
+                    {/if}
+                    {#if topicLinks.siblings.length > 0}
+                        The same topic in {@render topicList(topicLinks.siblings)}.
+                    {/if}
                 {/if}
-                {#if topicLinks.siblings.length > 0}
-                    The same topic in {@render topicList(topicLinks.siblings)}.
-                {/if}
-            {/if}
-        </p>
-    {/if}
-    <div class="reading-copy">
-        <!-- the title above is the lecture's name, which a `# ` heading opening it would repeat -->
-        <MarkdownRenderer source={withoutLeadingTitle(data.content)} spacing="1.2rem" headingIds />
+            </p>
+        {/if}
+        <div class="reading-copy">
+            <!-- the title above is the lecture's name, which a `# ` heading opening it would repeat -->
+            <MarkdownRenderer
+                source={withoutLeadingTitle(data.content)}
+                spacing="1.2rem"
+                headingIds
+            />
+        </div>
+        {#if topicLinks && inGeneralCourse && topicLinks.siblings.length > 0}
+            <p class="topic-links">
+                Go deeper: this topic in {@render topicList(topicLinks.siblings)}.
+            </p>
+        {/if}
     </div>
-    {#if topicLinks && inGeneralCourse && topicLinks.siblings.length > 0}
-        <p class="topic-links">
-            Go deeper: this topic in {@render topicList(topicLinks.siblings)}.
-        </p>
-    {/if}
     <LectureInstructions groups={data.instructions} language={courseLanguage(data.course.slug)} />
     {#if editorLanguage}
         <div class="editor-section" bind:this={editorSection}>
@@ -288,9 +294,16 @@ When the user asks a question about the lecture topic or for a demonstration of 
 
 <style>
     /* the lecture text's column, which the Markdown sets as 38em of its own text
-       (--md-text-width), so the title and these links start where the text does */
-    :global(.learn-pages) {
-        --lecture-text-width: calc(38 * var(--content-prose-size));
+       (--md-text-width), so the title and these links start where the text does; the wrapper
+       lays out nothing of its own, its children staying the column's */
+    .reading {
+        display: contents;
+        --lecture-text-width: calc(38 * var(--fs-prose));
+    }
+
+    /* room round the title, which a Card on the page's own colour gave it, invisible */
+    .lecture-title {
+        padding: 1.5rem 0;
     }
 
     .topic-links {
@@ -298,10 +311,10 @@ When the user asks a question about the lecture topic or for a demonstration of 
         font-weight: 500;
         width: min(100%, var(--lecture-text-width));
         margin: 0 auto;
-        opacity: 0.75;
+        color: var(--text-muted);
         background: var(--secondary);
         padding: 0.5rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
     }
 
     .topic-links a {
@@ -314,8 +327,8 @@ When the user asks a question about the lecture topic or for a demonstration of 
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        border-radius: 0.6rem;
+        border-radius: var(--r-overlay);
         padding: 0.4rem;
-        border: solid 0.1rem var(--tertiary);
+        border: 1px solid var(--line);
     }
 </style>

@@ -246,7 +246,7 @@
             class="undo-to-here"
             onclick={() => onUndo?.()}
         >
-            <Icon size={0.75}>
+            <Icon size="caption">
                 <FaUndo />
             </Icon>
         </button>
@@ -521,7 +521,7 @@
 
         &.flag-active {
             opacity: 1;
-            font-weight: bold;
+            font-weight: 700;
             color: var(--accent);
         }
     }

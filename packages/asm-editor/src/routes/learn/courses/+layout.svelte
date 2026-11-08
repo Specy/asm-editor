@@ -4,6 +4,6 @@
     let { children }: { children: import('svelte').Snippet } = $props()
 </script>
 
-<div class="content-pages learn-pages">
+<div class="content-pages">
     {@render children()}
 </div>

@@ -931,7 +931,6 @@
                             {@render memoryPanel(true)}
                         {:else if !running && children}
                             <Card
-                                background="secondary"
                                 style="padding: 1rem; overflow-y: auto; width: 31.3rem; height: 33.25rem;"
                             >
                                 {@render children()}

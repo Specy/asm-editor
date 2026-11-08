@@ -129,11 +129,11 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        border-right: 1px solid var(--landing-line);
+        border-right: 1px solid var(--line);
     }
 
     .item {
-        border-bottom: 1px solid var(--landing-line);
+        border-bottom: 1px solid var(--line);
 
         &:last-child {
             border-bottom: none;
@@ -155,10 +155,10 @@
         padding: 1.2rem 2.5rem;
         cursor: pointer;
         font-family: var(--font-mono);
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         letter-spacing: 0.02em;
-        color: var(--muted);
-        transition: color 0.2s;
+        color: var(--text-muted);
+        transition: color var(--dur-fast);
 
         &:hover {
             color: var(--background-text);
@@ -175,7 +175,7 @@
         padding-top: 2.2rem;
         padding-bottom: 0.6rem;
         font-family: var(--font-read);
-        font-size: 1.35rem;
+        font-size: var(--fs-h3);
         letter-spacing: 0;
         color: var(--background-text);
     }
@@ -187,11 +187,11 @@
 
     .plus {
         display: flex;
-        width: 0.65rem;
+        width: var(--fs-micro);
         opacity: 0.7;
         transition:
-            opacity 0.2s,
-            transform 0.3s;
+            opacity var(--dur-base),
+            transform var(--dur-base);
     }
 
     .open .plus {
@@ -240,10 +240,10 @@
 
     p {
         font-family: var(--font-mono);
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         line-height: 1.75;
         letter-spacing: 0.02em;
-        color: var(--muted);
+        color: var(--text-muted);
         max-width: 34rem;
     }
 
@@ -254,7 +254,7 @@
         margin-top: 1.2rem;
         color: var(--accent);
         font-family: var(--font-mono);
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         text-decoration: underline;
         text-underline-offset: 0.25em;
         text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
@@ -266,7 +266,7 @@
 
     .chevron {
         display: flex;
-        width: 0.55rem;
+        width: var(--fs-micro);
     }
 
     .inline-shot {
@@ -327,7 +327,7 @@
             object-position: left top;
             margin-top: 1.4rem;
             border-radius: 0.3rem;
-            border: 1px solid var(--landing-line);
+            border: 1px solid var(--line);
         }
     }
 

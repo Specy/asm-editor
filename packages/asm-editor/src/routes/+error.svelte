@@ -17,7 +17,7 @@
 <DefaultNavbar />
 <Page hasNavbar fillsScreen>
     {#if missing}
-        <ErrorState code="404" title="This page doesn't exist">
+        <ErrorState code="404" title="This page doesn't exist" pageTitle>
             Nothing is at <code>{page.url.pathname}</code>. The link may be out of date, or the
             address mistyped.
             {#snippet actions()}
@@ -32,6 +32,7 @@
         <ErrorState
             code={String(page.status)}
             title="Something went wrong"
+            pageTitle
             error={page.error?.message}
             reload
         >

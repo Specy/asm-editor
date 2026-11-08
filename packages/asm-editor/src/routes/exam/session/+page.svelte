@@ -75,6 +75,31 @@
     let unlockPasswordInput = $state('')
     let submissionUrl = $state('')
 
+    /**
+     * The session is inert under the "Exam disabled" and "Exam Finished" notices, which would leave
+     * focus on the page's body when one opens and again when Unlock closes it: the notice's unlock
+     * field takes focus when it opens (`focus`), and what had it before, or the session itself, gets
+     * it back once the exam is unlocked.
+     */
+    let sessionElement = $state<HTMLElement>()
+    let focusBeforeDisabled: HTMLElement | null = null
+    let disabledShown = false
+    //before the notice is drawn and the session made inert, while what has focus still has it
+    $effect.pre(() => {
+        if (!examDisabled || disabledShown) return
+        disabledShown = true
+        const active = document.activeElement
+        focusBeforeDisabled =
+            active instanceof HTMLElement && active !== document.body ? active : null
+    })
+    $effect(() => {
+        if (examDisabled || !disabledShown) return
+        disabledShown = false
+        const target = focusBeforeDisabled?.isConnected ? focusBeforeDisabled : sessionElement
+        focusBeforeDisabled = null
+        target?.focus({ preventScroll: true })
+    })
+
     /** The panel open in an assembly section's Workbench; the header's AI button opens the review agent there. */
     let assemblyPanel = $state<string | null>(null)
 
@@ -753,11 +778,12 @@
     {#if status === 'loaded' && exam}
         {@const loadedExam = exam}
         {#if examDisabled && !submissionUrl}
-            <div class="overlay">
-                <h1 class="loading">Exam disabled</h1>
+            <div class="overlay scrim">
+                <Header noMargin>Exam disabled</Header>
                 <p>The exam was paused because you left fullscreen or changed tab.</p>
                 <Row gap="1rem">
                     <TextField
+                        focus
                         autocomplete="one-time-code"
                         type="password"
                         aria-label="Unlock password"
@@ -766,21 +792,24 @@
                     />
                     <Button onClick={unlockExam}>Unlock</Button>
                 </Row>
-                <Card padding="1rem 2rem" background="tertiary">
-                    <Header type="h2">{examSubmission.name} ({examSubmission.hash})</Header>
+                <Card padding="1rem 2rem">
+                    <Header type="h2" style="font-size: var(--fs-h3)"
+                        >{examSubmission.name} ({examSubmission.hash})</Header
+                    >
                 </Card>
             </div>
         {/if}
 
         {#if examDisabled && submissionUrl}
-            <div class="overlay">
-                <h1 class="loading">Exam Finished</h1>
+            <div class="overlay scrim">
+                <Header noMargin>Exam Finished</Header>
                 <p>
                     The submission link is in your clipboard. You can now share the submission link.
                     You can also copy it again if needed.
                 </p>
                 <Row gap="1rem">
                     <TextField
+                        focus
                         autocomplete="one-time-code"
                         type="password"
                         aria-label="Unlock password"
@@ -802,17 +831,27 @@
                 >
                     Download submission
                 </Button>
-                <Card padding="1rem 2rem" background="tertiary">
-                    <Header type="h2">{examSubmission.name} ({examSubmission.hash})</Header>
+                <Card padding="1rem 2rem">
+                    <Header type="h2" style="font-size: var(--fs-h3)"
+                        >{examSubmission.name} ({examSubmission.hash})</Header
+                    >
                 </Card>
             </div>
         {/if}
 
-        <div class="exam-session">
-            <Card padding="0.6rem" background="secondary" style="flex: none;">
+        <!-- blocked while the exam is disabled, its notice standing in for the page -->
+        <div class="exam-session" inert={examDisabled} tabindex="-1" bind:this={sessionElement}>
+            <Card padding="0.6rem" style="flex: none;">
                 <div class="session-header">
                     <div class="header-left">
-                        <Header type="h2">{loadedExam.title}</Header>
+                        <!-- the page's title, the exam's, at the size of the session's other headings
+                             (--fs-h3) rather than a page title's, so the bar it heads stays one line -->
+                        <Header
+                            noMargin
+                            style="font-size: var(--fs-h3); line-height: normal; letter-spacing: normal;"
+                        >
+                            {loadedExam.title}
+                        </Header>
                         <p class="student-code">{examSubmission.hash}</p>
                         <p class="meta-line">
                             {examSubmission.name}
@@ -837,7 +876,7 @@
                                 }}
                                 {@attach tooltip('Ask AI to review this result')}
                                 aria-label="Ask AI"
-                                style="padding:0.4rem; width:2.4rem; height:2.4rem; margin-right: 0.4rem; border-radius: 1.5rem; border-bottom-right-radius: 0.4rem;"
+                                class="ask-ai"
                             >
                                 <Icon>
                                     <SparklesIcon />
@@ -845,7 +884,7 @@
                             </Button>
                         {/if}
                         {#if exerciseProgressLabel}
-                            <span style="font-size: 1.2rem; min-width: 3.2ch">
+                            <span style="font-size: var(--fs-lead); min-width: 3.2ch">
                                 {exerciseProgressLabel}
                             </span>
                         {/if}
@@ -886,12 +925,8 @@
             </Card>
 
             {#if isOnInstructions && hasInstructions}
-                <Card
-                    padding="1rem"
-                    background="secondary"
-                    style="margin:0.5rem; flex:1; min-height:0; overflow:auto;"
-                >
-                    <Header type="h2">Instructions</Header>
+                <Card padding="1rem" style="margin:0.5rem; flex:1; min-height:0; overflow:auto;">
+                    <Header type="h2" style="font-size: var(--fs-h3)">Instructions</Header>
                     <MarkdownRenderer source={loadedExam.instructions} disableLinks monacoColors />
                     <Row style="justify-content:flex-end; margin-top: auto">
                         <Button onClick={goToNextSection}>Start first section</Button>
@@ -922,18 +957,20 @@
                         {/key}
                     {:else}
                         <div class="non-assembly-layout">
-                            <div class="prompt-pane">
+                            <Card class="prompt-pane" padding="0.6rem">
                                 <MarkdownRenderer
                                     source={activeSection.prompt}
                                     disableLinks
                                     monacoColors
                                 />
-                            </div>
+                            </Card>
 
                             <div class="answer-pane">
                                 {#if activeSection.type === ExamSectionType.OpenQuestion}
                                     {@const openSection = activeSection as OpenQuestionSection}
-                                    <Header type="h2">Your answer</Header>
+                                    <Header type="h2" style="font-size: var(--fs-h3)"
+                                        >Your answer</Header
+                                    >
                                     <textarea
                                         placeholder={openSection.placeholder}
                                         bind:value={openAnswers[openSection.id]}
@@ -943,7 +980,7 @@
                                 {:else if activeSection.type === ExamSectionType.MultipleChoice}
                                     {@const mcSection = activeSection as MultipleChoiceSection}
                                     <Column gap="0.5rem">
-                                        <Header type="h2">
+                                        <Header type="h2" style="font-size: var(--fs-h3)">
                                             {mcSection.allowMultiple
                                                 ? 'Select all that apply'
                                                 : 'Select one option'}
@@ -976,7 +1013,9 @@
                                     </Column>
                                 {:else if activeSection.type === ExamSectionType.CCoding}
                                     {@const cSection = activeSection as CCodingSection}
-                                    <Header type="h2">Your answer</Header>
+                                    <Header type="h2" style="font-size: var(--fs-h3)"
+                                        >Your answer</Header
+                                    >
                                     <div class="c-editor-wrap">
                                         <Editor
                                             language="c"
@@ -1006,6 +1045,14 @@
 </Page>
 
 <style lang="scss">
+    @use '../../../styles/field.scss';
+
+    /* focused only to give focus back after an unlock, when nothing in it had it: no ring round
+       the whole page */
+    .exam-session:focus {
+        outline: none;
+    }
+
     .exam-session {
         display: flex;
         flex-direction: column;
@@ -1039,11 +1086,20 @@
     .student-code {
         font-weight: 600;
         background-color: color-mix(in srgb, var(--accent) 25%, transparent);
-        border: solid 0.1rem color-mix(in srgb, var(--accent) 65%, transparent);
+        border: 1px solid color-mix(in srgb, var(--accent) 65%, transparent);
         border-radius: 0.35rem;
         padding: 0.25rem 0.45rem;
         width: fit-content;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
+    }
+
+    /* Ask AI's speech bubble, as the chat page's toggle draws it */
+    .header-controls :global(.btn.ask-ai) {
+        padding: 0.4rem;
+        width: 2.4rem;
+        height: 2.4rem;
+        margin-right: 0.4rem;
+        border-radius: 1.5rem 1.5rem 0.4rem 1.5rem;
     }
 
     .failure {
@@ -1071,21 +1127,25 @@
         text-align: center;
     }
 
+    /* over the exam it blocks, which it dims as well as blurs; the loading one covers an empty
+       page and is no scrim */
+    .overlay.scrim {
+        background-color: var(--scrim);
+    }
+
     .meta-line {
-        color: var(--secondary-text);
-        opacity: 0.9;
-        font-size: 0.95rem;
+        color: var(--text-muted);
+        font-size: var(--fs-body);
     }
     .meta-line {
         padding: 0.35rem 0.45rem;
     }
 
+    /* an answer typed in the field look (styles/field.scss), in code's font */
     textarea {
+        @include field.input;
         width: 100%;
         height: 100%;
-        border-radius: 0.5rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
         padding: 0.8rem;
         font-family: var(--font-mono);
         resize: vertical;
@@ -1096,7 +1156,7 @@
         gap: 0.6rem;
         align-items: center;
         padding: 0.5rem;
-        border-radius: 0.5rem;
+        border-radius: var(--r-control);
         background-color: var(--secondary);
     }
     .non-assembly-layout {
@@ -1109,11 +1169,9 @@
         min-height: 0;
     }
 
-    .prompt-pane {
+    /* a Card (shared/layout/Card.svelte) that scrolls inside */
+    .non-assembly-layout :global(.prompt-pane) {
         overflow: auto;
-        border-radius: 0.5rem;
-        padding: 0.6rem;
-        background-color: var(--secondary);
     }
 
     .answer-pane {
@@ -1131,9 +1189,9 @@
         flex: 1;
         min-height: 0;
         position: relative;
-        border-radius: 0.5rem;
+        border-radius: var(--r-control);
         overflow: hidden;
-        border: solid 0.1rem var(--line);
+        border: 1px solid var(--line);
     }
 
     @media (max-width: 840px) {

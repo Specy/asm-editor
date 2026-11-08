@@ -43,7 +43,7 @@
                 aria-expanded={drawerOpen}
                 onClick={onToggleMenu}
             >
-                <Icon size={1.2}><FaBars /></Icon>
+                <Icon size="lead"><FaBars /></Icon>
             </IconButton>
         </span>
     {:else}
@@ -77,11 +77,11 @@
         title="Go back to your projects"
         onClick={onBack}
     >
-        <Icon size={0.8}><FaAngleLeft /></Icon>
+        <Icon size="small"><FaAngleLeft /></Icon>
         <span class="label">Go back to your projects</span>
     </Button>
     <Button kind="ghost" size="sm" class="action donate" onClick={onDonate}>
-        <Icon size={0.7}><FaHeart /></Icon>
+        <Icon size="caption"><FaHeart /></Icon>
         Donate
     </Button>
     <ShareMenu {onShare}>
@@ -94,7 +94,7 @@
                 aria-haspopup="dialog"
                 aria-expanded={expanded}
             >
-                <Icon size={0.75}><FaShareAlt /></Icon>
+                <Icon size="caption"><FaShareAlt /></Icon>
                 Share
             </Button>
         {/snippet}

@@ -305,7 +305,7 @@
             color: color-mix(in srgb, var(--secondary-text) 60%, transparent);
 
             :global(svg) {
-                width: 1rem;
+                width: var(--fs-body);
             }
         }
 

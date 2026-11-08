@@ -25,7 +25,7 @@
         aria-expanded={ui.drawerOpen}
         onClick={() => (ui.drawerOpen = !ui.drawerOpen)}
     >
-        <Icon size={1.2}>
+        <Icon size="lead">
             <FaBars />
         </Icon>
     </IconButton>
@@ -39,7 +39,7 @@
             {@attach tooltip('Save the Project')}
             onClick={() => session.save()}
         >
-            <Icon size={0.85}>
+            <Icon size="small">
                 <FaSave />
             </Icon>
             Save
@@ -68,7 +68,7 @@
 
     .title {
         font-size: var(--fs-prose);
-        font-weight: bold;
+        font-weight: 700;
         min-width: 3rem;
         margin: 0;
     }

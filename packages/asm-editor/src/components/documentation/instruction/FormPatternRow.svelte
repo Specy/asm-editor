@@ -217,8 +217,8 @@
     }
     .chevron {
         display: flex;
-        width: 0.6rem;
-        height: 0.6rem;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
         transition: transform var(--dur-base) ease;
     }
     .expanded .chevron {
@@ -398,8 +398,8 @@
     }
     .arrow {
         display: flex;
-        width: 0.75rem;
-        height: 0.75rem;
+        width: var(--fs-caption);
+        height: var(--fs-caption);
         margin-top: 0.45rem;
         color: var(--background-text-prose);
     }

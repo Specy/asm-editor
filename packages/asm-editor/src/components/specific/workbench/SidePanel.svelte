@@ -176,7 +176,7 @@
                 else ui.close()
             }}
         >
-            <Icon size={0.9}>
+            <Icon size="small">
                 <FaTimes />
             </Icon>
         </IconButton>

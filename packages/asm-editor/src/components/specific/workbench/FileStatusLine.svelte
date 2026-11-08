@@ -78,8 +78,8 @@
         font-weight: inherit;
 
         :global(svg) {
-            width: 0.75rem;
-            height: 0.75rem;
+            width: var(--fs-caption);
+            height: var(--fs-caption);
             opacity: 0.8;
         }
     }

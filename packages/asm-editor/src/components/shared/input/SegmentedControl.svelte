@@ -3,9 +3,10 @@
      * The choice of one of a few options, drawn as a rounded strip whose highlight slides to the one
      * picked, after genshin-music's `MultipleOptionSlider`. It is every such choice in the editor: the
      * Testcases' memory form, the execution dock's view switch, the Hex editor's byte order and
-     * Find kind, and the strips of the Register file panel's header, where `SizeSelector` is this
-     * control with the Target's widths baked in, so every strip there is the same control at the
-     * same size. What switches what a panel shows is a `TabStrip`, not this
+     * Find kind, the create page's instruction set, and the strips of the Register file panel's
+     * header, where `SizeSelector` is this control with the Target's widths baked in, so every
+     * strip there is the same control at the same size. What switches what a panel shows is a
+     * `TabStrip`, not this
      * ([design-system.md](../../../../../../docs/design/design-system.md), D14).
      */
     import type { Component, Snippet } from 'svelte'
@@ -36,6 +37,15 @@
          */
         fill?: boolean
         /**
+         * The strip takes the whole width it is given, in equal columns, one per option, or as
+         * many as the `--segmented-columns` property round it asks for, the options wrapping onto
+         * more rows: the create page's six instruction sets go two rows of three on a phone. A
+         * column is never narrower than its label.
+         */
+        wrap?: boolean
+        /** `sm` for a panel's or a tray's dense rows, `md` as tall as a form's `TextField`. */
+        size?: 'sm' | 'md'
+        /**
          * Draws an option's face in place of its icon and label, for a host whose buttons must read
          * as its own: the execution dock's view switch, whose narrow layouts drop the words and keep
          * the icons. The label still names the button.
@@ -43,11 +53,26 @@
         face?: Snippet<[Option]>
     }
 
-    let { options, selected, onSelect, style = '', ariaLabel, fill = false, face }: Props = $props()
+    let {
+        options,
+        selected,
+        onSelect,
+        style = '',
+        ariaLabel,
+        fill = false,
+        wrap = false,
+        size = 'sm',
+        face
+    }: Props = $props()
 
     let root: HTMLDivElement | undefined = $state()
-    /** Where the highlight sits, under the picked button: unknown until that button has a box. */
-    let highlight = $state<{ left: number; width: number } | null>(null)
+    /**
+     * Where the highlight sits, under the picked button: unknown until that button has a box. Its
+     * top and height only count when the strip wraps; on one row it spans the strip's height.
+     */
+    let highlight = $state<{ left: number; width: number; top: number; height: number } | null>(
+        null
+    )
 
     $effect(() => {
         const index = options.findIndex((option) => option.id === selected)
@@ -62,7 +87,12 @@
         const place = () => {
             //a control in a hidden panel has no box, and keeps its last place until it shows again
             if (button.offsetWidth === 0) return
-            highlight = { left: button.offsetLeft, width: button.offsetWidth }
+            highlight = {
+                left: button.offsetLeft,
+                width: button.offsetWidth,
+                top: button.offsetTop,
+                height: button.offsetHeight
+            }
         }
         place()
         //jsdom, which the component tests run in, has no ResizeObserver
@@ -78,9 +108,12 @@
     class="segmented-control slider"
     class:measured={highlight !== null}
     class:fill
+    class:wrap
+    class:md={size === 'md'}
     role={ariaLabel ? 'group' : undefined}
     aria-label={ariaLabel}
     {style}
+    style:--segmented-count={wrap ? options.length : undefined}
     bind:this={root}
 >
     {#each options as option (option.id)}
@@ -110,6 +143,8 @@
             class="segmented-control-highlight"
             style:left="calc({highlight.left}px + 0.1rem)"
             style:width="calc({highlight.width}px - 0.2rem)"
+            style:top={wrap ? `calc(${highlight.top}px + 0.1rem)` : undefined}
+            style:height={wrap ? `calc(${highlight.height}px - 0.2rem)` : undefined}
         ></span>
     {/if}
 </div>
@@ -135,8 +170,8 @@
     .segmented-control-icon {
         display: flex;
         flex: none;
-        width: 0.7rem;
-        height: 0.7rem;
+        width: var(--fs-caption);
+        height: var(--fs-caption);
         margin-right: 0.35rem;
     }
 
@@ -193,6 +228,32 @@
         }
     }
 
+    // as tall as a form's field: the same small label, with the room of a field's padding
+    .slider.md .segmented-control-button {
+        padding-block: 0.6rem;
+    }
+
+    // equal columns that never squeeze a label, so a strip too narrow for all of them in a row
+    // wants fewer columns from its host rather than clipped words; a button is as wide as its
+    // column, so its side padding only sets how narrow a column can be
+    .slider.wrap {
+        width: 100%;
+        grid-auto-flow: row;
+        grid-template-columns: repeat(
+            var(--segmented-columns, var(--segmented-count)),
+            minmax(max-content, 1fr)
+        );
+
+        .segmented-control-button {
+            padding-inline: 0.35rem;
+        }
+
+        // placed on its button's row, from the top and height measured
+        .segmented-control-highlight {
+            bottom: auto;
+        }
+    }
+
     .segmented-control-highlight {
         position: absolute;
         top: 0.1rem;
@@ -202,7 +263,9 @@
         pointer-events: none;
         transition:
             left var(--dur-base) ease-out,
-            width var(--dur-base) ease-out;
+            width var(--dur-base) ease-out,
+            top var(--dur-base) ease-out,
+            height var(--dur-base) ease-out;
 
         @media (prefers-reduced-motion: reduce) {
             transition: none;

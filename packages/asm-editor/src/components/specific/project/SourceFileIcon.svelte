@@ -15,7 +15,6 @@
     import FaFilePdf from '~icons/fa-solid/file-pdf'
     import FaFileVideo from '~icons/fa-solid/file-video'
     import FaMicrochip from '~icons/fa-solid/microchip'
-    import OctFileBinary from '~icons/octicon/file-binary-16'
     import { assemblyLanguageOf, fileIconKind, type FileIconKind } from './fileIconKind'
 
     let {
@@ -40,7 +39,7 @@
         pdf: { icon: FaFilePdf, label: 'PDF document' },
         audio: { icon: FaFileAudio, label: 'Audio file' },
         video: { icon: FaFileVideo, label: 'Video file' },
-        binary: { icon: OctFileBinary, label: 'Binary file' },
+        binary: { icon: FaFile, label: 'Binary file' },
         header: { icon: FaFileCode, label: 'C++ header file' },
         assembly: { icon: FaMicrochip, label: 'Assembly file' },
         markdown: { icon: FaMarkdown, label: 'Markdown file' },
@@ -93,8 +92,8 @@
         color: var(--hint);
 
         :global(svg) {
-            width: 0.9rem;
-            height: 0.9rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
 
         &.c {

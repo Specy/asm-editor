@@ -377,7 +377,7 @@
         {#if chevron}
             {@const Chevron = chevron}
             <span class="chevron-icon" class:open aria-hidden="true"
-                ><Icon size={0.65}><Chevron /></Icon></span
+                ><Icon size="micro"><Chevron /></Icon></span
             >
         {:else}
             <span class="chevron" aria-hidden="true"></span>

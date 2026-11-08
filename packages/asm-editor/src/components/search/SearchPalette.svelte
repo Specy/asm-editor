@@ -458,7 +458,7 @@
         min-width: 0;
         font-family: var(--font-mono);
         font-size: var(--fs-small);
-        font-weight: normal;
+        font-weight: 400;
         color: var(--text-muted);
     }
 

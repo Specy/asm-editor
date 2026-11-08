@@ -24,6 +24,7 @@
             })}
             class="lecture-link"
             class:current-lecture={lecture.slug === currentLecture?.slug}
+            aria-current={lecture.slug === currentLecture?.slug ? 'page' : undefined}
             onclick={onClick}
             style={lectureStyle}
         >
@@ -35,24 +36,23 @@
 </Column>
 
 <style lang="scss">
+    @use '../../styles/rows.scss';
+
+    /* the text where a 0.2rem edge used to push it; a caller's `lectureStyle` padding counts it */
     a {
-        padding: 0.4rem 0.6rem;
+        padding: 0.4rem 0.6rem 0.4rem 0.8rem;
         border-radius: 0 0.2rem 0.2rem 0;
-        border-left: solid 0.2rem transparent;
     }
 
-    a:hover {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        border-left-color: var(--accent);
+    /* the row under the pointer, and the page you are on (design-system.md, D4) */
+    a:hover:not(.current-lecture) {
+        background-color: var(--hover-bg);
     }
     .current-lecture {
-        border-left-color: var(--accent2);
-        background-color: rgba(var(--RGB-tertiary), 0.5);
+        @include rows.selected;
     }
     .lecture-link-inner {
-        opacity: 0.9;
-        transition: transform 0.1s;
+        transition: transform var(--dur-fast);
         font-size: var(--fs-body);
     }
     a:hover > .lecture-link-inner {

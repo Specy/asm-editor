@@ -702,8 +702,9 @@
         font-weight: 600;
         text-align: center;
         :global(svg) {
-            width: 1.6rem;
-            height: 1.6rem;
+            /* the h2 step at its size on :root, as Icon draws it (styles/iconSizes.ts) */
+            width: 1.8rem;
+            height: 1.8rem;
         }
         span {
             padding: 0.3rem 0.7rem;

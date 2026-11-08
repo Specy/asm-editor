@@ -36,7 +36,7 @@
                         onGoToLabel(label)
                     }}
                 >
-                    <Icon size={0.8} style="margin-left: 0.1rem; color: {label.color}">
+                    <Icon size="small" style="margin-left: 0.1rem; color: {label.color}">
                         <FaCircle />
                     </Icon>
                     <div class="ellipsis">

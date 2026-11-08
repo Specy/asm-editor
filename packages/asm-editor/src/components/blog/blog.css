@@ -1,24 +1,14 @@
-/* With the layout's 1rem padding and the title's 0.75rem margin, the title starts where
-   contentPages.css starts the /documentation and /learn/courses ones. */
+/* With the layout's 1rem padding and the title's 0.75rem margin (Header.svelte), the title starts
+   where the /documentation and /learn/courses ones start. */
 .blog-intro {
     max-width: 62rem;
     padding: 1.5rem 0 3rem;
 }
-.blog-intro h1,
-.blog-article-header h1 {
-    font-family: var(--font-ui);
-    font-size: 3.2rem;
-    line-height: 1.12;
-    letter-spacing: -0.035em;
-    margin: 0.75rem 0 1.25rem;
-    font-weight: 700;
-    text-wrap: balance;
-}
 .blog-lead {
     font-family: var(--font-ui);
-    font-size: 1.4rem;
+    font-size: var(--fs-lead);
     line-height: 1.5;
-    opacity: 0.85;
+    color: var(--text-muted);
     max-width: 65ch;
 }
 .blog-tags {
@@ -29,7 +19,7 @@
 }
 .blog-tag {
     padding: 0.3rem 0.65rem;
-    border-radius: 1.2rem;
+    border-radius: var(--r-pill);
     background: color-mix(in srgb, var(--accent) 9%, var(--secondary));
     border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
     font-size: var(--fs-caption);
@@ -41,11 +31,11 @@
     width: fit-content;
     margin-bottom: 0.6rem;
     padding: 0.2rem 0.6rem;
-    border-radius: 1.2rem;
+    border-radius: var(--r-pill);
     background: var(--accent);
     color: var(--accent-text);
     font-size: var(--fs-caption);
-    font-weight: bold;
+    font-weight: 700;
 }
 .blog-article-header .blog-draft {
     margin-top: 0.6rem;
@@ -67,25 +57,19 @@
     align-items: baseline;
     gap: 0.75rem 1.5rem;
 }
+/* a section of cards, a step above the cards' titles */
 .blog-section-heading h2 {
-    font-size: 1.5rem;
+    font-size: var(--fs-h2);
 }
+/* a Card (shared/layout/Card.svelte), its title's link covering it */
 .blog-card {
-    position: relative;
-    isolation: isolate;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    border-radius: 1rem;
-    background: var(--secondary);
-    border: 1px solid var(--tertiary);
     overflow: hidden;
 }
+/* no fill of its own, so the Card's hover tint shows through it as through the body over it */
 .blog-card-image {
     display: block;
     height: 10rem;
     overflow: hidden;
-    background: var(--secondary);
 }
 .blog-card-image img {
     display: block;
@@ -95,7 +79,7 @@
     object-position: top;
     mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent);
     opacity: 0.8;
-    transition: opacity 0.2s;
+    transition: opacity var(--dur-fast);
 }
 .blog-card:hover .blog-card-image img {
     opacity: 1;
@@ -111,11 +95,11 @@
 }
 .blog-date,
 .blog-byline {
-    font-size: 0.8rem;
-    opacity: 0.7;
+    font-size: var(--fs-small);
+    color: var(--text-muted);
 }
 .blog-card h3 {
-    font-size: 1.35rem;
+    font-size: var(--fs-h3);
     line-height: 1.35;
     margin: 0 0 0.8rem;
     text-wrap: balance;
@@ -125,11 +109,7 @@
     text-decoration: none;
 }
 .blog-card h3 a::after {
-    content: '';
-    position: absolute;
-    inset: 0;
     z-index: 1;
-    border-radius: 1rem;
 }
 .blog-card h3 a:focus-visible {
     outline: none;
@@ -142,7 +122,7 @@
     color: var(--accent);
 }
 .blog-card p {
-    opacity: 0.8;
+    color: var(--text-muted);
     line-height: 1.6;
     margin-bottom: auto;
 }
@@ -160,9 +140,10 @@
 }
 .blog-post-layout {
     display: grid;
-    /* Match the reading column to the paragraph font's 70ch measure. */
+    /* Match the reading column to the paragraph font's 70ch measure, at the reading page's prose
+       size (.reading, styles/tokens.css). */
     font-family: var(--font-read);
-    font-size: 1.2rem;
+    font-size: var(--fs-prose);
     font-weight: 500;
     grid-template-columns: minmax(1.25rem, 1fr) minmax(0, 70ch) minmax(1.25rem, 1fr);
 }
@@ -184,7 +165,7 @@
     display: none;
 }
 .blog-outline-title {
-    font-size: 0.8rem;
+    font-size: var(--fs-small);
     font-weight: 600;
     margin-bottom: 0.8rem;
     color: var(--background-text-prose);
@@ -195,7 +176,7 @@
 }
 .blog-outline ol {
     list-style: none;
-    border-left: 1px solid var(--tertiary);
+    border-left: 1px solid var(--line);
 }
 .blog-outline li a {
     display: block;
@@ -207,15 +188,18 @@
     color: var(--background-text-prose);
     text-decoration: none;
 }
-.blog-outline li a:hover,
+/* the row under the pointer, and the section being read, which is the current item: an accent
+   tint with the accent edge on its leading side (design-system.md, D4; styles/rows.scss) */
+.blog-outline li a:hover:not([aria-current='location']) {
+    background-color: var(--hover-bg);
+}
 .blog-outline li a[aria-current='location'] {
     border-left-color: var(--accent);
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    background-color: var(--selected-bg);
 }
 .blog-outline .blog-try-button {
     flex-shrink: 0;
-    font-size: 0.9rem;
+    font-size: var(--fs-small);
 }
 .blog-article-header {
     max-width: 70ch;
@@ -234,8 +218,8 @@
 }
 .blog-link-icon {
     display: inline-flex;
-    width: 0.9rem;
-    height: 0.9rem;
+    width: var(--fs-small);
+    height: var(--fs-small);
 }
 .blog-link-icon svg {
     width: 100%;
@@ -251,31 +235,32 @@
     color: inherit;
 }
 .blog-article ._markdown {
-    font-size: 1.2rem;
+    font-size: var(--fs-prose);
 }
 .blog-article ._markdown p,
 .blog-article ._markdown li {
     font-family: var(--font-read);
-    font-size: 1.2rem;
+    font-size: var(--fs-prose);
     font-weight: 500;
     letter-spacing: 0.01em;
     line-height: 1.5;
 }
+/* as a lecture's headings are (contentPages.css): a reading page differs only by its font and size */
 .blog-article ._markdown h2,
 .blog-article ._markdown h3 {
     font-family: var(--font-ui);
-    font-weight: 800;
-    letter-spacing: 0.02em;
+    font-weight: 700;
+    letter-spacing: -0.015em;
 }
 .blog-article ._markdown h2 {
-    font-size: 2.2rem;
+    font-size: var(--fs-h2);
     margin-top: 4rem;
 }
 .blog-article ._markdown h2:first-child {
     margin-top: 0;
 }
 .blog-article ._markdown h3 {
-    font-size: 1.8rem;
+    font-size: var(--fs-h3);
     margin-top: 2rem;
 }
 .blog-article ._markdown a:not(.blog-try-button) {
@@ -303,8 +288,9 @@
     line-height: 1.4;
     text-decoration: none;
 }
+/* the primary Button's hover (shared/button/variants.scss) */
 .blog-try-button:hover {
-    filter: brightness(1.1);
+    background-color: color-mix(in srgb, var(--accent) 85%, white);
 }
 .blog-try-button:focus-visible,
 .blog-outline li a:focus-visible,
@@ -316,8 +302,8 @@
     display: block;
     max-width: 100%;
     height: auto;
-    border-radius: 0.7rem;
-    border: 1px solid var(--tertiary);
+    border-radius: var(--r-overlay);
+    border: 1px solid var(--line);
     margin: 1rem auto;
 }
 .blog-article ._markdown figure {
@@ -329,7 +315,7 @@
     margin: 0.75rem auto;
     font-size: var(--fs-small);
     line-height: 1.5;
-    opacity: 0.75;
+    color: var(--text-muted);
 }
 .blog-article ._markdown h2,
 .blog-article ._markdown h3 {
@@ -339,7 +325,7 @@
     max-width: 70ch;
     margin: 3rem auto 0;
     padding-top: 1.5rem;
-    border-top: 1px solid var(--tertiary);
+    border-top: 1px solid var(--line);
     line-height: 1.7;
 }
 .blog-article-footer a {
@@ -376,16 +362,6 @@
 @media (max-width: 600px) {
     .blog-intro {
         padding-top: 0.75rem;
-    }
-    .blog-intro h1,
-    .blog-article-header h1 {
-        font-size: 2.3rem;
-    }
-    .blog-post-layout,
-    .blog-article ._markdown,
-    .blog-article ._markdown p,
-    .blog-article ._markdown li {
-        font-size: 1.1rem;
     }
 }
 @media (max-width: 650px) {

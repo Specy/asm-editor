@@ -31,7 +31,7 @@
             cursor: pointer;
             background-color: ${t.theme.background.color}; 
             color: ${ThemeStore.textOfColor(t.theme.background.color)};
-            font-weight: bold;
+            font-weight: 700;
             border: solid 3px ${
                 t.id === ThemeStore.meta.id ? t.theme.accent.color : t.theme.secondary.color
             };

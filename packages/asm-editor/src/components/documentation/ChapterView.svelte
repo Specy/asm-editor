@@ -9,6 +9,8 @@
     import { page } from '$app/state'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import Page from '#cmp/shared/layout/Page.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
     import { breadcrumbLd, documentationArticleLd } from '#lib/seo.ts'
     import { DOCUMENTATION_SITES } from '#lib/documentation/site.ts'
     import { hasCodeName, type Chapter } from '#lib/documentation/entries.ts'
@@ -45,16 +47,13 @@
 </script>
 
 <PageMeta {title} {description} type="article" {jsonLd} />
-<Page cropped contentStyle="padding: 1rem; gap: 1rem;">
-    <h1>{heading}</h1>
+<!-- the 70rem column every documentation index has, so the titles start at one x; the entries
+     keep their 60rem at its left (design-system.md, D8) -->
+<Page cropped="70rem" contentStyle="padding: 1rem; gap: 1rem;">
+    <Header>{heading}</Header>
     <div class="chapter">
         {#each chapter.entries as entry (entry.id)}
-            <section
-                class="entry"
-                id={entry.anchor}
-                class:prose={entry.kind === 'prose'}
-                class:reading-copy={entry.kind === 'prose'}
-            >
+            {#snippet content()}
                 <header>
                     <h2 class="title" class:code={hasCodeName(entry)}>{entry.title}</h2>
                     {#if entry.signature}
@@ -62,7 +61,17 @@
                     {/if}
                 </header>
                 <EntryBody {entry} />
-            </section>
+            {/snippet}
+            <!-- a prose entry is read as the page's text; every other entry is a Card -->
+            {#if entry.kind === 'prose'}
+                <section class="entry prose reading-copy" id={entry.anchor}>
+                    {@render content()}
+                </section>
+            {:else}
+                <Card element="section" class="entry" id={entry.anchor}>
+                    {@render content()}
+                </Card>
+            {/if}
         {/each}
     </div>
 </Page>
@@ -75,22 +84,17 @@
         width: 100%;
         max-width: 60rem;
     }
-    .entry {
+    .chapter > :global(.entry) {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
         padding: 0.9rem 1rem;
-        border-radius: 0.6rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
         scroll-margin-top: 5.5rem;
     }
-    .entry.prose {
-        background-color: transparent;
-        color: inherit;
+    .chapter > .prose {
         padding: 0.4rem 0;
     }
-    .entry:target {
+    .chapter > :global(.entry:target) {
         outline: 2px solid var(--accent);
         outline-offset: 2px;
     }
@@ -105,14 +109,14 @@
         font-size: var(--fs-lead);
     }
     .prose .title {
-        font-size: 1.35rem;
+        font-size: var(--fs-h3);
     }
     .code {
         font-family: var(--font-mono);
     }
     .signature {
         font-family: var(--font-mono);
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
         overflow-wrap: anywhere;
     }

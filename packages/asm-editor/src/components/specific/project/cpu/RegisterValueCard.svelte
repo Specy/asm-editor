@@ -52,7 +52,7 @@
         transform: translateY(-50%);
         padding: 1px calc(0.3rem + 1px);
         align-items: center;
-        font-weight: normal;
+        font-weight: 400;
         white-space: nowrap;
 
         /* the gap to the name, which the pointer crosses to reach the card and stay on it */

@@ -587,7 +587,7 @@
             )}
             onClick={() => preferencesStore.setValue('showDrawingBuffer', !showingDrawingBuffer)}
         >
-            <Icon size={0.8}>
+            <Icon size="small">
                 <FaLayerGroup />
             </Icon>
             {showingDrawingBuffer ? 'Drawing' : 'Visible'}
@@ -606,7 +606,7 @@
         )}
         onClick={() => (integerScaling = !integerScaling)}
     >
-        <Icon size={0.8}>
+        <Icon size="small">
             <FaTh />
         </Icon>
         {zoomLabel}
@@ -714,7 +714,7 @@
     <div class="screen-panel" {style}>
         {#if !headerless}
             <div class="screen-header">
-                <Icon size={0.9}>
+                <Icon size="small">
                     <FaDesktop />
                 </Icon>
                 <span class="screen-name ellipsis">{name}</span>
@@ -756,7 +756,7 @@
     }
 
     .screen-name {
-        font-weight: bold;
+        font-weight: 700;
     }
 
     .screen-size {

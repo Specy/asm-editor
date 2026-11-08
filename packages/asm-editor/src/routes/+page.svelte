@@ -28,7 +28,7 @@
     import FaPlay from '~icons/fa-solid/play'
     import FaDownload from '~icons/fa-solid/download'
     import FaGithub from '~icons/fa-brands/github'
-    import GoLinkExternal from '~icons/octicon/link-external-16'
+    import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import { onMount } from 'svelte'
     import { goto } from '$app/navigation'
     import { resolve } from '$app/paths'
@@ -710,7 +710,7 @@
                     <span class="tile-title">
                         <span class="icon"><FaGithub /></span>
                         GitHub
-                        <span class="arrow" aria-hidden="true"><GoLinkExternal /></span>
+                        <span class="arrow" aria-hidden="true"><FaExternalLinkAlt /></span>
                     </span>
                     <span class="tile-text">Read the source, report a bug or star the project.</span
                     >
@@ -744,7 +744,7 @@
                 style="gap: 0.6rem"
                 title="Read the EDUCON 2026 paper"
             >
-                Read the paper <span class="chevron"><GoLinkExternal /></span>
+                Read the paper <span class="chevron"><FaExternalLinkAlt /></span>
             </ButtonLink>
         </section>
 
@@ -771,13 +771,6 @@
 
     .landing {
         --inner: min(100% - 2rem, 76rem);
-        /* the home page's own hairlines, named apart from the shared --line until the page moves
-           onto it (design-system-plan.md, stage 4) */
-        --landing-line: color-mix(in srgb, var(--background-text) 11%, transparent);
-        --landing-line-strong: color-mix(in srgb, var(--background-text) 20%, transparent);
-        --muted: color-mix(in srgb, var(--background-text) 68%, transparent);
-        --serif: var(--font-read);
-        --mono: var(--font-mono);
         --lit:
             radial-gradient(
                 ellipse 80% 70% at 50% 0%,
@@ -806,7 +799,7 @@
         position: relative;
         width: var(--inner);
         margin: 0 auto;
-        border-inline: 1px solid var(--landing-line);
+        border-inline: 1px solid var(--line);
     }
 
     /* a divider across the page, a dot where it crosses the frame; the dots sit in a box laid out
@@ -816,7 +809,7 @@
         position: relative;
         z-index: 3;
         height: 1px;
-        background: var(--landing-line);
+        background: var(--line);
     }
 
     .rule-frame {
@@ -862,7 +855,7 @@
 
     .hex {
         white-space: pre;
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         line-height: 1.3;
         letter-spacing: 0.08em;
@@ -876,7 +869,7 @@
 
     .chevron {
         display: inline-flex;
-        width: 0.6rem;
+        width: var(--fs-micro);
         opacity: 0.8;
     }
 
@@ -912,8 +905,8 @@
     /* the instruction sets as one bar, a coloured square on each */
     .isas {
         display: flex;
-        border: 1px solid var(--landing-line-strong);
-        border-radius: 0.4rem;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--r-control);
         background: color-mix(in srgb, var(--background) 60%, transparent);
         backdrop-filter: blur(8px);
         overflow: hidden;
@@ -925,8 +918,8 @@
             gap: 0.5rem;
             padding: 0.4rem 0.9rem;
             cursor: pointer;
-            font-family: var(--mono);
-            font-size: 0.9rem;
+            font-family: var(--font-mono);
+            font-size: var(--fs-small);
             color: var(--background-text);
 
             &::before {
@@ -952,7 +945,7 @@
         }
 
         button + button {
-            border-left: 1px solid var(--landing-line-strong);
+            border-left: 1px solid var(--line-strong);
         }
     }
 
@@ -973,7 +966,6 @@
     @media (max-width: 480px) {
         .isas button {
             padding-inline: 0.6rem;
-            font-size: 0.8rem;
         }
     }
 
@@ -993,17 +985,17 @@
     }
 
     .lede {
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: var(--fs-body);
         line-height: 1.7;
         letter-spacing: 0.02em;
-        color: color-mix(in srgb, var(--background-text) 82%, transparent);
+        color: var(--text-muted);
         max-width: 29rem;
     }
 
     .actions .icon {
         display: flex;
-        width: 0.9rem;
+        width: var(--fs-small);
     }
 
     .actions {
@@ -1033,7 +1025,7 @@
         position: absolute;
         inset: 0;
         overflow: hidden;
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: 0.8rem;
         line-height: 1.45;
         letter-spacing: 0.08em;
@@ -1069,8 +1061,9 @@
         color: var(--background-text);
         transition: none;
         margin: -1px 0 0 -1px;
-        border-top: 1px solid color-mix(in srgb, var(--background-text) 11%, var(--background));
-        border-left: 1px solid color-mix(in srgb, var(--background-text) 11%, var(--background));
+        /* the hairline drawn solid over the page, so the bytes do not show through it */
+        border-top: 1px solid color-mix(in srgb, var(--tertiary) 60%, var(--background));
+        border-left: 1px solid color-mix(in srgb, var(--tertiary) 60%, var(--background));
 
         &:hover {
             background: color-mix(in srgb, var(--accent) 14%, var(--background));
@@ -1083,11 +1076,11 @@
     .card p,
     .tile-text,
     .closing p {
-        font-family: var(--mono);
-        font-size: 0.92rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         line-height: 1.7;
         letter-spacing: 0.02em;
-        color: var(--muted);
+        color: var(--text-muted);
     }
 
     /* ---- the editor in a browser window ---- */
@@ -1099,10 +1092,10 @@
 
     .browser {
         --chrome: color-mix(in srgb, var(--background) 55%, var(--tertiary));
-        border-radius: 0.6rem;
-        border: 1px solid var(--landing-line-strong);
+        border-radius: var(--r-overlay);
+        border: 1px solid var(--line-strong);
         background: var(--chrome);
-        box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.45);
+        box-shadow: var(--shadow-3);
         overflow: hidden;
     }
 
@@ -1159,10 +1152,10 @@
         cursor: pointer;
         font-family: var(--font-ui);
         font-size: 0.82rem;
-        color: var(--muted);
+        color: var(--text-muted);
         transition:
-            background-color 0.15s,
-            color 0.15s;
+            background-color var(--dur-fast),
+            color var(--dur-fast);
 
         img {
             width: 1rem;
@@ -1207,7 +1200,7 @@
             height: 1.1rem;
             width: 1px;
             transform: translateY(-50%);
-            background: var(--landing-line-strong);
+            background: var(--line-strong);
         }
 
         &.active::after,
@@ -1232,11 +1225,11 @@
         justify-content: center;
         width: 2rem;
         margin-left: 0.2rem;
-        border-radius: 0.4rem;
-        color: var(--muted);
+        border-radius: var(--r-control);
+        color: var(--text-muted);
 
         :global(svg) {
-            width: 0.75rem;
+            width: var(--fs-caption);
         }
 
         &:hover {
@@ -1252,9 +1245,9 @@
     .loading {
         align-self: center;
         justify-self: center;
-        font-family: var(--mono);
-        font-size: 0.9rem;
-        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
+        color: var(--text-muted);
     }
 
     .browser-toolbar {
@@ -1265,7 +1258,7 @@
         padding: 0 0.6rem;
         background: var(--secondary);
         color: var(--secondary-text);
-        border-bottom: 1px solid var(--landing-line);
+        border-bottom: 1px solid var(--line);
     }
 
     .browser-nav {
@@ -1280,10 +1273,10 @@
         width: 1.9rem;
         height: 1.9rem;
         border-radius: 50%;
-        color: var(--muted);
+        color: var(--text-muted);
 
         :global(svg) {
-            width: 0.75rem;
+            width: var(--fs-caption);
         }
 
         &:is(button) {
@@ -1291,8 +1284,8 @@
         }
 
         &:is(button):hover {
-            background: color-mix(in srgb, var(--secondary-text) 10%, transparent);
             color: var(--secondary-text);
+            background: var(--hover-bg);
         }
 
         &:focus-visible {
@@ -1308,11 +1301,11 @@
         gap: 0.55rem;
         height: 1.85rem;
         padding: 0 0.85rem;
-        border-radius: 1rem;
+        border-radius: var(--r-pill);
         background: color-mix(in srgb, var(--background) 65%, var(--secondary));
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: 0.8rem;
-        color: var(--muted);
+        color: var(--text-muted);
 
         .lock {
             flex: none;
@@ -1325,7 +1318,7 @@
         }
 
         &:hover {
-            box-shadow: inset 0 0 0 1px var(--landing-line-strong);
+            box-shadow: inset 0 0 0 1px var(--line-strong);
         }
 
         &:focus-visible {
@@ -1378,7 +1371,7 @@
 
         &:hover,
         &:focus-visible {
-            background: rgb(0 0 0 / 0.55);
+            background: var(--scrim);
         }
 
         &:hover .activate-hint,
@@ -1390,17 +1383,17 @@
 
     .activate-hint {
         padding: 0.7rem 1.2rem;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         background: var(--secondary);
         color: var(--secondary-text);
-        border: 1px solid var(--landing-line-strong);
+        border: 1px solid var(--line-strong);
         font-size: var(--fs-body);
-        box-shadow: 0 0.6rem 1.6rem rgb(0 0 0 / 0.45);
+        box-shadow: var(--shadow-3);
         opacity: 0;
         transform: translateY(0.3rem);
         transition:
-            opacity 0.2s,
-            transform 0.2s;
+            opacity var(--dur-base),
+            transform var(--dur-base);
     }
 
     .play {
@@ -1410,7 +1403,7 @@
 
         .icon {
             display: flex;
-            width: 0.75rem;
+            width: var(--fs-caption);
         }
     }
 
@@ -1431,7 +1424,7 @@
         padding: 2.75rem 2.5rem;
 
         h2 {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-size: clamp(1.8rem, 3.5vw, 2.3rem);
             line-height: 1.2;
             margin-bottom: 0.7rem;
@@ -1469,8 +1462,8 @@
         align-items: center;
         gap: 0.4rem;
         color: var(--accent);
-        font-family: var(--mono);
-        font-size: 0.9rem;
+        font-family: var(--font-mono);
+        font-size: var(--fs-small);
         text-decoration: underline;
         text-underline-offset: 0.25em;
         text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
@@ -1492,7 +1485,7 @@
     .tiles {
         display: grid;
         gap: 1px;
-        background: var(--landing-line);
+        background: var(--line);
     }
 
     .targets {
@@ -1520,7 +1513,7 @@
         box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.18);
 
         span {
-            font-family: var(--mono);
+            font-family: var(--font-mono);
             font-size: 1.35rem;
             color: var(--ink);
             padding: 0.2rem 0.45rem;
@@ -1549,9 +1542,9 @@
         margin-bottom: 0.3rem;
 
         h3 {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-weight: 500;
-            font-size: 1.3rem;
+            font-size: var(--fs-h3);
         }
     }
 
@@ -1563,7 +1556,7 @@
             display: inline-flex;
             align-items: center;
             gap: 0.4rem;
-            font-family: var(--mono);
+            font-family: var(--font-mono);
             font-size: var(--fs-small);
             /* the tile's colour, pulled towards the text so it reads on light and dark themes */
             color: color-mix(in srgb, var(--tile) 70%, var(--background-text));
@@ -1602,9 +1595,9 @@
         background: var(--background);
 
         h3 {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-weight: 500;
-            font-size: 1.3rem;
+            font-size: var(--fs-h3);
             margin: 1.4rem 0 0.8rem;
         }
 
@@ -1614,7 +1607,7 @@
     }
 
     .shot {
-        border: 1px dashed var(--landing-line-strong);
+        border: 1px dashed var(--line-strong);
         border-radius: 0.2rem;
     }
 
@@ -1647,7 +1640,7 @@
 
     .create-icon {
         display: flex;
-        width: 0.75rem;
+        width: var(--fs-caption);
     }
 
     @media (max-width: 760px) {
@@ -1673,10 +1666,12 @@
         gap: 0.5rem;
         padding: 1.8rem 2rem;
         background: var(--background);
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
+        /* the row tint (design-system.md, D4, the text at 10%) mixed into the tile's own fill, which
+           hides the grid's lines, so it fades in as a colour does */
         &:hover {
-            background: color-mix(in srgb, var(--background-text) 4%, var(--background));
+            background-color: color-mix(in srgb, currentColor 10%, var(--background));
 
             .arrow {
                 transform: translateX(3px);
@@ -1694,22 +1689,22 @@
         display: flex;
         align-items: center;
         gap: 0.55rem;
-        font-family: var(--serif);
-        font-size: 1.15rem;
+        font-family: var(--font-read);
+        font-size: var(--fs-lead);
 
         .icon {
             display: flex;
-            width: 1rem;
+            width: var(--fs-body);
         }
     }
 
     .arrow {
         display: flex;
-        width: 0.75rem;
+        width: var(--fs-caption);
         opacity: 0.5;
         transition:
-            transform 0.2s,
-            opacity 0.2s;
+            transform var(--dur-fast),
+            opacity var(--dur-fast);
     }
 
     .tile-text {
@@ -1720,16 +1715,16 @@
         padding: 2.5rem;
 
         :global(section .heading) {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-weight: 400;
-            font-size: 1.3rem;
+            font-size: var(--fs-h3);
         }
 
         :global(.agents > p) {
-            font-family: var(--mono);
-            font-size: 0.92rem;
+            font-family: var(--font-mono);
+            font-size: var(--fs-small);
             letter-spacing: 0.02em;
-            color: var(--muted);
+            color: var(--text-muted);
         }
     }
 
@@ -1744,33 +1739,33 @@
         padding: 4.5rem 1.5rem;
 
         h2 {
-            font-family: var(--serif);
+            font-family: var(--font-read);
             font-size: clamp(1.7rem, 3.2vw, 2.1rem);
         }
 
         p {
-            font-family: var(--serif);
-            font-size: 1.1rem;
+            font-family: var(--font-read);
+            font-size: var(--fs-prose);
             line-height: 1.75;
             max-width: 40rem;
         }
 
         .kicker {
-            font-family: var(--mono);
-            font-size: 0.8rem;
-            color: var(--muted);
+            font-family: var(--font-mono);
+            font-size: var(--fs-small);
+            color: var(--text-muted);
         }
 
         .reference {
             font-style: italic;
-            font-size: 0.98rem;
-            color: var(--muted);
+            font-size: var(--fs-body);
+            color: var(--text-muted);
         }
     }
 
     .divider {
         width: 4rem;
-        border-top: 1px solid var(--landing-line-strong);
+        border-top: 1px solid var(--line-strong);
         margin: 0.4rem 0;
     }
 
@@ -1791,10 +1786,6 @@
             font-weight: 500;
             font-size: clamp(2rem, 5vw, 3.2rem);
             color: var(--background-text);
-        }
-
-        p {
-            color: color-mix(in srgb, var(--background-text) 82%, transparent);
         }
 
         .actions {
@@ -1879,10 +1870,6 @@
 
         .showcase {
             padding: 0.5rem;
-        }
-
-        .lede {
-            font-size: 0.95rem;
         }
 
         .browser-nav,

@@ -545,7 +545,7 @@
     }
 
     .bold {
-        font-weight: bold;
+        font-weight: 700;
     }
 
     @for $color from 0 through 15 {

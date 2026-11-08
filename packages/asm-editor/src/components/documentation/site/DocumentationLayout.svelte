@@ -72,15 +72,18 @@
                     />
                 {/each}
             </Column>
+            <!-- the sidebar's one heading, an h2 as the course sidebar's name is: an h3 here would
+                 stand under no h2 -->
             <TogglableSection
                 open={true}
+                level={2}
                 sectionStyle="margin-left: 0; padding-left: 0.5rem;"
                 style="padding: 0 0.5rem;"
             >
                 {#snippet title()}
-                    <h2 style="font-size: 1rem; font-weight: 500; margin-left: -0.1rem">
+                    <span style="font-size: 1rem; font-weight: 500; margin-left: -0.1rem">
                         Instructions
-                    </h2>
+                    </span>
                 {/snippet}
                 <InstructionsMenu
                     hrefOf={(instructionName) =>

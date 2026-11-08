@@ -313,7 +313,7 @@
 
     h3 {
         font-size: var(--fs-body);
-        font-weight: bold;
+        font-weight: 700;
     }
 
     .display-setting {

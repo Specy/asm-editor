@@ -43,6 +43,6 @@
     .target {
         margin: 0;
         color: var(--background-text-prose);
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
 </style>

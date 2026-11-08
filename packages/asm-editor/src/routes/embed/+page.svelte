@@ -28,6 +28,7 @@
     import { toast } from '#stores/toastStore.ts'
     import FaExternal from '~icons/fa-solid/external-link-alt'
     import Button from '#cmp/shared/button/Button.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import {
@@ -301,7 +302,11 @@
 
                 {#if !inIframe}
                     <div class="embed-grid">
-                        <section class="embed-card settings-card" aria-labelledby="settings-title">
+                        <Card
+                            element="section"
+                            class="embed-card settings-card"
+                            aria-labelledby="settings-title"
+                        >
                             <div class="card-heading">
                                 <h2 id="settings-title">Embed settings</h2>
                                 <p>Choose which tools appear in the embedded editor.</p>
@@ -331,9 +336,13 @@
                                     />
                                 </div>
                             </div>
-                        </section>
-                        <section class="embed-card output-card" aria-labelledby="url-title">
-                            <div class="card-heading">
+                        </Card>
+                        <Card
+                            element="section"
+                            class="embed-card output-card"
+                            aria-labelledby="url-title"
+                        >
+                            <div class="card-heading with-action">
                                 <div>
                                     <h2 id="url-title">Embed URL</h2>
                                     <p>Use this link to preview or share your configured editor.</p>
@@ -348,9 +357,13 @@
                                 </Button>
                             </div>
                             <textarea aria-label="Embed URL" readonly>{generatedCode}</textarea>
-                        </section>
-                        <section class="embed-card output-card" aria-labelledby="code-title">
-                            <div class="card-heading">
+                        </Card>
+                        <Card
+                            element="section"
+                            class="embed-card output-card"
+                            aria-labelledby="code-title"
+                        >
+                            <div class="card-heading with-action">
                                 <div>
                                     <h2 id="code-title">Iframe code</h2>
                                     <p>Paste this HTML into your website to embed the editor.</p>
@@ -368,7 +381,7 @@
                             <textarea aria-label="Iframe embed code" readonly
                                 >{generatedIframeCode}</textarea
                             >
-                        </section>
+                        </Card>
                     </div>
                 {/if}
             </div>
@@ -408,32 +421,26 @@
         min-width: 0;
     }
 
-    .embed-card {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
+    /* Cards (shared/layout/Card.svelte), which draw their surface, edge and corners */
+    .embed-grid :global(.embed-card) {
         padding: 1rem;
         gap: 0.8rem;
-        background: var(--wb-surface, var(--secondary));
-        color: var(--secondary-text);
-        border: var(--wb-card-edge, 1px solid var(--line));
-        border-radius: var(--wb-radius, 0.4rem);
     }
 
-    .output-card .card-heading {
+    .card-heading.with-action {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         gap: 0.6rem;
     }
 
-    .output-card .card-heading > div {
+    .card-heading.with-action > div {
         min-width: 0;
     }
 
     .card-heading h2 {
         margin: 0;
-        font-size: 1.05rem;
+        font-size: var(--fs-prose);
     }
 
     .card-heading p {
@@ -459,7 +466,7 @@
             color-mix(in srgb, var(--secondary) 72%, var(--tertiary))
         );
         border-radius: nested-radius(var(--wb-radius, var(--r-control)), $inset: 0.1rem);
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
 
     .share-settings span {
@@ -472,10 +479,10 @@
         resize: vertical;
         background: var(--wb-strip, var(--background));
         border: var(--wb-card-edge, 1px solid var(--tertiary));
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
         padding: 0.5rem;
         color: var(--secondary-text);
-        font: 0.82rem/1.45 var(--font-mono);
+        font: var(--fs-small) / 1.45 var(--font-mono);
         overflow-wrap: anywhere;
     }
 
@@ -514,7 +521,7 @@
             padding: 0 0.5rem 0.5rem;
         }
 
-        .embed-card {
+        .embed-grid :global(.embed-card) {
             gap: 0.4rem;
             padding: 0.55rem;
             /* a short window scrolls the card rather than the page */
@@ -523,11 +530,11 @@
         }
 
         .card-heading h2 {
-            font-size: 0.95rem;
+            font-size: var(--fs-body);
         }
 
         .card-heading p {
-            font-size: 0.72rem;
+            font-size: var(--fs-caption);
         }
 
         .settings-grid {
@@ -537,7 +544,7 @@
         .share-settings {
             min-height: 2rem;
             padding: 0.15rem 0.35rem 0.15rem 0.65rem;
-            font-size: 0.78rem;
+            font-size: var(--fs-caption);
         }
 
         .share-settings :global(.switch) {
@@ -545,7 +552,7 @@
             --switch-height: 1.3rem;
         }
 
-        .output-card textarea {
+        textarea {
             flex: 1;
             height: auto;
             min-height: 4rem;

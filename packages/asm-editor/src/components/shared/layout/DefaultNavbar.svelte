@@ -116,7 +116,7 @@
                     {#if aiToggle.open}
                         <!-- an unplugin icon fills its parent, so it needs the sized box `Icon` gives
                          it; `SparklesIcon` carries its own 1em size. -->
-                        <Icon size={1}>
+                        <Icon size="body">
                             <FaTimes />
                         </Icon>
                     {:else}

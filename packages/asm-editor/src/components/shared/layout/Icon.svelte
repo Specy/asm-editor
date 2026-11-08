@@ -1,9 +1,19 @@
-<script>
-    /** @type {{size?: number, style?: string, label?: string, onClick?:  (e: MouseEvent) => void, children?: import('svelte').Snippet}} */
-    let { size = 1.2, style = '', label, children, onClick } = $props()
-    const boxStyle = $derived(
-        `width:${size}rem; min-width: ${size}rem; height:${size}rem; ${style};`
-    )
+<script lang="ts">
+    import type { Snippet } from 'svelte'
+    import { iconLength, type IconSize } from '#src/styles/iconSizes.ts'
+
+    interface Props {
+        size?: IconSize
+        style?: string
+        label?: string
+        onClick?: (e: MouseEvent) => void
+        children?: Snippet
+    }
+
+    let { size = 'lead', style = '', label, children, onClick }: Props = $props()
+    /** a step of the type scale, or the size of the text round it (styles/iconSizes.ts) */
+    const length = $derived(iconLength(size))
+    const boxStyle = $derived(`width:${length}; min-width: ${length}; height:${length}; ${style};`)
 </script>
 
 <!-- a clickable icon is a button so the keyboard can reach it; the others stay plain boxes, since

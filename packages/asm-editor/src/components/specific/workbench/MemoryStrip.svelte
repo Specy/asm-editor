@@ -68,8 +68,8 @@
 
         :global(svg) {
             flex: none;
-            width: 0.8rem;
-            height: 0.8rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
 
         &:hover {

@@ -40,7 +40,7 @@
     }
 
     .kbd :global(svg) {
-        width: 0.55rem;
-        height: 0.55rem;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
     }
 </style>

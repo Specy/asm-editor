@@ -531,7 +531,7 @@
     }
 
     .register-name {
-        font-weight: bold;
+        font-weight: 700;
         //a shade under the digits beside it, and in `em` rather than `rem` so it still shrinks with
         //the row: a button does not inherit the font size on its own (the browser gives it one of
         //its own), and without that a `.compact` file kept full-sized names beside its shrunken

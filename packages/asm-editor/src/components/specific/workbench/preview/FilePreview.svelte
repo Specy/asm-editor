@@ -299,8 +299,9 @@
         color: var(--accent);
 
         :global(svg) {
-            width: 1.3rem;
-            height: 1.3rem;
+            /* the h3 step at its size on :root, as Icon draws it (styles/iconSizes.ts) */
+            width: 1.4rem;
+            height: 1.4rem;
         }
     }
     /* the player alone, centred in the pane: the status line above already names its type */
@@ -321,8 +322,8 @@
         gap: 0.45rem;
 
         :global(svg) {
-            width: 0.8rem;
-            height: 0.8rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
     }
 </style>

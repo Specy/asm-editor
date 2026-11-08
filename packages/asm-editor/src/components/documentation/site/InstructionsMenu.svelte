@@ -25,6 +25,7 @@
             href={hrefOf(ins)}
             class="instruction-link"
             class:current-instruction={ins === currentInstructionName}
+            aria-current={ins === currentInstructionName ? 'page' : undefined}
             onclick={onClick}
         >
             <div class="instruction-link-inner">
@@ -35,24 +36,23 @@
 </Column>
 
 <style lang="scss">
+    @use '../../../styles/rows.scss';
+
+    /* the text where a 0.2rem edge used to push it */
     a {
-        padding: 0.4rem 0.6rem;
+        padding: 0.4rem 0.6rem 0.4rem 0.8rem;
         border-radius: 0 0.2rem 0.2rem 0;
-        border-left: solid 0.2rem transparent;
     }
 
-    a:hover {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        border-left-color: var(--accent);
+    /* the row under the pointer, and the page you are on (design-system.md, D4) */
+    a:hover:not(.current-instruction) {
+        background-color: var(--hover-bg);
     }
     .current-instruction {
-        border-left-color: var(--accent2);
-        background-color: rgba(var(--RGB-tertiary), 0.5);
+        @include rows.selected;
     }
     .instruction-link-inner {
-        transition: transform 0.1s;
-        opacity: 0.9;
+        transition: transform var(--dur-fast);
     }
     a:hover > .instruction-link-inner {
         transform: translateX(0.2rem);

@@ -73,7 +73,7 @@
     title={hint?.replaceAll('**', '')}
     onclick={() => (onBrowse ? onBrowse() : input?.click())}
 >
-    <Icon size={1.8}>
+    <Icon size="h2">
         <FaUpload />
     </Icon>
     <span class="drop-zone-copy">
@@ -95,7 +95,7 @@
         transition:fade={{ duration: motion(DUR_FAST) }}
     >
         <div class="drop-overlay-frame">
-            <Icon size={2.6}>
+            <Icon size="h1">
                 <FaUpload />
             </Icon>
             <div class="drop-overlay-title">{dropLabel}</div>
@@ -187,7 +187,7 @@
 
     .drop-overlay-title {
         font-size: var(--fs-h2);
-        font-weight: bold;
+        font-weight: 700;
     }
 
     .drop-overlay-hint {

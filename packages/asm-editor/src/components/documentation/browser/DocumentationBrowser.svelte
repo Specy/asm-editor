@@ -575,8 +575,8 @@
         cursor: pointer;
     }
     .back :global(svg) {
-        width: 0.9rem;
-        height: 0.9rem;
+        width: var(--fs-small);
+        height: var(--fs-small);
     }
     .note {
         margin: 0;
@@ -712,8 +712,8 @@
     .chevron {
         display: flex;
         align-self: center;
-        width: 0.6rem;
-        height: 0.6rem;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
         opacity: 0.6;
         transform: rotate(90deg);
         transition: transform var(--dur-base) ease;

@@ -1005,8 +1005,8 @@
         }
 
         :global(svg) {
-            width: 0.6rem;
-            height: 0.6rem;
+            width: var(--fs-micro);
+            height: var(--fs-micro);
         }
     }
 
@@ -1027,7 +1027,7 @@
     .folder {
         flex: 1;
         font-size: var(--fs-caption);
-        font-weight: normal;
+        font-weight: 400;
         color: var(--text-muted);
     }
 

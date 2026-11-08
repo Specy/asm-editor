@@ -178,8 +178,8 @@
         outline: none;
     }
     .bare .icon {
-        width: 1rem;
-        height: 1rem;
+        width: var(--fs-body);
+        height: var(--fs-body);
         opacity: 0.6;
     }
     .bare input::placeholder {
@@ -188,15 +188,15 @@
     /* its font size the box's, which the spinner standing in for the icon is drawn at */
     .icon {
         display: flex;
-        width: 0.95rem;
-        height: 0.95rem;
+        width: var(--fs-body);
+        height: var(--fs-body);
         flex: none;
         font-size: 0.95rem;
         opacity: 0.7;
     }
     .sm .icon {
-        width: 0.75rem;
-        height: 0.75rem;
+        width: var(--fs-caption);
+        height: var(--fs-caption);
         font-size: 0.75rem;
     }
     input {

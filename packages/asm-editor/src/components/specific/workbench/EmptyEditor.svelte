@@ -270,7 +270,7 @@
         text-align: left;
         :global(svg) {
             flex-shrink: 0;
-            width: 1rem;
+            width: var(--fs-body);
         }
     }
     .link:hover,

@@ -302,7 +302,7 @@
     .chevron {
         display: flex;
         flex: none;
-        width: 0.45rem;
+        width: var(--fs-micro);
         color: var(--hint);
         transition: transform var(--dur-base);
     }

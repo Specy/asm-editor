@@ -338,7 +338,7 @@
         top: 50%;
         right: 0.45rem;
         display: flex;
-        width: 0.45rem;
+        width: var(--fs-micro);
         transform: translateY(-50%);
         color: var(--hint);
         opacity: 0.5;

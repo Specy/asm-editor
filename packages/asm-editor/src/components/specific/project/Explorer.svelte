@@ -45,7 +45,6 @@
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaDownload from '~icons/fa-solid/download'
     import FaFlag from '~icons/fa-solid/flag'
-    import FaRegFlag from '~icons/fa-regular/flag'
     import FaFolder from '~icons/fa-solid/folder'
     import FaFolderOpen from '~icons/fa-solid/folder-open'
     import FaFileAlt from '~icons/fa-solid/file-alt'
@@ -723,7 +722,7 @@
             return [
                 {
                     label: 'Remove program',
-                    icon: FaRegFlag,
+                    icon: FaTimes,
                     disabled: locked,
                     onSelect: () => void removeProgram(path)
                 }
@@ -1434,8 +1433,8 @@
         color: color-mix(in srgb, var(--accent) 65%, var(--secondary-text));
 
         :global(svg) {
-            width: 0.9rem;
-            height: 0.9rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
     }
 

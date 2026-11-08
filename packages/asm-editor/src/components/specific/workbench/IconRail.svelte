@@ -49,7 +49,7 @@
         aria-pressed={entry.action ? undefined : active}
         onclick={() => press(entry)}
     >
-        <Icon size={1.25}>
+        <Icon size="lead">
             <entry.icon />
         </Icon>
         {#if entry.dot}
@@ -66,7 +66,7 @@
             aria-label="Go back"
             onclick={() => context.onBack?.()}
         >
-            <Icon size={1.4}>
+            <Icon size="h3">
                 <FaAngleLeft />
             </Icon>
         </button>
@@ -82,7 +82,7 @@
             aria-label="Save the Project"
             onclick={() => session.save()}
         >
-            <Icon size={1.15}>
+            <Icon size="lead">
                 <FaSave />
             </Icon>
         </button>

@@ -278,7 +278,7 @@
             hidden = !hidden
         }}
     >
-        <Icon size={1.1}>
+        <Icon size="prose">
             {#if onClose}
                 <FaWindowRestore />
             {:else if !hidden}

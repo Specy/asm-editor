@@ -355,7 +355,7 @@
                     onClick={searchAddress}
                     {@attach tooltip('Search address')}
                 >
-                    <Icon size={1}>
+                    <Icon size="body">
                         <FaSearch />
                     </Icon>
                 </IconButton>
@@ -366,7 +366,7 @@
                 onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
                 {@attach tooltip('Previous page')}
             >
-                <Icon size={1.2}>
+                <Icon size="lead">
                     <FaAngleLeft />
                 </Icon>
             </IconButton>
@@ -376,7 +376,7 @@
                 onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
                 {@attach tooltip('Next page')}
             >
-                <Icon size={1.2}>
+                <Icon size="lead">
                     <FaAngleRight />
                 </Icon>
             </IconButton>

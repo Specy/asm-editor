@@ -17,6 +17,7 @@
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import type { InstructionLesson } from '#lib/content/lectureInstructions.ts'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import InstructionTagBadge from '#cmp/documentation/entries/InstructionTagBadge.svelte'
     import { codeBlockStyle } from '#lib/content/codeBlockStyle.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
@@ -146,7 +147,10 @@
         <header class="header">
             <div class="title-line">
                 {#if !panel}
-                    <h1 class="name">{document.name}</h1>
+                    <!-- the instruction's page's title, in the page title's style (D8) -->
+                    <Header noMargin style="color: var(--accent); overflow-wrap: anywhere;"
+                        >{document.name}</Header
+                    >
                 {/if}
                 {#if showLongName || document.tags.length > 0}
                     <p class="identity">
@@ -327,14 +331,6 @@
         row-gap: 0.2rem;
         min-width: 0;
     }
-    .name {
-        margin: 0;
-        font-size: 3.5rem;
-        line-height: 1.05;
-        font-weight: 600;
-        color: var(--accent);
-        overflow-wrap: anywhere;
-    }
     .identity {
         display: flex;
         flex-wrap: wrap;
@@ -349,7 +345,7 @@
         font-size: var(--fs-body);
     }
     .long-name {
-        font-weight: normal;
+        font-weight: 400;
     }
     .instruction-tags {
         display: inline-flex;
@@ -428,7 +424,7 @@
     }
     .count {
         font-size: var(--fs-small);
-        font-weight: normal;
+        font-weight: 400;
         color: var(--background-text-prose);
     }
     .explanation {
@@ -503,7 +499,7 @@
     .description :global(._markdown ul),
     .description :global(._markdown ol) {
         font-family: var(--font-ui);
-        font-weight: normal;
+        font-weight: 400;
         font-size: inherit;
     }
     .panel .description :global(._markdown p),

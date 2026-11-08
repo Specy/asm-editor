@@ -21,7 +21,7 @@
     --fs-body: 1rem;
     /* the page end, the scale contentPages.css drew the content pages in, a step smaller on
        phones (below); a reading page (a lecture's body, a blog post's) raises --fs-prose, --fs-h3
-       and --fs-h2 one step for itself */
+       and --fs-h2 one step for itself (.reading, below) */
     --fs-prose: 1.1rem;
     --fs-lead: 1.2rem;
     --fs-h3: 1.4rem;
@@ -64,5 +64,25 @@
         --fs-h3: 1.3rem;
         --fs-h2: 1.6rem;
         --fs-h1: 2.1rem;
+    }
+}
+
+/* D11: a reading page, read from top to bottom (a lecture, a blog post), is a step larger. The
+   wrapper of its title, body and topic links wears it, so a width drawn from --fs-prose (the
+   lecture's title and links) moves with the text; the title stays at --fs-h1. Its lead (a blog
+   post's stand-first; a lecture has none) stays a step above its prose */
+.reading {
+    --fs-prose: 1.15rem;
+    --fs-lead: 1.3rem;
+    --fs-h3: 1.55rem;
+    --fs-h2: 2rem;
+}
+
+@media (max-width: 600px) {
+    .reading {
+        --fs-prose: 1.1rem;
+        --fs-lead: 1.2rem;
+        --fs-h3: 1.4rem;
+        --fs-h2: 1.75rem;
     }
 }

@@ -128,6 +128,29 @@ it('puts the guards back on a finished exam the teacher unlocks', async () => {
     await session.dispose()
 })
 
+//the session is inert under the notice, which would leave focus on the page's body both times
+it('moves focus into the disabled notice and gives it back on unlock', async () => {
+    const session = await startExam('teacher')
+    const choice = document.querySelector<HTMLInputElement>('input[type="radio"]')!
+    choice.focus()
+
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    window.dispatchEvent(new Event('blur'))
+    await vi.waitFor(() => expect(session.heading()).toBe('Exam disabled'))
+    const password = document.querySelector<HTMLInputElement>(
+        'input[placeholder="Unlock password"]'
+    )!
+    await vi.waitFor(() => expect(document.activeElement).toBe(password))
+
+    vi.mocked(document.hasFocus).mockReturnValue(true)
+    password.value = 'teacher'
+    password.dispatchEvent(new Event('input', { bubbles: true }))
+    session.button('Unlock')!.click()
+    await vi.waitFor(() => expect(session.heading()).toBeUndefined())
+    await vi.waitFor(() => expect(document.activeElement).toBe(choice))
+    await session.dispose()
+})
+
 //the warm-up's failure was an unhandled rejection
 it('starts the exam when its Cores cannot be warmed up, and says why in the console', async () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)

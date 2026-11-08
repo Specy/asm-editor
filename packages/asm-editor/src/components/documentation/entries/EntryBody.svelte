@@ -146,7 +146,7 @@
     .entry-body :global(._markdown ul),
     .entry-body :global(._markdown ol) {
         font-family: var(--font-ui);
-        font-weight: normal;
+        font-weight: 400;
         font-size: var(--fs-small);
         width: 100%;
         margin: 0;

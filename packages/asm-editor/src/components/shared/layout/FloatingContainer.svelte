@@ -37,7 +37,7 @@
 
     /* its title over the body, raised as a sticky header is */
     .floating-container-header {
-        font-weight: bold;
+        font-weight: 700;
         font-size: 1.2rem;
         padding: 0.6rem;
         gap: 0.4rem;

@@ -397,7 +397,7 @@
         padding: 0.6rem 1rem;
         background-color: var(--secondary);
         font-family: var(--font-ui);
-        font-weight: bold;
+        font-weight: 700;
         cursor: pointer;
         user-select: none;
     }

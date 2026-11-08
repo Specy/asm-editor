@@ -85,7 +85,7 @@
         disabled={onOpen ? false : disabled}
         onclick={() => (onOpen ? onOpen() : (open = !open))}
     >
-        <Icon size={0.8}>
+        <Icon size="small">
             <FaSlidersH />
         </Icon>
         Display
@@ -123,7 +123,7 @@
 
     .from-source {
         font-family: var(--font-mono);
-        font-weight: bold;
+        font-weight: 700;
         line-height: 1;
         color: var(--accent);
     }

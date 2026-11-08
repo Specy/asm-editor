@@ -104,7 +104,7 @@
 <style lang="scss">
     .fact b {
         font-family: var(--font-mono);
-        font-weight: normal;
+        font-weight: 400;
         opacity: 1;
     }
     .offset b {

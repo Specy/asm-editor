@@ -6,6 +6,7 @@
     import Select from '#cmp/shared/input/Select.svelte'
     import { BASE_CODE } from '#lib/Config.ts'
     import Header from '#cmp/shared/layout/Header.svelte'
+    import Card from '#cmp/shared/layout/Card.svelte'
     import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
@@ -211,9 +212,13 @@
 </svelte:head>
 
 <DefaultNavbar />
-<Page hasNavbar contentStyle="padding: 1rem;">
+<!-- the column of the index pages, its title at their left edge and height (design-system.md, D8) -->
+<Page hasNavbar cropped="70rem" contentStyle="padding: 1rem;">
+    <div class="title-room">
+        <Header>Exam builder</Header>
+    </div>
     <div class="exam-builder">
-        <section class="settings-card">
+        <Card element="section" class="settings-card" padding="0.9rem" gap="0.5rem">
             <div class="settings-grid">
                 <TextField type="text" label="Exam title" bind:value={settings.title} />
                 <TextField
@@ -236,19 +241,22 @@
                 />
             </div>
 
-            <Header type="h3">General instructions</Header>
+            <Header type="h2" style="font-size: var(--fs-lead)">General instructions</Header>
             <div class="markdown-editor-wrapper intro-editor">
                 <MarkdownEditor bind:value={settings.instructions} />
             </div>
-            <p>
-                When people open the exam, they will put their name and the exam access password,
-                which will generate a random code that identifies them, which you can save. If they
-                reload the page, or if they reset the website, a new code will be generated. Once
-                ready to start, the page will go full screen and any attempt to leave the page will
-                result with the editor being blocked. To unlock the page, the user will need to
-                enter the unlock password. Letting you know that they might have either accidentally
-                or intentionally left the exam.
-            </p>
+            <div class="exam-notes">
+                <p>
+                    When people open the exam, they enter their name and the exam access password.
+                    The page then gives each of them a random code that identifies them, which you
+                    can save. Reloading the page or resetting the website gives a new code.
+                </p>
+                <p>
+                    Once they are ready to start, the page goes full screen. Leaving full screen or
+                    changing tab blocks the editor until the unlock password is entered, so you know
+                    that they left the exam, by accident or on purpose.
+                </p>
+            </div>
 
             <Button
                 onClick={createExamUrl}
@@ -264,19 +272,21 @@
                 <textarea class="exam-link" aria-label="Exam link" readonly value={uncopiedExamUrl}
                 ></textarea>
             {/if}
-        </section>
+        </Card>
 
         <div class="sections-stack">
             {#each sections as section, i (section.id)}
-                <section class="section-card">
+                <Card element="section" class="section-card" padding="0.9rem" gap="0.5rem">
                     <div class="section-header">
                         <div class="section-heading">
-                            <Header type="h2">Section {i + 1}</Header>
+                            <Header type="h2" style="font-size: var(--fs-h3)">
+                                Section {i + 1}
+                            </Header>
                             <p>{sectionTypeLabel(section.type)}</p>
                         </div>
 
                         <div class="section-controls">
-                            <div style="min-width: 12rem;">
+                            <div class="type-select">
                                 <Select
                                     value={section.type}
                                     onChange={(type) => changeSectionType(section.id, type)}
@@ -327,7 +337,7 @@
                                 label="Section title"
                                 bind:value={section.title}
                             />
-                            <Header type="h3">Prompt</Header>
+                            <Header type="h3" style="font-size: var(--fs-lead)">Prompt</Header>
                             <div class="markdown-editor-wrapper prompt-editor">
                                 <MarkdownEditor bind:value={section.prompt} />
                             </div>
@@ -442,18 +452,18 @@
                                     bind:value={cSection.placeholder}
                                 />
 
-                                <div style="position: relative; display: flex; flex: 1;">
+                                <div class="c-starter">
                                     <Editor language="c" bind:code={cSection.starterCode} />
                                 </div>
                             {/if}
                         </div>
                     </div>
-                </section>
+                </Card>
             {/each}
         </div>
 
-        <section class="add-section-card">
-            <Header type="h2">Add a new section</Header>
+        <Card element="section" class="add-section-card" padding="0.9rem" gap="0.5rem">
+            <Header type="h2" style="font-size: var(--fs-h3)">Add a new section</Header>
             <Row gap="0.8rem" align="center" wrap>
                 <Select
                     wrapperStyle="max-width: 16rem"
@@ -468,34 +478,32 @@
                     Add section
                 </Button>
             </Row>
-        </section>
+        </Card>
     </div>
 </Page>
 
 <style>
+    /* the title starts where the other index pages' titles do, as /changelog's (S4-06) */
+    .title-room {
+        padding-top: 1.5rem;
+    }
+    @media (max-width: 600px) {
+        .title-room {
+            padding-top: 0.75rem;
+        }
+    }
+
     .exam-builder {
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        width: min(100%, 62rem);
-        margin: 0 auto;
-        padding: 0 0.6rem 1.4rem;
+        padding-bottom: 1.4rem;
     }
 
-    .settings-card,
-    .section-card,
-    .add-section-card {
-        display: flex;
-        flex-direction: column;
-        border: solid 0.1rem var(--secondary);
-        border-radius: 0.6rem;
-        color: var(--secondary-text);
-        padding: 0.9rem;
-        gap: 0.5rem;
-    }
-    .add-section-card {
-        background-color: var(--tertiary);
+    /* Cards (shared/layout/Card.svelte), which draw their surface, edge and corners */
+    .exam-builder :global(.add-section-card) {
         flex-direction: row;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
     }
@@ -520,6 +528,13 @@
         margin-bottom: 0.8rem;
     }
 
+    .exam-notes {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        max-width: 65ch;
+    }
+
     .exam-link {
         width: 100%;
         min-height: 5rem;
@@ -527,9 +542,9 @@
         background-color: var(--tertiary);
         color: var(--tertiary-text);
         border: none;
-        border-radius: 0.4rem;
+        border-radius: var(--r-control);
         padding: 0.5rem;
-        font: 0.82rem/1.45 var(--font-mono);
+        font: var(--fs-small) / 1.45 var(--font-mono);
         overflow-wrap: anywhere;
     }
 
@@ -539,10 +554,12 @@
         gap: 0.9rem;
     }
 
+    /* the controls go under the title when the two do not fit on one line, as on a phone */
     .section-header {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        border-bottom: solid 0.1rem var(--secondary);
+        border-bottom: 1px solid var(--line);
         padding-bottom: 0.8rem;
         justify-content: space-between;
         gap: 0.9rem;
@@ -555,16 +572,33 @@
         align-items: center;
     }
     .section-heading p {
-        font-size: 0.9rem;
-        opacity: 0.85;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
     }
 
+    /* the whole line when they have one of their own, the type list giving way to the buttons */
     .section-controls {
         display: flex;
+        flex: 1 1 auto;
         align-items: center;
         gap: 0.35rem;
-        flex-wrap: wrap;
         justify-content: flex-end;
+    }
+
+    .type-select {
+        flex: 0 1 12rem;
+        min-width: 0;
+    }
+
+    /* the C starter code in the card's edge, as the editors in the Workbench are */
+    .c-starter {
+        position: relative;
+        display: flex;
+        flex: 1;
+        min-height: 15rem;
+        border: var(--wb-card-edge);
+        border-radius: var(--wb-radius);
+        overflow: hidden;
     }
 
     .section-body {

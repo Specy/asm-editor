@@ -23,8 +23,9 @@ afterEach(async () => {
     document.body.replaceChildren()
 })
 
+//the notice's title is the page's own h1 (ErrorState's pageTitle)
 function heading() {
-    return document.querySelector('[role="alert"] [role="heading"]')?.textContent
+    return document.querySelector('[role="alert"] h1')?.textContent?.trim()
 }
 
 it('says a missing page is missing, with ways back and no links nested in links', () => {

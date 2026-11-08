@@ -25,7 +25,7 @@
         background: var(--secondary);
         cursor: pointer;
         font-size: inherit;
-        font-weight: bold;
+        font-weight: 700;
         line-height: 1;
 
         /* the hover tint over its fill (D4), as a secondary Button's */

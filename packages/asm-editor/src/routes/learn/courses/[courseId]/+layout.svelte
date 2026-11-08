@@ -32,6 +32,11 @@
     let { children, data }: Props = $props()
 
     let currentLectureName = $derived(`${page.params.moduleId}-${page.params.lectureId}`)
+    // the course's own page, which its name at the sidebar's top links to
+    let coursePath = $derived(resolve('/learn/courses/[courseId]', { courseId: data.course.slug }))
+    let onCoursePage = $derived(
+        page.url.pathname.replace(/\/$/, '') === coursePath.replace(/\/$/, '')
+    )
 
     let menuOpen = $state(false)
 
@@ -72,7 +77,8 @@
         <Column padding="0 1rem 0" gap="1rem">
             <a
                 onclick={() => (menuOpen = false)}
-                href={resolve('/learn/courses/[courseId]', { courseId: data.course.slug })}
+                href={coursePath}
+                aria-current={onCoursePage ? 'page' : undefined}
             >
                 <!-- Sidebar chrome, not the document's subject: each page under this layout
                      titles itself with its own <Header>. Matches the module headings below. -->
@@ -84,15 +90,17 @@
         </Column>
         <MaskedScroll gap="0">
             {#each data.course.modules as module (module.slug)}
+                <!-- under the course's name, the sidebar's h2 -->
                 <TogglableSection
                     open={true}
+                    level={3}
                     sectionStyle="margin-left: 0; padding-left: 0.4rem;"
                     style="padding: 0.5rem;"
                 >
                     {#snippet title()}
-                        <h2 style="font-size: 1rem; font-weight: 500; margin-left: -0.1rem">
+                        <span style="font-size: 1rem; font-weight: 500; margin-left: -0.1rem">
                             {module.name}
-                        </h2>
+                        </span>
                     {/snippet}
                     <Column>
                         <LecturesMenu
@@ -100,7 +108,7 @@
                                 (l) => `${module.slug}-${l.slug}` === currentLectureName
                             )}
                             lectures={module.lectures}
-                            lectureStyle="padding-left: 1rem"
+                            lectureStyle="padding-left: 1.2rem"
                             onClick={() => (menuOpen = false)}
                             courseId={data.course.slug}
                             moduleId={module.slug}

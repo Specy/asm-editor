@@ -99,7 +99,7 @@
                             selectedId = -1
                         }}
                     >
-                        <Icon size={1}>
+                        <Icon size="body">
                             <FaCheck />
                         </Icon>
                     </Button>
@@ -112,7 +112,7 @@
                         disabled={entry[0] === entry[1].defaultValue}
                         onClick={() => shortcutsStore.updateKey(entry[0], entry[1].defaultValue)}
                     >
-                        <Icon size={1}>
+                        <Icon size="body">
                             <FaUndo />
                         </Icon>
                     </Button>

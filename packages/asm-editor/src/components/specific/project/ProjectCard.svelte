@@ -149,7 +149,7 @@
             title="Open this project"
         >
             Open
-            <Icon size={0.7}>
+            <Icon size="caption">
                 <FaArrowRight />
             </Icon>
         </ButtonLink>

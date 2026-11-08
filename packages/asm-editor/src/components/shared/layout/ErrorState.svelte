@@ -9,6 +9,7 @@
     import { copyText } from '#lib/utils.ts'
     import Button from '#cmp/shared/button/Button.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import FaRedo from '~icons/fa-solid/redo'
     import FaCopy from '~icons/fa-solid/copy'
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
@@ -31,6 +32,9 @@
         compact?: boolean
         /** `start` for a notice in a box of the page's own, read from its edge as the box's others are. */
         align?: 'center' | 'start'
+        /** The title as the page's own `<h1>`, in the page title's style, for a page that is only
+         * this notice (the error page). */
+        pageTitle?: boolean
     }
 
     let {
@@ -41,7 +45,8 @@
         reload = false,
         actions,
         compact = false,
-        align = 'center'
+        align = 'center',
+        pageTitle = false
     }: Props = $props()
 
     const message = $derived(
@@ -74,8 +79,12 @@
     <div class="content">
         <header>
             {#if code}<span class="code">{code}</span>{/if}
-            <!-- a heading by role, so a page's own heading styles leave it alone -->
-            <div class="title" role="heading" aria-level="2">{title}</div>
+            {#if pageTitle}
+                <Header noMargin>{title}</Header>
+            {:else}
+                <!-- a heading by role, so a page's own heading styles leave it alone -->
+                <div class="title" role="heading" aria-level="2">{title}</div>
+            {/if}
         </header>
         {#if children}
             <div class="description">{@render children()}</div>
@@ -85,7 +94,7 @@
             <div class="actions">
                 {#if reload}
                     <Button onClick={() => location.reload()}>
-                        <Icon size={0.85}>
+                        <Icon size="small">
                             <FaRedo />
                         </Icon>
                         Reload the page
@@ -159,6 +168,7 @@
         display: flex;
         flex-direction: column;
     }
+    /* a display size, above the type scale's page title (design-system-changes.md, S4-39) */
     .code {
         align-self: center;
         margin-bottom: 2rem;
@@ -175,7 +185,7 @@
     .title {
         min-width: 0;
         margin: 0;
-        font-size: 1.6rem;
+        font-size: var(--fs-h2);
         font-weight: 600;
         letter-spacing: -0.01em;
     }
@@ -240,7 +250,7 @@
         cursor: pointer;
 
         :global(svg) {
-            width: 0.8rem;
+            width: var(--fs-small);
         }
         &:hover {
             background: var(--hover-bg);
@@ -280,7 +290,7 @@
             text-decoration: none;
 
             :global(svg) {
-                width: 0.7rem;
+                width: var(--fs-caption);
             }
             &:hover {
                 text-decoration: underline;
@@ -296,7 +306,7 @@
             font-size: 3rem;
         }
         .title {
-            font-size: 1.25rem;
+            font-size: var(--fs-lead);
         }
         .compact .title {
             font-size: var(--fs-body);

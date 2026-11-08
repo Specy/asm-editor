@@ -136,11 +136,6 @@ const TEXT_COLORS: ThemeTextColors = {
     textProseForLight: '#3a3a3a'
 }
 
-function toRgbChannels(color: string) {
-    const { r, g, b } = new TinyColor(color).toRgb()
-    return `${r}, ${g}, ${b}`
-}
-
 /**
  * The hint a light custom theme gets in place of the shared `#939393`, which a dark theme's
  * surfaces were picked for: 4.5:1 or more on light surfaces as dark as `#d2d7e0`
@@ -177,9 +172,6 @@ export function themeCssVariables(
     --${name}: ${color};
     --${name}-text: ${foreground};
     --${name}-text-prose: ${prose};
-    --RGB-${name}: ${toRgbChannels(color)};
-    --RGB-${name}-text: ${toRgbChannels(foreground)};
-    --RGB-${name}-text-prose: ${toRgbChannels(prose)};
 `
     })
     //the design system's tokens drawn from the theme's colours (design-system.md, D4 and D7),

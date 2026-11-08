@@ -344,8 +344,8 @@
     .example-isa {
         flex: none;
         font-size: 0.85em;
-        font-weight: normal;
-        opacity: 0.75;
+        font-weight: 400;
+        color: var(--text-muted);
     }
     .actions {
         display: flex;
@@ -354,7 +354,7 @@
     }
     .button-icon {
         display: flex;
-        width: 0.9rem;
+        width: var(--fs-small);
         flex-shrink: 0;
     }
     iframe {

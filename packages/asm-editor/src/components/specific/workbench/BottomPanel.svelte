@@ -187,8 +187,8 @@
     .tab-icon {
         display: grid;
         place-items: center;
-        width: 0.9rem;
-        height: 0.9rem;
+        width: var(--fs-small);
+        height: var(--fs-small);
     }
 
     /* the spinner in the count's place while the source is analysed, as large as the count */

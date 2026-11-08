@@ -54,7 +54,7 @@ function barebonesFor(language: AvailableLanguages): ProjectTemplate {
     return {
         id: BAREBONES_ID,
         name: 'Empty program',
-        description: 'Simple skeleton template for writing a program in ' + language + '.',
+        description: 'This program ends straight away, with a place marked for your code.',
         language,
         code: BASE_CODE[language],
         order: 0

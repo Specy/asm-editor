@@ -53,7 +53,7 @@
         margin: 0;
     }
     .language {
-        font-weight: bold;
+        font-weight: 700;
         margin-right: 0.3rem;
     }
     /* the lecture's own inline code, as a link */

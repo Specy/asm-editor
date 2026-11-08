@@ -250,8 +250,8 @@
         opacity: 0.85;
 
         :global(svg) {
-            width: 0.8rem;
-            height: 0.8rem;
+            width: var(--fs-small);
+            height: var(--fs-small);
         }
     }
 

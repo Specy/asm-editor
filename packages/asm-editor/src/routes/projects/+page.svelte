@@ -18,6 +18,7 @@
     import { toast } from '#stores/toastStore.ts'
     import { goto } from '$app/navigation'
     import Page from '#cmp/shared/layout/Page.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
     import { projectDownload } from '#lib/projectArchive.ts'
@@ -128,10 +129,10 @@
     <div class="project-display wb-cards">
         <div class="content">
             <div class="top-row">
-                <h1 class="page-title">Your projects</h1>
+                <Header noMargin>Your projects</Header>
                 <div class="top-row-buttons">
                     <Button kind="secondary" bordered style="gap: 0.5rem" onClick={pickAndImport}>
-                        <Icon size={0.85}>
+                        <Icon size="small">
                             <FaUpload />
                         </Icon>
                         Import
@@ -156,7 +157,7 @@
                         style="gap: 0.5rem"
                         {@attach tooltip('Create a new project')}
                     >
-                        <Icon size={0.85}>
+                        <Icon size="small">
                             <FaPlus />
                         </Icon>
                         Create
@@ -186,7 +187,7 @@
             {:else if !ProjectStore.inited}
                 <!-- the list is read each time the page opens, which takes a moment for large
                      Projects: until then nothing is known, not that there are none -->
-                <div class="empty reading" role="status">Reading your projects…</div>
+                <div class="empty reading-projects" role="status">Reading your projects…</div>
             {:else if ProjectStore.projects.length === 0}
                 <div class="empty">
                     <EmptyState title="No projects yet">
@@ -256,19 +257,15 @@
 </Page>
 
 <style lang="scss">
+    /* the title starts where the other index pages' titles do (contentPages.css' room above it
+       and Header's margin) */
     .top-row {
         display: flex;
-        margin-top: 2rem;
+        margin-top: 2.25rem;
         justify-content: space-between;
         align-items: center;
         gap: 1rem;
         margin-bottom: 1.2rem;
-    }
-
-    .page-title {
-        margin: 0;
-        font-size: 1.8rem;
-        white-space: nowrap;
     }
 
     .top-row-buttons {
@@ -297,9 +294,10 @@
     }
 
     /* shown only once the read takes long enough to notice, so a quick one does not flash it */
-    .reading {
+    /* not .reading, the reading pages' type scale (styles/tokens.css) */
+    .reading-projects {
         opacity: 0;
-        animation: appear 0.2s ease-out 0.3s forwards;
+        animation: appear var(--dur-base) var(--ease-out) 0.3s forwards;
     }
 
     @keyframes appear {
@@ -344,11 +342,8 @@
             flex-direction: column;
             align-items: stretch;
             gap: 0.8rem;
-            margin-top: 1rem;
+            margin-top: 1.5rem;
             margin-bottom: 0.8rem;
-        }
-        .page-title {
-            font-size: 1.5rem;
         }
         .top-row-buttons > :global(*) {
             flex: 1;

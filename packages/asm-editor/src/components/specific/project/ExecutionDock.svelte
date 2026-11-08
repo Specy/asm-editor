@@ -106,7 +106,7 @@
     import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'
     import FaStepForward from '~icons/fa-solid/step-forward'
-    import FaRegClock from '~icons/fa-regular/clock'
+    import FaClock from '~icons/fa-solid/clock'
     import FaStop from '~icons/fa-solid/stop'
     import FaFastBackward from '~icons/fa-solid/fast-backward'
     import FaUndo from '~icons/fa-solid/undo'
@@ -281,11 +281,11 @@
                     aria-label={buildButton.label}
                     aria-busy={building}
                 >
-                    <Icon size={1}>
+                    <Icon size="body">
                         {#if progress}
                             <Spinner />
                         {:else if building}
-                            <FaRegClock />
+                            <FaClock />
                         {:else}
                             <FaWrench />
                         {/if}
@@ -316,7 +316,7 @@
                     )}
                     onclick={compilation.onCompile}
                 >
-                    <Icon size={0.9}>
+                    <Icon size="small">
                         {#if compilation.busy}
                             <Spinner />
                         {:else}
@@ -378,7 +378,7 @@
                 {@attach tooltip('End the Debug session')}
                 aria-label="Stop"
             >
-                <Icon size={0.8}>
+                <Icon size="small">
                     <FaStop />
                 </Icon>
                 <span class="label">Stop</span>
@@ -406,7 +406,7 @@
                         class:reserved={face.word !== runFace}
                         aria-hidden={face.word !== runFace}
                     >
-                        <Icon size={0.8}>
+                        <Icon size="small">
                             <face.icon />
                         </Icon>
                         <span class="label">{face.word}</span>
@@ -422,7 +422,7 @@
                 {@attach tooltip('Undo the last step')}
                 aria-label="Undo"
             >
-                <Icon size={0.8}>
+                <Icon size="small">
                     <FaUndo />
                 </Icon>
                 <span class="label">Undo</span>
@@ -435,7 +435,7 @@
                 {@attach tooltip('Run one instruction')}
                 aria-label="Step"
             >
-                <Icon size={0.8}>
+                <Icon size="small">
                     <FaStepForward />
                 </Icon>
                 <span class="label">Step</span>
@@ -459,7 +459,7 @@
                     {#snippet face(option)}
                         <span class="view">
                             {#if option.icon}
-                                <Icon size={0.85}>
+                                <Icon size="small">
                                     <option.icon />
                                 </Icon>
                             {/if}
@@ -489,7 +489,7 @@
                     )}
                     aria-label="Sound"
                 >
-                    <Icon size={0.9}>
+                    <Icon size="small">
                         {#if sound.loading}
                             <Spinner />
                         {:else if sound.muted}
@@ -514,7 +514,7 @@
                     )}
                     aria-label="Test"
                 >
-                    <Icon size={0.9}>
+                    <Icon size="small">
                         <FaFlask />
                     </Icon>
                     <span class="label">Test</span>
@@ -528,7 +528,7 @@
                     {@attach tooltip(action.title)}
                     aria-label={action.label}
                 >
-                    <Icon size={0.9}>
+                    <Icon size="small">
                         <action.icon />
                     </Icon>
                     <span class="label">{action.label}</span>

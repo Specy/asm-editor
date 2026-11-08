@@ -1,6 +1,7 @@
 <script lang="ts">
     import { resolve } from '$app/paths'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import Header from '#cmp/shared/layout/Header.svelte'
     import TagLink from '#cmp/blog/TagLink.svelte'
     import ArticleOutline from '#cmp/blog/ArticleOutline.svelte'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
@@ -33,7 +34,8 @@
     {#each post.tags as tag (tag)}<meta property="article:tag" content={tag} />{/each}
 </svelte:head>
 
-<div class="blog-post-layout">
+<!-- a reading page: its title, body and outline a step larger (design-system.md, D11) -->
+<div class="blog-post-layout reading">
     <ArticleOutline sections={data.sections} article={articleElement} />
     <article class="blog-article" bind:this={articleElement}>
         <header class="blog-article-header">
@@ -42,7 +44,7 @@
                 All articles
             </a>
             {#if post.draft}<span class="blog-draft">Draft: shown by the dev server only</span>{/if}
-            <h1>{post.title}</h1>
+            <Header>{post.title}</Header>
             <p class="blog-lead">{post.description}</p>
             <div class="blog-byline">
                 <a href={AUTHOR.url} rel="external">{AUTHOR.alternateName}</a><span

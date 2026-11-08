@@ -210,8 +210,8 @@
         }
 
         .chevron {
-            width: 0.6rem;
-            height: 0.6rem;
+            width: var(--fs-micro);
+            height: var(--fs-micro);
             opacity: 0.6;
         }
     }
@@ -242,7 +242,7 @@
         padding: 0 0.7rem;
         background: transparent;
         color: inherit;
-        font-weight: bold;
+        font-weight: 700;
         font-size: var(--fs-small);
         text-align: left;
         cursor: pointer;
@@ -282,7 +282,7 @@
 
     /* beside the title, inside the toggle, and read as a detail of it */
     .info {
-        font-weight: normal;
+        font-weight: 400;
         color: var(--hint);
     }
 

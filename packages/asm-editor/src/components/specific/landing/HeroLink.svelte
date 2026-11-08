@@ -32,7 +32,9 @@
         padding: 1.4rem;
         align-items: center;
         justify-content: space-between;
-        transition: all 0.3s;
+        transition:
+            background-color var(--dur-fast),
+            color var(--dur-fast);
         &:hover {
             background-color: var(--tertiary);
             color: var(--tertiary-text);
