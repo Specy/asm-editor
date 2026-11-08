@@ -29,7 +29,7 @@
 </script>
 
 <div class="cycles-line" {style} {@attach tooltip(cycleCounterTooltip(cycles, processor))}>
-    <span class="small-heading">Cycles</span>
+    <span class="label">Cycles</span>
     <span class="count"
         >{cycles.estimate ? `${CYCLE_ESTIMATE_MARK} ` : ''}{formatCycles(cycles.total)}</span
     >
@@ -49,10 +49,22 @@
         overflow: hidden;
     }
 
-    /* the label a panel's heading, the count in the font of the PC's value under it */
+    /* the fonts of the PC's row under it: its name's for the label, in capitals as the name is
+       (owner, 2026-11-08), its value's for the count */
+    .label {
+        font-family: var(--font-ui);
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--secondary-text);
+    }
+
+    /* both in Fira Code at the size and weight of the PC's value (MemoryRenderer's .memory-grid) */
     .count {
         font-family: var(--font-mono);
         font-size: var(--fs-body);
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         color: var(--text-muted);
     }
 
@@ -61,7 +73,9 @@
     .last {
         margin-left: auto;
         font-family: var(--font-mono);
-        font-size: var(--fs-small);
+        font-size: 0.9rem;
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         color: var(--accent);
     }
 </style>

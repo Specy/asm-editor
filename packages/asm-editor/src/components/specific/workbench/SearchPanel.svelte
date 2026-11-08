@@ -410,7 +410,6 @@
     <div class="search-controls" onkeydown={onControlsKeydown}>
         <div class="query-row">
             <SearchField
-                size="sm"
                 type="text"
                 clearable={false}
                 invalid={search.status === 'invalid'}
@@ -742,7 +741,12 @@
 <style lang="scss">
     @use '../../../styles/rows.scss';
 
+    /* inset like the Documentation panel (--documentation-spacing in DocumentationBrowser.svelte),
+       so that switching between the two keeps the search box and the list where they were; the
+       text lines sit in line with the rows' contents */
     .search {
+        --search-spacing: 0.35rem;
+        --search-text-inset: calc(var(--search-spacing) + 0.4rem);
         position: relative;
         display: flex;
         flex-direction: column;
@@ -751,12 +755,15 @@
         font-size: var(--fs-caption);
     }
 
+    /* in line with the list under it: the same inset, and the same room kept for a scrollbar */
     .search-controls {
         display: flex;
         flex: none;
         flex-direction: column;
         gap: 0.4rem;
-        padding: 0.5rem;
+        padding: 0.5rem var(--search-spacing);
+        overflow: hidden;
+        scrollbar-gutter: stable;
     }
 
     .query-row {
@@ -765,15 +772,20 @@
         gap: 0.3rem;
     }
 
-    /* the query, a SearchField taking the row, and its three options at its end */
+    /* the query, a SearchField taking the row, and its three options at its end. It is the
+       Documentation panel's size, its text included, rather than the panel's caption text */
     .query-row > :global(.search-field) {
         flex: 1;
+        font-size: var(--fs-body);
     }
 
+    /* a pixel into the field's padding above and below, so that the field is as tall as the
+       Documentation panel's, which has no buttons in it until something is typed */
     .toggles {
         display: flex;
         flex: none;
         gap: 0.2rem;
+        margin-block: -1px;
     }
 
     /* the three options, small pressed IconButtons with letters for icons */
@@ -857,7 +869,7 @@
         flex: none;
         flex-direction: column;
         gap: 0.35rem;
-        padding: 0 0.8rem 0.4rem;
+        padding: 0 var(--search-text-inset) 0.4rem;
     }
 
     .lane {
@@ -928,7 +940,7 @@
 
     .note {
         margin: 0;
-        padding: 0.3rem 0.8rem;
+        padding: 0.3rem var(--search-text-inset);
         font-size: var(--fs-caption);
         line-height: 1.4;
         color: var(--hint);
@@ -937,7 +949,7 @@
     .summary {
         flex: none;
         margin: 0;
-        padding: 0 0.8rem 0.3rem;
+        padding: 0 var(--search-text-inset) 0.3rem;
         font-size: var(--fs-caption);
         color: var(--text-muted);
 
@@ -953,7 +965,7 @@
     .results {
         flex: 1;
         min-height: 0;
-        padding: 0 0 0.4rem;
+        padding: 0 var(--search-spacing) 0.4rem;
         overflow: auto;
         scrollbar-gutter: stable;
 
@@ -1088,7 +1100,8 @@
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.4rem 0.8rem;
+        /* inside the list, so already inset by its padding */
+        padding: 0.4rem calc(var(--search-text-inset) - var(--search-spacing));
         font-size: var(--fs-caption);
 
         > span {

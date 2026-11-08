@@ -43,7 +43,10 @@
          * column is never narrower than its label.
          */
         wrap?: boolean
-        /** `sm` for a panel's or a tray's dense rows, `md` as tall as a form's `TextField`. */
+        /**
+         * `sm` for a panel's or a tray's dense rows, `md` for a form, a little taller than its
+         * `TextField`.
+         */
         size?: 'sm' | 'md'
         /**
          * Draws an option's face in place of its icon and label, for a host whose buttons must read
@@ -228,9 +231,10 @@
         }
     }
 
-    // as tall as a form's field: the same small label, with the room of a field's padding
+    // a form's height, a little taller than its field: 40px for a row, the buttons 38px inside the
+    // strip's edge with the same small label centred in them; the highlight, inset 0.1rem, follows
     .slider.md .segmented-control-button {
-        padding-block: 0.6rem;
+        min-height: 2.375rem;
     }
 
     // equal columns that never squeeze a label, so a strip too narrow for all of them in a row

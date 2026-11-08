@@ -2,6 +2,7 @@
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { elementSize } from '#cmp/shared/floating/elementSize.ts'
     import type { Side } from '#cmp/shared/floating/floating.ts'
+    import { tooltipRadius } from '#src/styles/elevation.ts'
     import { boundedValueHover } from './boundedValueHover'
 
     interface Props {
@@ -35,6 +36,8 @@
 
     /** The card's arrow, which stands out of it towards the value; ARROW in the styles below. */
     const ARROW = 6
+    /** The Tooltip's corner, a control's, smaller than a menu's; --r-control in the styles below. */
+    const RADIUS = tooltipRadius()
     let cardWidth = $state(0)
     let cardHeight = $state(0)
     /** Where `boundedValueHover` put the card: its side of the value and its arrow along it. */
@@ -68,6 +71,7 @@
                 side={outline.side}
                 at={outline.at}
                 arrow={ARROW}
+                radius={RADIUS}
                 solid
             />
         {/if}
@@ -118,9 +122,12 @@
 
     /* the room the card's arrow stands out of it by, ARROW in the script */
     $arrow: 6px;
+    /* the card's room round what it holds, the same on every side (owner, 2026-11-08) */
+    $pad: 0.3rem;
 
-    /* a hover card over data, drawn as the Tooltip is: a solid Popover whose outline, arrow and
-       all, is drawn behind it; the padding keeps the room its edge takes */
+    /* a hover card over data, drawn as the Tooltip is: a solid Popover on the Tooltip's corner
+       (RADIUS in the script), whose outline, arrow and all, is drawn behind it; the padding keeps
+       the room its edge takes */
     .hover-element {
         @include popover.content;
         display: none;
@@ -129,7 +136,7 @@
         position: absolute;
         cursor: text;
         text-align: center;
-        padding: calc(0.2rem + 1px);
+        padding: calc(#{$pad} + 1px);
     }
 
     /* centred over the value, or under it, its arrow's tip a pixel off it, however many lines
@@ -160,12 +167,22 @@
         }
     }
 
+    /* its lines cut to the digits, from a capital's top to the baseline, so that the room the
+       font leaves above and below them does not add to the padding there */
+    .hover-content {
+        text-box: trim-both cap alphabetic;
+    }
+
     .old-value {
         color: var(--accent);
     }
 
+    /* Fira Code at the size and weight of the register and memory views' values (MemoryRenderer's
+       .memory-grid) */
     .monospaced {
         font-family: var(--font-mono);
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
     }
 
     /* the hover tint (D4), over the cell's own fill when it has one */
@@ -179,6 +196,8 @@
         display: flex;
     }
 
+    /* its room inside what scrolls, which a row running from edge to edge (the memory view's
+       region) reaches over */
     .bounded {
         width: max-content;
         padding: 1px;
@@ -186,11 +205,8 @@
         .hover-content {
             max-height: var(--hover-max-height);
             overflow: auto;
-            border-radius: nested-radius(var(--r-overlay), $border: 1px);
-        }
-
-        .old-value {
-            padding: 0 0.3rem 0.2rem;
+            padding: $pad;
+            border-radius: nested-radius(var(--r-control), $border: 1px);
         }
     }
 

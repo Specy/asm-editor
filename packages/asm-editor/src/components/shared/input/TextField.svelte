@@ -1,7 +1,7 @@
 <script lang="ts">
     /**
-     * A line of text to type, drawn as every field in the app is (`styles/field.scss`): the raised
-     * `--tertiary` of the search field, the surface's `--line` round it, `--r-control` corners and
+     * A line of text to type, drawn as every field in the app is (`styles/field.scss`): the fill the
+     * Testcases' fields had (`--secondary` mixed with `--tertiary`), the surface's `--line` round it, `--r-control` corners and
      * the placeholder in `--hint`. With a `label` it stands under that label, which names it; with
      * none, the caller names it (`aria-label`, `aria-labelledby` or a `<label>` round it). The rest
      * goes to the `<input>`, so it takes every attribute and handler an input does.
@@ -14,6 +14,8 @@
         el?: HTMLInputElement
         /** The words above it, its name. */
         label?: string
+        /** A word at the right of the label, such as "Optional", read with it as part of its name. */
+        hint?: string
         /** `md` for a form, `sm` for a panel's or a tray's dense rows. */
         size?: 'sm' | 'md'
         /** Typed in Fira Code, for an address, a value, a command line's arguments. */
@@ -31,6 +33,7 @@
         value = $bindable(),
         el = $bindable(),
         label,
+        hint,
         size = 'md',
         mono = false,
         invalid = false,
@@ -61,8 +64,9 @@
 {/snippet}
 
 {#if label}
-    <label class="labelled" style={wrapperStyle}>
+    <label class="labelled" class:hinted={hint !== undefined} style={wrapperStyle}>
         <span>{label}</span>
+        {#if hint}<span class="hint">{hint}</span>{/if}
         {@render field()}
     </label>
 {:else}
@@ -95,5 +99,21 @@
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
+    }
+
+    /* the label at the left, its hint at the right, the field across both under them */
+    .hinted {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: baseline;
+        column-gap: 0.75rem;
+
+        .text-field {
+            grid-column: 1 / -1;
+        }
+    }
+    .hint {
+        font-size: var(--fs-caption);
+        color: var(--text-muted);
     }
 </style>

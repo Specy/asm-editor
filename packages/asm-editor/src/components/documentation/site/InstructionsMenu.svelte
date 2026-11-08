@@ -23,38 +23,29 @@
     {#each names as ins (ins)}
         <a
             href={hrefOf(ins)}
-            class="instruction-link"
-            class:current-instruction={ins === currentInstructionName}
+            class="row"
             aria-current={ins === currentInstructionName ? 'page' : undefined}
             onclick={onClick}
         >
-            <div class="instruction-link-inner">
-                {ins}
-            </div>
+            {ins}
         </a>
     {/each}
 </Column>
 
 <style lang="scss">
-    @use '../../../styles/rows.scss';
+    @use '../../../styles/outline.scss';
+    @use '../../../styles/focus.scss' as *;
 
-    /* the text where a 0.2rem edge used to push it */
-    a {
-        padding: 0.4rem 0.6rem 0.4rem 0.8rem;
-        border-radius: 0 0.2rem 0.2rem 0;
-    }
-
-    /* the row under the pointer, and the page you are on (design-system.md, D4) */
-    a:hover:not(.current-instruction) {
-        background-color: var(--hover-bg);
-    }
-    .current-instruction {
-        @include rows.selected;
-    }
-    .instruction-link-inner {
-        transition: transform var(--dur-fast);
-    }
-    a:hover > .instruction-link-inner {
-        transform: translateX(0.2rem);
+    /* the outline's rows (styles/outline.scss), as the course sidebar's lectures are: run out to
+       the sidebar's left edge by the caller, edge to edge with no gap, their padding the rhythm,
+       rounded on the far side, the one under the pointer in the hover tint and the instruction
+       shown in the current item's look; the keyboard's ring inside the row. The text starts at
+       the caller's `--instruction-indent`, under its heading's name. */
+    .row {
+        @include outline.row('[aria-current="page"]');
+        @include outline.row-padding;
+        @include focus-ring($inset: true);
+        padding-left: var(--instruction-indent, 0.75rem);
+        font-size: var(--fs-body);
     }
 </style>

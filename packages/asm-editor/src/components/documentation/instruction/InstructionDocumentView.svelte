@@ -427,11 +427,16 @@
         font-weight: 400;
         color: var(--background-text-prose);
     }
+    /* a section's explanation and its boxes' notes a step larger on the page than in the panel,
+       as their rows are (FormPatternRow; owner, 2026-11-08) */
     .explanation {
         margin: 0;
         max-width: 80ch;
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
         color: var(--background-text-prose);
+    }
+    .panel .explanation {
+        font-size: var(--fs-small);
     }
     /* Boxes are drawn with rules, not fills: the box's edge, a rule under its note and one
        between its rows, so a row and its opened forms read apart without a block of colour. */
@@ -451,11 +456,12 @@
         margin: 0;
         padding: 0.45rem 0.8rem;
         border-bottom: 1px solid var(--doc-rule);
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
         color: var(--background-text-prose);
     }
     .panel .note {
         padding: 0.35rem 0.5rem;
+        font-size: var(--fs-small);
     }
     .rows {
         display: flex;

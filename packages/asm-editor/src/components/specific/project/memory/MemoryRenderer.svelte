@@ -633,19 +633,21 @@
                                     {/each}
                                 </div>
                             {/if}
-                            {#if unreadableByte}
-                                <div class="byte-value">??</div>
-                                <div class="byte-error">{unreadable?.reason}</div>
-                            {:else}
-                                {#if BigInt(word) !== signed}
-                                    <div class="byte-value" style="user-select: all;">
-                                        {signed}
+                            <div class="byte-values">
+                                {#if unreadableByte}
+                                    <div class="byte-value">??</div>
+                                    <div class="byte-error">{unreadable?.reason}</div>
+                                {:else}
+                                    {#if BigInt(word) !== signed}
+                                        <div class="byte-value" style="user-select: all;">
+                                            {signed}
+                                        </div>
+                                    {/if}
+                                    <div class="byte-value" style="user-select: all">
+                                        {word}
                                     </div>
                                 {/if}
-                                <div class="byte-value" style="user-select: all">
-                                    {word}
-                                </div>
-                            {/if}
+                            </div>
                         </div>
                     {/snippet}
                 </ValueDiff>
@@ -725,10 +727,19 @@
         }
     }
 
+    /* the byte's region above its values, its line from edge to edge of the card: it reaches
+       over the card's 0.3rem room ($pad in ValueDiffer) and takes the same room inside, so the
+       card has as much room above and below what it holds as beside it */
     .region-block {
         border-bottom: 1px solid var(--line);
-        padding: 0.2rem 0.4rem;
-        margin-bottom: 0.2rem;
+        margin: -0.3rem -0.3rem 0.3rem;
+        padding: 0.3rem;
+    }
+
+    /* each part's lines cut to the text, as the card's are (ValueDiffer) */
+    .region-block,
+    .byte-values {
+        text-box: trim-both cap alphabetic;
     }
 
     .region-hover {
@@ -743,12 +754,8 @@
         white-space: normal;
     }
 
-    .byte-value {
-        padding: 0 0.3rem 0.2rem;
-    }
-
     .byte-error {
-        padding: 0.2rem 0.4rem;
+        margin-top: 0.2rem;
         overflow-wrap: anywhere;
     }
 
@@ -768,6 +775,8 @@
     .selection-input {
         font-family: var(--font-mono);
         font-size: inherit;
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         text-align: center;
         align-self: center;
         //`box-sizing: border-box` is global, so the padding is inside the width the popup sets and
@@ -791,8 +800,16 @@
         //Keep the table around its cells so a smaller host scrolls the whole table.
         min-width: min-content;
         min-height: min-content;
+        //Fira Code at the size and weight the bytes had in the system's monospace before the design
+        //system (owner, 2026-11-08): the sizes below are the old ones, Fira Code scaled to the
+        //x-height of Windows' Consolas, which it is about a tenth larger than at a size, and drawn
+        //at its regular 400, which global.css raises to 500 for the rest of the app's code. The
+        //register views (RegisterFileRows, ValueDiffer, RegisterValueCard, CyclesLine) and the
+        //memory controls draw their values the same way
         font-family: var(--font-mono);
-        font-size: var(--fs-body);
+        font-size: 1rem;
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         grid-template-columns: min-content;
         grid-template-rows: min-content;
         grid-template-areas:
@@ -815,7 +832,7 @@
     //their padding, and the address column's header, which fits the hex toggle and the selection's
     //clear button side by side so selecting never widens the column
     .dense {
-        font-size: var(--fs-small);
+        font-size: 0.875rem;
         --cell-pad-x: 0.25rem;
         --address-header-width: 3.1rem;
 
@@ -843,6 +860,9 @@
         margin: 0 auto;
         padding: 0.45rem 0.6rem;
         font-size: var(--fs-small);
+        //in the interface's font, which the grid's adjustments to Fira Code are not for
+        font-size-adjust: none;
+        font-variation-settings: normal;
         overflow-wrap: anywhere;
         pointer-events: none;
         transition: opacity var(--dur-fast);

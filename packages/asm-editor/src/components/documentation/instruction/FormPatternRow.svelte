@@ -224,17 +224,21 @@
     .expanded .chevron {
         transform: rotate(90deg);
     }
+    /* On the page everything in a row reads a step larger than in the panel (owner, 2026-11-08):
+       the syntax a step above the editor's 16px, at --fs-prose; the facts, notes, details and
+       forms at --fs-body; the size chips at --fs-small. The panel keeps its dense sizes */
     .syntax {
         min-width: 0;
         font-family: var(--example-font-family, var(--font-mono));
-        font-size: var(--example-font-size, 1rem);
-        line-height: var(--example-line-height, 1.4);
+        font-size: var(--fs-prose);
+        line-height: 1.4;
         font-variant-ligatures: none;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
     }
     .compact .syntax {
         font-size: var(--fs-small);
+        line-height: var(--example-line-height, 1.4);
     }
     .symbol {
         padding: 0;
@@ -261,10 +265,13 @@
         padding: 0 0.35rem;
         border-radius: 0.3rem;
         font-family: var(--font-mono);
-        font-size: var(--fs-caption);
+        font-size: var(--fs-small);
         line-height: 1.5;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
+    }
+    .compact .chip {
+        font-size: var(--fs-caption);
     }
     .chip[title] {
         cursor: help;
@@ -275,7 +282,7 @@
         align-items: baseline;
         gap: 0.1rem 0.4rem;
         margin-left: auto;
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
         color: var(--background-text-prose);
     }
     /* In the narrow panel the fact line sits under the syntax, past the toggle */
@@ -289,7 +296,7 @@
     }
     .row-note {
         margin: -0.15rem 0.8rem 0.35rem 2.3rem;
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
         color: var(--background-text-prose);
     }
     .body {
@@ -309,7 +316,7 @@
         align-items: baseline;
         gap: 0.35rem 0.6rem;
         padding: 0.2rem 0;
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
     }
     .detail-label {
         min-width: 11rem;
@@ -328,7 +335,7 @@
         padding: 0.1rem 0.4rem;
         border-radius: var(--r-chip);
         font-family: var(--font-mono);
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
         font-variant-ligatures: none;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
@@ -361,7 +368,7 @@
         gap: 0.3rem;
         padding: 0.5rem 0;
         list-style: none;
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
         min-width: 0;
     }
     .form-line {
@@ -390,18 +397,27 @@
     .form-note {
         max-width: 80ch;
         margin: 0;
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
         color: var(--background-text-prose);
+    }
+    /* the panel's dense sizes */
+    .compact :is(.row-note, .detail, .mode, .form, .form-note) {
+        font-size: var(--fs-small);
     }
     .form-facts {
         margin-left: 0.5rem;
     }
     .arrow {
         display: flex;
+        width: var(--fs-small);
+        height: var(--fs-small);
+        margin-top: 0.5rem;
+        color: var(--background-text-prose);
+    }
+    .compact .arrow {
         width: var(--fs-caption);
         height: var(--fs-caption);
         margin-top: 0.45rem;
-        color: var(--background-text-prose);
     }
     .expansion {
         flex: 0 1 auto;

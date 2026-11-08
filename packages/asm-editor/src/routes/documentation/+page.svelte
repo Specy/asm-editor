@@ -82,7 +82,6 @@
 <style lang="scss">
     .intro {
         margin: 0;
-        color: var(--background-text-prose);
     }
     .langs {
         display: grid;

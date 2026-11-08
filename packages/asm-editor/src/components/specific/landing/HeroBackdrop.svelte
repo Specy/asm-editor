@@ -209,6 +209,9 @@
             />
         </div>
     </div>
+    <!-- in hex whatever the reader's Preference says, which lives in the browser's storage: drawn
+         the same on the server as once the page has started, so they are there from the first
+         paint and never flip -->
     <div class="registers card">
         <RegistersRenderer
             systemSize={RegisterSize.Long}
@@ -220,6 +223,7 @@
             registers={[pc]}
             withoutHeader
             position="bottom"
+            hex
         />
         <RegistersRenderer
             systemSize={RegisterSize.Long}
@@ -227,6 +231,7 @@
             style="flex: 1; min-height: 0;"
             size={RegisterSize.Long}
             {registers}
+            hex
         />
     </div>
     <div class="memory card">

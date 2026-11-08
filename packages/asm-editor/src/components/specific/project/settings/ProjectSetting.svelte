@@ -161,9 +161,4 @@
         color: var(--danger);
         text-align: right;
     }
-    /* the stepper in the fields' colour */
-    .value {
-        --stepper-background: var(--tertiary);
-        --stepper-text: var(--tertiary-text);
-    }
 </style>

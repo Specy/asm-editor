@@ -1,0 +1,92 @@
+// An outline: a sidebar's list of the parts of a thing, a row for each, grouped under small
+// headings, the part shown marked as the current item (design-system.md, D4). The exam builder's
+// outline (ExamOutline.svelte) is drawn with these; another sidebar uses them the same way:
+//
+//     @use '../../styles/outline.scss';
+//     .list-box { @include outline.list-box; }        the scrolling box round the groups
+//     .group-title { @include outline.group-title; }  a group's heading (h2, h3)
+//     .rows { @include outline.rows; }                the ul or ol of rows
+//     .row { @include outline.row; }                  an li, picked with the class `current`
+//     .pick { @include outline.row-control; }         the button or link that fills the row
+//
+// A row that is itself the link (an `a` straight in the list) takes `row` and `row-padding`, and
+// `row('[aria-current="page"]')` when the page marks the picked one with `aria-current` rather
+// than a class. The rows run flush to the outline's leading side (its Card has no padding, the
+// list box none on that side), so the picked row's accent edge touches the outline's edge; they
+// stack edge to edge, with no gap, their own padding the rhythm; each is rounded on its far side.
+
+@use 'rows';
+@use 'focus' as *;
+
+// The room inside a row, round its text; a group's heading and a control laid out as a row (the
+// exam outline's Add section) line their text up with it.
+$row-padding-block: 0.45rem;
+$row-padding-inline: 0.75rem;
+
+// The box the groups scroll in: room above, below and at the far side, none at the leading side.
+@mixin list-box {
+    padding: 0.35rem 0.5rem 0.25rem 0;
+}
+
+// A group's heading over its rows, small and muted, in line with the rows' text.
+@mixin group-title {
+    margin: 0;
+    padding: 0.65rem $row-padding-inline 0.3rem;
+    font: 600 var(--fs-caption) / 1.3 var(--font-ui);
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--text-muted);
+}
+
+// The list of rows, edge to edge.
+@mixin rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+// One row, from the outline's leading edge, rounded on the far side: the row under the pointer
+// takes the hover tint, the picked one (`$picked`, the class `current` unless told otherwise) the
+// current item's look, an accent tint and a 2px accent edge on the leading side (rows.selected).
+@mixin row($picked: '.current') {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    border-radius: 0 var(--r-chip) var(--r-chip) 0;
+    transition: background-color var(--dur-fast);
+
+    &:hover:not(#{$picked}) {
+        background-color: var(--hover-bg);
+    }
+
+    &#{$picked} {
+        @include rows.selected;
+    }
+}
+
+@mixin row-padding {
+    padding: $row-padding-block $row-padding-inline;
+}
+
+// The button or link that fills a row, beside whatever else the row holds (the exam outline's
+// arrows): no look of its own, the row's padding, and the keyboard's ring inside its edge.
+@mixin row-control {
+    @include row-padding;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    border: none;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    @include focus-ring($inset: true);
+}

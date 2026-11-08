@@ -50,6 +50,8 @@
         onPoke?: (fileId: string, writes: RegisterPoke[]) => void
         /** The menu a right click on an integer register's value opens, see `RegisterFileRows`. */
         valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
+        /** Integers in hexadecimal or decimal whatever the Preference says, see `RegisterFileRows`. */
+        hex?: boolean
     }
 
     let {
@@ -68,7 +70,8 @@
         pokeable = false,
         canPokeRegister,
         onPoke,
-        valueMenu
+        valueMenu,
+        hex
     }: Props = $props()
 
     const FORMAT_LABELS: Record<RegisterFormat, string> = {
@@ -229,12 +232,15 @@
                     : undefined}
                 onPoke={onPoke ? (writes) => onPoke(file.id, writes) : undefined}
                 {valueMenu}
+                {hex}
             />
         </div>
     {/if}
 </div>
 
 <style lang="scss">
+    @use '../../../../styles/radius.scss' as *;
+
     .registers-wrapper {
         display: flex;
         flex-direction: column;
@@ -285,6 +291,16 @@
         scrollbar-gutter: stable;
     }
 
+    //a panel first in a Card, nothing above it (a Playground or an embed with no flags, PC or
+    //cycles), puts its tabs' bar at the Card's top: the bar's corners are the Card's less its edge,
+    //so they run along the Card's curve. With a line above it the bar keeps its own 0.5rem
+    :global(.card) > .registers-wrapper:first-child {
+        --tab-strip-radius: #{nested-radius(
+                var(--wb-radius, 0.5rem),
+                $border: var(--wb-card-inset, 0px)
+            )};
+    }
+
     //the tabs, the selectors and the flags row are above the scrolling region rather than sticky
     //inside it, so they keep their height whatever the file below them does
     .registers-top {
@@ -296,7 +312,7 @@
     //grouping, and for a language with one file the title that line has always carried
     .registers-header {
         display: flex;
-        font-size: var(--fs-small);
+        font-size: 0.9rem;
         padding: 0.2rem;
         gap: 0.3rem;
         align-items: center;

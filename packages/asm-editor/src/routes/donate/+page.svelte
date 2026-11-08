@@ -97,7 +97,6 @@
         display: flex;
         flex-direction: column;
         gap: 0.8rem;
-        color: var(--background-text-prose);
     }
     .intro p {
         margin: 0;

@@ -99,6 +99,7 @@
 
 <style lang="scss">
     @use './testcases.scss' as *;
+    @use '../../../../styles/field.scss';
 
     .number-cell {
         @include mono;
@@ -121,8 +122,8 @@
 
         /* typed in, a field (styles/field.scss): its fill, and the global ring inside its edge */
         &:focus {
-            background-color: var(--tertiary);
-            color: var(--tertiary-text);
+            background-color: field.$fill;
+            color: field.$text;
         }
 
         &[aria-invalid='true'] {

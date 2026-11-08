@@ -70,9 +70,4 @@
         width: 9rem;
         accent-color: var(--accent);
     }
-    /* the stepper in the fields' colour */
-    .settings-value {
-        --stepper-background: var(--tertiary);
-        --stepper-text: var(--tertiary-text);
-    }
 </style>

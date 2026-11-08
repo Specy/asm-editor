@@ -77,6 +77,12 @@
         chevron?: Component
         /** Smaller, for a panel's rows of settings. */
         compact?: boolean
+        /**
+         * A class on the list, for a caller that draws it in colours of its own (the memory
+         * view's region picker, in its panel's): a rule from the caller reaches it with
+         * `:global()`, under an element of the caller's own so that it outweighs the list's.
+         */
+        listClass?: string
     }
 
     let {
@@ -96,6 +102,7 @@
         openAbove = false,
         chevron,
         compact = false,
+        listClass,
         ...rest
     }: Props = $props()
 
@@ -388,7 +395,7 @@
         <ul
             bind:this={list}
             id={listId}
-            class="list"
+            class={['list', listClass]}
             popover="manual"
             role="listbox"
             aria-labelledby={title ? labelId : undefined}
@@ -447,7 +454,6 @@
     @use '../../../styles/field.scss';
     @use '../../../styles/popover.scss';
     @use '../../../styles/radius.scss' as *;
-    @use '../../../styles/rows.scss';
 
     .wrapper {
         display: flex;
@@ -517,9 +523,13 @@
     }
 
     /* fixed, not absolute: an absolutely positioned popup is part of the page's scrollable
-       overflow and grows the document when it opens near the bottom. A Popover, as the menus are */
+       overflow and grows the document when it opens near the bottom. A Popover's edge, corner and
+       shadow, as the menus have, but the Select's own field colour, solid, so the list reads as
+       the control opened out rather than as a menu tinted over the page */
     .list {
-        @include popover.surface;
+        @include popover.surface($solid: true);
+        background-color: field.$fill;
+        color: field.$text;
         position: fixed;
         inset: auto;
         z-index: 100;
@@ -532,14 +542,14 @@
 
     /* over the options as they scroll past, set apart from them by a line from edge to edge. It
        reaches over the list's padding, which it sticks within, and gives it back to its content.
-       Opaque, so the options do not show through it: the list's tint without what is beneath */
+       In the list's colour, which is opaque, so the options do not show through it */
     .popup-header {
         position: sticky;
         top: -0.25rem;
         z-index: 1;
         margin: -0.25rem -0.25rem 0.25rem;
         padding: 0.25rem 0.25rem 0;
-        background-color: var(--tertiary);
+        background-color: field.$fill;
         border-bottom: 1px solid var(--line);
     }
 
@@ -555,9 +565,10 @@
         background-color: var(--hover-bg);
     }
 
-    /* the value chosen, which is the one the control holds */
+    /* the value chosen, which is the one the control holds: a selected row's accent tint
+       (styles/rows.scss) without the accent edge on its leading side (owner, 2026-11-08) */
     .option[aria-selected='true'] {
-        @include rows.selected;
+        background-color: var(--selected-bg);
 
         /* the pointer or the arrow keys on it too: the hover over the selection */
         &.active {

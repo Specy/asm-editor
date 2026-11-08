@@ -55,20 +55,27 @@
 </nav>
 
 <style>
+    /* The links run the navbar's full height, its padding included, so each is easy to hit, and
+       the space between two of them is their own padding rather than a gap no click reaches. The
+       negative margins give back the navbar's padding above, below and at the logo's left, so
+       nothing moves on screen. */
     .main-links {
+        --link-pad: 0.45rem;
         container: main-links / inline-size;
         display: flex;
         flex: 1;
         min-width: 0;
-        align-items: center;
-        gap: 0.9rem;
+        align-self: stretch;
+        align-items: stretch;
+        margin-block: -0.5rem;
+        margin-left: calc(-1 * var(--link-pad));
     }
 
     .link {
         display: flex;
         flex: none;
         align-items: center;
-        height: 2.2rem;
+        padding-inline: var(--link-pad);
         font-size: var(--fs-body);
         color: var(--text-muted);
     }
@@ -86,19 +93,16 @@
         color: var(--accent);
     }
 
+    /* inside the link, which reaches the navbar's edges */
     .link:focus-visible {
         outline: 2px solid var(--accent);
-        outline-offset: 2px;
+        outline-offset: -2px;
         border-radius: 0.2rem;
     }
 
-    .logo {
-        width: 2.2rem;
-    }
-
     .logo img {
-        width: 100%;
-        height: 100%;
+        width: 2.2rem;
+        height: 2.2rem;
     }
 
     @container main-links (max-width: 21rem) {
@@ -115,7 +119,7 @@
 
     @media (max-width: 600px) {
         .main-links {
-            gap: 0.55rem;
+            --link-pad: 0.275rem;
         }
 
         .link {

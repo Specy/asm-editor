@@ -14,6 +14,14 @@
         sectionStyle?: string
         /** The heading's text, which the button holds; no heading of its own. */
         title?: import('svelte').Snippet
+        /**
+         * A sidebar's section (the documentation's and the course's): its heading stays at the
+         * top of the box it scrolls in while its rows scroll under it, and its button is the
+         * whole row, out across the section's `inset` to the box's sides.
+         */
+        sticky?: boolean
+        /** A `sticky` section's room at its sides, which its heading's button spans. */
+        inset?: string
         children?: import('svelte').Snippet
     }
 
@@ -23,13 +31,15 @@
         style = '',
         sectionStyle = '',
         title,
+        sticky = false,
+        inset = '0rem',
         children
     }: Props = $props()
     let cantAnimate = $state(true)
     const id = $props.id()
 </script>
 
-<section class="section" class:open {style}>
+<section class="section" class:open class:sticky style="--inset: {inset}; {style}">
     <svelte:element this={`h${level}`} class="section-heading">
         <button
             class="section-title"
@@ -55,10 +65,38 @@
 </section>
 
 <style lang="scss">
+    @use '../../../styles/focus.scss' as *;
+
     /* the button draws the title; the heading only names its level */
     .section-heading {
         margin: 0;
         font: inherit;
+    }
+
+    /* A sidebar's section (owner, 2026-11-08). Its heading is pinned at the top of the content of
+       the box it scrolls in, below that box's padding, where MaskedScroll's faded edge (as tall as
+       that padding, --mask-size) ends, on the sidebar's fill; its shadow, a copy of it moved up by
+       that edge, covers the band above it, so the rows that scroll on under it are hidden there
+       too. It stays inside its section, so it leaves with the section's
+       last row as the next heading comes up. It is drawn above the rows, which their fade-in
+       leaves a layer of their own. Its button is the whole row: out across the section's sides,
+       and 0.3rem under the title, which its margin gives back so nothing below moves. */
+    .sticky {
+        padding-inline: var(--inset);
+    }
+    .sticky > .section-heading {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        margin: 0 calc(-1 * var(--inset)) -0.3rem;
+        background-color: var(--secondary);
+        box-shadow: 0 calc(-1 * var(--mask-size, 0rem)) 0 var(--secondary);
+    }
+    .sticky .section-title {
+        width: 100%;
+        padding: 0 var(--inset) 0.3rem;
+        /* the ring inside the row: the box's sides would clip it */
+        @include focus-ring($inset: true);
     }
 
     .section-title {
@@ -70,7 +108,8 @@
         background-color: transparent;
         font-family: var(--font-ui);
         color: var(--secondary-text);
-        font-weight: 700;
+        /* the heft the titles had in Fira Code at 500: Rubik's 500 is a step heavier */
+        font-weight: 400;
         align-items: center;
     }
     .section {

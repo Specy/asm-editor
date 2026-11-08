@@ -128,13 +128,15 @@
         padding: 0.8rem;
         flex-direction: column;
         padding-top: 0;
-        gap: 0.4rem;
+        /* the same room either side of the rule between two shortcuts, 0.2rem more than the 0.4rem
+           that left the keys touching it */
+        gap: 0.6rem;
         overflow-y: auto;
         font-family: var(--font-mono);
     }
     .input-row {
         justify-content: space-between;
-        padding-bottom: 0.4rem;
+        padding-bottom: 0.6rem;
         align-items: center;
         padding-left: 0.4rem;
         border-bottom: 1px solid var(--wb-line, var(--secondary));

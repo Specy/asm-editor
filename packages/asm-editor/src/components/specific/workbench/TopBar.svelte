@@ -35,7 +35,7 @@
             bg="var(--accent2)"
             color="var(--accent2-text)"
             size="sm"
-            style="gap: 0.4rem; flex: none;"
+            style="padding: 0 0.7rem; height: 1.9rem; gap: 0.4rem; flex: none; font-size: 0.9rem;"
             {@attach tooltip('Save the Project')}
             onClick={() => session.save()}
         >
@@ -59,11 +59,12 @@
         border-bottom: 1px solid var(--wb-divider);
     }
 
-    /* the whole of the bar's height, as wide as the rail under it */
+    /* the whole of the bar's height, as wide as the rail under it, with the corners it had */
     .top-bar :global(.rail-width) {
         align-self: stretch;
         width: var(--wb-rail-width);
         height: auto;
+        border-radius: 0.3rem;
     }
 
     .title {

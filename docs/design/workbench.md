@@ -138,7 +138,7 @@ These follow the brief, today's behaviour, or the decisions above. The owner con
     - Explorer, AI and Settings are off; today they are unreachable because the exam hides the editor's header.
     - Documentation stays available with its links disabled. Today it comes from a button in the exam page's own header (`FloatingLanguageDocumentation` with `disableLinks`); it becomes the Workbench's Documentation panel, and the header button goes. Corrected on 2026-09-30: the recap said Documentation was off, which is not today's behaviour.
     - Testcases are view-only.
-    - The exam prompt is a host panel, open by default.
+    - The exam prompt is a host panel, open by default. _Superseded on 2026-11-08 by the exam session's redesign ([design-system-changes.md](./design-system-changes.md), XS-03, XS-04): the prompt is a Card above the Workbench and the host panel is gone._
     - In review mode, the teacher's review agent is a host panel for assembly sections. The exam header's existing AI button opens it through the Workbench's bindable active panel. For other section types, where there is no Workbench, it stays the overlay it is today.
 - **Resizing** uses a small splitter component of our own; the codebase has none, and no library is needed.
 - **Donate** is a host link that goes through the projects page's unsaved-changes prompt; today's link to `/donate` bypasses it.

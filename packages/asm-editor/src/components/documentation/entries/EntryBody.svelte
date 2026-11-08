@@ -131,6 +131,9 @@
 </div>
 
 <style>
+    /* The text's size is --entry-text-size where the entry's place sets one, --fs-small otherwise:
+       a Chapter's page reads its cards a step larger, at --fs-body, where the Documentation panel
+       stays dense (owner, 2026-11-08). The code samples keep their own size */
     .entry-body {
         /* Keep positioned entry content beneath the sticky chapter and category headings. */
         isolation: isolate;
@@ -147,7 +150,7 @@
     .entry-body :global(._markdown ol) {
         font-family: var(--font-ui);
         font-weight: 400;
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
         width: 100%;
         margin: 0;
     }
@@ -172,8 +175,10 @@
         border-radius: 0.3rem;
         background-color: color-mix(in srgb, var(--accent) 8%, transparent);
     }
+    /* a table's own size where the entry's place sets one: a Chapter's page reads every table at
+       --fs-body, its prose entries' as well as its cards' (owner, 2026-11-08) */
     .entry-body :global(._markdown table) {
-        font-size: var(--fs-small);
+        font-size: var(--entry-table-size, var(--entry-text-size, var(--fs-small)));
     }
     .entry-body :global(._markdown td),
     .entry-body :global(._markdown th) {
@@ -188,7 +193,7 @@
     }
     dt {
         font-family: var(--font-mono);
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
         color: var(--accent);
         white-space: nowrap;
     }
@@ -226,7 +231,7 @@
     }
     .swatches code {
         font-family: var(--font-mono);
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
         color: var(--background-text-prose);
     }
 </style>

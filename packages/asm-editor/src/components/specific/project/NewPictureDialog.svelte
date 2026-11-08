@@ -167,10 +167,7 @@
         flex: 1;
         height: 2rem;
     }
-    /* the steppers in the name field's colours, as on --primary they vanish into the tray */
     .size {
-        --stepper-background: var(--secondary);
-        --stepper-text: var(--secondary-text);
         display: flex;
         align-items: center;
         gap: 0.4rem;

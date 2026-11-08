@@ -15,7 +15,7 @@
         type TestcaseRegisters
     } from '#lib/testcases.ts'
     import { languageTakesArguments, parseCommandLine } from '#lib/commandLine.ts'
-    import FaCaretRight from '~icons/fa-solid/caret-right'
+    import FaAngleRight from '~icons/fa-solid/angle-right'
     import Header from '#cmp/shared/layout/Header.svelte'
     import RegistersTable from './RegistersTable.svelte'
     import MemoryTable from './MemoryTable.svelte'
@@ -124,7 +124,7 @@
 
 <article class="testcase" class:open>
     <button class="header" aria-expanded={open} aria-controls="{id}-body" onclick={toggle}>
-        <span class="chevron" aria-hidden="true"><FaCaretRight /></span>
+        <span class="chevron" aria-hidden="true"><FaAngleRight /></span>
         <StatusDot
             class="dot"
             color={status === 'passed'
@@ -285,7 +285,7 @@
         align-items: center;
         gap: 0.55rem;
         width: 100%;
-        padding: 0.75rem 1rem;
+        padding: 0.75rem;
         text-align: left;
         font-family: var(--font-ui);
         color: var(--secondary-text);
@@ -299,11 +299,15 @@
         }
     }
 
+    /* a folding section's arrow (CollapsibleSection's): the same angle, box, dimming and turn. The
+       box is shorter than the title's line, so the row keeps the title's height */
     .chevron {
-        display: flex;
+        display: grid;
+        place-items: center;
         flex: none;
-        width: var(--fs-micro);
-        color: var(--hint);
+        width: 0.8rem;
+        height: 0.8rem;
+        opacity: 0.7;
         transition: transform var(--dur-base);
     }
 
@@ -373,12 +377,13 @@
         overflow: hidden;
     }
 
-    // the body lines up with the dot, under the row it unfolds from
+    // the body lines up with the caret, under the row it unfolds from, with the room round it the
+    // row has at its sides, so that the tables have as much of the width as can be given
     .body {
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        padding: 0.15rem 1rem 1rem 2rem;
+        padding: 0.15rem 0.75rem 0.75rem;
     }
 
     .section {

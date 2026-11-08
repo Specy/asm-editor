@@ -83,9 +83,11 @@
         gap: 0.4rem;
         min-width: 0;
     }
+    /* the size of the Forms heading above it (InstructionDocumentView's `.heading`; owner,
+       2026-11-08), the panel's own size in the panel */
     h3 {
         margin: 0;
-        font-size: var(--fs-body);
+        font-size: var(--fs-lead);
     }
     summary {
         display: flex;
@@ -103,7 +105,8 @@
     .compact h3 {
         font-size: var(--fs-small);
     }
-    /* one line a symbol, ruled apart, the text kept to a readable measure */
+    /* one line a symbol, ruled apart, the text kept to a readable measure; on the page a step
+       larger than the panel's, at --fs-body (owner, 2026-11-08) */
     dl {
         display: grid;
         grid-template-columns: max-content minmax(0, 80ch);
@@ -112,7 +115,7 @@
         margin: 0;
         border: 1px solid var(--doc-rule, var(--tertiary));
         border-radius: var(--wb-radius, var(--r-control));
-        font-size: var(--fs-small);
+        font-size: var(--fs-body);
     }
     .compact dl {
         font-size: var(--fs-small);

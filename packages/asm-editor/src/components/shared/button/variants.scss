@@ -1,4 +1,5 @@
 @use './tray.scss';
+@use '../../../styles/field.scss';
 
 // `Button` and `ButtonLink` (buttonVariant.ts), included in their `.btn` rule. `$disabled` is how
 // each marks a disabled button: the attribute on a button, a class on a link. Every rule that sets
@@ -16,15 +17,15 @@
     user-select: none;
     cursor: pointer;
 
-    // the roles (D5): the accent; the surface's own text at 14%, drawn from the button's colour,
-    // which is the surface's text it inherits; nothing until hovered
+    // the roles (D5): the accent; a field's fill and text (styles/field.scss), as a Select's
+    // (owner, 2026-11-08); nothing until hovered
     &.primary {
         background-color: var(--accent);
         color: var(--accent-text);
     }
     &.secondary {
-        background-color: color-mix(in srgb, currentColor 14%, transparent);
-        color: inherit;
+        background-color: field.$fill;
+        color: field.$text;
     }
     &.ghost {
         background-color: transparent;
@@ -81,13 +82,14 @@
     }
 
     // the accent and a data fill lighten toward white; a secondary takes the hover tint over its
-    // own, as a hovered row does (D4); the ghost's is the tray tool's
+    // own, as a hovered row does (D4), mixed into its fill so that it fades in; the ghost's is the
+    // tray tool's
     &:where(.workbench).primary:hover:not(#{$disabled}),
     &:where(.workbench).data-fill:hover:not(#{$disabled}) {
         background-color: color-mix(in srgb, var(--btn-color, var(--accent)) 85%, white);
     }
-    &:where(.workbench).secondary:hover:not(#{$disabled}) {
-        background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
+    &:where(.workbench).secondary:where(:not(.data-fill)):hover:not(#{$disabled}) {
+        background-color: color-mix(in srgb, currentColor 10%, #{field.$fill});
     }
 
     // on, as a toggle that is pressed, whatever its role

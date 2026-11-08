@@ -739,20 +739,25 @@
         min-width: 0;
         min-height: 0;
         overflow: hidden;
-        /* a host that squares its panels, the Workbench's Lines, squares this one too */
-        border-radius: var(--panel-radius, 0.5rem);
-        background-color: var(--secondary);
+        /* a host that squares its panels, the Workbench's Lines, squares this one too; otherwise
+           it has the corner and the surface of the host's cards, the registers' and memory's */
+        border-radius: var(--panel-radius, var(--wb-radius, 0.5rem));
+        background-color: var(--wb-surface, var(--secondary));
         color: var(--secondary-text);
     }
 
+    /* the band of a folding section's header (CollapsibleSection), its height, padding and text,
+       so the Screen reads the same with the Debug tools floating as in the Sections arrangement */
     .screen-header {
         display: flex;
-        gap: 0.4rem;
+        gap: 0.5rem;
         align-items: center;
-        padding: 0.2rem 0.3rem 0.2rem 0.5rem;
+        flex: none;
+        min-height: 2.25rem;
+        padding: 0 0.4rem 0 0.7rem;
         font-size: var(--fs-small);
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
+        background-color: var(--wb-section-header, var(--tertiary));
+        color: inherit;
     }
 
     .screen-name {
@@ -817,10 +822,10 @@
        the stage alone, filling the box the container sizes from the viewport and its corner */
     .screen-panel.screen-window {
         height: 100%;
-        /* inside the window's 1px edge, its curve parallel to the window's; the window is lifted
-           by its own shadow */
-        border-radius: 0 0 nested-radius(var(--r-overlay), $border: 1px)
-            nested-radius(var(--r-overlay), $border: 1px);
+        /* inside the window's 1px edge, its curve parallel to the window's (DraggableContainer's
+           `$corner`, a control's); the window is lifted by its own shadow */
+        border-radius: 0 0 nested-radius(var(--r-control), $border: 1px)
+            nested-radius(var(--r-control), $border: 1px);
     }
 
     canvas {

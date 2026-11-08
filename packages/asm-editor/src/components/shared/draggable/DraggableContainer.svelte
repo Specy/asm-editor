@@ -250,11 +250,11 @@
 </script>
 
 {#snippet bar()}
-    <Icon
-        style="cursor:inherit; padding: 0.2rem 0.4rem; height: 1.4rem; width: 1.6rem; min-width: 1.6rem"
-    >
-        <FaGripHorizontal />
-    </Icon>
+    <span class="grip" aria-hidden="true">
+        <Icon size="small" style="cursor: inherit">
+            <FaGripHorizontal />
+        </Icon>
+    </span>
     <div class="ellipsis">{title}</div>
     {#if headerInfo}
         <div class="header-info row">
@@ -352,8 +352,14 @@
     @use '../../../styles/radius.scss' as *;
 
     /* A Tray floating free over the Workbench (D3): its bar, the title strip it is dragged by, and
-       its body below, one frame of the tray's edge, corner and lift round both. The edge is 1px,
-       which screenWindow.ts measures the Screen's window by */
+       its body below, one frame round both with the tray's lift. The frame is the window's own
+       rather than the tray's hairline and corner: an --accent2 edge, which the hairline was too
+       faint to show against the Workbench, on a control's corner rather than an overlay's, as the
+       windows always had (owner, 2026-11-08). The edge is 1px, which screenWindow.ts measures the
+       Screen's window by */
+    $frame: var(--accent2);
+    $corner: var(--r-control);
+
     .tab-header {
         display: flex;
         min-width: 12rem;
@@ -377,14 +383,14 @@
         /* a button's own default, written down so the bar reads the same as a div */
         font-size: var(--fs-small);
         position: relative;
-        border-top-left-radius: var(--r-overlay);
-        border-top-right-radius: var(--r-overlay);
-        border: 1px solid var(--line);
+        border-top-left-radius: $corner;
+        border-top-right-radius: $corner;
+        border: 1px solid $frame;
         &.hidden {
             width: 0;
             min-width: 9rem;
-            border-bottom-left-radius: var(--r-overlay);
-            border-bottom-right-radius: var(--r-overlay);
+            border-bottom-left-radius: $corner;
+            border-bottom-right-radius: $corner;
         }
         /* over an open body its shadow falls round the window's top and sides only: the body
            casts the rest, and nothing falls from the bar into it */
@@ -396,11 +402,28 @@
     /* the button at the bar's end fills its height in its corner, so its own corner there runs
        parallel to the bar's, inside its edge (D12): its hover and its focus ring never cover the
        bar's rounded border. Folded, the bar is round at the bottom too */
+    /* the bar's two ends are squares as tall as the bar inside its edge, the grip's at its start
+       and the eye's (or Close's) at its end, each glyph centred in its own: the eye's hover fills
+       its square from the bar's top edge to its bottom one */
+    .grip,
     .tab-header :global(.bar-end) {
-        border-top-right-radius: nested-radius(var(--r-overlay), $border: 1px);
+        flex: none;
+        align-self: stretch;
+        width: calc(1.6rem - 2px);
+        height: auto;
+    }
+
+    .grip {
+        display: grid;
+        place-items: center;
+        cursor: inherit;
+    }
+
+    .tab-header :global(.bar-end) {
+        border-top-right-radius: nested-radius($corner, $border: 1px);
     }
     .tab-header.hidden :global(.bar-end) {
-        border-bottom-right-radius: nested-radius(var(--r-overlay), $border: 1px);
+        border-bottom-right-radius: nested-radius($corner, $border: 1px);
     }
 
     .header-info {
@@ -417,14 +440,14 @@
         margin-left: auto;
     }
 
-    /* the tray's tint, which blurs what is beneath, under what the window shows, its top edge
-       under the bar's */
+    /* the tray's tint, which blurs what is beneath, under what the window shows, in the window's
+       frame, its top edge under the bar's */
     .draggable-container-content {
         @include tray.surface;
         interpolate-size: allow-keywords; /* 👈 */
         border-width: 1px;
-        border-top-left-radius: 0;
-        border-top-right-radius: 0;
+        border-color: $frame;
+        border-radius: 0 0 $corner $corner;
         height: auto;
         transition-property: height, background-color, border-color, box-shadow, backdrop-filter;
         transition-duration: var(--dur-base);
@@ -491,7 +514,7 @@
             border-radius: 0.125rem;
             transform: translate(-50%, -50%);
             /* the frame's own colour, a thickening of the border, until the pointer is on it */
-            background-color: var(--line);
+            background-color: $frame;
             transition: background-color var(--dur-fast);
         }
 

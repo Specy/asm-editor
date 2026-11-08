@@ -8,7 +8,8 @@
      *
      * The layout mounts it beside its sidebar, inside its theme scope: a fixed element inside the
      * sidebar, the navbar or a page would be broken by their transforms, and the theme's colours
-     * live on the scope rather than on the document.
+     * live on the scope rather than on the document. While it is open the page under it holds
+     * still (`lockPageScroll`); leaving the page closes it.
      */
     import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { tick, untrack } from 'svelte'
@@ -16,7 +17,7 @@
     import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
-    import { goto } from '$app/navigation'
+    import { beforeNavigate, goto } from '$app/navigation'
     import type { ResolvedPathname } from '$app/types'
     import { hasCodeName } from '#lib/documentation/entries.ts'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
@@ -32,6 +33,7 @@
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
     import { closeSearchPalette, openSearchPalette, searchPalette } from './paletteState.svelte'
     import { listenForSearchKey, typedInEditor } from './searchHotkey'
+    import { lockPageScroll } from '#lib/scrollLock.ts'
 
     interface Props {
         scope: SearchScope
@@ -86,6 +88,16 @@
                 input?.setSelectionRange(end, end)
             })
         })
+    })
+
+    $effect(() => {
+        if (!shown) return
+        return lockPageScroll()
+    })
+
+    // Back, or a link reached some other way, leaves the palette behind with the page it was over
+    beforeNavigate(() => {
+        if (shown) closeSearchPalette()
     })
 
     let generation = 0
@@ -194,8 +206,11 @@
 {/snippet}
 
 {#if shown}
+    <!-- the scrim, a sibling under the palette rather than around it: the palette's own blur sees
+         only up to an ancestor with a blur or a fade of its own -->
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-    <div class="backdrop" onclick={close} transition:backdropFade>
+    <div class="backdrop" onclick={close} transition:backdropFade></div>
+    <div class="place">
         <div
             class="palette"
             transition:paletteMotion
@@ -203,7 +218,6 @@
             aria-modal="true"
             aria-label="Search"
             tabindex="-1"
-            onclick={(event) => event.stopPropagation()}
         >
             <div class="top">
                 <SearchField
@@ -319,8 +333,18 @@
     @use '../shared/button/tray.scss';
 
     /* lighter than a modal's: the palette is a tray over the page, as the prompts are, and the page
-       stays readable around it */
+       stays readable around it, dimmed by the scrim and blurred by 2px; the floating Testcases
+       window has the same (FloatingContainer.svelte) */
     .backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        background-color: var(--scrim);
+        backdrop-filter: blur(2px);
+    }
+
+    /* where the palette sits over the scrim, which takes the clicks around it */
+    .place {
         position: fixed;
         inset: 0;
         z-index: 50;
@@ -328,7 +352,7 @@
         justify-content: center;
         align-items: flex-start;
         padding: 12vh 1rem 1rem;
-        background-color: var(--scrim);
+        pointer-events: none;
     }
 
     /* drawn as the app's trays (prompts, toasts, the execution dock): a translucent tint that blurs
@@ -347,6 +371,7 @@
         overflow: hidden;
         outline: none;
         transform-origin: top center;
+        pointer-events: auto;
     }
 
     .top {
@@ -383,6 +408,8 @@
         padding: 0.35rem;
         list-style: none;
         overflow-y: auto;
+        /* its end is not the page's: a scroll past it stays here */
+        overscroll-behavior: contain;
         min-height: 0;
     }
 
@@ -500,7 +527,7 @@
     }
 
     @media (max-width: 600px) {
-        .backdrop {
+        .place {
             padding: 0;
         }
 

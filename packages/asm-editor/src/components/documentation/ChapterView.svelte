@@ -53,23 +53,27 @@
     <Header>{heading}</Header>
     <div class="chapter">
         {#each chapter.entries as entry (entry.id)}
-            {#snippet content()}
-                <header>
+            {#snippet head(card: boolean)}
+                <header class:card-head={card}>
                     <h2 class="title" class:code={hasCodeName(entry)}>{entry.title}</h2>
                     {#if entry.signature}
                         <span class="signature">{entry.signature}</span>
                     {/if}
                 </header>
-                <EntryBody {entry} />
             {/snippet}
-            <!-- a prose entry is read as the page's text; every other entry is a Card -->
+            <!-- a prose entry is read as the page's text; every other entry is a Card, its name
+                 over a rule across it, as the create and embed pages' Card headers are -->
             {#if entry.kind === 'prose'}
                 <section class="entry prose reading-copy" id={entry.anchor}>
-                    {@render content()}
+                    {@render head(false)}
+                    <EntryBody {entry} />
                 </section>
             {:else}
-                <Card element="section" class="entry" id={entry.anchor}>
-                    {@render content()}
+                <Card element="section" class="entry entry-card" id={entry.anchor}>
+                    {@render head(true)}
+                    <div class="entry-content">
+                        <EntryBody {entry} />
+                    </div>
                 </Card>
             {/if}
         {/each}
@@ -77,7 +81,10 @@
 </Page>
 
 <style>
+    /* every table on the page at --fs-body, its headers and code cells with it, a prose entry's
+       as well as a Card's (EntryBody; owner, 2026-11-08) */
     .chapter {
+        --entry-table-size: var(--fs-body);
         display: flex;
         flex-direction: column;
         gap: 1.2rem;
@@ -87,12 +94,26 @@
     .chapter > :global(.entry) {
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
-        padding: 0.9rem 1rem;
         scroll-margin-top: 5.5rem;
     }
     .chapter > .prose {
+        gap: 0.5rem;
         padding: 0.4rem 0;
+    }
+    /* a Card's text a step larger than the Documentation panel's, at --fs-body (EntryBody), and
+       its name and signature over a hairline across the whole Card (owner, 2026-11-08) */
+    .chapter > :global(.entry-card) {
+        --entry-text-size: var(--fs-body);
+    }
+    .card-head {
+        padding: 0.7rem 1rem 0.6rem;
+        border-bottom: 1px solid var(--line);
+    }
+    .entry-content {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        padding: 0.75rem 1rem 0.9rem;
     }
     .chapter > :global(.entry:target) {
         outline: 2px solid var(--accent);
@@ -116,7 +137,7 @@
     }
     .signature {
         font-family: var(--font-mono);
-        font-size: var(--fs-small);
+        font-size: var(--entry-text-size, var(--fs-small));
         color: var(--background-text-prose);
         overflow-wrap: anywhere;
     }

@@ -317,13 +317,15 @@
         border: var(--wb-card-edge);
     }
 
+    /* the Close button as far from the header's right edge as from its top and from the rule
+       under it: half of what the bar's height leaves round a button (an md IconButton, 1.8rem) */
     .panel-header {
         display: flex;
         align-items: center;
         gap: 0.2rem;
         flex: none;
         height: 2.2rem;
-        padding: 0 0.3rem 0 0.8rem;
+        padding: 0 calc((2.2rem - 1px - 1.8rem) / 2) 0 0.8rem;
         border-bottom: 1px solid var(--wb-line);
     }
 
@@ -386,11 +388,13 @@
         margin-inline: auto;
     }
 
+    /* its rows 0.3rem from the edges, the Close button as far from the right one */
     .phone .panel-header {
         flex-wrap: wrap;
         height: auto;
         min-height: 2.2rem;
         padding-block: 0.3rem;
+        padding-right: 0.3rem;
     }
 
     .phone .panel-content {

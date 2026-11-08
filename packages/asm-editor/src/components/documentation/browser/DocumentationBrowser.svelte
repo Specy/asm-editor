@@ -18,9 +18,12 @@
     import { tick, untrack } from 'svelte'
     import { DUR_BASE, motion, prefersLessMotion } from '#src/styles/motion.ts'
     import { SvelteSet } from 'svelte/reactivity'
-    import { slide } from 'svelte/transition'
+    import { cubicOut } from 'svelte/easing'
     import FaArrowLeft from '~icons/fa-solid/arrow-left'
     import FaChevronRight from '~icons/fa-solid/chevron-right'
+    import FaCompressAlt from '~icons/fa-solid/compress-alt'
+    import FaExpandAlt from '~icons/fa-solid/expand-alt'
+    import FaPrint from '~icons/fa-solid/print'
     import SearchField from '#cmp/search/SearchField.svelte'
     import {
         documentationFor,
@@ -40,6 +43,9 @@
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import Icon from '#cmp/shared/layout/Icon.svelte'
+    // the card tokens `/all` draws its Chapters on, as the Workbench's panel has them (`.wb-cards`)
+    import '#cmp/specific/workbench/workbench.css'
 
     interface Props {
         language: DocumentationLanguage
@@ -152,12 +158,35 @@
         new Map((chapters ?? []).map((chapter) => [chapter.id, categoryGroups(chapter)]))
     )
 
-    /** Clip the slide without creating a new scroll container for sticky category headings. */
-    function slideChapter(node: HTMLElement, options: { duration: number }) {
-        const transition = slide(node, options)
+    /**
+     * Slide a Chapter open or shut, clipped without creating a new scroll container for the sticky
+     * category headings. Its height is measured on every frame, not once when the slide starts as
+     * `slide` does: its rows lay themselves out only once they are on screen
+     * (`content-visibility: auto`, a prose entry 6rem tall until then) and a long prose entry cuts
+     * itself to its Show all height only once it has measured itself, both after the slide has
+     * begun, so a height read at the start was wrong and the slide ended with a jump.
+     */
+    function slideChapter(node: HTMLElement, { duration }: { duration: number }) {
+        const style = getComputedStyle(node)
+        const paddingTop = parseFloat(style.paddingTop)
+        const paddingBottom = parseFloat(style.paddingBottom)
         return {
-            ...transition,
-            css: (t: number, u: number) => `${transition.css?.(t, u) ?? ''}; overflow: clip;`
+            duration,
+            easing: cubicOut,
+            tick: (t: number) => {
+                if (t >= 1) {
+                    for (const property of ['height', 'padding-top', 'padding-bottom', 'overflow'])
+                        node.style.removeProperty(property)
+                    return
+                }
+                node.style.overflow = 'clip'
+                node.style.paddingTop = `${t * paddingTop}px`
+                node.style.paddingBottom = `${t * paddingBottom}px`
+                node.style.removeProperty('height')
+                // the rows' height now, without the padding this frame gives the Chapter
+                const rows = node.offsetHeight - t * (paddingTop + paddingBottom)
+                node.style.height = `${t * (rows + paddingTop + paddingBottom)}px`
+            }
         }
     }
 
@@ -454,16 +483,26 @@
         </div>
     {:else}
         {#if variant === 'page'}
+            <!-- filled, at the page's size, each with its mark (owner, 2026-11-08) -->
             <div class="toolbar">
                 {#if open.size > 0 || unfolded.size > 0}
-                    <Button kind="ghost" size="sm" onClick={collapseAll}>Collapse all</Button>
+                    <Button kind="secondary" style="gap: 0.5rem" onClick={collapseAll}>
+                        <Icon size="small"><FaCompressAlt /></Icon>
+                        Collapse all
+                    </Button>
                 {:else}
-                    <Button kind="ghost" size="sm" onClick={() => expandAll()}>Expand all</Button>
+                    <Button kind="secondary" style="gap: 0.5rem" onClick={() => expandAll()}>
+                        <Icon size="small"><FaExpandAlt /></Icon>
+                        Expand all
+                    </Button>
                 {/if}
-                <Button kind="ghost" size="sm" onClick={() => expandAll(true)}>Print as PDF</Button>
+                <Button kind="secondary" style="gap: 0.5rem" onClick={() => expandAll(true)}>
+                    <Icon size="small"><FaPrint /></Icon>
+                    Print as PDF
+                </Button>
             </div>
         {/if}
-        <div class="scroll" bind:this={scroller}>
+        <div class="scroll" class:wb-cards={variant === 'page'} bind:this={scroller}>
             {#each chapters as chapter (chapter.id)}
                 {@const isFolded = !unfolded.has(chapter.id)}
                 {@const groups = groupsByChapter.get(chapter.id) ?? null}
@@ -585,6 +624,7 @@
     }
     .toolbar {
         display: flex;
+        flex-wrap: wrap;
         gap: 0.5rem;
         padding-bottom: 0.6rem;
     }
@@ -600,9 +640,35 @@
         scrollbar-gutter: stable;
         padding: 0 var(--documentation-spacing) 0.8rem;
     }
+    /* `/all`: the Chapters on a panel of their own, as the Settings panel's sections sit on theirs
+       (CollapsibleSection.svelte, `outlined`): the card surface inside its edge, so that each
+       Chapter's header band and its open body, a well darker than the panel, read as they do
+       there (owner, 2026-11-08) */
     .page .scroll {
+        display: flex;
+        flex-direction: column;
+        gap: var(--documentation-spacing);
         overflow: visible;
-        padding: 0;
+        padding: 0.4rem;
+        background-color: var(--wb-surface);
+        color: var(--secondary-text);
+        border: var(--wb-card-edge);
+        border-radius: var(--wb-radius);
+    }
+    .page .chapter {
+        margin-bottom: 0;
+    }
+    /* on paper the Chapters alone, without the panel round them */
+    @media print {
+        .page .scroll {
+            padding: 0;
+            border: none;
+            background: none;
+        }
+        .page .chapter-title::before,
+        .page .chapter-title::after {
+            display: none;
+        }
     }
     .results {
         display: flex;
@@ -611,6 +677,11 @@
     }
     .chapter {
         --chapter-border-width: 1px;
+        --chapter-radius: 0.5rem;
+        /* a whole number of pixels wide, as Settings' sections are (CollapsibleSection.svelte):
+           with a fraction of a pixel in its left edge and its width, the pinned title ended a pixel
+           to the right of the body under it */
+        width: round(down, 100%, 1px);
         display: flex;
         flex-direction: column;
         margin-bottom: var(--documentation-spacing);
@@ -622,7 +693,7 @@
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         /* The sticky heading carries the top border so it stays visible while scrolling. */
         border-top: none;
-        border-radius: 0.5rem;
+        border-radius: var(--chapter-radius);
     }
     .chapter.folded {
         border-bottom: none;
@@ -638,11 +709,43 @@
         color: var(--secondary-text);
         border: var(--chapter-border-width) solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
-        border-radius: 0.5rem 0.5rem 0 0;
+        border-radius: var(--chapter-radius) var(--chapter-radius) 0 0;
         box-shadow: var(--shadow-1);
     }
+    /* The frame's top corners are the heading's alone: past its rounded corners the panel's
+       surface is painted over what the Chapter has there, its side edges and its well, which
+       otherwise showed round the curve, most of all while the heading is pinned over the body
+       scrolling under it (owner, 2026-11-08). Each corner is a square of the radius at the
+       heading's outer edge, clear inside the curve and the panel outside it, with a pixel's
+       blend so the curve stays smooth */
+    .chapter-title::before,
+    .chapter-title::after {
+        content: '';
+        position: absolute;
+        top: calc(-1 * var(--chapter-border-width));
+        width: var(--chapter-radius);
+        height: var(--chapter-radius);
+        pointer-events: none;
+        --corner-outside: var(--wb-surface, var(--secondary));
+    }
+    .chapter-title::before {
+        left: calc(-1 * var(--chapter-border-width));
+        background: radial-gradient(
+            circle at 100% 100%,
+            transparent calc(var(--chapter-radius) - 0.5px),
+            var(--corner-outside) calc(var(--chapter-radius) + 0.5px)
+        );
+    }
+    .chapter-title::after {
+        right: calc(-1 * var(--chapter-border-width));
+        background: radial-gradient(
+            circle at 0 100%,
+            transparent calc(var(--chapter-radius) - 0.5px),
+            var(--corner-outside) calc(var(--chapter-radius) + 0.5px)
+        );
+    }
     .chapter.folded .chapter-title {
-        border-radius: 0.5rem;
+        border-radius: var(--chapter-radius);
         box-shadow: none;
     }
     .chapter.categorized .chapter-title {

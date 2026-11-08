@@ -100,15 +100,14 @@
 </div>
 
 <style lang="scss">
-    /* one control: the field and its buttons inside one rounded box, which a host whose own
-       surface is --primary recolours to its fields' */
+    @use '../../../styles/field.scss';
+
+    /* one control: the field and its buttons inside one box, a field's (styles/field.scss), as a
+       Select is, each button set off from the number by the field's edge */
     .stepper {
+        @include field.surface;
         display: inline-flex;
         align-items: stretch;
-        height: 1.75rem;
-        border-radius: 0.35rem;
-        background: var(--stepper-background, var(--primary));
-        color: var(--stepper-text, var(--primary-text));
         overflow: hidden;
 
         /* ringed while the number is typed into, not after a press of − or + */
@@ -129,13 +128,15 @@
         background: transparent;
         color: inherit;
         cursor: pointer;
+        transition: background-color var(--dur-fast);
 
         :global(svg) {
             width: var(--fs-micro);
             height: var(--fs-micro);
         }
+        /* the hover every row and tool takes (D4), as a Select's */
         &:hover:not(:disabled) {
-            background: color-mix(in srgb, currentColor 12%, transparent);
+            background-color: var(--hover-bg);
         }
         &:disabled {
             opacity: 0.5;
@@ -145,11 +146,15 @@
     .less {
         order: -1;
     }
+    /* between − and +, so it is edged on both sides, at full strength while a button beside it is
+       disabled and faded; a compact Select's height (Select.svelte, `compact`), its padding above
+       and below the text */
     input {
         width: 3.2rem;
         min-width: 0;
-        padding: 0;
+        padding: 0.4rem 0;
         border: none;
+        border-inline: 1px solid var(--line);
         background: transparent;
         color: inherit;
         font: inherit;

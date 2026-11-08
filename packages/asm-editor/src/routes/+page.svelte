@@ -751,6 +751,11 @@
         {@render rule()}
 
         <section class="frame closing" aria-labelledby="closing-title">
+            <!-- the dividers' bytes, much fainter, behind the whole section -->
+            <div class="closing-hex" aria-hidden="true">
+                {#each hexStrip(200, 1200) as segment, i (i)}{#if segment.hot}<b>{segment.text}</b
+                        >{:else}{segment.text}{/if}{/each}
+            </div>
             <h2 id="closing-title">Write your first program</h2>
             <p>Start from an empty Project, or open an example and change it.</p>
             <div class="actions">
@@ -808,15 +813,17 @@
     .rule {
         position: relative;
         z-index: 3;
-        height: 1px;
-        background: var(--line);
+        /* a border, drawn a whole device pixel thick as the frame's lines are, where a box 1px
+           high came out one or two pixels thick on a scaled screen */
+        border-top: 1px solid var(--line);
     }
 
+    /* over the rule's line, which is its border, taking no room below it */
     .rule-frame {
         position: relative;
         width: var(--inner);
         height: 1px;
-        margin: 0 auto;
+        margin: -1px auto 0;
 
         /* 5px over a 1px line: two pixels each side */
         i {
@@ -1480,12 +1487,25 @@
 
     /* ---- the instruction sets ---- */
 
+    /* the lines between the cells are each cell's own top and left border, pulled back a pixel so
+       those along the grid's edges fall outside it and are cut off, as the quick links' are: a
+       border is drawn a whole device pixel wide, as the frame's lines are, where a 1px gap
+       showing the grid's background came out one or two pixels wide on a scaled screen */
     .targets,
     .cards,
     .tiles {
         display: grid;
-        gap: 1px;
-        background: var(--line);
+        overflow: hidden;
+        /* the hairline over the page, solid, so a hovered tile does not tint its own two lines */
+        --grid-line: color-mix(in srgb, var(--tertiary) 60%, var(--background));
+    }
+
+    .target,
+    .card,
+    .tile-link {
+        margin: -1px 0 0 -1px;
+        border-top: 1px solid var(--grid-line);
+        border-left: 1px solid var(--grid-line);
     }
 
     .targets {
@@ -1628,10 +1648,12 @@
 
     /* ---- the navbar's Create project ---- */
 
+    /* `a.btn`, so this outweighs the Button's own size rule whichever stylesheet loads last (the
+       navbar's Donate and Star say why) */
     .create-project {
         display: flex;
 
-        :global(.btn) {
+        :global(a.btn) {
             gap: 0.5rem;
             height: 2.2rem;
             padding: 0 1rem;
@@ -1644,7 +1666,7 @@
     }
 
     @media (max-width: 760px) {
-        .create-project :global(.btn) {
+        .create-project :global(a.btn) {
             width: 2.2rem;
             padding: 0;
         }
@@ -1779,6 +1801,8 @@
         gap: 1rem;
         padding: 5rem 1.5rem;
         background: var(--lit);
+        /* the bytes go under the section's content and over its background */
+        isolation: isolate;
 
         /* the hero title's face */
         h2 {
@@ -1790,6 +1814,34 @@
 
         .actions {
             margin-top: 0.8rem;
+        }
+    }
+
+    /* the bytes of the dividers, wrapping to fill the section, far fainter than the bands' so the
+       text over them reads as on a plain background; faded at the sides as the bands are, and
+       towards the rules above and below */
+    .closing-hex {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        letter-spacing: 0.08em;
+        word-spacing: 0.1em;
+        text-align: justify;
+        color: color-mix(in srgb, var(--background-text) 6%, transparent);
+        pointer-events: none;
+        user-select: none;
+        mask-image:
+            linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent),
+            linear-gradient(180deg, transparent, #000 25%, #000 75%, transparent);
+        mask-composite: intersect;
+
+        b {
+            font-weight: 400;
+            color: color-mix(in srgb, var(--accent) 18%, transparent);
         }
     }
 

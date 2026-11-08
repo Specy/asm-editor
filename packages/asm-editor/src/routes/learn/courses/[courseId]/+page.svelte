@@ -69,7 +69,7 @@
                 style="gap: 0.2rem"
             >
                 {#snippet title()}
-                    <span style="font-weight: 500; margin-left: -0.1rem">
+                    <span style="margin-left: -0.1rem">
                         {module.name}
                     </span>
                 {/snippet}

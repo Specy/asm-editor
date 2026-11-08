@@ -27,12 +27,25 @@
          * menus' translucent tint, which blurs what is beneath.
          */
         solid?: boolean
+        /**
+         * The corner in pixels; left out it is the menus' (`--r-overlay`). The Tooltip and the hover
+         * cards take a control's smaller corner (`tooltipRadius()` in elevation.ts).
+         */
+        radius?: number
     }
 
-    let { width, height, side, at, arrow, solid = false }: Props = $props()
+    let {
+        width,
+        height,
+        side,
+        at,
+        arrow,
+        solid = false,
+        radius = popoverElevation().radius
+    }: Props = $props()
 
     const id = $props.id()
-    const { radius, shadow } = popoverElevation()
+    const { shadow } = popoverElevation()
     const fill = $derived(
         solid ? 'var(--tertiary)' : 'color-mix(in srgb, var(--tertiary) 85%, transparent)'
     )

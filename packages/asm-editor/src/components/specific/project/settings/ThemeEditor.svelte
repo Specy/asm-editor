@@ -22,7 +22,7 @@
 
 <div class="theme-editor">
     <h2 class="presets-title">Theme presets</h2>
-    <Row wrap gap="1rem">
+    <Row wrap gap="0.5rem">
         {#each ThemeStore.themes as t (t.id)}
             <button
                 class="theme-selector"
@@ -84,7 +84,7 @@
                 if (!name) return
                 ThemeStore.createNewAndSet(name)
             }}
-            style="padding: 1rem 2rem; gap: 0.5rem"
+            style="flex-basis: 100%; padding: 1rem; gap: 0.5rem; border-radius: 0.5rem"
         >
             <Icon>
                 <FaPlus />
@@ -92,7 +92,10 @@
             Create new theme
         </Button>
     </Row>
-    <Column gap="1rem" style="margin-bottom:3rem; position: relative; margin-top: 2rem">
+    <!-- the colours the editor's gap under the list, with nothing under them but the section's own
+         padding; the veil over a preset's colours reaches 0.5rem past them, so it starts a list
+         gap under "Create new theme" and ends at the section's edge -->
+    <Column gap="1rem" style="position: relative">
         {#if !ThemeStore.meta.editable}
             <div
                 style="
@@ -100,7 +103,7 @@
             backdrop-filter: blur(0.2rem);
             position: absolute;
             display: flex;
-            margin: -1rem;
+            margin: -0.5rem -1rem;
             border-radius: 1rem;
             justify-content: center;
             align-items: center;

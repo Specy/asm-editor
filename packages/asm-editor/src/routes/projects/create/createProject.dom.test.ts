@@ -52,16 +52,26 @@ async function page() {
         props: { data: { templates: TEMPLATES, gettingStarted: 'getting-started' } } as never
     })
     flushSync()
+    const tiles = () => [
+        ...target.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')
+    ]
     return {
         target,
         bar: () =>
-            target.querySelector<HTMLElement>('[role="group"][aria-label="Instruction set"]')!,
+            target.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Instruction set"]')!,
+        tiles,
         picked: () =>
-            target.querySelector('[role="group"] button[aria-pressed="true"]')?.ariaLabel ?? null,
-        tags: () => [...target.querySelectorAll('.language-tags .badge')].map((b) => b.textContent),
+            tiles()
+                .find((tile) => tile.getAttribute('aria-checked') === 'true')
+                ?.textContent?.trim() ?? null,
+        /** The simulator the set picked follows, or null for one that follows none. */
+        compatible: () => target.querySelector('.compatible .simulator')?.textContent ?? null,
+        /** Each capability as a screen reader reads it, those the set lacks said to be missing. */
+        capabilities: () =>
+            [...target.querySelectorAll('.capabilities li')].map((li) => li.textContent?.trim()),
         pick: (label: string) => {
-            target
-                .querySelector<HTMLButtonElement>(`[role="group"] button[aria-label="${label}"]`)!
+            tiles()
+                .find((tile) => tile.textContent?.trim() === label)!
                 .click()
             flushSync()
         },
@@ -81,11 +91,14 @@ afterEach(async () => {
     ProjectStore.unload()
 })
 
-it('offers the instruction sets as one choice, each marked with a colour that is not read out', async () => {
+const NOT = ', not available'
+
+it('offers the instruction sets as one radio group, each marked with a colour that is not read out', async () => {
     const view = await page()
     try {
-        const buttons = [...view.bar().querySelectorAll('button')]
-        expect(buttons.map((button) => button.ariaLabel)).toEqual([
+        expect(view.bar().querySelectorAll('[role="radio"]')).toHaveLength(6)
+        const tiles = view.tiles()
+        expect(tiles.map((tile) => tile.textContent?.trim())).toEqual([
             'M68K',
             'MIPS',
             'RISC-V',
@@ -93,29 +106,86 @@ it('offers the instruction sets as one choice, each marked with a colour that is
             'x86-64',
             'Z80'
         ])
-        for (const button of buttons) {
-            const square = button.querySelector<HTMLElement>('.language-square')!
+        for (const tile of tiles) {
+            const square = tile.querySelector<HTMLElement>('.language-square')!
             expect(square.getAttribute('aria-hidden')).toBe('true')
             expect(square.style.backgroundColor).not.toBe('')
         }
         expect(view.picked()).toBe('RISC-V-64')
-        expect(view.tags()).toEqual(['RARS', 'C/C++'])
+        expect(tiles.map((tile) => tile.tabIndex)).toEqual([-1, -1, -1, 0, -1, -1])
+        expect(view.compatible()).toBe('RARS')
+        expect(view.capabilities()).toEqual([
+            'Screen',
+            'Keyboard',
+            'Mouse',
+            'Sound',
+            'File system',
+            'C/C++',
+            'Disassemble' + NOT,
+            'Ghidra decompile' + NOT
+        ])
     } finally {
         await view.dispose()
     }
 })
 
-it('shows the tags of the set picked and remembers it for the next project', async () => {
+it('shows what the set picked can do and remembers it for the next project', async () => {
     const view = await page()
     try {
         view.pick('x86-64')
         expect(view.picked()).toBe('x86-64')
-        expect(view.tags()).toEqual(['Disassemble', 'Decompile', 'C/C++'])
+        expect(view.compatible()).toBeNull()
+        expect(view.capabilities().filter((c) => c?.endsWith(NOT))).toEqual([])
         expect(localStorage.getItem(STORAGE_KEY)).toBe('X86')
         view.pick('M68K')
-        expect(view.tags()).toEqual(['EASy68K'])
+        expect(view.compatible()).toBe('EASy68K')
+        expect(view.capabilities().filter((c) => c?.endsWith(NOT))).toEqual([
+            'C/C++' + NOT,
+            'Disassemble' + NOT,
+            'Ghidra decompile' + NOT
+        ])
         view.pick('Z80')
-        expect(view.tags()).toEqual([])
+        expect(view.compatible()).toBeNull()
+        expect(view.capabilities().filter((c) => c?.endsWith(NOT))).toEqual([
+            'File system' + NOT,
+            'C/C++' + NOT,
+            'Disassemble' + NOT,
+            'Ghidra decompile' + NOT
+        ])
+        expect(
+            [
+                ...(view.target
+                    .querySelector('.summary')
+                    ?.querySelectorAll('span:not([aria-hidden])') ?? [])
+            ].map((span) => span.textContent?.trim())
+        ).toEqual(['Z80', 'Empty program'])
+        expect(localStorage.getItem(STORAGE_KEY)).toBe('Z80')
+    } finally {
+        await view.dispose()
+    }
+})
+
+it('moves through the sets with the arrow keys, Home and End, picking each one it reaches', async () => {
+    const view = await page()
+    try {
+        const press = (key: string) => {
+            document.activeElement!.dispatchEvent(
+                new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+            )
+            flushSync()
+            const focused = (document.activeElement as HTMLElement).textContent?.trim()
+            expect(focused).toBe(view.picked())
+            return focused
+        }
+        view.tiles()[3].focus()
+        expect(press('ArrowRight')).toBe('x86-64')
+        expect(press('ArrowDown')).toBe('Z80')
+        expect(press('ArrowRight')).toBe('M68K')
+        expect(press('ArrowLeft')).toBe('Z80')
+        expect(press('ArrowUp')).toBe('x86-64')
+        expect(press('Home')).toBe('M68K')
+        expect(press('End')).toBe('Z80')
+        expect(view.tiles().filter((tile) => tile.tabIndex === 0)).toHaveLength(1)
         expect(localStorage.getItem(STORAGE_KEY)).toBe('Z80')
     } finally {
         await view.dispose()
@@ -127,7 +197,8 @@ it('opens on the set picked last time, and ignores a stored value that is no set
     let view = await page()
     try {
         expect(view.picked()).toBe('MIPS')
-        expect(view.tags()).toEqual(['MARS', 'C/C++'])
+        expect(view.compatible()).toBe('MARS')
+        expect(view.capabilities()).toContain('C/C++')
     } finally {
         await view.dispose()
     }
@@ -176,7 +247,7 @@ it('creates the Project with the set and template picked and opens it', async ()
         name.value = 'Sorting'
         name.dispatchEvent(new Event('input', { bubbles: true }))
         const create = [...view.target.querySelectorAll('button')].find(
-            (button) => button.textContent?.trim() === 'Create'
+            (button) => button.textContent?.trim() === 'Create project'
         )!
         expect(create.type).toBe('submit')
         create.click()
@@ -193,7 +264,7 @@ it('creates the Project with the set and template picked and opens it', async ()
     }
 })
 
-it('takes the keyboard through the set, the template, the name, the description, Cancel, Create, then the drop zone', async () => {
+it('takes the keyboard through the set picked, the template, the name, the description, Cancel, Create, then the drop zone', async () => {
     const view = await page()
     try {
         const reachable = [
@@ -210,17 +281,12 @@ it('takes the keyboard through the set, the template, the name, the description,
         )
         expect(names).toEqual([
             'Follow the getting-started guide',
-            'M68K',
-            'MIPS',
-            'RISC-V',
             'RISC-V-64',
-            'x86-64',
-            'Z80',
             'Template',
             'Name',
             'Description',
             'Cancel',
-            'Create',
+            'Create project',
             'Already have a program? Drop it here'
         ])
     } finally {

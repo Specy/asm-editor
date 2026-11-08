@@ -164,7 +164,7 @@
     }
 
     @mixin folded-pill {
-        :global(.btn) {
+        :global(a.btn) {
             @include square;
         }
 
@@ -199,7 +199,10 @@
         }
     }
 
-    .pill :global(.btn) {
+    /* `a.btn`: one more than the Button's own size rule (`.btn.md` and its scoping class), which
+       otherwise ties with this one and wins or loses by which stylesheet loaded last, so the
+       buttons moved when the page's styles came in after the first paint */
+    .pill :global(a.btn) {
         gap: 0.5rem;
         height: 2.2rem;
         padding: 0 0.7rem;

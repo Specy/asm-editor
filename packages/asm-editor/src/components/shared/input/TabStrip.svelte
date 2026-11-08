@@ -30,7 +30,8 @@
      * ruled underneath, each tab ruled on its right, the picked one in the panel's own colour and
      * open at the bottom onto it, the others dimmed; its height is `--tab-strip-height`, 2rem
      * unless the host sets it. `panel` is the Register files': a bar outlined above the panel, its
-     * tabs sharing its width, the picked one a raised piece of the bar the panel below belongs to.
+     * tabs sharing its width, the picked one a raised piece of the bar the panel below belongs to;
+     * its top corners are `--tab-strip-radius`, 0.5rem unless the host sets it.
      */
     import { tick, type Snippet } from 'svelte'
     import type { HTMLButtonAttributes } from 'svelte/elements'
@@ -318,11 +319,20 @@
         /* the name is the tab's own button up to its close button, which ends the tab */
         .closable {
             max-width: 14rem;
-            padding-right: 0.4rem;
             gap: 0.2rem;
 
             .tab-select {
                 padding: 0 0 0 0.9rem;
+            }
+
+            /* its close fills the tab's height at the tab's end, square-cornered, its hover running
+               from the strip's top to the tab's rule, as the editor's own end of the strip does */
+            :global(.tab-close) {
+                align-self: stretch;
+                width: 1.9rem;
+                height: auto;
+                margin-left: 0;
+                border-radius: 0;
             }
         }
     }
@@ -345,14 +355,17 @@
     /* the Register files' bar: the page's own colour warmed towards the panel it sits on, outlined
        so it reads as the band the tabs belong to rather than as part of the registers. Its top
        corners are 0.5rem, the panel's own radius when nothing squares it (`--panel-radius`), and
-       stay so where a host squares the panel, as the Workbench does */
+       stay so where a host squares the panel, as the Workbench does; a host whose bar sits at the
+       top of something rounded gives it that corner instead (`--tab-strip-radius`) */
+    $panel-radius: var(--tab-strip-radius, 0.5rem);
+
     .panel {
         flex-wrap: nowrap;
         overflow: hidden;
         background-color: color-mix(in srgb, var(--background) 85%, var(--secondary));
         border: 1px solid var(--wb-line, var(--tertiary));
         border-bottom: 0;
-        border-radius: 0.5rem 0.5rem 0 0;
+        border-radius: $panel-radius $panel-radius 0 0;
 
         .tabs {
             flex: 1;
@@ -383,8 +396,8 @@
         //bar that the panel below belongs to
         .selected .tab-select,
         .tab-select:active {
-            border-radius: nested-radius(0.5rem, $border: 1px) nested-radius(0.5rem, $border: 1px) 0
-                0;
+            border-radius: nested-radius($panel-radius, $border: 1px)
+                nested-radius($panel-radius, $border: 1px) 0 0;
             transition: background-color 0s;
             background-color: var(--tertiary);
             color: var(--tertiary-text);

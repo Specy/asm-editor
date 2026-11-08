@@ -1,7 +1,7 @@
 /**
  * How `Button` and `ButtonLink` are drawn. A button takes a role (design-system.md, D5): `primary`,
  * the one action that moves things on, filled with the accent; `secondary`, any other action
- * beside it, filled with a tint of the text of the surface it sits on, so it shows on any surface;
+ * beside it, in a field's fill and text (styles/field.scss), as a Select is (owner, 2026-11-08);
  * and `ghost`, a label that only takes the surface's hover tint, for toolbars and Trays. It comes
  * in two sizes, `md` and the compact `sm`.
  */

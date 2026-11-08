@@ -28,13 +28,15 @@
     style={accent ? `--card-accent: ${accent}` : ''}
     aria-labelledby={headingId}
 >
-    <h2 id={headingId}>{title}</h2>
-    <p>{description}</p>
+    <div class="card-body">
+        <h2 id={headingId}>{title}</h2>
+        <p>{description}</p>
+    </div>
     <div class="card-footer">
         {#if secondary}
             <ButtonLink
                 href={secondary.href}
-                kind="secondary"
+                kind="ghost"
                 bordered
                 style="flex: 1 1 auto; min-width: 0; z-index: 1">{secondary.label}</ButtonLink
             >
@@ -52,9 +54,13 @@
 </Card>
 
 <style>
-    :global(.content-link-card) {
+    /* the content and the footer pad themselves, where the card did, so the footer's rule runs
+       edge to edge */
+    .card-body {
+        display: flex;
+        flex-direction: column;
         gap: 1rem;
-        padding: 1.2rem;
+        padding: 1.2rem 1.2rem 0.75rem;
     }
 
     h2 {
@@ -73,12 +79,13 @@
         color: var(--background-text-prose);
     }
 
-    /* a rule inside the card, its edge's hairline */
+    /* a rule across the card, its edge's hairline; the other link, a ghost in its edge, draws less
+       than the main one */
     .card-footer {
         display: flex;
         gap: 0.5rem;
         margin-top: auto;
-        padding-top: 1rem;
+        padding: 0.75rem;
         border-top: 1px solid var(--line);
     }
 
@@ -89,8 +96,11 @@
     }
 
     @media (max-width: 600px) {
-        :global(.content-link-card) {
-            padding: 0.9rem;
+        .card-body {
+            padding: 0.9rem 0.9rem 0.6rem;
+        }
+        .card-footer {
+            padding: 0.6rem;
         }
     }
 

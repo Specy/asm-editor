@@ -164,38 +164,10 @@
 .blog-outline {
     display: none;
 }
-.blog-outline-title {
-    font-size: var(--fs-small);
-    font-weight: 600;
-    margin-bottom: 0.8rem;
-    color: var(--background-text-prose);
-}
+/* the heading and rows are the outline's (ArticleOutline.svelte, styles/outline.scss) */
 .blog-outline nav {
     min-height: 0;
     overflow-y: auto;
-}
-.blog-outline ol {
-    list-style: none;
-    border-left: 1px solid var(--line);
-}
-.blog-outline li a {
-    display: block;
-    padding: 0.55rem 0.9rem;
-    margin-left: -1px;
-    border-left: 2px solid transparent;
-    font-size: var(--fs-small);
-    line-height: 1.45;
-    color: var(--background-text-prose);
-    text-decoration: none;
-}
-/* the row under the pointer, and the section being read, which is the current item: an accent
-   tint with the accent edge on its leading side (design-system.md, D4; styles/rows.scss) */
-.blog-outline li a:hover:not([aria-current='location']) {
-    background-color: var(--hover-bg);
-}
-.blog-outline li a[aria-current='location'] {
-    border-left-color: var(--accent);
-    background-color: var(--selected-bg);
 }
 .blog-outline .blog-try-button {
     flex-shrink: 0;
@@ -293,7 +265,6 @@
     background-color: color-mix(in srgb, var(--accent) 85%, white);
 }
 .blog-try-button:focus-visible,
-.blog-outline li a:focus-visible,
 .blog-article ._markdown a:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;

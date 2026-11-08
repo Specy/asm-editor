@@ -8,7 +8,7 @@
      */
     import { untrack } from 'svelte'
     import { shortcutLabel } from '#stores/shortcutsStore.ts'
-    import { popoverElevation } from '#src/styles/elevation.ts'
+    import { tooltipRadius } from '#src/styles/elevation.ts'
     import { DUR_FAST, EASE_OUT, prefersLessMotion } from '#src/styles/motion.ts'
     import PopoverOutline from './PopoverOutline.svelte'
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
@@ -19,8 +19,11 @@
 
     const ARROW = 6
     const GAP = 6
-    /** The corner the outline is drawn with, which the arrow keeps clear of. */
-    const RADIUS = popoverElevation().radius
+    /**
+     * The corner the outline is drawn with, which the arrow keeps clear of: a control's, smaller
+     * than a menu's.
+     */
+    const RADIUS = tooltipRadius()
     const MARGIN = 4
     /** How far it slides out of its element as it opens. */
     const SLIDE = 4
@@ -100,7 +103,9 @@
         if (!shown) return
         const done = () => {
             shown = false
-            card.hidePopover()
+            //the card leaves the page with its element, which can go while it fades: Svelte has
+            //cleared `card` by then, and a popover that is no longer open cannot be hidden
+            if (card?.isConnected && card.matches(':popover-open')) card.hidePopover()
         }
         if (instant || prefersLessMotion() || typeof card.animate !== 'function') return done()
         animation = card.animate([{ opacity: 1 }, { opacity: 0 }], {
@@ -117,6 +122,10 @@
         const { open, instant } = tooltip
         untrack(() => (open ? opening(instant) : closing(instant)))
     })
+
+    //a fade still running when the Tooltip goes is stopped with it: a cancelled animation fires no
+    //`onfinish`, which would otherwise reach for the card after it has left the page
+    $effect(() => () => animation?.cancel())
 
     //new content or a new size while it shows, placed again around the same element
     $effect(() => {
@@ -137,7 +146,7 @@
     onpointerenter={(event) => event.pointerType !== 'touch' && tooltip.keep()}
     onpointerleave={(event) => event.pointerType !== 'touch' && tooltip.leave()}
 >
-    <PopoverOutline {width} {height} {side} at={arrowAt} arrow={ARROW} solid />
+    <PopoverOutline {width} {height} {side} at={arrowAt} arrow={ARROW} radius={RADIUS} solid />
     <!-- the comma for the description only, which a screen reader reads as "Undo, Ctrl+Z" -->
     <span class="content" id={tooltip.contentId}
         >{#if typeof tooltip.content === 'string'}{tooltip.content}{:else}{@render tooltip.content()}{/if}{#if tooltip.shortcut}<span
@@ -151,8 +160,8 @@
     @use '../../../styles/popover.scss';
 
     /* placed by hand rather than by the popover's centring, and drawing no surface of its own: the
-       outline is its background, border and shadow, a solid Popover's; no display of its own
-       either, which would override the popover's hiding */
+       outline is its background, border and shadow, a solid Popover's on a control's corner; no
+       display of its own either, which would override the popover's hiding */
     .tooltip {
         @include popover.content;
         position: fixed;

@@ -66,7 +66,6 @@
         line-height: 1.5;
         max-width: 60rem;
         margin: 0;
-        color: var(--background-text-prose);
     }
     .intro :global(code) {
         background-color: var(--secondary);

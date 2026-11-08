@@ -65,6 +65,13 @@
          * A click on the value still pokes it.
          */
         valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
+        /**
+         * Integers in hexadecimal (`true`) or decimal (`false`) whatever the reader's Preference
+         * says, for a page drawn the same on the server as in the browser, which the Preference,
+         * kept in the browser's storage, cannot be: the home page's backdrop. Left out, the
+         * Preference decides.
+         */
+        hex?: boolean
     }
 
     let {
@@ -81,7 +88,8 @@
         pokeable = false,
         canPokeRegister,
         onPoke,
-        valueMenu
+        valueMenu,
+        hex
     }: Props = $props()
 
     const fileKind = $derived(defaultRegisterKind(file.formats))
@@ -91,7 +99,7 @@
     const isCompact = $derived(
         compact || Number(file.size) > RegisterSize.Double || fileKind === 'float'
     )
-    const usesHex = $derived(!preferencesStore.values.useDecimalAsDefault.value)
+    const usesHex = $derived(hex ?? !preferencesStore.values.useDecimalAsDefault.value)
     /** The hex digits one group takes, which is what the lines of a wide row are counted in. */
     const groupDigits = $derived(2 * Math.max(1, Math.min(Number(groupSize), Number(file.size))))
     //only a hexadecimal reading falls into lines of whole groups, because only it is counted in
@@ -341,7 +349,7 @@
         hoverSide={rowPosition === 'bottom' ? 'below' : 'above'}
         style="{chunkStyle}{row.rendered.blank ? ' opacity: 0.4;' : ''}"
         hoverValueElementStyle={group && group.bytes * 2 > RegisterSize.Long * 2
-            ? 'font-size: var(--fs-body)'
+            ? 'font-size: 0.95rem'
             : ''}
         value={chunkText(chunk)}
         diff={chunkPrevText(chunk)}
@@ -607,6 +615,8 @@
     //digits stay where they were
     .chunk-input {
         font-family: var(--font-mono);
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
         font-size: inherit;
         text-align: center;
         //the box the read-only cell has, digit for digit: `box-sizing: border-box` is global, so
@@ -637,5 +647,7 @@
         flex: 1;
         opacity: 0.4;
         font-family: var(--font-mono);
+        font-size-adjust: ex-height 0.49;
+        font-variation-settings: 'wght' 400;
     }
 </style>

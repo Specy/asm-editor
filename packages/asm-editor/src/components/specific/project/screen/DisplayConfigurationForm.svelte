@@ -325,10 +325,6 @@
     }
 
     .custom-size {
-        /* the stepper in the fields' colour */
-        --stepper-background: var(--tertiary);
-        --stepper-text: var(--tertiary-text);
-
         span {
             color: var(--hint);
         }

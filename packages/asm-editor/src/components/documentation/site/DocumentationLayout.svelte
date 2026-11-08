@@ -57,8 +57,15 @@
             <SearchLauncher {placeholder} />
         </Column>
 
-        <MaskedScroll>
-            <Column gap="1rem" padding="0 1rem">
+        <!-- the pages and the instructions as the course sidebar draws its lectures, the exam
+             builder's outline rows (styles/outline.scss): each a row from the sidebar's left edge
+             to 0.5rem short of its right, so the current one's accent edge is the sidebar's side,
+             the rows edge to edge with their own padding the rhythm. The pages' text starts where
+             the search box does; the instructions' sits under their heading's name (2.2rem: the
+             arrow's 1.4rem, its 0.4rem gap and the section's 0.5rem, less the title's -0.1rem),
+             as the lectures' does under their chapter's. -->
+        <MaskedScroll gap="0.5rem">
+            <Column padding="0 0.5rem 0 0" style="--menu-link-indent: 1rem;">
                 <MenuLink
                     href={resolveHref(`/documentation/${language}`)}
                     title={site.label}
@@ -77,13 +84,13 @@
             <TogglableSection
                 open={true}
                 level={2}
-                sectionStyle="margin-left: 0; padding-left: 0.5rem;"
-                style="padding: 0 0.5rem;"
+                sticky
+                inset="0.5rem"
+                sectionStyle="margin-left: -0.5rem; padding-left: 0; border-left: none; gap: 0; --instruction-indent: 2.2rem;"
+                style="padding-block: 0.5rem; gap: 0.3rem;"
             >
                 {#snippet title()}
-                    <span style="font-size: 1rem; font-weight: 500; margin-left: -0.1rem">
-                        Instructions
-                    </span>
+                    <span style="font-size: 1rem; margin-left: -0.1rem"> Instructions </span>
                 {/snippet}
                 <InstructionsMenu
                     hrefOf={(instructionName) =>
