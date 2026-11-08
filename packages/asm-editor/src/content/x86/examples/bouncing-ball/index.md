@@ -1,4 +1,4 @@
-Animate a ball that turns around at the screen's edges. The program draws 600 frames, at up to
+This program animates a ball that bounces off the Screen's edges. It draws 600 frames, at up to
 60 frames a second, so it runs for at least ten seconds. With two framebuffer pages, it finishes
 each picture out of view before showing it. If only one page is available, it draws directly on
 the visible page instead.
@@ -9,7 +9,7 @@ A **page** is enough framebuffer memory for one whole picture. The Screen in thi
 two pages, one after the other in memory. Only one is visible at a time. The program starts by
 painting both pages with the background colour, then repeats these steps:
 
-1. Choose the page to draw on and erase the rectangle around its previous ball.
+1. Choose the page to draw on and erase the rectangle where the ball was last drawn on that page.
 2. Move the ball, reverse its step if it passes an edge, and draw it at the new position.
 3. Ask the Screen to show the completed page, then choose the other page for the next frame.
 
@@ -281,9 +281,10 @@ to 600, this takes at least ten seconds. Set it to 6000 for at least 100 seconds
 ## Turning at an edge
 
 `x` is the ball's left edge, so it fits while `x` is from 0 to `xres - BALL`. The program adds the
-step; a result below 0 sets the sign flag for `js`, and one above `xres - BALL` fails `jle`. Either
-way, `neg` reverses the step. Adding the reversed step once returns to the previous position;
-adding it again moves one step in the other direction.
+step. If the result is below 0, `js` jumps to `turn_x`. If it is above `xres - BALL`, `jle` does
+not jump, so execution reaches `turn_x` as well. In either case, `neg` reverses the step.
+Adding the reversed step once returns to the previous position. Adding it again moves one step
+in the other direction.
 
 For example, the rightmost allowed `x` is `320 - 16 = 304`. From `x = 302`, a step of 3 would
 reach 305. The program reverses the step to -3, adds it to return to 302, then adds it again to

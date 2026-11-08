@@ -49,7 +49,10 @@ Neither instruction changes `hi` or `lo`.
 **remainder** in `hi`. Since 1000 = 60 × 16 + 40, `mflo $t6` copies 16 whole minutes and
 `mfhi $t7` copies the 40 seconds left over.
 
-Before looking at the table, predict what will happen if the seconds value is **367** instead of 1000. How many whole minutes and leftover seconds will `mflo` and `mfhi` copy?
+Predict what will happen if the seconds value is **367** instead of 1000. How many whole minutes
+will `mflo` copy into `$t6`, and how many leftover seconds will `mfhi` copy into `$t7`?
+
+The table shows the results for the original program:
 
 | After               | `hi` | `lo` | Ordinary destination |
 | ------------------- | ---: | ---: | -------------------- |
@@ -87,7 +90,7 @@ remainder 0.
 nonnegative or unsigned product needed more than that word. For signed products, a negative
 result that fits can have `hi = -1`: the upper half is filled with copies of the sign bit. For
 example, -2 × 3 is -6 and fits in one signed word even though the full product has `hi = -1`.
-To check whether a signed product fits, `hi` must be 0 when the low word's sign bit is 0, or -1
-when that bit is 1.
+A signed product fits in one word if `hi` is 0 when the low word's sign bit is 0, or -1 when
+that bit is 1.
 
 </details>

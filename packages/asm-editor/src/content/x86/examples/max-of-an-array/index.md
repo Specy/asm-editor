@@ -1,4 +1,4 @@
-To find the largest element, keep the best value seen so far in `r8`. Start with the first
+To find the largest element, keep the largest value seen so far in `r8`. Start with the first
 element, then compare each remaining element with it. This program assumes the array contains
 at least one qword.
 
@@ -32,8 +32,8 @@ _start:
 ```
 
 On the first pass, `r8 = 4` and `rcx = 1`. The address `numbers + rcx*8` points to the
-second qword, 42. Since signed 42 is greater than 4, `jle` does not jump, and `mov r8, rax`
-replaces the best so far with 42. The later elements do not exceed it, so `r8` still holds
+second qword, 42. Since 42 is greater than 4, `jle` does not jump, and `mov r8, rax`
+replaces the current maximum with 42. The later elements do not exceed it, so `r8` still holds
 **42** when the loop ends. Run the program and check `r8` in the register panel.
 
 `COUNT` is 6: `$ - numbers` is the array's size in bytes at assembly time, and dividing by
@@ -54,9 +54,9 @@ yet none of them would replace it. Loading the first element gives the loop a re
 
 ## Your turn
 
-Write the maximum loop for the five qwords below. Leave the largest **signed** value in `r8`
+Write a loop to find the largest element in the five qwords below. Leave the largest **signed** value in `r8`
 before the exit code runs. Initialize `r8` from the first element and start `rcx` at 1. At
-the top of the loop, leave it if `rcx` has reached `COUNT`. Otherwise, load the qword at
+the top of the loop, exit the loop if `rcx` has reached `COUNT`. Otherwise, load the qword at
 index `rcx`, replace `r8` only if that value is greater, then advance the index and repeat.
 The first value is negative, so this list also checks whether you chose the signed jump for
 the values.

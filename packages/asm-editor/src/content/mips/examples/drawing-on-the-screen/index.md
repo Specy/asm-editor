@@ -1,4 +1,4 @@
-This program draws a sky, ground, sun and house on a 32 by 32 word grid. Select **Build**, then
+This program draws a sky, ground, sun and house on a 32 by 32 grid of words. Select **Build**, then
 **Run**, and look at the Screen panel. Each word is one coloured cell. The program draws shapes by
 calculating which words to change and storing colours with `sw`.
 
@@ -142,9 +142,10 @@ The `# @screen` line sets the Screen on every Build. `unit=8` draws each word as
 down. `base=display` connects the Screen to the reserved memory labelled `display`. The
 `32 * 32` words need `32 * 32 * 4 = 4096` bytes, the amount reserved by `.space 4096`.
 
-A colour is the low 24 bits of a word, red in bits 23 to 16, green in 15 to 8 and blue in 7 to 0.
-So `0x0070B0E0` is a pale blue made of 112 red, 176 green and 224 blue, and the order is the
-`#RRGGBB` you write in CSS with a `0x` on the front.
+A cell's colour comes from the low 24 bits of its word: red in bits 23 to 16, green in 15 to 8
+and blue in 7 to 0. For example, `0x0070B0E0` is a pale blue with red, green and blue values of
+112, 176 and 224. The components follow the same order as CSS's `#RRGGBB`, but the assembly
+literal starts with `0x`.
 
 The address of the cell at `(x, y)` is `base + (y * SIDE + x) * 4`, the same calculation used for
 a 2D array of words. Both helpers use `sll` by 5 for `y * 32`, add `x`, use `sll` by 2 for four

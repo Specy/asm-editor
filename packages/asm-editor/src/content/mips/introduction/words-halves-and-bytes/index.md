@@ -22,8 +22,8 @@ bytes:   12 | 34 | 56 | 78
 This diagram groups the bits inside the value. In memory, the Playground displays the four bytes in
 little-endian order, as the previous lesson showed.
 
-The registers panel has **B**, **W**, and **L** view buttons. For MIPS, **B** divides each register
-into four bytes, **W** divides it into two halves, and **L** shows the whole 32-bit word. These
+The registers panel has **B**, **H**, and **W** view buttons. For MIPS, **B** divides each register
+into four bytes, **H** divides it into two halves, and **W** shows the whole 32-bit word. These
 buttons change how the panel groups the value; they do not change the bits in the register.
 
 ## Decimal and hexadecimal source values
@@ -42,11 +42,11 @@ main:
 ```
 
 Build the program and step through the three `li` instructions. `$t0` and `$t1` both become
-`00000064`: decimal `100` and hexadecimal `0x64` are two source spellings for the same value.
+`00000064`: decimal `100` and hexadecimal `0x64` are two ways to write the same value.
 `$t2` becomes `FFFFFFFF`.
 
 Hover over these register values. The panel shows both a signed and an unsigned reading when those
-readings differ. Then switch among **B**, **W**, and **L** to see the byte, half, and word boundaries.
+readings differ. Then switch among **B**, **H**, and **W** to see the byte, half, and word boundaries.
 The register still contains the same 32 bits in every view.
 
 ## Declare each size in memory
@@ -80,8 +80,8 @@ The panel shows these bytes from low address to high address:
 7F 00 34 12 78 56 34 12
 ```
 
-The `00` after `7F` is padding added by `.align 1`, which moves `middle` to a multiple-of-two
-address. The following `.align 2` moves `large` to a multiple-of-four address. The bytes of each
+The `00` after `7F` is padding added by `.align 1`, which moves `middle` to an address
+that is a multiple of two. The following `.align 2` moves `large` to an address that is a multiple of four. The bytes of each
 multi-byte value appear least significant first because this Playground is little endian.
 
 ## One pattern can have two numeric readings
@@ -102,8 +102,8 @@ add 1:             00010000   = 16
 Its highest bit is 1, so its signed reading is -16. If all eight bits are read as unsigned, the same
 pattern is 240.
 
-Width is part of the interpretation. The table follows the same low eight bits, `F0`, and pads them
-with leading zeroes at the wider widths. `F0` is negative when treated as one byte, while `00F0`
+Width is part of the interpretation. The table shows the same low eight bits, `F0`, with
+leading zeroes added at the wider widths. `F0` is negative when treated as one byte, while `00F0`
 and `000000F0` are positive because their highest bit is 0:
 
 | pattern    | width | unsigned reading | signed reading |

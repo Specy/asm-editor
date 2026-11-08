@@ -1,6 +1,6 @@
 {
     "name": "Stack arguments and a stack frame",
-    "description": "Fifth and sixth arguments on the stack, a local and saved return address in a frame, and a subroutine that restores the register it borrows.",
+    "description": "Pass fifth and sixth arguments on the stack, save a local value and the return address in a stack frame, and restore a borrowed register.",
     "order": 11,
     "topic": "subroutine-with-stack-arguments"
 }

@@ -1,6 +1,6 @@
-This program searches twelve sorted words for 91 and leaves its zero-based index in `$t4`.
+This program uses binary search to find 91 in an array of twelve sorted words and leaves its zero-based index in `$t4`.
 If the value is absent, `$t4` stays at -1. A left-to-right search would check ten words to find
-91, the tenth value in the array. This search checks four by repeatedly discarding half of the
+91, the tenth value in the array. Binary search checks four words by repeatedly discarding half of the
 remaining range.
 
 The range runs from `low` in `$t2` through `high` in `$t3`, including both ends. On each pass,

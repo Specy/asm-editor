@@ -25,8 +25,8 @@ Build the program and step through it. After the second instruction, `$t0` conta
 that line uses the name `$8`. After the last instruction, `$t2` contains 14 because `$9` and `$t1`
 refer to the same register.
 
-You will usually write the named forms. The numbered forms are useful when a register panel,
-documentation, or another program uses a different spelling.
+You will usually write the named forms. Knowing the numbered forms helps you recognize the same registers
+in the registers panel, documentation, or another program.
 
 ## The register names
 
@@ -52,17 +52,17 @@ For the small, self-contained programs in this part of the course, use `$t0` thr
 values you choose yourself. They are the simplest safe default. In programs that do not call
 subroutines yet, `$s0` through `$s7` can also hold your values; some exercises use them so their
 names become familiar. The difference between **temporary** and **saved** matters when one part of
-a program calls another, so the course will make that distinction concrete when it introduces
+a program calls another. You will learn how to use each kind when the course introduces
 subroutines.
 
-The other names are job labels used by common MIPS programming rules. They will become useful when
-the corresponding jobs appear. For now, the practical cautions are enough: do not keep your own
-values in `$at`, `$k0`, or `$k1`, and do not change `$sp` until you learn how the stack uses it.
+The other register names describe their roles under common MIPS programming conventions. You will
+use them as you learn about those roles. For now, do not keep your own values in `$at`, `$k0`, or
+`$k1`, and do not change `$sp` until you learn how the stack uses it.
 
 ## `$zero` always contains zero
 
-Register `$0`, usually written `$zero`, is the one member of the 32 that the hardware treats
-differently. Reading it always gives 0. An instruction may try to write to it, but the attempted
+Register `$0`, usually written `$zero`, is the only general-purpose register whose value you
+cannot change. Reading it always gives 0. An instruction may try to write to it, but the attempted
 write is discarded.
 
 That makes `$zero` useful in ordinary calculations. Step through this program:
@@ -78,8 +78,8 @@ main:
     add $t4, $zero, $zero   # $zero still reads as 0
 ```
 
-After stepping through it, `$t1` contains 5 and `$t2` contains -5. The attempted write to `$zero`
-does not remain anywhere, so `$t4` receives 0 on the final line.
+After stepping through it, `$t1` contains 5 and `$t2` contains -5. The processor discards the attempted
+write to `$zero`, so `$t4` receives 0 on the final line.
 
 ## A few names outside the 32
 

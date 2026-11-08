@@ -25,8 +25,8 @@ _start:
 ```
 
 On the first pass, `rcx = 0`, so the program writes 1 at `numbers`. On the second, `rcx = 1`, so
-it writes 2 eight bytes later. After the tenth store, `rcx` becomes 10; `cmp` and `jb` then let
-execution leave the loop. The index never names a slot past 9.
+it writes 2 eight bytes later. After the tenth store, `rcx` becomes 10, so `jb` no longer jumps
+back to `.fill`. The loop only writes to slots 0 through 9.
 
 Run the program, then enter `402000` in the memory panel's **address box**. In this playground,
 with only this `.bss` array, `numbers` begins at `0x402000`. The first two qwords should appear as:
@@ -40,8 +40,8 @@ address       eight bytes, from low address to high address
 Continue through ten qwords, ending with `0A 00 00 00 00 00 00 00` at `0x402048`. You may need
 to move through more than one panel page to see all eighty bytes. The `rax` store writes **all
 eight bytes** of each qword. For these small numbers, little-endian order puts the value in the
-first byte and seven zero bytes after it. The fixed address helps inspect this particular
-playground; the assembly uses the `numbers` label to locate the array.
+first byte and seven zero bytes after it. Use the fixed address to inspect this playground's
+array. The assembly uses the `numbers` label to locate it.
 
 Three sizes must agree: `resq 10` reserves ten eight-byte slots (80 bytes), `rax` makes each
 store eight bytes wide, and `rcx*8` moves the address by one slot for each increase in the index.

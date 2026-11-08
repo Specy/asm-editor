@@ -32,8 +32,8 @@ These directives tell the assembler how to build the program; the processor does
 as instructions. The names `word`, `dword`, and `qword` mean 2, 4, and 8 bytes. They come from x86's
 history: a dword is a double word, and a qword is a quadruple word.
 
-The other setup lines in the examples have small jobs too. `global _start` exposes the `_start`
-symbol to the linker as part of the standard runnable-program setup. `default rel` tells NASM to use
+The examples also use `global _start` to make the `_start` symbol available to the linker when it
+builds the executable. `default rel` tells NASM to use
 relative addressing for label-based memory references such as `[value]`, which is the usual choice
 for these programs.
 
@@ -47,7 +47,7 @@ bytes beginning at the address named `total`:
     add rax, [total]        ; read 8 bytes and add their value to rax
 ```
 
-The register's width says how many bytes to read. `rax` is eight bytes wide, so both lines access
+The register's width determines how many bytes to read. `rax` is eight bytes wide, so both lines access
 eight consecutive bytes beginning at `total`. The ordinary two-operand `mov` and arithmetic forms
 used here allow one memory operand. For example, `mov rax, [total]` is valid, while
 `mov [destination], [source]` is not.
@@ -96,11 +96,10 @@ The low byte `0x88` of `q` is at the lowest address, followed by `0x77`, through
 receives `0x1122334455667788`. A one-byte value has only one byte, so there is no ordering choice for
 `b`.
 
-The exact addresses in that table belong to this playground. It deliberately gives the small
-examples a predictable layout, with their data beginning at `0x402000`, so the bytes are easy to
-inspect. A real process can have many mapped regions, and its code, data, and stack may be placed at
-different addresses by its tools and operating system. Programs use labels such as `[q]`; they do
-not build in an address such as `0x402000`.
+In this playground, the small examples' data begins at `0x402000`, so you can inspect it at a
+predictable address. A real process can have many memory regions. Its build tools and operating
+system may place its code, data, and stack at different addresses. Using a label such as `[q]`
+lets the program refer to its data without specifying a numeric address such as `0x402000`.
 
 ## The operand width selects the bytes
 
@@ -120,8 +119,9 @@ also clears the upper half of `rbx`.
 
 ## Give immediate-to-memory stores a width
 
-A register operand gives NASM a width in a line such as `mov [total], rax`. A numeric immediate does
-not. NASM therefore rejects this line because the memory operand's size is unspecified:
+In `mov [total], rax`, NASM uses the register's width to determine how many bytes to store. A numeric
+immediate does not specify a width, so NASM rejects this line because the memory operand's size is
+unspecified:
 
 ```x86
     mov [total], 5          ; assembly error: byte, word, dword, or qword?

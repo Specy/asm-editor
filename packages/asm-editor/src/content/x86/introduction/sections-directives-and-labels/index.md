@@ -4,32 +4,31 @@ The programs in this course already use lines such as `section .text`, `dq`, `de
 `global _start`. These lines are **directives**: they tell NASM how to assemble the source. They are
 not instructions that the processor executes.
 
-This lesson brings those pieces together and adds three useful parts of the standard source layout:
-read-only data in `.rodata`, zero-initialized reserved storage in `.bss`, and assembly-time
-calculations with `equ`, `$`, and `$$`.
+Use `.rodata` for read-only data and `.bss` to reserve storage that starts filled with zeros.
+You can also calculate constants and data sizes while assembling, using `equ`, `$`, and `$$`.
 
 ## The four sections used in this course
 
 In the NASM/Linux ELF setup used here, `section` selects an object-file section. Everything that
 follows belongs to that section until another `section` directive selects a different one.
 
-| source section    | what it contains                                    | initialized payload in the executable | usual memory access |
-| ----------------- | --------------------------------------------------- | ------------------------------------- | ------------------- |
-| `section .text`   | machine instructions                                | yes                                   | read and execute    |
-| `section .rodata` | initialized data that code should not change        | yes                                   | read only           |
-| `section .data`   | initialized data that code may change               | yes                                   | read and write      |
-| `section .bss`    | reserved storage that starts filled with zero bytes | no                                    | read and write      |
+| source section    | what it contains                                    | initial bytes stored in the executable | usual memory access |
+| ----------------- | --------------------------------------------------- | -------------------------------------- | ------------------- |
+| `section .text`   | machine instructions                                | yes                                    | read and execute    |
+| `section .rodata` | initialized data that code should not change        | yes                                    | read only           |
+| `section .data`   | initialized data that code may change               | yes                                    | read and write      |
+| `section .bss`    | reserved storage that starts filled with zero bytes | no                                     | read and write      |
 
-These names and protections are conventions implemented by the ELF object metadata and this
-course's linker setup; they are not properties that NASM imposes on every possible program format.
-Here, `.text` and `.rodata` are normally mapped without write permission. Trying to store into such
-a mapping normally causes a protection fault, so the operating system stops the program.
+The ELF object metadata and this course's linker setup determine these section names and memory
+permissions. Other program formats can use different conventions.
+Here, `.text` and `.rodata` normally have no write permission. Trying to write to either section
+normally causes a protection fault, so the operating system stops the program.
 
 The `.bss` row separates file size from memory use. For example, reserving one megabyte in `.bss`
 does not put one megabyte of zero bytes into the executable file. The executable records how much
 zero-filled storage is required. That range still reserves virtual address space, and it consumes
-memory pages when the program uses it. `.bss` saves initialized payload in the program file; the
-storage is not free while the program runs.
+memory pages when the program uses it. Using `.bss` makes the executable file smaller, but the
+reserved storage still takes up memory while the program runs.
 
 The layout can be summarized as:
 
@@ -208,7 +207,7 @@ address of the 16 zero-filled bytes reserved at `buffer`.
 
 Practice declaring read-only bytes and deriving their length. In `.rodata`, declare `greeting` as
 the six bytes for `Hello` followed by a newline, with no zero terminator. Define `GLEN` as
-`$ - greeting`. Leave the address of `greeting` in `r8` and `GLEN` in `r9`. The final six bytes must
+`$ - greeting`. Leave the address of `greeting` in `r8` and `GLEN` in `r9`. The six bytes at `greeting` must
 be `48 65 6C 6C 6F 0A` in hexadecimal.
 
 ```x86|playground|memory|exercise

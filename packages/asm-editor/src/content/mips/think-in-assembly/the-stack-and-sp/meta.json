@@ -1,6 +1,6 @@
 {
     "name": "The stack and $sp",
-    "description": "Use MIPS register $sp to reserve aligned word slots, push and retrieve values in LIFO order, create local space, and restore the stack pointer exactly.",
+    "description": "Use $sp to reserve stack space, push and pop values, and restore the stack pointer.",
     "order": 4,
     "topic": "the-stack"
 }

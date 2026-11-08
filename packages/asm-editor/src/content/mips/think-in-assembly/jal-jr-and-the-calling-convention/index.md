@@ -33,9 +33,8 @@ address of `move $s0, $v0`. The final `jr $ra` returns there.
 `triple` is a **leaf subroutine** because it does not call another subroutine. It can leave `$ra`
 where `jal` put it.
 
-Leaf does not mean “never needs a stack frame.” A leaf may still need stack space for local data, or
-it may need to save a register that it promises to preserve. This particular leaf needs neither, so
-it has no frame.
+A leaf subroutine may still need a stack frame for local data or to save a register that it must
+preserve. `triple` needs neither, so it has no frame.
 
 ## The course calling convention
 
@@ -51,8 +50,9 @@ calling convention:
 | sixth argument       | `4($sp)`, in space made by the caller           |
 
 Every stack frame in this course uses a whole number of 4-byte words, so `$sp` stays word-aligned.
-Real MIPS ABIs specify stricter stack alignment and may reserve an argument home area. Code written
-for a real operating system must follow that system's ABI rather than this course convention.
+An application binary interface (**ABI**) defines the calling convention for a particular system.
+Real MIPS ABIs specify stricter stack alignment and may require the caller to reserve stack space
+for the register arguments too. Code written for an operating system must follow that system's ABI.
 
 ## A call inside a subroutine
 
@@ -94,7 +94,7 @@ instructions that restore saved values and return `$sp` to its entry value are i
 Here the frame is one word:
 
 1. `addi $sp, $sp, -4` makes room.
-2. `sw $ra, 0($sp)` saves the return address into `main`.
+2. `sw $ra, 0($sp)` saves the address where execution will resume in `main`.
 3. The two inner calls may overwrite `$ra`.
 4. `lw $ra, 0($sp)` restores the saved address.
 5. `addi $sp, $sp, 4` gives back exactly the space that was allocated.
@@ -122,14 +122,14 @@ The first row is **caller-saved**. A called routine may overwrite those register
 still needs a value held there, the caller moves or saves it before `jal`.
 
 The second row is **callee-saved**. A caller can keep a long-lived value in an `$s` register because
-every callee must return that register unchanged. The cost is paid by a callee that wants to borrow
-an `$s` register: it saves the old value and restores it before returning.
+every callee must return that register unchanged. A callee that changes
+an `$s` register saves its old value and restores it before returning.
 
 `$ra` has its own rule rather than belonging in either row: a routine preserves its incoming `$ra`
 when it will execute an inner `jal`. The stack pointer also has a direct rule: return it to exactly
 the value it had when the routine was entered.
 
-This leaf borrows `$s0`, so it needs a frame even though it makes no calls:
+This leaf changes `$s0` and uses a frame to save the caller's value, even though it makes no calls:
 
 ```mips|playground|memory
 .text
@@ -196,10 +196,9 @@ decimal_pair:
     jr $ra
 ```
 
-`decimal_pair` is a leaf and makes no frame, so the caller's argument addresses remain `0($sp)` and
+`decimal_pair` is a leaf and does not allocate a frame, so the caller's argument addresses remain `0($sp)` and
 `4($sp)` while it runs. If a callee first allocates its own frame, it must account for that change
-when loading caller-provided stack arguments. This example stays frameless, so its offsets do not
-change.
+when loading caller-provided stack arguments. In this example, the offsets do not change.
 
 ## Exercise: square two inputs
 

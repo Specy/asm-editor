@@ -4,10 +4,11 @@ Registers are convenient temporary storage, but there are only sixteen general-p
 families. The **stack** is an area of memory that a program can use for more temporary storage.
 The register `rsp`, the **stack pointer**, holds the address of the current top of the stack.
 
-Stack use works through cooperation. In **nested use**, one part of a program reserves stack space
-and another part reserves more before the first part releases its space. Their current ranges are
-distinct when each part releases exactly what it reserved. The mechanism cannot prevent code from
-changing `rsp` incorrectly or writing to an arbitrary address and corrupting another range.
+Different parts of a program can use the stack in turn. One part reserves space, then another
+reserves more space before the first part is finished. This is **nested use**: the second part must
+release its space before the first part releases its own. Each part must release exactly as much
+space as it reserved. The stack does not enforce this order or stop a program from writing over
+another part's data.
 
 ## `rsp` and downward growth
 
@@ -19,10 +20,9 @@ register forms of `push` and `pop`, so each operation changes `rsp` by eight byt
     pop rax                     ; load rax from [rsp], then rsp += 8
 ```
 
-Eight bytes is the width of these particular forms, not a rule that every stack value has this
-size. The 16-bit form, such as `push ax`, changes `rsp` by two bytes, and there is no ordinary
-`push eax` form in 64-bit mode. A manual allocation with `sub rsp, N` can reserve any chosen number
-of bytes.
+These 64-bit forms store or load eight bytes. Other stack operations can use different sizes:
+`push ax` stores two bytes and changes `rsp` by two. There is no ordinary `push eax` form in 64-bit
+mode. You can also reserve a block of bytes with `sub rsp, N`, choosing the byte count in `N`.
 
 Here two qwords are pushed and then popped:
 
@@ -113,13 +113,13 @@ _start:
 ```
 
 Immediately after the subtraction, the three qword slots begin at `[rsp]`, `[rsp + 8]`, and
-`[rsp + 16]`. These addresses stay at those offsets only while `rsp` is not changed again. Another
-push, pop, subtraction, or addition of `rsp` would move the base used by the same expressions.
+`[rsp + 16]`. These expressions refer to the same slots only while `rsp` stays unchanged. If you
+push, pop, or add to or subtract from `rsp`, the same expressions refer to different addresses.
 
 The matching `add rsp, 24` restores the stack pointer to its value before the allocation. If the
 subtraction and addition use different byte counts, later stack use begins from the wrong address.
-As with popped values, releasing the block does not erase its bytes; it only ends this use of the
-range.
+As with popped values, releasing the block leaves its bytes in memory, where later stack use can
+overwrite them.
 
 ## Saving and restoring registers
 
@@ -215,7 +215,7 @@ _start:
 Now reserve 32 bytes with `sub rsp, 32` and use all four qword slots. Store 5, 7, 8, and 9 at
 offsets 0, 8, 16, and 24 respectively. Load the qword at offset 8 into `r8` and the qword at offset
 24 into `r9`. Finally, release the whole block with `add rsp, 32`, restoring `rsp` to its starting
-value. The released bytes remain observable at their fixed addresses.
+value. You can still inspect the stored values at their addresses after releasing the block.
 
 ```x86|playground|memory|exercise
 default rel

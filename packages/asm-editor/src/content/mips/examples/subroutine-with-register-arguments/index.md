@@ -7,7 +7,7 @@ Euclid's algorithm repeatedly changes the pair `(a, b)` to `(b, a % b)`. When `b
 arguments and receive one result. In the course calling convention, the caller puts the first two
 arguments in `$a0` and `$a1`, and the subroutine returns its answer in `$v0`. `main` copies that
 answer to `$s0` before using `$v0` for the exit service. A subroutine must leave an `$s` register
-as it found it, so `$s0` can keep the answer across this call.
+as it found it, so a caller can keep values in these registers across a subroutine call.
 
 ```mips|playground|tests|allow-open
 .text
@@ -63,13 +63,13 @@ With 84 and 36, the pairs are `(84, 36)`, `(36, 12)`, and `(12, 0)`, so the retu
 `gcd` calls no other routine; such a routine is called a **leaf subroutine**. Nothing inside it
 replaces the return address in `$ra`, so `jr $ra` returns to the instruction after `jal`. Back in
 `main`, `move $s0, $v0` saves the GCD before `li $v0, 10` replaces the return value with the exit
-service number. That syscall ends
-the program before execution can reach the `gcd` label below `main`. At termination, `$s0` holds 12
+service number. That syscall ends the program before execution can reach the `gcd` label below
+`main`. At termination, `$s0` holds 12
 and `$v0` holds 10.
 
 For practice, change only the two argument values in `main`, predict `$s0`, then select **Build**
-and **Run** for each pair. The embedded **Test** checks the original 84/36 final registers; a
-different correct answer may fail that check:
+and **Run** for each pair. The embedded **Test** checks the final register values for the original
+arguments, 84 and 36. If you change the arguments, a correct result may still fail that check:
 
 - `1071` and `462` give `21`.
 - `36` and `84` give `12`; the first transition handles `a < b` normally.

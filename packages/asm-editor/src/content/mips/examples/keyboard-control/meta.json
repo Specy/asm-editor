@@ -1,6 +1,6 @@
 {
     "name": "Move a square with the keyboard",
-    "description": "The receiver registers polled once a frame for w, a, s and d, a direction kept in registers, and a square that keeps going until you steer it somewhere else.",
+    "description": "Poll the keyboard receiver once per frame for w, a, s and d. Store the direction in registers so the square keeps moving until you steer it.",
     "order": 22,
     "topic": "keyboard-control"
 }

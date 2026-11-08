@@ -1,4 +1,4 @@
-This program sorts six **signed qwords** into ascending order in the same array. Each pass compares
+This program uses **bubble sort** to sort six **signed qwords** into ascending order in the same array. Each pass compares
 neighbouring values and swaps them if the left value is greater. After the program runs, `values`
 contains **4, 8, 15, 16, 23, 42**.
 
@@ -51,7 +51,7 @@ The largest value has moved to the last slot. That happens after any full pass: 
 in each pair ends up on the right, while equal neighbours stay in place. The last slot is settled
 after pass one, and the last two slots after pass two. `rcx` starts at 5, so the first pass checks
 five pairs (`rbx` from 0 through 4). `dec rcx` reduces the next pass to four pairs, then three,
-two, and one: five passes and fifteen comparisons at most. The `.outer` and `.inner` loops both
+two, and one. This version always makes five passes and fifteen comparisons. The `.outer` and `.inner` loops both
 test at the bottom, so this program assumes **at least two qwords**.
 
 `jle` uses a **signed** comparison for the array values. For example, `-1` belongs before `4`,
@@ -62,8 +62,8 @@ in this pass.
 ## Your turn
 
 Make the sort stop after a pass that made no swaps. Start with the nearly sorted array below.
-Use `r8` to count completed passes and `r9` as an ordinary register holding a swap marker; `r9`
-is separate from the CPU flags register. At `.outer`, add one to `r8` and clear `r9` to zero.
+Use `r8` to count completed passes and `r9` to record whether a swap happened.
+This swap marker is separate from the CPU flags register. At `.outer`, add one to `r8` and clear `r9` to zero.
 In the swap path, set `r9` to 1. After the inner loop has checked its last pair, test `r9`:
 if it is zero, jump to `.done` **before** `dec rcx`; otherwise keep the existing shrinking-pass
 loop. Leave the sorted qwords in `values`.

@@ -3,9 +3,9 @@ bits:
 
 1. Is its low bit 0 or 1?
 2. What 32-bit pattern results from shifting it left by three places?
-3. What value is in its bottom four bits?
+3. What value is in its low four bits?
 4. How many of its 32 bits are 1?
-5. How many 0 bits come before its first 1 when you read from the top?
+5. How many 0 bits come before its first 1 when you read from bit 31 downward?
 
 The answers go to `$t1`, `$t2`, `$t3`, `$t4`, and `$t8`.
 
@@ -61,7 +61,7 @@ bits 31 through 1 and keeps bit 0. That bit is 0 for an even value and 1 for an 
 store.
 
 The same idea keeps a wider field. The mask `0xF` is binary `1111`, so
-`andi $t3, $t0, 0xF` keeps the bottom four bits and clears the rest. The bottom byte of the input is
+`andi $t3, $t0, 0xF` keeps the low four bits and clears the rest. The low byte of the input is
 `0xB6`, so those four bits are `0110` and `$t3` is 6.
 
 `andi` accepts masks up to `0xFFFF`. For a larger mask such as `0xF0000000`, use
@@ -80,6 +80,8 @@ moves past bit 31, so none of its bits remain in the register.
 The shift amount written in `sll` can be from 0 through 31.
 
 ## Count all 32 bits
+
+Counting the 1 bits in a pattern is called a **population count**, or **popcount**.
 
 The loop makes exactly 32 passes, one for each bit in the original pattern. On each pass it masks
 the working copy's low bit, adds that 0 or 1 to `$t4`, and shifts the next bit into place. The five
@@ -100,7 +102,7 @@ For a nonzero pattern, you can also find the position of its highest 1 bit: subt
 result from 31, the top bit's position. Zero has no 1 bit, so this calculation does not apply to it.
 
 For an optional challenge, predict these four edge cases before changing the first `li`, then check
-them in the Playground. Hex values in `$t2` show the complete 32-bit result.
+them in the Playground. The table shows `$t2` in hexadecimal so you can see the complete 32-bit result.
 
 | Input pattern       | `$t1` low bit | `$t2` left 3 | `$t3` low four | `$t4` ones | `$t8` leading zeroes | `$t5` after loop |
 | ------------------- | ------------: | -----------: | -------------: | ---------: | -------------------: | ---------------: |

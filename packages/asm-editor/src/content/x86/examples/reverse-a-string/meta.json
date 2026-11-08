@@ -1,6 +1,6 @@
 {
     "name": "Reverse a string in place",
-    "description": "Two pointers starting at the two ends of a string, swapping the bytes they point at and stepping towards each other until they meet.",
+    "description": "Reverse a string in place by swapping the characters at its two ends and moving towards the middle.",
     "order": 7,
     "topic": "reverse-a-string"
 }

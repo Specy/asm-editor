@@ -1,6 +1,6 @@
 {
     "name": "Sum of an array",
-    "description": "Add qwords by moving a pointer from the first element to an end label, then extend the array and check the sum.",
+    "description": "Add the qwords in an array using a pointer, then extend the array and check the sum.",
     "order": 4,
     "topic": "sum-of-an-array"
 }

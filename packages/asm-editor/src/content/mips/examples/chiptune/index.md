@@ -10,8 +10,10 @@ bytes apart. With the Synth's address in `$s0`, channel 0 starts at `$s0`, chann
 at `+0x11`, for example, so the bass's waveform is at `0x20 + 0x11 = 0x31` from `$s0`. The
 program selects pulse with 0, triangle with 1, and noise with 4.
 
-A note's **envelope** controls how its loudness changes over time. The channel's volume scales
-the whole envelope; its sustain sets the level held while the gate stays on. Both use 0 to 127.
+A note's **envelope** controls how its loudness changes over time. Turning the channel's **gate**
+on starts the envelope; turning it off starts the release, letting the note fade to silence.
+The channel's volume scales the whole envelope. Its sustain sets the level held while the
+gate stays on. Both use 0 to 127.
 
 | Setting | What it controls                                             |
 | ------- | ------------------------------------------------------------ |
@@ -162,6 +164,6 @@ half. Build and run each version to compare their sounds.
 Then make the bass shorter. In channel 1's setup, before the existing `li $t0, 127`, load 150
 into `$t0` and store it with `sh` at `0x26($s0)`: channel offset `0x20` plus decay offset
 `0x06`. Change the sustain store at `0x33($s0)` to use `$zero`. Keep the volume store at
-`0x32($s0)` at 127. Each bass note will
-now fade to silence in about 146 milliseconds, leaving a gap before its next note. The
+`0x32($s0)` at 127. Each bass note will now fade to silence in about 146 milliseconds,
+leaving a gap before its next note. The
 [Synth chapter](/documentation/mips/synth) lists the other registers.

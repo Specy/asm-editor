@@ -50,11 +50,12 @@ _start:
 
 The playground starts `_start` with `rsp` divisible by 16. `sub rsp, 8` and `push 7` each move it
 by eight bytes, so it is divisible by 16 immediately before `call`, as the System V convention
-requires. The padding is _below_ the argument as the caller builds the stack, so it ends up above
-the argument in the frame.
+requires. The caller reserves the padding before pushing the argument, so the padding is at a
+higher memory address than the argument.
 
-Set a breakpoint at `mov rax, rbx`, then inspect `rbp`, `rsp`, and nearby memory in the **Stack**
-tab. Use the offsets in this table to find the slots; the view may not give reserved slots names.
+Set a breakpoint at `mov rax, rbx`. Inspect `rbp` and `rsp` in the register panel, then enter the
+value of `rsp` in the memory panel's address box. Use the offsets in this table to find the slots.
+Reserved slots may have no names in the view.
 At this point `rsp = rbp - 24` and `rbx` holds 28.
 
 | Location     | Meaning                         | How it got there                          |

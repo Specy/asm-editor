@@ -1,6 +1,6 @@
 {
     "name": "Print a string",
-    "description": "Print fixed text in the console with Linux write, including the bytes that make each line break.",
+    "description": "Print fixed text in the console with Linux write and add newline bytes for line breaks.",
     "order": 17,
     "topic": "hello-world",
     "template": 4

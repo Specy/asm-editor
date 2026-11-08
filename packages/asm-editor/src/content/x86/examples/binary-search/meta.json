@@ -1,6 +1,6 @@
 {
     "name": "Binary search",
-    "description": "Search a sorted qword array by halving a half-open range; find an index or report that the value is absent.",
+    "description": "Use binary search on a sorted qword array. Halve a half-open range to find the target's index or report that it is absent.",
     "order": 15,
     "topic": "binary-search"
 }

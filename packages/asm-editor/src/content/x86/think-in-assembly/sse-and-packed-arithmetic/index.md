@@ -17,7 +17,7 @@ values. Lane 0 is the low lane and lane 1 is the high lane.
 ## Reading the instruction suffixes
 
 In the instruction families used here, the final letters say how many values the instruction uses
-and which format it gives those bits:
+and which floating-point format it uses:
 
 | suffix | meaning         | lanes used in one XMM register   |
 | ------ | --------------- | -------------------------------- |
@@ -35,7 +35,7 @@ The examples begin with binary64, so their arithmetic mnemonics end in `sd` or `
 
 The two-operand scalar SSE2 instructions used here read the low lane of each operand, write their
 answer to the destination's low lane, and preserve the destination's high 64 bits. This first
-calculation starts with memory loads whose high halves become zero:
+calculation loads each low lane from memory and clears each high half:
 
 ```x86|playground|sse|no-flags
 default rel
@@ -146,8 +146,8 @@ _start:
 |  low lane 0 |           1.0 |   10.0 |         11.0 |
 | high lane 1 |           2.0 |   20.0 |         22.0 |
 
-`mulpd` has the same lane-by-lane shape, with multiplication in place of addition. Neither packed
-operation carries a value from one lane into the other.
+`mulpd` multiplies corresponding lanes independently. In both instructions, the result in each lane
+depends only on the values in that lane.
 
 ## Converting signed integers and binary64 values
 
@@ -201,8 +201,8 @@ after:  xmm0 = [ low 7.0 | high 99.0 ]
 Decimal 2.7 has an infinite repeating expansion in base two. The assembler stores the nearest
 binary64 encoding, `0x400599999999999A`, under its normal rounding rule. Its exponent makes the
 normalized value approximately `1.35 x 2^1`; the stored fraction bits describe the digits after the
-leading 1 in that significand. `movq` lets `r10` expose those low-lane bits without treating them as
-an integer value to convert.
+leading 1 in that significand. `movq` copies those bits into `r10` without converting the
+floating-point value to an integer.
 
 ### MXCSR in brief
 
@@ -214,7 +214,7 @@ A masked exception records its condition and lets the instruction produce its de
 floating-point result. For example, a nonzero finite value divided by zero produces a signed
 infinity when divide-by-zero is masked. `0.0 / 0.0` is an invalid operation and produces a NaN when
 invalid operation is masked. The result for a masked exceptional operation depends on the operation
-and condition; masking does not turn every invalid calculation into the same result.
+and condition.
 
 ## Comparing low lanes
 
@@ -228,9 +228,9 @@ one of four outcomes in `ZF`, `PF`, and `CF`:
 | equal                                |    1 |    0 |    0 |
 | unordered                            |    1 |    1 |    1 |
 
-Unordered means at least one operand is a NaN. Test it first with `jp`. Its row also satisfies the
-flag conditions used by `jb` and `je`, so either of those jumps would misclassify a NaN if it ran
-first.
+Unordered means at least one operand is a NaN. Test for this outcome first with `jp`, which jumps
+when `PF` is set. An unordered comparison also sets `CF` and `ZF`, so testing `jb` or `je` first
+would misclassify it as less or equal.
 
 ```x86|playground|sse
 default rel
@@ -273,11 +273,12 @@ This input leaves 2 in `r12`.
 
 ## Packed comparisons produce masks
 
-A packed comparison writes a result into every lane. `cmppd` takes an immediate predicate; the
-value 1 selects ordered signaling less-than: “left lane is less than right lane.” If that relation
+A packed comparison writes a result into every lane. `cmppd` takes an immediate value that selects
+the comparison, called a **predicate**. The value 1 selects ordered signaling less-than: “left lane
+is less than right lane.” If that relation
 is true, the result lane is all one bits. If it is false, the result lane is all zero bits. A quiet
 NaN makes the lane false and all-zero, and it raises the invalid-operation condition. With the
-masked default taught above, MXCSR records that condition and execution continues.
+default exception mask, MXCSR records that condition and execution continues.
 
 ```x86|playground|sse|no-flags
 default rel
@@ -305,13 +306,13 @@ _start:
 |  low lane 0 | `1.0 < 2.0`, true  | `0xFFFFFFFFFFFFFFFF` |
 | high lane 1 | `5.0 < 4.0`, false | `0x0000000000000000` |
 
-Those all-one and all-zero lanes form a **mask**. They are bit patterns for selecting later data,
-so the floating-point display of the result is not useful here.
+Those all-one and all-zero lanes form a **mask**. Later instructions can use the mask to select
+data. Read these results as bits rather than floating-point values.
 
 ## Floating-point arguments and results
 
 For ordinary non-variadic System V x86-64 calls with simple scalar floating-point arguments, the
-first floating arguments use `xmm0` through `xmm7`; integer arguments are counted separately in the
+first floating-point arguments use `xmm0` through `xmm7`. Integer arguments are counted separately in the
 general-purpose argument registers. A floating-point result is returned in `xmm0`.
 
 Every XMM register is caller-saved. A called function may change any of them. A caller that needs
@@ -355,11 +356,11 @@ entry to `sum_of_squares`, as required by the convention. The function makes no 
 ## Your turn: scalar sum and average
 
 Use all four binary64 values at `values`. Calculate their sum in `xmm1` and their average in
-`xmm0`. The exact sum is 18.0 and the exact average is 4.5; the stored divisor is 4.0, so loading the
-divisor alone cannot produce either requested answer.
+`xmm0`. The sum should be 18.0 and the average should be 4.5. Divide the sum by the 4.0 stored at
+`count` to calculate the average.
 
-The fixed code stores both results and copies the low 64 raw bits into `r12` and `r13`. The checks
-assert both memory values and both safe register copies.
+The code after the placeholder stores both results in memory and copies their low 64 bits into
+`r12` and `r13`. The exercise checks both the memory values and the register copies.
 
 ```x86|playground|sse|memory|exercise
 default rel
@@ -437,8 +438,8 @@ _start:
 </details>
 
 Now perform packed addition and multiplication. Load the two lanes at `left` and `right`, put their
-lane-wise sums in `xmm0`, and put their lane-wise products in `xmm2`. The fixed code stores all four
-answers and copies each low/high qword to a safe general-purpose register.
+lane-wise sums in `xmm0`, and put their lane-wise products in `xmm2`. The code after the placeholder
+stores all four answers in memory and copies their bits into `r12` through `r15`.
 
 ```x86|playground|sse|memory|exercise
 default rel

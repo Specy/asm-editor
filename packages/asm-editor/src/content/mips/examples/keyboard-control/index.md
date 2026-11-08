@@ -8,7 +8,7 @@ corner starts at `(14, 14)`. `fill_rect` takes `x` in `$a0`, `y` in `$a1`, width
 height in `$a3`. It uses the colour in `$s0` and the address of `display` in `$s1`. The program calls
 it first to paint the background, then to erase and redraw the moving square.
 
-The keyboard receiver is a device-address block beginning at `0xffff0000`. Its control register is
+The keyboard receiver uses memory-mapped registers beginning at `0xffff0000`. Its control register is
 at that address, and its data register is four bytes later, at `0xffff0004`. Loads from these
 addresses ask the device for input. Stores to `display` paint Screen cells; loads from `display`
 read their current colour words.
@@ -133,7 +133,8 @@ wraps that corner if it crosses an edge, draws the square at its new position, a
 next pass. The background is painted only once. `$s2` and `$s3` hold the corner's `x` and `y`;
 `$s4` and `$s5` hold the horizontal and vertical steps. The initial steps `(1, 0)` move it right.
 
-`$s7` holds `0xffff0000`. The load at `0($s7)` reads receiver control; `andi` keeps Ready bit 0.
+`$s7` holds `0xffff0000`. The load at `0($s7)` reads the receiver control register.
+`andi` keeps only bit 0, the Ready bit.
 When that bit is 1, a character is waiting, so the load at `4($s7)` reads receiver data. The
 character is in its low byte, and reading the data consumes it. If a character is waiting, it
 remains available until the program reads it. If Ready is 0, the program skips the character checks

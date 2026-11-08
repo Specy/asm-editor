@@ -1,9 +1,10 @@
-This lesson describes exceptions in this Playground's MIPS simulator. It provides six coprocessor 0
-registers: `BadVAddr` (register 8), `Count` (9), `Compare` (11), `Status` (12), `Cause` (13), and
-`EPC` (14). Count and Compare control the timer. A handler begins at `0x80000180`. The simulator
-handles exceptions caused by instructions and supports timer and keyboard interrupts when the
-program enables them. It has no branch delay slots. The fixed addresses, reset values, data layout,
-and instruction budget below describe this simulator's setup.
+When an instruction fails, the MIPS simulator records what happened in **coprocessor 0 (CP0)**
+and runs an exception handler at `0x80000180`. The handler can inspect the cause and choose whether
+to retry the instruction or skip it.
+
+The Playground supports exceptions caused by instructions, plus timer and keyboard interrupts
+when your program enables them. It has no branch delay slots. The addresses, reset values, data
+layout, and instruction budget described here apply to this simulator.
 
 ## Exceptions and interrupts
 
@@ -42,7 +43,7 @@ If `$t0` holds `0x7FFFFFFF`, the signed result does not fit in 32 bits. The Play
 The handler eventually executes `eret`. That instruction clears the exception-level bit and loads
 the program counter from `EPC`. It does not move `EPC` for you.
 
-This leaves the handler with a deliberate choice:
+The handler chooses where execution resumes:
 
 | policy | what the handler does with `EPC`      | what `eret` runs next      |
 | ------ | ------------------------------------- | -------------------------- |
@@ -54,15 +55,14 @@ succeed. Otherwise it raises the same exception again. This Playground has no de
 MIPS instructions are four bytes, so copying `EPC` to `$k1` and running `addiu $k1, $k1, 4` skips
 exactly one instruction. A final `mtc0` writes that address back to `EPC`.
 
-## The four CP0 registers
+## CP0 registers for exception handling
 
-Coprocessor 0, or **CP0**, is a control-register bank separate from the 32 general-purpose
-registers. Two instructions cross between the banks:
+CP0 is a bank of control registers separate from the 32 general-purpose registers. Two instructions cross between the banks:
 
 - `mfc0 $k0, $13` copies CP0 register 13 into `$k0`.
 - `mtc0 $k0, $14` copies `$k0` into CP0 register 14.
 
-The four registers this Playground exposes are:
+These four CP0 registers describe and control exception handling:
 
 | number | name       | purpose in this Playground                      |
 | -----: | ---------- | ----------------------------------------------- |
@@ -70,6 +70,8 @@ The four registers this Playground exposes are:
 |     12 | `Status`   | control bits, including the exception-level bit |
 |     13 | `Cause`    | fields describing why the exception occurred    |
 |     14 | `EPC`      | the address where execution should resume       |
+
+The simulator also provides `Count` (register 9) and `Compare` (register 11) to control the timer.
 
 The Playground resets `Status` to `0x0000FF11`. Taking an exception sets bit 1, so an otherwise
 unchanged `Status` reads `0x0000FF13` inside the handler; `eret` clears that bit. These exact values
@@ -102,7 +104,7 @@ entry's saved values.
 
 ## Skipping the overflowing instruction
 
-Now the whole path is visible:
+This program uses a handler to skip an overflowing `add`:
 
 ```mips|playground|cp0|pc
 .text
@@ -142,9 +144,8 @@ The shift moves bit 2 down to bit 0. The mask `0x1F`, five binary ones, clears e
 five-bit code. The codes used in this lesson are 12 for arithmetic overflow and 4 for an address
 error on a load. Code 8 identifies an unsupported `syscall` service in this Playground.
 
-`BadVAddr` needs one extra rule: the Playground updates it when an address exception occurs. For
-other exceptions it may retain an older value, so zero after reset does not make it meaningful for
-an overflow. Read `BadVAddr` only after `Cause` says the current exception is an address error.
+`BadVAddr` holds the address involved in the most recent address exception. Other exceptions
+do not update it, so its value does not help diagnose an overflow, even if it is zero after reset. Read `BadVAddr` only after `Cause` says the current exception is an address error.
 
 ## Write two handlers
 

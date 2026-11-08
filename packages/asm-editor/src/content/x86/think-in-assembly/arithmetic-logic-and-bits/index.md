@@ -2,7 +2,7 @@
 
 Integer instructions work at a fixed width. An operation on qwords keeps 64 result bits; an
 operation on bytes keeps 8. The same bit pattern can be read as signed or unsigned, and some
-instructions use that choice to decide how to produce a wider result.
+instructions interpret the operands as signed or unsigned when producing a wider result.
 
 Unless a narrower register name is shown, the examples on this page use **qword forms**. This is
 especially important for multiplication and division, whose implicit register pairs change with
@@ -10,7 +10,7 @@ the operand width.
 
 ## Adding and subtracting
 
-The ordinary two-operand forms write their result over the first operand:
+The ordinary two-operand forms replace the first operand with the result:
 
 ```x86
     add rax, rbx            ; rax = rax + rbx
@@ -43,8 +43,9 @@ The two- and three-operand forms of `imul` keep one qword of a signed product:
     imul rcx, rax, 3        ; rcx = low 64 bits of rax * 3
 ```
 
-The two-operand form overwrites its first operand. The three-operand form reads its second operand
-and an immediate, then writes the first operand. Other general-purpose registers are unchanged.
+The two-operand form overwrites its first operand. The three-operand form multiplies its second
+operand by an immediate value, then writes the result to the first operand. Other general-purpose
+registers are unchanged.
 Both forms set `CF` and `OF` when the signed mathematical product does not fit in the destination;
 they clear both when it fits. Do not rely on the other arithmetic flags after `imul`.
 
@@ -145,8 +146,8 @@ so `-17 = (-3 * 5) + -2`. Do not rely on the arithmetic flags after `div` or `id
 are undefined.
 
 These setup instructions are for a qword dividend that begins in `rax`. The narrower division forms
-use the smaller pairs in the table, together with their corresponding widening instructions or
-other deliberate setup.
+use the smaller pairs in the table. Prepare those pairs with the corresponding widening
+instructions or by setting their high and low halves directly.
 
 Division raises a divide error in either of these cases:
 
@@ -227,7 +228,7 @@ eight low bits shown in the literal.
 `test rax, 8` sets `ZF` when bit 3 of `rax` is clear and clears `ZF` when that bit is set. It also
 clears `CF` and `OF`, like `and`.
 
-`bt rax, 3` uses a different result: it copies bit 3 of `rax` into `CF`. Do not read `ZF` after
+`bt rax, 3` copies bit 3 of `rax` into `CF`. Do not read `ZF` after
 `bt`; its value is undefined.
 
 A `setcc` instruction writes byte 1 when its flag condition is true and byte 0 otherwise. Here
@@ -269,8 +270,8 @@ new positions are filled according to the instruction:
 
 For `shl`, high bits that do not fit are lost, so the mathematical multiplication is exact only
 when its result fits in the qword. `shr` gives the quotient from unsigned division by the power of
-two. `sar` preserves the signed direction of a negative value, but it rounds negative nonmultiples
-toward negative infinity. Signed `idiv` instead truncates toward zero:
+two. For negative values that are not multiples of the power of two, `sar` rounds toward negative
+infinity. Signed `idiv` instead truncates toward zero:
 
 ```
     -17 sar 2     = -5
@@ -383,7 +384,7 @@ _start:
 
 </details>
 
-Practice forming `10 * x` as `(x << 3) + (x << 1)`. Apply that construction to the inputs in `r8`,
+Calculate `10 * x` as `(x << 3) + (x << 1)`. Apply this calculation to the inputs in `r8`,
 `r9`, and `r10`, and put the respective qword results in `r12`, `r13`, and `r14`. Write each
 calculation with shifts and addition, without `mul`, `imul`, or `div` in your source.
 

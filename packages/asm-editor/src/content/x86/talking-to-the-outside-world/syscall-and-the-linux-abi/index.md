@@ -1,9 +1,8 @@
 # `syscall` and the Linux x86-64 ABI
 
-This lesson is specifically about the **Linux x86-64 system-call ABI**, also called the Linux AMD64
-system-call ABI. Its call numbers and register assignments belong to this operating system and this
-64-bit ABI. Old 32-bit x86 examples use a different ABI; do not combine their call numbers or
-register rules with the table below.
+The **Linux x86-64 system-call ABI**, also called the Linux AMD64 system-call ABI, defines the
+call numbers and registers a 64-bit program uses to request Linux services. Old 32-bit x86 examples
+use a different ABI, so their call numbers and register rules do not match the table below.
 
 An **application binary interface**, or **ABI**, is the binary-level agreement about details such as
 call numbers, argument registers, and results.
@@ -54,8 +53,8 @@ and descriptor 2 reaches a console only when standard error is connected there.
 
 In this playground, standard output is connected to the console panel, and standard input is what
 you type there: a read of descriptor 0 waits for a line ended with Enter.
-The precise system calls implemented by the playground, with their numbers and arguments, are on
-the [x86 syscall reference](/documentation/x86/syscall).
+The [x86 syscall reference](/documentation/x86/syscall) lists the system calls supported by the
+playground, with their numbers and arguments.
 
 ## Ending the program with `exit`
 
@@ -143,14 +142,13 @@ write request: a nonnegative result lets it exit even if fewer than fourteen byt
 
 ## Recognizing an error
 
-A successful call returns a call-specific result in `rax`. Linux reports errors as negative values
+A successful call returns its result in `rax`. What that result means depends on the call. Linux reports errors as negative values
 from `-1` through `-4095`. There is no separate error flag to read after `syscall`; test the value in
 `rax`.
 
 For example, an invalid descriptor makes `write` return `-9`, the bad-file-descriptor error.
-The greeting checks for a negative result with `test rax, rax` followed by `js`: `test` sets flags
-without changing the value, and `js` branches if its sign bit is set. This works because successful
-write counts are nonnegative.
+The greeting checks for a negative result with `test rax, rax` followed by `js`. This works because
+successful write counts are nonnegative.
 
 This unsigned comparison recognizes the complete reserved error range:
 
@@ -164,8 +162,7 @@ For a concrete comparison, `-4095` has bits `0xFFFFFFFFFFFFF001`, and `-9` has b
 `0xFFFFFFFFFFFFFFF7`. As an unsigned value, `-9` is above the boundary, so `jae` branches. A
 successful result of 14 has bits `0x000000000000000E`, below that boundary, so it does not branch.
 In two's-complement form, those negative values occupy the top 4095 unsigned 64-bit values. That is
-why the unsigned `jae` condition catches them. The useful general pattern is
-`cmp rax, -4095` followed by `jae` to the error path.
+why the unsigned `jae` condition catches them.
 
 The signed-negative test in the greeting is enough for `write`. Use the general range check when
 successful results are not restricted to nonnegative signed values, for example when a call
@@ -236,7 +233,7 @@ request, such as reading a screen's dimensions. `mmap` can return an address thr
 program accesses device memory. Each call has its own arguments and result rules, but uses the
 same register convention above.
 
-The public references describe the supported devices and their data formats:
+The device references describe how to use each device and the data formats it accepts:
 
 - [Screen](/documentation/x86/screen): open `/dev/fb0`, map its pixel memory, and use framebuffer
   requests for screen information and double buffering.

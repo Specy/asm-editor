@@ -22,7 +22,7 @@ already know:
 - **Discard and pop a word:** if the value is no longer needed, release the slot with
   `addi $sp, $sp, 4` alone.
 
-The order matters. A push reserves the slot before writing it. A retrieve-pop reads the value before
+The order matters. A push reserves the slot before writing it. A pop that retrieves a value reads it before
 releasing its slot.
 
 ```mips|playground|memory
@@ -47,13 +47,13 @@ main:
 
 Here is the address trace. While the stack holds values, the newest one is at `0($sp)`:
 
-| after this action       | `$sp`        | value at `0x7FFFEFF4` | value at `0x7FFFEFF8` |
-| ----------------------- | ------------ | --------------------- | --------------------- |
-| editor setup            | `0x7FFFEFFC` | `00000000`            | `00000000`            |
-| push `$t0`              | `0x7FFFEFF8` | `00000000`            | `11111111`            |
-| push `$t1`              | `0x7FFFEFF4` | `22222222`            | `11111111`            |
-| retrieve-pop into `$t2` | `0x7FFFEFF8` | `22222222`            | `11111111`            |
-| retrieve-pop into `$t3` | `0x7FFFEFFC` | `22222222`            | `11111111`            |
+| after this action | `$sp`        | value at `0x7FFFEFF4` | value at `0x7FFFEFF8` |
+| ----------------- | ------------ | --------------------- | --------------------- |
+| editor setup      | `0x7FFFEFFC` | `00000000`            | `00000000`            |
+| push `$t0`        | `0x7FFFEFF8` | `00000000`            | `11111111`            |
+| push `$t1`        | `0x7FFFEFF4` | `22222222`            | `11111111`            |
+| pop into `$t2`    | `0x7FFFEFF8` | `22222222`            | `11111111`            |
+| pop into `$t3`    | `0x7FFFEFFC` | `22222222`            | `11111111`            |
 
 The last value pushed is the first one retrieved: `$t2` gets `0x22222222`, then `$t3` gets
 `0x11111111`. This order is called **last in, first out**, or **LIFO**.
@@ -65,7 +65,7 @@ zero, or any other particular value.
 
 ## Reserve several slots together
 
-Several word slots can share one adjustment. Reserving 12 bytes creates three 4-byte slots reached
+You can reserve several word slots with one adjustment to `$sp`. Reserving 12 bytes creates three 4-byte slots reached
 as `0($sp)`, `4($sp)`, and `8($sp)`:
 
 ```mips|playground|memory
@@ -93,8 +93,8 @@ main:
     syscall
 ```
 
-The three offsets are aligned, distinct, and inside the reserved 12-byte block. Offset 0 names its
-first word, offset 4 its second, and offset 8 its third. Each load uses the same offset as the store
+The three offsets are aligned, distinct, and inside the reserved 12-byte block. Offset 0 refers to its
+first word, offset 4 to its second, and offset 8 to its third. Each load uses the same offset as the store
 whose value it restores.
 
 The `$s0`, `$s1`, and `$s2` names do not give these registers special hardware behavior. The
@@ -104,7 +104,7 @@ explains the convention attached to their names.
 ## Use stack slots as local space
 
 Stack slots can also hold temporary values that do not need to stay in registers. This example
-reserves two direct-offset slots, uses them, and releases them:
+reserves two slots, accesses them with offsets from `$sp`, and releases them:
 
 ```mips|playground|memory
 .text

@@ -28,15 +28,16 @@ _start:
     syscall
 ```
 
-The System V convention gives the first two integer arguments to `rdi` and `rsi` and returns one
-integer in `rax`. `sum` follows that agreement. The `call` and `ret` instructions handle a separate
-problem: getting back to the instruction after this particular call.
+Under the System V calling convention, the caller puts the first two integer arguments in `rdi`
+and `rsi`, and the subroutine returns an integer in `rax`. `sum` follows that agreement.
+The `call` and `ret` instructions let execution return to the instruction after the call.
 
 ## Follow the return address
 
-Step through the program with `rip`, `rsp`, and the **Stack** tab visible. `rip` tells you which
-instruction will execute next. Let `S` stand for the value of `rsp` just before `call sum`;
-your run will show a concrete address instead.
+Choose **Open in editor**, then step through the program while watching `rip` and `rsp` in the
+register panel. To inspect the stack, enter the current value of `rsp` in the memory panel's
+address box. `rip` tells you which instruction will execute next. Let `S` stand for the value of
+`rsp` just before `call sum`; your run will show a concrete address instead.
 
 | When you stop          | `rip` points to         | `rsp`   | What to inspect                                           |
 | ---------------------- | ----------------------- | ------- | --------------------------------------------------------- |
@@ -45,7 +46,7 @@ your run will show a concrete address instead.
 | Just before `ret`      | `ret` at `sum`          | `S - 8` | The same address is still at `[rsp]`; `rax` now holds 42. |
 | After executing `ret`  | `mov r12, rax`          | `S`     | The caller has resumed immediately after its `call`.      |
 
-The address is eight bytes because this 64-bit `call` stores a 64-bit return address: one qword.
+This 64-bit `call` stores an eight-byte return address: one qword.
 It first subtracts 8 from `rsp`, writes the address of the instruction following the `call` at
 the new `[rsp]`, and sets `rip` to `sum`. `ret` reads that qword into `rip` and adds 8 to `rsp`.
 The old bytes may still be visible in memory afterward, but that stack slot is no longer in use.

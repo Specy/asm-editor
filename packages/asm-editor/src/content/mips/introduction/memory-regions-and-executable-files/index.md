@@ -5,7 +5,7 @@ region**.
 
 ## Sections group the program's contents
 
-A **section** groups source contents for the assembler. You already use `.text` for instructions
+A **section** groups instructions or data for the assembler. You already use `.text` for instructions
 and `.data` for declared data. Keep using those directives here:
 
 ```mips|playground|memory
@@ -24,8 +24,8 @@ main:
     syscall
 ```
 
-`.asciiz` places the two characters and a final zero byte. `.align 2` moves the next declaration to
-a multiple of four, and `.word` places the four-byte score. `.space 16` reserves sixteen bytes,
+`.asciiz` stores the two characters in `"Hi"` followed by a zero byte. `.align 2` moves the next declaration to
+an address that is a multiple of four, and `.word` stores the four-byte score. `.space 16` reserves sixteen bytes,
 which initially read as zero here. Each label names its declaration's first address.
 
 Build the example and inspect memory at `0x10010000`. Then Run it to see the addresses in registers:
@@ -42,7 +42,8 @@ into a register. The final `li $v0, 10` and `syscall` are the familiar finish se
 shows addresses without printing the greeting or changing the score.
 
 The declarations have **static storage**: their space lasts for the program's execution, and their
-sizes are established at Build. The score can still change; static describes storage's lifetime.
+sizes are determined when you Build. The score can still change: static describes how long the
+storage lasts.
 
 File-producing toolchains commonly distinguish four sections:
 
@@ -70,12 +71,12 @@ supplied so far, towards higher addresses. It does not provide a general operati
 individual block for reuse.
 
 The stack and heap are runtime regions. Their working contents do not come from this example's
-declarations. Our fixed buffer remains static storage even if we use it for temporary work.
+declarations. The fixed-size buffer in our example remains static storage even if we use it for temporary work.
 
 ## A map of this Playground
 
-Ordinary MIPS assembly programs here use these default locations. The table gives starting points
-and one initial register value, rather than the full extent of each region:
+Ordinary MIPS assembly programs here use these default locations. The table shows where each region starts
+and the initial stack pointer. It does not show where each region ends:
 
 | location     | role                           | connection to the example               |
 | ------------ | ------------------------------ | --------------------------------------- |
@@ -101,8 +102,8 @@ Reading the keyboard's character register can consume the waiting character. A s
 may therefore see another character. Reading the score retrieves its stored value until something
 writes a new one.
 
-The bitmap display has another arrangement: its pixel values occupy a configured range of ordinary
-simulator memory, called a **framebuffer**. The Screen shows those values as a picture. That range
+The bitmap display reads its pixel values from a configured range of ordinary simulator memory.
+This range is called a **framebuffer**. The Screen shows those values as a picture. That range
 can overlap declared data or heap, so its location matters when arranging storage. A picture does
 not automatically have a separate, protected memory region.
 
@@ -123,9 +124,9 @@ A toolchain that creates a separate executable often follows this route:
 assembly source → assembler → object file → linker → executable file → loader → memory
 ```
 
-The **assembler** converts instructions and lays out data. Its **object file** can still hold
+The **assembler** converts assembly instructions to machine instructions and lays out data. Its **object file** can still hold
 unresolved references: one file may use `greeting` while another defines it. The **linker** combines
-object files, arranges their contents and settles those addresses. The **loader** prepares memory
+object files, arranges their contents and resolves those references. The **loader** prepares memory
 from the executable and starts execution at its entry point. In that environment, startup code can
 run before `main`; that is separate from the Playground behavior above.
 

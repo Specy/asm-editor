@@ -1,11 +1,11 @@
 # The 16 registers and their halves
 
-x86-64 gives ordinary integer code sixteen **general-purpose integer register families**. They are
-small, named workspaces inside the processor. An instruction can use one to hold an integer value
-or an address; the name does not permanently assign a meaning to the value.
+x86-64 has sixteen **general-purpose integer registers**. They are small, named workspaces inside
+the processor. An instruction can use one to hold an integer value or an address. The register's
+name does not determine what the stored value means.
 
-The processor also has other kinds of registers. This lesson is only about these sixteen
-general-purpose integer registers and the different names for parts of each one.
+Each register has several names that select different parts of it. Together, these names form a
+**register family**.
 
 ## The sixteen families
 
@@ -52,11 +52,11 @@ For `rax`, the bytes can be pictured like this. `b0` is the least-significant by
 ```
 
 So if `rax` contains `0x1122334455667788`, then `eax` reads `0x55667788`, `ax` reads `0x7788`,
-`ah` reads `0x77`, and `al` reads `0x88`. Reading a narrower name takes only that low portion;
+`ah` reads `0x77`, and `al` reads `0x88`. Reading one of these names takes only the selected portion;
 it does not change the register.
 
-Here are copies of several portions. Immediately before the template at the end, the destination
-registers have the values listed below.
+This program copies several portions of `rax` to other registers. The table below shows their
+values just before the exit code, which starts with `mov rax, 60`.
 
 ```x86|playground|no-flags
 default rel
@@ -80,16 +80,16 @@ _start:
     syscall
 ```
 
-| register | value before the template |
-| -------- | ------------------------- |
-| `rbx`    | `0xAAAAAAAAAAAAAA88`      |
-| `rcx`    | `0xBBBBBBBBBBBBBB77`      |
-| `r10`    | `0xCCCCCCCCCCCC7788`      |
-| `r11`    | `0x0000000055667788`      |
-| `r12`    | `0x1122334455667788`      |
+| register | value before the exit code |
+| -------- | -------------------------- |
+| `rbx`    | `0xAAAAAAAAAAAAAA88`       |
+| `rcx`    | `0xBBBBBBBBBBBBBB77`       |
+| `r10`    | `0xCCCCCCCCCCCC7788`       |
+| `r11`    | `0x0000000055667788`       |
+| `r12`    | `0x1122334455667788`       |
 
-The table describes the moment before the template because its `syscall` overwrites `rcx` and
-`r11`, as every `syscall` does, so after a full run those two hold other values.
+The exit code's `syscall` overwrites `rcx` and `r11`. Step through the program to inspect those
+registers before that instruction runs.
 
 The first four families also have the old high-byte names `ah`, `bh`, `ch`, and `dh`. Each selects
 the second-lowest byte, as `ah` does above. Prefer the ordinary low-byte names when possible:
@@ -120,7 +120,7 @@ _start:
     syscall
 ```
 
-Before the template, `r8` is `0xFFFFFFFFFFFFFF00`, `r9` is
+Before the exit code, `r8` is `0xFFFFFFFFFFFFFF00`, `r9` is
 `0xFFFFFFFFFFFF0000`, and `r10` is `0x0000000000000000`.
 
 This rule is especially useful when reading code. `mov edx, 5` does more than put 5 in the low half

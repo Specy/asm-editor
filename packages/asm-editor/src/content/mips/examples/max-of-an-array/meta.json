@@ -1,6 +1,6 @@
 {
     "name": "The largest element",
-    "description": "A boundary-safe indexed walk that keeps the first signed maximum and its position, including an explicit result for an empty array.",
+    "description": "Find the largest signed value in an array and its index, keeping the first match when values tie and handling an empty array.",
     "order": 5,
     "topic": "max-of-an-array"
 }

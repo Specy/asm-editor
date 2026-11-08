@@ -1,6 +1,6 @@
 {
     "name": ".data, .text and directives",
-    "description": "Use .data and .text to separate declared bytes from instructions, name addresses with labels, and apply the small set of directives needed for words, bytes, strings, reserved space, alignment, and the entry point.",
+    "description": "Separate data from instructions with .data and .text. Use labels to name addresses and directives to declare words, bytes and strings, reserve space, align data, and choose the starting instruction.",
     "order": 2,
     "topic": "program-structure"
 }

@@ -1,5 +1,5 @@
-Draw a house, a sun, sky and grass by filling rectangles in pixel memory. A rectangle one
-row high is enough to build the sloping roof and the round sun too.
+Draw a house, a sun, sky and grass by filling rectangles in pixel memory. Rows of rectangles
+that are one pixel high form the sloping roof and the round sun.
 
 ## Pixels and rows
 
@@ -58,8 +58,8 @@ The program reserves two blocks of bytes in `.bss` for those results:
 - `fix` receives the framebuffer's byte count (`smem_len`) and bytes per row (`line_length`),
   along with other device information, when the request is `FBIOGET_FSCREENINFO`.
 
-Each block has a fixed layout: every named value occupies bytes at an agreed offset. Linux calls
-such a block a _structure_. You do not need C to read it: `[fix + fb_fix_screeninfo.line_length]`
+Each block is a _structure_: every named value occupies bytes at a fixed offset. You do not
+need C to read it: `[fix + fb_fix_screeninfo.line_length]`
 reads the value at the `line_length` offset within `fix`. The include file `linux/fb.inc` supplies
 these offsets and the total block sizes used by `resb`, so each request has enough space for its
 whole result. The other include files supply syscall numbers and flag constants.
@@ -81,7 +81,7 @@ On success, `mmap` returns the address in `rax`; the program keeps it in `rbx`. 
 
 The example checks `open` and `mmap`. It assumes the two supported information requests succeed
 on the editor's Screen and leaves their error checks out. Code that must handle other devices
-should check each `ioctl` result before using the information it was meant to fill.
+should check each `ioctl` result before reading values from the corresponding structure.
 
 ## Draw the picture
 

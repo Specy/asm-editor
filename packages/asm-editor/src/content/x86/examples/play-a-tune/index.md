@@ -1,4 +1,4 @@
-This program plays the first phrase of Beethoven's "Ode to Joy" on a piano, with a drum under every
+This program plays the first phrase of Beethoven's "Ode to Joy" on a piano, with a drum alongside every
 note. **MIDI** messages are instructions to play instruments, rather than recorded sound. The
 program writes these messages to `/dev/snd/midiC1D0`, a **port** that receives MIDI bytes. A
 **synthesizer** reads the instructions and produces the sound. This one follows General MIDI,
@@ -130,13 +130,13 @@ fail:
 ```
 
 `send` takes the three message bytes in `dil`, `sil` and `dl`. It stores them in consecutive bytes
-of `message`, then gives `write` that buffer's address and a length of 3. The program writes the
+of `message`, then calls `write` with the buffer's address and a length of 3. The program writes the
 two-byte program-change message separately.
 
 The sleep works like the PC-speaker example: multiply milliseconds by 1,000,000 to get
 nanoseconds, then fill a `timespec`. These durations are all under one second, so `tv_sec` is 0.
-The durations add up to 6.4 seconds. In a testcase nothing is heard, and each
-`nanosleep` advances the testcase's clock immediately.
+The durations add up to 6.4 seconds. In a Testcase, playback is silent, and each
+`nanosleep` advances the Testcase's clock immediately.
 
 ## Drums on channel 10
 
@@ -144,8 +144,8 @@ On channel 10, the note number selects a drum rather than a piano pitch: 36 is a
 38 a snare and 42 a closed hi-hat. The third number in each group in `tune` selects the drum to
 start alongside that piano note. Listen for the bass drum, hi-hat, snare, hi-hat pattern.
 
-The synthesizer's drum sounds used here decay after being triggered, so this example sends them
-no note-off messages. The piano notes do receive note-offs after their durations.
+The drum sounds used here fade on their own, so this example sends them no note-off messages.
+The program releases each piano note with a note-off message after its duration.
 
 ## Finishing playback
 

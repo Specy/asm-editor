@@ -1,6 +1,6 @@
 {
     "name": "Memory, little endian and sizes",
-    "description": "How labels name byte addresses, how x86 lays out little-endian integers, how operand width selects bytes, and when NASM requires an explicit memory size.",
+    "description": "Labels and byte addresses, little-endian integers, operand widths, and explicit memory sizes in NASM.",
     "order": 2,
     "topic": "memory"
 }

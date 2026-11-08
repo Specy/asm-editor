@@ -1,6 +1,6 @@
 {
     "name": "Variables in memory and constants",
-    "description": "Use named memory and an equ constant to calculate an area, then practice an eight-byte immediate store.",
+    "description": "Use variables in memory and an equ constant to calculate an area, then write an immediate value to an eight-byte variable.",
     "order": 1,
     "topic": "variables-in-memory"
 }

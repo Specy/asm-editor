@@ -5,8 +5,8 @@ kernel-controlled code. A device interrupt can also make the CPU enter the kerne
 instruction requests a kernel service through another entry path. Linux may then deliver a signal
 to a program.
 
-These events are related control transfers. Their names belong to different layers, so it helps to
-follow one event all the way through the machine.
+Each event transfers control to kernel code. To understand the differences, follow what the CPU,
+kernel and user program each do.
 
 ## Four layers of one event
 
@@ -155,7 +155,7 @@ _start:
 ```
 
 The next program stops on the load from `0x10`, which is outside this program's mappings. It leaves
-the same sentinel values and parks `rip` on the `mov` that raises `#PF`.
+`r8` at `0x1111` and `r9` at `0x2222`, with `rip` pointing to the `mov` that raises `#PF`.
 
 ```x86|playground|no-flags
 default rel
@@ -219,7 +219,7 @@ valid when it is smaller than `rbx`.
 
 This program makes the overflow condition certain. The first division leaves remainder 2 in
 `rdx`. The second divisor is also 2, so its high half is greater than or equal to its divisor. The
-second `div` raises `#DE`, `rip` stays there, and the sentinel values in `r8` and `r9` remain.
+second `div` raises `#DE`, `rip` stays there, and `r8` and `r9` remain at -1.
 
 ```x86|playground|no-flags
 default rel
@@ -296,8 +296,8 @@ Complete `divide_checked`. It receives an unsigned 64-bit dividend in `rax` and 
 Return the quotient in `r8` and 0 in `r9` when division succeeds. For a zero divisor, return 0 in
 `r8` and 1 in `r9` without executing `div`.
 
-The program calls your routine twice. It saves the successful result of `100 / 4` in `r12:r13`,
-then leaves the failure result of `100 / 0` in `r8:r9`. Thus one test run observes both paths.
+The program calls your routine twice. It saves the quotient and status from `100 / 4` in `r12` and `r13`,
+then leaves the quotient and status from `100 / 0` in `r8` and `r9`. This checks both paths in one run.
 
 ```x86|playground|exercise
 default rel

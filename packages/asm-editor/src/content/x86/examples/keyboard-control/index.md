@@ -2,13 +2,13 @@ Move a square with the arrow keys: hold an arrow to move and release it to stop.
 ends the program. It also ends after 600 frames without a key event, about ten seconds at 60 frames
 per second.
 
-**Click the Screen first** so its keys reach the program. **Shift+Tab** gives the keyboard back to
-the page.
+**Click the Screen first** so the program receives your key presses. **Shift+Tab** gives the
+keyboard back to the page.
 
 ## Reading the keyboard without waiting
 
-Each read from the keyboard device returns records describing key changes. The program uses
-these records to track which arrows are held: one byte for each arrow, 1 for held and 0 for released.
+The program reads keyboard events to track which arrows are held. It stores the state of each
+arrow in one byte: 1 for held and 0 for released.
 
 The program opens `/dev/input/by-path/platform-i8042-serio-0-event-kbd` with
 `O_RDONLY | O_NONBLOCK`. The path names the emulated PC keyboard. `O_NONBLOCK` lets a read return
@@ -293,8 +293,8 @@ path with value 0 and clears that byte. Repeats restart the countdown too, but b
 
 The read loop asks for one event at a time and continues until a read returns something other
 than 24. Normally that is `-EAGAIN`, meaning the queue is empty. This example also takes that
-branch for an error, an end-of-file result, or a short read. It proceeds to movement without
-reporting or recovering from them; it does not establish that the device is still working.
+branch for an error, an end-of-file result, or a short read. It then proceeds to movement without
+reporting the problem or trying to recover, so the square may stop responding if the device fails.
 
 ## Moving and drawing
 
@@ -303,8 +303,8 @@ Multiplying by `SPEED` gives the horizontal movement for this frame. `down - up`
 vertically. Two held arrows can therefore move the square diagonally. Each coordinate is clamped
 between 0 and the screen dimension minus `BOX`, keeping the whole square visible.
 
-Drawing follows the [bouncing ball](/learn/courses/x86/examples/bouncing-ball). Each page remembers
-where it last held the square in `drawn_x` and `drawn_y`. When that differs from the new position,
+Drawing follows the [bouncing ball](/learn/courses/x86/examples/bouncing-ball). The program uses
+`drawn_x` and `drawn_y` to remember the square's last position on each page. When that differs from the new position,
 `redraw` erases the old square on that page and draws the new one. `present` pans to the selected
 page, waits for the vertical blank here, then selects the other page for the next frame. With only
 one page, the program draws on the displayed page instead.

@@ -1,6 +1,6 @@
 {
     "name": "Arrays, strings and the string instructions",
-    "description": "Walk equal-size arrays by index or pointer, distinguish fixed-length data from zero-terminated strings, and use bounded movs, stos, scas and cmps operations with repeat prefixes.",
+    "description": "Walk arrays by index or pointer, distinguish fixed-length data from zero-terminated strings, and use movs, stos, scas and cmps with repeat prefixes and element counts.",
     "order": 3,
     "topic": "data-in-memory"
 }

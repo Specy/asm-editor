@@ -1,6 +1,6 @@
-The assembler writes six numbers next to one another in memory. Rather than give each word a
-separate label, this program keeps the address of the next word in `$t0` and adds each value to a
-running total in `$t2`.
+This program adds six numbers stored next to one another in memory. It keeps the address of the
+next word in `$t0` and adds each value to a running total in `$t2`, so it does not need a separate
+label for each word.
 
 `numbers` names the first word. The six `.word` values take 24 bytes, so the assembler places `end`
 at its current location immediately after the sixth word. The label takes no space of its own.
@@ -43,9 +43,9 @@ At `loop`, `$t0` points to the next word and `$t1` marks the stopping address. `
 addresses _before_ `lw` reads memory. If they differ, `lw` reads the word at `$t0`, `addu` adds it
 to `$t2`, and `addiu` advances `$t0` by four bytes to the next word. `lw` itself does not move the
 pointer. The jump repeats the check. `addu` and `addiu` do their arithmetic without stopping on
-signed overflow; the six values here give the ordinary sum 108.
+signed overflow. The six values here add up to 108.
 
-Run the program. The important stopping check is that `$t0` equals `$t1`: the pointer reached
+Run the program and check that `$t0` equals `$t1`: the pointer reached
 `end` without trying to load from it. `$t2` should hold 108 and `$t3` should still hold the last
 word, 42. The register panel shows hexadecimal without a `0x` prefix, so those values appear as
 `0000006C` and `0000002A`. In this Playground layout, `numbers` begins at `0x10010000`; after six

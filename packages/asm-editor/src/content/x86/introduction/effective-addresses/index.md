@@ -1,7 +1,7 @@
 # Effective addresses
 
-For the ordinary bracketed memory operands used in this course in 64-bit mode, x86 can calculate an
-address from this pattern:
+In 64-bit mode, x86 can calculate a memory address by adding a register value, a scaled index, and a
+fixed offset. The bracketed memory operands used in this course follow this pattern:
 
 ```
 [base + index * scale + displacement]
@@ -104,8 +104,8 @@ in `r12`. For the array above, that value is 30.
 `lea` calculates the same number and puts the number itself in `r13`. It does not access memory. If
 `rbx` is `0x402000`, then `r13` becomes `0x402010`, the address of the qword containing 30.
 
-The name `lea` means **load effective address**. Its bracketed operand describes a calculation, while
-its first operand is the one destination register:
+The name `lea` means **load effective address**. Its bracketed operand describes the calculation, and
+its first operand is the destination register:
 
 ```x86
     lea r13, [rbx + rsi*8]      ; r13 = address of array[index]
@@ -138,7 +138,7 @@ both the base and index roles, so the result is five times `rsi`.
 ## Your turn
 
 `grid` contains four qwords. Read two groups of indexed elements, using `rbx` as the base address and
-each index with the qword scale.
+multiplying each index by 8.
 
 - For the first group, `r12`, `r13`, and `r14` contain indices 3, 0, and 2. Put the selected qwords
   in `r8`, `r9`, and `r10`.

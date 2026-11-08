@@ -1,7 +1,8 @@
 # Loops
 
-A loop repeats a body while a condition allows another pass. In assembly, the parts that a
-high-level language writes as `while` or `for` are separate instructions and labels.
+A loop repeats a block of instructions, called its body, while a condition allows another pass.
+In assembly, the parts that a high-level language writes as `while` or `for` are separate
+instructions and labels.
 
 Consider this loop:
 
@@ -31,14 +32,13 @@ This shape has five parts:
 - the **backward edge** jumps to an earlier label;
 - the **exit** is where execution continues when the condition is false.
 
-The update is essential. Every path through the body that returns to the test must change the
-controlling state so that the condition can eventually become false. If one path jumps back without
-doing that, the loop can repeat forever.
+The `index++` update moves this loop toward its exit condition. If the loop keeps jumping back
+without changing `index`, its condition stays true and it repeats forever.
 
 ## Testing before the body
 
-Here is the same pre-tested shape with an unsigned qword counter. The body sees the values 0 through
-9:
+Here is a loop that tests its condition before the body, using an unsigned qword counter. The
+counter is 0 through 9 when the body runs:
 
 ```x86|playground|no-flags
 default rel
@@ -157,7 +157,7 @@ fill_done:
     syscall
 ```
 
-`lea rbx, [rel numbers]` first calculates the position-independent address of the array. The memory
+`lea rbx, [rel numbers]` first puts the position-independent address of the array in `rbx`. The memory
 operand `[rbx + rcx*8]` then combines that base address with the index. Its scale is 8 because each
 qword occupies eight bytes. A dword array would use a scale of 4 and a dword-sized store.
 
@@ -166,8 +166,8 @@ to `fill_done` before any memory access.
 
 ## Nested loops
 
-A nested loop has two pieces of controlling state. The inner counter must be initialized once for
-every outer pass:
+A nested loop runs one loop inside another. In this example, each loop has its own counter. Reset
+the inner counter before each pass through the outer loop:
 
 ```x86|playground|no-flags
 default rel
@@ -201,7 +201,7 @@ On each outer pass, `rdx` starts at 0 and the inner body advances it through 1, 
 inner body therefore runs four times. `rcx` advances once after each completed inner loop, so three
 outer passes produce 12 inner-body executions and leave 12 in `r12`.
 
-Reset placement determines which loop owns the initialization. If `xor rdx, rdx` were moved above
+The position of the reset instruction determines how often it runs. If `xor rdx, rdx` were moved above
 `outer_body`, it would run only once. The first inner loop would take `rdx` from 0 to 4. Because this
 inner loop tests at the bottom, the second outer pass would still enter the inner body once, taking
 `rdx` from 4 to 5, and the third would take it from 5 to 6. That changed program would leave 6 in

@@ -1,10 +1,10 @@
-Memory is a line of bytes. It has no idea what a row is, and there is no arrangement of hardware that
-will give it one. A grid of three rows and four columns is therefore twelve numbers in a row, plus an
-agreement about how to read them.
+You can store a two-dimensional array in memory as a sequence of elements. For a grid of three rows
+and four columns, the program stores twelve numbers and uses the row and column to calculate each
+element's address.
 
-The agreement here is **row major**: the whole of row 0, then the whole of row 1, then row 2. Under
-that agreement the element at row `r` and column `c` is number `r * COLS + c` in the line, and the
-multiplication is where the shape of the grid actually lives.
+This example uses **row-major order**: the whole of row 0, then the whole of row 1, then row 2.
+The element at row `r` and column `c` has index `r * COLS + c`. Rows and columns both count from 0,
+and `COLS` is the number of elements in each row.
 
 ```x86|playground|memory|allow-open
 default rel
@@ -60,18 +60,18 @@ loop reads indices 4, 5, 6, and 7, adding **5 + 6 + 7 + 8** into `r9`. These are
 qwords. The column loop reads indices 2, 6, and 10, adding **3 + 7 + 11** into `r10`. It computes a
 new row start on each of its three passes, so its reads are four qwords, or 32 bytes, apart.
 
-Nothing recorded that this was a grid, which you can prove. Change `COLS equ 4` to `COLS equ 3`
+You can read the same values as a grid with different dimensions. Change `COLS equ 4` to `COLS equ 3`
 _and_ `ROWS equ 3` to `ROWS equ 4`, without changing the `dq` values. The same twelve qwords are now
 read as four rows of three. The source lines still look like rows of four, but the arithmetic decides
 which values belong to each row: `r8` becomes **8**, `r9` becomes **15** (4 + 5 + 6), and `r10`
 becomes **30** (3 + 6 + 9 + 12).
 
-The three `dq` lines are one array for the same reason: the assembler writes twelve qwords one after
-another and the line breaks in the source exist for your benefit only.
+The three `dq` lines form one array: the assembler writes twelve qwords one after another.
+The line breaks make the source easier to read, but do not add gaps between the values.
 
-`[grid + rax*8]` scales by 8 because an element is a qword. An element of some other size, a twenty
-byte record say, needs a real multiplication into a register first, because the scale in an address
-only goes up to 8.
+`[grid + rax*8]` scales the index by 8 because each qword occupies 8 bytes. An x86 address can use
+a scale of 1, 2, 4, or 8. For a 20-byte record, calculate the byte offset in a register first,
+then add that offset to the array's address.
 
 ## Your turn
 

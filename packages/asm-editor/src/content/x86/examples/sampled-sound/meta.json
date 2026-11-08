@@ -1,6 +1,6 @@
 {
     "name": "Sampled sound",
-    "description": "Generate fading square-wave samples and play a scale through /dev/dsp.",
+    "description": "This program generates fading square-wave samples and plays a scale through /dev/dsp.",
     "order": 27,
     "topic": "sampled-sound"
 }

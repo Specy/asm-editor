@@ -1,6 +1,6 @@
 {
     "name": "The largest element",
-    "description": "Find the largest signed element of a qword array by keeping the best value so far.",
+    "description": "Find the largest signed element of a qword array by keeping the largest value seen so far.",
     "order": 5,
     "topic": "max-of-an-array"
 }

@@ -3,20 +3,19 @@
 This course is about **x86-64**, the 64-bit form of x86. x86 is an **instruction-set architecture**:
 the family of instructions that a processor understands. An **assembly language** is a readable way
 to write those small machine instructions. You already know the general ideas behind instructions,
-registers, memory, and control flow. Here you will meet the particular names and habits of the x86
+registers, memory, and control flow. Here you will learn the names and conventions of the x86
 family.
 
 x86 is a long-lived design. It began with Intel's 8086 processor in 1978, grew from 16 to 32 bits in
 the 1980s, and gained its 64-bit form through an AMD design introduced in 2003. Newer processors
 kept much of the older design working. That history is why familiar-looking old names still appear
-inside modern x86-64 programs: compatibility is part of the architecture, not just trivia about it.
+inside modern x86-64 programs.
 
 ## Why learn it?
 
 x86-64 is common in personal computers, servers, virtual machines, and the tools that support them.
-Knowing it makes compiled programs less mysterious: you can inspect what a compiler produced,
-follow a debugger, understand performance-sensitive code, and see how an operating system and a
-program meet.
+Knowing it helps you inspect what a compiler produced, follow a program in a debugger, understand
+performance-sensitive code, and see how a program interacts with an operating system.
 
 Assembly also gives you a direct view of a program's work. You choose instructions, keep track of
 values, and follow the changes one instruction at a time. The programs in this course stay small so
@@ -25,8 +24,8 @@ that view remains useful.
 ## The tools in this course
 
 You will write source code in **NASM syntax**. NASM is an assembler: it turns the instruction text
-you write into machine code. Another spelling, called AT&T syntax, appears in some online examples
-and tools, so a line of x86 found elsewhere may look different while describing the same processor.
+you write into machine code. Another notation, called AT&T syntax, appears in some online examples
+and tools, so an x86 instruction found elsewhere may look different while describing the same operation.
 
 The editor runs the assembled programs with **blink**, in a Linux-style environment. This matters
 because a program is more than a sequence of calculations: it starts as a process, has a place for
@@ -35,9 +34,9 @@ program, run it, and inspect its state as it executes.
 
 ## A first look
 
-Here is a complete, runnable program. The lines around the middle are a program template; for now,
-use the three arithmetic lines as the part to observe. Build and run it, then find `42` in `rbx` in
-the registers panel.
+Here is a complete, runnable program. Focus on the two `mov` instructions and the `add` instruction
+in the middle. The surrounding lines form a template for running the program. Build and run it,
+then find `42` in `rbx` in the registers panel.
 
 ```x86|playground|no-flags
 default rel
@@ -55,8 +54,7 @@ _start:
 ```
 
 `mov` puts the two numbers in processor registers, small storage locations inside the CPU. `add`
-combines them, leaving the result in `rbx`. The template gives the program the shape needed to run
-in this environment; its individual lines will become familiar through the course.
+adds them, leaving the result in `rbx`. You will learn how the template works through the course.
 
 ## The route ahead
 

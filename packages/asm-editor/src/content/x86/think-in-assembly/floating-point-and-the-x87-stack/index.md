@@ -1,9 +1,9 @@
 # Floating point and the x87 stack
 
-The bits in a register or memory have meaning only because an instruction or a program gives them
-one. The bit pattern `0x05` can be the integer 5, for example, while another program could use an
-integer as a fixed-point value with an implied fractional position. This lesson covers the IEEE 754
-**binary floating-point** formats built into x86 and the x87 instructions that operate on them.
+An instruction or program determines how to interpret the bits in a register or memory. For
+example, `0x05` can represent the integer 5. A program using fixed-point arithmetic could interpret
+the same integer as a value with an implied fractional position. This lesson covers the IEEE 754
+**binary floating-point** formats used by x86 and the x87 instructions that operate on them.
 
 ## Binary32 and binary64 in memory
 
@@ -115,9 +115,8 @@ name `st(1)` appears as `st1` in `faddp st1, st0`.
 Each physical register has a tag that says whether its logical entry is empty. Popping marks an
 entry empty; it need not erase the old bits. A ninth live value, or an instruction that reads an
 empty entry, raises the x87 invalid-operation condition for a stack fault. This condition is
-normally masked and recorded in x87 status, but unmasking it can make it trap. The practical rule is
-simple: every load pushes, and a popping arithmetic or store instruction must eventually remove
-that value.
+normally masked and recorded in x87 status, but unmasking it can make it trap. Keep track of how many values are on the stack: every load pushes a value, and an arithmetic or
+store instruction with a pop removes one.
 
 ## A small x87 instruction set
 
@@ -197,8 +196,8 @@ After `fsubp`, the result first occupies the old `st(1)` physical register. The 
 the new `st(0)`. `fdivp` follows the same rule: it computes old `st(1) / st(0)`, places the result
 in old `st(1)`, and pops.
 
-Integer loads and stores use the same push/pop discipline. If `n` is a signed dword containing 7,
-this balanced sequence stores the signed dword 4:
+Integer loads and stores push and pop in the same way. If `n` is a signed dword containing 7,
+this sequence stores the signed dword 4 and leaves the stack empty:
 
 ```x86
     fild dword [n]          ; stack: [7.0]
@@ -259,12 +258,12 @@ expected answers are exactly representable.
 The control word also masks or unmasks exception classes. Masked conditions such as invalid
 operations, division by zero, overflow, underflow, and inexact results are recorded in x87 status
 while execution continues with a defined floating-point response. Unmasking an exception permits a
-trap. Control-word programming is outside this first x87 lesson.
+trap. These examples do not change the control word.
 
 ## Your turn
 
-Calculate `(10.0 - 4.0) / 2.0` with the explicitly ordered popping forms. Store the binary64 result
-at `out`, then copy its eight bits to `r8`. Every input and the result is exactly representable.
+Calculate `(10.0 - 4.0) / 2.0` with `fsubp` and `fdivp`. Store the binary64 result
+at `out`, then copy its eight bytes to `r8`. Every input and the result is exactly representable.
 
 ```x86|playground|x87|memory|exercise
 default rel

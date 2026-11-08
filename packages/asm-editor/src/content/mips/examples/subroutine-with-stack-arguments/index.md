@@ -75,7 +75,7 @@ Follow `$sp` through the call. The addresses below use the Playground's initial 
 | At `jal sum_of_squares`         | `0x7FFFEFF4` | not yet used | `0($sp)` and `4($sp)`          |
 | After the 12-byte frame is made | `0x7FFFEFE8` | `0x7FFFEFF4` | `0($fp)` and `4($fp)`          |
 
-The frame takes three words. `0($sp)` is a local for the first square; `4($sp)` holds the old
+The frame takes three words. `0($sp)` holds the result of the first call to `square`; `4($sp)` holds the old
 `$fp`, and `8($sp)` holds the return address into `main`. The saved `$ra` matters because each
 inner `jal square` replaces `$ra`. `$fp` is a saved register too: this routine changes it, so it
 must restore the caller's value before returning. Setting `$fp` to the entry value of `$sp` gives
@@ -93,8 +93,8 @@ Memory panel, starting at `7FFFEFE8`:
 | `0x7FFFEFF8` | `4($fp)`                   | sixth argument: 4                |
 
 While `square` runs, it briefly reserves one more word below this frame to save `$s0`. It restores
-`$s0` and `$sp` before returning. That is the callee-saved promise for `$s0`; the hardware does not
-do it for us. After the second call, `sum_of_squares` loads its local 9 and adds it to 16 from
+`$s0` and `$sp` before returning. This is what callee-saved means for `$s0`: `square` must restore its incoming value. The hardware
+does not save or restore it automatically. After the second call, `sum_of_squares` loads the saved result, 9, and adds it to the 16 returned by
 `square`.
 
 The prologue allocates space for every slot, then saves the incoming values the routine must

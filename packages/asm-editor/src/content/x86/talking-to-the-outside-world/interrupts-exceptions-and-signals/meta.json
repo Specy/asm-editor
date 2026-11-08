@@ -1,6 +1,6 @@
 {
     "name": "Interrupts, exceptions and signals",
-    "description": "How x86 exceptions, hardware interrupts, software int instructions, syscall entry, kernel handlers, and Linux signals fit into one layered model.",
+    "description": "How the CPU and Linux handle exceptions, interrupts and system calls, and how a program receives a signal.",
     "order": 2,
     "topic": "interrupts"
 }

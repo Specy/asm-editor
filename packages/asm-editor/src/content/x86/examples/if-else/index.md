@@ -1,7 +1,7 @@
 The `cmp` and conditional-jumps lesson built an `if` with two paths. To find the larger of two
 numbers, we can begin with one possible answer and change it only if the comparison calls for it.
 
-Load `x` into `rax`. If signed `x >= y`, it is already the answer, so jump past the replacement.
+Load `x` into `rax`. If `x >= y` in a signed comparison, `x` is already the answer, so jump past the replacement.
 Otherwise, let execution fall through to `mov rax, [y]`.
 
 ```x86|playground|allow-open
@@ -32,8 +32,8 @@ checks whether `SF = OF`. Here they differ, so execution falls through and loads
 The copy to `r8` matters because the exit syscall setup then replaces `rax` with 60. Try swapping
 the two data values: `jge` is taken, so the replacement is skipped and `r8` holds 12 again.
 
-The dot makes `.done` a NASM local label under `_start`. You can jump to `.done` from this part of
-`_start`; after another ordinary label, a `.done` there would be a separate label. The jump lands
+The dot makes `.done` a NASM local label under `_start`. You can jump to it from this part of
+`_start`. If you define another `.done` after a different ordinary label, it is a separate label. The jump lands
 at `mov r8, rax`, which both paths must run.
 
 These are signed qwords, so the jump is `jge` (greater or equal), not `jae` (above or equal).

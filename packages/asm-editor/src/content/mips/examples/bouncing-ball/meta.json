@@ -1,6 +1,6 @@
 {
     "name": "A bouncing ball",
-    "description": "Move a ball within a 32 by 32 display, bounce it at the play-area bounds, and pace each frame with a timed wait.",
+    "description": "Move a ball across a 32 by 32 Screen, bounce it at the edges of its play area, and wait between frames.",
     "order": 21,
     "topic": "bouncing-ball"
 }

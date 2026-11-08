@@ -1,6 +1,6 @@
-A string reversed where it sits, with no second copy of it anywhere. Two addresses start at the two
-ends of the string, swap the bytes they point at, and walk towards each other until they meet in the
-middle.
+This program reverses a string in place, without making a second copy. Two pointers start at the
+ends of the string. The loop swaps the bytes they point at, then moves the pointers towards each
+other until they meet or cross.
 
 Each swap writes two character bytes. The loop makes half as many swaps as there are characters,
 rounded down, and never writes the zero terminator. It needs no count: it stops when the two
@@ -36,10 +36,10 @@ _start:
 ```
 
 Type `402000` into the memory panel. The nine bytes read `79 6C 62 6D 65 73 73 61 00`: `ylbmessa`,
-and the terminator still sitting exactly where it was.
+followed by the zero terminator at its original address.
 
-Keeping the zero out of the reversal is what `LEN equ $ - text - 1` is for. `$ - text` is nine, every
-byte the `db` line produced, and the `- 1` takes the terminator back off, leaving eight characters to
+`LEN equ $ - text - 1` excludes the zero terminator from the reversal. `$ - text` is nine, the number
+of bytes the `db` line produced. Subtracting one excludes the terminator, leaving eight characters to
 reverse. Drop the `- 1` and the zero gets swapped to the front, where it turns the string into an
 empty one.
 

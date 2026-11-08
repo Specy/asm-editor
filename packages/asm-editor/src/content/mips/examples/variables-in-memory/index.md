@@ -30,10 +30,13 @@ live in memory.
 
 The three data labels mark consecutive four-byte slots. From the address in `$t0`, `0($t0)` reaches
 `price`, `4($t0)` reaches `shipping`, and `8($t0)` reaches `total`. These offsets count bytes. Here
-`price` and `shipping` are initialized with `.word`; `total` is four bytes reserved with `.space 4`.
-The Playground loader happens to show newly reserved bytes as zero; `.space` itself only reserves
-them. `.eqv TAX 20` gives the assembler a name for the number 20 and uses no memory. These lines
-beginning with a dot tell the assembler how to prepare the program before it runs.
+`.word` gives `price` and `shipping` their initial values. `.space 4` reserves four bytes for
+`total`. Newly reserved bytes appear as zero in the Playground, but `.space` itself only
+reserves them.
+
+`.eqv TAX 20` names the constant `TAX`, whose value is 20. It uses no memory. These lines beginning
+with a dot are assembler directives: they tell the assembler how to prepare the program before it
+runs.
 
 In the Playground's default layout, `price` begins at `0x10010000`. Type `10010000` in the memory
 panel's address box and compare the three slots before and after running:
@@ -46,7 +49,7 @@ panel's address box and compare the three slots before and after running:
 
 The final value, 305, is `0x00000131` in hexadecimal. In the Playground's little-endian memory,
 its least significant byte goes at the lowest address, so the byte view shows `31 01 00 00`.
-Select **W** to group those bytes into a word and see the value in the usual order.
+Drag across those four bytes to see the word's decimal value.
 
 Now try a change that makes the offsets matter. Select **Open in editor** on the program above. Add
 `discount: .word 15` between `shipping` and `total`. Then insert these instructions immediately
@@ -57,7 +60,7 @@ after `lw $t2, 4($t0)`:
     sub $t1, $t1, $t3   # subtract discount from price
 ```
 
-The new slot takes offset 8 and moves `total` to offset 12, so change the final store to
+The new slot is at offset 8 and moves `total` to offset 12, so change the final store to
 `sw $t1, 12($t0)`. Before running, predict the modified program's final `$t1` and the four bytes
 at `total`. Then run it and check the register and memory panels. `$t1` should hold 290, and
 `total` should show `22 01 00 00` in the byte view (`0x00000122`).

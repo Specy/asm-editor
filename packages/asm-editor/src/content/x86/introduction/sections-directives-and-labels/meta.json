@@ -1,6 +1,6 @@
 {
     "name": "Sections, directives and labels",
-    "description": "Lay out code, initialized data, and zero-filled storage; name addresses; and calculate sizes with equ, $, and $$.",
+    "description": "Use sections to lay out code and data, labels to name addresses, and equ, $, and $$ to calculate sizes.",
     "order": 7,
     "topic": "program-structure"
 }

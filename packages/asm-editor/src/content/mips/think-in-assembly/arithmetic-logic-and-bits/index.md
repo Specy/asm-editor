@@ -35,9 +35,8 @@ main:
     syscall
 ```
 
-The earlier directives lesson introduced `li $v0, 10` followed by `syscall` as supplied Playground
-boilerplate that ends the program. Leave those two lines in place; how that service works is outside
-this page.
+As in the earlier directives lesson, `li $v0, 10` followed by `syscall` ends the program. Leave
+those two lines in place in each example.
 
 The product is 10,000,000,000, which is `0x00000002540BE400` as a 64-bit value. Split it after the
 first eight digits:
@@ -195,8 +194,8 @@ main:
 ```
 
 The shift places the wanted byte at the right edge. The mask then clears every bit above it. This
-same two-step workflow extracts any fixed field: shift the field to the right edge, then use `and`
-to keep its width.
+same two steps extract any fixed field: shift the field to the right edge, then use `and` with a
+mask to keep only the bits in that field.
 
 ## Counting set bits
 
@@ -265,7 +264,7 @@ main:
 </details>
 
 For the second exercise, count the 1 bits in `$t0` and leave the count in `$t1`. The test starts
-`$t0` at `0xF0F0F0F0`, which contains sixteen 1 bits. You may destroy `$t0`. Inspect exactly 32
+`$t0` at `0xF0F0F0F0`, which contains sixteen 1 bits. You may change the value in `$t0`. Inspect exactly 32
 bits, following the loop from the example above. The stop sequence is already present.
 
 ```mips|playground|exercise

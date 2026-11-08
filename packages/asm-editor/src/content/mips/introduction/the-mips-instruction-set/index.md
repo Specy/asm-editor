@@ -108,8 +108,8 @@ more than one. This is why the number of source lines is not a reliable count of
 the processor receives.
 
 Some pseudo-instruction expansions need a temporary register while the assembler builds a value.
-They may use `$at`, the **assembler temporary** introduced in the register lesson. Keep leaving
-`$at` for the assembler instead of storing your own values there.
+They may use `$at`, the **assembler temporary** introduced in the register lesson. Leave `$at`
+for the assembler instead of storing your own values there.
 
 ## Your turn
 

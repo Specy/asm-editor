@@ -1,6 +1,6 @@
-`write` sends bytes. A register holding 12345 contains no bytes that a terminal would recognise as
-`1`, `2`, `3`, `4` and `5`, so a program that wants to print a number has to manufacture those five
-characters itself.
+`write` sends bytes. A register holding the integer 12345 does not contain the text `"12345"`.
+To print that number, a program first has to convert it to the character bytes for `1`, `2`, `3`, `4`
+and `5`.
 
 The method is repeated division, and it produces the digits in the wrong order. Divide 12345 by ten
 and the remainder is 5, which is the **last** digit. Divide the quotient by ten and the remainder is 4,
@@ -74,15 +74,14 @@ _start:
     syscall
 ```
 
-In the playground, the console reads `12345`, then `3039`, then `11000000111001`. One number,
-three bases, one subroutine: only `rsi` changes between the calls.
+In the playground, the console shows `12345`, then `3039`, then `11000000111001`. Each call
+passes the same number in `rdi` and a different base in `rsi`.
 
-Walk the buffer. `rcx` starts at `buffer + 64`, one byte **past** the end, and every digit produced
-moves it down by one and writes there. So the first digit produced, the last digit of the number, ends
-up at the highest address; the last one produced ends up at the lowest; and when the loop finishes,
-`rcx` is pointing at the first character of the answer with the rest of them in order in front of it.
-Nothing has to be reversed afterwards. `buffer + 64` minus `rcx` is then the length, which is precisely
-what `write` wants next.
+`rcx` starts at `buffer + 64`, one byte **past** the end of the buffer. For each digit, the loop
+subtracts one from `rcx` and stores the character at that address. The first digit produced is the
+last digit of the number, so it goes at the highest address. Each earlier digit goes before it.
+When the loop finishes, `rcx` points to the first character, and the characters are already in the
+order needed for printing. The length passed to `write` is `buffer + 64` minus `rcx`.
 
 ```
  buffer                                        buffer + 64
@@ -92,10 +91,10 @@ what `write` wants next.
                                 rcx when the loop stops
 ```
 
-`div rsi` produces both halves of what the loop needs from one instruction: the quotient in `rax` to
-go round again with, the remainder in `rdx` to turn into a character. The `xor rdx, rdx` at the top of
-each pass is not optional, because `rdx` is still holding the remainder that pass produced, and
-leaving it there makes the next dividend astronomically large and ends the program on a divide error.
+`div rsi` divides the unsigned value in `rdx:rax` by the base. It puts the quotient in `rax`
+for the next pass and the remainder in `rdx` to select a character. Before each division,
+`xor rdx, rdx` clears the high half of the dividend so that the value being divided is just `rax`.
+If a nonzero remainder stays in `rdx`, the next pass divides the wrong number.
 
 `digits` holds the characters for remainders 0 through 35. Remainder 5 picks up `'5'`; remainder 11
 picks up `'b'`. For base 36, the largest possible remainder is 35, which picks up `'z'`. The zero

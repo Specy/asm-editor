@@ -1,6 +1,6 @@
 {
     "name": "Bytes, words, dwords and qwords",
-    "description": "The four x86 integer widths, signed and unsigned readings, fixed-width wrapping, and deliberate widening with movzx and movsx.",
+    "description": "The four x86 integer widths, signed and unsigned values, arithmetic wrapping, and widening values with movzx and movsx.",
     "order": 3,
     "topic": "numbers"
 }

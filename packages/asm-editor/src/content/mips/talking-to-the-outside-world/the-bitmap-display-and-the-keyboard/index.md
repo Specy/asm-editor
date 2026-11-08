@@ -1,8 +1,8 @@
 Framebuffer pixels, keyboard input and console output all use ordinary loads and stores. A program
 stores colour words in a reserved memory area, and the Screen watches that area as a framebuffer. At
-four special addresses, loads and stores talk to keyboard and console device registers instead. The
-special-register arrangement is called **memory-mapped I/O**. The syscalls you already know still
-have a place: service 10 exits, and service 32 gives a moving or polling program a controlled pause.
+four special addresses, loads and stores talk to keyboard and console device registers instead. Accessing
+device registers through memory addresses is called **memory-mapped I/O**. You can still use
+syscalls: service 10 exits, and service 32 pauses an animation or a keyboard-polling loop.
 
 ## One word is one pixel
 
@@ -61,12 +61,12 @@ instruction runs:
 ```
 
 `unit` sets both unit dimensions; `unitWidth` and `unitHeight` can set them separately. `width` and
-`height` use the fixed display-size choices above. `base` can name a label defined by the program or
+`height` accept whole numbers from 1 to 1024, as described above. `base` can name a label defined by the program or
 give an address such as `0x10010000`. A label is convenient because the assembler chooses its
 address.
 
-Settings left out keep their current Screen values. With no directive, the current configuration
-also remains; a new MIPS project starts with 1 by 1 units, a 512 by 256 display and base address
+Settings you leave out keep their current Screen values. With no directive, the current configuration
+also stays in use; a new MIPS project starts with 1 by 1 units, a 512 by 256 display and base address
 `0x10010000`. An unsupported size produces a warning and is replaced by the nearest allowed choice.
 A malformed value or an unknown base label also produces a warning and leaves that setting as it
 was. These warnings do not stop the Build. The assembler itself sees the line only as a comment.
@@ -148,7 +148,7 @@ When Ready is 1, it loads receiver data. If another character is already queued,
 moves into receiver data and Ready stays 1; otherwise Ready becomes 0. The queue preserves the order
 in which the keys were typed.
 
-Click the Screen before typing. A visible focus ring shows that it owns the keyboard. Keys typed in
+Click the Screen before typing. A visible focus ring shows that the Screen will receive your key presses. Keys typed in
 the console reach the receiver too, after any typed on the Screen; keys typed anywhere else on the
 page do not.
 
@@ -190,8 +190,8 @@ receive:
 { "runFor": 40000 }
 ```
 
-This is **polling**: repeatedly asking the device whether work is ready. Service 32 keeps an empty
-poll from turning into a tight busy-wait. The loads, branches, `li` instructions and `syscall`
+This is **polling**: repeatedly asking the device whether work is ready. Service 32 pauses the loop
+while the input queue is empty. The loads, branches, `li` instructions and `syscall`
 instruction still count toward the running instruction budget. The elapsed pause itself adds no
 running instructions, so the program can wait without spending that budget merely to count time.
 
@@ -257,8 +257,7 @@ reverse:
 ```
 
 Updating only the old and new dot positions is efficient for this animation because only one small
-object changes. Partial redraw is not a universal rule: when most of an image changes, redrawing the
-whole framebuffer can be the simpler approach.
+object changes. When most of an image changes, redrawing the whole framebuffer can be simpler.
 
 ## Your turn
 

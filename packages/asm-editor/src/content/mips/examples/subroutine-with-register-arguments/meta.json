@@ -1,6 +1,6 @@
 {
     "name": "A subroutine with its arguments in registers",
-    "description": "Euclid's greatest common divisor for nonnegative integers that are not both zero, using a leaf subroutine with register arguments.",
+    "description": "Find the greatest common divisor using Euclid's algorithm in a leaf subroutine with register arguments. The inputs must be nonnegative and not both zero.",
     "order": 10,
     "topic": "subroutine-with-register-arguments",
     "template": 3

@@ -1,6 +1,6 @@
 This program reverses a zero-terminated string in place. `$t0` stays at the first byte while
 `$t1` scans forward to find the zero terminator. Then `$t1` moves back to the last letter, and
-the two pointers swap bytes as they move toward each other.
+the program swaps the bytes at the two pointers as they move toward each other.
 
 ```mips|playground|memory|tests|allow-open
 .data
@@ -62,8 +62,8 @@ pointing **at** the terminator.
 
 For an empty string, that zero is the first byte, so `$t1` still equals `$t0`. The `beq` at
 `found_end` goes straight to `done`. Subtracting one in this case would put `$t1` **before** the
-string. For a nonempty string, subtracting one puts `$t1` on its last letter. It now serves as the
-right pointer; `$t0` is still on the first letter.
+string. For a nonempty string, subtracting one puts `$t1` on its last letter. `$t1` is now the
+right pointer, and `$t0` is still on the first letter.
 
 At `swap_loop`, `sltu` checks whether the left address is below the right address. If so, the two
 `lbu` instructions save the original bytes in `$t2` and `$t3`. The two `sb` instructions write

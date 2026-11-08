@@ -1,6 +1,6 @@
 {
     "name": "Sum of an array",
-    "description": "Walk a word array to its end label, add its values in $t2, and safely handle an empty array.",
+    "description": "Add the values in a word array, using an end label to stop the loop even when the array is empty.",
     "order": 4,
     "topic": "sum-of-an-array"
 }

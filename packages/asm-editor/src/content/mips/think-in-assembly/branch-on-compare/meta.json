@@ -1,6 +1,6 @@
 {
     "name": "Branch on compare",
-    "description": "Build one-armed if, if/else, and ordered else-if chains from comparison branches, fall-through, labels, and unconditional jumps.",
+    "description": "Use comparison branches, labels, and jumps to write if, if/else, and else-if statements.",
     "order": 0,
     "topic": "branching"
 }

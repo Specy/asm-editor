@@ -1,4 +1,4 @@
-This program sorts eight words in memory from smallest to largest. It compares neighbouring words
+This program uses **bubble sort** to sort eight words in memory from smallest to largest. It compares neighbouring words
 and swaps them when the left one is larger. One trip through the array moves its largest value to
 the end. Then the program starts again, stopping one pair earlier because that last word is already
 in place.
@@ -47,9 +47,8 @@ order. The pointer then moves four bytes to the next pair:
 
 The larger word of each pair travels to the right. As the comparisons continue, 42 meets 4, 23,
 and 16. Then 99 replaces it as the word travelling right, and the final comparison puts 99 after
-
-1. After the first pass the array reads `8, 15, 4, 23, 16, 42, 1, 99`. The last word is now in
-   its final position, even though the words before it are not yet sorted.
+the value 1. After the first pass the array reads `8, 15, 4, 23, 16, 42, 1, 99`. The last word is now in
+its final position, even though the words before it are not yet sorted.
 
 `$t1` holds the address of the left word in the current pair. `0($t1)` loads or stores that word;
 `4($t1)` reaches the next one because a word occupies four bytes. The pointer moves only after the
@@ -63,15 +62,17 @@ seventh pass, the array is sorted. If `$t2` were not reset, it would still be ze
 previous pass; subtracting one would make it nonzero, and `bnez` would keep the loop going beyond
 the array.
 
-Build and run the program. In the memory panel, enter `10010000` as the address and select **W**
-to view words. The eight values should read `1, 4, 8, 15, 16, 23, 42, 99` in order.
+Build and run the program. In the memory panel, enter `10010000` as the address. Drag across four
+bytes at a time to read each word's decimal value. The eight values should be
+`1, 4, 8, 15, 16, 23, 42, 99` in order.
 
 Now check the passes yourself:
 
 1. On paper, start with `42, 8, 15, 4`. Compare each neighbouring pair from left to right,
-   swapping when needed. What order do the four words have after one pass? The last word should be 42. To check, select **Open in editor**, change the data to those four values and `COUNT` to 4,
-   then **Build** and **Step** instruction by instruction until execution reaches `inner` three
-   times.
+   swapping when needed. What order do the four words have after one pass? The last word should
+   be 42. To check, select **Open in editor**, change the data to those four values and `COUNT` to 4,
+   then **Build** and **Step** instruction by instruction until `$t2` reaches zero for the first
+   time. Inspect the four words in memory.
 2. Restore the eight values and `COUNT 8`. Swap the two source registers in `slt`, then predict
    which word will reach the end on the first pass. **Build** and **Run**, and inspect the eight
    words in memory. They should now be in descending order.

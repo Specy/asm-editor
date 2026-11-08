@@ -1,6 +1,6 @@
 {
     "name": "Floating point and the x87 stack",
-    "description": "Decode binary32 and binary64, follow x87's rotating eight-register stack, calculate with ordered popping operations, and branch correctly after floating-point comparisons.",
+    "description": "Read binary32 and binary64 values, calculate with the x87 register stack, and branch on floating-point comparisons.",
     "order": 6,
     "topic": "floating-point"
 }
