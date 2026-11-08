@@ -7,7 +7,8 @@
      * editor, which would be far too heavy for this. Nothing in it can be used: the registers and
      * memory are fed from a trace worked out in advance, moved along by one timer that waits while
      * the hero is off screen or the tab is hidden, and never starts for a reader who prefers less
-     * motion.
+     * motion. The views are drawn `decorative`, without the hover cards and Tooltips nobody can
+     * reach here, which were most of the page's elements.
      */
     import { onMount, untrack } from 'svelte'
     import { tokenizeAssembly } from '#lib/content/assemblyHighlight.ts'
@@ -77,7 +78,12 @@
     const registers = REGISTER_NAMES.map((name) =>
         makeRegister(name, valueOf(states[0], name), RegisterSize.Long)
     )
-    /** Rows enough to fill the column, as the editor's memory fills its own. */
+    /**
+     * Rows enough to fill the column, as the editor's memory fills its own. The 40 rows end about
+     * 1,120px down the page, which a 2560×1440 window shows whole, and a taller one shows the
+     * card's empty foot beneath them: fewer rows would change what the big screens draw. The
+     * program writes only the first four.
+     */
     const PAGE_SIZE = 8 * 40
     const page = (memory: number[]) => {
         const bytes = new Uint8Array(PAGE_SIZE)
@@ -192,6 +198,7 @@
         </div>
         <div class="dock">
             <ExecutionDock
+                decorative
                 attached
                 debugging
                 building={false}
@@ -224,6 +231,7 @@
             withoutHeader
             position="bottom"
             hex
+            decorative
         />
         <RegistersRenderer
             systemSize={RegisterSize.Long}
@@ -232,6 +240,7 @@
             size={RegisterSize.Long}
             {registers}
             hex
+            decorative
         />
     </div>
     <div class="memory card">
@@ -246,6 +255,7 @@
             {memory}
             currentAddress={BigInt(HERO_DATA_BASE)}
             sp={SP}
+            decorative
         />
     </div>
 </div>

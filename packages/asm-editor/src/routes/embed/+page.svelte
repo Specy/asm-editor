@@ -36,6 +36,7 @@
     import FaPlus from '~icons/fa-solid/plus'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import CopyButton from '#cmp/shared/button/CopyButton.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
     import { languageHasScreen } from '#lib/languages/peripherals/peripheralSet.ts'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
@@ -532,14 +533,14 @@
                                         value={shareText}></textarea>
                                 </div>
                             </div>
-                            <Button
+                            <CopyButton
                                 style="width: 100%; gap: 0.5rem"
                                 disabled={!generatedCode}
-                                onClick={() => void copyText(shareText, shareName)}
+                                copy={() => copyText(shareText, shareName)}
                             >
                                 <Icon size="small"><FaCopy /></Icon>
                                 Copy
-                            </Button>
+                            </CopyButton>
                         </div>
                     </Card>
                 </div>

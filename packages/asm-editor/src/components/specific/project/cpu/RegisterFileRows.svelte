@@ -72,6 +72,12 @@
          * Preference decides.
          */
         hex?: boolean
+        /**
+         * The rows as a picture, for a backdrop nothing can point at (the home page's): the same
+         * names, values and change highlights, without the hover cards of the values and of the
+         * whole register beside its name, and without the names' Tooltips.
+         */
+        decorative?: boolean
     }
 
     let {
@@ -89,7 +95,8 @@
         canPokeRegister,
         onPoke,
         valueMenu,
-        hex
+        hex,
+        decorative = false
     }: Props = $props()
 
     const fileKind = $derived(defaultRegisterKind(file.formats))
@@ -345,6 +352,7 @@
     {@const group = chunk.group}
     {@const lines = hoverLines(row, chunk)}
     <ValueDiff
+        {decorative}
         monospaced
         hoverSide={rowPosition === 'bottom' ? 'below' : 'above'}
         style="{chunkStyle}{row.rendered.blank ? ' opacity: 0.4;' : ''}"
@@ -381,29 +389,31 @@
         -->
         {@const rowPosition = rowIndex === 0 ? 'bottom' : position}
         <div class="register-wrapper">
-            <RegisterValueCard>
-                {#if !row.hexadecimal}
-                    0x{row.register.toHex()}
-                {:else if usesHex}
-                    {row.register.value}
-                {:else}
-                    <!-- masked to the register's width: MIPS and RISC-V hand registers back signed -->
-                    {row.register.toHex()}
-                {/if}
-            </RegisterValueCard>
+            {#if !decorative}
+                <RegisterValueCard>
+                    {#if !row.hexadecimal}
+                        0x{row.register.toHex()}
+                    {:else if usesHex}
+                        {row.register.value}
+                    {:else}
+                        <!-- masked to the register's width: MIPS and RISC-V hand registers back signed -->
+                        {row.register.toHex()}
+                    {/if}
+                </RegisterValueCard>
+            {/if}
             <!-- what a register the file describes is, on its name: the M68K 68020's ISP -->
             {#if row.integer && onRegisterClick}
                 <button
                     class="register-name"
                     onclick={() => onRegisterClick(row.register)}
-                    {@attach tooltip(file.layout[row.index]?.description)}
+                    {@attach !decorative && tooltip(file.layout[row.index]?.description)}
                 >
                     {row.register.name.toUpperCase()}
                 </button>
             {:else}
                 <span
                     class="register-name register-name-static"
-                    {@attach tooltip(file.layout[row.index]?.description)}
+                    {@attach !decorative && tooltip(file.layout[row.index]?.description)}
                 >
                     {row.register.name.toUpperCase()}
                 </span>
@@ -585,6 +595,13 @@
         flex: 1;
         height: 100%;
         border-left: solid 1px var(--wb-line, var(--tertiary));
+    }
+
+    //a decorative row's value is the cell alone, without the hover's wrapper around it: it keeps
+    //the place the wrapper gave it, at the top of the row and only as tall as its digits, so a
+    //change highlight covers what it always covered
+    .register-hex > :global(.tooltip-base) {
+        align-self: flex-start;
     }
 
     /* the value a pointer menu is open for, outlined as the Symbols panel outlines its row */

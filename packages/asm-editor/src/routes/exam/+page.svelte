@@ -16,6 +16,7 @@
     import Row from '#cmp/shared/layout/Row.svelte'
     import MarkdownEditor from '#cmp/shared/markdown/MarkdownEditor.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import CopyButton from '#cmp/shared/button/CopyButton.svelte'
     import IconButton from '#cmp/shared/button/IconButton.svelte'
     import Switch from '#cmp/shared/input/Switch.svelte'
     import TextField from '#cmp/shared/input/TextField.svelte'
@@ -177,19 +178,20 @@
         section.language = language
     }
 
-    async function createExamUrl() {
+    /** Copies the exam's link, answering whether it reached the clipboard. */
+    async function createExamUrl(): Promise<boolean> {
         if (!settings.unlockPassword.trim()) {
             toast.error('Please provide an unlock password before creating the exam.')
             //the field may be in a part not shown: show it, and put the cursor in it
             current = DETAILS
             await tick()
             unlockPasswordField?.focus()
-            return
+            return false
         }
 
         if (sections.length === 0) {
             toast.error('Please add at least one section before creating the exam.')
-            return
+            return false
         }
 
         const unlockPasswordHash = (await makeHash(settings.unlockPassword)).slice(0, 6)
@@ -221,7 +223,9 @@
         }
 
         const url = createExamSessionLink(payload)
-        uncopiedExamUrl = (await copyText(url, 'Exam link')) ? '' : url
+        const copied = await copyText(url, 'Exam link')
+        uncopiedExamUrl = copied ? '' : url
+        return copied
     }
 </script>
 
@@ -568,10 +572,10 @@
                             Delete section
                         </Button>
                     {/if}
-                    <Button onClick={createExamUrl} style="gap: 0.45rem">
+                    <CopyButton copy={createExamUrl}>
                         Create exam link
                         <Icon size="caption"><FaArrowRight /></Icon>
-                    </Button>
+                    </CopyButton>
                 </div>
             </footer>
         </Card>
@@ -600,17 +604,18 @@
         align-items: start;
         padding-bottom: 1.4rem;
     }
-    /* the title over the Card, at the height of the other index pages' titles, as /changelog's
-       (S4-06) */
+    /* the title over the Card. Smaller than the other pages' titles, a step of the scale down
+       (`--fs-h2`, where theirs is `--fs-h1`), with less room above and below it, so that the
+       outline and the Card start higher and the part has more of the window (the owner's
+       exception for this page) */
     .title-room {
         grid-area: title;
         min-width: 0;
-        padding-top: 1.5rem;
+        padding-top: 0.5rem;
     }
-    @media (max-width: 600px) {
-        .title-room {
-            padding-top: 0.75rem;
-        }
+    .title-room :global(h1) {
+        margin: 0 0 0.75rem;
+        font-size: var(--fs-h2);
     }
     .exam-builder > :global(.exam-outline) {
         grid-area: outline;

@@ -116,10 +116,10 @@
 </TabStrip>
 
 <style lang="scss">
-    /* the ENTRY mark in a tab at the tab's own weight, not a Badge's bold (doubled class: Badge's own
+    /* the ENTRY mark in a tab at medium weight, not a Badge's bold (doubled class: Badge's own
        rule weighs as much as one class and a scoped hash) */
     :global(.badge.entry-mark.entry-mark) {
-        font-weight: 400;
+        font-weight: 500;
     }
 
     /* the strip itself is TabStrip's; this is what a File's tab and the editor's own end of the

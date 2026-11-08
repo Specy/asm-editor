@@ -52,6 +52,8 @@
         valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
         /** Integers in hexadecimal or decimal whatever the Preference says, see `RegisterFileRows`. */
         hex?: boolean
+        /** The rows as a picture, with nothing to hover, see `RegisterFileRows`. */
+        decorative?: boolean
     }
 
     let {
@@ -71,7 +73,8 @@
         canPokeRegister,
         onPoke,
         valueMenu,
-        hex
+        hex,
+        decorative = false
     }: Props = $props()
 
     const FORMAT_LABELS: Record<RegisterFormat, string> = {
@@ -233,6 +236,7 @@
                 onPoke={onPoke ? (writes) => onPoke(file.id, writes) : undefined}
                 {valueMenu}
                 {hex}
+                {decorative}
             />
         </div>
     {/if}

@@ -2,7 +2,7 @@ import { SvelteSet } from 'svelte/reactivity'
 import { canFloat } from './deviceClass'
 import type { Viewport } from './viewport.svelte'
 import type { SettingsTarget } from './hostApi'
-import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
+import { preferencesStore, type DebugToolsPlacement } from '#stores/preferencesStore.svelte.ts'
 
 /** Reads and writes the open panel where the host keeps it, so a host can bind it. */
 export type ActivePanelAccess = {
@@ -49,10 +49,20 @@ export class WorkbenchUi {
      * Screen answers once: closing the window, or a later Build, does not bring it back.
      */
     screenWindowRequested = $state(false)
+    /**
+     * Where the host puts the Debug tools in place of the Preference, for a host whose people
+     * cannot reach the Preferences: an Exam docks them as sections. Left out, the Preference.
+     */
+    private readonly debugTools: DebugToolsPlacement | undefined
 
-    constructor(viewport: Viewport, access: ActivePanelAccess) {
+    constructor(
+        viewport: Viewport,
+        access: ActivePanelAccess,
+        options: { debugTools?: DebugToolsPlacement } = {}
+    ) {
         this.viewport = viewport
         this.access = access
+        this.debugTools = options.debugTools
         const initial = access.get()
         if (initial) this.opened.add(initial)
     }
@@ -69,10 +79,13 @@ export class WorkbenchUi {
         return this.viewport.deviceClass !== 'desktop'
     }
 
-    /** Whether the Debug tools are floating windows: the Preference, where the screen allows it. */
+    /**
+     * Whether the Debug tools are floating windows: the host's placement or else the Preference,
+     * where the screen allows it.
+     */
     get floatingDebugTools() {
         return (
-            preferencesStore.values.debugTools.value === 'floating' &&
+            (this.debugTools ?? preferencesStore.values.debugTools.value) === 'floating' &&
             canFloat(this.viewport.deviceClass, this.viewport.canHover)
         )
     }

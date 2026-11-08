@@ -101,7 +101,7 @@
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
-    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import { tooltip, type TooltipContent } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaPlay from '~icons/fa-solid/play'
     import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'
@@ -163,6 +163,11 @@
         onUndo: () => void
         onStep: () => void
         onTest?: () => void
+        /**
+         * The dock as a picture, for a backdrop nothing can point at (the home page's): the same
+         * buttons, words and states, without their Tooltips.
+         */
+        decorative?: boolean
     }
 
     let {
@@ -194,8 +199,12 @@
         onPause,
         onUndo,
         onStep,
-        onTest
+        onTest,
+        decorative = false
     }: Props = $props()
+
+    /** A control's Tooltip, which a decorative dock leaves out. */
+    const tip = (content: TooltipContent) => !decorative && tooltip(content)
 
     const hasEnd = $derived(showExecution && (hasTests || actions.length > 0 || !!sound))
     /** Whether anything precedes the view switch in its tray, which a divider then sets apart. */
@@ -277,7 +286,7 @@
                     class:progress={!!progress}
                     onclick={onBuild}
                     disabled={buildDisabled || building || running}
-                    {@attach tooltip(progress?.phase ?? buildButton.title)}
+                    {@attach tip(progress?.phase ?? buildButton.title)}
                     aria-label={buildButton.label}
                     aria-busy={building}
                 >
@@ -296,7 +305,7 @@
                     <button
                         type="button"
                         class="tool"
-                        {@attach tooltip('Stop building and go back to editing')}
+                        {@attach tip('Stop building and go back to editing')}
                         aria-label="Cancel the Build"
                         onclick={progress.onCancel}>Cancel</button
                     >
@@ -310,7 +319,7 @@
                     disabled={compilation.disabled}
                     aria-label={compilation.label}
                     aria-busy={compilation.busy}
-                    {@attach tooltip(
+                    {@attach tip(
                         compilation.warning ??
                             'Compile the source and the Files it includes with Compiler Explorer'
                     )}
@@ -332,7 +341,7 @@
                     <select
                         class="tool optimization"
                         aria-label="Optimization"
-                        {@attach tooltip('Compiler optimization')}
+                        {@attach tip('Compiler optimization')}
                         value={compilation.optimization.value}
                         disabled={compilation.busy || compilation.disabled}
                         onchange={(event) =>
@@ -348,7 +357,7 @@
                     <select
                         class="tool compiler"
                         aria-label="Source compiler"
-                        {@attach tooltip('Source compiler')}
+                        {@attach tip('Source compiler')}
                         value={compilation.compiler.value}
                         disabled={compilation.busy || compilation.disabled}
                         onchange={(event) =>
@@ -363,7 +372,7 @@
                     <button
                         type="button"
                         class="tool"
-                        {@attach tooltip('Cancel source compilation')}
+                        {@attach tip('Cancel source compilation')}
                         aria-label="Cancel source compilation"
                         onclick={compilation.onCancel}>Cancel</button
                     >
@@ -375,7 +384,7 @@
                 type="button"
                 class="tool"
                 onclick={onStop}
-                {@attach tooltip('End the Debug session')}
+                {@attach tip('End the Debug session')}
                 aria-label="Stop"
             >
                 <Icon size="small">
@@ -391,7 +400,7 @@
                 class:primary={!restartable}
                 onclick={() => (restartable ? onRestart?.() : running ? onPause() : onRun())}
                 disabled={restartable ? buildDisabled || building : executionDisabled || building}
-                {@attach tooltip(
+                {@attach tip(
                     restartable
                         ? 'Reset the program to the start'
                         : running
@@ -419,7 +428,7 @@
                 class="tool"
                 disabled={undoDisabled || running || !canUndo}
                 onclick={onUndo}
-                {@attach tooltip('Undo the last step')}
+                {@attach tip('Undo the last step')}
                 aria-label="Undo"
             >
                 <Icon size="small">
@@ -432,7 +441,7 @@
                 class="tool emphasis"
                 disabled={executionDisabled || running || building}
                 onclick={onStep}
-                {@attach tooltip('Run one instruction')}
+                {@attach tip('Run one instruction')}
                 aria-label="Step"
             >
                 <Icon size="small">
@@ -480,7 +489,7 @@
                     class:playing={sound.playing && !sound.muted}
                     onclick={sound.onToggle}
                     aria-pressed={!sound.muted}
-                    {@attach tooltip(
+                    {@attach tip(
                         sound.loading
                             ? 'Loading sounds…'
                             : sound.muted
@@ -507,7 +516,7 @@
                     class="tool"
                     onclick={() => onTest?.()}
                     disabled={buildDisabled || building || running}
-                    {@attach tooltip(
+                    {@attach tip(
                         debugging
                             ? 'End the Debug session and run the Testcases'
                             : 'Run the Testcases'
@@ -525,7 +534,7 @@
                     type="button"
                     class="tool action {action.tone ?? ''}"
                     onclick={action.onClick}
-                    {@attach tooltip(action.title)}
+                    {@attach tip(action.title)}
                     aria-label={action.label}
                 >
                     <Icon size="small">

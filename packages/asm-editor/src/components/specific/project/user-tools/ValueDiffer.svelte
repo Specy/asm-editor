@@ -18,6 +18,12 @@
         id?: string | undefined
         hoverValue?: import('svelte').Snippet
         hoverBoundary?: HTMLElement
+        /**
+         * The value as a picture, for a view nothing can point at (the home page's backdrop): the
+         * cell alone, in the same classes and colours and with the same change highlight, without
+         * the hover card or the wrapper that places it. The caller's container holds the cell.
+         */
+        decorative?: boolean
     }
 
     let {
@@ -31,7 +37,8 @@
         hoverSide = 'above',
         id = undefined,
         hoverValue,
-        hoverBoundary
+        hoverBoundary,
+        decorative = false
     }: Props = $props()
 
     /** The card's arrow, which stands out of it towards the value; ARROW in the styles below. */
@@ -50,44 +57,7 @@
     )
 </script>
 
-<div
-    style="position: relative;"
-    use:boundedValueHover={{ boundary: hoverBoundary, onPlace: (place) => (placed = place) }}
->
-    <div
-        class="hover-element"
-        class:bounded={!!hoverBoundary}
-        class:below={!hoverBoundary && hoverSide === 'below'}
-        style={hoverElementStyle}
-        use:elementSize={(width, height) => {
-            cardWidth = width
-            cardHeight = height
-        }}
-    >
-        {#if outline}
-            <PopoverOutline
-                width={cardWidth}
-                height={cardHeight}
-                side={outline.side}
-                at={outline.at}
-                arrow={ARROW}
-                radius={RADIUS}
-                solid
-            />
-        {/if}
-        <div class="hover-content">
-            {#if hoverValue}
-                <div class:monospaced style={hoverValueElementStyle}>
-                    {@render hoverValue?.()}
-                </div>
-            {/if}
-            {#if diff !== value}
-                <div class="old-value" class:monospaced role="tooltip">
-                    {diff}
-                </div>
-            {/if}
-        </div>
-    </div>
+{#snippet cell()}
     <div
         class:modified={diff !== value}
         class:softDiff={hasSoftDiff === true}
@@ -98,7 +68,52 @@
     >
         {value}
     </div>
-</div>
+{/snippet}
+
+{#if decorative}
+    {@render cell()}
+{:else}
+    <div
+        style="position: relative;"
+        use:boundedValueHover={{ boundary: hoverBoundary, onPlace: (place) => (placed = place) }}
+    >
+        <div
+            class="hover-element"
+            class:bounded={!!hoverBoundary}
+            class:below={!hoverBoundary && hoverSide === 'below'}
+            style={hoverElementStyle}
+            use:elementSize={(width, height) => {
+                cardWidth = width
+                cardHeight = height
+            }}
+        >
+            {#if outline}
+                <PopoverOutline
+                    width={cardWidth}
+                    height={cardHeight}
+                    side={outline.side}
+                    at={outline.at}
+                    arrow={ARROW}
+                    radius={RADIUS}
+                    solid
+                />
+            {/if}
+            <div class="hover-content">
+                {#if hoverValue}
+                    <div class:monospaced style={hoverValueElementStyle}>
+                        {@render hoverValue?.()}
+                    </div>
+                {/if}
+                {#if diff !== value}
+                    <div class="old-value" class:monospaced role="tooltip">
+                        {diff}
+                    </div>
+                {/if}
+            </div>
+        </div>
+        {@render cell()}
+    </div>
+{/if}
 
 <style lang="scss">
     @use '../../../../styles/popover.scss';

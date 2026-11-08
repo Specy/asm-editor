@@ -82,6 +82,12 @@
         cellMenu?: (cell: MemoryCell) => ContextMenuEntry[]
         /** A byte to mark while its page is shown: where a pointer menu last moved the view. */
         markedAddress?: bigint
+        /**
+         * The page as a picture, for a backdrop nothing can point at (the home page's): the same
+         * bytes in the same colours, the change highlight among them, with no hover card on a
+         * byte, no Tooltip, and no selection, Poke or menu to listen for.
+         */
+        decorative?: boolean
     }
 
     let {
@@ -103,7 +109,8 @@
         pokeable = false,
         onPoke,
         cellMenu,
-        markedAddress
+        markedAddress,
+        decorative = false
     }: Props = $props()
     const annotations = $derived.by(() => {
         //with each byte's hover, and what a region the machine defines means there: a ROM's
@@ -147,6 +154,7 @@
     )
 
     onMount(() => {
+        if (decorative) return
         const deselect = () => {
             selectingAddresses = false
         }
@@ -462,7 +470,8 @@
             style="height:2rem; min-width: var(--address-header-width); padding-bottom: 0; padding-right: 0.25rem;"
         >
             <Button
-                {@attach tooltip(type === DisplayType.Hex ? 'Show as character' : 'Show as hex')}
+                {@attach !decorative &&
+                    tooltip(type === DisplayType.Hex ? 'Show as character' : 'Show as hex')}
                 aria-label={type === DisplayType.Hex ? 'Show as character' : 'Show as hex'}
                 style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
                 onClick={() =>
@@ -499,9 +508,9 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="memory-numbers"
-        onpointerdown={onPointerDown}
-        oncontextmenu={onContextMenu}
-        ondragstart={(e) => e.preventDefault()}
+        onpointerdown={decorative ? undefined : onPointerDown}
+        oncontextmenu={decorative ? undefined : onContextMenu}
+        ondragstart={decorative ? undefined : (e) => e.preventDefault()}
         onpointermove={selectingAddresses ? handlePointerMove : undefined}
     >
         {#each memory.current as word, i (currentAddress + BigInt(i))}
@@ -589,9 +598,13 @@
                 {/if}
                 <!-- a byte in hex is always two digits, `0F` and not `F`, as the Hex editor and the
                      selection's popup write it, so that bytes read side by side make the word -->
+                <!-- a decorative byte is the cell alone, which `.memory-number` holds as it held the
+                     hover's wrapper: nothing points at it, so it needs neither the hover nor the id
+                     a pointer finds it by -->
                 <ValueDiff
+                    {decorative}
                     value={unreadableByte ? '??' : getTextFromValue(BigInt(word), 2, type)}
-                    id={`${id}-${i}`}
+                    id={decorative ? undefined : `${id}-${i}`}
                     diff={unreadableByte
                         ? '??'
                         : getTextFromValue(

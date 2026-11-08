@@ -8,6 +8,8 @@
      */
     import { copyText } from '#lib/utils.ts'
     import Button from '#cmp/shared/button/Button.svelte'
+    import CopyLabel from '#cmp/shared/button/CopyLabel.svelte'
+    import { CopyFeedback } from '#cmp/shared/button/copyFeedback.svelte.ts'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
     import FaRedo from '~icons/fa-solid/redo'
@@ -48,6 +50,9 @@
         align = 'center',
         pageTitle = false
     }: Props = $props()
+
+    /** The error card's Copy, a header tool rather than a Button, says "Copied" as CopyButton does. */
+    const copyFeedback = new CopyFeedback()
 
     const message = $derived(
         error === undefined
@@ -108,9 +113,15 @@
             <section class="error-card" aria-label="Error">
                 <div class="error-header">
                     <span>Error</span>
-                    <button class="copy" onclick={() => copyText(message, 'Error')}>
-                        <FaCopy />
-                        Copy
+                    <button
+                        type="button"
+                        class="copy"
+                        onclick={() => void copyFeedback.run(() => copyText(message, 'Error'))}
+                    >
+                        <CopyLabel copied={copyFeedback.copied}>
+                            <FaCopy />
+                            Copy
+                        </CopyLabel>
                     </button>
                 </div>
                 <pre class="error-message">{message}</pre>

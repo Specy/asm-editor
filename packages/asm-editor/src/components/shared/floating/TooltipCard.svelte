@@ -104,8 +104,9 @@
         const done = () => {
             shown = false
             //the card leaves the page with its element, which can go while it fades: Svelte has
-            //cleared `card` by then, and a popover that is no longer open cannot be hidden
-            if (card?.isConnected && card.matches(':popover-open')) card.hidePopover()
+            //cleared `card` by then, and a popover no longer on the page cannot be hidden (one
+            //on the page that is already hidden hides again without complaint)
+            if (card?.isConnected) card.hidePopover()
         }
         if (instant || prefersLessMotion() || typeof card.animate !== 'function') return done()
         animation = card.animate([{ opacity: 1 }, { opacity: 0 }], {

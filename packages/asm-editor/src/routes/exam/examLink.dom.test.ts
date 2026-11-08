@@ -51,11 +51,14 @@ async function createExamLink() {
     const target = document.createElement('div')
     document.body.append(target)
     const component = mount((await import('./+page.svelte')).default, { target })
-    const password = target.querySelector<HTMLInputElement>('input[placeholder="Required"]')!
+    const password = target.querySelector<HTMLInputElement>(
+        'input[placeholder="Known only to you"]'
+    )!
     password.value = 'teacher'
     password.dispatchEvent(new Event('input', { bubbles: true }))
-    const create = [...target.querySelectorAll('button')].find(
-        (button) => button.textContent?.trim() === 'Create exam link'
+    //the button holds "Copied" too, out of sight until a copy works (CopyLabel)
+    const create = [...target.querySelectorAll('button')].find((button) =>
+        button.textContent?.includes('Create exam link')
     )!
     create.click()
     await vi.waitFor(() => expect(writeText).toHaveBeenCalled())

@@ -12,9 +12,23 @@
     }
 
     let { children }: Props = $props()
+
+    /** What the toast or the pill says, for a screen reader. */
+    const announcement = $derived(
+        !$toast.visible
+            ? ''
+            : $toast.type === ToastType.Pill || !$toast.title
+              ? $toast.message
+              : `${$toast.title}: ${$toast.message}`
+    )
 </script>
 
 {@render children?.()}
+<!-- read out by a screen reader, as neither is: they come into the page already written. A new
+     text each time, so the same message twice in a row (a link copied twice) is read twice -->
+<div class="visually-hidden" role="status">
+    {#key $toast.id}{announcement}{/key}
+</div>
 <!-- drawn above the page, so the colours of a page that wears its own theme are passed in -->
 {#key $toast.id}
     {#if $toast.type === ToastType.Toast}
@@ -87,13 +101,20 @@
         overflow: hidden;
         transform: translateY(calc(-100% - 2rem));
     }
+    /* larger than the navbar's search field it comes down over (35px tall, 288px wide at most),
+       so it reads as a pill of its own rather than the field changed: a step up the type scale,
+       taller and wider. As wide as its words, up to the window less 1rem a side, where they wrap
+       (from the middle of the window it could only take the right half) */
     .pill {
         left: 50vw;
         top: 0.5rem;
         text-align: center;
-        min-width: 10rem;
-        padding: 0.55rem 1.2rem;
-        font-size: var(--fs-small);
+        width: max-content;
+        min-width: min(20rem, 100vw - 2rem);
+        max-width: calc(100vw - 2rem);
+        padding: 0.8rem 1.6rem;
+        font-size: var(--fs-body);
+        line-height: 1.25;
         font-weight: 500;
         transform: translateY(calc(-100% - 1rem)) translateX(-50%);
     }

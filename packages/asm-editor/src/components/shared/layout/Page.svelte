@@ -1,7 +1,7 @@
 <script module lang="ts">
     //the first Page after the app starts is the one the reader landed on, which shows at once; only
-    //a Page a navigation brings in flies in
-    let landed = false
+    //a Page a navigation brings in flies in. A property, which each later Page reads
+    const pages = { landed: false }
 </script>
 
 <script lang="ts">
@@ -27,8 +27,8 @@
         fillsScreen = false
     }: Props = $props()
 
-    const arriving = landed
-    landed = true
+    const arriving = pages.landed
+    pages.landed = true
 </script>
 
 <main

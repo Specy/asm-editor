@@ -3,9 +3,10 @@
      * An exam session (CONTEXT.md, Exam): a start Card that says what the exam's guards do and
      * asks for the student's name (and the access password, when the exam has one), then the
      * exam one part at a time, the instructions and each section, under a slim bar with the
-     * title, the student, the parts as dots, the time left and Finish exam, Previous and Next at
-     * the bottom. A coding section's answer is the Workbench under its prompt
-     * (docs/design/workbench.md); the others answer in fields under theirs.
+     * title, the student, the parts as dots with Previous and Next round their count, the time
+     * left and Finish exam. A coding section's answer is the Workbench (docs/design/workbench.md)
+     * beside its prompt, which folds away to give it the width; the others answer in fields under
+     * theirs.
      */
     import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { browser } from '$app/env'
@@ -14,6 +15,8 @@
     import { resolve } from '$app/paths'
     import Page from '#cmp/shared/layout/Page.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import CopyButton from '#cmp/shared/button/CopyButton.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import TextField from '#cmp/shared/input/TextField.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
@@ -49,11 +52,16 @@
     import { toast } from '#stores/toastStore.ts'
     import { Prompt } from '#stores/promptStore.svelte.ts'
     import { onMount, tick } from 'svelte'
+    import { MediaQuery } from 'svelte/reactivity'
     import FaClock from '~icons/fa-regular/clock'
     import FaExpand from '~icons/fa-solid/expand'
     import FaLock from '~icons/fa-solid/lock'
     import FaLink from '~icons/fa-solid/link'
     import FaHourglass from '~icons/fa-solid/hourglass-half'
+    import FaChevronLeft from '~icons/fa-solid/chevron-left'
+    import FaChevronRight from '~icons/fa-solid/chevron-right'
+    import FaAngleDoubleLeft from '~icons/fa-solid/angle-double-left'
+    import FaAngleDoubleRight from '~icons/fa-solid/angle-double-right'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import ExamReviewAgentSidebar from '#cmp/specific/exam/ExamReviewAgentSidebar.svelte'
     import ExamReviewAgent from '#cmp/specific/exam/ExamReviewAgent.svelte'
@@ -67,6 +75,8 @@
     const EXAM_SESSION_SNAPSHOT_PREFIX = 'asm-editor_exam_session_snapshot:'
     /** The time left from which the timer is drawn in the warning colour. */
     const LOW_TIME_MS = 5 * 60_000
+    /** The coding sections whose question the student folded away, kept for the tab's session. */
+    const FOLDED_PROMPTS_KEY = 'asm-editor_exam_folded_prompts'
 
     type StoredExamSessionSnapshot = {
         version: number
@@ -155,6 +165,48 @@
     let dotsBefore = $state(false)
     let dotsAfter = $state(false)
 
+    /**
+     * The coding sections whose question is folded to a strip beside (on a phone, over) the
+     * answer. Each section remembers its own, so a section opens on its question until the
+     * student folds it there; kept in `sessionStorage` while the tab lives, a reload included.
+     */
+    let foldedPrompts = $state<string[]>(readFoldedPrompts())
+    /** The question's Hide button and the strip that shows it again, which take the focus in turn. */
+    let promptHideButton = $state<HTMLElement>()
+    let promptStripButton = $state<HTMLButtonElement>()
+    /**
+     * Whether the question is over its answer rather than beside it (the styles' 900px), where the
+     * strip is a bar across the top and its Tooltip goes under it: at its right, with no room
+     * there, it would slide over the bar under the pointer.
+     */
+    const promptStacked = new MediaQuery('max-width: 900px', false)
+
+    function readFoldedPrompts(): string[] {
+        if (!browser) return []
+        try {
+            const stored: unknown = JSON.parse(sessionStorage.getItem(FOLDED_PROMPTS_KEY) ?? '[]')
+            return Array.isArray(stored)
+                ? stored.filter((id): id is string => typeof id === 'string')
+                : []
+        } catch {
+            return []
+        }
+    }
+
+    /** Folds a section's question away or shows it again; the focus goes to what undoes it. */
+    async function setPromptFolded(sectionId: string, folded: boolean) {
+        foldedPrompts = folded
+            ? [...new Set([...foldedPrompts, sectionId])]
+            : foldedPrompts.filter((id) => id !== sectionId)
+        try {
+            sessionStorage.setItem(FOLDED_PROMPTS_KEY, JSON.stringify(foldedPrompts))
+        } catch {
+            // storage may be full or blocked; the fold then lasts until the page closes
+        }
+        await tick()
+        ;(folded ? promptStripButton : promptHideButton)?.focus()
+    }
+
     function measureDots() {
         if (!dotsElement) return
         const { scrollLeft, scrollWidth, clientWidth } = dotsElement
@@ -187,11 +239,17 @@
         activePartIndex >= 0 && activePartIndex + 1 < parts.length && !examDisabled
     )
 
+    /** Where Previous and Next lead, which their Tooltips say; nothing at either end. */
+    const previousPartLabel = $derived(
+        canGoToPreviousSection ? `Go to ${partLabel(parts[activePartIndex - 1])}` : ''
+    )
+    const nextPartLabel = $derived(
+        canGoToNextSection ? `Go to ${partLabel(parts[activePartIndex + 1])}` : ''
+    )
+
     const isOnLastSection = $derived(
         activeSectionIndex >= 0 && activeSectionIndex === sections.length - 1
     )
-    /** On the last section the Next button finishes the exam. */
-    const nextFinishes = $derived(isOnLastSection && !isReviewMode)
     const isSubmitted = $derived(!!examSubmission.submissionTimestamp)
 
     const formattedSubmissionTime = $derived(
@@ -233,6 +291,13 @@
         return minutes === 1 ? '1 minute' : `${minutes} minutes`
     }
 
+    /** A part as its heading reads: "Instructions", or "Section 2 · Multiple choice". */
+    function partLabel(part: ExamPart) {
+        return part.section
+            ? `Section ${part.number} · ${sectionTypeLabel(part.section.type)}`
+            : 'Instructions'
+    }
+
     function getSectionIndex(sectionId: string) {
         return sections.findIndex((section) => section.id === sectionId)
     }
@@ -260,8 +325,8 @@
 
     /**
      * After Previous or Next: a button that the move disabled (Previous on the first part, Next on
-     * the last one of a review) gave its focus to the page's body, so it goes to the pager's other
-     * button.
+     * the last) gave its focus to the page's body, so it goes to the pager's other button, and not
+     * on to Finish exam, which a second press of Enter would then open.
      */
     async function keepPagerFocus() {
         await tick()
@@ -881,15 +946,31 @@
     >
 {/snippet}
 
-<!-- a section's header band: its number and type, its title muted at the right -->
-{#snippet sectionHead(section: ExamSection, number: number)}
-    <header class="part-head">
+<!-- a section's header band: its number and type, its title muted at the right; a coding
+     section's (`foldable`) has its title under them and, at its right, the button that folds the
+     question away -->
+{#snippet sectionHead(section: ExamSection, number: number, foldable = false)}
+    <header class="part-head" class:foldable>
         <h2 id="exam-part-title" class="part-title">
             Section {number}
             <span class="part-type">· {sectionTypeLabel(section.type)}</span>
         </h2>
         {#if section.title?.trim()}
             <p class="part-name">{section.title}</p>
+        {/if}
+        {#if foldable}
+            <IconButton
+                label="Hide the question"
+                class="prompt-hide"
+                quiet
+                aria-expanded="true"
+                aria-controls="exam-prompt"
+                bind:el={promptHideButton}
+                onClick={() => setPromptFolded(section.id, true)}
+                {@attach tooltip('Give the editor more room')}
+            >
+                <FaAngleDoubleLeft />
+            </IconButton>
         {/if}
     </header>
 {/snippet}
@@ -906,6 +987,38 @@
             <MarkdownRenderer source={section.prompt} disableLinks monacoColors centered={false} />
         </div>
     </Card>
+{/snippet}
+
+<!-- a coding section's question: a panel of its own from the bar to the window's bottom at the
+     left of its answer (over it on a phone), on the page's fill rather than a card, so that it
+     does not read as part of the Workbench; or, folded, a strip as tall that shows it again from
+     anywhere along it. The folded panel stays built, hidden, so it opens again where it was
+     scrolled to -->
+{#snippet promptColumn(section: ExamSection, number: number)}
+    {@const folded = foldedPrompts.includes(section.id)}
+    {#if folded}
+        <button
+            type="button"
+            class="prompt-strip"
+            aria-expanded="false"
+            aria-controls="exam-prompt"
+            bind:this={promptStripButton}
+            onclick={() => setPromptFolded(section.id, false)}
+            {@attach tooltip(
+                `Section ${number} · ${sectionTypeLabel(section.type)}${section.title?.trim() ? `: ${section.title.trim()}` : ''}`,
+                { placement: promptStacked.current ? 'bottom' : 'right' }
+            )}
+        >
+            <FaAngleDoubleRight />
+            <span class="strip-label">Show the question</span>
+        </button>
+    {/if}
+    <section id="exam-prompt" class="prompt-panel" class:folded aria-labelledby="exam-part-title">
+        {@render sectionHead(section, number, true)}
+        <div class="part-body prompt-body">
+            <MarkdownRenderer source={section.prompt} disableLinks monacoColors centered={false} />
+        </div>
+    </section>
 {/snippet}
 
 <Page fillsScreen>
@@ -997,8 +1110,7 @@
                                 <div class="start-field">
                                     <TextField
                                         label="Exam access password"
-                                        type="password"
-                                        autocomplete="off"
+                                        concealed
                                         focus={!!exam.submission}
                                         bind:el={accessPasswordField}
                                         bind:value={accessPasswordInput}
@@ -1082,8 +1194,7 @@
                         <div class="unlock-row">
                             <TextField
                                 focus
-                                autocomplete="one-time-code"
-                                type="password"
+                                concealed
                                 aria-label="Unlock password"
                                 placeholder="Unlock password"
                                 bind:value={unlockPasswordInput}
@@ -1121,12 +1232,12 @@
                         </p>
                         <p class="notice-student">{@render student()}</p>
                         <div class="notice-actions">
-                            <Button
-                                onClick={() => copyText(submissionUrl, 'Submission link')}
+                            <CopyButton
+                                copy={() => copyText(submissionUrl, 'Submission link')}
                                 {@attach focusOnMount}
                             >
                                 Copy submission link
-                            </Button>
+                            </CopyButton>
                             <Button
                                 kind="secondary"
                                 onClick={async () => {
@@ -1144,8 +1255,7 @@
                         <p class="unlock-hint">Your teacher can reopen the exam:</p>
                         <div class="unlock-row">
                             <TextField
-                                autocomplete="one-time-code"
-                                type="password"
+                                concealed
                                 aria-label="Unlock password"
                                 placeholder="Unlock password"
                                 bind:value={unlockPasswordInput}
@@ -1205,9 +1315,36 @@
                                 </li>
                             {/each}
                         </ol>
-                        <span class="count" aria-hidden="true">
-                            {activePartIndex + 1} / {parts.length}
-                        </span>
+                        <!-- Previous and Next round the count, one button each, so the one pressed
+                             keeps the focus as the parts change; named "Previous section" and
+                             "Next section", the last word for screen readers only -->
+                        <div class="pager" bind:this={pagerElement}>
+                            <Button
+                                kind="ghost"
+                                size="sm"
+                                class="step previous"
+                                disabled={!canGoToPreviousSection}
+                                onClick={goToPreviousSection}
+                                {@attach tooltip(previousPartLabel, { placement: 'bottom' })}
+                            >
+                                <FaChevronLeft />
+                                <span>Previous <span class="visually-hidden">section</span></span>
+                            </Button>
+                            <span class="count" aria-hidden="true">
+                                {activePartIndex + 1} / {parts.length}
+                            </span>
+                            <Button
+                                kind="ghost"
+                                size="sm"
+                                class="step next"
+                                disabled={!canGoToNextSection}
+                                onClick={goToNextSection}
+                                {@attach tooltip(nextPartLabel, { placement: 'bottom' })}
+                            >
+                                <span>Next <span class="visually-hidden">section</span></span>
+                                <FaChevronRight />
+                            </Button>
+                        </div>
                     </nav>
                 {/if}
 
@@ -1244,9 +1381,10 @@
                     {#if !isReviewMode}
                         <!-- on purpose only on the last section, as before the redesign: the student
                              finishes after reaching the end; kept in the bar, disabled until then, so
-                             the bar doesn't move from part to part -->
+                             the bar doesn't move from part to part, and filled there, the one way
+                             on from the last section -->
                         <Button
-                            kind="secondary"
+                            kind={isOnLastSection && !isSubmitted ? 'primary' : 'secondary'}
                             size="sm"
                             disabled={isSubmitted || !isOnLastSection}
                             onClick={() => finishExam()}
@@ -1285,8 +1423,8 @@
                     {@const number = activeSectionIndex + 1}
                     {#if activeSection.type === ExamSectionType.AssemblyCoding}
                         {@const assemblySection = activeSection as AssemblyCodingSection}
-                        <div class="coding-part">
-                            {@render promptCard(assemblySection, number)}
+                        <div class="coding-part wb-cards">
+                            {@render promptColumn(assemblySection, number)}
                             {#key `${assemblySection.id}-${assemblySection.language}`}
                                 <ExamAssemblySection
                                     section={assemblySection}
@@ -1301,8 +1439,8 @@
                         </div>
                     {:else if activeSection.type === ExamSectionType.CCoding}
                         {@const cSection = activeSection as CCodingSection}
-                        <div class="coding-part c-part">
-                            {@render promptCard(cSection, number)}
+                        <div class="coding-part c-part wb-cards">
+                            {@render promptColumn(cSection, number)}
                             <section class="c-answer" aria-labelledby="exam-c-answer">
                                 <h3 id="exam-c-answer" class="answer-label">Your answer</h3>
                                 <div class="c-editor-wrap">
@@ -1386,30 +1524,6 @@
                     {/if}
                 {/if}
             </div>
-
-            <!-- Previous and Next, one button each, so the one pressed keeps the focus as the
-                 parts change; Next finishes the exam on the last section -->
-            <nav class="pager" aria-label="Sections" bind:this={pagerElement}>
-                <Button
-                    kind="secondary"
-                    disabled={!canGoToPreviousSection}
-                    onClick={goToPreviousSection}
-                    style="gap: 0.4rem;"
-                >
-                    <span aria-hidden="true">←</span> Previous
-                </Button>
-                <Button
-                    disabled={nextFinishes ? isSubmitted : !canGoToNextSection}
-                    onClick={() => (nextFinishes ? finishExam() : goToNextSection())}
-                    style="gap: 0.4rem;"
-                >
-                    {#if nextFinishes}
-                        Finish exam
-                    {:else}
-                        Next section <span aria-hidden="true">→</span>
-                    {/if}
-                </Button>
-            </nav>
         </div>
     {/if}
 </Page>
@@ -1424,8 +1538,8 @@
         outline: none;
     }
 
-    /* the bar, the part and the pager, one screen tall: a coding part's Workbench fills what the
-       bars leave, a reading part scrolls inside */
+    /* the bar and the part, one screen tall: a coding part's Workbench fills what the bar leaves,
+       a reading part scrolls inside */
     .exam-session {
         display: flex;
         flex-direction: column;
@@ -1596,9 +1710,10 @@
     /* ---- the bar ---- */
 
     /* a strip across the top, as the project page's bar (ProjectTopBar): the exam, then the
-       student at the left; the parts, the time and Finish exam at the right. Where it is short of
-       room the student's name, then the title, are cut short and the dots scroll; the code, the
-       count, the time and Finish exam keep their room */
+       student at the left; the parts with Previous and Next, the time and Finish exam at the
+       right. Where it is short of room the student's name, then the title, are cut short and the
+       dots scroll; the code, Previous and Next with the count, the time and Finish exam keep
+       their room */
     .top-bar {
         display: flex;
         align-items: center;
@@ -1661,8 +1776,8 @@
         justify-content: flex-end;
         gap: 0.5rem;
         flex: 0 1 auto;
-        min-width: 6.5rem;
-        max-width: 20rem;
+        min-width: 18.5rem;
+        max-width: 33rem;
     }
     .dots {
         position: relative;
@@ -1724,6 +1839,24 @@
             background-color: var(--accent);
             box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--accent) 30%, transparent);
         }
+    }
+    /* Previous and Next round the count, as a pager reads "‹ Previous 2 / 5 Next ›": ghost
+       Buttons, their chevron the size of a small control's mark */
+    .pager {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .progress :global(.btn.step) {
+        flex: none;
+        gap: 0.35rem;
+        padding-inline: 0.55rem;
+    }
+    .progress :global(.btn.step svg) {
+        flex: none;
+        width: var(--fs-caption);
+        height: var(--fs-caption);
     }
     .count {
         flex: none;
@@ -1787,22 +1920,101 @@
         padding: 1rem;
     }
 
-    /* a coding section's prompt over its answer, the whole width, the prompt as far from the
-       window's edge as the Workbench's cards are */
+    /* a coding section: its question in a panel at the left, the answer taking the rest of the
+       width on the card tokens (`wb-cards`). 900px wide and less, the question is over the
+       answer (below) */
     .coding-part {
         display: flex;
-        flex-direction: column;
         flex: 1;
         min-height: 0;
     }
-    .coding-part > :global(.prompt-card) {
+    /* the question's panel: from the bar to the window's bottom, flush with its left edge, on the
+       page's own fill (`--primary`, which is the background in the built-in themes and the
+       lightest tone in a light one) rather than the Workbench's cards, ruled off from them as the
+       bar is above; scrolling on its own */
+    .prompt-panel {
+        display: flex;
+        flex-direction: column;
         flex: none;
-        max-height: 35%;
-        margin: var(--wb-gap, 0.25rem) var(--wb-gap, 0.25rem) 0;
+        width: clamp(20rem, 28vw, 26rem);
+        min-height: 0;
+        background-color: var(--primary);
+        color: var(--primary-text);
+        border-right: 1px solid var(--line);
+
+        /* folded: still built, out of sight, so it opens again where it was scrolled to */
+        &.folded {
+            display: none;
+        }
     }
-    .coding-part .prompt-body {
+    .prompt-panel .prompt-body {
+        flex: 1 1 auto;
         min-height: 0;
         overflow-y: auto;
+    }
+
+    /* a coding section's band: the heading with the fold button at its right, the title under
+       the heading, as the column is too narrow for both on one line */
+    .part-head.foldable {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.15rem 0.5rem;
+        padding-right: 0.5rem;
+    }
+    .part-head.foldable .part-name {
+        grid-row: 2;
+        grid-column: 1;
+        margin: 0;
+    }
+    .part-head.foldable :global(.prompt-hide) {
+        grid-row: 1;
+        grid-column: 2;
+        margin-block: -0.2rem;
+    }
+
+    /* the folded question: the panel's surface and rule as a strip 2.75rem wide (44px, a touch
+       target), from the bar to the window's bottom, whose whole length shows the question again */
+    .prompt-strip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.7rem;
+        flex: none;
+        width: 2.75rem;
+        min-height: 0;
+        padding: 0.85rem 0;
+        border: none;
+        border-right: 1px solid var(--line);
+        background-color: var(--primary);
+        color: var(--primary-text);
+        font: inherit;
+        font-size: var(--fs-body);
+        cursor: pointer;
+        @include focus-ring($inset: true);
+
+        :global(svg) {
+            flex: none;
+            width: var(--fs-small);
+            height: var(--fs-small);
+        }
+
+        /* the row's hover over the panel's surface, which it keeps */
+        &:hover {
+            background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
+        }
+    }
+    /* read top to bottom, as the debug strip's names are, and cut short on a short screen */
+    .strip-label {
+        min-height: 0;
+        overflow: hidden;
+        writing-mode: vertical-rl;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        color: var(--text-muted);
+    }
+    .prompt-strip:hover .strip-label {
+        color: inherit;
     }
 
     /* the header band over a rule, as the exam builder's part Card has */
@@ -1907,7 +2119,8 @@
         min-height: 0;
         padding: 0.75rem var(--wb-gap, 0.25rem) var(--wb-gap, 0.25rem);
     }
-    /* lined up with the prompt's text, inside its Card's edge and padding */
+    /* inset as a Card's text is, so that under the question (900px wide and less) it lines up
+       with the question's text */
     .c-answer .answer-label {
         padding-inline: calc(1rem + 1px);
     }
@@ -1922,21 +2135,40 @@
         overflow: hidden;
     }
 
-    /* ---- the pager ---- */
-
-    .pager {
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.5rem;
-        flex: none;
-        padding: 0.45rem 0.5rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        border-top: 1px solid var(--line);
+    /* 900px wide and less (a phone, a tablet upright) a column beside the answer would leave the
+       editor too narrow: the question is over it, at most 35% of the height, and folds to a bar
+       across the top; the fold buttons' arrows turn to point up and down */
+    @media (max-width: 900px) {
+        .coding-part {
+            flex-direction: column;
+        }
+        .prompt-panel {
+            width: auto;
+            max-height: 35%;
+            border-right: none;
+            border-bottom: 1px solid var(--line);
+        }
+        /* folded, a bar across the window 2.75rem tall, as wide a target as the strip */
+        .prompt-strip {
+            flex-direction: row;
+            width: auto;
+            min-height: 2.75rem;
+            padding: 0 1rem;
+            border-right: none;
+            border-bottom: 1px solid var(--line);
+        }
+        .strip-label {
+            writing-mode: horizontal-tb;
+        }
+        .prompt-strip :global(svg),
+        .part-head.foldable :global(.prompt-hide svg) {
+            transform: rotate(90deg);
+        }
     }
 
-    /* a phone: the bar in two lines, the exam with the time and Finish exam over the student and
-       the parts; the parts' dots scroll when there are more than fit */
+    /* a phone: the bar in three lines, the exam with the time and Finish exam, then the student,
+       then Previous and Next at the two ends of the third with the dots and the count centred
+       between them; the dots scroll when there are more than fit */
     @media (max-width: 720px) {
         .top-bar {
             flex-wrap: wrap;
@@ -1965,23 +2197,35 @@
         .bar-actions {
             order: 3;
         }
-        /* no wider than leaves the code and a few dots their room on the line */
         .top-bar .student-name {
             order: 5;
-            max-width: calc(100% - 11.5rem);
         }
         .top-bar .student-code {
             order: 6;
         }
+        /* a line of its own, the whole width */
         .progress {
             order: 7;
-            flex: 1 1 0;
+            flex: 1 1 100%;
+            min-width: 0;
             max-width: none;
+        }
+        .pager {
+            display: contents;
+        }
+        .progress :global(.btn.previous) {
+            order: -1;
+        }
+        .dots {
+            margin-left: auto;
+        }
+        .count {
+            margin-right: auto;
         }
         .reading {
             padding: 0.75rem 0.5rem;
         }
-        .coding-part > :global(.prompt-card) {
+        .prompt-panel {
             max-height: 30%;
         }
         .part-head {

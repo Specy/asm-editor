@@ -6,6 +6,7 @@
      * with a button that copies it. On `/documentation` and in the home page's Documentation section.
      */
     import Button from '#cmp/shared/button/Button.svelte'
+    import CopyButton from '#cmp/shared/button/CopyButton.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
     import FaCopy from '~icons/fa-solid/copy'
@@ -55,15 +56,15 @@
                         {#if expanded}<FaCompressAlt />{:else}<FaExpandAlt />{/if}
                     </Icon>
                 </Button>
-                <Button
+                <CopyButton
                     kind="secondary"
                     size="sm"
                     style={`${BUTTON_STYLE} padding: 0 0.75rem; gap: 0.4rem;`}
-                    onClick={() => void copyText(AGENT_MESSAGE, 'Message')}
+                    copy={() => copyText(AGENT_MESSAGE, 'Message')}
                 >
                     <Icon size="small"><FaCopy /></Icon>
                     Copy
-                </Button>
+                </CopyButton>
             </div>
         </Card>
     </div>

@@ -29,6 +29,8 @@
         valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
         /** Integers in hexadecimal or decimal whatever the Preference says, see `RegisterFileRows`. */
         hex?: boolean
+        /** The rows as a picture, with nothing to hover, see `RegisterFileRows`. */
+        decorative?: boolean
     }
 
     let {
@@ -42,7 +44,8 @@
         systemSize,
         language,
         valueMenu,
-        hex
+        hex,
+        decorative = false
     }: Props = $props()
 
     //no layout: every register here is an integer of the width it was built with, which is what the
@@ -71,4 +74,5 @@
     {size}
     {valueMenu}
     {hex}
+    {decorative}
 />

@@ -36,6 +36,7 @@
         hostLinks = [],
         activePanel = $bindable(null),
         screenWindow = false,
+        debugTools,
         header
     }: Props = $props()
 
@@ -75,10 +76,14 @@
     })
 
     const viewport = watchViewport()
-    const ui = new WorkbenchUi(viewport, {
-        get: () => activePanel,
-        set: (id) => (activePanel = id)
-    })
+    const ui = new WorkbenchUi(
+        viewport,
+        {
+            get: () => activePanel,
+            set: (id) => (activePanel = id)
+        },
+        { debugTools: untrack(() => debugTools) }
+    )
     ui.screenWindowRequested = untrack(() => screenWindow)
     let headerHeight = $state(0)
     let debugged = false

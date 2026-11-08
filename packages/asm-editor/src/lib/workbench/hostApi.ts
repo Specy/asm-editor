@@ -2,6 +2,7 @@ import type { Component, Snippet } from 'svelte'
 import type { Project } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import type { EditJournalStore } from '#lib/editJournal.ts'
+import type { DebugToolsPlacement } from '#stores/preferencesStore.svelte.ts'
 import type { WorkbenchUi } from './WorkbenchUi.svelte.ts'
 import type { WorkbenchSession } from './WorkbenchSession.svelte.ts'
 
@@ -94,6 +95,12 @@ export interface WorkbenchProps {
      * `fullscreenDisplay`. Read once, when the Workbench is made.
      */
     screenWindow?: boolean
+    /**
+     * Where the Debug tools (Stack pointer, History, Call stack) go in place of the person's
+     * Preference, which the Workbench's Settings change: for a host with Settings off, as an Exam
+     * docks them as sections in the debug column. Read once, when the Workbench is made.
+     */
+    debugTools?: DebugToolsPlacement
     /** Host actions above the workspace, with access to its responsive menu state. */
     header?: Snippet<[WorkbenchUi]>
     loading?: Snippet
