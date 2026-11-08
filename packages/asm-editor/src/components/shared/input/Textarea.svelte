@@ -7,21 +7,18 @@
     let { value = $bindable(''), title = '' }: Props = $props()
 </script>
 
-<div class="wrapper">
-    <div>{title}</div>
+<label class="wrapper">
+    <span>{title}</span>
     <textarea placeholder={title} bind:value></textarea>
-</div>
+</label>
 
 <style lang="scss">
+    @use '../../../styles/field.scss';
+
+    /* drawn as every field is (styles/field.scss), as TextField is */
     textarea {
-        display: flex;
-        align-items: center;
-        border-radius: var(--r-control);
-        padding: 0.2rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        padding: 0.6rem 1rem;
-        margin-top: 0.3rem;
+        @include field.input;
+        padding: 0.5rem 0.75rem;
         min-height: 4rem;
         max-height: 20rem;
         resize: vertical;
@@ -29,6 +26,7 @@
     .wrapper {
         display: flex;
         flex-direction: column;
+        gap: 0.3rem;
         flex: 1;
     }
 </style>

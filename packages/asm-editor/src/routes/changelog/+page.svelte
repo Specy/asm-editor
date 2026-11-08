@@ -40,8 +40,7 @@
                     </p>
                     {#if version.blogPost}
                         <ButtonLink
-                            cssVar="tertiary"
-                            hasIcon
+                            kind="secondary"
                             style="gap: 0.5rem; margin-left: auto; white-space: nowrap"
                             href={resolve('/blog/posts/[slug]', { slug: version.blogPost })}
                         >

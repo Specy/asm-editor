@@ -1,6 +1,8 @@
 <script lang="ts">
     import { onMount, tick, untrack, type Snippet } from 'svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import FaDesktop from '~icons/fa-solid/desktop'
     import FaTh from '~icons/fa-solid/th'
     import FaWindowMaximize from '~icons/fa-solid/window-maximize'
@@ -572,38 +574,43 @@
 {#snippet actions()}
     {@render configuration?.()}
     {#if doubleBuffering}
-        <button
+        <Button
+            kind="ghost"
+            size="sm"
             class="screen-action"
-            class:active={showingDrawingBuffer}
+            active={showingDrawingBuffer}
+            aria-pressed={showingDrawingBuffer}
             {@attach tooltip(
                 showingDrawingBuffer
                     ? 'Show the visible buffer again'
                     : 'Show the drawing buffer, the frame the program is composing'
             )}
-            onclick={() => preferencesStore.setValue('showDrawingBuffer', !showingDrawingBuffer)}
+            onClick={() => preferencesStore.setValue('showDrawingBuffer', !showingDrawingBuffer)}
         >
             <Icon size={0.8}>
                 <FaLayerGroup />
             </Icon>
             {showingDrawingBuffer ? 'Drawing' : 'Visible'}
-        </button>
+        </Button>
     {/if}
-    <button
+    <Button
+        kind="ghost"
+        size="sm"
         class="screen-action"
-        class:active={integerScaling}
+        active={integerScaling}
         aria-pressed={integerScaling}
         {@attach tooltip(
             integerScaling
                 ? 'Integer scaling is on. Click to turn it off and fill the available space.'
                 : 'Turn on integer scaling which improves text and line crispness.'
         )}
-        onclick={() => (integerScaling = !integerScaling)}
+        onClick={() => (integerScaling = !integerScaling)}
     >
         <Icon size={0.8}>
             <FaTh />
         </Icon>
         {zoomLabel}
-    </button>
+    </Button>
 {/snippet}
 
 <!-- the window's bar reads like the in-page header: what the screen IS on the left, next to the
@@ -619,16 +626,14 @@
 <!-- in the page the controls end with the one that takes the Screen out into a window -->
 {#snippet pageActions()}
     {@render actions()}
-    <button
-        class="screen-action"
+    <IconButton
+        size="sm"
+        label="Open in a window"
         {@attach tooltip('Open the screen in a floating window')}
-        aria-label="Open in a window"
-        onclick={toggleWindow}
+        onClick={toggleWindow}
     >
-        <Icon size={0.8}>
-            <FaWindowMaximize />
-        </Icon>
-    </button>
+        <FaWindowMaximize />
+    </IconButton>
 {/snippet}
 
 <!-- the stage is measured by its content box, so the canvas is never fitted into the stage's own
@@ -724,6 +729,8 @@
 {/if}
 
 <style lang="scss">
+    @use '../../../../styles/radius.scss' as *;
+
     .screen-panel {
         display: flex;
         flex-direction: column;
@@ -743,7 +750,7 @@
         gap: 0.4rem;
         align-items: center;
         padding: 0.2rem 0.3rem 0.2rem 0.5rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         background-color: var(--tertiary);
         color: var(--tertiary-text);
     }
@@ -764,29 +771,11 @@
         margin-left: auto;
     }
 
-    .screen-action {
-        display: flex;
+    /* the bar's toggles, small ghost Buttons (D5) that keep the bar's height: a pressed one is the
+       accent, as the drawing buffer shown in place of the visible one is */
+    :global(.btn.ghost.sm.screen-action) {
         gap: 0.3rem;
-        align-items: center;
         padding: 0.15rem 0.4rem;
-        border: none;
-        border-radius: 0.2rem;
-        font-family: var(--font-ui);
-        font-size: 0.8rem;
-        color: inherit;
-        background-color: var(--secondary);
-        cursor: pointer;
-
-        &:hover {
-            filter: brightness(1.2);
-        }
-    }
-
-    /* the drawing buffer is not what the program is showing, so the panel says so for as long as
-       it is the image on the canvas */
-    .screen-action.active {
-        background-color: var(--accent);
-        color: var(--accent-text);
     }
 
     /* only the frame the stage sits in; the stage's content box is the box the canvas is fitted
@@ -828,8 +817,10 @@
        the stage alone, filling the box the container sizes from the viewport and its corner */
     .screen-panel.screen-window {
         height: 100%;
-        border-radius: 0 0 0.4rem 0.4rem;
-        box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.45);
+        /* inside the window's 1px edge, its curve parallel to the window's; the window is lifted
+           by its own shadow */
+        border-radius: 0 0 nested-radius(var(--r-overlay), $border: 1px)
+            nested-radius(var(--r-overlay), $border: 1px);
     }
 
     canvas {

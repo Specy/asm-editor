@@ -70,13 +70,14 @@
     }
     .call-stack-wrapper {
         background-color: var(--primary);
-        border-radius: 0.7rem;
+        border-radius: var(--r-overlay);
         /* the floating window's bottom edge sets it, when it has been dragged */
         max-height: var(--floating-body-max-height, 20rem);
         padding: 0.4rem;
         max-width: 12rem;
         overflow-y: auto;
-        box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+        /* the floating window's tray shadow below its bar, which casts none into it */
+        box-shadow: var(--shadow-2);
         border-top-left-radius: 0;
         border-top-right-radius: 0;
     }
@@ -112,12 +113,12 @@
         color: var(--primary-text);
         border-radius: 0.3rem;
         padding: 0.4rem;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         cursor: pointer;
         background-color: transparent;
     }
     .return-address:hover {
-        background-color: var(--tertiary);
+        background-color: var(--hover-bg);
     }
     .label-name {
         gap: 0.4rem;
@@ -127,12 +128,12 @@
         background-color: transparent;
         color: var(--primary-text);
         font-family: var(--font-ui);
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         border-radius: 0.3rem;
         cursor: pointer;
-        transition: all 0.1s;
+        transition: background-color var(--dur-fast);
         &:hover {
-            background-color: var(--tertiary);
+            background-color: var(--hover-bg);
         }
     }
     .noHover {

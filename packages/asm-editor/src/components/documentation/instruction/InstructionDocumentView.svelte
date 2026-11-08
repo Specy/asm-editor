@@ -342,12 +342,11 @@
         gap: 0.3rem 0.7rem;
         margin: 0;
         min-width: 0;
-        font-size: 1.3rem;
-        color: var(--background-text-prose);
-        opacity: 0.85;
+        font-size: var(--fs-h3);
+        color: var(--text-muted);
     }
     .panel .identity {
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
     }
     .long-name {
         font-weight: normal;
@@ -365,7 +364,7 @@
     .header-facts {
         max-width: 80ch;
         margin: 0;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     /* its own spaces, which Svelte would trim from the span's text */
@@ -407,10 +406,10 @@
     }
     .heading {
         margin: 0;
-        font-size: 1.25rem;
+        font-size: var(--fs-lead);
     }
     .panel .heading {
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
     details.section > summary {
         display: flex;
@@ -419,23 +418,23 @@
         gap: 0.6rem;
         cursor: pointer;
         font-weight: 600;
-        font-size: 1.25rem;
+        font-size: var(--fs-lead);
     }
     .panel details.section > summary {
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
     details.section > summary .heading {
         font-size: inherit;
     }
     .count {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         font-weight: normal;
         color: var(--background-text-prose);
     }
     .explanation {
         margin: 0;
         max-width: 80ch;
-        font-size: 0.88rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     /* Boxes are drawn with rules, not fills: the box's edge, a rule under its note and one
@@ -445,7 +444,7 @@
         flex-direction: column;
         min-width: 0;
         border: 1px solid var(--doc-rule);
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
     }
     /* the rule under the note spans its box; the words stop at a readable measure */
     .note-text {
@@ -456,7 +455,7 @@
         margin: 0;
         padding: 0.45rem 0.8rem;
         border-bottom: 1px solid var(--doc-rule);
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     .panel .note {
@@ -483,8 +482,9 @@
         font-size: var(--fs-small);
         cursor: pointer;
     }
+    /* the hover tint over its fill (D4) */
     .show-all:hover {
-        background-color: color-mix(in srgb, var(--accent) 25%, var(--tertiary));
+        background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
     }
     /* set apart from the reference above it and the example below it */
     .description {
@@ -502,7 +502,7 @@
     .description :global(._markdown p),
     .description :global(._markdown ul),
     .description :global(._markdown ol) {
-        font-family: inherit;
+        font-family: var(--font-ui);
         font-weight: normal;
         font-size: inherit;
     }

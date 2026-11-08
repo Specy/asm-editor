@@ -11,7 +11,7 @@
      */
     import { untrack } from 'svelte'
     import { sourceLanguage } from '#lib/sourceCompilation/records.ts'
-    import { prefersReducedMotion } from 'svelte/motion'
+    import { prefersLessMotion } from '#src/styles/motion.ts'
     import Splitter from '#cmp/shared/layout/Splitter.svelte'
     import MemoryControls from '#cmp/specific/project/memory/MemoryControls.svelte'
     import MemoryVisualiser from '#cmp/specific/project/memory/MemoryRenderer.svelte'
@@ -103,7 +103,7 @@
 
     $effect(() => {
         const maximized = ui.maximized && !phone && !!ui.activePanel
-        if (maximized || !ui.activePanel || phone || prefersReducedMotion.current) restoring = false
+        if (maximized || !ui.activePanel || phone || prefersLessMotion()) restoring = false
         else if (wasMaximized) restoring = true
         wasMaximized = maximized
     })
@@ -216,7 +216,6 @@
                                     <div class="memory-controls">
                                         <MemoryControls
                                             {emulator}
-                                            buttonVar="secondary"
                                             systemSize={emulator.systemSize}
                                             bytesPerPage={emulator.memory.global.pageSize}
                                             memorySize={MEMORY_SIZE[language]}
@@ -491,7 +490,7 @@
         position: absolute;
         inset: 0;
         z-index: 11;
-        background-color: rgb(0 0 0 / 0.4);
+        background-color: var(--scrim);
         backdrop-filter: blur(1px);
         cursor: default;
     }
@@ -525,15 +524,15 @@
             pointer-events: none;
             transform: translateX(-100%);
             transition:
-                transform 0.2s ease,
-                visibility 0s 0.2s;
+                transform var(--dur-base) ease,
+                visibility 0s var(--dur-base);
 
             &.shown {
                 visibility: visible;
                 pointer-events: auto;
                 transform: translateX(0);
                 transition:
-                    transform 0.2s ease,
+                    transform var(--dur-base) ease,
                     visibility 0s;
             }
 
@@ -544,11 +543,11 @@
 
         &.maximized {
             width: calc(100% - var(--wb-rail-width) - 2 * var(--wb-gap));
-            animation: expand-panel-width 0.2s ease;
+            animation: expand-panel-width var(--dur-base) ease;
         }
 
         &.restoring {
-            animation: restore-panel-width 0.2s ease forwards;
+            animation: restore-panel-width var(--dur-base) ease forwards;
         }
     }
 

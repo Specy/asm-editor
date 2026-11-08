@@ -1,6 +1,7 @@
 <script lang="ts">
     import RegisterFileRows from '#cmp/specific/project/cpu/RegisterFileRows.svelte'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
+    import TabStrip from '#cmp/shared/input/TabStrip.svelte'
     import SizeSelector from '#cmp/specific/project/cpu/SizeSelector.svelte'
     import StatusCodesRenderer from '#cmp/specific/project/cpu/StatusCodesRenderer.svelte'
     import {
@@ -136,6 +137,9 @@
     const maxGroupSize = $derived(file ? maxGroupSizeOf(file) : systemSize)
     const groupSize = $derived(file ? groupSizeOf(file) : systemSize)
     const tabs = $derived(files.map((candidate) => ({ id: candidate.id, label: candidate.label })))
+    const hasTabs = $derived(!withoutHeader && files.length > 1)
+    //the rows, the panel the tabs switch
+    const rowsId = $props.id()
     const formats = $derived(
         (file?.formats ?? []).map((offered) => ({ id: offered, label: FORMAT_LABELS[offered] }))
     )
@@ -150,17 +154,19 @@
         -->
         {#if !withoutHeader || file.flags.length > 0}
             <div class="registers-top">
-                {#if !withoutHeader && files.length > 1}
+                {#if hasTabs}
                     <!--
                         the tabs run the whole width of the panel, touching its edges and squared off
                         where they meet the rows, so the strip reads as the tabs of the thing below
                         it rather than as one more option control floating in the header
                     -->
-                    <SegmentedControl
-                        tabs
-                        options={tabs}
+                    <TabStrip
+                        look="panel"
+                        ariaLabel="Register files"
+                        {tabs}
                         selected={file.id}
-                        onSelect={(id) => (pickedId = id)}
+                        onselect={(id) => (pickedId = id)}
+                        panelId={() => rowsId}
                     />
                 {/if}
                 {#if !withoutHeader}
@@ -200,7 +206,12 @@
                 {/if}
             </div>
         {/if}
-        <div class="registers-scroll">
+        <div
+            class="registers-scroll"
+            id={rowsId}
+            role={hasTabs ? 'tabpanel' : undefined}
+            aria-label={hasTabs ? file.label : undefined}
+        >
             <RegisterFileRows
                 {file}
                 registers={file.registers}
@@ -285,7 +296,7 @@
     //grouping, and for a language with one file the title that line has always carried
     .registers-header {
         display: flex;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         padding: 0.2rem;
         gap: 0.3rem;
         align-items: center;

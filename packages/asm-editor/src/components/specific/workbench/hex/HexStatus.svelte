@@ -2,7 +2,9 @@
     import FaSearch from '~icons/fa-solid/search'
     import FaMapMarkerAlt from '~icons/fa-solid/map-marker-alt'
     import FaMicroscope from '~icons/fa-solid/microscope'
+    import Button from '#cmp/shared/button/Button.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
     import FileStatusLine, { byteCount } from '../FileStatusLine.svelte'
     import { offsetHex } from './hexGrid'
 
@@ -59,39 +61,43 @@
             <span class="fact region">{region}</span>
         {/if}
         {#if readOnly}
-            <span class="fact badge read-only" {@attach tooltip(readOnly)}>read-only</span>
+            <Badge class="read-only" {@attach tooltip(readOnly)}>read-only</Badge>
         {/if}
     {/snippet}
     {#snippet tools()}
         <!-- named as their words, which a narrow pane drops -->
-        <button
-            type="button"
+        <Button
+            kind="ghost"
+            size="sm"
             class="tool"
             aria-label="Find"
             {@attach tooltip('Find bytes or text', { shortcut: 'Mod+KeyF' })}
-            onclick={onFind}
+            onClick={onFind}
         >
             <FaSearch /><span>Find</span>
-        </button>
-        <button
-            type="button"
+        </Button>
+        <Button
+            kind="ghost"
+            size="sm"
             class="tool"
             aria-label="Go to"
             {@attach tooltip('Go to offset', { shortcut: 'Mod+KeyG' })}
-            onclick={onGoTo}
+            onClick={onGoTo}
         >
             <FaMapMarkerAlt /><span>Go to</span>
-        </button>
-        <button
-            type="button"
+        </Button>
+        <Button
+            kind="ghost"
+            size="sm"
             class="tool"
             aria-label="Inspector"
             {@attach tooltip('Data inspector: the bytes at the caret as numbers')}
             aria-pressed={inspectorOpen}
-            onclick={onToggleInspector}
+            active={inspectorOpen}
+            onClick={onToggleInspector}
         >
             <FaMicroscope /><span>Inspector</span>
-        </button>
+        </Button>
     {/snippet}
 </FileStatusLine>
 
@@ -112,12 +118,9 @@
         text-overflow: ellipsis;
         max-width: 14rem;
     }
-    .read-only {
-        background: color-mix(in srgb, var(--secondary-text) 14%, transparent);
-    }
     /* a narrow pane keeps the buttons' icons and drops their words */
     @container file-status (max-width: 30rem) {
-        .tool span {
+        :global(.tool) span {
             display: none;
         }
     }

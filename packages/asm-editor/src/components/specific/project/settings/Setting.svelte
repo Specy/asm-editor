@@ -2,6 +2,7 @@
     import type { PreferenceValue } from '#stores/preferencesStore.svelte.ts'
     import Switch from '#cmp/shared/input/Switch.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
+    import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
 
     interface Props {
         entry: PreferenceValue<unknown>
@@ -27,10 +28,10 @@
                     key: option.label,
                     value: option.value
                 }))}
+                compact
                 {value}
                 ariaLabel={entry.name}
                 {onChange}
-                style="padding: 0.4rem 0.6rem; background: var(--tertiary); color: var(--tertiary-text)"
                 wrapperStyle="min-width: 9rem; max-width: 12rem"
             />
         {/if}
@@ -46,7 +47,11 @@
                 oninput={() => onChange(Number(value))}
             />
         {:else if entry.type === 'number'}
-            <input class="number" type="number" bind:value onchange={() => onChange(value)} />
+            <NumberStepper
+                value={value as number}
+                ariaLabel={entry.name}
+                onchange={(next) => onChange(next)}
+            />
         {/if}
     </div>
 </div>
@@ -59,17 +64,15 @@
         gap: 0.4rem;
         min-height: calc(2rem + 0.4rem);
         padding: 0.2rem 0.4rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
     .range {
         width: 9rem;
         accent-color: var(--accent);
     }
-    .number {
-        padding: 0.6rem 1rem;
-        border-radius: var(--r-control);
-        width: 7rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
+    /* the stepper in the fields' colour */
+    .settings-value {
+        --stepper-background: var(--tertiary);
+        --stepper-text: var(--tertiary-text);
     }
 </style>

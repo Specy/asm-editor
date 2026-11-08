@@ -22,7 +22,7 @@
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { viewStore } from '#stores/view.ts'
     import { BASE_CODE, LANGUAGE_THEMES } from '#lib/Config.ts'
-    import Header from '#cmp/shared/layout/Header.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
     import { copyText, createShareLink } from '#lib/utils.ts'
     import { toast } from '#stores/toastStore.ts'
@@ -292,7 +292,7 @@
                                     />
                                 {/snippet}
                                 {#snippet loading()}
-                                    <Header>Loading emulator...</Header>
+                                    <Spinner size="lg" label="Loading emulator…" />
                                 {/snippet}
                             </EmulatorLoader>
                         {/key}
@@ -309,7 +309,7 @@
                             <div class="settings-grid">
                                 {#each switches as { key, label, description } (key)}
                                     <div class="share-settings">
-                                        <span>{label}</span>
+                                        <span class="ellipsis">{label}</span>
                                         <!-- a switch with a Tooltip is named by aria-label in place
                                              of the title that repeats its label (ADR 0064) -->
                                         <Switch
@@ -321,7 +321,7 @@
                                     </div>
                                 {/each}
                                 <div class="share-settings">
-                                    <span>Instruction Set</span>
+                                    <span class="ellipsis">Instruction Set</span>
                                     <Select
                                         onChange={changeLanguage}
                                         style="background-color: var(--tertiary); color: var(--secondary-text); padding: 0.3rem 0.6rem; gap: 0.4rem;"
@@ -339,9 +339,8 @@
                                     <p>Use this link to preview or share your configured editor.</p>
                                 </div>
                                 <Button
-                                    cssVar="secondary"
-                                    hasIcon
-                                    style="padding: 0.35rem 0.65rem; font-size: 0.78rem;"
+                                    kind="secondary"
+                                    size="sm"
                                     disabled={!generatedCode}
                                     onClick={() => void copyText(generatedCode, 'Embed URL')}
                                 >
@@ -357,9 +356,8 @@
                                     <p>Paste this HTML into your website to embed the editor.</p>
                                 </div>
                                 <Button
-                                    cssVar="secondary"
-                                    hasIcon
-                                    style="padding: 0.35rem 0.65rem; font-size: 0.78rem;"
+                                    kind="secondary"
+                                    size="sm"
                                     disabled={!generatedCode}
                                     onClick={() =>
                                         void copyText(generatedIframeCode, 'Iframe code')}
@@ -466,9 +464,6 @@
 
     .share-settings span {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     textarea {
@@ -480,7 +475,7 @@
         border-radius: var(--wb-radius, 0.4rem);
         padding: 0.5rem;
         color: var(--secondary-text);
-        font: 0.82rem/1.45 monospace;
+        font: 0.82rem/1.45 var(--font-mono);
         overflow-wrap: anywhere;
     }
 

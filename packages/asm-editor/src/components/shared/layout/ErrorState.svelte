@@ -84,7 +84,7 @@
         {#if reload || actions}
             <div class="actions">
                 {#if reload}
-                    <Button hasIcon onClick={() => location.reload()}>
+                    <Button onClick={() => location.reload()}>
                         <Icon size={0.85}>
                             <FaRedo />
                         </Icon>
@@ -180,12 +180,12 @@
         letter-spacing: -0.01em;
     }
     .compact .title {
-        font-size: 1.05rem;
+        font-size: var(--fs-prose);
     }
     .description {
         margin: 0;
         line-height: 1.5;
-        opacity: 0.85;
+        color: var(--text-muted);
         overflow-wrap: anywhere;
     }
     .compact .description {
@@ -243,7 +243,7 @@
             width: 0.8rem;
         }
         &:hover {
-            background: color-mix(in srgb, var(--tertiary) 60%, transparent);
+            background: var(--hover-bg);
         }
         &:focus-visible {
             outline: 2px solid var(--accent);
@@ -269,8 +269,8 @@
     }
     .report {
         margin: 0;
-        font-size: 0.9rem;
-        opacity: 0.75;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
 
         a {
             display: inline-flex;
@@ -288,7 +288,7 @@
         }
     }
     .compact .report {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
     /* a narrow column: the title shrinks and the actions take the full width */
     @container (max-width: 26rem) {

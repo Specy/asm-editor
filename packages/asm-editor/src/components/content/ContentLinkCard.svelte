@@ -28,7 +28,7 @@
         {#if secondary}
             <ButtonLink
                 href={secondary.href}
-                cssVar="secondary"
+                kind="secondary"
                 bordered
                 style="flex: 1 1 auto; min-width: 0; z-index: 1">{secondary.label}</ButtonLink
             >

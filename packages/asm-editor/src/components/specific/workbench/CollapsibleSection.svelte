@@ -152,7 +152,7 @@
         min-width: 0;
         background-color: var(--wb-surface, var(--secondary));
         color: var(--secondary-text);
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
         border: var(--wb-card-edge, none);
         border-bottom: var(--wb-section-rule, none);
         overflow: hidden;
@@ -196,7 +196,7 @@
 
         .toggle {
             padding: 0.45rem 0.5rem;
-            font-size: 0.95rem;
+            font-size: var(--fs-body);
             font-weight: 600;
 
             &:hover {
@@ -248,7 +248,7 @@
         cursor: pointer;
 
         &:hover {
-            background-color: color-mix(in srgb, var(--tertiary) 35%, transparent);
+            background-color: var(--hover-bg);
         }
     }
 
@@ -259,7 +259,7 @@
         width: 0.8rem;
         height: 0.8rem;
         opacity: 0.7;
-        transition: transform 0.15s;
+        transition: transform var(--dur-base);
 
         &.open {
             transform: rotate(90deg);
@@ -272,7 +272,7 @@
         align-items: center;
         gap: 0.3rem;
         flex: none;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
 
     /* the toggle runs to the header's right end, so only controls keep some room from it */
@@ -294,14 +294,14 @@
         min-height: 0;
         visibility: hidden;
         transition:
-            grid-template-rows 0.2s ease,
-            visibility 0s 0.2s;
+            grid-template-rows var(--dur-base) ease,
+            visibility 0s var(--dur-base);
 
         &.shown {
             grid-template-rows: 1fr;
             visibility: visible;
             transition:
-                grid-template-rows 0.2s ease,
+                grid-template-rows var(--dur-base) ease,
                 visibility 0s;
         }
 

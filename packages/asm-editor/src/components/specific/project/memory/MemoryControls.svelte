@@ -9,8 +9,8 @@
     } from '#lib/languages/memoryRegions.ts'
     import type { Emulator } from '#lib/languages/Emulator.ts'
     import type { MemoryRegion, DataLabel } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-    import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
-    import Button from '#cmp/shared/button/Button.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaSearch from '~icons/fa-solid/search'
     import FaAngleLeft from '~icons/fa-solid/angle-left'
@@ -35,11 +35,6 @@
         style?: string
         systemSize: RegisterSize
         onAddressChange: (address: bigint) => void
-        /**
-         * The buttons' colour: the page's own by default, where the controls sit on the page; a
-         * caller that puts them on a card passes the card's, so they read as part of it.
-         */
-        buttonVar?: ThemeKeys
         /** Whether the memory region picker sits after the page buttons. */
         showRegions?: boolean
     }
@@ -54,7 +49,6 @@
         style = '',
         systemSize,
         onAddressChange,
-        buttonVar = 'primary',
         showRegions = true
     }: Props = $props()
 
@@ -354,48 +348,38 @@
                         onkeydown={onAddressKeyDown}
                     />
                 </div>
-                <Button
+                <IconButton
+                    label="Search address"
+                    emphasis={searchChangesView}
+                    style="flex-shrink: 0"
                     onClick={searchAddress}
-                    hasIcon
-                    style="padding: 0; width:1.8rem; min-height: 1.8rem; flex-shrink: 0;"
-                    cssVar="unset"
-                    bg="transparent"
-                    color="var(--secondary-text)"
                     {@attach tooltip('Search address')}
-                    aria-label="Search address"
-                    active={searchChangesView}
                 >
                     <Icon size={1}>
                         <FaSearch />
                     </Icon>
-                </Button>
+                </IconButton>
             </div>
 
-            <Button
+            <IconButton
+                label="Previous page"
                 onClick={() => updateAddress(currentAddress - BigInt(bytesPerPage))}
-                hasIcon
-                style="padding: 0; width:1.8rem; min-height: 1.8rem;"
-                cssVar={buttonVar}
                 {@attach tooltip('Previous page')}
-                aria-label="Previous page"
             >
                 <Icon size={1.2}>
                     <FaAngleLeft />
                 </Icon>
-            </Button>
+            </IconButton>
 
-            <Button
+            <IconButton
+                label="Next page"
                 onClick={() => updateAddress(currentAddress + BigInt(bytesPerPage))}
-                hasIcon
-                style="padding: 0; width:1.8rem; min-height: 1.8rem;"
-                cssVar={buttonVar}
                 {@attach tooltip('Next page')}
-                aria-label="Next page"
             >
                 <Icon size={1.2}>
                     <FaAngleRight />
                 </Icon>
-            </Button>
+            </IconButton>
 
             {#if showRegions}
                 <!-- the title completes the region's name, which the trigger cuts short; the
@@ -413,10 +397,10 @@
                         )}
                         ariaLabel="Memory regions"
                         popupWidth={400}
-                        listStyle="border: 1px solid var(--tertiary);"
                         onToggle={(row) => foldChoices.set(String(row.key), !!row.expanded)}
                         wrapperStyle="height: 100%;"
-                        style="padding: 0.4rem 0.6rem; height: 100%; gap: 0.4rem; font-size: 0.8rem; border: 1px solid var(--memory-control-border);"
+                        compact
+                        style="height: 100%; gap: 0.4rem; font-size: 0.8rem; border: 1px solid var(--memory-control-border);"
                         onChange={(address) => {
                             if (address !== undefined) {
                                 error = ''
@@ -424,14 +408,15 @@
                             }
                         }}
                     >
-                        {#snippet trigger()}<span class="picker-current-region"
+                        {#snippet trigger()}<span class="picker-current-region ellipsis"
                                 >{currentRegion || 'Memory regions'}</span
                             >{/snippet}
                         {#snippet popupHeader({ focusOptions, close })}
                             <div class="picker-header">
-                                <input
+                                <TextField
                                     aria-label="Filter memory regions"
                                     placeholder="Filter regions and labels"
+                                    autocomplete="off"
                                     bind:value={filter}
                                     onkeydown={(event) => {
                                         if (event.key === 'ArrowDown') {
@@ -497,6 +482,9 @@
 </div>
 
 <style lang="scss">
+    @use '../../../../styles/radius.scss' as *;
+    @use '../../../../styles/field.scss';
+
     .memory-controls-layout {
         --memory-control-border: var(--line);
         container: memory-controls / inline-size;
@@ -509,16 +497,13 @@
         gap: 0.5rem;
         padding: 0.5rem;
     }
-    .picker-header > input {
+    /* a field, edged with the list's line, which the Select's Popover redefines as its text at
+       15% so that it shows on the list's own --tertiary */
+    .picker-header > :global(.text-field) {
         width: 100%;
-        padding: 0.5rem;
-        background: var(--primary);
-        color: var(--primary-text);
-        border: 1px solid var(--tertiary);
-        border-radius: 0.3rem;
     }
     .library-toggle {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -533,7 +518,7 @@
     }
     .destination small {
         margin-left: auto;
-        opacity: 0.7;
+        color: var(--text-muted);
         font-family: var(--font-mono);
     }
     .data-label {
@@ -567,7 +552,8 @@
             bottom: -0.5rem;
             left: calc(-1 * var(--reach-left));
             width: calc(var(--reach-left) + 1rem + var(--reach-right));
-            border-radius: 0.3rem;
+            /* the corners of the option it starts at the edge of, in the Select's list */
+            border-radius: nested-radius(var(--r-overlay), $border: 1px, $inset: 0.25rem);
         }
         &:hover::before {
             background: color-mix(in srgb, currentColor 18%, transparent);
@@ -591,7 +577,7 @@
     .swatch {
         width: 0.9rem;
         height: 0.9rem;
-        border: 1px solid var(--tertiary);
+        border: 1px solid var(--line);
         border-radius: 0.2rem;
         flex-shrink: 0;
     }
@@ -602,20 +588,17 @@
     }
     .picker-current-region {
         display: block;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
     .address-error {
         color: var(--danger);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
     .address-caption {
         margin-right: 0.35rem;
     }
     .hex-address-label {
         padding: 0.3rem 0;
-        opacity: 0.6;
+        color: var(--text-muted);
     }
     .address-search {
         display: flex;
@@ -624,19 +607,17 @@
         gap: 0.3rem;
     }
 
+    /* a field (styles/field.scss) round the caption, the 0x and the typed address */
     .hex-address {
+        @include field.box('.hex-address-input');
         flex: 1;
         min-width: 0;
         display: flex;
-        border: 1px solid var(--memory-control-border);
-        border-radius: var(--r-control);
         /* the text has as much room on its right as above and below it, the input's own 0.3rem
            included */
         padding: 0.2rem 0.2rem 0.2rem 0.6rem;
         align-items: center;
-        font-size: 0.9rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        font-size: var(--fs-small);
     }
     .hex-address-entry {
         position: relative;
@@ -657,7 +638,7 @@
         overflow: hidden;
         white-space: pre;
         pointer-events: none;
-        color: var(--secondary-text);
+        color: inherit;
     }
     .address-completion > span {
         flex-shrink: 0;
@@ -666,17 +647,13 @@
         visibility: hidden;
     }
     .completion-suffix {
-        opacity: 0.45;
+        color: var(--hint);
     }
     .hex-address-input {
         position: relative;
         width: 100%;
-        min-width: 0;
-        color: var(--secondary-text);
         display: flex;
         flex: 1;
-        border: none;
-        background-color: transparent;
     }
     @container memory-controls (max-width: 22rem) {
         .address-search:not(.without-regions) {

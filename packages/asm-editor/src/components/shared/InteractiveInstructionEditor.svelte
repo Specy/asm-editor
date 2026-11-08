@@ -40,6 +40,7 @@
     import RegisterFilesPanel from '#cmp/specific/project/cpu/RegisterFilesPanel.svelte'
     import ProcessorLine from '#cmp/specific/project/cpu/ProcessorLine.svelte'
     import CyclesLine from '#cmp/specific/project/cpu/CyclesLine.svelte'
+    import TabStrip from '#cmp/shared/input/TabStrip.svelte'
     import { onMount, type Snippet, untrack } from 'svelte'
     import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
     import type {
@@ -168,6 +169,8 @@
         dockActions = []
     }: Props = $props()
     const session = untrack(() => (project ? new PlaygroundSession(project) : undefined))
+    //the code, the panel the file tabs switch
+    const codePanelId = $props.id()
     $effect(() => {
         if (session && activePath && session.project.files[activePath])
             session.selected = activePath
@@ -615,23 +618,29 @@
 </script>
 
 {#snippet editorSurface()}
-    <div class="editor-border" class:failed={emulator.errors.length > 0}>
+    <div
+        class="editor-border"
+        class:failed={emulator.errors.length > 0}
+        class:has-files={!!session}
+    >
         {#if session}
-            <div class="playground-files" role="tablist" aria-label="Program files">
-                {#each Object.keys(session.project.files) as path (path)}
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={selectedFile === path}
-                        onclick={() => {
-                            session.selected = path
-                            activePath = path
-                        }}>{path}</button
-                    >
-                {/each}
-            </div>
+            <TabStrip
+                ariaLabel="Program files"
+                tabs={Object.keys(session.project.files).map((path) => ({ id: path, label: path }))}
+                selected={selectedFile}
+                panelId={() => codePanelId}
+                onselect={(path) => {
+                    session.selected = path
+                    activePath = path
+                }}
+            />
         {/if}
-        <div class="playground-code">
+        <div
+            class="playground-code"
+            id={codePanelId}
+            role={session ? 'tabpanel' : undefined}
+            aria-label={session ? selectedFile : undefined}
+        >
             <Editor
                 onChange={handleEditorChange}
                 onBreakpointPress={(line) => emulator.toggleBreakpoint(line - 1, selectedFile)}
@@ -772,7 +781,6 @@
         <div class="memory-controls">
             <MemoryControls
                 {emulator}
-                buttonVar="secondary"
                 showRegions={showMemoryRegions}
                 systemSize={emulator.systemSize}
                 bytesPerPage={emulator.memory.global.pageSize}
@@ -1102,16 +1110,9 @@
         min-width: 0;
         min-height: 0;
         background-color: var(--secondary);
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
         border: var(--wb-card-edge, 1px solid var(--line));
         overflow: hidden;
-    }
-
-    .playground-files {
-        display: flex;
-        flex: none;
-        overflow-x: auto;
-        border-bottom: 1px solid var(--wb-line);
     }
 
     .playground-code {
@@ -1122,25 +1123,9 @@
         min-height: 0;
     }
 
-    .editor-border:has(.playground-files) {
+    /* the file tabs, when the Playground has several files, above the code */
+    .editor-border.has-files {
         flex-direction: column;
-    }
-    .playground-files button {
-        flex: none;
-        padding: 0.35rem 0.65rem;
-        color: var(--hint);
-        background: transparent;
-        border: 0;
-        border-bottom: 2px solid transparent;
-        cursor: pointer;
-    }
-    .playground-files button[aria-selected='true'] {
-        color: var(--primary-text);
-        border-bottom-color: var(--accent);
-    }
-    .playground-files button:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
     }
 
     /* the shadow Monaco draws under the top edge once the code is scrolled */
@@ -1159,9 +1144,9 @@
         z-index: 6;
         content: '';
         inset: 0;
-        border: 0.2rem solid var(--danger);
+        border: 3px solid var(--danger);
         pointer-events: none;
-        animation: appear 0.3s ease-in;
+        animation: appear var(--dur-base) ease-in;
     }
 
     @keyframes appear {

@@ -213,7 +213,7 @@
     .nav-agent-toggle {
         height: 2.2rem;
         padding: 0.3rem 0.8rem;
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         border-radius: 1.5rem;
         border-bottom-right-radius: 0.4rem;
         font-weight: bold;

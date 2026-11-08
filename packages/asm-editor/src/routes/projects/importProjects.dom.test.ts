@@ -257,7 +257,7 @@ it('says the stored projects could not be read rather than that there are none',
         read.mockRestore()
         await ProjectStore.load()
         flushSync()
-        expect(target.querySelector('.empty-title')?.textContent).toBe('No projects yet')
+        expect(target.querySelector('.empty-state .title')?.textContent).toBe('No projects yet')
     } finally {
         await dispose()
     }
@@ -299,10 +299,10 @@ it('says it is reading the projects until it has read them, not that there are n
         await vi.waitFor(() => expect(read).toHaveBeenCalled())
         flushSync()
         expect(target.querySelector('[role="status"]')?.textContent).toBe('Reading your projects…')
-        expect(target.querySelector('.empty-title')).toBeNull()
+        expect(target.querySelector('.empty-state .title')).toBeNull()
         finish([])
         await vi.waitFor(() =>
-            expect(target.querySelector('.empty-title')?.textContent).toBe('No projects yet')
+            expect(target.querySelector('.empty-state .title')?.textContent).toBe('No projects yet')
         )
         expect(target.querySelector('[role="status"]')).toBeNull()
     } finally {

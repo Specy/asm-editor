@@ -29,8 +29,14 @@
     import type { PseudocodeSearchProgress } from '#lib/pseudocode/pseudocodeSearchCache.ts'
     import FaAngleRight from '~icons/fa-solid/angle-right'
     import FaEllipsisH from '~icons/fa-solid/ellipsis-h'
-    import FaSearch from '~icons/fa-solid/search'
     import SourceFileIcon from '#cmp/specific/project/SourceFileIcon.svelte'
+    import Button from '#cmp/shared/button/Button.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
+    import SearchField from '#cmp/search/SearchField.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
+    import Switch from '#cmp/shared/input/Switch.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { usesCommandKey } from '#stores/shortcutsStore.ts'
     import { useWorkbench } from './workbenchContext'
@@ -403,42 +409,46 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="search-controls" onkeydown={onControlsKeydown}>
         <div class="query-row">
-            <div class="query" class:invalid={search.status === 'invalid'}>
-                <span class="query-icon" aria-hidden="true"><FaSearch /></span>
-                <input
-                    bind:this={queryInput}
-                    bind:value={search.text}
-                    type="text"
-                    spellcheck="false"
-                    autocomplete="off"
-                    aria-label="Search"
-                    placeholder="Search"
-                    aria-invalid={search.status === 'invalid'}
-                    aria-describedby={search.status === 'invalid' ? problemId : undefined}
-                    onkeydown={onQueryKeydown}
-                />
-                {#each TOGGLES as option (option.key)}
-                    <button
-                        type="button"
-                        class="toggle {option.key}"
-                        aria-pressed={search[option.key]}
-                        aria-label={option.label}
-                        {@attach tooltip(option.label, { shortcut: option.shortcut })}
-                        onclick={() => (search[option.key] = !search[option.key])}
-                        >{option.glyph}</button
-                    >
-                {/each}
-            </div>
-            <button
-                type="button"
+            <SearchField
+                size="sm"
+                type="text"
+                clearable={false}
+                invalid={search.status === 'invalid'}
+                bind:el={queryInput}
+                bind:value={search.text}
+                label="Search"
+                placeholder="Search"
+                aria-invalid={search.status === 'invalid'}
+                aria-describedby={search.status === 'invalid' ? problemId : undefined}
+                onkeydown={onQueryKeydown}
+            >
+                {#snippet end()}
+                    <span class="toggles">
+                        {#each TOGGLES as option (option.key)}
+                            <IconButton
+                                size="sm"
+                                quiet
+                                class="toggle {option.key}"
+                                pressed={search[option.key]}
+                                label={option.label}
+                                {@attach tooltip(option.label, { shortcut: option.shortcut })}
+                                onClick={() => (search[option.key] = !search[option.key])}
+                                >{option.glyph}</IconButton
+                            >
+                        {/each}
+                    </span>
+                {/snippet}
+            </SearchField>
+            <IconButton
+                quiet
                 class="details"
+                label="Files to include and exclude"
                 aria-expanded={search.details}
-                aria-label="Files to include and exclude"
                 {@attach tooltip('Files to include and exclude')}
-                onclick={() => (search.details = !search.details)}
+                onClick={() => (search.details = !search.details)}
             >
                 <FaEllipsisH />
-            </button>
+            </IconButton>
         </div>
         {#if search.status === 'invalid' && search.problem}
             <p class="problem" id={problemId}>{search.problem}</p>
@@ -446,20 +456,18 @@
         {#if search.details || search.include || search.exclude}
             <label class="pattern">
                 <span>Files to include</span>
-                <input
+                <TextField
+                    size="sm"
                     bind:value={search.include}
-                    type="text"
-                    spellcheck="false"
                     autocomplete="off"
                     placeholder="*.c, src/**"
                 />
             </label>
             <label class="pattern">
                 <span>Files to exclude</span>
-                <input
+                <TextField
+                    size="sm"
                     bind:value={search.exclude}
-                    type="text"
-                    spellcheck="false"
                     autocomplete="off"
                     placeholder="*.md, build/**"
                 />
@@ -470,11 +478,10 @@
                 <legend>Look in</legend>
                 {#each LOOK_IN as place (place.key)}
                     <label {@attach tooltip(place.title)}>
-                        <input
-                            type="checkbox"
+                        <Switch
                             checked={lookIn[place.key]}
-                            onchange={(event) =>
-                                search.setLookIn(place.key, event.currentTarget.checked)}
+                            style="--switch-width: 1.9rem; --switch-height: 1.05rem; --switch-padding: 0.15rem"
+                            onChange={(checked) => search.setLookIn(place.key, checked)}
                         />
                         {place.label}
                     </label>
@@ -491,10 +498,13 @@
                 {#if listing?.status === 'generating'}
                     <div class="lane">
                         <p>
-                            Generating the Listing of {lane.name}{listing.document.progress ===
-                            undefined
-                                ? '…'
-                                : `: ${Math.round(listing.document.progress * 100)}%`}
+                            <Spinner
+                                announce={false}
+                                label="Generating the Listing of {lane.name}{listing.document
+                                    .progress === undefined
+                                    ? '…'
+                                    : `: ${Math.round(listing.document.progress * 100)}%`}"
+                            />
                         </p>
                         <progress
                             max="1"
@@ -515,10 +525,12 @@
                                         'en-US'
                                     )} functions of {lane.name}
                                 </p>
-                                <button
-                                    type="button"
+                                <Button
+                                    kind="ghost"
+                                    size="sm"
+                                    bordered
                                     class="lane-action"
-                                    onclick={() => search.cancel(lane.path)}>Cancel</button
+                                    onClick={() => search.cancel(lane.path)}>Cancel</Button
                                 >
                             </div>
                             <progress
@@ -535,21 +547,25 @@
                                         'en-US'
                                     )} functions of {lane.name}. Press Resume to search the rest.
                                 </p>
-                                <button
-                                    type="button"
+                                <Button
+                                    kind="ghost"
+                                    size="sm"
+                                    bordered
                                     class="lane-action"
-                                    onclick={() => search.decompile(lane.path)}>Resume</button
+                                    onClick={() => search.decompile(lane.path)}>Resume</Button
                                 >
                             {:else}
                                 <p>
                                     {lane.name} has {progress.total.toLocaleString('en-US')} functions.
                                     Their Pseudocode is decompiled when you search.
                                 </p>
-                                <button
-                                    type="button"
+                                <Button
+                                    kind="ghost"
+                                    size="sm"
+                                    bordered
                                     class="lane-action"
-                                    onclick={() => search.decompile(lane.path)}
-                                    >Decompile now</button
+                                    onClick={() => search.decompile(lane.path)}
+                                    >Decompile now</Button
                                 >
                             {/if}
                         </div>
@@ -563,15 +579,17 @@
                                 {#each progress.failures as failure (failure.address)}
                                     <li title={failure.error}>
                                         <span class="failure-name">{failure.name}</span>
-                                        <span class="failure-error">{failure.error}</span>
+                                        <span class="failure-error ellipsis">{failure.error}</span>
                                         {#if failure.retryable}
-                                            <button
-                                                type="button"
+                                            <Button
+                                                kind="ghost"
+                                                size="sm"
+                                                bordered
                                                 class="lane-action"
                                                 aria-label={`Try ${failure.name} again`}
-                                                onclick={() =>
+                                                onClick={() =>
                                                     search.retry(lane.path, failure.address)}
-                                                >Try again</button
+                                                >Try again</Button
                                             >
                                         {/if}
                                     </li>
@@ -581,11 +599,14 @@
                     {/if}
                 {/if}
             {/each}
-            <p class="announcement" role="status" aria-live="polite">{laneAnnouncement}</p>
+            <p class="announcement visually-hidden" role="status" aria-live="polite">
+                {laneAnnouncement}
+            </p>
         </div>
     {/if}
 
     {#if nothingTicked}
+        <!-- an instruction, as the one before a query is, not an empty list -->
         <p class="note">Nothing to search: tick Files, Listings or Pseudocode under “Look in”.</p>
     {:else if !search.text}
         <p class="note">
@@ -642,12 +663,14 @@
                         />
                         <span class="group-name ellipsis">{fileName(group.path)}</span>
                         {#if group.kind !== 'file'}
-                            <span class="view-tag"
-                                >{group.kind === 'listing' ? 'Listing' : 'Pseudocode'}</span
+                            <Badge class="view-tag" tone="accent"
+                                >{group.kind === 'listing' ? 'Listing' : 'Pseudocode'}</Badge
                             >
                         {/if}
                         <span class="folder ellipsis">{folderOf(group.path)}</span>
-                        <span class="count-badge">{group.matches.toLocaleString('en-US')}</span>
+                        <Badge class="count-badge" solid
+                            >{group.matches.toLocaleString('en-US')}</Badge
+                        >
                     </div>
                 {:else if item.type === 'function'}
                     {@const fn = item.result.document.function}
@@ -672,8 +695,8 @@
                             ><FaAngleRight /></span
                         >
                         <span class="function-name ellipsis">{fn?.name}</span>
-                        <span class="count-badge"
-                            >{item.result.matches.toLocaleString('en-US')}</span
+                        <Badge class="count-badge" solid
+                            >{item.result.matches.toLocaleString('en-US')}</Badge
                         >
                     </div>
                 {:else}
@@ -703,8 +726,12 @@
             {#if hidden > 0}
                 <div class="more">
                     <span>{count(hidden, 'more line')} not shown</span>
-                    <button type="button" class="lane-action" onclick={() => search.showMore()}
-                        >Show more</button
+                    <Button
+                        kind="ghost"
+                        size="sm"
+                        bordered
+                        class="lane-action"
+                        onClick={() => search.showMore()}>Show more</Button
                     >
                 </div>
             {/if}
@@ -713,13 +740,15 @@
 </section>
 
 <style lang="scss">
+    @use '../../../styles/rows.scss';
+
     .search {
         position: relative;
         display: flex;
         flex-direction: column;
         flex: 1;
         min-height: 0;
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
     }
 
     .search-controls {
@@ -736,112 +765,48 @@
         gap: 0.3rem;
     }
 
-    /* the Symbols panel's filter, with the three toggles at its end */
-    .query {
-        display: flex;
+    /* the query, a SearchField taking the row, and its three options at its end */
+    .query-row > :global(.search-field) {
         flex: 1;
-        align-items: center;
-        gap: 0.2rem;
-        min-width: 0;
-        min-height: 2rem;
-        padding: 0.2rem 0.25rem 0.2rem 0.6rem;
-        border-radius: 0.5rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-
-        &:focus-within {
-            outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
-        }
-
-        &.invalid {
-            outline: 2px solid color-mix(in srgb, var(--danger) 75%, transparent);
-        }
-
-        input {
-            flex: 1;
-            min-width: 0;
-            padding: 0 0 0 0.25rem;
-            border: none;
-            outline: none;
-            background: transparent;
-            color: inherit;
-            font: inherit;
-        }
     }
 
-    .query-icon {
+    .toggles {
         display: flex;
         flex: none;
-        width: 0.75rem;
-        height: 0.75rem;
-        opacity: 0.7;
+        gap: 0.2rem;
     }
 
-    .toggle {
-        display: grid;
-        place-items: center;
-        flex: none;
-        min-width: 1.45rem;
-        height: 1.45rem;
+    /* the three options, small pressed IconButtons with letters for icons */
+    .toggles :global(.icon-button.toggle) {
+        width: auto;
+        min-width: var(--icon-button-size);
         /* Fira Code's glyphs sit a little above the middle of their line box */
         padding: 0.1em 0.2rem 0;
-        border: 1px solid transparent;
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
+        /* the SearchField's, which these sit inside (D12) */
+        border-radius: var(--search-field-inner-radius, 0.3rem);
         font-family: var(--font-mono);
-        font-size: 0.7rem;
+        font-size: var(--fs-caption);
         line-height: 1;
-        opacity: 0.75;
-        cursor: pointer;
-
-        &:hover {
-            opacity: 1;
-            background-color: color-mix(in srgb, var(--tertiary-text) 12%, transparent);
-        }
-
-        &[aria-pressed='true'] {
-            opacity: 1;
-            color: var(--accent-text);
-            background-color: var(--accent);
-        }
-
-        /* the underline already fills the space below the letters */
-        &.wholeWord {
-            padding-top: 0;
-            text-decoration: underline;
-            text-underline-offset: 0.18em;
-        }
     }
 
-    /* as tall as the query box beside it, and square */
-    .details {
-        display: grid;
-        place-items: center;
-        flex: none;
-        align-self: stretch;
-        width: 2rem;
-        min-height: 2rem;
-        padding: 0.57rem;
-        border: none;
-        border-radius: 0.5rem;
-        background: transparent;
-        color: inherit;
-        opacity: 0.75;
-        cursor: pointer;
+    /* the underline already fills the space below the letters */
+    .toggles :global(.icon-button.wholeWord) {
+        padding-top: 0;
+        text-decoration: underline;
+        text-underline-offset: 0.18em;
+    }
 
-        &:hover,
-        &[aria-expanded='true'] {
-            opacity: 1;
-            background-color: var(--tertiary);
-        }
+    /* its fields shown: tinted as under the pointer, and in the panel's text */
+    .query-row :global(.details[aria-expanded='true']) {
+        color: inherit;
+        background-color: var(--hover-bg);
     }
 
     .problem {
         margin: 0;
         padding: 0 0.3rem;
         color: var(--danger);
-        font-size: 0.72rem;
+        font-size: var(--fs-caption);
         line-height: 1.35;
         overflow-wrap: anywhere;
     }
@@ -850,24 +815,14 @@
         display: flex;
         flex-direction: column;
         gap: 0.2rem;
-        font-size: 0.7rem;
-        opacity: 0.9;
+        font-size: var(--fs-caption);
 
-        input {
-            min-width: 0;
-            min-height: 1.8rem;
-            padding: 0.2rem 0.5rem;
-            border: none;
-            border-radius: var(--r-control);
-            outline: none;
-            background-color: var(--tertiary);
-            color: var(--tertiary-text);
-            font: inherit;
-            font-size: 0.78rem;
+        > span {
+            color: var(--text-muted);
+        }
 
-            &:focus {
-                outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
-            }
+        :global(.text-field) {
+            font-size: var(--fs-caption);
         }
     }
 
@@ -884,8 +839,8 @@
             float: left;
             margin-right: 0.2rem;
             padding: 0;
-            font-size: 0.7rem;
-            opacity: 0.7;
+            font-size: var(--fs-caption);
+            color: var(--text-muted);
         }
 
         label {
@@ -894,11 +849,6 @@
             gap: 0.3rem;
             min-height: 1.4rem;
             cursor: pointer;
-        }
-
-        input {
-            margin: 0;
-            accent-color: var(--accent);
         }
     }
 
@@ -912,7 +862,7 @@
 
     .lane {
         margin: 0;
-        font-size: 0.72rem;
+        font-size: var(--fs-caption);
         line-height: 1.35;
 
         p {
@@ -941,20 +891,9 @@
         }
     }
 
-    .lane-action {
+    /* a lane's actions, small ghosts (D5) edged with the panel's line */
+    .search :global(.lane-action) {
         flex: none;
-        padding: 0.15rem 0.5rem;
-        border: 1px solid var(--wb-line, var(--tertiary));
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        font-size: 0.7rem;
-        cursor: pointer;
-
-        &:hover {
-            background-color: var(--tertiary);
-        }
     }
 
     .failures {
@@ -984,20 +923,7 @@
     .failure-error {
         flex: 1;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        opacity: 0.65;
-    }
-
-    .announcement {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        margin: -1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
+        color: var(--text-muted);
     }
 
     .note {
@@ -1012,8 +938,8 @@
         flex: none;
         margin: 0;
         padding: 0 0.8rem 0.3rem;
-        font-size: 0.7rem;
-        opacity: 0.7;
+        font-size: var(--fs-caption);
+        color: var(--text-muted);
 
         &:empty {
             display: none;
@@ -1021,7 +947,6 @@
 
         &.failed {
             color: var(--danger);
-            opacity: 1;
         }
     }
 
@@ -1052,7 +977,7 @@
 
         &:hover,
         &:focus-visible {
-            background: var(--tertiary);
+            background: var(--hover-bg);
         }
 
         &:focus-visible {
@@ -1073,7 +998,7 @@
         width: 0.8rem;
         height: 0.8rem;
         opacity: 0.7;
-        transition: transform 0.1s;
+        transition: transform var(--dur-base);
 
         &.open {
             transform: rotate(90deg);
@@ -1085,10 +1010,9 @@
         }
     }
 
+    /* the global class cuts the text short; a flex item has to be let shrink for it to */
     .ellipsis {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
 
     .group {
@@ -1100,39 +1024,21 @@
         max-width: 60%;
     }
 
-    .view-tag {
-        flex: none;
-        padding: 0.02rem 0.3rem;
-        border-radius: var(--r-pill);
-        background: color-mix(in srgb, var(--accent) 12%, transparent);
-        color: var(--accent);
-        font-size: 0.6rem;
-        font-weight: 600;
-    }
-
     .folder {
         flex: 1;
-        font-size: 0.7rem;
+        font-size: var(--fs-caption);
         font-weight: normal;
-        opacity: 0.55;
+        color: var(--text-muted);
     }
 
-    .count-badge {
-        flex: none;
-        min-width: 1.2rem;
+    .item :global(.count-badge) {
         margin-left: auto;
-        padding: 0 0.35rem;
-        border-radius: var(--r-pill);
-        background: var(--tertiary);
-        font-size: var(--fs-micro);
-        font-weight: normal;
-        text-align: center;
     }
 
     .function {
         padding-left: 1.2rem;
         font-family: var(--font-mono);
-        font-size: 0.72rem;
+        font-size: var(--fs-caption);
 
         .function-name {
             flex: 1;
@@ -1142,7 +1048,7 @@
     .row {
         gap: 0.5rem;
         font-family: var(--font-mono);
-        font-size: 0.72rem;
+        font-size: var(--fs-caption);
 
         &.level-2 {
             padding-left: 1.6rem;
@@ -1153,8 +1059,7 @@
         }
 
         &.opened {
-            background: color-mix(in srgb, var(--accent) 24%, var(--tertiary));
-            box-shadow: inset 2px 0 0 var(--accent);
+            @include rows.selected;
         }
     }
 
@@ -1162,7 +1067,7 @@
         flex: none;
         min-width: 2ch;
         text-align: right;
-        opacity: 0.5;
+        color: var(--text-muted);
     }
 
     .row-text {
@@ -1184,7 +1089,10 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.4rem 0.8rem;
-        font-size: 0.72rem;
-        opacity: 0.85;
+        font-size: var(--fs-caption);
+
+        > span {
+            color: var(--text-muted);
+        }
     }
 </style>

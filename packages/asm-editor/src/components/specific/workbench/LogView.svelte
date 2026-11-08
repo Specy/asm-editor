@@ -1,5 +1,6 @@
 <script lang="ts">
     /** The Log: what the Workbench did, newest at the bottom. */
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { noteSpans, type LogEntry, type LogTone } from '#lib/workbench/workbenchLog.ts'
 
     interface Props {
@@ -34,9 +35,9 @@
 
 <div class="log" bind:this={element}>
     {#if entries.length === 0}
-        <p class="empty">
+        <EmptyState>
             Builds, test runs, program exits and notes on what a run met are recorded here.
-        </p>
+        </EmptyState>
     {/if}
     {#each entries as entry (entry.id)}
         <div class="entry {entry.tone}">
@@ -71,15 +72,13 @@
         scrollbar-gutter: stable;
         padding: var(--wb-output-padding);
         font-family: var(--font-mono);
-        font-size: 0.82rem;
+        font-size: var(--fs-small);
         line-height: 1.55;
     }
 
-    .empty {
-        margin: 0;
-        font-family: Rubik, sans-serif;
-        font-size: 0.8rem;
-        color: var(--hint);
+    /* the Log's own padding is the empty state's */
+    .log {
+        --empty-state-padding: 0;
     }
 
     .entry {
@@ -113,22 +112,25 @@
         code {
             font: inherit;
             padding: 0 0.25rem;
-            border-radius: 0.2rem;
+            border-radius: var(--r-chip);
             background-color: color-mix(in srgb, var(--hint) 16%, transparent);
         }
     }
 
+    /* the Testcases' passed green, the success colour as text (`--success-ink`): on a dark theme
+       the dark green brightened 1.6 times, which reads at 4.5:1 where the green alone does not */
     .success .mark {
-        color: var(--success);
-        filter: brightness(1.6);
+        color: var(--success-ink);
     }
 
     .warning .mark {
         color: var(--warning);
     }
 
+    /* the Testcases' failed red, the danger colour mixed with the text, 4.5:1 where the pure
+       colour is not */
     .error .mark {
-        color: var(--danger);
+        color: color-mix(in srgb, var(--danger) 75%, currentColor);
     }
 
     .info .mark {

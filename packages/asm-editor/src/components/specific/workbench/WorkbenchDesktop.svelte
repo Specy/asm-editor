@@ -8,7 +8,7 @@
      * itself for a program's input and output, until the person sizes it during that session.
      */
     import { untrack } from 'svelte'
-    import { prefersReducedMotion } from 'svelte/motion'
+    import { prefersLessMotion } from '#src/styles/motion.ts'
     import Splitter from '#cmp/shared/layout/Splitter.svelte'
     import { LAYOUT_LIMITS, workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
     import IconRail from './IconRail.svelte'
@@ -58,7 +58,7 @@
     // Keep the panel over the editor until its return to the saved width finishes.
     $effect(() => {
         const maximized = ui.maximized && !!panelId
-        if (maximized || !panelId || prefersReducedMotion.current) restoring = false
+        if (maximized || !panelId || prefersLessMotion()) restoring = false
         else if (wasMaximized) restoring = true
         wasMaximized = maximized
     })
@@ -249,7 +249,7 @@
             bottom: var(--wb-gap);
             left: calc(var(--wb-gap) + var(--wb-card-inset) + var(--wb-rail-width));
             width: calc(100% - 2 * var(--wb-gap) - var(--wb-card-inset) - var(--wb-rail-width));
-            animation: expand-panel-width 0.2s ease;
+            animation: expand-panel-width var(--dur-base) ease;
             overflow: hidden;
             background-color: var(--wb-surface);
             border-radius: 0 var(--wb-radius) var(--wb-radius) 0;
@@ -257,7 +257,7 @@
         }
 
         &.restoring {
-            animation: restore-panel-width 0.2s ease forwards;
+            animation: restore-panel-width var(--dur-base) ease forwards;
         }
     }
 

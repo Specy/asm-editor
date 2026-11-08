@@ -168,6 +168,28 @@ describe('the CSS variables', () => {
         expect(css).toContain('--line-strong: var(--tertiary);')
         expect(css).toContain('--selected-bg: color-mix(in srgb, var(--accent) 20%, transparent);')
     })
+
+    it("keep a dark theme's hint and brightened success ink", () => {
+        for (const theme of BUILTIN_THEMES) {
+            const css = themeCssVariables(theme.theme, ThemeStore.meta)
+            expect(css).toContain('--hint: #939393;')
+            expect(css).toContain(
+                '--success-ink: rgb(from var(--success) calc(r * 1.6) calc(g * 1.6) calc(b * 1.6));'
+            )
+        }
+    })
+
+    it('give a light custom theme a darker hint and the plain success colour as ink', () => {
+        const light = structuredClone(DEFAULT_THEME.theme)
+        light.background.color = '#eef0f4'
+        light.primary.color = '#f7f8fa'
+        light.secondary.color = '#e3e6ec'
+        light.tertiary.color = '#d2d7e0'
+        const css = themeCssVariables(light, ThemeStore.meta)
+        expect(css).toContain('--hint: #575b61;')
+        expect(css).toContain('--hint-text: #dbdbdb;')
+        expect(css).toContain('--success-ink: var(--success);')
+    })
 })
 
 describe('a saved theme', () => {

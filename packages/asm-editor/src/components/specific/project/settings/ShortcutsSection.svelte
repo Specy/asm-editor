@@ -83,7 +83,7 @@
             <div class="row" style="gap:0.3rem">
                 <Button
                     active={entry[1].id === selectedId}
-                    cssVar="tertiary"
+                    kind="secondary"
                     onClick={() => {
                         selectedId = entry[1].id
                     }}
@@ -92,8 +92,8 @@
                 </Button>
                 {#if entry[1].id === selectedId}
                     <Button
-                        hasIcon
                         style="min-height: 2.2rem"
+                        aria-label="Save the shortcut"
                         onClick={() => {
                             shortcutsStore.updateKey(entry[0], currentShortcut)
                             selectedId = -1
@@ -105,9 +105,10 @@
                     </Button>
                 {:else}
                     <Button
-                        hasIcon
                         style="min-height: 2.2rem"
-                        cssVar={entry[0] !== entry[1].defaultValue ? 'accent' : 'tertiary'}
+                        kind="secondary"
+                        active={entry[0] !== entry[1].defaultValue}
+                        aria-label="Reset to the default shortcut"
                         disabled={entry[0] === entry[1].defaultValue}
                         onClick={() => shortcutsStore.updateKey(entry[0], entry[1].defaultValue)}
                     >

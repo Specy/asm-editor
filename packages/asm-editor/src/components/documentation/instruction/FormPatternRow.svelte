@@ -174,7 +174,7 @@
         padding: 0.25rem 0.5rem 0.25rem 0.3rem;
     }
     .pattern-head.expandable:hover {
-        background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
+        background-color: var(--hover-bg);
     }
     .pattern-head:has(.toggle:focus-visible) {
         outline: 2px solid var(--accent);
@@ -219,7 +219,7 @@
         display: flex;
         width: 0.6rem;
         height: 0.6rem;
-        transition: transform 0.15s ease;
+        transition: transform var(--dur-base) ease;
     }
     .expanded .chevron {
         transform: rotate(90deg);
@@ -234,7 +234,7 @@
         overflow-wrap: anywhere;
     }
     .compact .syntax {
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
     .symbol {
         padding: 0;
@@ -282,10 +282,10 @@
     .compact .pattern-facts {
         flex-basis: 100%;
         margin-left: 1.8rem;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
     .dot {
-        opacity: 0.6;
+        color: var(--text-muted);
     }
     .row-note {
         margin: -0.15rem 0.8rem 0.35rem 2.3rem;
@@ -328,7 +328,7 @@
         padding: 0.1rem 0.4rem;
         border-radius: var(--r-chip);
         font-family: var(--font-mono);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         font-variant-ligatures: none;
         background-color: var(--tertiary);
         color: var(--tertiary-text);
@@ -361,7 +361,7 @@
         gap: 0.3rem;
         padding: 0.5rem 0;
         list-style: none;
-        font-size: 0.88rem;
+        font-size: var(--fs-small);
         min-width: 0;
     }
     .form-line {
@@ -390,7 +390,7 @@
     .form-note {
         max-width: 80ch;
         margin: 0;
-        font-size: 0.82rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     .form-facts {

@@ -35,11 +35,10 @@
     <!-- the slot keeps the one-line height, so the whole message opens over what follows -->
     <div class="slot">
         <div class="message" class:expanded>
-            <span class="text" class:expanded id={`${id}-message`}>{AGENT_MESSAGE}</span>
+            <span class="text ellipsis" class:expanded id={`${id}-message`}>{AGENT_MESSAGE}</span>
             <div class="actions">
                 <Button
-                    cssVar="tertiary"
-                    hasIcon
+                    kind="secondary"
                     style={`${BUTTON_STYLE} width: var(--button); padding: 0;`}
                     aria-label={expanded
                         ? 'Show the message on one line'
@@ -56,9 +55,9 @@
                     </Icon>
                 </Button>
                 <Button
-                    cssVar="tertiary"
-                    hasIcon
-                    style={`${BUTTON_STYLE} padding: 0 0.75rem; font-size: 0.85rem; gap: 0.4rem;`}
+                    kind="secondary"
+                    size="sm"
+                    style={`${BUTTON_STYLE} padding: 0 0.75rem; gap: 0.4rem;`}
                     onClick={() => void copyText(AGENT_MESSAGE, 'Message')}
                 >
                     <Icon size={0.9}><FaCopy /></Icon>
@@ -139,9 +138,6 @@
         --half: calc((var(--button) - var(--line-height)) / 2);
         line-height: var(--line-height);
         padding: calc(var(--half) + 1px) 0 calc(var(--half) - 1px);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
     .text.expanded {
         white-space: normal;

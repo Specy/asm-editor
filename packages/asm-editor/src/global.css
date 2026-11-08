@@ -146,6 +146,18 @@ body {
     color: var(--background-text-prose);
 }
 
+/* A heading inside a panel, such as Settings' Display or the Explorer's Hints (design-system.md,
+   D6): sentence case, at the caption's size, told from the rows under it by its weight, in the
+   text colour of the surface it is on. The side panel's own title (EXPLORER, SETTINGS) is the one
+   heading that stays in capitals. */
+.small-heading {
+    font-family: var(--font-ui);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
 a {
     text-decoration: none;
     color: inherit;
@@ -239,13 +251,17 @@ button {
     font-family: var(--font-ui);
 }
 
-/* Monaco's context menu, a translucent tint (its theme's menu.background) that blurs what is
-   beneath, as the app's own context menus and prompts are. Its menu.border is drawn this thick:
-   Monaco's stylesheet borders the menu by --vscode-strokeThickness, which the standalone editor
-   never defines, so it had no border at all. */
+/* Monaco's context menu, a Popover as the app's own context menus are: a translucent tint (its
+   theme's menu.background) that blurs what is beneath, on their corner and shadow. Its menu.border
+   is drawn this thick: Monaco's stylesheet borders the menu by --vscode-strokeThickness, which the
+   standalone editor never defines, so it had no border at all. Its rows sit 4px inside that border,
+   so their corner is nested-radius(var(--r-overlay), $border: 1px, $inset: 4px) (styles/radius.scss)
+   written out, which this stylesheet, not being SCSS, cannot call. */
 .context-view.monaco-menu-container {
-    --vscode-cornerRadius-large: 0.4rem;
+    --vscode-cornerRadius-large: var(--r-overlay);
+    --vscode-cornerRadius-medium: max(0px, calc(var(--r-overlay) - 1px - 4px));
     --vscode-strokeThickness: 1px;
+    --vscode-shadow-lg: var(--shadow-3);
     backdrop-filter: blur(4px);
 }
 

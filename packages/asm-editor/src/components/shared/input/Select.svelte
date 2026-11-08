@@ -32,6 +32,7 @@
      */
     import { tick, type Component, type Snippet } from 'svelte'
     import { cubicOut } from 'svelte/easing'
+    import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import type { HTMLButtonAttributes } from 'svelte/elements'
     import Icon from '#cmp/shared/layout/Icon.svelte'
 
@@ -74,8 +75,8 @@
         openAbove?: boolean
         /** An icon drawn in place of the triangle, turned over while the list is open. */
         chevron?: Component
-        /** Added to the list's own style, such as a border that sets it apart from the panel under it. */
-        listStyle?: string
+        /** Smaller, for a panel's rows of settings. */
+        compact?: boolean
     }
 
     let {
@@ -94,7 +95,7 @@
         popupWidth,
         openAbove = false,
         chevron,
-        listStyle = '',
+        compact = false,
         ...rest
     }: Props = $props()
 
@@ -116,7 +117,10 @@
     /** The header's height, which an option scrolled into view keeps clear of. */
     let headerHeight = $state(0)
 
-    const selectedIndex = $derived(options.findIndex((option) => option.value === value))
+    //a row heading a group is never the value, though it may carry the one a caller uses for none
+    const selectedIndex = $derived(
+        options.findIndex((option) => option.expanded === undefined && option.value === value)
+    )
     const label = $derived(options[selectedIndex]?.key ?? '')
 
     function selectable(index: number) {
@@ -196,18 +200,14 @@
     })
 
     /**
-     * Grows out of the control and shrinks back into it, from whichever edge it opened against.
-     * Short on purpose: this sits between a click and a choice, so it has to stay out of the way.
-     * Reduced motion collapses the duration rather than skipping the transition, so the open and
-     * close paths stay identical.
+     * Grows out of the control and shrinks back into it, from whichever edge it opened against,
+     * in a Popover's time (`--dur-base`, D13). Reduced motion collapses the duration rather than
+     * skipping the transition (`motion()`), so the open and close paths stay identical.
      */
-    function popup(_node: HTMLElement, { duration = 130 }: { duration?: number } = {}) {
-        const reduced =
-            typeof window !== 'undefined' &&
-            window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    function popup(_node: HTMLElement, { duration = DUR_BASE }: { duration?: number } = {}) {
         const from = placement.openUp ? 4 : -4
         return {
-            duration: reduced ? 0 : duration,
+            duration: motion(duration),
             easing: cubicOut,
             css: (t: number) =>
                 `opacity: ${t}; transform: translateY(${(1 - t) * from}px) scaleY(${0.94 + 0.06 * t});`
@@ -359,6 +359,7 @@
         {...rest}
         {disabled}
         class="control"
+        class:compact
         {style}
         role="combobox"
         aria-haspopup="listbox"
@@ -370,7 +371,7 @@
         onclick={() => (open ? closeList() : openList())}
         onkeydown={onKeyDown}
     >
-        <span class="label"
+        <span class="label ellipsis"
             >{#if trigger}{@render trigger()}{:else}{label}{/if}</span
         >
         {#if chevron}
@@ -395,7 +396,7 @@
             transition:popup
             style="top: {placement.top}px; left: {placement.left}px; width: {placement.width}px; max-height: {placement.maxHeight}px; transform-origin: {placement.openUp
                 ? 'bottom'
-                : 'top'}; scroll-padding-top: {headerHeight}px; {listStyle}"
+                : 'top'}; scroll-padding-top: {headerHeight}px;"
         >
             {#if popupHeader}<li role="presentation" class="popup-header" bind:this={header}>
                     {@render popupHeader({
@@ -443,48 +444,49 @@
 </div>
 
 <style lang="scss">
+    @use '../../../styles/field.scss';
+    @use '../../../styles/popover.scss';
+    @use '../../../styles/radius.scss' as *;
+    @use '../../../styles/rows.scss';
+
     .wrapper {
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
     }
 
+    /* a field, as TextField is (styles/field.scss), and as tall as one */
     .control {
+        @include field.surface;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 0.75rem;
         width: 100%;
-        padding: 0.7rem 1rem;
-        border: none;
-        border-radius: var(--r-control);
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        padding: 0.5rem 0.75rem;
         font-family: inherit;
         font-size: inherit;
         text-align: left;
         cursor: pointer;
     }
 
+    /* a panel's settings: smaller */
+    .control.compact {
+        padding: 0.4rem 0.6rem;
+    }
+
+    /* the hover every row and tool takes (D4), over its fill */
     .control:hover:not(:disabled) {
-        filter: brightness(1.1);
+        background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
     }
 
     .control:disabled {
-        opacity: 0.6;
-        cursor: default;
-    }
-
-    .control:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     .label {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     .chevron {
@@ -501,7 +503,7 @@
         display: flex;
         flex-shrink: 0;
         opacity: 0.8;
-        transition: transform 0.15s ease;
+        transition: transform var(--dur-base) ease;
     }
 
     .chevron-icon.open {
@@ -515,8 +517,9 @@
     }
 
     /* fixed, not absolute: an absolutely positioned popup is part of the page's scrollable
-       overflow and grows the document when it opens near the bottom */
+       overflow and grows the document when it opens near the bottom. A Popover, as the menus are */
     .list {
+        @include popover.surface;
         position: fixed;
         inset: auto;
         z-index: 100;
@@ -525,37 +528,41 @@
         margin: 0;
         padding: 0.25rem;
         list-style: none;
-        border-radius: 0.4rem;
-        border: none;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        box-shadow: var(--shadow-3);
     }
 
     /* over the options as they scroll past, set apart from them by a line from edge to edge. It
-       reaches over the list's padding, which it sticks within, and gives it back to its content */
+       reaches over the list's padding, which it sticks within, and gives it back to its content.
+       Opaque, so the options do not show through it: the list's tint without what is beneath */
     .popup-header {
         position: sticky;
         top: -0.25rem;
         z-index: 1;
         margin: -0.25rem -0.25rem 0.25rem;
         padding: 0.25rem 0.25rem 0;
-        background-color: var(--secondary);
-        border-bottom: 1px solid var(--tertiary);
+        background-color: var(--tertiary);
+        border-bottom: 1px solid var(--line);
     }
 
     .option {
         padding: 0.5rem 0.75rem;
-        border-radius: 0.3rem;
+        /* inside the list's 1px edge and 0.25rem padding, its curve parallel to the list's */
+        border-radius: nested-radius(var(--r-overlay), $border: 1px, $inset: 0.25rem);
         cursor: pointer;
     }
 
+    /* the option the pointer or the arrow keys are on: the list's text at 10% */
     .option.active {
-        background-color: rgba(var(--RGB-accent), 0.25);
+        background-color: var(--hover-bg);
     }
 
+    /* the value chosen, which is the one the control holds */
     .option[aria-selected='true'] {
-        font-weight: bold;
+        @include rows.selected;
+
+        /* the pointer or the arrow keys on it too: the hover over the selection */
+        &.active {
+            background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
+        }
     }
 
     .option.disabled {

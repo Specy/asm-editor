@@ -13,7 +13,7 @@
      */
     import Workbench from '#cmp/specific/workbench/Workbench.svelte'
     import { EXAM_PANEL_ACCESS } from './examAccess'
-    import Header from '#cmp/shared/layout/Header.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import FaFileAlt from '~icons/fa-solid/file-alt'
     import type { AssemblyCodingSection } from '#lib/exam.ts'
@@ -105,7 +105,7 @@
         bind:activePanel
     >
         {#snippet loading()}
-            <Header>Loading emulator...</Header>
+            <Spinner size="lg" label="Loading emulator…" />
         {/snippet}
     </Workbench>
 </div>

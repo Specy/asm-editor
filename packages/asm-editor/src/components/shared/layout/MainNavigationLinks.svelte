@@ -69,8 +69,8 @@
         flex: none;
         align-items: center;
         height: 2.2rem;
-        font-size: 0.95rem;
-        color: color-mix(in srgb, var(--background-text) 70%, transparent);
+        font-size: var(--fs-body);
+        color: var(--text-muted);
     }
 
     .link[aria-current] {
@@ -101,13 +101,13 @@
         height: 100%;
     }
 
-    @container main-links (max-width: 20rem) {
+    @container main-links (max-width: 21rem) {
         .embed {
             display: none;
         }
     }
 
-    @container main-links (max-width: 16rem) {
+    @container main-links (max-width: 17rem) {
         .blog {
             display: none;
         }
@@ -119,7 +119,7 @@
         }
 
         .link {
-            font-size: 0.9rem;
+            font-size: var(--fs-small);
         }
 
         .embed {

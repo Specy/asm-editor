@@ -1,19 +1,25 @@
 <script lang="ts">
     /**
-     * The search box of the Documentation panel and of the palette. Pointing at it, focusing it or
+     * A search or filter box: an icon, the field, the controls a caller adds at its end, and a
+     * clear button once something is typed, drawn as every field is (`styles/field.scss`). The
+     * Documentation panel's and the palette's are `semantic`: pointing at one, focusing it or
      * typing in it starts the search model loading; while it loads, a spinner and a short status
      * say the results are by words only for now
      * ([ADR 0026](../../../../../docs/adr/0026-hybrid-search-in-the-browser-over-a-build-time-index.md)).
      * The status is a live region, there from the start so its change is announced; on a narrow
-     * box only the spinner shows and the words are left to screen readers.
+     * box only the spinner shows and the words are left to screen readers. The Symbols and Search
+     * panels' filters are not: they match the Project's own text.
      */
+    import type { Component, Snippet } from 'svelte'
     import FaSearch from '~icons/fa-solid/search'
     import FaTimes from '~icons/fa-solid/times'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { HTMLInputAttributes } from 'svelte/elements'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
 
-    interface Props extends Omit<HTMLInputAttributes, 'value'> {
+    interface Props extends Omit<HTMLInputAttributes, 'value' | 'size'> {
         value: string
         el?: HTMLInputElement
         placeholder?: string
@@ -24,6 +30,20 @@
          * results, rather than a box inside it.
          */
         bare?: boolean
+        /** Whether it searches with the search model, which it then warms and reports on. */
+        semantic?: boolean
+        /** The icon at its start, a magnifier when left out. */
+        icon?: Component
+        /** `sm` for a side panel's filter. */
+        size?: 'sm' | 'md'
+        /** Whether a button to clear it shows once something is typed. */
+        clearable?: boolean
+        /** The clear button's name and Tooltip. */
+        clearLabel?: string
+        /** Edged in the danger colour; the caller says why (`aria-invalid`, `aria-describedby`). */
+        invalid?: boolean
+        /** Controls at its end, before the clear button, such as a search's options. */
+        end?: Snippet
     }
 
     let {
@@ -32,19 +52,35 @@
         placeholder = 'Search',
         label = 'Search',
         bare = false,
+        semantic = false,
+        icon: Icon = FaSearch,
+        size = 'md',
+        clearable = true,
+        clearLabel = 'Clear the search',
+        invalid = false,
+        end,
         ...rest
     }: Props = $props()
 
-    const loading = $derived(searchClient.model === 'loading')
-    const warm = () => searchClient.warmModel()
+    const loading = $derived(semantic && searchClient.model === 'loading')
+    const warm = () => {
+        if (semantic) searchClient.warmModel()
+    }
 </script>
 
-<div class="search-field" class:bare onpointerenter={warm} onfocusin={warm} role="presentation">
+<div
+    class="search-field {size}"
+    class:bare
+    class:invalid
+    onpointerenter={warm}
+    onfocusin={warm}
+    role="presentation"
+>
     <span class="icon" aria-hidden="true">
         {#if loading}
-            <span class="spinner keeps-moving"></span>
+            <Spinner />
         {:else}
-            <FaSearch />
+            <Icon />
         {/if}
     </span>
     <input
@@ -54,37 +90,48 @@
         spellcheck="false"
         autocomplete="off"
         aria-label={label}
-        aria-busy={loading}
+        aria-busy={semantic ? loading : undefined}
         oninput={warm}
         {placeholder}
         {...rest}
     />
-    <span
-        class="status"
-        class:quiet={!loading}
-        role="status"
-        title={loading ? 'Downloading the search model: matching words only for now' : undefined}
-    >
-        {#if loading}Loading semantic search…{/if}
-    </span>
-    {#if value}
-        <button
-            type="button"
-            class="clear"
-            {@attach tooltip('Clear the search')}
-            aria-label="Clear the search"
-            onclick={() => {
+    {#if semantic}
+        <span
+            class="status"
+            class:visually-hidden={!loading}
+            role="status"
+            title={loading
+                ? 'Downloading the search model: matching words only for now'
+                : undefined}
+        >
+            {#if loading}Loading semantic search…{/if}
+        </span>
+    {/if}
+    {@render end?.()}
+    {#if clearable && value}
+        <IconButton
+            size="sm"
+            quiet
+            label={clearLabel}
+            {@attach tooltip(clearLabel)}
+            onClick={() => {
                 value = ''
                 el?.focus()
             }}
         >
             <FaTimes />
-        </button>
+        </IconButton>
     {/if}
 </div>
 
-<style>
+<style lang="scss">
+    @use '../../styles/field.scss';
+    @use '../../styles/radius.scss' as *;
+    @use '../../styles/visually-hidden.scss' as *;
+
+    /* a field (styles/field.scss) round its icon, its text and its buttons */
     .search-field {
+        @include field.box;
         container-type: inline-size;
         position: relative;
         display: flex;
@@ -93,23 +140,41 @@
         padding: 0.45rem 0.6rem;
         /* Tall enough for the clear button, so the field does not grow when it appears. */
         min-height: calc(1.4rem + 0.9rem);
-        border-radius: 0.5rem;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
         min-width: 0;
     }
-    .search-field:focus-within {
-        outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+    /* a side panel's: as tall as its rows of controls, its buttons a quarter rem inside its edge,
+       their corners running parallel to its own (D12); the caller's buttons at its end take the
+       same corner, `--search-field-inner-radius` */
+    .search-field.sm {
+        --search-field-inner-radius: #{nested-radius(
+                var(--r-control),
+                $border: 1px,
+                $inset: 0.25rem
+            )};
+        gap: 0.45rem;
+        min-height: 2rem;
+        padding: 0.2rem 0.25rem 0.2rem 0.6rem;
+
+        > :global(.icon-button) {
+            border-radius: var(--search-field-inner-radius);
+        }
+    }
+    .search-field.invalid {
+        border-color: var(--danger);
+    }
+    .search-field.invalid:has(input:focus-visible) {
+        outline-color: var(--danger);
     }
     .search-field.bare {
         gap: 0.65rem;
         padding: 0.5rem 0.4rem;
+        border: none;
         background-color: transparent;
         color: inherit;
         font-size: var(--fs-body);
     }
     /* the caret is enough: the field is the only thing in its dialog that takes focus */
-    .search-field.bare:focus-within {
+    .search-field.bare:has(input:focus-visible) {
         outline: none;
     }
     .bare .icon {
@@ -118,84 +183,41 @@
         opacity: 0.6;
     }
     .bare input::placeholder {
-        color: inherit;
-        opacity: 0.5;
+        color: var(--hint);
     }
-    .bare .clear:hover {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-    }
+    /* its font size the box's, which the spinner standing in for the icon is drawn at */
     .icon {
         display: flex;
         width: 0.95rem;
         height: 0.95rem;
         flex: none;
+        font-size: 0.95rem;
         opacity: 0.7;
+    }
+    .sm .icon {
+        width: 0.75rem;
+        height: 0.75rem;
+        font-size: 0.75rem;
     }
     input {
         flex: 1;
-        min-width: 0;
-        border: none;
-        outline: none;
-        background: transparent;
-        color: inherit;
-        font: inherit;
         padding: 0;
     }
     input::-webkit-search-cancel-button {
         display: none;
     }
-    .clear {
-        display: flex;
-        flex: none;
-        width: 1.4rem;
-        height: 1.4rem;
-        padding: 0.3rem;
-        border: none;
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-        opacity: 0.7;
-    }
-    .clear:hover {
-        opacity: 1;
-        background-color: color-mix(in srgb, var(--tertiary-text) 12%, transparent);
-    }
     .status {
         flex: none;
         font-size: var(--fs-caption);
         white-space: nowrap;
-        opacity: 0.7;
+        color: var(--text-muted);
     }
-    /* Out of sight, not out of the accessibility tree, so the live region is there before it speaks. */
-    .status.quiet {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-    }
-    /* Too narrow for the words beside the query: the spinner alone shows, the words stay for screen readers. */
+    /* Too narrow for the words beside the query: the spinner alone shows, the words stay for
+       screen readers. Out of sight while quiet too (the global class), so the live region is there
+       before it speaks. */
     @container (max-width: 20rem) {
         .status {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            overflow: hidden;
-            clip-path: inset(50%);
-        }
-    }
-    .spinner {
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        border: 2px solid color-mix(in srgb, var(--tertiary-text) 30%, transparent);
-        border-top-color: var(--accent);
-        animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-        to {
-            transform: rotate(360deg);
+            @include visually-hidden;
         }
     }
 </style>

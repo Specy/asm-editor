@@ -63,7 +63,7 @@
         min-width: 0;
     }
     figcaption {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     .fill {

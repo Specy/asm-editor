@@ -6,6 +6,7 @@
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaSave from '~icons/fa-solid/save'
     import FaBars from '~icons/fa-solid/bars'
@@ -16,23 +17,25 @@
 </script>
 
 <header class="top-bar">
-    <button
-        class="icon-button rail-width"
+    <IconButton
+        size="lg"
+        class="rail-width"
+        label="Open the menu"
         {@attach tooltip('Open the menu')}
-        aria-label="Open the menu"
         aria-expanded={ui.drawerOpen}
-        onclick={() => (ui.drawerOpen = !ui.drawerOpen)}
+        onClick={() => (ui.drawerOpen = !ui.drawerOpen)}
     >
         <Icon size={1.2}>
             <FaBars />
         </Icon>
-    </button>
+    </IconButton>
     <h1 class="title ellipsis" title={context.title}>{context.title}</h1>
     {#if context.onSave && context.unsaved}
         <Button
-            cssVar="accent2"
-            hasIcon
-            style="padding: 0 0.7rem; height: 1.9rem; gap: 0.4rem; flex: none; font-size: 0.9rem;"
+            bg="var(--accent2)"
+            color="var(--accent2-text)"
+            size="sm"
+            style="gap: 0.4rem; flex: none;"
             {@attach tooltip('Save the Project')}
             onClick={() => session.save()}
         >
@@ -56,28 +59,15 @@
         border-bottom: 1px solid var(--wb-divider);
     }
 
-    .rail-width {
-        flex: none;
+    /* the whole of the bar's height, as wide as the rail under it */
+    .top-bar :global(.rail-width) {
         align-self: stretch;
         width: var(--wb-rail-width);
-    }
-
-    .icon-button {
-        display: grid;
-        place-items: center;
-        padding: 0;
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-        border-radius: 0.3rem;
-
-        &:hover {
-            background-color: var(--secondary);
-        }
+        height: auto;
     }
 
     .title {
-        font-size: 1.05rem;
+        font-size: var(--fs-prose);
         font-weight: bold;
         min-width: 3rem;
         margin: 0;

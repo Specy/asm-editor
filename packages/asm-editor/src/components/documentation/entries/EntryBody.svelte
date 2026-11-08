@@ -145,9 +145,9 @@
     .entry-body :global(._markdown p),
     .entry-body :global(._markdown ul),
     .entry-body :global(._markdown ol) {
-        font-family: inherit;
+        font-family: var(--font-ui);
         font-weight: normal;
-        font-size: 0.92rem;
+        font-size: var(--fs-small);
         width: 100%;
         margin: 0;
     }
@@ -168,7 +168,7 @@
     .entry-body :global(blockquote) {
         margin: 0.2rem 0;
         padding: 0.4rem 0.7rem;
-        border-left: 0.2rem solid var(--accent);
+        border-left: 3px solid var(--accent);
         border-radius: 0.3rem;
         background-color: color-mix(in srgb, var(--accent) 8%, transparent);
     }
@@ -177,18 +177,18 @@
     }
     .entry-body :global(._markdown td),
     .entry-body :global(._markdown th) {
-        font-family: inherit;
+        font-family: var(--font-ui);
     }
     .fields {
         display: grid;
         grid-template-columns: max-content 1fr;
         gap: 0.3rem 0.8rem;
         margin: 0;
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
     }
     dt {
         font-family: var(--font-mono);
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         color: var(--accent);
         white-space: nowrap;
     }

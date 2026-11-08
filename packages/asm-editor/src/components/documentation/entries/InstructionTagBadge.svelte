@@ -21,6 +21,7 @@
      * the forms that have it ([the design record](../../../../../../docs/design/instruction-categories.md)).
      */
     import { tagLabel } from '#lib/documentation/instructions/categories.ts'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
 
     interface Props {
         tag: InstructionTag
@@ -31,20 +32,6 @@
     let { tag, title }: Props = $props()
 </script>
 
-<span class="instruction-tag" data-tag={tag} title={title ?? TAG_TITLES[tag]}>{tagLabel(tag)}</span>
-
-<style>
-    .instruction-tag {
-        display: inline-block;
-        padding: 0 0.35rem;
-        border-radius: 0.3rem;
-        font-size: 0.7rem;
-        font-family: Rubik, sans-serif;
-        font-weight: normal;
-        line-height: 1.5;
-        background-color: var(--accent2);
-        color: var(--accent2-text);
-        white-space: nowrap;
-        vertical-align: middle;
-    }
-</style>
+<Badge class="instruction-tag" tone="info" solid data-tag={tag} title={title ?? TAG_TITLES[tag]}
+    >{tagLabel(tag)}</Badge
+>

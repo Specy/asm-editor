@@ -142,6 +142,18 @@ function toRgbChannels(color: string) {
 }
 
 /**
+ * The hint a light custom theme gets in place of the shared `#939393`, which a dark theme's
+ * surfaces were picked for: 4.5:1 or more on light surfaces as dark as `#d2d7e0`
+ * (design-system-changes.md, S3-97).
+ */
+const LIGHT_THEME_HINT = '#575b61'
+/**
+ * The success colour as text: on a dark theme the shared green brightened 1.6 times (`#55aa8e`,
+ * the passed verdicts' colour), on a light one the green itself, which reads there (S3-69, S3-97).
+ */
+const SUCCESS_INK_ON_DARK = 'rgb(from var(--success) calc(r * 1.6) calc(g * 1.6) calc(b * 1.6))'
+
+/**
  * The custom properties a theme stands for, as the body of a `style` attribute.
  *
  * Written once and read both by the provider that dresses the whole app and by the scope that
@@ -152,7 +164,11 @@ export function themeCssVariables(
     theme: Record<ThemeKeys, ThemeProp<ThemeKeys>>,
     text: ThemeTextColors
 ) {
-    const declarations = Object.values(theme).map(({ name, color }) => {
+    //a custom theme can be light; the shared read-only colours are picked for a dark one
+    const light = !new TinyColor(theme.background.color).isDark()
+    const declarations = Object.values(theme).map(({ name, prop, color: picked }) => {
+        //the faintest text, on a light theme a grey dark enough to read on its surfaces
+        const color = light && prop === 'hint' ? LIGHT_THEME_HINT : picked
         const isDark = new TinyColor(color).isDark()
         const foreground = isDark ? text.textForDark : text.textForLight
         //the dimmed variant of the same text, for prose sitting on this color
@@ -170,6 +186,7 @@ export function themeCssVariables(
     //here so that they resolve against the colours of the element that carries the theme
     return `${declarations.join('\n')}
     --scroll-accent: ${theme.scrollbar.color};
+    --success-ink: ${light ? 'var(--success)' : SUCCESS_INK_ON_DARK};
     --line: color-mix(in srgb, var(--tertiary) 60%, transparent);
     --line-strong: var(--tertiary);
     --selected-bg: color-mix(in srgb, var(--accent) 20%, transparent);

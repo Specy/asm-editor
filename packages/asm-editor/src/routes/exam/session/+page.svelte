@@ -1,4 +1,5 @@
 <script lang="ts">
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { browser } from '$app/env'
     import { page } from '$app/state'
     import { goto } from '$app/navigation'
@@ -7,8 +8,9 @@
     import Column from '#cmp/shared/layout/Column.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
-    import Input from '#cmp/shared/input/Input.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
@@ -719,7 +721,7 @@
 <Page fillsScreen>
     {#if status === 'loading'}
         <div class="overlay">
-            <h1 class="loading">Loading exam...</h1>
+            <Spinner size="lg" label="Loading exam…" />
             {#if examSubmission.hash}
                 <p class="student-code">{examSubmission.hash}</p>
             {:else}
@@ -738,7 +740,7 @@
                 {errorMessage}
                 {#snippet actions()}
                     <Button
-                        cssVar={loadError !== undefined ? 'tertiary' : 'unset'}
+                        kind={loadError !== undefined ? 'secondary' : 'primary'}
                         onClick={() => goto(resolve('/exam'))}
                     >
                         Back to exam builder
@@ -755,9 +757,10 @@
                 <h1 class="loading">Exam disabled</h1>
                 <p>The exam was paused because you left fullscreen or changed tab.</p>
                 <Row gap="1rem">
-                    <Input
-                        autoComplete="one-time-code"
+                    <TextField
+                        autocomplete="one-time-code"
                         type="password"
+                        aria-label="Unlock password"
                         placeholder="Unlock password"
                         bind:value={unlockPasswordInput}
                     />
@@ -777,9 +780,10 @@
                     You can also copy it again if needed.
                 </p>
                 <Row gap="1rem">
-                    <Input
-                        autoComplete="one-time-code"
+                    <TextField
+                        autocomplete="one-time-code"
                         type="password"
+                        aria-label="Unlock password"
                         placeholder="Unlock password"
                         bind:value={unlockPasswordInput}
                     />
@@ -823,8 +827,6 @@
                     <div class="header-controls">
                         {#if isReviewMode && AI_FEATURES_ENABLED}
                             <Button
-                                cssVar="accent"
-                                hasIcon
                                 onClick={() => {
                                     //an assembly section shows the agent as a panel of its Workbench
                                     if (activeSection?.type === ExamSectionType.AssemblyCoding) {
@@ -847,36 +849,31 @@
                                 {exerciseProgressLabel}
                             </span>
                         {/if}
-                        <Button
-                            cssVar="secondary"
-                            hasIcon
+                        <IconButton
                             disabled={!canGoToPreviousSection}
                             onClick={goToPreviousSection}
                             {@attach tooltip('Previous section')}
-                            aria-label="Previous section"
-                            style="padding:0.3rem; width:2.2rem; height:2.2rem"
+                            label="Previous section"
+                            size="lg"
                         >
                             <Icon>
                                 <FaArrowLeft />
                             </Icon>
-                        </Button>
+                        </IconButton>
 
-                        <Button
-                            cssVar="secondary"
-                            hasIcon
+                        <IconButton
                             disabled={!canGoToNextSection}
                             onClick={goToNextSection}
                             {@attach tooltip('Next section')}
-                            aria-label="Next section"
-                            style="padding:0.3rem; width:2.2rem; height:2.2rem"
+                            label="Next section"
+                            size="lg"
                         >
                             <Icon>
                                 <FaArrowRight />
                             </Icon>
-                        </Button>
+                        </IconButton>
                         {#if !isReviewMode}
                             <Button
-                                cssVar="accent"
                                 disabled={!isOnLastSection || isSubmitted}
                                 onClick={() => finishExam()}
                                 style="margin-left: 0.4rem"
@@ -1072,9 +1069,6 @@
         z-index: 12;
         padding: 1rem;
         text-align: center;
-    }
-    .loading {
-        font-size: 2.6rem;
     }
 
     .meta-line {

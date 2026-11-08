@@ -6,7 +6,7 @@
 }
 .blog-intro h1,
 .blog-article-header h1 {
-    font-family: Rubik, sans-serif;
+    font-family: var(--font-ui);
     font-size: 3.2rem;
     line-height: 1.12;
     letter-spacing: -0.035em;
@@ -15,7 +15,7 @@
     text-wrap: balance;
 }
 .blog-lead {
-    font-family: Rubik, sans-serif;
+    font-family: var(--font-ui);
     font-size: 1.4rem;
     line-height: 1.5;
     opacity: 0.85;
@@ -168,7 +168,7 @@
 }
 .blog-article,
 .blog-outline {
-    font-family: Rubik, sans-serif;
+    font-family: var(--font-ui);
     font-size: var(--fs-body);
     font-weight: 400;
 }
@@ -263,7 +263,7 @@
 }
 .blog-article ._markdown h2,
 .blog-article ._markdown h3 {
-    font-family: Rubik, sans-serif;
+    font-family: var(--font-ui);
     font-weight: 800;
     letter-spacing: 0.02em;
 }
@@ -297,7 +297,7 @@
     border-radius: 0.6rem;
     background: var(--accent);
     color: var(--accent-text);
-    font-family: Rubik, sans-serif;
+    font-family: var(--font-ui);
     font-size: var(--fs-body);
     font-weight: 500;
     line-height: 1.4;

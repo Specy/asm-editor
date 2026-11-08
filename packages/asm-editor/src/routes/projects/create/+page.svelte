@@ -5,7 +5,8 @@
 
     import Button from '#cmp/shared/button/Button.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
-    import Input from '#cmp/shared/input/Input.svelte'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
     import Textarea from '#cmp/shared/input/Textarea.svelte'
     import Title from '#cmp/shared/layout/Header.svelte'
@@ -150,7 +151,7 @@
             style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; margin:0.5rem 0"
             onSubmit={create}
         >
-            <Input title="Name" placeholder="Name" bind:value={name} />
+            <TextField label="Name" placeholder="Name" bind:value={name} />
             <Textarea title="Description" bind:value={description} />
             <Select
                 title="Instruction Set"
@@ -165,7 +166,7 @@
                         {#if tags.length}
                             <span class="language-badges">
                                 {#each tags as tag (tag)}
-                                    <span class="language-badge">{tag}</span>
+                                    <Badge tone="accent">{tag}</Badge>
                                 {/each}
                             </span>
                         {/if}
@@ -176,7 +177,7 @@
                 <Select title="Template" options={templateOptions} bind:value={templateId}>
                     {#snippet item(option)}
                         <span class="template-option-name">{option.key}</span>
-                        <span class="template-option-description">
+                        <span class="template-option-description ellipsis">
                             {templates.find((template) => template.id === option.value)
                                 ?.description ?? ''}
                         </span>
@@ -190,7 +191,7 @@
         <div
             style="display:flex; justify-content: space-between; align-items:center; margin-top: 1rem;"
         >
-            <ButtonLink href="/projects" cssVar="primary" {@attach tooltip('Cancel new project')}
+            <ButtonLink href="/projects" kind="secondary" {@attach tooltip('Cancel new project')}
                 >Cancel
             </ButtonLink>
             <Button onClick={create}>Create</Button>
@@ -245,16 +246,6 @@
         gap: 0.3rem;
     }
 
-    .language-badge {
-        padding: 0.15rem 0.45rem;
-        border-radius: 0.3rem;
-        background: color-mix(in srgb, var(--accent) 12%, transparent);
-        color: var(--accent);
-        font-size: 0.7rem;
-        font-weight: normal;
-        white-space: nowrap;
-    }
-
     .template-option-name {
         display: block;
     }
@@ -262,10 +253,7 @@
     /* one row, clipped: a description is a hint at what the program does, not the program */
     .template-option-description {
         display: block;
-        overflow: hidden;
         font-size: var(--fs-small);
-        text-overflow: ellipsis;
-        white-space: nowrap;
         opacity: 0.75;
     }
 

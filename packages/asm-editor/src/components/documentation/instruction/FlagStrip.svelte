@@ -125,7 +125,7 @@
         max-width: 100%;
         overflow-x: auto;
         border: var(--wb-card-edge, 1px solid var(--line));
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
         background: var(--secondary);
         color: var(--secondary-text);
     }
@@ -137,7 +137,7 @@
         font-variant-ligatures: none;
     }
     .name {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
         border-bottom: 1px solid color-mix(in srgb, var(--tertiary) 70%, transparent);
     }
@@ -146,7 +146,7 @@
         text-underline-offset: 0.2em;
     }
     .mark {
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         cursor: help;
     }
     .glyph[data-kind='changed'],
@@ -155,8 +155,7 @@
     }
     .glyph[data-kind='unchanged'],
     .mark[data-kind='unchanged'] {
-        color: var(--background-text-prose);
-        opacity: 0.7;
+        color: var(--text-muted);
     }
     .glyph[data-kind='undefined'],
     .mark[data-kind='undefined'] {
@@ -169,7 +168,7 @@
         margin: 0;
         padding: 0;
         list-style: none;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     .legend-item {
@@ -193,7 +192,7 @@
     }
     .varies {
         margin: 0;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     .notes {

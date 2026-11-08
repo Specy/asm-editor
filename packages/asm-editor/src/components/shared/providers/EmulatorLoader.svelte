@@ -2,7 +2,7 @@
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { createEmulator, type Emulator } from '#lib/languages/Emulator.ts'
     import { onDestroy, untrack, type Snippet } from 'svelte'
-    import Header from '#cmp/shared/layout/Header.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
@@ -89,7 +89,7 @@
         {#if loading}
             {@render loading()}
         {:else}
-            <Header>Loading...</Header>
+            <Spinner size="lg" label="Loading…" />
         {/if}
     </Column>
 {:then data}

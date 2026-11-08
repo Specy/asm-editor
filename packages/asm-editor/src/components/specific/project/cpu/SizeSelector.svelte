@@ -1,5 +1,5 @@
 <script lang="ts">
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
     import { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { REGISTER_SIZES, sizeName } from '#lib/languages/sizeNames.ts'

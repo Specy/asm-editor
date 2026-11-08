@@ -507,13 +507,13 @@
 
     .placeholder,
     .hint {
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         color: var(--hint);
         user-select: none;
     }
 
     .placeholder {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         font-style: italic;
     }
 
@@ -629,15 +629,16 @@
         border: 1px solid color-mix(in srgb, var(--tertiary) 80%, transparent);
         background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
         color: var(--secondary-text);
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         font-size: var(--fs-caption);
         font-weight: 500;
         white-space: nowrap;
         cursor: pointer;
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
+        /* the hover tint over its fill (D4) */
         &:hover {
-            background-color: var(--tertiary);
+            background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
         }
 
         &:focus-visible {
@@ -649,14 +650,5 @@
             font-family: inherit;
             color: var(--hint);
         }
-    }
-
-    .visually-hidden {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
     }
 </style>

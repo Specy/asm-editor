@@ -66,8 +66,9 @@
         background-color: var(--primary);
         color: var(--primary-text);
         padding: 0.4rem;
-        border-radius: 0.7rem;
-        box-shadow: 0 3px 10px rgb(0 0 0 / 0.2);
+        border-radius: var(--r-overlay);
+        /* the floating window's tray shadow below its bar, which casts none into it */
+        box-shadow: var(--shadow-2);
         border-top-left-radius: 0;
         border-top-right-radius: 0;
         gap: 0.4rem;

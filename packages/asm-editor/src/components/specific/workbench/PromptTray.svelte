@@ -112,7 +112,9 @@
         {@render children()}
         <div class="prompt-row">
             {#if ondelete}
-                <button type="button" class="tool delete" onclick={ondelete}>Delete</button>
+                <button type="button" class="tool delete" onclick={ondelete}
+                    ><span>Delete</span></button
+                >
             {/if}
             <button type="button" class="tool" onclick={onclose}>Cancel</button>
             <button type="submit" class="tool primary" disabled={!submittable}>{action}</button>
@@ -137,7 +139,7 @@
         width: min(32rem, calc(100% - 1.2rem));
         box-sizing: border-box;
         padding: 0.6rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
 
     .prompt-form {
@@ -155,10 +157,14 @@
         @include tray.tool;
     }
 
-    /* apart from Cancel and the button that goes on, at the row's start */
+    /* apart from Cancel and the button that goes on, at the row's start; its word in the danger
+       colour, the button in the tray's text, which its hover is drawn from (tray.tool-look) */
     .delete {
         margin-right: auto;
-        color: var(--danger);
+
+        span {
+            color: var(--danger);
+        }
     }
 
     .primary {

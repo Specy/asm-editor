@@ -16,8 +16,8 @@ const MARGIN = 0.5 * 16
 /** Just past the Stop button, where the room the window opens in starts. */
 const LEFT = 9 * 16
 /**
- * The body's frame around the canvas, both sides together: its paddings, and its 0.1 rem border
- * as a browser draws it at 100%, one whole pixel.
+ * The body's frame around the canvas, both sides together: its paddings, and its 1px border as
+ * a browser draws it at 100%, one whole pixel.
  */
 const FRAME = 2 * (1 + 0.3 * 16)
 /** The narrowest body, which leaves the bar room for its controls. */
@@ -211,11 +211,12 @@ describe('a window resized by a corner', () => {
     })
 
     it('counts the border in the device pixels a browser draws it in', () => {
-        //0.1 rem is 1.6 pixels: one device pixel at 100%, two at 125%, two at 150%
+        //1px is one device pixel at 100%, 125% and 150%, two at 200%
         for (const [devicePixelRatio, border] of [
             [1, 1],
-            [1.25, 2 / 1.25],
-            [1.5, 2 / 1.5]
+            [1.25, 1 / 1.25],
+            [1.5, 1 / 1.5],
+            [2, 1]
         ]) {
             const frame = 2 * (border + 0.3 * 16)
             const zoom = bodyZoom({

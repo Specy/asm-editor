@@ -7,6 +7,7 @@
     import { tick } from 'svelte'
     import type { Testcase } from '#lib/Project.svelte.ts'
     import FaTimes from '~icons/fa-solid/times'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
@@ -57,14 +58,16 @@
                         }
                     }}
                 />
-                <button
+                <IconButton
+                    size="sm"
+                    quiet
                     class="remove"
-                    aria-label="Remove answer {i + 1}"
+                    label="Remove answer {i + 1}"
                     {@attach tooltip('Remove this answer')}
-                    onclick={() => remove(i, false)}
+                    onClick={() => remove(i, false)}
                 >
                     <FaTimes />
-                </button>
+                </IconButton>
             </div>
         {:else}
             <span class="cell">
@@ -81,6 +84,7 @@
 
 <style lang="scss">
     @use './testcases.scss' as *;
+    @use '../../../../styles/field.scss';
 
     .cells {
         display: flex;
@@ -88,23 +92,13 @@
         gap: 0.4rem;
     }
 
+    /* a box round an answer's field, its number and its × (styles/field.scss), ringed while the
+       field is typed in */
     .cell {
+        @include field.box;
         display: flex;
         align-items: center;
         max-width: 100%;
-        border: 1px solid var(--tc-line);
-        border-radius: var(--r-control);
-        background-color: var(--tc-field);
-        transition: border-color 0.15s;
-
-        &:focus-within {
-            border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-        }
-
-        /* the cell's edge shows the focus, in place of the app's ring */
-        :focus-visible {
-            outline: none;
-        }
     }
 
     .index {
@@ -112,7 +106,7 @@
         display: flex;
         align-items: center;
         padding: 0 0.45rem;
-        font-size: 0.7rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
         border-right: 1px solid var(--tc-line);
     }
@@ -126,34 +120,33 @@
         padding: 0.4rem 0.55rem;
         font-size: var(--fs-small);
         background-color: transparent;
-        color: var(--secondary-text);
+        color: inherit;
         white-space: pre;
     }
 
     .empty {
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         font-style: italic;
         color: var(--hint);
     }
 
-    .remove {
+    .cell :global(.remove) {
         @include remove-button;
-        width: 1.6rem;
-        align-self: stretch;
+        margin-right: 0.15rem;
     }
 
     .add {
         padding: 0.4rem 0.75rem;
         border: 1px dashed var(--tc-line);
         border-radius: var(--r-control);
-        font-family: Rubik, sans-serif;
-        font-size: 0.82rem;
+        font-family: var(--font-ui);
+        font-size: var(--fs-small);
         color: var(--hint);
         background-color: transparent;
         cursor: pointer;
         transition:
-            color 0.15s,
-            border-color 0.15s;
+            color var(--dur-fast),
+            border-color var(--dur-fast);
 
         &:hover {
             color: var(--secondary-text);

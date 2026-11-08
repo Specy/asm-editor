@@ -1,6 +1,7 @@
 <script lang="ts">
     import { navigationStore } from '#stores/navigationStore.ts'
     import { fly } from 'svelte/transition'
+    import { motion } from '#src/styles/motion.ts'
     interface Props {
         cropped?: boolean | string
         style?: string
@@ -28,7 +29,7 @@
     {style}
     in:fly|global={{
         y: $navigationStore.direction === 'back' ? 8 : -8,
-        duration: 500
+        duration: motion(500)
     }}
 >
     <div

@@ -6,7 +6,7 @@
      * place ([the design record](../../../../../../docs/design/documentation-search.md),
      * The Documentation panel).
      */
-    import { prefersReducedMotion } from 'svelte/motion'
+    import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import { slide } from 'svelte/transition'
     import FaChevronRight from '~icons/fa-solid/chevron-right'
     import HighlightedText from '#cmp/search/HighlightedText.svelte'
@@ -74,29 +74,24 @@
         <button type="button" class="head" aria-expanded={expanded} onclick={ontoggle}>
             <span class="chevron" aria-hidden="true"><FaChevronRight /></span>
             <span class="line">
-                <span class="name" class:code={hasCodeName(entry)}
+                <span class="name ellipsis" class:code={hasCodeName(entry)}
                     ><HighlightedText text={entry.title} {terms} /></span
                 >
                 {#if entry.signature}
-                    <span class="signature">{entry.signature}</span>
+                    <span class="signature ellipsis">{entry.signature}</span>
                 {/if}
                 {#if showCategory && entry.category}
                     <span class="category">{categoryLabel(entry.category)}</span>
                 {/if}
             </span>
             {#if !expanded}
-                <span
-                    class="summary"
-                    transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
+                <span class="summary ellipsis" transition:slide={{ duration: motion(DUR_BASE) }}
                     ><HighlightedText text={entry.summary} {terms} /></span
                 >
             {/if}
         </button>
         {#if expanded}
-            <div
-                class="body"
-                transition:slide={{ duration: prefersReducedMotion.current ? 0 : 200 }}
-            >
+            <div class="body" transition:slide={{ duration: motion(DUR_BASE) }}>
                 <EntryBody {entry} {disableLinks} />
                 {#if pageLink}
                     <a class="page-link" href={resolveHref(entry.href)}>
@@ -170,7 +165,7 @@
         min-width: 0;
     }
     .head:hover {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
+        background-color: var(--hover-bg);
     }
     .head:focus-visible {
         outline: 2px solid var(--accent);
@@ -183,7 +178,7 @@
         width: 0.6rem;
         height: 0.6rem;
         opacity: 0.55;
-        transition: transform 0.15s ease;
+        transition: transform var(--dur-base) ease;
     }
     .expanded .chevron {
         transform: rotate(90deg);
@@ -199,9 +194,6 @@
         flex: none;
         font-weight: 600;
         max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
     .code {
         font-family: var(--font-mono);
@@ -211,11 +203,8 @@
         flex: 1;
         min-width: 0;
         font-family: var(--font-mono);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
     .category {
         flex: none;
@@ -231,9 +220,6 @@
         margin-top: 0.25rem;
         font-size: var(--fs-small);
         color: var(--background-text-prose);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
         min-width: 0;
     }
     .body {

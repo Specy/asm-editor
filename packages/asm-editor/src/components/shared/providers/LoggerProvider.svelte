@@ -2,8 +2,11 @@
     import { toast, ToastType } from '#stores/toastStore.ts'
     import { ScopedTheme } from '#stores/themeStore.svelte.ts'
     import { fly } from 'svelte/transition'
+    import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import FaTimes from '~icons/fa-solid/times'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import StatusDot from '#cmp/shared/misc/StatusDot.svelte'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -19,22 +22,23 @@
             class="toast-wrapper"
             class:toastVisible={$toast.visible}
             style={ScopedTheme.variables}
-            in:fly|global={{ y: -100 }}
+            in:fly|global={{ y: -100, duration: motion(DUR_BASE) }}
         >
             <div class="toast-title">
-                <span class="dot" style={`background-color:${$toast.color}`}></span>
+                <!-- the hidden toast has no colour, and no dot: a dot with none would take the
+                     neutral tone's -->
+                {#if $toast.color}<StatusDot color={$toast.color} />{/if}
                 <div class="title-text">
                     {$toast.title}
                 </div>
-                <button
-                    type="button"
-                    class="close"
+                <IconButton
+                    quiet
+                    label="Close"
                     {@attach tooltip('Close')}
-                    aria-label="Close"
-                    onclick={toast.closeToast}
+                    onClick={toast.closeToast}
                 >
                     <FaTimes />
-                </button>
+                </IconButton>
             </div>
             <div class="toast-text">
                 {$toast.message}
@@ -54,7 +58,7 @@
             class="pill"
             class:pillVisible={$toast.visible}
             style={ScopedTheme.variables}
-            in:fly|global={{ y: -100 }}
+            in:fly|global={{ y: -100, duration: motion(DUR_BASE) }}
         >
             {$toast.message}
         </div>
@@ -71,7 +75,7 @@
         @include tray.surface;
         position: fixed;
         z-index: 20;
-        transition: transform 0.3s ease-out;
+        transition: transform var(--dur-base) ease-out;
     }
     .toast-wrapper {
         display: flex;
@@ -89,7 +93,7 @@
         text-align: center;
         min-width: 10rem;
         padding: 0.55rem 1.2rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         font-weight: 500;
         transform: translateY(calc(-100% - 1rem)) translateX(-50%);
     }
@@ -105,50 +109,12 @@
         gap: 0.5rem;
         padding: 0.35rem 0.35rem 0.35rem 0.75rem;
         border-bottom: 1px solid var(--tray-line);
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         font-weight: 500;
-    }
-    .dot {
-        flex: none;
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 50%;
     }
     .title-text {
         flex: 1;
         min-width: 0;
-    }
-    .close {
-        display: grid;
-        place-items: center;
-        flex: none;
-        width: 1.8rem;
-        height: 1.8rem;
-        padding: 0;
-        border: none;
-        border-radius: 0.4rem;
-        background-color: transparent;
-        color: var(--primary-text);
-        opacity: 0.75;
-        cursor: pointer;
-        transition:
-            background-color 0.15s,
-            opacity 0.15s;
-
-        &:hover {
-            opacity: 1;
-            background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-        }
-
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
-
-        :global(svg) {
-            width: 0.8rem;
-            height: 0.8rem;
-        }
     }
     .toast-text {
         padding: 0.6rem 0.75rem 0.7rem;

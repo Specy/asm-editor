@@ -181,7 +181,7 @@
 
 {#snippet exampleOption(example: Example)}
     <span class="example-option">
-        <span class="example-name">{exampleName(example)}</span>
+        <span class="example-name ellipsis">{exampleName(example)}</span>
         <span class="example-isa">{languageLabel(example.language)}</span>
     </span>
 {/snippet}
@@ -237,7 +237,7 @@
                         >
                             {#snippet trigger({ open, expanded })}
                                 <Button
-                                    cssVar="secondary"
+                                    kind="secondary"
                                     onClick={open}
                                     disabled={!selected}
                                     aria-haspopup="dialog"
@@ -246,7 +246,6 @@
                             {/snippet}
                         </ShareMenu>
                         <ButtonLink
-                            cssVar="accent"
                             href={editorPath}
                             disabled={!editorPath}
                             aria-disabled={!editorPath}
@@ -263,7 +262,7 @@
             {/snippet}
         </DefaultNavbar>
         {#if status === 'loading'}
-            <p class="message" role="status">Loading examples...</p>
+            <p class="message" role="status">Loading examples…</p>
         {:else if status === 'error'}
             <ErrorState title="Examples could not be loaded" error={failure}>
                 Try loading the examples again.
@@ -314,12 +313,7 @@
         background-color: transparent;
         color: var(--tertiary-text);
         border: 1px solid var(--tertiary);
-        padding-block: 0.35rem;
-    }
-    /* the chosen row reads as the workbench's active items do */
-    .examples-toolbar :global(.option[aria-selected='true']) {
-        background-color: var(--accent2);
-        color: var(--accent2-text);
+        padding: 0.35rem 1rem;
     }
     /* only a layout box on phones, where the two pickers share one line */
     .pickers {
@@ -346,9 +340,6 @@
     }
     .example-name {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
     .example-isa {
         flex: none;

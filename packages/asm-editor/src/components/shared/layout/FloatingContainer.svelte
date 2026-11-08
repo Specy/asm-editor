@@ -1,5 +1,5 @@
 <script lang="ts">
-    import Button from '#cmp/shared/button/Button.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaTimes from '~icons/fa-solid/times'
     interface Props {
@@ -17,23 +17,25 @@
     <div class="row floating-container-header">
         <div style="white-space: nowrap;">{title}</div>
         {@render header?.()}
-        <Button
-            style="padding: 0.5rem"
-            hasIcon
+        <IconButton
+            size="lg"
+            label="Close {title}"
             onClick={() => {
                 visible = !visible
             }}
-            cssVar="secondary"
         >
             <Icon>
                 <FaTimes />
             </Icon>
-        </Button>
+        </IconButton>
     </div>
     {@render children?.()}
 </div>
 
 <style lang="scss">
+    @use '../button/tray.scss';
+
+    /* its title over the body, raised as a sticky header is */
     .floating-container-header {
         font-weight: bold;
         font-size: 1.2rem;
@@ -42,15 +44,17 @@
         padding-left: 1rem;
         justify-content: space-between;
         flex-wrap: wrap;
-        background-color: rgba(var(--RGB-secondary), 0.75);
+        background-color: color-mix(in srgb, var(--secondary) 75%, transparent);
         color: var(--secondary-text);
         align-items: center;
-        box-shadow: -2px -1px 27px 4px #00000057;
+        box-shadow: var(--shadow-1);
         z-index: 2;
-        border-bottom: 0.2rem solid var(--primary);
+        border-bottom: 3px solid var(--primary);
     }
 
+    /* a Tray, floating free over the page */
     .floating-container {
+        @include tray.surface;
         display: flex;
         flex-direction: column;
         position: fixed;
@@ -60,16 +64,14 @@
         top: calc(var(--screen-height) * 0.5);
         left: 50vw;
         transform: translate(-50%, -50%);
-        border-radius: 0.8rem;
         z-index: 5;
-        background-color: rgba(var(--RGB-tertiary), 0.9);
-        color: var(--tertiary-text);
-        backdrop-filter: blur(3px);
         opacity: 1;
-        transition: all 0.25s;
+        transition:
+            opacity var(--dur-base),
+            transform var(--dur-base),
+            scale var(--dur-base);
         transform-origin: top left;
         scale: 1;
-        box-shadow: -2px -1px 27px 4px #00000057;
     }
     @keyframes delayHide {
         99% {
@@ -82,6 +84,6 @@
         opacity: 0;
         scale: 1.01;
         transform: translate(-50%, calc(-50% - 1rem));
-        animation: delayHide 0.25s forwards;
+        animation: delayHide var(--dur-base) forwards;
     }
 </style>

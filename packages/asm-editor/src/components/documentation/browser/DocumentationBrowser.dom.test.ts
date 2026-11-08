@@ -10,7 +10,9 @@ import type { Chapter, DocumentationEntry } from '#lib/documentation/entries.ts'
 import type { InstructionCategory } from '#lib/documentation/instructions/categories.ts'
 import DocumentationBrowser from './DocumentationBrowser.svelte'
 
-// svelte/motion reads the reduced motion query as it loads, before any hook runs
+// jsdom has no window.matchMedia, which these components read before any hook runs (the
+// reduced-motion setting through styles/motion.ts among them); answering yes also ends every
+// transition at once
 vi.hoisted(() => {
     window.matchMedia = (() => ({
         matches: true,

@@ -90,7 +90,7 @@
                     style="padding: 0.5rem;"
                 >
                     {#snippet title()}
-                        <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                        <h2 style="font-size: 1rem; font-weight: 500; margin-left: -0.1rem">
                             {module.name}
                         </h2>
                     {/snippet}
@@ -112,7 +112,7 @@
         <Column style="margin-top: auto;" padding="0.5rem" gap="0.5rem">
             <ButtonLink
                 style="width: 100%; gap: 0.5rem"
-                cssVar="tertiary"
+                kind="secondary"
                 href="/donate"
                 {@attach tooltip('Donate to the project')}
             >

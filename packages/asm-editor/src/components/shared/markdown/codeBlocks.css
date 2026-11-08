@@ -10,7 +10,7 @@ pre.code-block {
     margin: 0;
     padding: 0.4rem 1rem;
     border: var(--wb-card-edge, 1px solid var(--line));
-    border-radius: var(--wb-radius, 0.4rem);
+    border-radius: var(--wb-radius, var(--r-control));
     background: var(--secondary) !important;
     color: var(--secondary-text) !important;
     box-shadow: none;

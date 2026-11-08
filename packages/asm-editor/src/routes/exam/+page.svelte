@@ -6,11 +6,14 @@
     import Select from '#cmp/shared/input/Select.svelte'
     import { BASE_CODE } from '#lib/Config.ts'
     import Header from '#cmp/shared/layout/Header.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
     import MarkdownEditor from '#cmp/shared/markdown/MarkdownEditor.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
-    import Input from '#cmp/shared/input/Input.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
+    import Switch from '#cmp/shared/input/Switch.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     import { copyText, encryptData, makeHash } from '#lib/utils.ts'
     import { toast } from '#stores/toastStore.ts'
     import FaDumbbell from '~icons/fa-solid/dumbbell'
@@ -212,22 +215,22 @@
     <div class="exam-builder">
         <section class="settings-card">
             <div class="settings-grid">
-                <Input type="text" title="Exam title" bind:value={settings.title} />
-                <Input
+                <TextField type="text" label="Exam title" bind:value={settings.title} />
+                <TextField
                     type="password"
-                    title="Unlock password"
+                    label="Unlock password"
                     placeholder="Required"
                     bind:value={settings.unlockPassword}
                 />
-                <Input
+                <TextField
                     type="number"
-                    title="Time limit (minutes)"
+                    label="Time limit (minutes)"
                     placeholder="Leave empty for unlimited"
                     bind:value={settings.timeLimitMinutes}
                 />
-                <Input
+                <TextField
                     type="password"
-                    title="Exam access password"
+                    label="Exam access password"
                     placeholder="Optional"
                     bind:value={settings.examAccessPassword}
                 />
@@ -249,8 +252,7 @@
 
             <Button
                 onClick={createExamUrl}
-                hasIcon
-                style="margin-left: auto; margin-top: 0.5rem; align-self: flex-start; gap: 0.5rem; padding: 0.5rem;"
+                style="margin-left: auto; margin-top: 0.5rem; align-self: flex-start; gap: 0.5rem;"
             >
                 <Icon>
                     <FaDumbbell />
@@ -282,51 +284,49 @@
                                 />
                             </div>
 
-                            <Button
+                            <IconButton
                                 {@attach tooltip('Move section up')}
-                                aria-label="Move section up"
-                                cssVar="secondary"
-                                hasIcon
-                                style="padding: 0.6rem;"
+                                size="lg"
+                                label="Move section up"
                                 disabled={isSectionFirst(i)}
                                 onClick={() => moveSection(section.id, -1)}
                             >
                                 <Icon>
                                     <FaArrowUp />
                                 </Icon>
-                            </Button>
-                            <Button
+                            </IconButton>
+                            <IconButton
                                 {@attach tooltip('Move section down')}
-                                aria-label="Move section down"
-                                cssVar="secondary"
-                                hasIcon
-                                style="padding: 0.6rem;"
+                                size="lg"
+                                label="Move section down"
                                 disabled={isSectionLast(i)}
                                 onClick={() => moveSection(section.id, 1)}
                             >
                                 <Icon>
                                     <FaArrowDown />
                                 </Icon>
-                            </Button>
-                            <Button
+                            </IconButton>
+                            <IconButton
                                 {@attach tooltip('Delete section')}
-                                aria-label="Delete section"
-                                cssVar="secondary"
-                                hasIcon
-                                style="padding: 0.6rem;"
+                                size="lg"
+                                label="Delete section"
                                 disabled={sections.length <= 1}
                                 onClick={() => removeSection(section.id)}
                             >
                                 <Icon>
                                     <FaTrash />
                                 </Icon>
-                            </Button>
+                            </IconButton>
                         </div>
                     </div>
 
                     <div class="section-body">
                         <div class="section-left">
-                            <Input type="text" title="Section title" bind:value={section.title} />
+                            <TextField
+                                type="text"
+                                label="Section title"
+                                bind:value={section.title}
+                            />
                             <Header type="h3">Prompt</Header>
                             <div class="markdown-editor-wrapper prompt-editor">
                                 <MarkdownEditor bind:value={section.prompt} />
@@ -336,9 +336,9 @@
                         <div class="section-right">
                             {#if section.type === ExamSectionType.OpenQuestion}
                                 {@const openSection = section}
-                                <Input
+                                <TextField
                                     type="text"
-                                    title="Answer placeholder"
+                                    label="Answer placeholder"
                                     bind:value={openSection.placeholder}
                                 />
                             {/if}
@@ -346,15 +346,9 @@
                             {#if section.type === ExamSectionType.MultipleChoice}
                                 {@const multipleChoiceSection = section as MultipleChoiceSection}
                                 <Row align="center" gap="0.6rem">
-                                    <input
+                                    <Switch
                                         id={`allow-multiple-${multipleChoiceSection.id}`}
-                                        type="checkbox"
-                                        checked={multipleChoiceSection.allowMultiple}
-                                        onchange={(e) => {
-                                            multipleChoiceSection.allowMultiple = (
-                                                e.target as HTMLInputElement
-                                            ).checked
-                                        }}
+                                        bind:checked={multipleChoiceSection.allowMultiple}
                                     />
                                     <label for={`allow-multiple-${multipleChoiceSection.id}`}>
                                         Allow multiple selections
@@ -364,32 +358,31 @@
                                 <div class="options-list">
                                     {#each multipleChoiceSection.options as option, optionIndex (option.id)}
                                         <Row gap="0.4rem" align="center">
-                                            <Input
+                                            <TextField
                                                 wrapperStyle="flex: 1;"
                                                 type="text"
-                                                title={`Option ${optionIndex + 1}`}
+                                                label={`Option ${optionIndex + 1}`}
                                                 bind:value={option.text}
                                             />
-                                            <Button
-                                                style="gap: 0.5rem; padding: 0.7rem; margin-top: 1.5rem"
-                                                hasIcon
-                                                cssVar="secondary"
+                                            <IconButton
+                                                size="lg"
+                                                label={`Delete option ${optionIndex + 1}`}
+                                                style="margin-top: 1.5rem"
                                                 onClick={() =>
                                                     removeOption(multipleChoiceSection, option.id)}
                                             >
                                                 <Icon>
                                                     <FaTrash />
                                                 </Icon>
-                                            </Button>
+                                            </IconButton>
                                         </Row>
                                     {/each}
                                 </div>
 
                                 <Button
-                                    cssVar="secondary"
+                                    kind="secondary"
                                     onClick={() => createOption(multipleChoiceSection)}
-                                    hasIcon
-                                    style="gap: 0.5rem; padding: 0.5rem; width: 100%"
+                                    style="gap: 0.5rem; width: 100%"
                                 >
                                     <Icon>
                                         <FaPlus />
@@ -435,7 +428,7 @@
                                             />
                                         {/snippet}
                                         {#snippet loading()}
-                                            <Header>Loading emulator...</Header>
+                                            <Spinner size="lg" label="Loading emulator…" />
                                         {/snippet}
                                     </EmulatorLoader>
                                 {/key}
@@ -443,9 +436,9 @@
 
                             {#if section.type === ExamSectionType.CCoding}
                                 {@const cSection = section as CCodingSection}
-                                <Input
+                                <TextField
                                     type="text"
-                                    title="Answer placeholder"
+                                    label="Answer placeholder"
                                     bind:value={cSection.placeholder}
                                 />
 
@@ -468,7 +461,7 @@
                     onChange={(type) => (newSectionType = type)}
                     options={sectionTypeOptions}
                 />
-                <Button onClick={addSection} hasIcon style="gap: 0.5rem; padding: 0.5rem;">
+                <Button onClick={addSection} style="gap: 0.5rem;">
                     <Icon>
                         <FaPlus />
                     </Icon>
@@ -536,7 +529,7 @@
         border: none;
         border-radius: 0.4rem;
         padding: 0.5rem;
-        font: 0.82rem/1.45 monospace;
+        font: 0.82rem/1.45 var(--font-mono);
         overflow-wrap: anywhere;
     }
 

@@ -1,49 +1,46 @@
 <script lang="ts">
     /**
-     * A card's surface drawn as one shape with its arrow: the shadow, the fill, the border and, for
-     * a translucent card, the blur of what is beneath it. It sits behind its card's content, which
-     * draws no background or border of its own, and reaches past the card's box by the arrow's size
-     * on every side, so the arrow can stand out of any edge. A card's box-shadow and border would
-     * follow the box and miss the arrow; a separate arrow over a translucent card would show a darker
-     * patch where the two overlap (the Tooltips design, decision 13).
+     * A Popover's surface drawn as one shape with its arrow: the shadow, the fill, the edge and, for
+     * a translucent one, the blur of what is beneath it. It sits behind its Popover's content,
+     * which draws no background or border of its own, and reaches past the Popover's box by the
+     * arrow's size on every side, so the arrow can stand out of any edge. A box-shadow and border
+     * would follow the box and miss the arrow; a separate arrow over a translucent card would show
+     * a darker patch where the two overlap (the Tooltips design, decision 13).
+     *
+     * Its corner and shadow are the Popover's, `--r-overlay` and `--shadow-3` as numbers
+     * (`styles/elevation.ts`), and its edge is `--line`, which the Popover's content root redefines
+     * (`popover.content` in `styles/popover.scss`). A Popover with no arrow is drawn by CSS instead
+     * (`popover.surface`).
      */
+    import { popoverElevation } from '#src/styles/elevation.ts'
     import { outlinePath, type Side } from './floating'
 
     interface Props {
         width: number
         height: number
-        radius: number
-        /** The side of its target the card is on; no arrow when `at` is left out. */
+        /** The side of its target the Popover is on; no arrow when `at` is left out. */
         side: Side
         at?: number
         arrow: number
-        fill: string
-        stroke: string
-        /** Blurs what is beneath it, for a translucent `fill`. */
-        blur?: boolean
-        /** The shadow's drop and softness, in pixels, and its opacity. */
-        shadow: { y: number; blur: number; opacity: number }
+        /**
+         * Opaque, as the Tooltip is, so that its text reads over a busy canvas; left out it is the
+         * menus' translucent tint, which blurs what is beneath.
+         */
+        solid?: boolean
     }
 
-    let {
-        width,
-        height,
-        radius,
-        side,
-        at,
-        arrow,
-        fill,
-        stroke,
-        blur = false,
-        shadow
-    }: Props = $props()
+    let { width, height, side, at, arrow, solid = false }: Props = $props()
 
     const id = $props.id()
+    const { radius, shadow } = popoverElevation()
+    const fill = $derived(
+        solid ? 'var(--tertiary)' : 'color-mix(in srgb, var(--tertiary) 85%, transparent)'
+    )
     const size = $derived(at === undefined ? 0 : arrow)
     const shape = $derived({ radius, side, at: at ?? 0, arrow: size, offset: size })
     const path = $derived(outlinePath(width, height, shape))
     //the shadow's room past the outline on every side, so neither the mask nor the filter cuts it off
-    const reach = $derived(shadow.y + shadow.blur * 3)
+    const reach = shadow.y + shadow.blur * 3
     const region = $derived({
         x: -reach,
         y: -reach,
@@ -54,7 +51,7 @@
 
 {#if width > 0 && height > 0}
     <div class="outline" style:inset="-{size}px" aria-hidden="true">
-        {#if blur}
+        {#if !solid}
             <div class="blur" style:clip-path="path('{path}')"></div>
         {/if}
         <svg width={width + size * 2} height={height + size * 2}>
@@ -81,11 +78,11 @@
                 <path d={path} fill="#000" filter="url(#{id}-shadow)" />
             </g>
             <path d={path} style:fill />
-            <!-- the border on the fill's own path, twice as wide and cut to the inside: its outer
+            <!-- the edge on the fill's own path, twice as wide and cut to the inside: its outer
                  edge is the fill's, curves and the arrow's tip included, as a CSS border's is -->
             <path
                 d={path}
-                style:stroke
+                style:stroke="var(--line)"
                 stroke-width="2"
                 fill="none"
                 clip-path="url(#{id}-inside)"

@@ -1,6 +1,7 @@
 <script lang="ts">
     import { tick, untrack } from 'svelte'
     import Select from '#cmp/shared/input/Select.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     import NumberStepper from '#cmp/shared/input/NumberStepper.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
@@ -92,7 +93,7 @@
     <div class="title">New picture{folder ? ` in ${folder}` : ''}</div>
     <label class="row">
         <span>File name</span>
-        <input type="text" bind:value={name} bind:this={nameInput} spellcheck="false" />
+        <TextField size="sm" bind:value={name} bind:el={nameInput} />
     </label>
     <div class="row">
         <span>Size</span>
@@ -146,7 +147,7 @@
         gap: 0.55rem;
         width: min(24rem, calc(100vw - 2rem));
         padding: 0.7rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
     .title {
         font-weight: 500;
@@ -159,21 +160,12 @@
         > span {
             width: 3.6rem;
             flex-shrink: 0;
-            opacity: 0.8;
+            color: var(--text-muted);
         }
     }
-    input {
-        height: 2rem;
-        padding: 0 0.5rem;
-        border: 1px solid var(--tray-line);
-        border-radius: var(--r-control);
-        background: var(--secondary);
-        color: var(--secondary-text);
-        font: inherit;
-    }
-    input[type='text'] {
+    .row :global(.text-field) {
         flex: 1;
-        min-width: 0;
+        height: 2rem;
     }
     /* the steppers in the name field's colours, as on --primary they vanish into the tray */
     .size {
@@ -185,8 +177,8 @@
     }
     .hint {
         margin: 0;
-        font-size: 0.8rem;
-        opacity: 0.75;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
     }
     .buttons {
         display: flex;

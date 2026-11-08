@@ -216,7 +216,7 @@
 
     button.row {
         cursor: pointer;
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
         &:hover,
         &:focus-visible {
@@ -277,13 +277,13 @@
     }
 
     .got {
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
         color: var(--tc-fail);
     }
 
     .as-expected {
         margin-left: auto;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--tc-pass);
     }
 

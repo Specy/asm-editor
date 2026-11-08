@@ -468,7 +468,8 @@
                 onClick={() =>
                     (type = type === DisplayType.Hex ? DisplayType.Char : DisplayType.Hex)}
                 active={type === DisplayType.Char}
-                cssVar="accent2"
+                bg="var(--accent2)"
+                color="var(--accent2-text)"
             >
                 <Icon size={dense ? 0.8 : 1}>
                     <MdTextFields />
@@ -476,7 +477,9 @@
             </Button>
             {#if selectedAddressesIndexes.start !== -1}
                 <Button
-                    cssVar="success"
+                    bg="var(--success)"
+                    color="var(--success-text)"
+                    aria-label="Clear the selection"
                     style="padding: 0.2rem; border-radius: 0.35rem; height:100%; width: 100%"
                     onClick={clearSelection}
                 >
@@ -675,6 +678,9 @@
 {/if}
 
 <style lang="scss">
+    @use '../../../shared/button/tray.scss';
+    @use '../../../../styles/field.scss';
+
     //the value fills its cell, so that in a page stretched taller than its rows need, a
     //Playground's, it is centred beside its address and a highlighted byte still covers the cell
     .memory-number {
@@ -715,14 +721,12 @@
             flex: 1;
         }
         :global(.hover-element) {
-            --memory-hover-border: color-mix(in srgb, var(--tertiary-text) 28%, var(--tertiary));
-            border: 1px solid var(--memory-hover-border);
             pointer-events: none;
         }
     }
 
     .region-block {
-        border-bottom: 1px solid var(--memory-hover-border);
+        border-bottom: 1px solid var(--line);
         padding: 0.2rem 0.4rem;
         margin-bottom: 0.2rem;
     }
@@ -735,7 +739,7 @@
         max-width: 16rem;
         margin-top: 0.15rem;
         font-size: 0.85em;
-        opacity: 0.85;
+        color: var(--text-muted);
         white-space: normal;
     }
 
@@ -767,20 +771,18 @@
         text-align: center;
         align-self: center;
         //`box-sizing: border-box` is global, so the padding is inside the width the popup sets and
-        //the text keeps its own `ch` per character. The frame is an outline drawn inside that box
-        //rather than a border, which is layout and would squeeze the digits it draws around.
+        //the text keeps its own `ch` per character. An inline editor (styles/field.scss): its
+        //frame is drawn inside that box rather than as a border, which is layout and would squeeze
+        //the digits it draws around, and the global ring inside it while it is typed in
         padding: 0 0.1rem;
         min-width: calc(2ch + 0.2rem);
-        outline: solid 0.1rem var(--accent);
-        outline-offset: -0.1rem;
-        border-radius: 0.2rem;
-        background-color: var(--secondary);
-        color: var(--secondary-text);
+        @include field.inline;
     }
 
     //a commit that does not fit the selection: the input keeps what was typed and says why
     .refused {
-        outline-color: var(--danger);
+        outline: 2px solid var(--danger);
+        outline-offset: -2px;
     }
 
     .memory-grid {
@@ -813,7 +815,7 @@
     //their padding, and the address column's header, which fits the hex toggle and the selection's
     //clear button side by side so selecting never widens the column
     .dense {
-        font-size: 0.875rem;
+        font-size: var(--fs-small);
         --cell-pad-x: 0.25rem;
         --address-header-width: 3.1rem;
 
@@ -825,8 +827,10 @@
     //why the Core refused bytes on this page, floating over the bottom of the bytes rather than
     //taking a row of its own, so moving to or from such a page never changes the panel's size.
     //It takes no pointer: the bytes under it stay selectable, and while the pointer is over a
-    //page that still has readable bytes it fades so the row it covers can be read
+    //page that still has readable bytes it fades so the row it covers can be read. A Tray, its
+    //danger in its icon
     .memory-unreadable {
+        @include tray.surface;
         position: absolute;
         z-index: 1;
         left: 0.6rem;
@@ -838,17 +842,10 @@
         width: fit-content;
         margin: 0 auto;
         padding: 0.45rem 0.6rem;
-        border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
-        border-radius: 0.4rem;
-        background: color-mix(in srgb, var(--tertiary) 65%, transparent);
-        backdrop-filter: blur(6px);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25);
-        font-family: var(--font-ui);
         font-size: var(--fs-small);
-        color: var(--tertiary-text);
         overflow-wrap: anywhere;
         pointer-events: none;
-        transition: opacity 0.15s;
+        transition: opacity var(--dur-fast);
 
         :global(svg) {
             color: var(--danger);
@@ -863,7 +860,6 @@
 
     .memory-numbers {
         grid-area: c;
-        color: var(--text-layered);
         display: grid;
         background-color: var(--secondary);
         color: var(--secondary-text);

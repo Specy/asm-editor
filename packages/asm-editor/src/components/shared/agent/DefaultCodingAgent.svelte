@@ -257,10 +257,10 @@
     {accent}
     avatarContext={avatarInstructions}
     style={`width: 100%;
-            border-radius: 1.2rem;
+            border-radius: var(--r-overlay);
             border: solid 1px var(--wb-line, var(--tertiary));
             height: 100%; 
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            box-shadow: var(--shadow-2);
             ${style}
     `}
 />

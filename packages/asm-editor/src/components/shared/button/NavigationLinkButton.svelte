@@ -40,14 +40,16 @@
         justify-content: space-between;
         background-color: var(--secondary);
         color: var(--secondary-text);
-        transition: all 0.2s;
+        transition:
+            background-color var(--dur-fast),
+            color var(--dur-fast);
+        /* the hover tint over its fill (D4), as a secondary Button's */
         &:hover {
-            background-color: var(--tertiary);
-            color: var(--tertiary-text);
+            background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
         }
     }
     .link.coloured {
-        border-left: 0.3rem solid var(--link-accent);
+        border-left: 4px solid var(--link-accent);
         background-color: color-mix(in srgb, var(--link-accent) 8%, var(--secondary));
         &:hover {
             background-color: color-mix(in srgb, var(--link-accent) 18%, var(--secondary));
@@ -59,7 +61,9 @@
     .arrow {
         opacity: 0;
         height: 1.5rem;
-        transition: all 0.2s;
+        transition:
+            opacity var(--dur-fast),
+            transform var(--dur-fast);
         transform: translateX(-1rem);
     }
     .link:hover .arrow {

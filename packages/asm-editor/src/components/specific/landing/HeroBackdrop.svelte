@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { prefersLessMotion } from '#src/styles/motion.ts'
     /**
      * The picture behind the home page's hero: the editor's Workbench, drawn faintly with the
      * editor's own registers, memory and execution dock, running a RISC-V program one instruction
@@ -113,7 +114,7 @@
 
     let root: HTMLElement
     onMount(() => {
-        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        if (prefersLessMotion()) {
             position = previous = UNDO_AT
             return
         }

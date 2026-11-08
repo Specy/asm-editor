@@ -407,7 +407,7 @@
                     </p>
                     <div class="actions">
                         {@render editorButton()}
-                        <ButtonLink href={coursesHref} cssVar="tertiary" style="gap: 0.6rem">
+                        <ButtonLink href={coursesHref} kind="secondary" style="gap: 0.6rem">
                             <span class="icon" aria-hidden="true"><FaGraduationCap /></span>
                             Courses
                         </ButtonLink>
@@ -415,7 +415,7 @@
                     <!-- always takes its room, so the centred hero does not move when the browser offers the install -->
                     <div class="install actions" class:hidden={!installEvent}>
                         <Button
-                            cssVar="tertiary"
+                            kind="secondary"
                             style="gap: 0.6rem"
                             onClick={install}
                             disabled={!installEvent}
@@ -740,7 +740,7 @@
             </p>
             <ButtonLink
                 href="https://doi.org/10.1109/EDUCON67543.2026.11574463"
-                cssVar="tertiary"
+                kind="secondary"
                 style="gap: 0.6rem"
                 title="Read the EDUCON 2026 paper"
             >
@@ -755,7 +755,7 @@
             <p>Start from an empty Project, or open an example and change it.</p>
             <div class="actions">
                 {@render editorButton()}
-                <ButtonLink href={examplesHref} cssVar="tertiary" style="gap: 0.6rem">
+                <ButtonLink href={examplesHref} kind="secondary" style="gap: 0.6rem">
                     <span class="icon" aria-hidden="true"><FaCode /></span>
                     Open an example
                 </ButtonLink>
@@ -767,6 +767,8 @@
 </Page>
 
 <style lang="scss">
+    @use '../styles/visually-hidden.scss' as *;
+
     .landing {
         --inner: min(100% - 2rem, 76rem);
         /* the home page's own hairlines, named apart from the shared --line until the page moves
@@ -774,8 +776,8 @@
         --landing-line: color-mix(in srgb, var(--background-text) 11%, transparent);
         --landing-line-strong: color-mix(in srgb, var(--background-text) 20%, transparent);
         --muted: color-mix(in srgb, var(--background-text) 68%, transparent);
-        --serif: 'Noto Serif', Georgia, serif;
-        --mono: 'Fira Code', monospace;
+        --serif: var(--font-read);
+        --mono: var(--font-mono);
         --lit:
             radial-gradient(
                 ellipse 80% 70% at 50% 0%,
@@ -977,7 +979,7 @@
 
     /* the app's own face */
     h1 {
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         font-weight: 500;
         font-size: clamp(2.5rem, 5.5vw, 4rem);
         line-height: 1.08;
@@ -1155,7 +1157,7 @@
         padding: 0 0.8rem;
         border-radius: 0.5rem 0.5rem 0 0;
         cursor: pointer;
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         font-size: 0.82rem;
         color: var(--muted);
         transition:
@@ -1655,12 +1657,7 @@
         }
 
         .create-label {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            overflow: hidden;
-            clip-path: inset(50%);
-            white-space: nowrap;
+            @include visually-hidden;
         }
     }
 
@@ -1790,7 +1787,7 @@
 
         /* the hero title's face */
         h2 {
-            font-family: Rubik, sans-serif;
+            font-family: var(--font-ui);
             font-weight: 500;
             font-size: clamp(2rem, 5vw, 3.2rem);
             color: var(--background-text);

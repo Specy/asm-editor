@@ -1,4 +1,5 @@
 <script lang="ts">
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { IMPORTABLE_FILES, importFiles, importFromData } from '#lib/projectImport.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import ProjectCard from '#cmp/specific/project/ProjectCard.svelte'
@@ -10,6 +11,7 @@
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { scale } from 'svelte/transition'
+    import { motion } from '#src/styles/motion.ts'
     import FileDropZone from '#cmp/shared/fileImporter/FileDropZone.svelte'
     import { blobDownloader, copyText, createShareLink, ShareTooLargeError } from '#lib/utils.ts'
     import FaUpload from '~icons/fa-solid/upload'
@@ -128,7 +130,7 @@
             <div class="top-row">
                 <h1 class="page-title">Your projects</h1>
                 <div class="top-row-buttons">
-                    <Button cssVar="secondary" bordered style="gap: 0.5rem" onClick={pickAndImport}>
+                    <Button kind="secondary" bordered style="gap: 0.5rem" onClick={pickAndImport}>
                         <Icon size={0.85}>
                             <FaUpload />
                         </Icon>
@@ -187,18 +189,21 @@
                 <div class="empty reading" role="status">Reading your projects…</div>
             {:else if ProjectStore.projects.length === 0}
                 <div class="empty">
-                    <div class="empty-title">No projects yet</div>
-                    <div class="empty-hint">
+                    <EmptyState title="No projects yet">
                         Create one from a language and a template, or import a file.
-                    </div>
+                    </EmptyState>
                 </div>
             {/if}
             <div class="project-grid">
                 {#each ProjectStore.projects as project, i (project.id)}
                     <div
                         class="project-cell"
-                        in:scale|global={{ duration: 200, delay: i * 50 + 150, start: 0.9 }}
-                        out:scale={{ duration: 300, start: 0.8 }}
+                        in:scale|global={{
+                            duration: motion(200),
+                            delay: motion(i * 50 + 150),
+                            start: 0.9
+                        }}
+                        out:scale={{ duration: motion(300), start: 0.8 }}
                     >
                         <ProjectCard
                             {project}
@@ -276,6 +281,7 @@
     }
 
     .empty {
+        --empty-state-padding: 0;
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
@@ -300,15 +306,6 @@
         to {
             opacity: 1;
         }
-    }
-
-    .empty-title {
-        font-weight: 600;
-    }
-
-    .empty-hint {
-        font-size: var(--fs-small);
-        color: var(--hint);
     }
 
     /* nothing on the page is selected by a click on its empty space: Chrome would otherwise put the

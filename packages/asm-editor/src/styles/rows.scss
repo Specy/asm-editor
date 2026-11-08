@@ -1,0 +1,12 @@
+// The two states of a row in a list (design-system.md, D4). The row under the pointer, and the one
+// the arrow keys have reached, which is the same state, take `background-color: var(--hover-bg)`:
+// the surface's text at 10%, drawn from the row's own colour, so a row in a colour of its own
+// gives that colour to its contents (design-system-plan.md, Risks).
+
+// The current item, the one the person has (the Explorer's open File, a Select's chosen value,
+// the Search or Symbols panel's opened row): an accent tint and a 2px accent edge on its leading
+// side. The accent then always means "this is the one you have".
+@mixin selected {
+    background-color: var(--selected-bg);
+    box-shadow: inset 2px 0 0 var(--accent);
+}

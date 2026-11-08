@@ -8,7 +8,8 @@ import { mount, unmount } from 'svelte'
 import { decodeExamPayload } from '#lib/exam.ts'
 import { toast } from '#stores/toastStore.ts'
 
-// svelte/motion reads the reduced motion query as it loads, before any hook runs
+// jsdom has no window.matchMedia, which these components read before any hook runs (the
+// reduced-motion setting through styles/motion.ts among them)
 vi.hoisted(() => {
     window.matchMedia = (() => ({
         matches: false,

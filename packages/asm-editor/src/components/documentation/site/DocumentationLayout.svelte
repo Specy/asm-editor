@@ -78,7 +78,7 @@
                 style="padding: 0 0.5rem;"
             >
                 {#snippet title()}
-                    <h2 style="font-size: 1rem; font-weight: normal; margin-left: -0.1rem">
+                    <h2 style="font-size: 1rem; font-weight: 500; margin-left: -0.1rem">
                         Instructions
                     </h2>
                 {/snippet}

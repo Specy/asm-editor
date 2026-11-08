@@ -2,9 +2,10 @@
     import { Prompt, PromptType } from '#stores/promptStore.svelte.ts'
     import { ScopedTheme } from '#stores/themeStore.svelte.ts'
     import { fade } from 'svelte/transition'
+    import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import { tick } from 'svelte'
 
-    import Input from '#cmp/shared/input/Input.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     interface Props {
         children?: import('svelte').Snippet
     }
@@ -39,7 +40,7 @@
     <form
         class="prompt-wrapper"
         style={ScopedTheme.variables}
-        out:fade|global={{ duration: 150 }}
+        out:fade|global={{ duration: motion(DUR_BASE) }}
         onsubmit={(e) => {
             e.preventDefault()
             if (Prompt.type === PromptType.Text) Prompt.answerText(value)
@@ -50,12 +51,12 @@
             {Prompt.question}
         </div>
         {#if Prompt.type === PromptType.Text}
-            <Input
+            <TextField
                 focus
                 bind:value
                 bind:el={inputEl}
+                aria-label={Prompt.question}
                 placeholder={Prompt.placeholder}
-                style="border: 1px solid var(--tray-line);"
             />
         {/if}
 
@@ -114,9 +115,9 @@
         gap: 0.5rem;
         z-index: 20;
         padding: 0.6rem;
-        transition: transform 0.3s ease-out;
+        transition: transform var(--dur-base) ease-out;
         flex-direction: column;
-        animation: slideIn 0.25s ease-out;
+        animation: slideIn var(--dur-base) ease-out;
         animation-fill-mode: forwards;
         transform: translateX(calc(50vw - 50%));
     }
@@ -134,7 +135,7 @@
 
     .prompt-text {
         padding: 0.1rem 0.2rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         display: flex;
         margin-top: auto;
         line-height: 1.5;

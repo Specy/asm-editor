@@ -100,7 +100,7 @@
     }
     a {
         color: var(--primary-text);
-        transition: all 0.2s ease-in-out;
+        transition: color var(--dur-fast) ease-in-out;
     }
     a:hover {
         color: var(--accent);
@@ -116,7 +116,7 @@
             color: var(--primary-text);
             margin-left: 1rem;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: transform var(--dur-base);
             &:hover {
                 transform: rotate(25deg) scale(1.1);
             }
@@ -137,7 +137,7 @@
         overflow: hidden;
         white-space: pre;
         font-family: var(--font-mono);
-        font-size: 1.05rem;
+        font-size: var(--fs-prose);
         line-height: 1.3;
         letter-spacing: 0.08em;
         color: color-mix(in srgb, var(--background-text) 9%, transparent);

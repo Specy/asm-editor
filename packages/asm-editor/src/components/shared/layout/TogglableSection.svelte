@@ -22,7 +22,7 @@
         }}
     >
         <Icon
-            style={`transform: rotate(${open ? 90 : 0}deg); transition: all 0.2s cubic-bezier(.54,.9,0,.97); color: var(--accent); `}
+            style={`transform: rotate(${open ? 90 : 0}deg); transition: transform var(--dur-base) cubic-bezier(.54,.9,0,.97); color: var(--accent); `}
             size={1.4}
         >
             <FaAngleRight />
@@ -36,13 +36,13 @@
 
 <style lang="scss">
     .section-title {
-        font-size: 1.5rem;
+        font-size: var(--fs-h3);
         display: flex;
         gap: 0.4rem;
         cursor: pointer;
         text-align: left;
         background-color: transparent;
-        font-family: var(--font-mono);
+        font-family: var(--font-ui);
         color: var(--secondary-text);
         font-weight: bold;
         align-items: center;
@@ -57,11 +57,11 @@
         padding-left: 0.8rem;
         margin-left: 0.6rem;
         gap: 0.8rem;
-        border-left: 0.2rem solid var(--secondary);
+        border-left: 3px solid var(--secondary);
         opacity: 0;
         &.open {
             display: flex;
-            animation: fade-in 0.2s forwards;
+            animation: fade-in var(--dur-base) forwards;
         }
     }
 

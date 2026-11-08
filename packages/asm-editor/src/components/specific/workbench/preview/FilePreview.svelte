@@ -6,6 +6,7 @@
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import FaExpand from '~icons/fa-solid/expand'
     import FaFilePdf from '~icons/fa-solid/file-pdf'
+    import Button from '#cmp/shared/button/Button.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FileStatusLine, { byteCount } from '../FileStatusLine.svelte'
     import { formatDuration, pdfDisplay, PREVIEW_UNAVAILABLE } from './previewSupport'
@@ -111,8 +112,9 @@
     </FileStatusLine>
     {#snippet actualSizeTool()}
         <!-- named as its words, which a narrow pane drops -->
-        <button
-            type="button"
+        <Button
+            kind="ghost"
+            size="sm"
             class="tool"
             aria-label="Actual size"
             {@attach tooltip(
@@ -121,10 +123,11 @@
                     : 'Show the image at its own size, a pixel for a pixel'
             )}
             aria-pressed={actualSize}
-            onclick={() => (actualSize = !actualSize)}
+            active={actualSize}
+            onClick={() => (actualSize = !actualSize)}
         >
             <FaExpand /><span>Actual size</span>
-        </button>
+        </Button>
     {/snippet}
     <div class="preview-body {kind.preview}" class:actual-size={actualSize}>
         {#if source}
@@ -153,12 +156,12 @@
                                 : 'This browser cannot show a PDF inside the page.'}
                         </p>
                         <div class="pdf-actions">
-                            <button type="button" class="action primary" onclick={openInTab}>
+                            <Button onClick={openInTab}>
                                 <FaExternalLinkAlt />Open in a new tab
-                            </button>
-                            <button type="button" class="action" onclick={download}>
+                            </Button>
+                            <Button kind="secondary" onClick={download}>
                                 <FaDownload />Download
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 {/if}
@@ -209,7 +212,7 @@
     }
     /* one button, which keeps its words in a narrower pane than the Hex editor's three */
     @container file-status (max-width: 22rem) {
-        .tool span {
+        :global(.tool) span {
             display: none;
         }
     }
@@ -284,7 +287,7 @@
     }
     .pdf-notice p {
         margin: 0;
-        opacity: 0.8;
+        color: var(--text-muted);
     }
     .pdf-icon {
         display: grid;
@@ -311,39 +314,15 @@
         justify-content: center;
         gap: 0.5rem;
     }
-    .action {
+    /* the notice's two actions, Buttons (D5), their icons a little smaller than their words */
+    .pdf-actions :global(.btn) {
         display: flex;
         align-items: center;
         gap: 0.45rem;
-        height: 2.2rem;
-        padding: 0 0.9rem;
-        border: 1px solid var(--line);
-        border-radius: var(--r-control);
-        background: var(--primary);
-        color: var(--primary-text);
-        font: inherit;
-        font-size: 0.9rem;
-        cursor: pointer;
 
         :global(svg) {
             width: 0.8rem;
             height: 0.8rem;
-        }
-        &:hover {
-            background: color-mix(in srgb, var(--tertiary) 55%, var(--primary));
-        }
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-        }
-    }
-    .action.primary {
-        border-color: transparent;
-        background: var(--accent);
-        color: var(--accent-text);
-
-        &:hover {
-            background: color-mix(in srgb, var(--accent) 85%, white);
         }
     }
 </style>

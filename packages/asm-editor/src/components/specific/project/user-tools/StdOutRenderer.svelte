@@ -5,6 +5,7 @@
      */
     import FaExclamationTriangle from '~icons/fa-solid/exclamation-triangle'
     import { fly } from 'svelte/transition'
+    import { motion } from '#src/styles/motion.ts'
     import TerminalConsole from '#cmp/shared/terminal/TerminalConsole.svelte'
     import ProblemsList from './ProblemsList.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
@@ -52,8 +53,8 @@
         <span
             class="floating-std-icon"
             role="img"
-            in:fly|global={{ duration: 300 }}
-            out:fly|global={{ duration: 200 }}
+            in:fly|global={{ duration: motion(300) }}
+            out:fly|global={{ duration: motion(200) }}
             class:warningOnly={!hasErrors}
             {@attach tooltip(hasErrors ? 'Compiler errors' : 'Compiler warnings')}
             aria-label={hasErrors ? 'Compiler errors' : 'Compiler warnings'}
@@ -83,16 +84,18 @@
         color: var(--danger-text);
         padding: 0.2rem;
         right: 0.4rem;
-        border-radius: 0.2rem;
+        border-radius: var(--r-chip);
         width: 1.4rem;
         height: 1.4rem;
-        transition: all 0.3s;
+        transition:
+            background-color var(--dur-base),
+            color var(--dur-base);
         bottom: 0.4rem;
     }
     /* a single-class selector after the icon's, so source order lets it win */
     .warningOnly {
-        background-color: #d19a3f;
-        color: #181818;
+        background-color: var(--warning);
+        color: var(--warning-text);
     }
     /* the console scrolls inside, so the box keeps its height and the icon its corner. A card like
        the code and the registers around it, inside the same 1px edge. Held low, so that what a run
@@ -102,7 +105,7 @@
         max-height: 6.5rem;
         position: relative;
         border: var(--wb-card-edge, 1px solid var(--line));
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
         overflow: hidden;
         display: flex;
         flex: 1;
@@ -137,6 +140,6 @@
         bottom: 0.8rem;
         right: 1.2rem;
         color: var(--hint);
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
 </style>

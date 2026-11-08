@@ -2,6 +2,7 @@
     import Navbar from '#cmp/shared/layout/Navbar.svelte'
     import MainNavigationLinks from './MainNavigationLinks.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import FaStar from '~icons/fa-solid/star'
     import FaHeart from '~icons/fa-solid/heart'
     import FaBars from '~icons/fa-solid/bars'
@@ -58,8 +59,7 @@
     })
     /** Donate and Star read as text, with a surface only under the pointer, so a page's own
      *  action, like the home page's Create project, is the one filled button. */
-    const QUIET =
-        '--btn-color: transparent; --btn-text: color-mix(in srgb, var(--background-text) 70%, transparent); font-weight: 400'
+    const QUIET = 'font-weight: 400'
 </script>
 
 <Navbar style={toolbar ? `flex-wrap: wrap; ${style ?? ''}` : style}>
@@ -79,7 +79,7 @@
             {#if !compact}
                 <div class="pill donate">
                     <ButtonLink
-                        cssVar="secondary"
+                        kind="ghost"
                         href={resolve('/donate')}
                         style={QUIET}
                         {@attach tooltip('Donate to the project')}
@@ -92,7 +92,7 @@
                 </div>
                 <div class="pill star">
                     <ButtonLink
-                        cssVar="secondary"
+                        kind="ghost"
                         href="https://github.com/Specy/asm-editor"
                         target="_blank"
                         style={QUIET}
@@ -132,16 +132,18 @@
             {/if}
             {#if hasMenu}
                 <div class="menu">
-                    <Icon
-                        onClick={() => (menuOpen = !menuOpen)}
+                    <IconButton
                         label={menuOpen ? 'Close the menu' : 'Open the menu'}
+                        onClick={() => (menuOpen = !menuOpen)}
                     >
-                        {#if menuOpen}
-                            <FaTimes />
-                        {:else}
-                            <FaBars />
-                        {/if}
-                    </Icon>
+                        <Icon>
+                            {#if menuOpen}
+                                <FaTimes />
+                            {:else}
+                                <FaBars />
+                            {/if}
+                        </Icon>
+                    </IconButton>
                 </div>
             {/if}
         </div>
@@ -149,6 +151,8 @@
 </Navbar>
 
 <style lang="scss">
+    @use '../../../styles/visually-hidden.scss' as *;
+
     /* a folded button shrinks to a square around its icon, and keeps its words for screen readers */
     @mixin square {
         width: 2.2rem;
@@ -156,12 +160,7 @@
     }
 
     @mixin folded-label {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
+        @include visually-hidden;
     }
 
     @mixin folded-pill {
@@ -204,6 +203,12 @@
         gap: 0.5rem;
         height: 2.2rem;
         padding: 0 0.7rem;
+    }
+
+    /* Donate and Star muted in what they hold, so their hover, drawn from the button's own
+       colour, is the page's text at 10% as every hover is */
+    .pill :global(.btn > *) {
+        color: var(--text-muted);
     }
 
     .search {
@@ -318,7 +323,7 @@
 
         .icon,
         .ai {
-            font-size: 0.9rem;
+            font-size: var(--fs-small);
         }
 
         .menu {

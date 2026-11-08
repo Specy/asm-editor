@@ -1141,10 +1141,10 @@ describe('a function that does not decompile', () => {
         slow.clear()
         host.querySelector('button')!.click()
         flushSync()
-        expect(host.querySelector('h2')?.textContent).toBe('Decompiling…')
+        expect(host.querySelector('.waiting .spinner')?.textContent?.trim()).toBe('Decompiling…')
         expect((await decompiled(pane)).status).toBe('ready')
         flushSync()
-        expect(host.querySelector('h2')).toBeNull()
+        expect(host.querySelector('.waiting')).toBeNull()
     })
 })
 

@@ -7,8 +7,9 @@
      * outside it, or the page scrolling or resizing under it.
      */
     import { tick, type Snippet } from 'svelte'
-    import CardOutline from '#cmp/shared/floating/CardOutline.svelte'
+    import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { placeCard, type Side } from '#cmp/shared/floating/floating.ts'
+    import { popoverElevation } from '#src/styles/elevation.ts'
     import Switch from '#cmp/shared/input/Switch.svelte'
     import type { ShareStartAction } from '#lib/shareStart.ts'
 
@@ -42,8 +43,8 @@
 
     const EDGE = 4
     const ARROW = 6
-    /** 0.4rem, ContextMenu's corner. */
-    const RADIUS = 6.4
+    /** The corner the outline is drawn with, which the arrow keeps clear of. */
+    const RADIUS = popoverElevation().radius
     let panel = $state<HTMLDivElement>()
     let left = $state(0)
     let top = $state(0)
@@ -125,18 +126,7 @@
             at = null
         }}
     >
-        <CardOutline
-            {width}
-            {height}
-            radius={RADIUS}
-            {side}
-            at={arrowAt}
-            arrow={ARROW}
-            fill="color-mix(in srgb, var(--tertiary) 85%, transparent)"
-            stroke="color-mix(in srgb, var(--tertiary-text) 15%, transparent)"
-            blur
-            shadow={{ y: 8, blur: 24, opacity: 0.35 }}
-        />
+        <PopoverOutline {width} {height} {side} at={arrowAt} arrow={ARROW} />
         <label class="row">
             <span>Build on open</span>
             <Switch
@@ -162,8 +152,12 @@
 {/if}
 
 <style lang="scss">
-    /* ContextMenu's surface: the outline draws the tint, edge, shadow and arrow as one shape */
+    @use '../../../styles/popover.scss';
+
+    /* a Popover, as ContextMenu is: the outline draws the tint, edge, shadow and arrow as one
+       shape */
     .share-menu {
+        @include popover.content;
         position: fixed;
         inset: auto;
         z-index: 100;
@@ -176,7 +170,6 @@
         overflow: visible;
         border: 0;
         background: transparent;
-        color: var(--tertiary-text);
         font-size: var(--fs-small);
         outline: none;
     }
@@ -191,17 +184,16 @@
         margin-top: 0.2rem;
         padding: 0.45rem 0.8rem;
         border: 0;
-        border-radius: 0.3rem;
+        /* as far in from the Popover's edge as its corner is round, so clear of the curve: a
+           control's own corner (D12) */
+        border-radius: var(--r-control);
         background-color: var(--accent);
         color: var(--accent-text);
         font: inherit;
         cursor: pointer;
+        /* the primary Button's hover, which the look decision keeps (D5) */
         &:hover {
-            filter: brightness(1.1);
-        }
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
+            background-color: color-mix(in srgb, var(--accent) 85%, white);
         }
     }
 </style>

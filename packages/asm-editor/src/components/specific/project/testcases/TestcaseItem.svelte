@@ -20,6 +20,8 @@
     import RegistersTable from './RegistersTable.svelte'
     import MemoryTable from './MemoryTable.svelte'
     import InputCells from './InputCells.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
+    import StatusDot from '#cmp/shared/misc/StatusDot.svelte'
 
     interface Props {
         testcase: Testcase
@@ -123,7 +125,15 @@
 <article class="testcase" class:open>
     <button class="header" aria-expanded={open} aria-controls="{id}-body" onclick={toggle}>
         <span class="chevron" aria-hidden="true"><FaCaretRight /></span>
-        <span class="dot {status}" aria-hidden="true"></span>
+        <StatusDot
+            class="dot"
+            color={status === 'passed'
+                ? 'var(--tc-pass)'
+                : status === 'failed'
+                  ? 'var(--tc-fail)'
+                  : undefined}
+            hollow={status !== 'passed' && status !== 'failed'}
+        />
         <span class="title ellipsis" class:unnamed={!testcase.name?.trim()}>
             {testcaseLabel(testcase, index)}
         </span>
@@ -139,13 +149,12 @@
                     {#if editable}
                         <div class="section">
                             <Header type="h3" noMargin id="{id}-name">Name</Header>
-                            <input
+                            <TextField
                                 aria-labelledby="{id}-name"
-                                class="field"
-                                bind:this={nameInput}
+                                class="testcase-field"
+                                bind:el={nameInput}
                                 bind:value={testcase.name}
                                 placeholder="Testcase {index + 1}"
-                                spellcheck="false"
                                 autocomplete="off"
                             />
                         </div>
@@ -159,10 +168,11 @@
                                 >
                             </div>
                             {#if editable}
-                                <input
+                                <TextField
                                     aria-labelledby="{id}-arguments"
-                                    class="field arguments"
-                                    class:invalid={argumentsProblem}
+                                    class="testcase-field arguments"
+                                    mono
+                                    invalid={!!argumentsProblem}
                                     value={testcase.arguments ?? ''}
                                     oninput={(event) => {
                                         const text = event.currentTarget.value
@@ -171,7 +181,6 @@
                                         else testcase.arguments = text
                                     }}
                                     placeholder="the Project's Arguments"
-                                    spellcheck="false"
                                     autocomplete="off"
                                     autocapitalize="off"
                                     aria-invalid={argumentsProblem ? 'true' : undefined}
@@ -278,11 +287,11 @@
         width: 100%;
         padding: 0.75rem 1rem;
         text-align: left;
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         color: var(--secondary-text);
         background-color: transparent;
         cursor: pointer;
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
         &:hover,
         &:focus-visible {
@@ -295,36 +304,18 @@
         flex: none;
         width: 0.45rem;
         color: var(--hint);
-        transition: transform 0.15s;
+        transition: transform var(--dur-base);
     }
 
     .open .chevron {
         transform: rotate(90deg);
     }
 
-    .dot {
-        flex: none;
-        width: 0.55rem;
-        height: 0.55rem;
-        border-radius: 50%;
-        border: 1.5px solid var(--hint);
-
-        &.passed {
-            border-color: var(--tc-pass);
-            background-color: var(--tc-pass);
-        }
-
-        &.failed {
-            border-color: var(--tc-fail);
-            background-color: var(--tc-fail);
-        }
-    }
-
     .title {
         flex: 1;
         min-width: 0;
         font-weight: 600;
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
 
         &.unnamed {
             font-weight: 500;
@@ -334,7 +325,7 @@
 
     .status {
         flex: none;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--hint);
 
         &.passed {
@@ -356,14 +347,14 @@
         min-height: 0;
         visibility: hidden;
         transition:
-            grid-template-rows 0.2s ease,
-            visibility 0s 0.2s;
+            grid-template-rows var(--dur-base) ease,
+            visibility 0s var(--dur-base);
 
         &.shown {
             grid-template-rows: 1fr;
             visibility: inherit;
             transition:
-                grid-template-rows 0.2s ease,
+                grid-template-rows var(--dur-base) ease,
                 visibility 0s;
         }
 
@@ -398,7 +389,7 @@
 
     /* titled as the Settings panel's forms are, a step above the text they head */
     .section :global(h3) {
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
     }
 
     .title-row {
@@ -410,12 +401,11 @@
     .caption {
         font-size: var(--fs-caption);
         color: var(--hint);
-        opacity: 0.8;
     }
 
     .verdict {
         margin-left: auto;
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
         color: var(--tc-pass);
 
         &.differs {
@@ -427,14 +417,20 @@
         @include field;
     }
 
+    /* the Testcase's name and Arguments, fields as every one is (styles/field.scss), the width of
+       the section */
+    .section :global(.testcase-field) {
+        width: 100%;
+        font-size: var(--fs-small);
+    }
+    .section :global(.testcase-field.mono) {
+        font-size: var(--fs-small);
+    }
+
     .arguments {
         @include mono;
         margin: 0;
         font-size: var(--fs-small);
-
-        &.invalid {
-            border-color: var(--tc-fail);
-        }
     }
 
     .problem {
@@ -462,14 +458,15 @@
         border-color: color-mix(in srgb, var(--tc-fail) 40%, transparent);
     }
 
-    .nothing {
-        font-family: Rubik, sans-serif;
+    /* in the failed output's red, its italics setting it apart */
+    .got .nothing {
+        font-family: var(--font-ui);
         font-style: italic;
-        opacity: 0.8;
+        color: var(--tc-fail);
     }
 
     .difference {
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
         color: var(--hint);
     }
 

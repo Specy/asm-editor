@@ -4,7 +4,7 @@
      * the code on a translucent, blurred card. A notice that only compiling again resolves is
      * itself the button that does, when `recompile` is given.
      */
-    import FaSpinner from '~icons/fa-solid/spinner'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     interface Props {
@@ -26,7 +26,7 @@
             onclick={recompile.onClick}
         >
             {#if recompile.busy}
-                <span class="spinner keeps-moving" aria-hidden="true"><FaSpinner /></span>
+                <Spinner />
                 Compiling…
             {:else}
                 {notice}
@@ -38,8 +38,11 @@
 {/if}
 
 <style lang="scss">
-    /* clear of Monaco's scrollbar and minimap on the right */
+    @use '../../shared/button/tray.scss';
+
+    /* a Tray over the editor's top right corner, clear of Monaco's scrollbar and minimap */
     .compilation-notice {
+        @include tray.surface;
         position: absolute;
         z-index: 4;
         top: 0.5rem;
@@ -50,23 +53,18 @@
         width: fit-content;
         max-width: calc(100% - 2.25rem);
         padding: 0.5rem 0.8rem;
-        border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-        border-radius: 0.5rem;
-        color: var(--secondary-text);
-        background: color-mix(in srgb, var(--accent) 14%, transparent);
-        backdrop-filter: blur(8px);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25);
         font: inherit;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         text-align: left;
     }
 
     .clickable {
         cursor: pointer;
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
+        /* the hover every tool takes, over the tray's own tint */
         &:hover:not(:disabled) {
-            background: color-mix(in srgb, var(--accent) 26%, transparent);
+            background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
         }
 
         &:focus-visible {
@@ -76,22 +74,6 @@
 
         &:disabled {
             cursor: not-allowed;
-        }
-    }
-
-    .spinner {
-        display: flex;
-        animation: notice-spin 1s linear infinite;
-
-        :global(svg) {
-            width: 0.8rem;
-            height: 0.8rem;
-        }
-    }
-
-    @keyframes notice-spin {
-        to {
-            transform: rotate(360deg);
         }
     }
 </style>

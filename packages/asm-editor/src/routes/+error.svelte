@@ -22,8 +22,8 @@
             address mistyped.
             {#snippet actions()}
                 <ButtonLink href={resolve('/')}>Home</ButtonLink>
-                <ButtonLink href={resolve('/projects')} cssVar="tertiary">Your projects</ButtonLink>
-                <ButtonLink href={resolve('/documentation')} cssVar="tertiary">
+                <ButtonLink href={resolve('/projects')} kind="secondary">Your projects</ButtonLink>
+                <ButtonLink href={resolve('/documentation')} kind="secondary">
                     Documentation
                 </ButtonLink>
             {/snippet}
@@ -37,7 +37,7 @@
         >
             This page failed to load. Reloading it usually fixes that.
             {#snippet actions()}
-                <ButtonLink href={resolve('/')} cssVar="tertiary">Home</ButtonLink>
+                <ButtonLink href={resolve('/')} kind="secondary">Home</ButtonLink>
             {/snippet}
         </ErrorState>
     {/if}

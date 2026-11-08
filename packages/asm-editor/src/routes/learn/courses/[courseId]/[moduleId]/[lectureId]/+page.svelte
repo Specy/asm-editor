@@ -192,7 +192,7 @@
         {#if previousLecture}
             <ButtonLink
                 style="gap: 1rem"
-                cssVar="secondary"
+                kind="secondary"
                 href={`/learn/courses/${data.course.slug}/${previousLecture?.module.slug}/${previousLecture?.slug}`}
             >
                 <Icon>

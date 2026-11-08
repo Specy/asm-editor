@@ -8,7 +8,10 @@
      */
     import { untrack } from 'svelte'
     import { shortcutLabel } from '#stores/shortcutsStore.ts'
-    import CardOutline from './CardOutline.svelte'
+    import { popoverElevation } from '#src/styles/elevation.ts'
+    import { DUR_FAST, EASE_OUT, prefersLessMotion } from '#src/styles/motion.ts'
+    import PopoverOutline from './PopoverOutline.svelte'
+    import Kbd from '#cmp/shared/misc/Kbd.svelte'
     import { placeCard, type Side } from './floating'
     import type { Tooltip } from './tooltip.svelte.ts'
 
@@ -16,7 +19,8 @@
 
     const ARROW = 6
     const GAP = 6
-    const RADIUS = 6
+    /** The corner the outline is drawn with, which the arrow keeps clear of. */
+    const RADIUS = popoverElevation().radius
     const MARGIN = 4
     /** How far it slides out of its element as it opens. */
     const SLIDE = 4
@@ -28,10 +32,6 @@
     let arrowAt = $state(0)
     let shown = false
     let animation: Animation | undefined
-
-    function reducedMotion() {
-        return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-    }
 
     function place() {
         width = card.offsetWidth
@@ -68,7 +68,7 @@
         if (!shown) card.showPopover()
         shown = true
         place()
-        if (reducedMotion() || typeof card.animate !== 'function') return
+        if (prefersLessMotion() || typeof card.animate !== 'function') return
         if (instant) {
             animation = card.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 80 })
             return
@@ -90,8 +90,8 @@
                 },
                 { opacity: 1, transform: 'none', transformOrigin: `${x}px ${y}px` }
             ],
-            //Svelte's cubicOut
-            { duration: 120, easing: 'cubic-bezier(0.33, 1, 0.68, 1)' }
+            //--dur-fast and --ease-out, Svelte's cubicOut
+            { duration: DUR_FAST, easing: EASE_OUT }
         )
     }
 
@@ -102,7 +102,7 @@
             shown = false
             card.hidePopover()
         }
-        if (instant || reducedMotion() || typeof card.animate !== 'function') return done()
+        if (instant || prefersLessMotion() || typeof card.animate !== 'function') return done()
         animation = card.animate([{ opacity: 1 }, { opacity: 0 }], {
             duration: 80,
             fill: 'forwards'
@@ -137,31 +137,24 @@
     onpointerenter={(event) => event.pointerType !== 'touch' && tooltip.keep()}
     onpointerleave={(event) => event.pointerType !== 'touch' && tooltip.leave()}
 >
-    <CardOutline
-        {width}
-        {height}
-        radius={RADIUS}
-        {side}
-        at={arrowAt}
-        arrow={ARROW}
-        fill="var(--tertiary)"
-        stroke="color-mix(in srgb, var(--tertiary-text) 15%, transparent)"
-        shadow={{ y: 4, blur: 12, opacity: 0.25 }}
-    />
+    <PopoverOutline {width} {height} {side} at={arrowAt} arrow={ARROW} solid />
     <!-- the comma for the description only, which a screen reader reads as "Undo, Ctrl+Z" -->
     <span class="content" id={tooltip.contentId}
         >{#if typeof tooltip.content === 'string'}{tooltip.content}{:else}{@render tooltip.content()}{/if}{#if tooltip.shortcut}<span
                 class="visually-hidden">,</span
             >
-            <kbd>{shortcutLabel(tooltip.shortcut)}</kbd>{/if}</span
+            <Kbd class="shortcut">{shortcutLabel(tooltip.shortcut)}</Kbd>{/if}</span
     >
 </div>
 
 <style lang="scss">
+    @use '../../../styles/popover.scss';
+
     /* placed by hand rather than by the popover's centring, and drawing no surface of its own: the
-       outline is its background, border and shadow; no display of its own either, which would
-       override the popover's hiding */
+       outline is its background, border and shadow, a solid Popover's; no display of its own
+       either, which would override the popover's hiding */
     .tooltip {
+        @include popover.content;
         position: fixed;
         inset: auto;
         width: max-content;
@@ -171,22 +164,14 @@
         overflow: visible;
         border: 0;
         background: transparent;
-        color: var(--tertiary-text);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         line-height: 1.35;
         text-align: left;
         white-space: pre-line;
         overflow-wrap: anywhere;
     }
 
-    kbd {
+    .content :global(.shortcut) {
         margin-left: 0.2rem;
-        padding: 0 0.3rem;
-        border: 1px solid color-mix(in srgb, var(--tertiary-text) 25%, transparent);
-        border-radius: 0.25rem;
-        font-family: inherit;
-        font-size: var(--fs-caption);
-        white-space: nowrap;
-        opacity: 0.85;
     }
 </style>

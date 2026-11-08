@@ -10,8 +10,10 @@
      * sidebar, the navbar or a page would be broken by their transforms, and the theme's colours
      * live on the scope rather than on the document.
      */
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { tick, untrack } from 'svelte'
     import { cubicOut } from 'svelte/easing'
+    import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import { goto } from '$app/navigation'
@@ -27,6 +29,7 @@
     import type { SearchScope } from '#lib/search/scope.ts'
     import HighlightedText from './HighlightedText.svelte'
     import SearchField from './SearchField.svelte'
+    import Kbd from '#cmp/shared/misc/Kbd.svelte'
     import { closeSearchPalette, openSearchPalette, searchPalette } from './paletteState.svelte'
     import { listenForSearchKey, typedInEditor } from './searchHotkey'
 
@@ -113,27 +116,26 @@
         return () => clearTimeout(timer)
     })
 
-    function reducedMotion(): boolean {
-        return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    }
-
     function backdropFade(_node: HTMLElement) {
-        return { duration: 150, easing: cubicOut, css: (t: number) => `opacity: ${t};` }
+        return {
+            duration: motion(DUR_BASE),
+            easing: cubicOut,
+            css: (t: number) => `opacity: ${t};`
+        }
     }
 
     /**
-     * Drops in from just above where it settles and shrinks back into it; on a phone the sheet rises
-     * from just below instead. Reduced motion keeps the fade and drops the movement. Both ways run
-     * the same transition, so reopening while it closes turns it around rather than starting over.
+     * Drops in from just above where it settles and shrinks back into it, in a Tray's time
+     * (`--dur-base`); on a phone the sheet rises from just below instead. Reduced motion makes it
+     * come and go at once (`motion()`), as the backdrop does. Both ways run the same transition, so
+     * reopening while it closes turns it around rather than starting over.
      */
     function paletteMotion(_node: HTMLElement) {
-        const still = reducedMotion()
         const phone = window.matchMedia('(max-width: 600px)').matches
         return {
-            duration: 160,
+            duration: motion(DUR_BASE),
             easing: cubicOut,
             css: (t: number) => {
-                if (still) return `opacity: ${t};`
                 const u = 1 - t
                 return phone
                     ? `opacity: ${t}; transform: translateY(${u * 1.5}rem);`
@@ -206,6 +208,7 @@
             <div class="top">
                 <SearchField
                     bare
+                    semantic
                     bind:value={query}
                     bind:el={input}
                     {placeholder}
@@ -219,7 +222,7 @@
                     {onkeydown}
                 />
                 <!-- a phone has no Esc key and no backdrop around the sheet to tap -->
-                <button type="button" class="close" onclick={close}>Cancel</button>
+                <button type="button" class="close" onclick={close}><span>Cancel</span></button>
             </div>
             {#if !query.trim()}
                 <p class="hint">Write the name of an instruction, directive or any question.</p>
@@ -246,7 +249,7 @@
                                             ),
                                             languageLabel(result.entry.language.toUpperCase())
                                         )}<span class="dot" aria-hidden="true">·</span>{/if}<span
-                                        class="where"
+                                        class="where ellipsis"
                                         >{result.entry.category
                                             ? `${result.entry.chapterTitle} · ${categoryLabel(result.entry.category)}`
                                             : result.entry.chapterTitle}</span
@@ -261,16 +264,18 @@
                                         ><HighlightedText text={result.entry.title} {terms} /></span
                                     >
                                     {#if result.entry.signature}
-                                        <span class="signature">{result.entry.signature}</span>
+                                        <span class="signature ellipsis"
+                                            >{result.entry.signature}</span
+                                        >
                                     {/if}
                                 </span>
-                                <span class="line"
+                                <span class="line ellipsis"
                                     ><HighlightedText text={result.entry.summary} {terms} /></span
                                 >
                             {:else}
                                 <span class="kind"
                                     >{@render language(courseAccent(result.section.course))}<span
-                                        class="where"
+                                        class="where ellipsis"
                                         >{result.section.courseName} › {result.section
                                             .lectureName}</span
                                     ></span
@@ -284,25 +289,27 @@
                                         /></span
                                     ></span
                                 >
-                                <span class="line"
+                                <span class="line ellipsis"
                                     ><HighlightedText text={result.excerpt} {terms} /></span
                                 >
                             {/if}
                         </li>
                     {/each}
                     {#if results.length === 0 && searched === query.trim()}
-                        <li class="empty" role="presentation">Nothing matches “{query.trim()}”.</li>
+                        <li class="empty" role="presentation">
+                            <EmptyState>Nothing matches “{query.trim()}”.</EmptyState>
+                        </li>
                     {/if}
                 </ul>
             {/if}
             <footer>
                 <span
-                    ><kbd aria-label="Up"><FaArrowUp /></kbd><kbd aria-label="Down"
-                        ><FaArrowDown /></kbd
+                    ><Kbd aria-label="Up"><FaArrowUp /></Kbd><Kbd aria-label="Down"
+                        ><FaArrowDown /></Kbd
                     > to move</span
                 >
-                <span><kbd>Enter</kbd> to open</span>
-                <span><kbd>Esc</kbd> to close</span>
+                <span><Kbd>Enter</Kbd> to open</span>
+                <span><Kbd>Esc</Kbd> to close</span>
             </footer>
         </div>
     </div>
@@ -321,7 +328,7 @@
         justify-content: center;
         align-items: flex-start;
         padding: 12vh 1rem 1rem;
-        background-color: rgb(0 0 0 / 35%);
+        background-color: var(--scrim);
     }
 
     /* drawn as the app's trays (prompts, toasts, the execution dock): a translucent tint that blurs
@@ -338,7 +345,6 @@
         min-height: min(26rem, 70vh);
         max-height: 70vh;
         overflow: hidden;
-        box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 0.4);
         outline: none;
         transform-origin: top center;
     }
@@ -356,12 +362,17 @@
         flex: 1;
     }
 
+    /* its word in the accent, the button in the tray's text, which its hover is drawn from
+       (tray.tool-look) */
     .close {
         @include tray.tool(0.6rem);
         display: none;
         flex: none;
         height: 2rem;
-        color: var(--accent);
+
+        span {
+            color: var(--accent);
+        }
     }
 
     .results {
@@ -375,8 +386,9 @@
         min-height: 0;
     }
 
-    /* a menu's rows: no surface until pointed at or chosen with the arrows, then the tint the tray's
-       buttons take on hover, with an accent edge so the chosen one reads at a glance */
+    /* a menu's rows: no surface until pointed at or reached with the arrows, then the tint every
+       hovered row takes, the palette's text at 10%; no accent, since the palette has no current
+       item */
     li {
         position: relative;
         display: flex;
@@ -389,18 +401,7 @@
     }
 
     li.selected {
-        background-color: color-mix(in srgb, var(--tertiary) 55%, transparent);
-
-        &::before {
-            content: '';
-            position: absolute;
-            top: 0.45rem;
-            bottom: 0.45rem;
-            left: 0;
-            width: 2px;
-            border-radius: 1px;
-            background-color: var(--accent);
-        }
+        background-color: var(--hover-bg);
     }
 
     .kind {
@@ -408,8 +409,8 @@
         align-items: center;
         gap: 0.4rem;
         min-width: 0;
-        font-size: 0.72rem;
-        color: color-mix(in srgb, var(--primary-text) 60%, transparent);
+        font-size: var(--fs-caption);
+        color: var(--text-muted);
     }
 
     /* the square the home page's instruction sets wear */
@@ -434,14 +435,11 @@
 
     .dot {
         flex: none;
-        opacity: 0.6;
+        color: var(--text-muted);
     }
 
     .where {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     .title {
@@ -459,35 +457,29 @@
     .signature {
         min-width: 0;
         font-family: var(--font-mono);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         font-weight: normal;
-        opacity: 0.65;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        color: var(--text-muted);
     }
 
     .line {
         font-size: var(--fs-small);
-        opacity: 0.75;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        color: var(--text-muted);
     }
 
+    /* not a row: the empty state's own padding, at the rows' sides, in place of a row's */
     .empty {
-        padding: 0.8rem 0.7rem;
+        --empty-state-padding: 0.8rem 0.7rem;
+        padding: 0;
         cursor: default;
-        opacity: 0.65;
-        font-size: 0.9rem;
     }
 
     .hint {
         flex: 1;
         margin: 0;
         padding: 0.9rem 1.05rem;
-        opacity: 0.6;
-        font-size: 0.9rem;
+        color: var(--text-muted);
+        font-size: var(--fs-small);
     }
 
     footer {
@@ -498,31 +490,12 @@
         padding: 0.45rem 0.85rem;
         border-top: 1px solid var(--tray-line);
         font-size: var(--fs-caption);
-        color: color-mix(in srgb, var(--primary-text) 65%, transparent);
+        color: var(--text-muted);
 
         span {
             display: inline-flex;
             align-items: center;
             gap: 0.3rem;
-        }
-    }
-
-    /* the keys the Tooltips show */
-    kbd {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 1.2rem;
-        height: 1.2rem;
-        padding: 0 0.3rem;
-        border: 1px solid color-mix(in srgb, var(--primary-text) 25%, transparent);
-        border-radius: var(--r-chip);
-        font-family: inherit;
-        font-size: 0.7rem;
-
-        :global(svg) {
-            width: 0.55rem;
-            height: 0.55rem;
         }
     }
 

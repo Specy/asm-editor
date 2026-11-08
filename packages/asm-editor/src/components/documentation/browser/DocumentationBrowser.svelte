@@ -13,8 +13,10 @@
      * panel leaves out what a later processor brought, from the Chapters and from the results
      * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
      */
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { tick, untrack } from 'svelte'
-    import { prefersReducedMotion } from 'svelte/motion'
+    import { DUR_BASE, motion, prefersLessMotion } from '#src/styles/motion.ts'
     import { SvelteSet } from 'svelte/reactivity'
     import { slide } from 'svelte/transition'
     import FaArrowLeft from '~icons/fa-solid/arrow-left'
@@ -295,7 +297,7 @@
         const wasFolded = !unfolded.has(id)
         unfolded.add(id)
         await tick()
-        if (!wasFolded || !wasRendered || prefersReducedMotion.current) finishChapterScroll(id)
+        if (!wasFolded || !wasRendered || prefersLessMotion()) finishChapterScroll(id)
     }
 
     /** Wait for a folded Chapter to finish opening before positioning it in the scroll area. */
@@ -311,7 +313,7 @@
             )
             ?.scrollIntoView({
                 block: entry ? 'nearest' : 'start',
-                behavior: prefersReducedMotion.current ? 'instant' : 'smooth'
+                behavior: prefersLessMotion() ? 'instant' : 'smooth'
             })
     }
 
@@ -392,6 +394,7 @@
             {/if}
             <div class="field">
                 <SearchField
+                    semantic
                     bind:value={() => query, setQuery}
                     bind:el={input}
                     placeholder="Search the documentation"
@@ -410,11 +413,11 @@
             {/snippet}
         </ErrorState>
     {:else if !chapters}
-        <p class="note">Loading the documentation…</p>
+        <p class="note"><Spinner label="Loading the documentation…" /></p>
     {:else if searching && variant === 'panel'}
         <div class="scroll results" bind:this={scroller}>
             {#if shown.length === 0 && searched === query.trim()}
-                <p class="note">Nothing matches “{query.trim()}”.</p>
+                <EmptyState>Nothing matches “{query.trim()}”.</EmptyState>
             {/if}
             {#each shown as result ('pinnedEntry' in result ? `pinned:${result.pinnedEntry.id}` : result.key)}
                 {#if 'pinnedEntry' in result}
@@ -453,15 +456,11 @@
         {#if variant === 'page'}
             <div class="toolbar">
                 {#if open.size > 0 || unfolded.size > 0}
-                    <button type="button" class="tool" onclick={collapseAll}> Collapse all </button>
+                    <Button kind="ghost" size="sm" onClick={collapseAll}>Collapse all</Button>
                 {:else}
-                    <button type="button" class="tool" onclick={() => expandAll()}>
-                        Expand all
-                    </button>
+                    <Button kind="ghost" size="sm" onClick={() => expandAll()}>Expand all</Button>
                 {/if}
-                <button type="button" class="tool" onclick={() => expandAll(true)}>
-                    Print as PDF
-                </button>
+                <Button kind="ghost" size="sm" onClick={() => expandAll(true)}>Print as PDF</Button>
             </div>
         {/if}
         <div class="scroll" bind:this={scroller}>
@@ -494,15 +493,13 @@
                         <div
                             class="chapter-entries"
                             class:categorized={!!groups}
-                            transition:slideChapter={{
-                                duration: prefersReducedMotion.current ? 0 : 200
-                            }}
+                            transition:slideChapter={{ duration: motion(DUR_BASE) }}
                             onintroend={() => finishChapterScroll(chapter.id)}
                         >
                             {#if groups}
                                 {#each groups as group (group.category)}
                                     <div class="category-group">
-                                        <h4 class="category-title">
+                                        <h4 class="category-title small-heading">
                                             {categoryLabel(group.category)}
                                         </h4>
                                         {#each group.items as entry (entry.id)}
@@ -591,20 +588,6 @@
         gap: 0.5rem;
         padding-bottom: 0.6rem;
     }
-    .tool {
-        padding: 0.35rem 0.8rem;
-        border: none;
-        border-radius: var(--r-control);
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        font: inherit;
-        font-size: 0.9rem;
-        cursor: pointer;
-    }
-    .tool:hover {
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-    }
     @media print {
         .toolbar {
             display: none;
@@ -650,7 +633,7 @@
         z-index: 2;
         will-change: transform;
         margin: 0 calc(-1 * var(--chapter-border-width));
-        font-size: 0.95rem;
+        font-size: var(--fs-body);
         background-color: var(--wb-section-header, var(--tertiary));
         color: var(--secondary-text);
         border: var(--chapter-border-width) solid
@@ -693,10 +676,6 @@
         will-change: transform;
         margin: 0 -0.5rem;
         padding: 0.35rem 1rem;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
         color: var(--secondary-text);
         background-color: var(--wb-section-header, var(--tertiary));
         border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
@@ -737,18 +716,18 @@
         height: 0.6rem;
         opacity: 0.6;
         transform: rotate(90deg);
-        transition: transform 0.15s ease;
+        transition: transform var(--dur-base) ease;
     }
     .chevron.folded {
         transform: rotate(0deg);
     }
     .page .chapter-title {
         top: 3.2rem;
-        font-size: 1.1rem;
+        font-size: var(--fs-prose);
     }
     .page .category-title {
         top: calc(3.2rem + var(--chapter-title-height, 2.6rem));
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
     .page .category-group :global(.entry-row) {
         scroll-margin-top: calc(3.2rem + var(--chapter-title-height, 2.6rem) + 2rem);

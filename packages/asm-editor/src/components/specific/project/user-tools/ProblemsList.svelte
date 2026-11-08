@@ -71,9 +71,9 @@
             border: 0;
             border-radius: 0.2rem;
             color: var(--primary-text);
-            background: color-mix(in srgb, #d19a3f 15%, transparent);
+            background: color-mix(in srgb, var(--warning) 15%, transparent);
             font: inherit;
-            font-size: 0.78rem;
+            font-size: var(--fs-caption);
             text-align: left;
             white-space: pre-wrap;
             cursor: pointer;

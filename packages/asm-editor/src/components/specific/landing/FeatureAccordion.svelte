@@ -174,7 +174,7 @@
         cursor: default;
         padding-top: 2.2rem;
         padding-bottom: 0.6rem;
-        font-family: 'Noto Serif', Georgia, serif;
+        font-family: var(--font-read);
         font-size: 1.35rem;
         letter-spacing: 0;
         color: var(--background-text);

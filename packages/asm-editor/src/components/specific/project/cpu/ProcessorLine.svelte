@@ -35,7 +35,7 @@
     }
 
     .label {
-        opacity: 0.8;
+        color: var(--text-muted);
     }
 
     .processor {

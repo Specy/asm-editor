@@ -29,7 +29,7 @@
 </script>
 
 <div class="cycles-line" {style} {@attach tooltip(cycleCounterTooltip(cycles, processor))}>
-    <span class="label">Cycles</span>
+    <span class="small-heading">Cycles</span>
     <span class="count"
         >{cycles.estimate ? `${CYCLE_ESTIMATE_MARK} ` : ''}{formatCycles(cycles.total)}</span
     >
@@ -49,19 +49,11 @@
         overflow: hidden;
     }
 
-    /* the fonts of the PC's row under it: its name's for the label, its value's for the count */
-    .label {
-        font-family: var(--font-ui);
-        font-size: 0.9rem;
-        font-weight: bold;
-        text-transform: uppercase;
-        color: var(--secondary-text);
-    }
-
+    /* the label a panel's heading, the count in the font of the PC's value under it */
     .count {
         font-family: var(--font-mono);
         font-size: var(--fs-body);
-        opacity: 0.8;
+        color: var(--text-muted);
     }
 
     /* the newest step's cost, in the colour the panels give what the newest step changed, at the
@@ -69,7 +61,7 @@
     .last {
         margin-left: auto;
         font-family: var(--font-mono);
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
         color: var(--accent);
     }
 </style>

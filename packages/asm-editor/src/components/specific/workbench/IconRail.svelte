@@ -12,6 +12,7 @@
     import FaAngleLeft from '~icons/fa-solid/angle-left'
     import FaSave from '~icons/fa-solid/save'
     import { useWorkbench, type RailEntry } from './workbenchContext'
+    import StatusDot from '#cmp/shared/misc/StatusDot.svelte'
 
     interface Props {
         withBack?: boolean
@@ -52,7 +53,7 @@
             <entry.icon />
         </Icon>
         {#if entry.dot}
-            <span class="dot {entry.dot}"></span>
+            <StatusDot class="dot" tone={entry.dot === 'error' ? 'danger' : 'success'} />
         {/if}
     </button>
 {/snippet}
@@ -140,12 +141,12 @@
         opacity: 0.75;
         cursor: pointer;
         transition:
-            background-color 0.15s,
-            opacity 0.15s;
+            background-color var(--dur-fast),
+            opacity var(--dur-fast);
 
         &:hover {
             opacity: 1;
-            background-color: var(--tertiary);
+            background-color: var(--hover-bg);
         }
 
         &.active {
@@ -162,21 +163,11 @@
         }
     }
 
-    .dot {
+    /* over the icon's corner, cut out of it by a ring of the rail's own colour */
+    .rail-button :global(.dot) {
         position: absolute;
         top: 0.3rem;
         right: 0.3rem;
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 50%;
         border: 1px solid var(--secondary);
-
-        &.success {
-            background-color: var(--success);
-        }
-
-        &.error {
-            background-color: var(--danger);
-        }
     }
 </style>

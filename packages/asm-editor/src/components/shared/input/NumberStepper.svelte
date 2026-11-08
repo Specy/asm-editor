@@ -16,8 +16,15 @@
         step?: number
         /** Names the number, its field's label, and its buttons' as "Less" and "More" of it. */
         ariaLabel: string
+        /** Its field's id, for a `<label for>` beside it. */
+        id?: string
         title?: string
         disabled?: boolean
+        /**
+         * Brings a number typed, or stepped to with − or +, onto the values the field takes; a
+         * whole number of `step`s when left out. What is not a number puts the field back.
+         */
+        snap?: (next: number) => number
         /** Each value it settles on: a press of − or +, or what was typed once committed. */
         onchange?: (value: number) => void
         el?: HTMLInputElement
@@ -29,16 +36,19 @@
         max = Infinity,
         step = 1,
         ariaLabel,
+        id,
         title,
         disabled = false,
+        snap = (next: number) => Math.round(next / step) * step,
         onchange,
         el = $bindable()
     }: Props = $props()
 
-    /** `next` as a whole number of steps within the limits; what was there for no number at all. */
+    /** `next` snapped and within the limits; what was there for no number at all. */
     function within(next: number) {
-        if (!Number.isFinite(next)) return value
-        return Math.min(max, Math.max(min, Math.round(next / step) * step))
+        const snapped = Number.isFinite(next) ? snap(next) : Number.NaN
+        if (!Number.isFinite(snapped)) return value
+        return Math.min(max, Math.max(min, snapped))
     }
 
     function settle(next: number) {
@@ -55,6 +65,7 @@
      drawn before it all the same -->
 <div class="stepper" class:disabled {title}>
     <input
+        {id}
         type="number"
         {min}
         {max}
@@ -65,7 +76,8 @@
         bind:this={el}
         oninput={(event) => {
             const typed = event.currentTarget.valueAsNumber
-            if (Number.isFinite(typed)) value = typed
+            //a number its snap refuses is never the value, so leaving the field puts back the last
+            if (Number.isFinite(typed) && Number.isFinite(snap(typed))) value = typed
         }}
         onchange={(event) => settle(event.currentTarget.valueAsNumber)}
     />
@@ -126,7 +138,7 @@
             background: color-mix(in srgb, currentColor 12%, transparent);
         }
         &:disabled {
-            opacity: 0.35;
+            opacity: 0.5;
             cursor: default;
         }
     }

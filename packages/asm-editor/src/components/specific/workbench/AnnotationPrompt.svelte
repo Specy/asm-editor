@@ -110,42 +110,39 @@
 </PromptTray>
 
 <style lang="scss">
+    @use '../../../styles/field.scss';
+
     .annotation-title {
         display: flex;
         min-width: 0;
         padding: 0 0.2rem;
     }
 
+    /* the global class cuts the text short; a flex item has to be let shrink for it to */
     .ellipsis {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     .annotation-note,
     .annotation-hint {
         margin: 0;
         padding: 0 0.2rem;
-        font-size: 0.8rem;
-        opacity: 0.75;
+        font-size: var(--fs-small);
+        color: var(--text-muted);
         overflow-wrap: anywhere;
     }
 
+    /* a field (styles/field.scss) with its prefix inside it */
     .annotation-field {
+        @include field.box('.annotation-input');
         display: flex;
         align-items: stretch;
-        border: 1px solid var(--tray-line);
-        border-radius: var(--r-control);
-        background-color: var(--secondary);
-        color: var(--secondary-text);
 
-        &:focus-within {
-            outline: 2px solid var(--accent);
-            outline-offset: -1px;
+        &.invalid {
+            border-color: var(--danger);
         }
 
-        &.invalid:focus-within {
+        &.invalid:has(.annotation-input:focus-visible) {
             outline-color: var(--danger);
         }
     }
@@ -155,20 +152,14 @@
         align-items: center;
         padding-left: 0.6rem;
         font-family: var(--font-mono);
-        opacity: 0.7;
+        color: var(--text-muted);
     }
 
     .annotation-input {
         flex: 1;
-        min-width: 0;
         box-sizing: border-box;
-        padding: 0.45rem 0.6rem;
-        border: none;
-        outline: none;
-        background: transparent;
-        color: inherit;
+        padding: 0.5rem 0.75rem;
         font-family: var(--font-mono);
-        font-size: 0.9rem;
     }
 
     textarea.annotation-input {

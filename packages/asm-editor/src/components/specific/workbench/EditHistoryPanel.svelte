@@ -14,6 +14,8 @@
     import FaUndo from '~icons/fa-solid/undo'
     import FaRedo from '~icons/fa-solid/redo'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import { useWorkbench } from './workbenchContext'
     import CollapsibleSection from './CollapsibleSection.svelte'
 
@@ -134,21 +136,19 @@
         {@const current = journal.undo.length}
         <CollapsibleSection variant="outlined" title={path}>
             {#snippet actions()}
-                <button
-                    type="button"
-                    class="action"
+                <IconButton
+                    size="sm"
+                    label="Undo"
                     {@attach tooltip(`Undo the last edit to ${path}`)}
-                    aria-label="Undo"
                     disabled={!!readOnly || current === 0}
-                    onclick={() => session.undoFileEdit(path)}><FaUndo /></button
+                    onClick={() => session.undoFileEdit(path)}><FaUndo /></IconButton
                 >
-                <button
-                    type="button"
-                    class="action"
+                <IconButton
+                    size="sm"
+                    label="Redo"
                     {@attach tooltip(`Redo the next edit to ${path}`)}
-                    aria-label="Redo"
                     disabled={!!readOnly || !journal.redo.length}
-                    onclick={() => session.undoFileEdit(path, true)}><FaRedo /></button
+                    onClick={() => session.undoFileEdit(path, true)}><FaRedo /></IconButton
                 >
             {/snippet}
             {#if rows.length === 1}
@@ -171,7 +171,7 @@
                         >
                             <span class="label ellipsis">{row.label}</span>
                             {#if isCurrent}
-                                <span class="pill">current</span>
+                                <Badge class="pill" tone="accent" solid>current</Badge>
                             {/if}
                             {#if row.time !== undefined}
                                 <span class="time">{ago(row.time)}</span>
@@ -185,6 +185,8 @@
 </section>
 
 <style lang="scss">
+    @use '../../../styles/rows.scss';
+
     /* spaced like the Settings panel, whose sections the File's steps are drawn as */
     .edit-history {
         display: flex;
@@ -192,40 +194,18 @@
         gap: 0.35rem;
         flex: 1;
         padding: 0.5rem 0.35rem 0.8rem;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
     .note {
         margin: 0;
         padding: 0.5rem 0.6rem;
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         line-height: 1.4;
         color: var(--hint);
     }
+    /* the global class cuts the text short; a flex item has to be let shrink for it to */
     .ellipsis {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .action {
-        display: grid;
-        place-items: center;
-        width: 1.6rem;
-        height: 1.6rem;
-        padding: 0.38rem;
-        border: none;
-        border-radius: 0.3rem;
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-
-        &:hover:not(:disabled) {
-            background: var(--tertiary);
-        }
-        &:disabled {
-            opacity: 0.35;
-            cursor: default;
-        }
     }
     /* a File's steps scroll past about ten of them, so that the Files after it stay in reach */
     .steps {
@@ -253,19 +233,18 @@
 
         &:hover:not(:disabled),
         &:focus-visible {
-            background: var(--tertiary);
+            background: var(--hover-bg);
         }
         &:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: -2px;
         }
-        /* the current step keeps its colour under the pointer too, square on the side its bar
-           marks */
+        /* the current step, the shared current item (D4), under the pointer too; square on the
+           side its edge marks */
         &.current,
         &.current:hover:not(:disabled) {
             border-radius: 0 0.3rem 0.3rem 0;
-            background: color-mix(in srgb, var(--accent) 24%, var(--tertiary));
-            box-shadow: inset 2px 0 0 var(--accent);
+            @include rows.selected;
         }
         &.undone {
             opacity: 0.5;
@@ -276,18 +255,8 @@
     }
     .time {
         flex: none;
-        font-size: 0.72rem;
-        opacity: 0.65;
+        font-size: var(--fs-caption);
+        color: var(--text-muted);
         font-variant-numeric: tabular-nums;
-    }
-    .pill {
-        flex: none;
-        padding: 0.05rem 0.45rem;
-        border-radius: 1rem;
-        background: var(--accent);
-        color: var(--accent-text);
-        font-size: 0.68rem;
-        font-weight: 600;
-        line-height: 1.4;
     }
 </style>

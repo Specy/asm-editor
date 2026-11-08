@@ -19,7 +19,8 @@ import { snapZoom, type ZoomSnap } from './screenZoom'
 const MARGIN_REM = 0.5
 /**
  * The draggable's own header bar, which the window has instead of the panel's: the bar is 1.6 rem
- * and sits 0.1 rem over the body.
+ * and sits 0.1 rem over the body, over the 1px border the two share, so that it measures a whole
+ * 1.5 rem.
  */
 const HEADER_REM = 1.5
 /**
@@ -32,10 +33,10 @@ const HEADER_REM = 1.5
 const LEFT_REM = 9
 /**
  * The body's frame around the canvas, one side: the viewport's 0.15 rem padding and the focus
- * ring's 0.15 rem room, inside the container's 0.1 rem border (`border`).
+ * ring's 0.15 rem room, inside the container's 1px border (`border`).
  */
 const PADDING_REM = 0.3
-const BORDER_REM = 0.1
+const BORDER_PX = 1
 /**
  * The narrowest body, so that the bar above it has room for the title, the size and the controls.
  * A Screen narrower than that at its zoom is centred in it.
@@ -93,11 +94,11 @@ function measures(input: {
 }) {
     const rootFontSize = input.rootFontSize > 0 ? input.rootFontSize : 16
     const rem = (value: number) => value * rootFontSize
-    //a browser draws a border in whole device pixels, down, and at least one: at 100% the 1.6
-    //pixels of 0.1 rem are 1, so a frame measured in rem alone would leave each body a pixel short
-    //of the zoom it was sized for
+    //a browser draws a border in whole device pixels, down, and at least one: at 125% and 150%
+    //the 1px border is one device pixel, less than a CSS pixel, so a frame measured in CSS pixels
+    //alone would leave each body short of the zoom it was sized for
     const ratio = input.devicePixelRatio > 0 ? input.devicePixelRatio : 1
-    const border = Math.max(1, Math.floor(rem(BORDER_REM) * ratio + 1e-6)) / ratio
+    const border = Math.max(1, Math.floor(BORDER_PX * ratio + 1e-6)) / ratio
     //a phone's Workbench has no room beside the window, so the window takes the whole viewport
     const phone = input.viewportWidth <= PHONE_MAX_WIDTH
     const margin = phone ? 0 : rem(MARGIN_REM)

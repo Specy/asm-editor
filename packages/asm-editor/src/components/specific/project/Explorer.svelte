@@ -19,7 +19,9 @@
      * File a Build saved the program it linked in, is dimmed and marked From an earlier Build once
      * its sources have changed.
      */
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import type { ProgramChoice } from '#lib/workbench/WorkbenchSession.svelte.ts'
     import type { BuildOutputState } from '#lib/buildOutput.ts'
@@ -55,6 +57,7 @@
     import FaTrash from '~icons/fa-solid/trash'
     import FaUpload from '~icons/fa-solid/upload'
     import SourceFileIcon from './SourceFileIcon.svelte'
+    import Badge from '#cmp/shared/misc/Badge.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
 
     type TreeNode = {
@@ -807,39 +810,41 @@
                 <span class="disclosure" class:expanded={projectExpanded}>
                     <FaAngleRight />
                 </span>
-                <strong title={name}>{label}</strong>
+                <strong class="small-heading ellipsis" title={name}>{label}</strong>
             </button>
         {:else}
-            <div class="section-title"><strong title={name}>{label}</strong></div>
+            <div class="section-title">
+                <strong class="small-heading ellipsis" title={name}>{label}</strong>
+            </div>
         {/if}
         <div class="section-actions">
-            <button
-                class="icon-action"
+            <IconButton
+                size="sm"
                 disabled={locked}
                 {@attach tooltip('New text file')}
-                aria-label="New text file"
-                onclick={() => startCreate()}
+                label="New text file"
+                onClick={() => startCreate()}
             >
                 <FaPlus />
-            </button>
-            <button
-                class="icon-action"
+            </IconButton>
+            <IconButton
+                size="sm"
                 disabled={locked}
                 {@attach tooltip('Create a BMP image and open it in the pixel editor')}
-                aria-label="New picture"
-                onclick={() => startNewPicture()}
+                label="New picture"
+                onClick={() => startNewPicture()}
             >
                 <FaFileImage />
-            </button>
-            <button
-                class="icon-action"
+            </IconButton>
+            <IconButton
+                size="sm"
                 disabled={locked}
                 {@attach tooltip('Upload files')}
-                aria-label="Upload files"
-                onclick={() => pickUploads()}
+                label="Upload files"
+                onClick={() => pickUploads()}
             >
                 <FaUpload />
-            </button>
+            </IconButton>
             <input type="file" multiple hidden bind:this={uploadInput} onchange={onUploadChange} />
         </div>
     </div>
@@ -864,7 +869,7 @@
             }}
         >
             {#if rows.length === 0 && !editing}
-                <div class="empty">This Project has no files.</div>
+                <EmptyState>This Project has no files.</EmptyState>
             {/if}
             {#each displayRows as row (row.draft ? 'draft' : row.directory ? `directory:${row.path}` : `file:${row.path}`)}
                 {#if row.draft}
@@ -926,14 +931,15 @@
                         <!-- a long press on the row opens its menu, so its buttons' Tooltips
                              leave touch alone -->
                         <div class="row-actions">
-                            <button
+                            <IconButton
+                                size="sm"
+                                label="New text file"
                                 disabled={locked}
                                 {@attach tooltip('New text file in this folder', { touch: false })}
-                                aria-label="New text file"
-                                onclick={() => startCreate(row.path)}
+                                onClick={() => startCreate(row.path)}
                             >
                                 <FaPlus />
-                            </button>
+                            </IconButton>
                         </div>
                     </div>
                 {:else if editing?.mode === 'rename' && editing.path === row.path}
@@ -1008,27 +1014,30 @@
                                 <span class="stale-note">From an earlier Build</span>
                             {/if}
                             {#if diagnosticCounts[row.path]?.errors}
-                                <span
+                                <Badge
                                     class="diagnostic-count error"
+                                    tone="danger"
                                     title={`${diagnosticCounts[row.path].errors} error${diagnosticCounts[row.path].errors === 1 ? '' : 's'}`}
-                                    >{diagnosticCounts[row.path].errors}</span
+                                    >{diagnosticCounts[row.path].errors}</Badge
                                 >
                             {/if}
                             {#if diagnosticCounts[row.path]?.warnings}
-                                <span
+                                <Badge
                                     class="diagnostic-count warning"
+                                    tone="warning"
                                     title={`${diagnosticCounts[row.path].warnings} warning${diagnosticCounts[row.path].warnings === 1 ? '' : 's'}`}
-                                    >{diagnosticCounts[row.path].warnings}</span
+                                    >{diagnosticCounts[row.path].warnings}</Badge
                                 >
                             {/if}
                             {#if entries.has(row.path)}
                                 {@const selectedEntry = row.path === selectedProgram}
-                                <span
-                                    class="entry-mark"
-                                    class:selected={selectedEntry}
+                                <Badge
+                                    class={['entry-mark', { selected: selectedEntry }]}
+                                    tone={selectedEntry ? 'accent' : 'neutral'}
+                                    solid={selectedEntry}
                                     title={selectedEntry
                                         ? 'Entry of the selected program'
-                                        : 'Entry of a program'}>ENTRY</span
+                                        : 'Entry of a program'}>ENTRY</Badge
                                 >
                             {/if}
                         </button>
@@ -1036,14 +1045,15 @@
                              leave touch alone -->
                         <div class="row-actions">
                             {#each rowActions(row.path) as action (action.label)}
-                                <button
+                                <IconButton
+                                    size="sm"
+                                    label={action.label}
                                     disabled={action.disabled}
                                     {@attach tooltip(action.label, { touch: false })}
-                                    aria-label={action.label}
-                                    onclick={action.onSelect}
+                                    onClick={action.onSelect}
                                 >
                                     <action.icon />
-                                </button>
+                                </IconButton>
                             {/each}
                         </div>
                     </div>
@@ -1052,7 +1062,7 @@
         </div>
         {#if libraryFiles.length > 0}
             <div class="library-files" aria-label="Runtime library members this Build linked">
-                <div class="library-title" title="Linked by this Build; read-only">
+                <div class="library-title small-heading" title="Linked by this Build; read-only">
                     Runtime library
                 </div>
                 <div class="library-list">
@@ -1083,15 +1093,16 @@
     {#if showHints}
         <aside class="hints" aria-label="Hints">
             <div class="hints-heading">
-                <span class="hints-title">Hints</span>
-                <button
-                    class="hints-close"
+                <span class="small-heading">Hints</span>
+                <IconButton
+                    size="sm"
+                    quiet
+                    label="Hide the hints"
                     {@attach tooltip('Hide the hints until the next reload')}
-                    aria-label="Hide the hints"
-                    onclick={() => (hintsDismissed.value = true)}
+                    onClick={() => (hintsDismissed.value = true)}
                 >
                     <FaTimes />
-                </button>
+                </IconButton>
             </div>
             {#if canWriteC}
                 <button class="hint" disabled={locked} onclick={() => startCreate('', freeCName())}>
@@ -1140,6 +1151,9 @@
 </section>
 
 <style lang="scss">
+    @use '../../../styles/rows.scss';
+    @use '../../../styles/field.scss';
+
     /* at most a quarter of the panel each, their lists scrolling under their titles past that,
        so the Project's own Files keep at least half of it */
     .library-files {
@@ -1149,7 +1163,7 @@
         max-height: 25%;
         margin-top: 0.4rem;
         padding-top: 0.3rem;
-        border-top: solid 0.1rem var(--tertiary);
+        border-top: solid 1px var(--tertiary);
         opacity: 0.85;
     }
 
@@ -1160,10 +1174,6 @@
 
     .library-title {
         padding: 0.2rem 0.5rem;
-        font-size: var(--fs-caption);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        opacity: 0.7;
     }
 
     /* a Build output whose sources have changed since: still there to look at, but dimmed */
@@ -1185,8 +1195,10 @@
         flex: none;
         padding: 0.2rem 0;
         border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
-        font-size: 0.7rem;
+        font-size: var(--fs-caption);
         line-height: 1.35;
+        /* no word left alone on a hint's last line */
+        text-wrap: pretty;
     }
 
     .hint {
@@ -1196,12 +1208,11 @@
         margin: 0;
         padding: 0.4rem 0.8rem;
         border: 0;
-        color: inherit;
         background: transparent;
         font: inherit;
         text-align: left;
         text-decoration: none;
-        opacity: 0.8;
+        color: var(--text-muted);
 
         & + .hint::before {
             content: '';
@@ -1224,13 +1235,14 @@
         cursor: pointer;
 
         &:hover:not(:disabled) {
-            opacity: 1;
-            background: var(--tertiary);
+            color: var(--secondary-text);
+            background: var(--hover-bg);
         }
 
         &:disabled {
             cursor: not-allowed;
-            opacity: 0.4;
+            color: inherit;
+            opacity: 0.5;
         }
     }
 
@@ -1239,75 +1251,6 @@
         align-items: center;
         justify-content: space-between;
         padding: 0.1rem 0.35rem 0 0.8rem;
-    }
-
-    .hints-title {
-        font-size: var(--fs-micro);
-        text-transform: uppercase;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-    }
-
-    .hints-close {
-        display: grid;
-        place-items: center;
-        width: 1.1rem;
-        height: 1.1rem;
-        padding: 0.25rem;
-        border: 0;
-        border-radius: 0.2rem;
-        color: inherit;
-        background: transparent;
-        opacity: 0.6;
-        cursor: pointer;
-
-        &:hover {
-            opacity: 1;
-            background: var(--tertiary);
-        }
-    }
-
-    .icon-action,
-    .row-actions button {
-        display: grid;
-        place-items: center;
-        width: 1.65rem;
-        height: 1.65rem;
-        padding: 0.38rem;
-        border: 0;
-        border-radius: 0.2rem;
-        color: inherit;
-        background: transparent;
-        cursor: pointer;
-
-        &:hover:not(:disabled) {
-            background: var(--tertiary);
-        }
-
-        &:disabled {
-            cursor: not-allowed;
-            opacity: 0.3;
-        }
-    }
-
-    .diagnostic-count {
-        flex: none;
-        min-width: 1rem;
-        padding: 0.05rem 0.25rem;
-        border-radius: 0.5rem;
-        font-size: var(--fs-micro);
-        line-height: 1rem;
-        text-align: center;
-    }
-
-    .diagnostic-count.error {
-        color: #fff;
-        background: #c74444;
-    }
-
-    .diagnostic-count.warning {
-        color: #1c1607;
-        background: #d6a83c;
     }
 
     .explorer-section {
@@ -1339,7 +1282,7 @@
         color: inherit;
         background: transparent;
         font: inherit;
-        font-size: 0.7rem;
+        font-size: var(--fs-caption);
         text-align: left;
         cursor: pointer;
     }
@@ -1351,26 +1294,17 @@
         align-items: center;
         min-width: 0;
         padding: 0 0.3rem 0 0.8rem;
-        font-size: 0.7rem;
+        font-size: var(--fs-caption);
     }
 
     .section-heading strong {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        text-transform: uppercase;
-        white-space: nowrap;
     }
 
     .section-actions {
         display: flex;
         align-items: center;
         padding-right: 0.25rem;
-
-        .icon-action {
-            width: 1.55rem;
-            height: 1.55rem;
-        }
     }
 
     .disclosure,
@@ -1396,7 +1330,7 @@
         color: var(--danger);
         background: color-mix(in srgb, var(--danger) 10%, transparent);
         border-bottom: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
-        font-size: 0.7rem;
+        font-size: var(--fs-caption);
         overflow-wrap: anywhere;
     }
 
@@ -1424,7 +1358,7 @@
         color: inherit;
         background: transparent;
         font: inherit;
-        font-size: 0.78rem;
+        font-size: var(--fs-caption);
         text-align: left;
 
         &.directory.drop-target {
@@ -1463,35 +1397,32 @@
         cursor: default;
     }
 
+    /* an inline editor in the row (styles/field.scss), the ring inside its edge as it is typed in */
     .name-input {
+        @include field.inline;
         flex: 1;
         min-width: 0;
         height: 1.35rem;
+        /* the name stays where the row drew it: its padding is what the margin takes back */
         margin: 0 0.25rem 0 -4px;
-        padding: 0 3px;
-        border: 1px solid var(--accent);
-        border-radius: 0.15rem;
-        outline: none;
-        color: inherit;
-        background: var(--primary);
+        padding: 0 4px;
         font: inherit;
         font-size: inherit;
         line-height: normal;
         box-sizing: border-box;
     }
 
+    /* the row the pointer or the keyboard is on, and the one whose menu is open: the panel's text
+       at 10% */
     .tree-row:hover,
-    .tree-row:focus-within {
-        background: var(--tertiary);
-    }
-
+    .tree-row:focus-within,
     .tree-row.menu-open {
-        background: var(--tertiary);
+        background: var(--hover-bg);
     }
 
+    /* the File open in the editor */
     .tree-row.selected {
-        background: color-mix(in srgb, var(--accent) 24%, var(--tertiary));
-        box-shadow: inset 2px 0 0 var(--accent);
+        @include rows.selected;
     }
 
     .file-icon {
@@ -1508,37 +1439,22 @@
         }
     }
 
+    /* a folder's own yellow, a data colour as SourceFileIcon's are, not a warning
+       (design-system.md, D9's note of 2026-11-08) */
     .file-icon.folder {
-        color: color-mix(in srgb, #dcb864 78%, var(--secondary-text));
+        --folder-yellow: #dcb864;
+        color: color-mix(in srgb, var(--folder-yellow) 78%, var(--secondary-text));
     }
 
+    /* the global class cuts the text short; a flex item has to be let shrink for it to */
     .ellipsis {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
-    /* every Entry file's, neutral; the Selected program's in the accent colour */
-    .entry-mark {
-        flex: none;
+    /* every Entry file's mark neutral, the Selected program's solid in the accent colour, since
+       the selected row under it is tinted with the accent */
+    .tree-row :global(.entry-mark) {
         margin-left: auto;
-        padding: 0.02rem 0.3rem;
-        color: color-mix(in srgb, var(--secondary-text) 70%, transparent);
-        background: color-mix(in srgb, var(--secondary-text) 6%, transparent);
-        border: 1px solid color-mix(in srgb, var(--secondary-text) 30%, transparent);
-        border-radius: var(--r-pill);
-        font-size: 0.48rem;
-        font-weight: 700;
-        line-height: 0.72rem;
-        letter-spacing: 0.04em;
-
-        /* solid, since the selected row under it is tinted with the accent */
-        &.selected {
-            color: var(--accent-text);
-            background: var(--accent);
-            border-color: var(--accent);
-        }
     }
 
     /* a row's controls are buttons only on touch screens, which have no right click; elsewhere
@@ -1556,21 +1472,6 @@
         opacity: 0;
         pointer-events: none;
         background: linear-gradient(90deg, transparent, var(--tertiary) 22%);
-
-        /* tappable only while shown, which the row's own rules below make them: a hidden row's
-           buttons over its mark and name would take a tap meant for the row */
-        button {
-            width: 1.38rem;
-            height: 1.38rem;
-            padding: 0.32rem;
-        }
-    }
-
-    .empty {
-        padding: 1.25rem 0.8rem;
-        text-align: center;
-        opacity: 0.55;
-        font-size: var(--fs-caption);
     }
 
     @media (hover: none) {

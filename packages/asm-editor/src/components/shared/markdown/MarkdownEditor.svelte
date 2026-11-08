@@ -5,7 +5,7 @@
      * Exam session will show it ([ADR 0053](../../../../../../docs/adr/0053-markdown-is-rendered-by-our-own-synchronous-pipeline.md)).
      */
     import Editor from '#cmp/specific/project/Editor.svelte'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
     import FaAlignLeft from '~icons/fa-solid/align-left'
     import FaEye from '~icons/fa-solid/eye'
     import MarkdownRenderer from './MarkdownRenderer.svelte'
@@ -81,7 +81,7 @@
         flex: 1;
         min-height: 0;
         border: var(--wb-card-edge, 1px solid var(--line));
-        border-radius: var(--wb-radius, 0.4rem);
+        border-radius: var(--wb-radius, var(--r-control));
         overflow: hidden;
     }
     .text,

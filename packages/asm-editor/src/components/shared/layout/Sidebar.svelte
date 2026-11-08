@@ -83,8 +83,8 @@
             position: fixed;
             left: 0;
             z-index: 5;
-            transition: transform 0.3s;
-            background-color: rgba(var(--RGB-secondary), 0.9);
+            transition: transform var(--dur-base);
+            background-color: color-mix(in srgb, var(--secondary) 90%, transparent);
             //its own width, whatever that resolves to, so the drawer always leaves the screen
             //completely
             transform: translateX(-100%);
@@ -100,12 +100,12 @@
         left: 0;
         width: 100vw;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: var(--scrim);
         opacity: 0;
         pointer-events: none;
         cursor: pointer;
         z-index: 3;
-        transition: opacity 0.3s;
+        transition: opacity var(--dur-base);
         backdrop-filter: blur(0.2rem);
     }
 

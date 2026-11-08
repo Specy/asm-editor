@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { PatchPrompt } from '#lib/workbench/patchPrompt.svelte.ts'
     import PromptTray from './PromptTray.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
 
     /**
      * "Patch instruction…" over a Listing line
@@ -61,11 +62,10 @@
         >
         <span class="patch-size">{plural(prompt.site.length, 'byte')}</span>
     </div>
-    <input
-        class="patch-input"
+    <TextField
+        mono
         value={prompt.text}
         oninput={(event) => prompt.input(event.currentTarget.value)}
-        spellcheck="false"
         autocomplete="off"
         autocapitalize="off"
         aria-label="Instruction"
@@ -101,8 +101,7 @@
 </PromptTray>
 
 <style lang="scss">
-    code,
-    .patch-input {
+    code {
         font-family: var(--font-mono);
     }
 
@@ -115,23 +114,7 @@
     }
 
     .patch-size {
-        opacity: 0.7;
-    }
-
-    .patch-input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 0.45rem 0.6rem;
-        border: 1px solid var(--tray-line);
-        border-radius: var(--r-control);
-        background-color: var(--secondary);
-        color: var(--secondary-text);
-        font-size: 0.9rem;
-    }
-
-    .patch-input:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -1px;
+        color: var(--text-muted);
     }
 
     .patch-preview {
@@ -141,7 +124,7 @@
         min-height: 2.6rem;
         padding: 0 0.2rem;
         overflow-wrap: anywhere;
-        transition: opacity 0.15s;
+        transition: opacity var(--dur-fast);
     }
 
     .patch-preview.stale {
@@ -154,7 +137,7 @@
 
     .patch-was,
     .patch-note {
-        opacity: 0.75;
+        color: var(--text-muted);
     }
 
     .patch-error {

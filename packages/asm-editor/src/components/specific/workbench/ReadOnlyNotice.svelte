@@ -26,7 +26,11 @@
 </div>
 
 <style lang="scss">
+    @use '../../shared/button/tray.scss';
+
+    /* a Tray over the editor's top right corner */
     .read-only-notice {
+        @include tray.surface;
         position: absolute;
         z-index: 4;
         top: 0.5rem;
@@ -38,17 +42,11 @@
         width: fit-content;
         max-width: calc(100% - 2.25rem);
         padding: 0.2rem 0.5rem;
-        border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-        border-radius: 0.5rem;
-        color: var(--secondary-text);
-        background: color-mix(in srgb, var(--accent) 14%, transparent);
-        backdrop-filter: blur(8px);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.25);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         overflow-wrap: anywhere;
         transition:
-            opacity 0.2s,
-            visibility 0.2s;
+            opacity var(--dur-base),
+            visibility var(--dur-base);
 
         /* gone while the find widget slides in over the same corner */
         &.find-open {

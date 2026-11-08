@@ -61,7 +61,7 @@
         overflow: hidden;
         opacity: 0.6;
         > div {
-            border-radius: 1rem;
+            border-radius: var(--r-pill);
             transform: translateX(-110%);
         }
         .progress-70 {

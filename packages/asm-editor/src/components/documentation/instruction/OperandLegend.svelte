@@ -97,7 +97,7 @@
         display: inline;
     }
     .count {
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         color: var(--background-text-prose);
     }
     .compact h3 {
@@ -111,8 +111,8 @@
         max-width: 100%;
         margin: 0;
         border: 1px solid var(--doc-rule, var(--tertiary));
-        border-radius: var(--wb-radius, 0.4rem);
-        font-size: 0.92rem;
+        border-radius: var(--wb-radius, var(--r-control));
+        font-size: var(--fs-small);
     }
     .compact dl {
         font-size: var(--fs-small);
@@ -124,7 +124,7 @@
         column-gap: 1rem;
         padding: 0.45rem 0.8rem;
         border-top: 1px solid var(--doc-rule, var(--tertiary));
-        transition: background-color 0.3s ease;
+        transition: background-color var(--dur-base) ease;
     }
     .compact .line {
         padding: 0.35rem 0.5rem;

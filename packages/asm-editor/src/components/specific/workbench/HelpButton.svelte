@@ -28,9 +28,9 @@
         font-weight: bold;
         line-height: 1;
 
+        /* the hover tint over its fill (D4), as a secondary Button's */
         &:hover {
-            color: var(--tertiary-text);
-            background: var(--tertiary);
+            background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
         }
 
         &:focus-visible {

@@ -118,7 +118,7 @@
                     value={language}
                     ariaLabel="Instruction set"
                     disabled={readonly || !session.languageEditable}
-                    style="padding: 0.4rem 0.6rem; background: var(--tertiary); color: var(--tertiary-text)"
+                    compact
                     wrapperStyle="min-width: 9rem; max-width: 12rem"
                     onChange={(next) => {
                         if (!readonly) session.setLanguage(next)
@@ -151,7 +151,7 @@
                 <p class="hint">These belong to this program and take effect at the next Build.</p>
                 {#if session.configurableDisplay}
                     <div class="display" bind:this={sections.display}>
-                        <h3 class="part-title">Display</h3>
+                        <h3 class="part-title small-heading">Display</h3>
                         <DisplayConfigurationForm
                             display={session.currentDisplay}
                             origin={session.displayOrigin}
@@ -269,11 +269,6 @@
     .part-title {
         margin: 0;
         padding: 0.2rem 0.4rem;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--hint);
     }
 
     .instruction-set {
@@ -283,7 +278,7 @@
         gap: 0.4rem;
         min-height: calc(2rem + 0.4rem);
         padding: 0.2rem 0.4rem;
-        font-size: 0.9rem;
+        font-size: var(--fs-small);
     }
 
     .theme {

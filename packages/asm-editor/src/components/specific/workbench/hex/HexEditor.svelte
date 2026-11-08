@@ -16,6 +16,7 @@
 </script>
 
 <script lang="ts">
+    import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { onDestroy, onMount, tick, untrack } from 'svelte'
     import type { ProjectFileKind } from '#lib/fileKinds.ts'
     import { executableAnalysis } from '#lib/executables.ts'
@@ -23,6 +24,9 @@
     import { memoryRegionColor } from '#lib/languages/memoryRegions.ts'
     import { fileBytes, overwriteText, type ProjectFile } from '#lib/projectFiles.ts'
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
+    import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
+    import { placeCard, type Box } from '#cmp/shared/floating/floating.ts'
+    import { popoverElevation } from '#src/styles/elevation.ts'
     import { usesCommandKey } from '#stores/shortcutsStore.ts'
     import { workbenchLayout } from '#stores/workbenchLayoutStore.svelte.ts'
     import FaCopy from '~icons/fa-solid/copy'
@@ -528,7 +532,7 @@
     //the byte under the pointer, for its hover card: gone while a press drags a selection or the
     //context menu is open, and when Find opens or a key is pressed, so it never stays over the
     //bytes being worked on; the pointer moving on brings it back
-    let hovered = $state<{ offset: number; left: number; top: number } | undefined>()
+    let hovered = $state<{ offset: number; cell: Box } | undefined>()
     let root = $state<HTMLDivElement>()
     let area = $state<HTMLDivElement>()
     function hover(event: PointerEvent) {
@@ -542,10 +546,35 @@
         // The card is positioned inside the byte panel, below the status and any notice.
         const frame = area.getBoundingClientRect()
         const left = box.left - frame.left
-        const top = box.bottom - frame.top + 2
-        if (hovered?.offset === offset && hovered.left === left && hovered.top === top) return
-        hovered = { offset, left, top }
+        const top = box.top - frame.top
+        if (hovered?.offset === offset && hovered.cell.left === left && hovered.cell.top === top)
+            return
+        hovered = { offset, cell: { left, top, width: box.width, height: box.height } }
     }
+    /** The hover card's arrow, which stands out of it towards the byte. */
+    const HOVER_ARROW = 6
+    let hoverWidth = $state(0)
+    let hoverHeight = $state(0)
+    /**
+     * Where the hover card goes in the byte panel: under its byte, or over it near the panel's
+     * bottom, with its arrow on the byte, wherever the pointer is on it.
+     */
+    const hoverPlace = $derived.by(() => {
+        if (!hovered || !area || hoverWidth === 0) return undefined
+        return placeCard(
+            hovered.cell,
+            { width: hoverWidth, height: hoverHeight },
+            {
+                side: 'bottom',
+                gap: 2,
+                arrow: HOVER_ARROW,
+                radius: popoverElevation().radius,
+                align: 'start',
+                margin: 4,
+                viewport: { width: area.clientWidth, height: area.clientHeight }
+            }
+        )
+    })
     /** What a byte's hover card says: the region it is in, or nothing outside every region. */
     function hoverText(offset: number): string | undefined {
         const region = regionOf(offset)
@@ -994,7 +1023,9 @@
                             </div>
                         {/each}
                         {#if !size}
-                            <p class="hex-empty" style:top="{headerHeight}px">The File is empty.</p>
+                            <EmptyState class="hex-empty" style="top: {headerHeight}px"
+                                >The File is empty.</EmptyState
+                            >
                         {/if}
                         <input
                             class="hex-touch-input"
@@ -1017,9 +1048,22 @@
                     <div
                         class="hex-hover"
                         role="tooltip"
-                        style:left="{hovered.left}px"
-                        style:top="{hovered.top}px"
+                        style:left="{hoverPlace?.left ?? 0}px"
+                        style:top="{hoverPlace?.top ?? 0}px"
+                        style:visibility={hoverPlace ? undefined : 'hidden'}
+                        bind:offsetWidth={hoverWidth}
+                        bind:offsetHeight={hoverHeight}
                     >
+                        {#if hoverPlace}
+                            <PopoverOutline
+                                width={hoverWidth}
+                                height={hoverHeight}
+                                side={hoverPlace.side}
+                                at={hoverPlace.arrow}
+                                arrow={HOVER_ARROW}
+                                solid
+                            />
+                        {/if}
                         {text}
                     </div>
                 {/if}
@@ -1059,6 +1103,8 @@
 </div>
 
 <style lang="scss">
+    @use '../../../../styles/popover.scss';
+
     .hex-editor {
         --cell-pad-x: 0.25rem;
         --hex-gutter: color-mix(in srgb, var(--tertiary) 45%, var(--secondary));
@@ -1080,7 +1126,7 @@
         padding: 0.45rem 0.75rem;
         border-bottom: 1px solid var(--line);
         background: color-mix(in srgb, var(--accent2, var(--accent)) 10%, var(--secondary));
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         overflow-wrap: anywhere;
     }
     .hex-body {
@@ -1116,7 +1162,7 @@
         overflow: auto;
         overscroll-behavior: contain;
         font-family: var(--font-mono);
-        font-size: 0.875rem;
+        font-size: var(--fs-small);
         user-select: none;
     }
     /* the keyboard reached the bytes: a ring round them, over the header and the offsets, in place
@@ -1159,7 +1205,7 @@
         z-index: 2;
         border-bottom: 1px solid var(--line);
         background: var(--hex-gutter);
-        color: color-mix(in srgb, var(--secondary-text) 60%, transparent);
+        color: var(--text-muted);
     }
     /* as wide as the largest offset's digits in every row, the header's included */
     .hex-offset {
@@ -1170,14 +1216,16 @@
         width: calc(var(--offset-digits) * 1ch + 1rem);
         padding: 0.25rem 0.5rem;
         background: var(--hex-gutter);
-        color: color-mix(in srgb, var(--secondary-text) 60%, transparent);
+        color: var(--text-muted);
     }
+    /* in the header's colour, which is muted already */
     .hex-header .hex-offset {
+        color: inherit;
         display: flex;
         align-items: center;
 
         .label {
-            font-family: Rubik, sans-serif;
+            font-family: var(--font-ui);
             font-size: var(--fs-caption);
         }
     }
@@ -1206,10 +1254,6 @@
     }
     .group-start {
         margin-left: 0.5rem;
-    }
-    .hex-header .hex-cell,
-    .hex-header .text-cell {
-        opacity: 0.8;
     }
     .hex-row:not(.hex-header) {
         .hex-cell[data-offset]:hover,
@@ -1281,13 +1325,11 @@
     .focused .caret .nibble {
         text-decoration: none;
     }
-    .hex-empty {
+    /* under the header row, where the first row of bytes would be */
+    .hex-area :global(.hex-empty) {
+        --empty-state-padding: 0.5rem 0;
         position: absolute;
         left: 0.6rem;
-        padding: 0.5rem 0;
-        font-family: Rubik, sans-serif;
-        font-size: var(--fs-small);
-        opacity: 0.7;
     }
     /* what a phone's keyboard types into, under the caret so the page does not jump to it */
     .hex-touch-input {
@@ -1301,18 +1343,16 @@
         font-size: 16px;
         pointer-events: none;
     }
+    /* a hover card over data, drawn as the Tooltip is: a solid Popover whose outline, arrow and
+       all, is drawn behind it; the padding keeps the room its edge takes */
     .hex-hover {
+        @include popover.content;
         position: absolute;
         z-index: 5;
         max-width: min(24rem, 90%);
-        padding: 0.2rem 0.4rem;
-        border: 1px solid color-mix(in srgb, var(--tertiary-text) 28%, var(--tertiary));
-        border-radius: 0.2rem;
-        background: var(--tertiary);
-        color: var(--tertiary-text);
-        box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px;
+        padding: calc(0.2rem + 1px) calc(0.4rem + 1px);
         font-family: var(--font-mono);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
         overflow-wrap: anywhere;
         pointer-events: none;
     }
@@ -1321,7 +1361,7 @@
         visibility: hidden;
         pointer-events: none;
         font-family: var(--font-mono);
-        font-size: 0.875rem;
+        font-size: var(--fs-small);
         white-space: pre;
 
         .hex-row {

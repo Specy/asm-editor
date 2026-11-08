@@ -70,10 +70,10 @@ function render(options: { initialFileId?: string; initialFormat?: RegisterForma
     })
     flushSync()
     const buttons = (selector: string) => [...target.querySelectorAll<HTMLElement>(selector)]
+    //the files are tabs, the Formats and the groupings the options of a strip
+    const choices = () => buttons('.segmented-control-button, [role="tab"]')
     const click = (label: string) => {
-        const button = buttons('.segmented-control-button').find(
-            (candidate) => candidate.textContent?.trim() === label
-        )
+        const button = choices().find((candidate) => candidate.textContent?.trim() === label)
         if (!button) throw new Error(`no "${label}" button in the panel header`)
         button.click()
         flushSync()
@@ -82,10 +82,10 @@ function render(options: { initialFileId?: string; initialFormat?: RegisterForma
         pokes,
         click,
         chunks: () => buttons('.chunk-button'),
-        selected: (label: string) =>
-            buttons('.segmented-control-button')
-                .find((candidate) => candidate.textContent?.trim() === label)
-                ?.getAttribute('aria-pressed'),
+        selected: (label: string) => {
+            const button = choices().find((candidate) => candidate.textContent?.trim() === label)
+            return button?.getAttribute('aria-pressed') ?? button?.getAttribute('aria-selected')
+        },
         input: () => target.querySelector<HTMLInputElement>('.chunk-input'),
         openFirstChunk: () => {
             buttons('.chunk-button')[0].click()

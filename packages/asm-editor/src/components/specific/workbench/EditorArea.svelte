@@ -130,7 +130,7 @@
         z-index: 4;
         content: '';
         inset: 0;
-        border: 0.2rem solid var(--danger);
+        border: 3px solid var(--danger);
         pointer-events: none;
     }
     @media (max-width: 700px) {

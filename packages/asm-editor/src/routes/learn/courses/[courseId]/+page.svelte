@@ -68,7 +68,7 @@
                 style="gap: 0.2rem"
             >
                 {#snippet title()}
-                    <h4 style="font-weight: normal; margin-left: -0.1rem">
+                    <h4 style="font-weight: 500; margin-left: -0.1rem">
                         {module.name}
                     </h4>
                 {/snippet}

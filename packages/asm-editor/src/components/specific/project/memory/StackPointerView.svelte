@@ -1,5 +1,4 @@
 <script lang="ts">
-    import type { ThemeKeys } from '#stores/themeStore.svelte.ts'
     /**
      * A memory tab that follows its own address, the stack pointer's for the one tab there is: the
      * Stack pointer Debug tool, in a draggable window or a section of the debug column. Its address
@@ -35,8 +34,6 @@
         /** The menu a right click on a byte opens, see `MemoryRenderer`. */
         cellMenu?: (cell: MemoryCell) => ContextMenuEntry[]
         style?: string
-        /** The colour of the address controls' buttons, see `MemoryControls`. */
-        controlsVar?: ThemeKeys
     }
 
     let {
@@ -52,8 +49,7 @@
         pokeable = false,
         onPoke,
         cellMenu,
-        style = '',
-        controlsVar = 'primary'
+        style = ''
     }: Props = $props()
 </script>
 
@@ -70,7 +66,6 @@
                 onAddressChange?.(e, tab)
             }}
             hideLabel
-            buttonVar={controlsVar}
             showRegions={false}
         />
     </div>

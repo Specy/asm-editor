@@ -4,11 +4,13 @@
 
 <script lang="ts">
     import { onMount } from 'svelte'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import FaArrowDown from '~icons/fa-solid/arrow-down'
     import FaTimes from '~icons/fa-solid/times'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import IconButton from '#cmp/shared/button/IconButton.svelte'
+    import TextField from '#cmp/shared/input/TextField.svelte'
     import { readsAsHex } from './hexSearch'
 
     /**
@@ -92,10 +94,12 @@
                 style="flex-shrink: 0"
             />
         {/if}
-        <input
-            bind:this={input}
+        <TextField
+            size="sm"
+            mono
+            invalid={failed}
+            bind:el={input}
             bind:value={query}
-            class:failed
             aria-label={mode === 'find'
                 ? kind === 'hex'
                     ? 'Hex bytes to find'
@@ -106,39 +110,35 @@
                     ? '7f 45 ?? 46'
                     : 'Text'
                 : 'Offset: 1f40, 0x1f40 or #8000'}
-            spellcheck="false"
             autocomplete="off"
             oninput={onInput}
             onkeydown={onKeydown}
         />
         {#if mode === 'find'}
-            <button
-                type="button"
-                class="icon"
+            <IconButton
+                size="sm"
+                label="Previous match"
                 {@attach tooltip('Previous match', { shortcut: 'Shift+Enter' })}
-                aria-label="Previous match"
-                onclick={() => onSubmit(true)}
+                onClick={() => onSubmit(true)}
             >
                 <FaArrowUp />
-            </button>
-            <button
-                type="button"
-                class="icon"
+            </IconButton>
+            <IconButton
+                size="sm"
+                label="Next match"
                 {@attach tooltip('Next match', { shortcut: 'Enter' })}
-                aria-label="Next match"
-                onclick={() => onSubmit(false)}
+                onClick={() => onSubmit(false)}
             >
                 <FaArrowDown />
-            </button>
+            </IconButton>
         {:else}
             <button type="button" class="go" onclick={() => onSubmit(false)}>Go</button>
         {/if}
-        <button
-            type="button"
-            class="icon"
+        <IconButton
+            size="sm"
+            label="Close"
             {@attach tooltip('Close', { shortcut: 'Escape' })}
-            aria-label="Close"
-            onclick={onClose}><FaTimes /></button
+            onClick={onClose}><FaTimes /></IconButton
         >
     </div>
     {#if message || matchCount}
@@ -150,7 +150,11 @@
 </div>
 
 <style lang="scss">
+    @use '../../../shared/button/tray.scss';
+
+    /* a Tray over the bytes' top right corner, as Monaco's find widget is over the code's */
     .hex-find-bar {
+        @include tray.surface;
         position: absolute;
         z-index: 4;
         top: 0.3rem;
@@ -161,12 +165,7 @@
         width: 28rem;
         max-width: calc(100% - 1.6rem);
         padding: 0.3rem;
-        border: 1px solid var(--wb-line, var(--tertiary));
-        border-radius: 0.4rem;
-        background: var(--secondary);
-        color: var(--secondary-text);
-        box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 0.3);
-        font-size: 0.8rem;
+        font-size: var(--fs-small);
     }
     .controls {
         display: flex;
@@ -174,23 +173,11 @@
         gap: 0.25rem;
         width: 100%;
     }
-    input {
+    .controls :global(.text-field) {
         flex: 1 1 10rem;
         min-width: 4rem;
-        padding: 0.25rem 0.4rem;
-        border: 1px solid var(--wb-line, var(--tertiary));
-        border-radius: 0.25rem;
-        background: var(--primary);
-        color: var(--primary-text);
-        font-family: var(--font-mono);
+        height: 1.6rem;
         font-size: var(--fs-small);
-
-        &:focus {
-            border-color: var(--accent);
-        }
-        &.failed {
-            border-color: var(--danger);
-        }
     }
     .message {
         display: flex;
@@ -199,11 +186,10 @@
         padding: 0 0.2rem;
         line-height: 1.2;
         overflow-wrap: anywhere;
-        opacity: 0.8;
+        color: var(--text-muted);
 
         &.failed {
             color: var(--danger);
-            opacity: 1;
         }
     }
     .message-text {
@@ -221,29 +207,23 @@
             outline-offset: -2px;
         }
     }
-    .icon,
     .go {
         display: grid;
         place-items: center;
         flex-shrink: 0;
         height: 1.6rem;
         min-width: 1.6rem;
+        padding: 0 0.5rem;
         border-radius: 0.25rem;
-        background: transparent;
+        background: color-mix(in srgb, var(--accent) 22%, transparent);
         color: inherit;
         font: inherit;
         cursor: pointer;
 
-        :global(svg) {
-            width: 0.75rem;
-            height: 0.75rem;
-        }
+        /* the hover every tray tool takes (tray.tool-look): the bar's text at 10%, over Go's own
+           tint */
         &:hover {
-            background: color-mix(in srgb, var(--tertiary) 55%, transparent);
+            background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
         }
-    }
-    .go {
-        padding: 0 0.5rem;
-        background: color-mix(in srgb, var(--accent) 22%, transparent);
     }
 </style>

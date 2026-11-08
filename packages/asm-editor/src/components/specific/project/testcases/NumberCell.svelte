@@ -109,26 +109,31 @@
         background-color: transparent;
         color: var(--secondary-text);
         text-overflow: ellipsis;
-        transition: background-color 0.15s;
+        transition: background-color var(--dur-fast);
 
         &::placeholder {
             color: var(--hint);
-            opacity: 0.6;
         }
 
         &:hover:not(:disabled) {
             background-color: var(--tc-hover);
         }
 
+        /* typed in, a field (styles/field.scss): its fill, and the global ring inside its edge */
         &:focus {
-            background-color: var(--tc-field);
-            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent);
+            background-color: var(--tertiary);
+            color: var(--tertiary-text);
         }
 
         &[aria-invalid='true'] {
             color: var(--tc-fail);
             background-color: var(--tc-fail-bg);
             box-shadow: inset 0 0 0 1px var(--tc-fail);
+        }
+
+        /* typed in, its ring in the failure's colour, so the red edge is not covered by the accent */
+        &[aria-invalid='true']:focus-visible {
+            outline-color: var(--tc-fail);
         }
 
         &:disabled {

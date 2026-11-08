@@ -1,38 +1,65 @@
-<script>
-    import { DEFAULT_BUTTON_VARIANT, isSurfaceButton } from './buttonVariant.ts'
+<script lang="ts">
+    import type { Snippet } from 'svelte'
+    import type { HTMLAnchorAttributes } from 'svelte/elements'
+    import {
+        DEFAULT_BUTTON_VARIANT,
+        dataColours,
+        type ButtonKind,
+        type ButtonSize,
+        type ButtonVariant
+    } from './buttonVariant.ts'
 
-    /** The rest goes to the link, an attachment such as a Tooltip among them. */
-    /** @type {{ target?: string, href: any, color?: string, style?: string, bg?: string, onClick?: (e: MouseEvent) => void , hasIcon?: boolean, cssVar?: string, disabled?: boolean, variant?: import('./buttonVariant.ts').ButtonVariant, bordered?: boolean, children?: import('svelte').Snippet} & Omit<import('svelte/elements').HTMLAnchorAttributes, 'color' | 'style' | 'href' | 'target'>} */
+    /** A link drawn as a `Button`; the rest goes to the link, an attachment such as a Tooltip among them. */
+    interface Props extends Omit<HTMLAnchorAttributes, 'color' | 'style' | 'href' | 'target'> {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        href: any
+        target?: string
+        /** Its role (buttonVariant.ts): `primary` when left out. */
+        kind?: ButtonKind
+        size?: ButtonSize
+        disabled?: boolean
+        /** A fill that is data, a language's accent or a theme's colour, in place of the role's. */
+        bg?: string
+        /** The text on `bg`. */
+        color?: string
+        style?: string
+        /** Its look; the app-wide default when left out (buttonVariant.ts). */
+        variant?: ButtonVariant
+        /** A hairline edge round it, the `--line` of the surface it sits on. */
+        bordered?: boolean
+        children?: Snippet
+        onClick?: (e: MouseEvent) => void
+    }
+
     let {
         href,
-        disabled = false,
-        color = 'var(--accent-text)',
         target = '',
+        kind = 'primary',
+        size = 'md',
+        disabled = false,
+        bg,
+        color,
         style = '',
-        bg = 'var(--accent)',
-        hasIcon = false,
-        cssVar = 'unset',
         variant = DEFAULT_BUTTON_VARIANT,
         bordered = false,
+        class: className,
         onClick,
         children,
         ...rest
-    } = $props()
-
-    const surface = $derived(isSurfaceButton(cssVar, bg))
+    }: Props = $props()
 </script>
 
 <a
     type="button"
     {...rest}
-    class="btn {variant}"
-    class:surface
+    class={['btn', variant, kind, size, className]}
+    class:data-fill={bg !== undefined}
+    class:data-text={color !== undefined}
     class:bordered
     class:disabled
-    class:hasIcon
     {href}
     {target}
-    style={`--btn-color:var(--${cssVar},${bg}); --btn-text:var(--${cssVar}-text,${color});${style}; `}
+    style={dataColours(bg, color, style)}
     onclick={(e) => {
         if (disabled) return e.preventDefault()
         if (onClick) onClick(e)
@@ -45,42 +72,6 @@
     @use './variants.scss';
 
     .btn {
-        padding: 0.6rem 1rem;
-        border-radius: var(--r-control);
-        color: var(--btn-text, --accent-text);
-        background-color: var(--btn-color, --accent);
-        text-align: center;
-        display: flex;
-        transition: all 0.3s;
-        font-size: var(--fs-body);
-        align-items: center;
-        justify-content: center;
-        border: none;
-        width: fit-content;
-        user-select: none;
-        position: relative;
-        cursor: pointer;
-
-        @include variants.workbench('.disabled');
-    }
-
-    .btn:hover {
-        filter: brightness(1.2);
-    }
-
-    .disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .disabled:hover {
-        filter: none !important;
-    }
-
-    .hasIcon {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.35rem 0.8rem;
+        @include variants.button('.disabled');
     }
 </style>

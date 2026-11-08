@@ -1,6 +1,7 @@
 <script lang="ts">
     import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
     import ValueDiff from '#cmp/specific/project/user-tools/ValueDiffer.svelte'
+    import RegisterValueCard from './RegisterValueCard.svelte'
     import {
         defaultRegisterKind,
         type Register,
@@ -337,16 +338,13 @@
     {@const lines = hoverLines(row, chunk)}
     <ValueDiff
         monospaced
-        hoverElementStyle="left: 50%; transform: translateX(-50%);{rowPosition === 'bottom'
-            ? 'bottom: var(--top); top: unset;'
-            : ''}"
+        hoverSide={rowPosition === 'bottom' ? 'below' : 'above'}
         style="{chunkStyle}{row.rendered.blank ? ' opacity: 0.4;' : ''}"
         hoverValueElementStyle={group && group.bytes * 2 > RegisterSize.Long * 2
-            ? 'font-size: 0.95rem'
+            ? 'font-size: var(--fs-body)'
             : ''}
         value={chunkText(chunk)}
         diff={chunkPrevText(chunk)}
-        hoverElementOffset={`${-1.25 * Math.max(1, lines.length)}rem`}
     >
         {#snippet hoverValue()}
             <div class="column">
@@ -375,7 +373,7 @@
         -->
         {@const rowPosition = rowIndex === 0 ? 'bottom' : position}
         <div class="register-wrapper">
-            <div class="hover-register-value">
+            <RegisterValueCard>
                 {#if !row.hexadecimal}
                     0x{row.register.toHex()}
                 {:else if usesHex}
@@ -384,7 +382,7 @@
                     <!-- masked to the register's width: MIPS and RISC-V hand registers back signed -->
                     {row.register.toHex()}
                 {/if}
-            </div>
+            </RegisterValueCard>
             <!-- what a register the file describes is, on its name: the M68K 68020's ISP -->
             {#if row.integer && onRegisterClick}
                 <button
@@ -465,6 +463,8 @@
 {/if}
 
 <style lang="scss">
+    @use '../../../../styles/field.scss';
+
     .registers {
         height: fit-content;
         display: grid;
@@ -518,28 +518,6 @@
         }
     }
 
-    .hover-register-value {
-        display: none;
-        min-width: 100%;
-        background-color: var(--tertiary);
-        color: var(--tertiary-text);
-        border-radius: 0.2rem;
-        position: absolute;
-        cursor: text;
-        user-select: all;
-        font-family: var(--font-mono);
-        font-size: var(--fs-body);
-        box-shadow: rgba(0, 0, 0, 0.4) 0px 0px 6px;
-        left: 100%;
-        z-index: 3;
-        top: 0;
-        height: 100%;
-        padding: 0 0.3rem;
-        align-items: center;
-        font-weight: normal;
-        white-space: nowrap;
-    }
-
     .register-wrapper {
         max-height: 1.35rem;
         display: flex;
@@ -547,7 +525,7 @@
         align-items: center;
         position: relative;
 
-        &:hover .hover-register-value {
+        &:hover :global(.hover-register-value) {
             display: flex;
         }
     }
@@ -598,7 +576,7 @@
         gap: 0.1rem;
         flex: 1;
         height: 100%;
-        border-left: solid 0.1rem var(--wb-line, var(--tertiary));
+        border-left: solid 1px var(--wb-line, var(--tertiary));
     }
 
     /* the value a pointer menu is open for, outlined as the Symbols panel outlines its row */
@@ -621,7 +599,7 @@
         }
 
         &:focus-visible {
-            outline: solid 0.1rem var(--accent);
+            outline: solid 1px var(--accent);
         }
     }
 
@@ -633,24 +611,23 @@
         text-align: center;
         //the box the read-only cell has, digit for digit: `box-sizing: border-box` is global, so
         //the padding the widths below carry is inside them and the text still gets its own `ch` per
-        //character. The frame is an outline drawn inside that box rather than a border, because a
-        //border is layout and would widen the cell and shift the row the moment the input opened.
+        //character. The frame is drawn inside that box rather than as a border, because a border
+        //is layout and would widen the cell and shift the row the moment the input opened.
         padding: 0.1rem;
         min-width: calc(2ch + 0.2rem);
         //the cap the read-only cell beside it gets, for the same reason: the register column is as
         //wide as what it holds, so an input that grew with a long typed value would push the memory
         //panel sideways
         max-width: calc(16ch + 0.2rem);
-        outline: solid 0.1rem var(--accent);
-        outline-offset: -0.1rem;
-        border-radius: 0.2rem;
-        background-color: var(--primary);
-        color: var(--primary-text);
+        //an inline editor (styles/field.scss): its edge drawn inside it, so the row does not move,
+        //and the global ring inside that while it is typed in
+        @include field.inline;
     }
 
     //a commit the helper refused: the input keeps what was typed and says why in its title
     .refused {
-        outline-color: var(--danger);
+        outline: 2px solid var(--danger);
+        outline-offset: -2px;
     }
 
     .blank-register {

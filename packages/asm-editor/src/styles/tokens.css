@@ -2,13 +2,16 @@
    ones drawn from a theme colour (--line, --line-strong, --selected-bg) are written by
    themeCssVariables() beside the theme's colours, on every element that carries a theme, since a
    custom property that reads a colour resolves where it is declared. The Popover's radius and
-   shadow are drawn in SVG and will be named again in styles/elevation.ts, which has to agree with
-   --r-overlay and --shadow-3 here. */
+   shadow are drawn in SVG and named again in styles/elevation.ts, which has to agree with
+   --r-overlay and --shadow-3 here (elevation.test.ts checks it). */
 :root {
     /* D2: Rubik for interface and reference text, Noto Serif for long prose read from top to
-       bottom, Fira Code only for code and machine values */
-    --font-ui: Rubik;
-    --font-read: 'Noto Serif', Rubik, sans-serif;
+       bottom, Fira Code only for code and machine values. Each falls back within its kind: the
+       interface to a sans-serif, where a Rubik that has not loaded (or its Latin subset's missing
+       →, ≥, ⌘ and ✓) would otherwise fall to the browser's default serif; prose to Georgia and a
+       serif while Noto Serif loads or when Google Fonts is blocked */
+    --font-ui: Rubik, sans-serif;
+    --font-read: 'Noto Serif', Georgia, serif;
     --font-mono: 'Fira Code', monospace;
 
     /* D11: one type scale. The interface end, for the app, the index pages and the reference */
@@ -37,7 +40,9 @@
     --shadow-1: 0 0.35rem 0.5rem -0.35rem color-mix(in srgb, black 55%, transparent);
     --shadow-2: 0 0.25rem 0.8rem rgb(0 0 0 / 0.35);
     --shadow-3: 0 0.5rem 1.5rem rgb(0 0 0 / 0.35);
-    /* hover and press, then a Tray or a Popover opening and closing; Svelte's cubicOut */
+    /* hover and press, then a Tray or a Popover opening and closing; Svelte's cubicOut. Named
+       again in styles/motion.ts for Svelte's transitions and element.animate(), which motion.test.ts
+       holds to these */
     --dur-fast: 120ms;
     --dur-base: 160ms;
     --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
@@ -49,7 +54,7 @@
        custom property keeps `currentColor` until it is used, which in `background-color` is the
        element's own colour and in `color` its parent's */
     --hover-bg: color-mix(in srgb, currentColor 10%, transparent);
-    --text-muted: color-mix(in srgb, currentColor 65%, transparent);
+    --text-muted: color-mix(in srgb, currentColor 68%, transparent);
 }
 
 /* the page end a step smaller on phones, at contentPages.css's breakpoint; the lead keeps its size */

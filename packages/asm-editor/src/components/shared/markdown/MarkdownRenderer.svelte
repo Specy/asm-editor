@@ -234,7 +234,7 @@
         margin: 0.5rem var(--md-inline-margin, auto);
         font-family: var(--font-mono);
         border-radius: 0.5rem;
-        border: solid 0.1rem var(--tertiary);
+        border: solid 1px var(--tertiary);
         width: fit-content;
         max-width: 100%;
     }
@@ -243,7 +243,7 @@
         font-family: var(--font-mono);
         background: var(--secondary);
         padding: 0.2rem 0.4rem;
-        border-radius: 0.3rem;
+        border-radius: var(--r-chip);
         color: var(--accent);
     }
 
@@ -266,7 +266,7 @@
 
     :global(._markdown thead th) {
         padding: 0.4rem;
-        border-right: 0.1rem solid var(--secondary);
+        border-right: 1px solid var(--secondary);
     }
 
     :global(._markdown thead th:first-child) {
@@ -288,7 +288,7 @@
 
     :global(._markdown td) {
         padding: 0.2rem 0.4rem;
-        border: 0.1rem solid var(--tertiary);
+        border: 1px solid var(--tertiary);
     }
 
     :global(._markdown td:first-child) {
@@ -343,7 +343,7 @@
     :global(._markdown .code-playground) {
         box-sizing: border-box;
         border: none;
-        border-radius: 0.8rem;
+        border-radius: var(--r-overlay);
         width: 100%;
         min-height: 21.4rem;
         margin: 1.5rem var(--md-inline-margin, auto);
@@ -384,7 +384,7 @@
         box-sizing: border-box;
         width: min(100%, var(--md-text-width));
         margin: 0 var(--md-inline-margin, auto);
-        border: solid 0.1rem var(--tertiary);
+        border: solid 1px var(--tertiary);
         border-radius: 0.8rem;
         overflow: hidden;
     }
@@ -396,14 +396,14 @@
     :global(._markdown summary) {
         padding: 0.6rem 1rem;
         background-color: var(--secondary);
-        font-family: Rubik, sans-serif;
+        font-family: var(--font-ui);
         font-weight: bold;
         cursor: pointer;
         user-select: none;
     }
 
     :global(._markdown details[open] > summary) {
-        border-bottom: solid 0.1rem var(--tertiary);
+        border-bottom: solid 1px var(--tertiary);
     }
 
     :global(._markdown details > :not(summary)) {

@@ -39,8 +39,9 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
     const isDark = color('secondary').isDark()
     const tokens = ASSEMBLY_TOKEN_COLORS[isDark ? 'dark' : 'light']
     const brackets = ASSEMBLY_BRACKET_COLORS[isDark ? 'dark' : 'light']
-    //the hairline the app's own raised cards and context menus are edged and divided with
+    //the hairline the app's Popovers (its context menus, the Tooltip) are edged and divided with
     const hairline = new TinyColor(text('tertiary')).setAlpha(0.15).toHex8String()
+    const rowHover = new TinyColor(text('tertiary')).setAlpha(0.1).toHex8String()
     return {
         base: isDark ? 'vs-dark' : 'vs',
         inherit: true,
@@ -64,6 +65,8 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
             'editorCursor.foreground': color('accent').toHexString(),
             'editorWhitespace.foreground': new TinyColor(text('secondary')).toHexString() + '2A',
             'editorWidget.background': color('tertiary').toHexString(),
+            //the hover, a hover card over data drawn as the Tooltip is: solid, on the Popovers' edge
+            'editorHoverWidget.border': hairline,
             'editorSuggestWidget.selectedBackground': color('accent2').darken(5).toHexString(),
             'input.background': layer('tertiary', 10).toHexString(),
             //translucent, so the blur global.css gives the context menu shows what is beneath
@@ -71,10 +74,12 @@ export function generateTheme(): monaco.editor.IStandaloneThemeData {
             'menu.foreground': text('tertiary'),
             'menu.border': hairline,
             'menu.separatorBackground': hairline,
-            'menu.selectionBackground': layer('tertiary', 6).toHexString(),
+            //the row the pointer or the arrow keys are on, as in the app's own menus and lists: the
+            //text at 10% (--hover-bg)
+            'menu.selectionBackground': rowHover,
             'menu.selectionForeground': text('tertiary'),
             //Monaco's context menu uses list hover colors for mouse and keyboard focus.
-            'list.hoverBackground': layer('tertiary', 6).toHexString(),
+            'list.hoverBackground': rowHover,
             'list.hoverForeground': text('tertiary'),
             'editorBracketHighlight.foreground1': brackets.levels[0],
             'editorBracketHighlight.foreground2': brackets.levels[1],

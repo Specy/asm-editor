@@ -1,4 +1,5 @@
 <script lang="ts">
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { page } from '$app/state'
     import {
         makeProject,
@@ -526,7 +527,7 @@
 
 {#snippet loadingScreen()}
     <div class="overlay" class:overlay-hidden={status !== 'loading'}>
-        <h1 class="loading">Loading...</h1>
+        <Spinner size="lg" label="Loading…" />
     </div>
 {/snippet}
 {#snippet projectTopBar(ui: WorkbenchUi)}
@@ -569,7 +570,7 @@
                             {@render loadingScreen()}
                         {/snippet}
                         {#snippet failureActions()}
-                            <ButtonLink href={resolve('/projects')} cssVar="tertiary">
+                            <ButtonLink href={resolve('/projects')} kind="secondary">
                                 Back to projects
                             </ButtonLink>
                         {/snippet}
@@ -588,7 +589,7 @@
                         {/if}
                         <ButtonLink
                             href={resolve('/projects')}
-                            cssVar={failure?.error !== undefined ? 'tertiary' : 'unset'}
+                            kind={failure?.error !== undefined ? 'secondary' : 'primary'}
                         >
                             Back to projects
                         </ButtonLink>
@@ -634,10 +635,5 @@
         gap: 2rem;
         z-index: 20;
         padding: 1rem;
-    }
-
-    .loading {
-        font-size: 3.5rem;
-        text-align: center;
     }
 </style>

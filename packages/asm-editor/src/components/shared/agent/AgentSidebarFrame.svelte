@@ -60,20 +60,20 @@
         backdrop-filter: blur(0.7rem);
         height: 100dvh;
         z-index: 100;
-        border: solid 0.1rem var(--tertiary);
+        border: solid 1px var(--tertiary);
         border-right: none;
         transform: translateX(100%);
-        transition: transform 0.3s ease;
+        transition: transform var(--dur-base) ease;
         box-shadow: none;
         display: flex;
         flex-direction: column;
-        border-top-left-radius: 1rem;
-        border-bottom-left-radius: 1rem;
+        border-top-left-radius: var(--r-overlay);
+        border-bottom-left-radius: var(--r-overlay);
         overflow: hidden;
     }
 
     .floating-sidebar.open {
         transform: translateX(0);
-        box-shadow: -4px 0 3rem 2rem rgba(0, 0, 0, 0.3);
+        box-shadow: var(--shadow-2);
     }
 </style>

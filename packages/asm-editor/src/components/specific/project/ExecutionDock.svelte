@@ -100,7 +100,7 @@
      * one tray spans the bar and the buttons share its width.
      */
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import SegmentedControl from '#cmp/specific/project/cpu/SegmentedControl.svelte'
+    import SegmentedControl from '#cmp/shared/input/SegmentedControl.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaPlay from '~icons/fa-solid/play'
     import FaPause from '~icons/fa-solid/pause'
@@ -112,7 +112,7 @@
     import FaUndo from '~icons/fa-solid/undo'
     import FaFlask from '~icons/fa-solid/flask'
     import FaCode from '~icons/fa-solid/code'
-    import FaSpinner from '~icons/fa-solid/spinner'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import FaVolumeUp from '~icons/fa-solid/volume-up'
     import FaVolumeMute from '~icons/fa-solid/volume-mute'
 
@@ -283,7 +283,7 @@
                 >
                     <Icon size={1}>
                         {#if progress}
-                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
+                            <Spinner />
                         {:else if building}
                             <FaRegClock />
                         {:else}
@@ -318,7 +318,7 @@
                 >
                     <Icon size={0.9}>
                         {#if compilation.busy}
-                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
+                            <Spinner />
                         {:else}
                             <FaCode />
                         {/if}
@@ -491,7 +491,7 @@
                 >
                     <Icon size={0.9}>
                         {#if sound.loading}
-                            <span class="busy-spinner keeps-moving"><FaSpinner /></span>
+                            <Spinner />
                         {:else if sound.muted}
                             <FaVolumeMute />
                         {:else}
@@ -557,15 +557,13 @@
     /* each end one opaque tray lifted off the code by a shadow, its buttons sunk into it: the one
        action that moves the program on filled, the rest only their label */
     .toolbar {
+        @include tray.frame;
         display: flex;
         align-items: center;
         gap: 0.2rem;
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
-        border: 1px solid var(--line);
-        border-radius: var(--r-overlay);
         background-color: var(--tray);
-        box-shadow: var(--shadow-2);
         pointer-events: auto;
     }
 
@@ -591,24 +589,28 @@
         }
     }
 
+    /* sunk into the tray, in its own colours rather than see-through as other tools are */
     .tool:disabled {
+        opacity: 1;
         color: color-mix(in srgb, var(--primary-text) 35%, var(--tray));
         cursor: not-allowed;
     }
 
-    .emphasis:not(:disabled) {
+    /* a tool in a colour of its own gives it to its icon and label, and keeps the tray's text for
+       its hover (tray.tool-look) */
+    .emphasis:not(:disabled) > :global(*) {
         color: var(--accent);
     }
 
-    .danger {
+    .danger > :global(*) {
         color: var(--danger);
     }
 
-    .sound.playing {
+    .sound.playing > :global(*) {
         color: var(--accent);
     }
 
-    .success {
+    .success > :global(*) {
         color: var(--success);
     }
 
@@ -713,27 +715,14 @@
         line-height: 1.2;
     }
 
-    .busy-spinner {
-        display: flex;
-        animation: compile-spin 1s linear infinite;
-    }
-
-    @keyframes compile-spin {
-        to {
-            transform: rotate(360deg);
-        }
-    }
-
     /* in the compact layouts one tray across the bar, every button an equal share of it, Test and
        the caller's actions with the others behind a divider */
     .fill {
+        @include tray.frame;
         gap: 0.2rem;
         height: var(--wb-control-height, 2.6rem);
         padding: 0.25rem;
-        border: 1px solid var(--line);
-        border-radius: var(--r-overlay);
         background-color: var(--tray);
-        box-shadow: var(--shadow-2);
         pointer-events: auto;
 
         .toolbar {
@@ -777,7 +766,6 @@
             border-bottom: none;
             border-radius: 0;
             backdrop-filter: blur(4px);
-            box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
         }
 
         .optimization,
@@ -805,7 +793,6 @@
         border-top: 1px solid var(--line);
         border-radius: 0;
         backdrop-filter: blur(4px);
-        box-shadow: 0 -0.1rem 0.6rem rgb(0 0 0 / 0.25);
     }
 
     .attached.rounded-start {

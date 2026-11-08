@@ -10,6 +10,7 @@
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { ThemeStore } from '#stores/themeStore.svelte.ts'
     import { scale } from 'svelte/transition'
+    import { motion } from '#src/styles/motion.ts'
     import Column from '#cmp/shared/layout/Column.svelte'
     import Row from '#cmp/shared/layout/Row.svelte'
     import FaPlus from '~icons/fa-solid/plus'
@@ -31,7 +32,7 @@
             background-color: ${t.theme.background.color}; 
             color: ${ThemeStore.textOfColor(t.theme.background.color)};
             font-weight: bold;
-            border: solid 0.2rem ${
+            border: solid 3px ${
                 t.id === ThemeStore.meta.id ? t.theme.accent.color : t.theme.secondary.color
             };
             `}
@@ -52,6 +53,7 @@
                     </div>
                     {#if t.editable}
                         <Button
+                            aria-label="Delete {t.name}"
                             onClick={async (event) => {
                                 //the button sits inside the preset's, which would select the
                                 //theme it is about to delete
@@ -63,7 +65,6 @@
                                 if (!confirmed) return
                                 ThemeStore.delete(t.id)
                             }}
-                            hasIcon
                             bg={t.theme.background.color}
                             color={ThemeStore.textOfColor(t.theme.secondary.color)}
                         >
@@ -76,8 +77,7 @@
             </button>
         {/each}
         <Button
-            bg="var(--tertiary)"
-            color="var(--tertiary-text)"
+            kind="secondary"
             onClick={async () => {
                 const name = await Prompt.askText('Write the name of the theme')
                 if (name === null) return
@@ -96,7 +96,7 @@
         {#if !ThemeStore.meta.editable}
             <div
                 style="
-            background-color: rgba(var(--RGB-secondary), 0.7);
+            background-color: color-mix(in srgb, var(--secondary) 70%, transparent);
             backdrop-filter: blur(0.2rem);
             position: absolute;
             display: flex;
@@ -104,7 +104,7 @@
             border-radius: 1rem;
             justify-content: center;
             align-items: center;
-            font-size: 1.5rem;
+            font-size: var(--fs-h3);
             inset: 0;
             "
             >
@@ -113,7 +113,13 @@
         {/if}
         {#each theme as color, i (color.name)}
             {#if !color.readonly}
-                <div in:scale|global={{ delay: i * 50 + 200, start: 0.9, duration: 200 }}>
+                <div
+                    in:scale|global={{
+                        delay: motion(i * 50 + 200),
+                        start: 0.9,
+                        duration: motion(200)
+                    }}
+                >
                     <ColorThemeRow bind:color={theme[i]} />
                 </div>
             {/if}

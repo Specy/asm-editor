@@ -14,7 +14,7 @@
 <style>
     .rgb-line {
         width: 100%;
-        border-radius: 1rem;
+        border-radius: var(--r-pill);
         background: linear-gradient(
             60deg,
             hsl(224, 85%, 66%),
