@@ -13,10 +13,15 @@ import type { SearchScope, ShardId } from './scope'
  * the Orama database of every shard loaded so far, and the model that turns a query into a vector.
  * ONNX Runtime is the CPU-only WebAssembly build, one thread unless the page is cross-origin
  * isolated; the WebGPU one is a 27 MiB file Cloudflare Pages cannot serve.
+ *
+ * The index is fetched at high priority and the model's files at low, so that over HTTP/2 and
+ * HTTP/3 a shard asked for while the model downloads still comes first: the words are what a
+ * search needs at once, the model only improves the order later. Each shard is a request of its
+ * own, answered when it is in, so a search can start from the shards already there.
  */
 
 export type WorkerRequest =
-    | { id: number; type: 'load-shards'; shards: { shard: ShardId; url: string }[] }
+    | { id: number; type: 'load-shard'; shard: ShardId; url: string }
     | { id: number; type: 'load-model'; urls: SearchModelUrls }
     | { id: number; type: 'search'; scope: SearchScope; query: string; limit: number }
 
@@ -40,7 +45,7 @@ async function loadShard(shard: ShardId, url: string): Promise<void> {
     let pending = loading.get(shard)
     if (!pending) {
         pending = (async () => {
-            const response = await fetch(url)
+            const response = await fetch(url, { priority: 'high' })
             if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
             const payload: unknown = await response.json()
             if (!isPayload(payload)) throw new Error(`${url} is not a search shard`)
@@ -52,21 +57,28 @@ async function loadShard(shard: ShardId, url: string): Promise<void> {
     return pending
 }
 
-async function fetchBytes(url: string): Promise<Uint8Array> {
-    const response = await fetch(url)
+/** One of the model's files, behind any shard asked for meanwhile. */
+async function fetchModelFile(url: string): Promise<Response> {
+    const response = await fetch(url, { priority: 'low' })
     if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
-    return new Uint8Array(await response.arrayBuffer())
+    return response
+}
+
+async function fetchBytes(url: string): Promise<Uint8Array> {
+    return new Uint8Array(await (await fetchModelFile(url)).arrayBuffer())
 }
 
 async function loadModel(urls: SearchModelUrls): Promise<void> {
     if (embedder) return
+    // ONNX Runtime fetches its WebAssembly itself, streamed, which is the only way Chrome keeps the
+    // compiled code for the next visit; handed over as bytes, it would be compiled every time
     ort.env.wasm.wasmPaths = { wasm: ortWasmUrl }
     ort.env.wasm.numThreads = self.crossOriginIsolated ? 2 : 1
     const [model, weights, tokenizerJson, tokenizerConfig] = await Promise.all([
         fetchBytes(urls.model),
         fetchBytes(urls.weights),
-        fetch(urls.tokenizer).then((response) => response.json()),
-        fetch(urls.tokenizerConfig).then((response) => response.json())
+        fetchModelFile(urls.tokenizer).then((response) => response.json()),
+        fetchModelFile(urls.tokenizerConfig).then((response) => response.json())
     ])
     const session = await ort.InferenceSession.create(model, {
         executionProviders: ['wasm'],
@@ -97,8 +109,8 @@ async function search(scope: SearchScope, query: string, limit: number): Promise
 
 async function handle(request: WorkerRequest): Promise<unknown> {
     switch (request.type) {
-        case 'load-shards':
-            await Promise.all(request.shards.map(({ shard, url }) => loadShard(shard, url)))
+        case 'load-shard':
+            await loadShard(request.shard, request.url)
             return null
         case 'load-model':
             await loadModel(request.urls)

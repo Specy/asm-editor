@@ -12,6 +12,10 @@
      * another is followed in place, with Back. For an M68K program whose processor is known, the
      * panel leaves out what a later processor brought, from the Chapters and from the results
      * ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
+     *
+     * Its results come as the index does ([LiveSearch](../../../lib/search/liveSearch.svelte.ts)):
+     * from the first shard in, then again as more of the index and the model arrive, until the
+     * reader opens one, scrolls them or clicks in them.
      */
     import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import Spinner from '#cmp/shared/misc/Spinner.svelte'
@@ -35,6 +39,7 @@
     import { categoryLabel, groupByCategory } from '#lib/documentation/instructions/categories.ts'
     import { resolveDocumentationLink, type DocumentationTarget } from '#lib/documentation/links.ts'
     import type { SearchResult } from '#lib/search/engine.ts'
+    import { LiveSearch } from '#lib/search/liveSearch.svelte.ts'
     import { queryTerms } from '#lib/search/queryTerms.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { DocumentationLanguage, SearchScope } from '#lib/search/scope.ts'
@@ -204,8 +209,6 @@
     )
 
     let query = $state('')
-    let results = $state<SearchResult[]>([])
-    let searched = $state('')
     /** The rows and cards shown open. */
     const open = new SvelteSet<string>()
 
@@ -230,40 +233,28 @@
     const terms = $derived(queryTerms(query))
     const searching = $derived(query.trim().length > 0)
 
-    let generation = 0
-    $effect(() => {
-        const text = query.trim()
-        const where = scope
-        if (!text || !where) {
-            results = []
-            searched = ''
-            return
-        }
-        const mine = ++generation
-        const timer = setTimeout(() => {
-            searchClient.search(where, text, 30).then(
-                (answer) => {
-                    if (mine !== generation) return
-                    results = answer.results
-                    searched = text
-                    const exact = answer.results.find(
-                        (result) =>
-                            result.kind === 'entry' && result.exact && !hidden.has(result.entry.id)
-                    )
-                    const ids: string[] = []
-                    if (untrack(() => pinned)) ids.push(untrack(() => pinned)!)
-                    else if (exact?.kind === 'entry') ids.push(exact.entry.id)
-                    openOnly(ids)
-                },
-                () => {
-                    if (mine !== generation) return
-                    results = []
-                    searched = text
-                }
+    const live = new LiveSearch({
+        query: () => query,
+        scope: () => scope,
+        limit: 30,
+        delay: 120,
+        onAnswer: (answer) => {
+            const exact = answer.results.find(
+                (result) => result.kind === 'entry' && result.exact && !hidden.has(result.entry.id)
             )
-        }, 120)
-        return () => clearTimeout(timer)
+            const ids: string[] = []
+            if (untrack(() => pinned)) ids.push(untrack(() => pinned)!)
+            else if (exact?.kind === 'entry') ids.push(exact.entry.id)
+            openOnly(ids)
+        }
     })
+    const results = $derived(live.results)
+    /** Still coming: more of the index, which an empty list waits for rather than saying none. */
+    const indexLoading = $derived(
+        !!scope && ['idle', 'loading', 'partial'].includes(searchClient.indexStatus(scope))
+    )
+    /** Opening a row, clicking or scrolling in the results: they hold still under the reader. */
+    const hold = () => live.hold()
 
     $effect(() => {
         const current = request
@@ -427,7 +418,7 @@
             {/if}
             <div class="field">
                 <SearchField
-                    semantic
+                    {scope}
                     bind:value={() => query, setQuery}
                     bind:el={input}
                     placeholder="Search the documentation"
@@ -448,8 +439,24 @@
     {:else if !chapters}
         <p class="note"><Spinner label="Loading the documentation…" /></p>
     {:else if searching && variant === 'panel'}
-        <div class="scroll results" bind:this={scroller}>
-            {#if shown.length === 0 && searched === query.trim()}
+        <!-- listens only to hold the results still; its rows are the controls -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+            class="scroll results"
+            bind:this={scroller}
+            onpointerdown={hold}
+            onwheel={hold}
+            ontouchmove={hold}
+            onkeydown={hold}
+        >
+            {#if shown.length === 0 && live.failed}
+                <EmptyState
+                    >Search could not load. Check the connection, then type again.</EmptyState
+                >
+            {:else if shown.length === 0 && indexLoading}
+                <!-- the box's status announces it -->
+                <EmptyState><Spinner label="Loading search…" announce={false} /></EmptyState>
+            {:else if shown.length === 0 && live.searched === query.trim()}
                 <EmptyState>Nothing matches “{query.trim()}”.</EmptyState>
             {/if}
             {#each shown as result ('pinnedEntry' in result ? `pinned:${result.pinnedEntry.id}` : result.key)}

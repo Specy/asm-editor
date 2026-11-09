@@ -145,6 +145,26 @@ markdown stay components an entry names.
 - Until it is ready, search is full-text only, and a spinner in the search box shows while the reader
   types. The first query typed after it is ready uses both; results already on screen are not
   reordered under the reader.
+- 2026-11-09 (owner, "Words first"; amends the bullet above): on a slow connection a search showed
+  nothing at all while the box said the model was loading. Measured on the live site through a
+  10 Mbps link, the navbar's search answered 8.8 s after typing and the model came at 24 s: the 11
+  index shards (2.5 MB compressed) downloaded beside the model (22 MB of weights, 3.8 MB of ONNX
+  Runtime) and shared the link with it, and every search waited for all 11. Now:
+    - The index comes first. A search box asks for its scope's shards, one request each, and the
+      model only once the shards on their way are in (`searchClient.warm`); the worker fetches the
+      shards at high priority and the model's files at low, so a scope asked for while the model
+      downloads still comes first over HTTP/2 and HTTP/3. ONNX Runtime still fetches its own
+      WebAssembly, after the weights: fetched beside them and handed over as bytes it would save
+      one request's wait on a first visit, but Chrome keeps compiled WebAssembly only when it is
+      streamed, so every later visit would compile it again.
+    - A search box answers from the shards already in, and asks again each time another shard or
+      the model arrives (`LiveSearch`), until the reader starts on the results: moving through them
+      with ↑ and ↓ or pointing at one in the palette (a pointer that moved, not one the rows slid
+      under), scrolling them, clicking or opening one in the panel. They then stay as they are
+      until the query changes. The agents' tool still waits for the whole scope.
+    - While the index loads, the list says "Loading search…" rather than nothing, and never
+      "Nothing matches" before the index is in; while the model loads, the box says "Matching words
+      until meaning search loads…". An index that could not be loaded says so.
 
 ## Guarding the ranking
 

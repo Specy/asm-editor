@@ -2,18 +2,21 @@
     /**
      * A search or filter box: an icon, the field, the controls a caller adds at its end, and a
      * clear button once something is typed, drawn as every field is (`styles/field.scss`). The
-     * Documentation panel's and the palette's are `semantic`: pointing at one, focusing it or
-     * typing in it starts the search model loading; while it loads, a spinner and a short status
-     * say the results are by words only for now
+     * Documentation panel's and the palette's search a `scope` of the Documentation: pointing at
+     * one, focusing it or typing in it starts its index loading, then the search model
      * ([ADR 0026](../../../../../docs/adr/0026-hybrid-search-in-the-browser-over-a-build-time-index.md)).
-     * The status is a live region, there from the start so its change is announced; on a narrow
-     * box only the spinner shows and the words are left to screen readers. The Symbols and Search
-     * panels' filters are not: they match the Project's own text.
+     * While either loads a spinner stands in for its icon. While the index loads, the list under it
+     * says so and the status only tells screen readers; while the model loads, the status says
+     * that the results match words for now. The status is a live region, there from the start so
+     * its change is announced; on a narrow box only the spinner shows and the words are left to
+     * screen readers. The Symbols and Search panels' filters have no scope: they match the
+     * Project's own text.
      */
     import type { Component, Snippet } from 'svelte'
     import FaSearch from '~icons/fa-solid/search'
     import FaTimes from '~icons/fa-solid/times'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
+    import type { SearchScope } from '#lib/search/scope.ts'
     import type { HTMLInputAttributes } from 'svelte/elements'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import IconButton from '#cmp/shared/button/IconButton.svelte'
@@ -30,8 +33,8 @@
          * results, rather than a box inside it.
          */
         bare?: boolean
-        /** Whether it searches with the search model, which it then warms and reports on. */
-        semantic?: boolean
+        /** The Documentation it searches, whose index and model it warms and reports on. */
+        scope?: SearchScope
         /** The icon at its start, a magnifier when left out. */
         icon?: Component
         /** `sm` for a side panel's filter. */
@@ -52,7 +55,7 @@
         placeholder = 'Search',
         label = 'Search',
         bare = false,
-        semantic = false,
+        scope,
         icon: Icon = FaSearch,
         size = 'md',
         clearable = true,
@@ -62,9 +65,15 @@
         ...rest
     }: Props = $props()
 
-    const loading = $derived(semantic && searchClient.model === 'loading')
+    /** What is still coming: the words to search, then the model that adds meaning. */
+    const loading = $derived.by((): 'index' | 'model' | null => {
+        if (!scope) return null
+        const index = searchClient.indexStatus(scope)
+        if (index === 'loading' || index === 'partial') return 'index'
+        return searchClient.model === 'loading' ? 'model' : null
+    })
     const warm = () => {
-        if (semantic) searchClient.warmModel()
+        if (scope) searchClient.warm(scope)
     }
 </script>
 
@@ -90,21 +99,23 @@
         spellcheck="false"
         autocomplete="off"
         aria-label={label}
-        aria-busy={semantic ? loading : undefined}
+        aria-busy={scope ? loading !== null : undefined}
         oninput={warm}
         {placeholder}
         {...rest}
     />
-    {#if semantic}
+    {#if scope}
+        <!-- the index's wait is shown in the list under the box, these words only read out -->
         <span
             class="status"
-            class:visually-hidden={!loading}
+            class:visually-hidden={loading !== 'model'}
             role="status"
-            title={loading
-                ? 'Downloading the search model: matching words only for now'
+            title={loading === 'model'
+                ? 'Search by meaning is still downloading. Until it is ready, results match the words you type.'
                 : undefined}
         >
-            {#if loading}Loading semantic search…{/if}
+            {#if loading === 'index'}Loading search…{:else if loading === 'model'}Matching words
+                until meaning search loads…{/if}
         </span>
     {/if}
     {@render end?.()}

@@ -11,11 +11,16 @@
      * live on the scope rather than on the document. While it is open the page under it holds
      * still (`lockPageScroll`); leaving the page closes it.
      *
+     * Its results come as the index does ([LiveSearch](../../lib/search/liveSearch.svelte.ts)):
+     * from the first shard in, then again as more of the index and the model arrive, until the
+     * reader moves through them with ↑ and ↓, points at one or scrolls them.
+     *
      * It loads with the page: its words come from `queryTerms.ts` and its entries' kinds from
      * `entryKinds.ts`, so neither the search engine (Orama, in the search worker) nor the lecture
      * parser comes with it.
      */
     import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { tick, untrack } from 'svelte'
     import { cubicOut } from 'svelte/easing'
     import { DUR_BASE, motion } from '#src/styles/motion.ts'
@@ -31,6 +36,7 @@
     import { resolveHref } from '#lib/hrefs.ts'
     import type { SearchResult } from '#lib/search/engine.ts'
     import { queryTerms } from '#lib/search/queryTerms.ts'
+    import { LiveSearch } from '#lib/search/liveSearch.svelte.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { SearchScope } from '#lib/search/scope.ts'
     import HighlightedText from './HighlightedText.svelte'
@@ -61,9 +67,20 @@
     const shown = $derived(searchPalette.open && searchPalette.owner === (site ? 'site' : 'page'))
 
     let query = $state('')
-    let results = $state<SearchResult[]>([])
-    let searched = $state('')
     let selected = $state(0)
+    const live = new LiveSearch({
+        query: () => query,
+        scope: () => scope,
+        active: () => shown,
+        limit: 20,
+        delay: 100,
+        onAnswer: () => (selected = 0)
+    })
+    const results = $derived(live.results)
+    /** Still coming: more of the index, which an empty list waits for rather than saying none. */
+    const indexLoading = $derived(
+        ['idle', 'loading', 'partial'].includes(searchClient.indexStatus(scope))
+    )
     let input = $state<HTMLInputElement>()
     let list = $state<HTMLUListElement>()
     let opener: HTMLElement | null = null
@@ -111,34 +128,6 @@
     // Back, or a link reached some other way, leaves the palette behind with the page it was over
     beforeNavigate(() => {
         if (shown) closeSearchPalette()
-    })
-
-    let generation = 0
-    $effect(() => {
-        const text = query.trim()
-        const where = scope
-        if (!shown || !text) {
-            results = []
-            searched = ''
-            return
-        }
-        const mine = ++generation
-        const timer = setTimeout(() => {
-            searchClient.search(where, text, 20).then(
-                (answer) => {
-                    if (mine !== generation) return
-                    results = answer.results
-                    searched = text
-                    selected = 0
-                },
-                () => {
-                    if (mine !== generation) return
-                    results = []
-                    searched = text
-                }
-            )
-        }, 100)
-        return () => clearTimeout(timer)
     })
 
     function backdropFade(_node: HTMLElement) {
@@ -194,9 +183,11 @@
     function onkeydown(event: KeyboardEvent) {
         if (event.key === 'ArrowDown') {
             event.preventDefault()
+            live.hold()
             move(1)
         } else if (event.key === 'ArrowUp') {
             event.preventDefault()
+            live.hold()
             move(-1)
         } else if (event.key === 'Enter') {
             event.preventDefault()
@@ -241,7 +232,7 @@
             <div class="top">
                 <SearchField
                     bare
-                    semantic
+                    {scope}
                     bind:value={query}
                     bind:el={input}
                     {placeholder}
@@ -260,7 +251,16 @@
             {#if !query.trim()}
                 <p class="hint">Write the name of an instruction, directive or any question.</p>
             {:else}
-                <ul class="results" id="palette-results" role="listbox" bind:this={list}>
+                <!-- scrolled or pointed at, the results hold still under the reader -->
+                <ul
+                    class="results"
+                    id="palette-results"
+                    role="listbox"
+                    bind:this={list}
+                    onwheel={() => live.hold()}
+                    ontouchmove={() => live.hold()}
+                    onpointerdown={() => live.hold()}
+                >
                     {#each results as result, index (result.key)}
                         <!-- svelte-ignore a11y_click_events_have_key_events -->
                         <li
@@ -268,7 +268,11 @@
                             role="option"
                             aria-selected={index === selected}
                             class:selected={index === selected}
-                            onmousemove={() => (selected = index)}
+                            onmousemove={(event) => {
+                                // only a pointer that moved: not one the new rows slid under
+                                if (event.movementX || event.movementY) live.hold()
+                                selected = index
+                            }}
                             onclick={() => go(result)}
                         >
                             {#if result.kind === 'entry'}
@@ -328,7 +332,20 @@
                             {/if}
                         </li>
                     {/each}
-                    {#if results.length === 0 && searched === query.trim()}
+                    {#if results.length === 0 && live.failed}
+                        <li class="empty" role="presentation">
+                            <EmptyState
+                                >Search could not load. Check the connection, then type again.</EmptyState
+                            >
+                        </li>
+                    {:else if results.length === 0 && indexLoading}
+                        <!-- the box's status announces it -->
+                        <li class="empty" role="presentation">
+                            <EmptyState
+                                ><Spinner label="Loading search…" announce={false} /></EmptyState
+                            >
+                        </li>
+                    {:else if results.length === 0 && live.searched === query.trim()}
                         <li class="empty" role="presentation">
                             <EmptyState>Nothing matches “{query.trim()}”.</EmptyState>
                         </li>

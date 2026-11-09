@@ -3,8 +3,7 @@ import { COURSES_SCOPE } from '#lib/search/scope.ts'
 
 //the model and the indexes are the search worker's business: a search box only asks for them
 const searchClient = vi.hoisted(() => ({
-    warmModel: vi.fn(),
-    loadScope: vi.fn(async () => undefined)
+    warm: vi.fn()
 }))
 vi.mock('#lib/search/searchClient.svelte.ts', () => ({ searchClient }))
 
@@ -20,10 +19,9 @@ describe('a search box', () => {
     it("starts loading its palette's index when pointed at, not before", () => {
         const unregister = registerPaletteScope('page', COURSES_SCOPE)
         try {
-            expect(searchClient.loadScope).not.toHaveBeenCalled()
+            expect(searchClient.warm).not.toHaveBeenCalled()
             warmSearch('page')
-            expect(searchClient.loadScope).toHaveBeenCalledWith(COURSES_SCOPE)
-            expect(searchClient.warmModel).toHaveBeenCalled()
+            expect(searchClient.warm).toHaveBeenCalledWith(COURSES_SCOPE)
         } finally {
             unregister()
         }
@@ -36,7 +34,7 @@ describe('a search box', () => {
             openSearchPalette('x')
             expect(searchPalette.query).toBe('x')
             expect(searchPalette.open).toBe(true)
-            expect(searchClient.loadScope).toHaveBeenCalledWith(COURSES_SCOPE)
+            expect(searchClient.warm).toHaveBeenCalledWith(COURSES_SCOPE)
         } finally {
             unregister()
         }
@@ -44,6 +42,6 @@ describe('a search box', () => {
 
     it('asks for no index while no palette of its kind is mounted', () => {
         warmSearch('site')
-        expect(searchClient.loadScope).not.toHaveBeenCalled()
+        expect(searchClient.warm).toHaveBeenCalledWith(undefined)
     })
 })

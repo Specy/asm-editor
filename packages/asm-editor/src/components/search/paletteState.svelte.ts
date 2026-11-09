@@ -37,18 +37,11 @@ export function registerPaletteScope(owner: PaletteOwner, scope: SearchScope): (
 
 /**
  * Pointing at or focusing a search box, or opening its palette, is a sign the reader means to
- * search: the palette's index starts downloading, and the model with it. A page loads neither on
- * arrival, where most readers never search (the Courses page's six indexes were 1.4 MB).
+ * search: the palette's index starts downloading, and the model once the index is in. A page loads
+ * neither on arrival, where most readers never search (the Courses page's six indexes were 1.4 MB).
  */
 export function warmSearch(owner: PaletteOwner) {
-    searchClient.warmModel()
-    const scope = paletteScopes[owner]
-    if (!scope) return
-    searchClient
-        .loadScope(scope)
-        .catch((error: Error) =>
-            console.warn(`search: could not load the index (${error.message})`)
-        )
+    searchClient.warm(paletteScopes[owner])
 }
 
 /** Opening the palette is a sign the reader means to search: its index and the model start loading. */

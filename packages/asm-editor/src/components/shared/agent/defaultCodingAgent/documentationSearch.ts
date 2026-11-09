@@ -69,8 +69,9 @@ export async function searchForAgent(
         throw new Error('This page has no language of its own: say which one to search.')
     }
     const { searchClient } = await import('#lib/search/searchClient.svelte.ts')
-    // An agent that searches once will search again: let the model load for the next query.
-    void searchClient.loadModel()
+    // An agent that searches once will search again: let the model load, after the index, for
+    // the next query.
+    searchClient.warm(scope)
     const answer = await searchClient.search(scope, query, limit)
     return { mode: answer.mode, searched: describe(scope), results: answer.results.map(hitOf) }
 }

@@ -1,6 +1,7 @@
 import { browser } from '$app/env'
 import { resolve } from '$app/paths'
 import modelUrls from 'virtual:search-model'
+import { SvelteMap } from 'svelte/reactivity'
 import { lazyLoad } from '#lib/lazyLoad.ts'
 import type { SearchResult } from './engine'
 import type { SearchModelUrls } from './model'
@@ -13,16 +14,19 @@ import type { SearchAnswer, WorkerRequest, WorkerResponse } from './searchWorker
  * The panel, the palette and the agents' tool all ask through `search`, the plain function the
  * plan promised, with nothing in it about the UI.
  *
- * A scope's word index (around a megabyte compressed, enough to match words at once) loads when
- * the reader points at or focuses a search box or opens a palette ([paletteState](../../components/search/paletteState.svelte.ts),
- * `warmSearch`); the Workbench, whose Documentation panel is one click away, loads its scope on
- * arrival, once the page has settled (`preload`). The model (tens of
- * megabytes with its runtime) waits for a sign that the reader means to search: pointing at or
- * focusing a search box or launcher, opening the palette (Ctrl+K included), or typing a query
- * (`warmModel`, which `search` itself calls). It is then asked for once, unless the browser asks
- * to save data; there is no switch for it, and a failed download is not retried. While it loads
- * (`model === 'loading'`), the search box says so and search matches words only; a query typed
- * after it is ready uses both.
+ * Words first, meaning second. A scope's word index (a few hundred kilobytes to a few megabytes
+ * compressed, enough to match words at once) loads when the reader points at or focuses a search
+ * box or opens a palette (`warm`, [paletteState](../../components/search/paletteState.svelte.ts));
+ * the Workbench, whose Documentation panel is one click away, loads its scope on arrival, once the
+ * page has settled (`preload`). The model (tens of megabytes with its runtime) is asked for on the
+ * same signs, but only once the index shards being loaded are in, so that the two never share the
+ * connection; the worker fetches the model at low priority too, for a scope asked for while it
+ * downloads. It is asked for once, unless the browser asks to save data; there is no switch for
+ * it, and a failed download is not retried.
+ *
+ * A search box shows the state of both (`indexStatus`, `model`), and a search from one answers
+ * from the shards already in (`partial`), asking again as more arrive (`answerKey`,
+ * [LiveSearch](./liveSearch.svelte.ts)). The agents' tool waits for the whole scope.
  *
  * A worker that fails to load or dies fails the requests waiting on it, and the next request starts
  * a fresh worker, which loads the shards it is asked for again. A model the dead one had, or was
@@ -30,13 +34,28 @@ import type { SearchAnswer, WorkerRequest, WorkerResponse } from './searchWorker
  * words.
  */
 export type ModelStatus =
-    /** Not asked for yet. */
+    /** Not asked for yet, or waiting for the index to come first. */
     | 'idle'
     | 'loading'
     | 'ready'
     /** The browser asks to save data, or this build has no model: words only. */
     | 'skipped'
     | 'failed'
+
+/** How much of a scope's index is in the worker. */
+export type IndexStatus =
+    /** Some of its shards were never asked for. */
+    | 'idle'
+    /** Asked for, none in yet. */
+    | 'loading'
+    /** Some in, more coming: a search answers from those already in. */
+    | 'partial'
+    /** Every shard in, or every one not in failed: nothing more is coming. */
+    | 'ready'
+    /** None in, and every one failed. */
+    | 'failed'
+
+type ShardState = 'loading' | 'ready' | 'failed'
 
 type NetworkInformation = { saveData?: boolean }
 
@@ -77,7 +96,14 @@ class SearchClient {
         }
     >()
 
+    /** Each shard's load, while it is loading or in: asked for once, whichever scope asked first. */
     private readonly shards = new Map<ShardId, Promise<void>>()
+    /** What a search box shows: each shard asked for, loading, in or failed. */
+    private readonly shardStates = new SvelteMap<ShardId, ShardState>()
+    /** Shard loads not yet settled, which the model waits for. */
+    private inFlight = 0
+    /** Something asked for the model; it starts once the index in flight is in. */
+    private modelWanted = false
     private modelLoad: Promise<void> | null = null
 
     private async request<T>(message: Unnumbered<WorkerRequest>): Promise<T> {
@@ -134,32 +160,76 @@ class SearchClient {
         state.worker.terminate()
         this.state = undefined
         this.shards.clear()
+        this.shardStates.clear()
+        // the shards failing with it would start the model on a fresh worker: wait for a search
+        this.modelWanted = false
         if (this.model === 'ready') this.model = 'failed'
         const waiting = [...this.pending.values()]
         this.pending.clear()
         for (const pending of waiting) pending.reject(new Error(message))
     }
 
-    /** Loads the shards a scope reads; each shard once, whichever scope asked first. */
-    loadScope(scope: SearchScope): Promise<void> {
-        const missing = shardsOf(scope).filter((shard) => !this.shards.has(shard))
-        if (missing.length > 0) {
-            const loading = this.request<void>({
-                type: 'load-shards',
-                shards: missing.map((shard) => ({ shard, url: shardUrl(shard) }))
+    /** One shard, once; a failed one is asked for again by the next scope that needs it. */
+    private loadShard(shard: ShardId): Promise<void> {
+        const known = this.shards.get(shard)
+        if (known) return known
+        const loading = this.request<void>({ type: 'load-shard', shard, url: shardUrl(shard) })
+        this.shards.set(shard, loading)
+        this.shardStates.set(shard, 'loading')
+        this.inFlight++
+        loading
+            .then(
+                () => {
+                    if (this.shards.get(shard) === loading) this.shardStates.set(shard, 'ready')
+                },
+                () => {
+                    if (this.shards.get(shard) !== loading) return
+                    this.shards.delete(shard)
+                    this.shardStates.set(shard, 'failed')
+                }
+            )
+            .finally(() => {
+                this.inFlight--
+                this.startModelIfDue()
             })
-            for (const shard of missing) {
-                this.shards.set(shard, loading)
-                loading.catch(() => {
-                    if (this.shards.get(shard) === loading) this.shards.delete(shard)
-                })
+        return loading
+    }
+
+    /** Loads the shards a scope reads, each once, whichever scope asked first. */
+    loadScope(scope: SearchScope): Promise<void> {
+        return Promise.all(shardsOf(scope).map((shard) => this.loadShard(shard))).then(() => {})
+    }
+
+    /** Resolves once any shard of the scope is in; rejects once every one has failed. */
+    private anyShard(scope: SearchScope): Promise<void> {
+        return Promise.any(shardsOf(scope).map((shard) => this.loadShard(shard))).catch(
+            (error: AggregateError) => {
+                throw error.errors[0] instanceof Error ? error.errors[0] : error
             }
-        }
-        return Promise.all(shardsOf(scope).map((shard) => this.shards.get(shard))).then(() => {})
+        )
+    }
+
+    /** How much of a scope's index is in, for a search box to show. */
+    indexStatus(scope: SearchScope): IndexStatus {
+        const states = shardsOf(scope).map((shard) => this.shardStates.get(shard))
+        const some = (state: ShardState | undefined) => states.includes(state)
+        if (some('loading')) return some('ready') ? 'partial' : 'loading'
+        if (states.every((state) => state === 'ready')) return 'ready'
+        if (some(undefined)) return 'idle'
+        return some('ready') ? 'ready' : 'failed'
+    }
+
+    /**
+     * Changes whenever a search of the scope could answer differently: another of its shards came
+     * in, or the model became ready. A box showing results asks again when it changes.
+     */
+    answerKey(scope: SearchScope): string {
+        const ready = shardsOf(scope).filter((shard) => this.shardStates.get(shard) === 'ready')
+        return `${ready.length}:${this.model === 'ready'}`
     }
 
     /** Starts the model download, once, unless the browser asks to save data. */
-    loadModel(): Promise<void> {
+    private loadModel(): Promise<void> {
         if (this.modelLoad) return this.modelLoad
         if (!modelUrls || savesData()) {
             this.model = 'skipped'
@@ -182,20 +252,31 @@ class SearchClient {
         return this.modelLoad
     }
 
+    /** The model, once asked for and once no shard is still on its way. */
+    private startModelIfDue() {
+        if (this.modelWanted && !this.modelLoad && this.inFlight === 0) void this.loadModel()
+    }
+
     /**
-     * What the search boxes call on a sign of intent (pointer over, focus, the palette opening, a
-     * query typed): starts the model download if nothing has asked for it yet. Cheap to call again;
-     * a skipped or failed model stays so.
+     * What a search box calls on a sign of intent (pointer over, focus, a palette opening, a query
+     * typed): its scope's index starts loading, and the model after it if nothing has asked for it
+     * yet. Cheap to call again; a skipped or failed model stays so.
      */
-    warmModel(): void {
-        if (!browser || this.modelLoad) return
-        void this.loadModel()
+    warm(scope?: SearchScope): void {
+        if (!browser) return
+        if (scope) {
+            this.loadScope(scope).catch((error: Error) =>
+                console.warn(`search: could not load the index (${error.message})`)
+            )
+        }
+        this.modelWanted = true
+        this.startModelIfDue()
     }
 
     /**
      * The scope's shards, once the page has settled, so they do not compete with what the page
      * itself is loading: what the Workbench calls on arrival. Not the model, which waits for
-     * `warmModel`.
+     * `warm`.
      */
     preload(scope: SearchScope): void {
         if (!browser) return
@@ -208,11 +289,26 @@ class SearchClient {
         else setTimeout(start, 1500)
     }
 
-    /** The ranked results for a query in a scope, by words, and by meaning once the model is ready. */
-    async search(scope: SearchScope, query: string, limit = 20): Promise<SearchAnswer> {
+    /**
+     * The ranked results for a query in a scope, by words, and by meaning once the model is ready.
+     * It waits for the whole scope's index, unless `partial`: then it answers as soon as any of it
+     * is in, from what is in.
+     */
+    async search(
+        scope: SearchScope,
+        query: string,
+        limit = 20,
+        options: { partial?: boolean } = {}
+    ): Promise<SearchAnswer> {
         if (!browser || !query.trim()) return { results: [], mode: 'text' }
-        this.warmModel()
-        await this.loadScope(scope)
+        const whole = this.loadScope(scope)
+        this.warm()
+        if (options.partial) {
+            whole.catch(() => undefined)
+            await this.anyShard(scope)
+        } else {
+            await whole
+        }
         return this.request<SearchAnswer>({ type: 'search', scope, query, limit })
     }
 }
