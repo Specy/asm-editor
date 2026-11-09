@@ -57,12 +57,12 @@ select {
     fill: currentColor;
 }
 
-.wrap {
-    flex-wrap: wrap;
-}
-
+/* The screen's height and width, which a box that fills the screen is drawn at. A box inside a
+   container that stands for the screen (the embed builder's Preview) sets them to that
+   container's, such as 100cqw, so what reads them there fills the container instead */
 html {
     --screen-height: 100vh;
+    --screen-width: 100vw;
     min-height: 100%;
     width: 100%;
     background-color: var(--background, #171a21);
@@ -120,11 +120,6 @@ body {
     text-overflow: ellipsis;
 }
 
-/* prose (a lecture, a documentation description) written a step below titles and interface text */
-.text-prose {
-    color: var(--background-text-prose);
-}
-
 /* A heading inside a panel, such as Settings' Display or the Explorer's Hints (design-system.md,
    D6): sentence case, at the caption's size, told from the rows under it by its weight, in the
    text colour of the surface it is on. The side panel's own title (EXPLORER, SETTINGS) is the one
@@ -165,19 +160,8 @@ input[type='radio'] {
     display: flex;
 }
 
-.align-center {
-    align-items: center;
-}
-
-.justify-center {
-    justify-items: center;
-}
 .space-between {
     justify-content: space-between;
-}
-.flex-center {
-    align-items: center;
-    justify-content: center;
 }
 
 /* --scroll-accent is the theme's scrollbar colour, written on the document's root as well as the

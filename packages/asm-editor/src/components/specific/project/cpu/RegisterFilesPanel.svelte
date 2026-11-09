@@ -47,6 +47,8 @@
          */
         pokeable?: boolean
         canPokeRegister?: (fileId: string, register: string) => boolean
+        /** Whether a register takes Pokes whenever the panel does, see `RegisterFileRows`. */
+        registerTakesPokes?: (fileId: string, register: string) => boolean
         onPoke?: (fileId: string, writes: RegisterPoke[]) => void
         /** The menu a right click on an integer register's value opens, see `RegisterFileRows`. */
         valueMenu?: (value: bigint, bytes: number) => ContextMenuEntry[]
@@ -71,6 +73,7 @@
         onRegisterClick,
         pokeable = false,
         canPokeRegister,
+        registerTakesPokes,
         onPoke,
         valueMenu,
         hex,
@@ -232,6 +235,9 @@
                 {pokeable}
                 canPokeRegister={canPokeRegister
                     ? (register) => canPokeRegister(file.id, register)
+                    : undefined}
+                takesPokes={registerTakesPokes
+                    ? (register) => registerTakesPokes(file.id, register)
                     : undefined}
                 onPoke={onPoke ? (writes) => onPoke(file.id, writes) : undefined}
                 {valueMenu}

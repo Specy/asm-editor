@@ -1,25 +1,17 @@
 <script lang="ts">
     /**
-     * A language's documentation pages around their content: its theme, the navbar, and a sidebar
-     * with the search box, a link to every page in its `DOCUMENTATION_SITES` table and its
-     * instructions. The language's own layout passes in its instruction names, so no page loads
+     * A language's documentation pages around their content, in SiteSidebarLayout: its theme, and
+     * a sidebar with the search box, a link to every page in its `DOCUMENTATION_SITES` table and
+     * its instructions. The language's own layout passes in its instruction names, so no page loads
      * another language's lists.
      */
-    import { onMount } from 'svelte'
-    import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
-    import SearchPalette from '#cmp/search/SearchPalette.svelte'
-    import { languageScope, type DocumentationLanguage } from '#lib/search/scope.ts'
-    import { searchClient } from '#lib/search/searchClient.svelte.ts'
-    import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
-    import TogglableSection from '#cmp/shared/layout/TogglableSection.svelte'
     import { page } from '$app/state'
+    import SiteSidebarLayout from '#cmp/content/SiteSidebarLayout.svelte'
+    import { languageScope, type DocumentationLanguage } from '#lib/search/scope.ts'
+    import TogglableSection from '#cmp/shared/layout/TogglableSection.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
-    import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
     import MenuLink from './MenuLink.svelte'
     import InstructionsMenu from './InstructionsMenu.svelte'
-    import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
-    import Sidebar from '#cmp/shared/layout/Sidebar.svelte'
-    import OpenEditorButton from '#cmp/shared/button/OpenEditorButton.svelte'
     import { DOCUMENTATION_SITES } from '#lib/documentation/site.ts'
     import { resolveHref } from '#lib/hrefs.ts'
 
@@ -31,7 +23,6 @@
     }
 
     let { language, names, children }: Props = $props()
-    let menuOpen = $state(false)
     let currentInstructionName = $derived(page.params.instructionName ?? '')
 
     const site = $derived(DOCUMENTATION_SITES[language])
@@ -46,72 +37,43 @@
     // The palette, its two boxes and Ctrl+K: this language's Documentation, its Course and the
     // General course ([the design record](../../../../../../docs/design/documentation-search.md))
     const scope = $derived(languageScope(language))
-    onMount(() => searchClient.preload(scope))
 </script>
 
-<ThemeScope theme={site.theme}>
-    <DefaultNavbar includeEmbed={false} bind:menuOpen style="border-bottom-left-radius: 0;" />
-
-    <Sidebar bind:menuOpen menuStyle="overflow-y: hidden;">
-        <Column padding="0 1rem">
-            <SearchLauncher {placeholder} />
+<SiteSidebarLayout
+    theme={site.theme}
+    {scope}
+    {placeholder}
+    includeEmbed={false}
+    navGap="0.5rem"
+    contentTop="4rem"
+>
+    {#snippet nav(closeMenu)}
+        <!-- the pages, then the instructions under their heading, as the course sidebar draws its
+             lectures: the pages' text starts where the search box does, the instructions' under
+             their heading's name, as the lectures' do under their chapter's -->
+        <Column padding="0 0.5rem 0 0" style="--row-indent: 1rem;">
+            <MenuLink
+                href={resolveHref(`/documentation/${language}`)}
+                title={site.label}
+                onClick={closeMenu}
+            />
+            {#each links as link (link.id)}
+                <MenuLink href={resolveHref(link.href)} title={link.title} onClick={closeMenu} />
+            {/each}
         </Column>
+        <!-- the sidebar's one heading, an h2 as the course sidebar's name is: an h3 here would
+             stand under no h2 -->
+        <TogglableSection open={true} level={2} sticky>
+            {#snippet title()}Instructions{/snippet}
+            <InstructionsMenu
+                hrefOf={(instructionName) =>
+                    resolveHref(`/documentation/${language}/instruction/${instructionName}`)}
+                names={instructionNames}
+                onClick={closeMenu}
+                {currentInstructionName}
+            />
+        </TogglableSection>
+    {/snippet}
 
-        <!-- the pages and the instructions as the course sidebar draws its lectures, the exam
-             builder's outline rows (styles/outline.scss): each a row from the sidebar's left edge
-             to 0.5rem short of its right, so the current one's accent edge is the sidebar's side,
-             the rows edge to edge with their own padding the rhythm. The pages' text starts where
-             the search box does; the instructions' sits under their heading's name (2.2rem: the
-             arrow's 1.4rem, its 0.4rem gap and the section's 0.5rem, less the title's -0.1rem),
-             as the lectures' does under their chapter's. -->
-        <MaskedScroll gap="0.5rem">
-            <Column padding="0 0.5rem 0 0" style="--menu-link-indent: 1rem;">
-                <MenuLink
-                    href={resolveHref(`/documentation/${language}`)}
-                    title={site.label}
-                    onClick={() => (menuOpen = false)}
-                />
-                {#each links as link (link.id)}
-                    <MenuLink
-                        href={resolveHref(link.href)}
-                        title={link.title}
-                        onClick={() => (menuOpen = false)}
-                    />
-                {/each}
-            </Column>
-            <!-- the sidebar's one heading, an h2 as the course sidebar's name is: an h3 here would
-                 stand under no h2 -->
-            <TogglableSection
-                open={true}
-                level={2}
-                sticky
-                inset="0.5rem"
-                sectionStyle="margin-left: -0.5rem; padding-left: 0; border-left: none; gap: 0; --instruction-indent: 2.2rem;"
-                style="padding-block: 0.5rem; gap: 0.3rem;"
-            >
-                {#snippet title()}
-                    <span style="font-size: 1rem; margin-left: -0.1rem"> Instructions </span>
-                {/snippet}
-                <InstructionsMenu
-                    hrefOf={(instructionName) =>
-                        resolveHref(`/documentation/${language}/instruction/${instructionName}`)}
-                    names={instructionNames}
-                    onClick={() => (menuOpen = false)}
-                    {currentInstructionName}
-                />
-            </TogglableSection>
-        </MaskedScroll>
-
-        <Column style="margin-top: auto;" padding="0.5rem">
-            <OpenEditorButton />
-        </Column>
-
-        {#snippet content()}
-            <Column flex1 style="padding-top: 4rem;">
-                {@render children?.()}
-            </Column>
-        {/snippet}
-    </Sidebar>
-
-    <SearchPalette {scope} {placeholder} />
-</ThemeScope>
+    {@render children?.()}
+</SiteSidebarLayout>

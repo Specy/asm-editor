@@ -100,7 +100,7 @@
 <style>
     .draggable {
         position: absolute;
-        z-index: 10;
+        z-index: var(--z-window);
     }
     /* a pointer that cannot hover is a touch screen, where a window dragged with a grip is a poor
        gesture: a caller says whether its panel is worth keeping there. `block` rather than any

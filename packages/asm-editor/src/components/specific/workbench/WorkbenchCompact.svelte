@@ -3,11 +3,11 @@
      * The Workbench on tablets and phones, after the brief
      * ([the design record](../../../../../../docs/design/workbench.md), Layout and behaviour). One column
      * scrolls, on a phone under the top bar: the editor at a fixed height that a Build does not
-     * move, the execution controls in a bar across it that stays in reach (on a phone along the
-     * editor's bottom edge instead), the bottom panel, then
-     * the Debug session's sections. A tablet keeps the rail, with Back and Save in it as on a
-     * desktop, and opens panels in a drawer beside it; a phone puts the rail and the panel in a
-     * drawer from the left. Each editor keeps its file tabs; the Debug tools are sections.
+     * move, with the execution controls inside it (at its corner on a tablet, as on a desktop,
+     * along its bottom edge on a phone), the bottom panel, then the Debug session's sections. A
+     * tablet keeps the rail, with Back and Save in it as on a desktop, and opens panels in a drawer
+     * beside it; a phone puts the rail and the panel in a drawer from the left. Each editor keeps
+     * its file tabs; the Debug tools are sections.
      */
     import { untrack } from 'svelte'
     import { prefersLessMotion } from '#src/styles/motion.ts'
@@ -300,7 +300,7 @@
     .rail-slot {
         /* keep the tablet's rail beside its drawer, above the backdrop */
         position: relative;
-        z-index: 12;
+        z-index: var(--z-drawer);
         display: flex;
         flex: none;
         margin: var(--wb-gap) 0 var(--wb-gap) var(--wb-gap);
@@ -312,10 +312,11 @@
         }
     }
 
-    /* Before a Build the editor, the handle and the open bottom panel fill the column exactly, so nothing scrolls while writing; the editor keeps that height after a Build,
-       the Debug session's sections going below it. The column is a size container so the height
-       comes from the room actually left under whatever bars sit above the Workbench, not from
-       guessing them. */
+    /* Before a Build the editor, the handle and the open bottom panel fill the column exactly, so
+       nothing scrolls while writing; the editor keeps that height after a Build, the Debug
+       session's sections going below it. The column is a size container so the height comes from
+       the room actually left under whatever bars sit above the Workbench, not from guessing
+       them. */
     .scroll {
         --compact-editor-min: 14rem;
         --compact-editor-height: max(
@@ -441,7 +442,7 @@
     .backdrop {
         position: absolute;
         inset: 0;
-        z-index: 11;
+        z-index: var(--z-float);
         background-color: var(--scrim);
         backdrop-filter: blur(1px);
         cursor: default;
@@ -451,7 +452,7 @@
        right edge; in a phone's drawer it holds the rail too, the panel ruled off from it */
     .drawer {
         position: absolute;
-        z-index: 12;
+        z-index: var(--z-drawer);
         top: var(--wb-gap);
         bottom: var(--wb-gap);
         left: calc(var(--wb-gap) + var(--wb-rail-width));

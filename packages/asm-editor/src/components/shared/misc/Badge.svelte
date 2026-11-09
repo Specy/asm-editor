@@ -6,7 +6,11 @@
      * for "the one you have" (D4), the status colours for problems (D9), the surface's own text
      * for anything neutral. Soft by default, its text in the tone over a faint tint of it and a
      * hairline; `solid` fills it with the tone, for the current item's mark and for a count that
-     * asks to be seen.
+     * asks to be seen. `weight="medium"` draws its text at 500 rather than bold.
+     *
+     * Its look weighs only `.badge` and the scoping class, its tone, fill and weight behind
+     * `:where()`, as Button's sizes are (variants.scss): a caller's `.something :global(.badge)`
+     * outweighs it whichever stylesheet loads last.
      */
     import type { Snippet } from 'svelte'
     import type { HTMLAttributes } from 'svelte/elements'
@@ -16,13 +20,24 @@
         tone?: 'neutral' | 'accent' | 'danger' | 'warning' | 'info'
         /** Filled with the tone rather than tinted with it. */
         solid?: boolean
+        /** Its text's weight: bold, as every Badge's is when left out, or medium (500). */
+        weight?: 'bold' | 'medium'
         children: Snippet
     }
 
-    let { tone = 'neutral', solid = false, class: className, children, ...rest }: Props = $props()
+    let {
+        tone = 'neutral',
+        solid = false,
+        weight = 'bold',
+        class: className,
+        children,
+        ...rest
+    }: Props = $props()
 </script>
 
-<span {...rest} class={['badge', tone, className]} class:solid>{@render children()}</span>
+<span {...rest} class={['badge', tone, className]} class:solid class:medium={weight === 'medium'}
+    >{@render children()}</span
+>
 
 <style lang="scss">
     /* the tint and the hairline are drawn from the badge's own text colour (currentColor in a
@@ -48,48 +63,51 @@
         white-space: nowrap;
     }
 
-    .neutral {
+    .badge:where(.medium) {
+        font-weight: 500;
+    }
+
+    .badge:where(.neutral) {
         color: color-mix(in srgb, currentColor 70%, transparent);
     }
-    .accent {
+    .badge:where(.accent) {
         color: var(--accent);
     }
     /* the status colours mixed with the surrounding text, so that a soft count reads at 4.5:1 or
        more on every built-in theme's background, panel and selected row, whose accent tint the
        pure colours fall below (the danger red to 2.7:1); the text being the surface's, the mix
        stays readable on a light theme too */
-    .danger {
+    .badge:where(.danger) {
         color: color-mix(in srgb, var(--danger) 30%, currentColor);
     }
-    .warning {
+    .badge:where(.warning) {
         color: color-mix(in srgb, var(--warning) 45%, currentColor);
     }
-    .info {
+    .badge:where(.info) {
         color: var(--accent2);
     }
 
-    .solid {
+    .badge:where(.solid) {
         border-color: transparent;
-
-        &.neutral {
-            color: inherit;
-            background-color: color-mix(in srgb, currentColor 14%, transparent);
-        }
-        &.accent {
-            color: var(--accent-text);
-            background-color: var(--accent);
-        }
-        &.danger {
-            color: var(--danger-text);
-            background-color: var(--danger);
-        }
-        &.warning {
-            color: var(--warning-text);
-            background-color: var(--warning);
-        }
-        &.info {
-            color: var(--accent2-text);
-            background-color: var(--accent2);
-        }
+    }
+    .badge:where(.solid.neutral) {
+        color: inherit;
+        background-color: color-mix(in srgb, currentColor 14%, transparent);
+    }
+    .badge:where(.solid.accent) {
+        color: var(--accent-text);
+        background-color: var(--accent);
+    }
+    .badge:where(.solid.danger) {
+        color: var(--danger-text);
+        background-color: var(--danger);
+    }
+    .badge:where(.solid.warning) {
+        color: var(--warning-text);
+        background-color: var(--warning);
+    }
+    .badge:where(.solid.info) {
+        color: var(--accent2-text);
+        background-color: var(--accent2);
     }
 </style>

@@ -19,7 +19,7 @@
     import InstructionSetPicker from '#cmp/shared/input/InstructionSetPicker.svelte'
     import TabStrip from '#cmp/shared/input/TabStrip.svelte'
     import Switch from '#cmp/shared/input/Switch.svelte'
-    import Title from '#cmp/shared/layout/Header.svelte'
+    import PageHead from '#cmp/shared/layout/PageHead.svelte'
     import TestcasesEditor from '#cmp/specific/project/testcases/TestcasesEditor.svelte'
     import { testcaseRegisters, type TestcaseRegisters } from '#lib/testcases.ts'
     import type { RegisterSize } from '#lib/languages/commonLanguageFeatures.svelte.ts'
@@ -158,8 +158,10 @@
     let ready = $state(false)
     let testcases = $state([] as Testcase[])
     let generatedCode = $state('')
+    /** The generated iframe's height and corners, which the Preview's box takes too. */
+    const FRAME = { height: '20.8rem', radius: '0.8rem' }
     let generatedIframeCode = $derived(
-        `<iframe src="${generatedCode}" style="border: none; border-radius: 0.8rem; width: 100%; min-height: 20.8rem;"></iframe>`
+        `<iframe src="${generatedCode}" style="border: none; border-radius: ${FRAME.radius}; width: 100%; min-height: ${FRAME.height};"></iframe>`
     )
     const shareText = $derived(shareFormat === 'link' ? generatedCode : generatedIframeCode)
     const shareName = $derived(shareFormat === 'link' ? 'Embed link' : 'Embed HTML')
@@ -347,13 +349,11 @@
         <!-- framed: the editor alone, filling the frame -->
         <Page fillsScreen>
             <div class="playground" style="display: contents">
-                <div style="display: contents">
-                    <Column
-                        style={`--embed-padding: ${framedByUs ? 'var(--wb-gap)' : '0.5rem'}; padding: var(--embed-padding) var(--embed-padding) var(--embed-padding); flex:1; min-width: 0`}
-                    >
-                        {@render editor()}
-                    </Column>
-                </div>
+                <Column
+                    style={`--embed-padding: ${framedByUs ? 'var(--wb-gap)' : '0.5rem'}; padding: var(--embed-padding); flex:1; min-width: 0`}
+                >
+                    {@render editor()}
+                </Column>
             </div>
         </Page>
     {:else}
@@ -362,12 +362,13 @@
              pages' are (design-system.md, D8), the preview over the settings and the output -->
         <Page hasNavbar cropped="70rem" contentStyle="padding: 1rem">
             <div class="embed-page">
-                <header class="page-head">
-                    <Title>Embed a program</Title>
-                    <p class="lead">Put a working editor with your program on any web page.</p>
-                </header>
+                <PageHead title="Embed a program" compact>
+                    {#snippet lead()}
+                        Put a working editor with your program on any web page.
+                    {/snippet}
+                </PageHead>
 
-                <Card element="section" padding="0" aria-labelledby="preview-title">
+                <Card element="section" aria-labelledby="preview-title">
                     <div class="card-head">
                         <h2 id="preview-title">Preview</h2>
                         <p class="hint">
@@ -378,7 +379,11 @@
                         <!-- the generated iframe's box with the frame's own page in it, its
                              background and its 0.5rem of padding, so the editor sits here as it
                              will there -->
-                        <div class="stage">
+                        <div
+                            class="stage"
+                            style:--screen-height={FRAME.height}
+                            style:border-radius={FRAME.radius}
+                        >
                             <div class="stage-page">
                                 {@render editor()}
                             </div>
@@ -390,7 +395,7 @@
                     <!-- the create page's look (its mockup of 2026-11-08): each group under a
                          header band, the instruction sets as its tiles, the switches on its
                          fields' fill -->
-                    <Card element="section" padding="0" aria-labelledby="settings-title">
+                    <Card element="section" aria-labelledby="settings-title">
                         <div class="card-head">
                             <h2 id="settings-title">Settings</h2>
                         </div>
@@ -435,7 +440,6 @@
                                         <Button
                                             kind="secondary"
                                             size="sm"
-                                            style="gap: 0.4rem"
                                             aria-label={testcases.length > 0
                                                 ? 'Edit Testcases'
                                                 : 'Add Testcases'}
@@ -471,7 +475,7 @@
                                         {/if}
                                     </div>
                                 </div>
-                                <p class="section-hint" id={testcasesHintId}>
+                                <p class="hint" id={testcasesHintId}>
                                     {#if testcases.length > 0}
                                         Readers press Test to check their program against them.
                                     {:else}
@@ -483,7 +487,7 @@
                         </section>
                     </Card>
 
-                    <Card element="section" padding="0" aria-labelledby="share-title">
+                    <Card element="section" aria-labelledby="share-title">
                         <div class="card-head">
                             <h2 id="share-title">Share</h2>
                         </div>
@@ -534,7 +538,7 @@
                                 </div>
                             </div>
                             <CopyButton
-                                style="width: 100%; gap: 0.5rem"
+                                style="width: 100%"
                                 disabled={!generatedCode}
                                 copy={() => copyText(shareText, shareName)}
                             >
@@ -634,10 +638,14 @@
 
 <style lang="scss">
     @use '../../styles/field.scss';
+    @use '../../styles/form-card.scss';
+    @use '../../styles/tiles.scss';
 
-    /* the title at the other index pages' height (S4-06), and room under the cards; on the
-       narrowest phones the column's gutter is halved, so that the preview's registers, 18rem at
-       the least, still fit inside its Card */
+    /* the title, the smaller one (PageHead's `compact`, the owner's exception for this page, E-20),
+       0.5rem down, so the Preview starts higher, and room under the cards; on the narrowest phones
+       the column's gutter is halved, so that the preview's registers, 18rem at the least, still
+       fit inside its Card. The Cards' heads, bodies and groups start 1.25rem in, 1rem on a phone
+       (styles/form-card.scss) */
     .embed-page {
         display: flex;
         flex-direction: column;
@@ -645,6 +653,7 @@
         width: 100%;
         padding-top: 0.5rem;
         padding-bottom: 4rem;
+        @include form-card.inset;
 
         @media screen and (max-width: 650px) {
             padding: 0.5rem 0 3rem;
@@ -654,20 +663,6 @@
             width: auto;
             margin-inline: -0.5rem;
         }
-    }
-
-    /* the title a step of the scale down (`--fs-h2`, where the other pages' is `--fs-h1`), with
-       less room above and under it, as the exam builder's (O-92), so the Preview starts higher
-       (the owner's exception for this page) */
-    .page-head :global(h1) {
-        margin: 0 0 0.35rem;
-        font-size: var(--fs-h2);
-    }
-
-    .lead {
-        margin: 0;
-        line-height: 1.6;
-        color: var(--text-muted);
     }
 
     h2 {
@@ -690,22 +685,19 @@
         align-items: baseline;
         justify-content: space-between;
         gap: 0.25rem 1rem;
-        padding: 0.6rem 1.25rem;
+        padding: 0.6rem var(--form-inset);
         border-bottom: 1px solid var(--line);
-
-        @media (max-width: 600px) {
-            padding: 0.6rem 1rem;
-        }
     }
 
-    /* the generated iframe's box (its HTML's `width: 100%; min-height: 20.8rem`, which a frame
-       takes as its height, and its 0.8rem corners), standing for the frame's screen to what it
-       holds: its height is the screen's (`--screen-height`, which the editor holds its registers
-       card to and the Testcases window takes its height from), and what floats over the screen
-       floats over this box, the containing block of what is fixed in it (layout containment),
-       and a container, which `100cqw` is the width of */
+    /* the generated iframe's box (its HTML's `width: 100%; min-height`, which a frame takes as its
+       height, and its corners: `FRAME`), standing for the frame's screen to what it holds: its
+       height is the screen's (`--screen-height`, which the editor holds its registers card to and
+       the Testcases window takes its height from) and its width the screen's width
+       (`--screen-width`, as wide as this box, which the readers' Testcases window is placed in as
+       in a frame), so what floats over the screen floats over this box, the containing block of
+       what is fixed in it (layout containment), and a container, which `100cqw` is the width of */
     .stage {
-        --screen-height: 20.8rem;
+        --screen-width: 100cqw;
         --embed-padding: 0.5rem;
         display: flex;
         flex-direction: column;
@@ -713,19 +705,8 @@
         overflow: hidden;
         contain: layout;
         container-type: inline-size;
-        border-radius: 0.8rem;
         background-color: var(--background);
         color: var(--background-text);
-
-        /* the readers' Testcases window as wide as this box, as a frame's is as wide as the
-           frame, where it says the width of the screen (FloatingContainer) */
-        :global(.floating-place) {
-            width: 100cqw;
-        }
-
-        :global(.floating-container) {
-            max-width: calc(100cqw - 2rem);
-        }
     }
 
     /* the frame's own page: its colour and 0.5rem of padding, the editor filling it, and
@@ -767,68 +748,36 @@
         flex: 1;
         flex-direction: column;
         gap: 1rem;
-        padding: 1.25rem;
-
-        @media (max-width: 600px) {
-            padding: 1rem;
-        }
+        padding: var(--form-inset);
     }
 
-    /* a group's header, as the create page's: a band a shade lighter than the Card over a rule,
-       as the Workbench's folding sections draw theirs (CollapsibleSection), ruled off above too
-       but for the first, which the Card's head already rules off */
+    /* a group's header, as the create page's (styles/form-card.scss), the first under the Card's
+       head, which has the Card's top corners and already rules it off */
     .band {
-        margin: 0;
-        padding: 0.6rem 1.25rem;
-        background-color: var(--wb-section-header);
-        border-block: 1px solid var(--line);
-        font: 700 var(--fs-small) / 1.4 var(--font-ui);
-        color: var(--secondary-text);
-
-        &.first {
-            border-top: none;
-        }
+        @include form-card.band;
+    }
+    .band.first {
+        @include form-card.band-first(null);
     }
 
     /* what the band heads, as the create page's sections space theirs; the box the settings'
        columns are counted against */
     .section {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        padding: 0.85rem 1.25rem 1rem;
         container-type: inline-size;
+        @include form-card.section;
     }
 
-    @media (max-width: 600px) {
-        .band {
-            padding: 0.55rem 1rem;
-        }
-        .section {
-            padding: 0.8rem 1rem 1rem;
-        }
-    }
-
-    /* the panels' short names three to a row, under the instruction sets' tiles and as far apart,
-       or two where the tiles go two to a row; the longer behaviours and the Testcases two to a row
-       while they fit, else one */
-    .settings-grid {
-        display: grid;
-        gap: 0.4rem;
-    }
-
+    /* the panels' short names in the instruction sets' tiles' grid (styles/tiles.scss), three to a
+       row or two where the tiles go two to a row; the longer behaviours and the Testcases two to a
+       row while they fit, else one, as far apart */
     .settings-grid.panels {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        @include tiles.grid;
     }
 
     .settings-grid.pairs {
+        display: grid;
         grid-template-columns: repeat(auto-fill, minmax(min(100%, 14.5rem), 1fr));
-    }
-
-    @container (max-width: 23.5rem) {
-        .settings-grid.panels {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+        gap: tiles.$gap;
     }
 
     /* a setting's name and its control in one row, on a field's fill inside its edge
@@ -840,7 +789,7 @@
         align-items: center;
         justify-content: space-between;
         min-width: 0;
-        min-height: calc(1.5rem + var(--fs-small) * 1.3 + 2px);
+        min-height: tiles.$height;
         padding: 0.3rem 0.5rem 0.3rem 0.8rem;
         font-size: var(--fs-small);
         line-height: 1.3;
@@ -850,14 +799,6 @@
         }
     }
 
-    /* under the rows, as the create page's line on a template is under its field */
-    .section-hint {
-        margin: 0;
-        font-size: var(--fs-small);
-        line-height: 1.45;
-        color: var(--text-muted);
-    }
-
     /* the frame and Copy closer together than the settings' groups */
     .share-body {
         gap: 0.75rem;
@@ -865,18 +806,14 @@
 
     /* the tabs and the tab's content framed together as a field is, its edge and corner, inset
        from the Card's edges: the strip a shade darker than the Card across its top, the content
-       on the field's fill, and the picked tab in that fill too, open onto it (the strip's picked
-       tab is drawn in --secondary, pointed here at the fill). The corners clip the strip's */
+       on the field's fill, and the picked tab in that fill too, open onto it (TabStrip's
+       `--tab-strip-picked`). The corners clip the strip's */
     .share-frame {
-        --share-fill: #{field.$fill};
+        --tab-strip-picked: #{field.$fill};
         @include field.surface;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-
-        > :global(.tab-strip) {
-            --secondary: var(--share-fill);
-        }
     }
 
     /* the hint ruled off from the code under it by the hairline under a header, across the

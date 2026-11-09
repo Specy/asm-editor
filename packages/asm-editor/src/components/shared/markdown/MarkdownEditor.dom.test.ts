@@ -50,7 +50,7 @@ describe('Markdown editor', () => {
     })
 
     it('switches between the text and the preview', () => {
-        const target = render({ value: 'text', layout: 'switch' })
+        const target = render({ value: 'text' })
         expect(target.querySelector('.text')?.classList.contains('shown')).toBe(true)
         expect(target.querySelector('.preview')?.classList.contains('shown')).toBe(false)
         button(target, 'Preview')?.click()
@@ -59,15 +59,10 @@ describe('Markdown editor', () => {
         expect(target.querySelector('.preview')?.classList.contains('shown')).toBe(true)
     })
 
-    it.each(['split', 'auto'] as const)('takes the %s layout it is given', (layout) => {
-        const target = render({ value: 'text', layout })
-        expect(target.querySelector('.markdown-editor')?.classList.contains(layout)).toBe(true)
-    })
-
-    it.each([true, false])('numbers the preview’s code lines: %s', (lineNumbers) => {
-        const target = render({ value: '```riscv\nli a0, 1\n```', lineNumbers })
+    it('numbers the preview’s code lines', () => {
+        const target = render({ value: '```riscv\nli a0, 1\n```' })
         expect(target.querySelector('.preview ._markdown')?.getAttribute('style')).toContain(
-            `--code-block-gutter-display: ${lineNumbers ? 'block' : 'none'}`
+            '--code-block-gutter-display: block'
         )
     })
 })

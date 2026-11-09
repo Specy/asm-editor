@@ -16,6 +16,8 @@
     } from '#lib/testcases.ts'
     import { languageTakesArguments, parseCommandLine } from '#lib/commandLine.ts'
     import FaAngleRight from '~icons/fa-solid/angle-right'
+    import FaTrashAlt from '~icons/fa-solid/trash-alt'
+    import FaClone from '~icons/fa-solid/clone'
     import Header from '#cmp/shared/layout/Header.svelte'
     import RegistersTable from './RegistersTable.svelte'
     import MemoryTable from './MemoryTable.svelte'
@@ -278,10 +280,14 @@
                     {/if}
                     {#if editable}
                         <div class="footer">
-                            <button class="text-button delete" onclick={onDelete}
-                                >Delete testcase</button
-                            >
-                            <button class="text-button" onclick={onDuplicate}>Duplicate</button>
+                            <button class="text-button delete" onclick={onDelete}>
+                                <FaTrashAlt aria-hidden="true" />
+                                Delete testcase
+                            </button>
+                            <button class="text-button" onclick={onDuplicate}>
+                                <FaClone aria-hidden="true" />
+                                Duplicate
+                            </button>
                         </div>
                     {/if}
                 </div>
@@ -476,9 +482,6 @@
         width: 100%;
         font-size: var(--fs-small);
     }
-    .section :global(.testcase-field.mono) {
-        font-size: var(--fs-small);
-    }
 
     .arguments {
         @include mono;
@@ -528,8 +531,18 @@
         justify-content: space-between;
     }
 
+    /* each with its icon before its words (owner, 2026-11-09) */
     .text-button {
         @include text-button;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+
+        :global(svg) {
+            flex: none;
+            width: var(--fs-caption);
+            height: var(--fs-caption);
+        }
     }
 
     .delete:hover {

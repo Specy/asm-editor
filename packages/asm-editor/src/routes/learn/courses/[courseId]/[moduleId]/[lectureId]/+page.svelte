@@ -87,25 +87,17 @@
         )
     )
 
-    let nextLecture = $derived.by(() => {
-        const currentLectureIndex = lectures.findIndex(
+    let currentLectureIndex = $derived(
+        lectures.findIndex(
             (l) => l.slug === currentLectureName && l.module.slug === currentModuleName
         )
-        if (currentLectureIndex === -1) return null
-        const next = lectures[currentLectureIndex + 1]
-        if (!next) return null
-        return lectures[currentLectureIndex + 1]
-    })
-
-    let previousLecture = $derived.by(() => {
-        const currentLectureIndex = lectures.findIndex(
-            (l) => l.slug === currentLectureName && l.module.slug === currentModuleName
-        )
-        if (currentLectureIndex === -1) return null
-        const prev = lectures[currentLectureIndex - 1]
-        if (!prev) return null
-        return lectures[currentLectureIndex - 1]
-    })
+    )
+    let nextLecture = $derived(
+        currentLectureIndex === -1 ? null : (lectures[currentLectureIndex + 1] ?? null)
+    )
+    let previousLecture = $derived(
+        currentLectureIndex === -1 ? null : (lectures[currentLectureIndex - 1] ?? null)
+    )
 </script>
 
 <PageMeta
@@ -199,7 +191,11 @@
             <ButtonLink
                 style="gap: 1rem"
                 kind="secondary"
-                href={`/learn/courses/${data.course.slug}/${previousLecture?.module.slug}/${previousLecture?.slug}`}
+                href={resolve('/learn/courses/[courseId]/[moduleId]/[lectureId]', {
+                    courseId: data.course.slug,
+                    moduleId: previousLecture.module.slug,
+                    lectureId: previousLecture.slug
+                })}
             >
                 <Icon>
                     <FaChevronLeft />
@@ -213,8 +209,11 @@
         {#if nextLecture}
             <ButtonLink
                 style="gap: 1rem"
-                disabled={!nextLecture}
-                href={`/learn/courses/${data.course.slug}/${nextLecture?.module.slug}/${nextLecture?.slug}`}
+                href={resolve('/learn/courses/[courseId]/[moduleId]/[lectureId]', {
+                    courseId: data.course.slug,
+                    moduleId: nextLecture.module.slug,
+                    lectureId: nextLecture.slug
+                })}
             >
                 Next Lecture
                 <Icon>
@@ -231,7 +230,7 @@
     <FloatingAgentSidebar
         bind:open={lectureAgent.open}
         openSize="28rem"
-        verticalOffset="3.2rem"
+        verticalOffset="var(--navbar-height)"
         bind:editorLanguage
         bind:editorCode
         {emulatorInstance}
@@ -301,7 +300,7 @@ When the user asks a question about the lecture topic or for a demonstration of 
         --lecture-text-width: calc(38 * var(--fs-prose));
     }
 
-    /* room round the title, which a Card on the page's own colour gave it, invisible */
+    /* room above and below the title */
     .lecture-title {
         padding: 1.5rem 0;
     }

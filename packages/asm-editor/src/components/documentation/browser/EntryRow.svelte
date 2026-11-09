@@ -113,10 +113,9 @@
     {/if}
 </div>
 
-<!-- `.entry-row + .entry-row` never matches: each row is its own instance of this component, so
-     the compiler drops it and no divider renders. Kept until it is decided whether rows get one -->
-<!-- svelte-ignore css_unused_selector -->
-<style>
+<style lang="scss">
+    @use '../../../styles/radius.scss' as *;
+
     .entry-row {
         border-radius: 0.45rem;
         min-width: 0;
@@ -136,9 +135,6 @@
             content-visibility: visible;
             contain: none;
         }
-    }
-    .entry-row + .entry-row {
-        border-top: 1px solid var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
     }
     .entry-row.expanded {
         background-color: color-mix(in srgb, var(--tertiary) 45%, transparent);
@@ -245,6 +241,9 @@
     .in-panel > .body {
         --entry-text-size: var(--fs-body);
         --entry-caption-size: var(--fs-small);
+        /* half the room at its sides of the body on a page, so the text and the code get more of
+           the panel's width (owner, 2026-11-09) */
+        padding-inline: 0.875rem 0.35rem;
     }
     /* An expanded entry's name stays pinned while its body scrolls under it: just under the pinned
        Chapter and category headings (`--entry-head-top`, DocumentationBrowser), opaque in the row's
@@ -261,45 +260,16 @@
         border-radius: 0.45rem 0.45rem 0 0;
         box-shadow: inset 0 -1px 0
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
+        @include outside-corners(0.45rem, var(--row-under));
     }
     /* the hover tint over that colour, which stays opaque (D4) */
     .in-panel.expanded > .head:hover {
         background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
-    }
-    .in-panel.expanded > .head::before,
-    .in-panel.expanded > .head::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        width: 0.45rem;
-        height: 0.45rem;
-        pointer-events: none;
-    }
-    .in-panel.expanded > .head::before {
-        left: 0;
-        background: radial-gradient(
-            circle at 100% 100%,
-            transparent calc(0.45rem - 0.5px),
-            var(--row-under) calc(0.45rem + 0.5px)
-        );
-    }
-    .in-panel.expanded > .head::after {
-        right: 0;
-        background: radial-gradient(
-            circle at 0 100%,
-            transparent calc(0.45rem - 0.5px),
-            var(--row-under) calc(0.45rem + 0.5px)
-        );
     }
     .page-link {
         align-self: flex-start;
         font-size: var(--fs-small);
         color: var(--accent);
         text-decoration: underline;
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .chevron {
-            transition: none;
-        }
     }
 </style>

@@ -198,10 +198,11 @@
         letter-spacing: 0.01em;
     }
 
-    /* a heading opened by its id lands below the fixed navbar rather than under it */
+    /* a heading opened by its id lands below the fixed navbar rather than under it, as every
+       anchor in the app does (--anchor-offset) */
     .heading-ids :global(h2[id]),
     .heading-ids :global(h3[id]) {
-        scroll-margin-top: 4.5rem;
+        scroll-margin-top: var(--anchor-offset);
     }
 
     :global(._markdown pre.code-block:not(.code-playground)) {
@@ -394,12 +395,36 @@
     }
 
     :global(._markdown summary) {
-        padding: 0.6rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.6rem 1rem 0.6rem 0.6rem;
         background-color: var(--secondary);
         font-family: var(--font-ui);
         font-weight: 700;
         cursor: pointer;
         user-select: none;
+        list-style: none;
+    }
+    :global(._markdown summary::-webkit-details-marker) {
+        display: none;
+    }
+    /* the browser's triangle replaced by the app's rounded chevron (Material's round
+       keyboard-arrow-right, as the Select's is), turned down while the block is open (owner,
+       2026-11-09) */
+    :global(._markdown summary::before) {
+        content: '';
+        flex: none;
+        width: 1.25em;
+        height: 1.25em;
+        background-color: currentColor;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.29 15.88L13.17 12L9.29 8.12a.996.996 0 1 1 1.41-1.41l4.59 4.59c.39.39.39 1.02 0 1.41L10.7 17.3a.996.996 0 0 1-1.41 0c-.38-.39-.39-1.03 0-1.42'/%3E%3C/svg%3E")
+            center / contain no-repeat;
+        opacity: 0.8;
+        transition: transform var(--dur-base) ease;
+    }
+    :global(._markdown details[open] > summary::before) {
+        transform: rotate(90deg);
     }
 
     :global(._markdown details[open] > summary) {
@@ -422,6 +447,10 @@
         display: flex;
     }
 
+    /* `simpleCode`, compact code (a Documentation entry, a lecture's card or an instruction in the
+       panel, a note under an editor line): no room round it and the width of what holds it. `!important`, as markdownPlaygrounds.ts writes
+       a playground fence's margin and max-width inline, which only it beats; it beats a caller's
+       rule too, so a caller sets none of these */
     :global(.simple-code pre.code-block) {
         margin: 0 !important;
         width: unset !important;

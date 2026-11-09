@@ -8,13 +8,13 @@
      * The create page, the embed builder and the exam builder pick their set with it.
      */
     import { languageLabel } from '#lib/languages/languageLabel.ts'
-    import { languageAccent } from '#lib/languages/languageColors.ts'
     import {
         COMPATIBLE_WITH,
         LANGUAGE_DESCRIPTIONS,
         LANGUAGE_ORDER
     } from '#lib/languages/languageCapabilities.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
+    import LanguageSquare from '#cmp/shared/misc/LanguageSquare.svelte'
 
     interface Props {
         selected: AvailableLanguages
@@ -73,11 +73,7 @@
                 onclick={() => onSelect(value)}
                 onkeydown={(event) => onTileKeyDown(event, index)}
             >
-                <span
-                    class="language-square"
-                    style:background-color={languageAccent(value)}
-                    aria-hidden="true"
-                ></span>
+                <LanguageSquare language={value} />
                 {languageLabel(value)}
             </button>
         {/each}
@@ -111,6 +107,7 @@
 
 <style lang="scss">
     @use '../../../styles/field.scss';
+    @use '../../../styles/tiles.scss';
 
     /* the tiles over the set's line, as far apart as the create page's sections space what they
        hold; the box the tiles' columns are counted against */
@@ -121,17 +118,9 @@
         container-type: inline-size;
     }
 
-    /* three to a row, or two where three would cut "RISC-V-64" (each tile needs about 7.4rem:
-       its padding, square, gap and nine characters of Fira Code), which is most phones */
+    /* three to a row, or two where three would cut "RISC-V-64" (styles/tiles.scss) */
     .tiles {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.4rem;
-    }
-    @container (max-width: 23.5rem) {
-        .tiles {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+        @include tiles.grid;
     }
 
     /* a field's fill and edge (styles/field.scss), as the fields beside it; the picked one in the
@@ -142,8 +131,8 @@
         align-items: center;
         gap: 0.6rem;
         min-width: 0;
-        padding: 0.75rem 0.8rem;
-        font: var(--fs-small) / 1.3 var(--font-mono);
+        padding: tiles.$padding-block 0.8rem;
+        font: var(--fs-small) / #{tiles.$line-height} var(--font-mono);
         text-align: left;
         white-space: nowrap;
         cursor: pointer;
@@ -159,14 +148,6 @@
             border-color: var(--accent);
             background-color: color-mix(in srgb, var(--accent) 18%, field.$fill);
         }
-    }
-
-    /* drawn as the home page's instruction-set bar draws its squares */
-    .language-square {
-        flex: none;
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 2px;
     }
 
     /* the picked set's line over the others', unseen: the one grid cell they share takes the

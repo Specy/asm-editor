@@ -2004,6 +2004,37 @@ describe('pokes', () => {
         expect(emulator.canPoke).toBe(true)
     })
 
+    it('refuses a Poke from the moment a Step starts, before the panels are told', async () => {
+        const emulator = await pokeableEmulator()
+        let release!: () => void
+        const gate = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        emulator._step = async () => {
+            await gate
+            return { terminated: false }
+        }
+        const stepping = emulator.step()
+        expect(emulator.pokeRegisters(CPU_REGISTER_FILE_ID, [{ register: 'R0', value: 1n }])).toBe(
+            false
+        )
+        expect(emulator.pokeMemory(0x1000n, new Uint8Array([1]))).toBe(false)
+        expect(emulator.pokeLog).toEqual([])
+        release()
+        await stepping
+    })
+
+    it('does not tell the panels about a Step that settles in the task it started in', async () => {
+        const emulator = await pokeableEmulator()
+        //each change of `canPoke` draws every register value again, twice a Step
+        const stepping = emulator.step()
+        expect(emulator.canPoke).toBe(true)
+        await stepping
+        await settle()
+        expect(emulator.canPoke).toBe(true)
+        expect(emulator.coreSteps).toBe(1)
+    })
+
     it('refuses the program counter and the registers the Core hides', async () => {
         const emulator = await pokeableEmulator()
         emulator.setSessionState({
@@ -2029,6 +2060,21 @@ describe('pokes', () => {
             ])
         ).toBe(false)
         expect(emulator.pokeLog).toEqual([])
+    })
+
+    it('says which registers take Pokes whenever one is possible, for the panels to draw', async () => {
+        const emulator = await pokeableEmulator()
+        emulator.setSessionState({
+            startingRegisterNames: ['R0', 'zero', 'pc'],
+            hiddenRegisters: ['zero']
+        })
+        //a terminated program takes no Poke now, and its rows keep the buttons they had
+        emulator.setSessionState({ terminated: true })
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 'R0')).toBe(false)
+        expect(emulator.registerTakesPokes(CPU_REGISTER_FILE_ID, 'R0')).toBe(true)
+        expect(emulator.registerTakesPokes(CPU_REGISTER_FILE_ID, 'zero')).toBe(false)
+        expect(emulator.registerTakesPokes(CPU_REGISTER_FILE_ID, 'pc')).toBe(false)
+        expect(emulator.registerTakesPokes('nosuchfile', 'f0')).toBe(false)
     })
 
     it('refuses a row the Core blanked, which holds no value to change', async () => {

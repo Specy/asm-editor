@@ -1,8 +1,7 @@
 <script lang="ts">
     /**
      * The Workbench's execution controls with only the session in their context, as a pane's
-     * dock or a tablet's shared bar draws them: the rest of the Workbench is not needed to see
-     * which buttons they hold.
+     * dock draws them: the rest of the Workbench is not needed to see which buttons they hold.
      */
     import type { ComponentProps } from 'svelte'
     import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'

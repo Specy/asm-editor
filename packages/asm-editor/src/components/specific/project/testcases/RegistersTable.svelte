@@ -310,6 +310,12 @@
         @include mono;
         position: relative;
         padding: 0 0.7rem;
+
+        /* an editable row's register Select takes its whole cell, its words where the read-only
+           name's are and its caret's room at its end (owner, 2026-11-09) */
+        &:has(select) {
+            padding: 0;
+        }
         font-weight: 600;
         text-align: left;
         white-space: nowrap;
@@ -318,7 +324,8 @@
         select {
             @include mono;
             width: 100%;
-            padding: 0.45rem 0.8rem 0.45rem 0;
+            height: 2.1rem;
+            padding: 0 1.5rem 0 0.7rem;
             appearance: none;
             font-weight: 600;
             font-size: var(--fs-small);
@@ -373,13 +380,21 @@
         }
     }
 
-    /* the row's ×, in the middle of a cell as tall as the others */
+    /* the start and expected values as tall as their row, which the × and the Select are */
+    td > :global(.number-cell) {
+        height: 2.1rem;
+    }
+
+    /* the row's ×, filling its cell edge to edge (owner, 2026-11-09): its hover the whole cell */
     .remove {
         height: 2.1rem;
 
         :global(.icon-button) {
             @include remove-button;
-            margin: 0 auto;
+            width: 100%;
+            height: 2.1rem;
+            margin: 0;
+            border-radius: 0;
         }
     }
 

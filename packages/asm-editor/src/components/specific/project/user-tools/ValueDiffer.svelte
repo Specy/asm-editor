@@ -1,8 +1,9 @@
 <script lang="ts">
+    import { flushSync } from 'svelte'
+    import type { Attachment } from 'svelte/attachments'
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { elementSize } from '#cmp/shared/floating/elementSize.ts'
     import type { Side } from '#cmp/shared/floating/floating.ts'
-    import { tooltipRadius } from '#src/styles/elevation.ts'
     import { boundedValueHover } from './boundedValueHover'
 
     interface Props {
@@ -41,12 +42,29 @@
         decorative = false
     }: Props = $props()
 
-    /** The card's arrow, which stands out of it towards the value; ARROW in the styles below. */
-    const ARROW = 6
-    /** The Tooltip's corner, a control's, smaller than a menu's; --r-control in the styles below. */
-    const RADIUS = tooltipRadius()
     let cardWidth = $state(0)
     let cardHeight = $state(0)
+    /**
+     * Whether the card has been built: on the value's first hover, rather than one hidden card per
+     * value, outline, readings and all, kept up to date on every Step for a pointer that may never
+     * come (a register panel has dozens of values, a memory view hundreds). The CSS that shows it
+     * on hover finds it built in the same frame.
+     */
+    let built = $state(false)
+    function buildCard() {
+        if (built) return
+        built = true
+        //now, before the card shows, and before `boundedValueHover` measures it to place it
+        flushSync()
+    }
+    /** The card's size, for its outline, watched once it is built. */
+    const measureCard: Attachment<HTMLElement> = (node) => {
+        const size = elementSize(node, (width, height) => {
+            cardWidth = width
+            cardHeight = height
+        })
+        return () => size.destroy()
+    }
     /** Where `boundedValueHover` put the card: its side of the value and its arrow along it. */
     let placed = $state<{ side: Side; at?: number }>()
     //centred over or under the value when nothing bounds it, else where the bounds left it
@@ -73,41 +91,45 @@
 {#if decorative}
     {@render cell()}
 {:else}
+    <!-- the card's shell is there from the start, for `boundedValueHover` to place, and what it
+         holds is built on the first hover -->
     <div
         style="position: relative;"
-        use:boundedValueHover={{ boundary: hoverBoundary, onPlace: (place) => (placed = place) }}
+        use:boundedValueHover={{
+            boundary: hoverBoundary,
+            onPlace: (place) => (placed = place),
+            onEnter: buildCard
+        }}
     >
         <div
             class="hover-element"
             class:bounded={!!hoverBoundary}
             class:below={!hoverBoundary && hoverSide === 'below'}
             style={hoverElementStyle}
-            use:elementSize={(width, height) => {
-                cardWidth = width
-                cardHeight = height
-            }}
+            {@attach built && measureCard}
         >
-            {#if outline}
+            {#if built && outline}
                 <PopoverOutline
                     width={cardWidth}
                     height={cardHeight}
                     side={outline.side}
                     at={outline.at}
-                    arrow={ARROW}
-                    radius={RADIUS}
+                    corner="control"
                     solid
                 />
             {/if}
             <div class="hover-content">
-                {#if hoverValue}
-                    <div class:monospaced style={hoverValueElementStyle}>
-                        {@render hoverValue?.()}
-                    </div>
-                {/if}
-                {#if diff !== value}
-                    <div class="old-value" class:monospaced role="tooltip">
-                        {diff}
-                    </div>
+                {#if built}
+                    {#if hoverValue}
+                        <div class:monospaced style={hoverValueElementStyle}>
+                            {@render hoverValue?.()}
+                        </div>
+                    {/if}
+                    {#if diff !== value}
+                        <div class="old-value" class:monospaced role="tooltip">
+                            {diff}
+                        </div>
+                    {/if}
                 {/if}
             </div>
         </div>
@@ -118,12 +140,12 @@
 <style lang="scss">
     @use '../../../../styles/popover.scss';
     @use '../../../../styles/radius.scss' as *;
+    @use '../../../../styles/type.scss';
 
     .tooltip-base {
         display: flex;
         align-items: center;
         border-radius: 0.2rem;
-        text-align: center;
         justify-content: center;
         cursor: default;
         text-align: center;
@@ -135,14 +157,14 @@
         color: var(--primary-text);
     }
 
-    /* the room the card's arrow stands out of it by, ARROW in the script */
-    $arrow: 6px;
+    /* the room the card's arrow stands out of it by, PopoverOutline's arrow */
+    $arrow: popover.$arrow;
     /* the card's room round what it holds, the same on every side (owner, 2026-11-08) */
     $pad: 0.3rem;
 
-    /* a hover card over data, drawn as the Tooltip is: a solid Popover on the Tooltip's corner
-       (RADIUS in the script), whose outline, arrow and all, is drawn behind it; the padding keeps
-       the room its edge takes */
+    /* a hover card over data, drawn as the Tooltip is: a solid Popover on a control's corner
+       (PopoverOutline's `corner="control"`), whose outline, arrow and all, is drawn behind it;
+       the padding keeps the room its edge takes */
     .hover-element {
         @include popover.content;
         display: none;
@@ -195,9 +217,7 @@
     /* Fira Code at the size and weight of the register and memory views' values (MemoryRenderer's
        .memory-grid) */
     .monospaced {
-        font-family: var(--font-mono);
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
+        @include type.machine-value;
     }
 
     /* the hover tint (D4), over the cell's own fill when it has one */

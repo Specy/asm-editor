@@ -1,0 +1,30 @@
+/* The Cards surface style (design-system.md, D1): the tokens a Card is drawn on, the page Card's
+   (Card.svelte), a Workbench panel's, a Playground's panels', the floating Testcases window's
+   (FloatingContainer.svelte) and the error card's. The Workbench's Lines look overrides them
+   (WorkbenchShell.svelte). Outside the Workbench and the Playgrounds an element takes them with
+   the class `wb-cards`, as a Card does on itself, so that what it holds is drawn as in a Workbench
+   panel. They keep the `--wb-` prefix of the Workbench, where they began; workbench.css imports
+   this file, so whatever imports it has them too. */
+
+:where(.workbench, .project-top-bar, .playground, .wb-cards) {
+    /* the design system's hairline (styles/tokens.css), under the Workbench's older name */
+    --wb-line: var(--line);
+}
+
+:where(.workbench, .playground, .wb-cards) {
+    --wb-gap: 0.25rem;
+    --wb-radius: var(--r-control);
+    --wb-surface: var(--secondary);
+    /* a band a shade lighter than the panel, so a section's header reads as one */
+    --wb-section-header: color-mix(in srgb, var(--secondary) 72%, var(--tertiary));
+    /* the rule a section draws under itself and beside its neighbour, and memory beside the
+       registers: the card edge in Cards, a divider in Lines */
+    --wb-section-rule: var(--wb-card-edge);
+    /* a tab strip is a shade darker than the panel whose tabs it holds */
+    --wb-strip: color-mix(in srgb, var(--background) 65%, var(--secondary));
+    /* the 1px edge of every card: a border, so the card's content is clipped inside it, its
+       corners included, and nothing it holds can paint over it */
+    --wb-card-edge: 1px solid var(--wb-line);
+    /* that edge's width, for what is placed against a card from outside it */
+    --wb-card-inset: 1px;
+}

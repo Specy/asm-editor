@@ -2,7 +2,9 @@
     /**
      * An on/off control that slides rather than ticks: the track takes the accent color and the
      * knob crosses it. A button with the switch role, so it is focusable and toggles with Space and
-     * Enter like a native checkbox, and the label around it stays free to be plain text.
+     * Enter like a native checkbox, and the label around it stays free to be plain text. Its
+     * `size` is the room it sits in: `md`, a form's or a Settings row's; `sm`, a dense row's, a
+     * Popover's (the share menu) or a side panel's (the Search panel's Look in).
      */
     import type { HTMLButtonAttributes } from 'svelte/elements'
 
@@ -10,6 +12,7 @@
     interface Props extends Omit<HTMLButtonAttributes, 'disabled' | 'style' | 'onchange'> {
         checked: boolean
         disabled?: boolean
+        size?: 'sm' | 'md'
         style?: string
         onChange?: (checked: boolean) => void
     }
@@ -17,6 +20,7 @@
     let {
         checked = $bindable(false),
         disabled = false,
+        size = 'md',
         style = '',
         onChange,
         ...rest
@@ -34,7 +38,7 @@
     {...rest}
     role="switch"
     aria-checked={checked}
-    class="switch"
+    class="switch {size}"
     class:on={checked}
     {disabled}
     {style}
@@ -62,14 +66,14 @@
         transition:
             background-color var(--dur-fast) ease,
             border-color var(--dur-fast) ease;
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-        }
         &:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
+    }
+    .switch.sm {
+        --switch-width: 2.2rem;
+        --switch-height: 1.2rem;
     }
     /* exactly the room inside the padding and the edge, so it sits centred, and its travel when on,
        the width less the height, is the same as without the edge */
@@ -90,12 +94,6 @@
         .knob {
             background-color: var(--accent-text);
             transform: translateX(calc(var(--switch-width) - var(--switch-height)));
-        }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .switch,
-        .knob {
-            transition: none;
         }
     }
 </style>

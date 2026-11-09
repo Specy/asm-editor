@@ -62,6 +62,8 @@ function render(
     options: {
         pokeable?: boolean
         pokeableRegisters?: string[]
+        /** A panel that takes no Pokes at all, as the PC's row and the Testcase editor are. */
+        readOnly?: boolean
         file?: typeof file | typeof floatFile
         registers?: Register[]
         format?: RegisterFormat
@@ -86,9 +88,15 @@ function render(
             format: options.format ?? ('hex' as const),
             groupSize: RegisterSize.Word,
             pokeable: options.pokeable ?? true,
+            //the registers that take Pokes, as the Emulator's `canPokeRegister` and
+            //`registerTakesPokes` answer while a Poke is possible
             canPokeRegister: (register: string) =>
                 (options.pokeableRegisters ?? ['d0', 'd1']).includes(register),
-            onPoke: (writes: RegisterPoke[]) => pokes.push({ writes }),
+            takesPokes: (register: string) =>
+                (options.pokeableRegisters ?? ['d0', 'd1']).includes(register),
+            onPoke: options.readOnly
+                ? undefined
+                : (writes: RegisterPoke[]) => pokes.push({ writes }),
             valueMenu: options.withMenu
                 ? (value: bigint, bytes: number): ContextMenuEntry[] => {
                       menus.push({ value, bytes })
@@ -111,6 +119,12 @@ function render(
         chunks: () => [...target.querySelectorAll<HTMLElement>('.chunk-button')],
         input: () => target.querySelector<HTMLInputElement>('.chunk-input'),
         values: () => [...target.querySelectorAll<HTMLElement>('.register-hex')],
+        /** The pointer on every register's name, which builds its whole-value card. */
+        hoverNames: () => {
+            for (const row of target.querySelectorAll('.register-wrapper'))
+                row.dispatchEvent(new Event('pointerenter'))
+            flushSync()
+        },
         menu: () => document.querySelector<HTMLElement>('[role="menu"]'),
         close: () => {
             void unmount(app)
@@ -204,7 +218,7 @@ describe('poking a register row', () => {
         expect(panel.pokes).toEqual([])
         const open = panel.input()!
         expect(open.value).toBe('1ffff')
-        expect(open.classList.contains('refused')).toBe(true)
+        expect(open.getAttribute('aria-invalid')).toBe('true')
         expect(open.title).toContain('16 bits')
         panel.close()
     })
@@ -268,11 +282,27 @@ describe('poking a register row', () => {
         const panel = render({ pokeableRegisters: ['d0'] })
         //only `d0`'s two groups are buttons; `d1` is drawn exactly as a read-only row is
         expect(panel.chunks()).toHaveLength(2)
-        const readOnly = render({ pokeable: false })
+        const readOnly = render({ readOnly: true })
         expect(readOnly.chunks()).toHaveLength(0)
         expect(readOnly.input()).toBe(null)
         panel.close()
         readOnly.close()
+    })
+
+    it('keeps the buttons while no Poke is possible, unavailable and out of the tab order', () => {
+        //a Run or a Build owning the Core: the panel takes no Pokes for now
+        const panel = render({ pokeable: false })
+        expect(panel.chunks()).toHaveLength(4)
+        for (const chunk of panel.chunks()) {
+            expect(chunk.getAttribute('aria-disabled')).toBe('true')
+            expect(chunk.tabIndex).toBe(-1)
+            expect(chunk.hasAttribute('title')).toBe(false)
+        }
+        panel.chunks()[0].click()
+        flushSync()
+        expect(panel.input()).toBe(null)
+        expect(panel.pokes).toEqual([])
+        panel.close()
     })
 })
 
@@ -308,6 +338,9 @@ describe("a register name's hover", () => {
                 makeRegister('d1', 0x1234n, RegisterSize.Long)
             ]
         })
+        //built on each name's first hover
+        expect(panel.target.querySelectorAll('.hover-register-value')).toHaveLength(0)
+        panel.hoverNames()
         const hovers = [...panel.target.querySelectorAll('.hover-register-value')]
         expect(hovers.map((hover) => hover.textContent?.trim())).toEqual(['ffffffff', '00001234'])
         panel.close()

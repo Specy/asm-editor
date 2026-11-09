@@ -7,6 +7,7 @@
      */
     import type { ResolvedPathname } from '$app/types'
     import Column from '#cmp/shared/layout/Column.svelte'
+    import SidebarLink from '#cmp/content/SidebarLink.svelte'
 
     interface Props {
         currentInstructionName?: string
@@ -21,31 +22,8 @@
 
 <Column>
     {#each names as ins (ins)}
-        <a
-            href={hrefOf(ins)}
-            class="row"
-            aria-current={ins === currentInstructionName ? 'page' : undefined}
-            onclick={onClick}
-        >
+        <SidebarLink href={hrefOf(ins)} current={ins === currentInstructionName} {onClick}>
             {ins}
-        </a>
+        </SidebarLink>
     {/each}
 </Column>
-
-<style lang="scss">
-    @use '../../../styles/outline.scss';
-    @use '../../../styles/focus.scss' as *;
-
-    /* the outline's rows (styles/outline.scss), as the course sidebar's lectures are: run out to
-       the sidebar's left edge by the caller, edge to edge with no gap, their padding the rhythm,
-       rounded on the far side, the one under the pointer in the hover tint and the instruction
-       shown in the current item's look; the keyboard's ring inside the row. The text starts at
-       the caller's `--instruction-indent`, under its heading's name. */
-    .row {
-        @include outline.row('[aria-current="page"]');
-        @include outline.row-padding;
-        @include focus-ring($inset: true);
-        padding-left: var(--instruction-indent, 0.75rem);
-        font-size: var(--fs-body);
-    }
-</style>

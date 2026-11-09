@@ -914,7 +914,7 @@
             activeSectionId={activeSection.id}
             visibleAnswer={activeVisibleAnswer}
             emulatorInstance={emulator}
-            style="border-radius: 0; border: none; box-shadow: none; flex: 1; min-height: 0;"
+            style="flex: 1; min-height: 0;"
         />
     {/if}
 {/snippet}
@@ -956,12 +956,7 @@
 {/snippet}
 
 {#snippet promptCard(section: ExamSection, number: number)}
-    <Card
-        element="section"
-        class="part-card prompt-card"
-        padding="0"
-        aria-labelledby="exam-part-title"
-    >
+    <Card element="section" aria-labelledby="exam-part-title">
         {@render sectionHead(section, number)}
         <div class="part-body prompt-body">
             <MarkdownRenderer source={section.prompt} disableLinks monacoColors centered={false} />
@@ -1009,7 +1004,6 @@
             <Card
                 element="section"
                 class="start-card"
-                padding="0"
                 aria-labelledby="exam-start-title"
                 aria-busy={status === 'loading'}
             >
@@ -1109,12 +1103,7 @@
                             {/if}
                         </div>
                         <footer class="card-foot">
-                            <Button
-                                type="submit"
-                                disabled={starting}
-                                aria-busy={starting}
-                                style="gap: 0.5rem;"
-                            >
+                            <Button type="submit" disabled={starting} aria-busy={starting}>
                                 {#if starting}<Spinner />{/if}
                                 {exam.submission ? 'Open submission' : 'Start exam'}
                             </Button>
@@ -1152,7 +1141,6 @@
                 <Card
                     element="section"
                     class="notice"
-                    padding="0"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="exam-notice-title"
@@ -1192,7 +1180,6 @@
                 <Card
                     element="section"
                     class="notice"
-                    padding="0"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="exam-notice-title"
@@ -1380,12 +1367,7 @@
             <div class="part" class:coding={isCodingSection} bind:this={partElement}>
                 {#if isOnInstructions && hasInstructions}
                     <div class="reading">
-                        <Card
-                            element="section"
-                            class="part-card"
-                            padding="0"
-                            aria-labelledby="exam-part-title"
-                        >
+                        <Card element="section" aria-labelledby="exam-part-title">
                             <header class="part-head">
                                 <h2 id="exam-part-title" class="part-title">Instructions</h2>
                             </header>
@@ -1511,6 +1493,7 @@
 <style lang="scss">
     @use '../../../styles/field.scss';
     @use '../../../styles/focus.scss' as *;
+    @use '../../../components/specific/exam/exam.scss';
 
     /* focused only to give focus back after an unlock, when nothing in it had it: no ring round
        the whole page */
@@ -1519,8 +1502,10 @@
     }
 
     /* the bar and the part, one screen tall: a coding part's Workbench fills what the bar leaves,
-       a reading part scrolls inside */
+       a reading part scrolls inside. A part's heading and text start `--part-inset` in, from the
+       Card's edge or the question panel's, and so does the C answer's label under the panel */
     .exam-session {
+        --part-inset: 1rem;
         display: flex;
         flex-direction: column;
         flex: none;
@@ -1542,8 +1527,8 @@
         max-width: 34rem;
     }
 
-    /* a Card's heading over a rule, its body, and a rule over its actions, as the exam builder's
-       part Card and the create page's Card draw theirs */
+    /* a Card's heading over a rule, its body, and its actions at the right over a rule, as the
+       create page's Card ends */
     .card-head {
         padding: 0.9rem 1.25rem;
         border-bottom: 1px solid var(--line);
@@ -1617,7 +1602,7 @@
     .failure {
         position: fixed;
         inset: 0;
-        z-index: 12;
+        z-index: var(--z-drawer);
         display: flex;
     }
 
@@ -1630,7 +1615,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        z-index: 12;
+        z-index: var(--z-drawer);
         padding: 1rem;
     }
 
@@ -1830,7 +1815,6 @@
     }
     .progress :global(.btn.step) {
         flex: none;
-        gap: 0.35rem;
         padding-inline: 0.55rem;
     }
     .progress :global(.btn.step svg) {
@@ -1895,7 +1879,7 @@
         flex: 1 0 auto;
         gap: 1rem;
         width: 100%;
-        max-width: 52rem;
+        max-width: exam.$column;
         margin: 0 auto;
         padding: 1rem;
     }
@@ -1997,14 +1981,14 @@
         color: inherit;
     }
 
-    /* the header band over a rule, as the exam builder's part Card has */
+    /* a part's heading over a rule across its Card or the question's panel */
     .part-head {
         display: flex;
         flex-wrap: wrap;
         align-items: baseline;
         gap: 0.25rem 1rem;
         flex: none;
-        padding: 0.6rem 1rem;
+        padding: 0.6rem var(--part-inset);
         border-bottom: 1px solid var(--line);
     }
     .part-title {
@@ -2021,7 +2005,7 @@
         font-size: var(--fs-small);
     }
     .part-body {
-        padding: 1rem;
+        padding: var(--part-inset);
     }
 
     .answer {
@@ -2097,10 +2081,9 @@
         flex: 1;
         gap: 0.4rem;
         min-height: 0;
-        padding: 0.75rem var(--wb-gap, 0.25rem) var(--wb-gap, 0.25rem);
+        padding: 0.75rem var(--wb-gap) var(--wb-gap);
     }
-    /* inset as a Card's text is, so that under the question (900px wide and less) it lines up
-       with the question's text */
+    /* inset from the editor's edge as a Card's text is from the Card's */
     .c-answer .answer-label {
         padding-inline: calc(1rem + 1px);
     }
@@ -2110,8 +2093,8 @@
         flex: 1;
         min-height: 0;
         position: relative;
-        border: var(--wb-card-edge, 1px solid var(--line));
-        border-radius: var(--wb-radius, var(--r-control));
+        border: var(--wb-card-edge);
+        border-radius: var(--wb-radius);
         overflow: hidden;
     }
 
@@ -2140,6 +2123,10 @@
         .strip-label {
             writing-mode: horizontal-tb;
         }
+        /* under the question, in line with its text */
+        .c-answer .answer-label {
+            padding-inline: calc(var(--part-inset) - var(--wb-gap));
+        }
         .prompt-strip :global(svg),
         .part-head.foldable :global(.prompt-hide svg) {
             transform: rotate(90deg);
@@ -2149,7 +2136,10 @@
     /* a phone: the bar in three lines, the exam with the time and Finish exam, then the student,
        then Previous and Next at the two ends of the third with the dots and the count centred
        between them; the dots scroll when there are more than fit */
-    @media (max-width: 720px) {
+    @media (max-width: exam.$phone) {
+        .exam-session {
+            --part-inset: 0.75rem;
+        }
         .top-bar {
             flex-wrap: wrap;
             gap: 0.1rem 0.6rem;
@@ -2209,10 +2199,7 @@
             max-height: 30%;
         }
         .part-head {
-            padding: 0.5rem 0.75rem;
-        }
-        .part-body {
-            padding: 0.75rem;
+            padding-block: 0.5rem;
         }
         .card-head,
         .card-body,

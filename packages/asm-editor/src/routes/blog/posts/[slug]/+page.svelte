@@ -47,9 +47,7 @@
             <Header>{post.title}</Header>
             <p class="blog-lead">{post.description}</p>
             <div class="blog-byline">
-                <a href={AUTHOR.url} rel="external">{AUTHOR.alternateName}</a><span
-                    aria-hidden="true">·</span
-                >
+                <a href={AUTHOR.url} rel="external">{AUTHOR.alternateName}</a>
                 <time datetime={post.datePublished}>{formatBlogDate(post.datePublished)}</time>
                 {#if post.dateUpdated}<span
                         >Updated <time datetime={post.dateUpdated}

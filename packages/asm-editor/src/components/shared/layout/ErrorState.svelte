@@ -16,7 +16,7 @@
     import FaCopy from '~icons/fa-solid/copy'
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import type { Snippet } from 'svelte'
-    import '#cmp/specific/workbench/workbench.css'
+    import '#src/styles/cards.css'
 
     interface Props {
         title: string
@@ -217,16 +217,12 @@
         flex-wrap: wrap;
         gap: 0.5rem;
     }
-    /* the buttons' own rule is as specific as `.actions .btn`, so these name the state too */
-    .error-state .actions > :global(.btn) {
-        gap: 0.5rem;
-        padding: 0.5rem 0.9rem;
-    }
+    /* a compact card's buttons a step smaller than a Button's own `md` */
     .error-state.compact .actions > :global(.btn) {
         padding: 0.35rem 0.7rem;
         font-size: var(--fs-small);
     }
-    /* a Workbench card (workbench.css): the error under a header band a shade lighter */
+    /* a Workbench card (styles/cards.css): the error under a header band a shade lighter */
     .error-card {
         display: flex;
         flex-direction: column;

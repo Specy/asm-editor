@@ -185,9 +185,8 @@ describe('the view switch', () => {
         //a split of a pane with one tab opens empty
         const right = show(session, 'crackme', session.splitEditor())
         expect(left.displayedPath).toBe('main.asm')
-        //main.asm is no Entry file, so its pane has no Build and no dock; the Executable's has its
-        //switch on every device, and on a desktop and a phone its Build, which a tablet puts in one
-        //bar of its own
+        //main.asm is no Entry file, so its pane has no Build and no dock; the Executable's has one
+        //for its switch, whether or not the layout gives the panes their execution controls
         for (const controls of [true, false]) {
             expect(left.hasDock(controls)).toBe(false)
             expect(right.hasDock(controls)).toBe(true)
@@ -199,10 +198,6 @@ describe('the view switch', () => {
             'Decompile',
             'Hex'
         ])
-        //a tablet's shared bar leaves the switch to the pane's own dock
-        expect(
-            dock(session, { group: right, fill: true, showViews: false }).read().buttons
-        ).toEqual(['Debug'])
         //a phone's dock along the bottom edge of a pane showing the Executable
         show(session, 'crackme', left)
         expect(dock(session, { group: left, fill: true, attached: true }).read().buttons).toEqual([

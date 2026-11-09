@@ -1,8 +1,8 @@
 <script lang="ts">
     /**
      * A Markdown text being written, as the **Exam** builder's instructions and prompts are: the
-     * text in Monaco's Markdown mode, and beside it or behind Text · Preview tabs on the editor's
-     * top edge (`TabStrip`'s `strip` look) the text as the Exam session will show it
+     * text in Monaco's Markdown mode, and behind Text · Preview tabs on the editor's top edge
+     * (`TabStrip`'s `strip` look) the text as the Exam session will show it, its code numbered
      * ([ADR 0053](../../../../../../docs/adr/0053-markdown-is-rendered-by-our-own-synchronous-pipeline.md)).
      */
     import Editor from '#cmp/specific/project/Editor.svelte'
@@ -11,24 +11,7 @@
     import FaEye from '~icons/fa-solid/eye'
     import MarkdownRenderer from './MarkdownRenderer.svelte'
 
-    let {
-        value = $bindable(''),
-        layout = 'auto',
-        lineNumbers = true,
-        gutterSpacing = false
-    }: {
-        value?: string
-        /**
-         * The text and the preview side by side (`split`), one at a time behind tabs (`switch`),
-         * or side by side only when the editor itself is at least 768px wide (`auto`), as a
-         * full-width box is and a half-width column is not.
-         */
-        layout?: 'split' | 'switch' | 'auto'
-        /** Configure preview line numbers in code; this does not add a UI toggle. */
-        lineNumbers?: boolean
-        /** Reserve editor gutter spacing in the Markdown preview. Off by default. */
-        gutterSpacing?: boolean
-    } = $props()
+    let { value = $bindable('') }: { value?: string } = $props()
 
     const VIEWS = [
         { id: 'text', label: 'Text', icon: FaAlignLeft },
@@ -40,11 +23,9 @@
     //each tab names the pane it shows, for a screen reader
     const panes = $props.id()
     const paneId = (id: string) => `${panes}-${id}`
-    //side by side there are no tabs, so the panes are not their panels
-    const tabbed = $derived(layout !== 'split')
 </script>
 
-<div class="markdown-editor" class:split={layout === 'split'} class:auto={layout === 'auto'}>
+<div class="markdown-editor">
     <div class="views">
         <TabStrip
             ariaLabel="View"
@@ -66,8 +47,8 @@
             class="text"
             class:shown={view === 'text'}
             id={paneId('text')}
-            role={tabbed ? 'tabpanel' : undefined}
-            aria-label={tabbed ? 'Text' : undefined}
+            role="tabpanel"
+            aria-label="Text"
         >
             <Editor language="markdown" bind:code={value} />
         </div>
@@ -75,17 +56,10 @@
             class="preview"
             class:shown={view === 'preview'}
             id={paneId('preview')}
-            role={tabbed ? 'tabpanel' : undefined}
-            aria-label={tabbed ? 'Preview' : undefined}
+            role="tabpanel"
+            aria-label="Preview"
         >
-            <MarkdownRenderer
-                source={value}
-                disableLinks
-                monacoColors
-                centered={false}
-                {lineNumbers}
-                {gutterSpacing}
-            />
+            <MarkdownRenderer source={value} disableLinks monacoColors centered={false} />
         </div>
     </div>
 </div>
@@ -97,14 +71,13 @@
        onto it, as a Workbench pane's tabs are */
     .markdown-editor {
         --wb-strip: var(--background);
-        container-type: inline-size;
         display: flex;
         flex: 1;
         flex-direction: column;
         min-width: 0;
         min-height: 0;
-        border: 1px solid var(--line);
-        border-radius: var(--r-control);
+        border: var(--wb-card-edge);
+        border-radius: var(--wb-radius);
         overflow: hidden;
     }
 
@@ -154,27 +127,5 @@
     .text :global(.monaco-editor),
     .text :global(.monaco-editor .overflow-guard) {
         border-radius: 0;
-    }
-
-    /* side by side: no tabs, both panes, a line between them */
-    @mixin side-by-side {
-        .views {
-            display: none;
-        }
-        .text,
-        .preview {
-            display: flex;
-        }
-        .preview {
-            border-left: 1px solid var(--line);
-        }
-    }
-    .split {
-        @include side-by-side;
-    }
-    @container (min-width: 768px) {
-        .auto {
-            @include side-by-side;
-        }
     }
 </style>

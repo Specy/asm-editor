@@ -77,8 +77,7 @@
         scroll={false}
         {panelId}
         onselect={(id) => (session.bottomTab = id as BottomTab)}
-        tabAttributes={(item) =>
-            iconTabs ? { 'aria-label': item.label, style: 'padding: 0 0.75rem' } : {}}
+        iconOnly={iconTabs}
     >
         {#snippet tab(item)}
             <span class="tab-face" class:icon-only={iconTabs}>
@@ -158,8 +157,14 @@
 </section>
 
 <style lang="scss">
+    @use '../../../styles/radius.scss' as *;
+
     .bottom-panel {
         --wb-output-padding: 0.7rem 0.9rem;
+        /* the Terminal sits in the card's lower corners: its focus ring rounds with them, inside
+           the card's 1px edge */
+        --terminal-corners: 0 0 #{nested-radius(var(--wb-radius), $border: 1px)}
+            #{nested-radius(var(--wb-radius), $border: 1px)};
         display: flex;
         flex-direction: column;
         min-height: 0;
@@ -208,8 +213,6 @@
         padding: 0 0.9rem 0 0.6rem;
         font-size: var(--fs-caption);
         color: var(--hint);
-
-        /* one line, cut short rather than wrapped in a strip one line tall */
     }
 
     .tab-body {

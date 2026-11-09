@@ -112,6 +112,7 @@
         <IconButton
             size="sm"
             quiet
+            fill
             class="clear"
             label={clearLabel}
             {@attach tooltip(clearLabel)}
@@ -150,17 +151,15 @@
         min-height: var(--field-height);
         min-width: 0;
     }
-    /* The clear button runs edge to edge: the box's whole height inside its edge, a square at its
-       end across the padding, its outer corners following the box's (D12) and its inner ones
-       square (owner, 2026-11-08) */
-    .search-field > :global(.icon-button.clear) {
-        align-self: stretch;
-        width: calc(var(--field-height) - 2 * var(--field-edge));
-        height: auto;
+    /* The clear button runs edge to edge (IconButton's `fill`): the box's whole height inside its
+       edge, a square at its end across the padding, its outer corners following the box's (D12)
+       and its inner ones square (owner, 2026-11-08) */
+    .search-field > :global(.clear) {
+        --icon-button-cell: calc(var(--field-height) - 2 * var(--field-edge));
+        --icon-button-radius: 0 #{nested-radius(var(--r-control), $border: 1px)}
+            #{nested-radius(var(--r-control), $border: 1px)} 0;
         margin: calc(-1 * var(--field-pad-block)) calc(-1 * var(--field-pad-end))
             calc(-1 * var(--field-pad-block)) 0;
-        border-radius: 0 #{nested-radius(var(--r-control), $border: 1px)}
-            #{nested-radius(var(--r-control), $border: 1px)} 0;
     }
     /* a side panel's: as tall as its rows of controls, its buttons a quarter rem inside its edge,
        their corners running parallel to its own (D12); the caller's buttons at its end take the
@@ -191,30 +190,23 @@
         --field-pad-start: 0.4rem;
         --field-pad-end: 0.4rem;
         --field-edge: 0px;
-        /* the palette's top band round it (SearchPalette's `.top`), whose padding the clear button
-           reaches across too: from the palette's top edge to the rule under the field, and to the
-           palette's edge, whose corner it follows */
-        --band-pad-block: 0.3rem;
-        --band-pad-end: 0.5rem;
         gap: 0.65rem;
         border: none;
         background-color: transparent;
         color: inherit;
         font-size: var(--fs-body);
     }
-    .search-field.bare > :global(.icon-button.clear) {
-        width: calc(var(--field-height) + 2 * var(--band-pad-block));
-        margin: calc(-1 * (var(--field-pad-block) + var(--band-pad-block)))
-            calc(-1 * (var(--field-pad-end) + var(--band-pad-end)))
-            calc(-1 * (var(--field-pad-block) + var(--band-pad-block))) 0;
-        border-radius: 0 #{nested-radius(var(--r-overlay), $border: 1px)} 0 0;
-    }
-    /* on a phone the palette fills the screen without corners, its Cancel after the field */
-    @media (max-width: 600px) {
-        .search-field.bare > :global(.icon-button.clear) {
-            margin-right: calc(-1 * var(--field-pad-end));
-            border-radius: 0;
-        }
+    /* A bare field's clear button reaches across the band round it too, to the band's edges: the
+       band says how far, with `--band-pad-block` (its padding above and below the field),
+       `--band-pad-end` (its padding after it) and `--band-corner` (the corner of what it is the
+       top of, which the button's top end follows), as the palette's top does (SearchPalette's
+       `.top`). With none of them it fills the field's own box. */
+    .search-field.bare > :global(.clear) {
+        --icon-button-cell: calc(var(--field-height) + 2 * var(--band-pad-block, 0px));
+        --icon-button-radius: 0 var(--band-corner, 0px) 0 0;
+        margin: calc(-1 * (var(--field-pad-block) + var(--band-pad-block, 0px)))
+            calc(-1 * (var(--field-pad-end) + var(--band-pad-end, 0px)))
+            calc(-1 * (var(--field-pad-block) + var(--band-pad-block, 0px))) 0;
     }
     /* the caret is enough: the field is the only thing in its dialog that takes focus */
     .search-field.bare:has(input:focus-visible) {

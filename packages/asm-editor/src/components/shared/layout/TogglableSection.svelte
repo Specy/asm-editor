@@ -15,13 +15,13 @@
         /** The heading's text, which the button holds; no heading of its own. */
         title?: import('svelte').Snippet
         /**
-         * A sidebar's section (the documentation's and the course's): its heading stays at the
-         * top of the box it scrolls in while its rows scroll under it, and its button is the
-         * whole row, out across the section's `inset` to the box's sides.
+         * A sidebar's section (SiteSidebarLayout's: the documentation's and the course's): its
+         * heading, in the sidebar's text size, stays at the top of the box it scrolls in while
+         * its rows scroll under it, and its button is the whole row, out to the box's sides. Its
+         * rows run out to the box's leading edge, their text at `--row-indent`, under the
+         * heading's name.
          */
         sticky?: boolean
-        /** A `sticky` section's room at its sides, which its heading's button spans. */
-        inset?: string
         children?: import('svelte').Snippet
     }
 
@@ -32,14 +32,13 @@
         sectionStyle = '',
         title,
         sticky = false,
-        inset = '0rem',
         children
     }: Props = $props()
     let cantAnimate = $state(true)
     const id = $props.id()
 </script>
 
-<section class="section" class:open class:sticky style="--inset: {inset}; {style}">
+<section class="section" class:open class:sticky {style}>
     <svelte:element this={`h${level}`} class="section-heading">
         <button
             class="section-title"
@@ -56,7 +55,7 @@
             >
                 <FaAngleRight />
             </Icon>
-            {@render title?.()}
+            <span class="title-text">{@render title?.()}</span>
         </button>
     </svelte:element>
     <div {id} class="column sub-section-content" class:open class:cantAnimate style={sectionStyle}>
@@ -73,16 +72,19 @@
         font: inherit;
     }
 
-    /* A sidebar's section (owner, 2026-11-08). Its heading is pinned at the top of the content of
-       the box it scrolls in, below that box's padding, where MaskedScroll's faded edge (as tall as
-       that padding, --mask-size) ends, on the sidebar's fill; its shadow, a copy of it moved up by
+    /* A sidebar's section (owner, 2026-11-08), 0.5rem in from the box it scrolls in at either
+       side (`--inset`) and above and below. Its heading is pinned at the top of the content of
+       that box, below the box's padding, where MaskedScroll's faded edge (as tall as that
+       padding, --mask-size) ends, on the sidebar's fill; its shadow, a copy of it moved up by
        that edge, covers the band above it, so the rows that scroll on under it are hidden there
-       too. It stays inside its section, so it leaves with the section's
-       last row as the next heading comes up. It is drawn above the rows, which their fade-in
-       leaves a layer of their own. Its button is the whole row: out across the section's sides,
-       and 0.3rem under the title, which its margin gives back so nothing below moves. */
-    .sticky {
-        padding-inline: var(--inset);
+       too. It stays inside its section, so it leaves with the section's last row as the next
+       heading comes up. It is drawn above the rows, which their fade-in leaves a layer of their
+       own. Its button is the whole row: out across the section's sides, and 0.3rem under the
+       title, which its margin gives back so nothing below moves. */
+    .section.sticky {
+        --inset: 0.5rem;
+        gap: 0.3rem;
+        padding: 0.5rem var(--inset);
     }
     .sticky > .section-heading {
         position: sticky;
@@ -98,6 +100,20 @@
         /* the ring inside the row: the box's sides would clip it */
         @include focus-ring($inset: true);
     }
+    /* the title in the sidebar's text size */
+    .sticky .title-text {
+        font-size: 1rem;
+    }
+    /* the rows from the box's leading edge, edge to edge, with no rule beside them, so the
+       current one's accent edge is the sidebar's side; their text under the title's (the
+       section's inset, the arrow's 1.4rem and its 0.4rem gap, less the title's -0.1rem) */
+    .sticky > .sub-section-content {
+        --row-indent: calc(var(--inset) + 1.4rem + 0.4rem - 0.1rem);
+        gap: 0;
+        margin-left: calc(-1 * var(--inset));
+        padding-left: 0;
+        border-left: none;
+    }
 
     .section-title {
         font-size: var(--fs-h3);
@@ -111,6 +127,10 @@
         /* the heft the titles had in Fira Code at 500: Rubik's 500 is a step heavier */
         font-weight: 400;
         align-items: center;
+    }
+    /* the title's text a hair to the left, so it lines up with what is under it */
+    .title-text {
+        margin-left: -0.1rem;
     }
     .section {
         display: flex;
@@ -130,11 +150,11 @@
         }
     }
 
-    .cantAnimate {
-        animation: unset !important;
+    /* open from the first paint, with no fade-in until the reader folds it */
+    .sub-section-content.cantAnimate {
+        animation: unset;
         &.open {
             opacity: 1;
-            translate: translateX(0);
         }
     }
     @keyframes fade-in {

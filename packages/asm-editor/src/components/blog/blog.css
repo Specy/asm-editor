@@ -4,12 +4,15 @@
     max-width: 62rem;
     padding: 1.5rem 0 3rem;
 }
+/* the paragraph under the title, as every content page's intro is (contentPages.css): its size,
+   its 1.65 lines in a 70ch measure, muted, a step smaller on a phone */
 .blog-lead {
     font-family: var(--font-ui);
     font-size: var(--fs-lead);
-    line-height: 1.5;
+    font-weight: 400;
+    line-height: 1.65;
     color: var(--text-muted);
-    max-width: 65ch;
+    max-width: 70ch;
 }
 .blog-tags {
     display: flex;
@@ -61,15 +64,17 @@
 .blog-section-heading h2 {
     font-size: var(--fs-h2);
 }
-/* a Card (shared/layout/Card.svelte), its title's link covering it */
+/* a Card (shared/layout/Card.svelte), its title's link covering it; a stacking context of its own
+   for its picture to go under its content (below), whether or not Card makes one */
 .blog-card {
     overflow: hidden;
+    isolation: isolate;
 }
 /* the card's picture, its colours muted until the pointer is on the card (the card's surface keeps
    its colour: the picture coming to life is the hover) */
 /* under the body, so the title draws over it (its opacity would otherwise paint it as a positioned
    layer, over the body), and under the title link's cover, which keeps its pointer on the picture
-   too: below the card's content, still above its surface (the card isolates) */
+   too: below the card's content, still above its surface (the card isolates, above) */
 .blog-card-image {
     display: block;
     position: relative;
@@ -304,10 +309,6 @@
     line-height: 1.5;
     color: var(--text-muted);
 }
-.blog-article ._markdown h2,
-.blog-article ._markdown h3 {
-    scroll-margin-top: 5.5rem;
-}
 .blog-article-footer {
     max-width: 70ch;
     margin: 3rem auto 0;
@@ -332,12 +333,13 @@
         width: 13rem;
         position: sticky;
         /* Match the navbar offset and page padding to stay still from the first scroll. */
-        top: calc(3.2rem + 2.5rem);
+        top: calc(var(--navbar-height) + 2.5rem);
         display: flex;
         flex-direction: column;
         align-self: start;
         gap: 1.5rem;
-        max-height: calc(100dvh - 6.7rem);
+        /* the screen under where it is pinned, less 1rem under it */
+        max-height: calc(100dvh - var(--navbar-height) - 2.5rem - 1rem);
         padding-top: 1rem;
     }
 }
@@ -347,6 +349,9 @@
     }
 }
 @media (max-width: 600px) {
+    .blog-lead {
+        font-size: var(--fs-prose);
+    }
     .blog-intro {
         padding-top: 0.75rem;
     }

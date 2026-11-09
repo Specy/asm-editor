@@ -79,6 +79,7 @@
         editorCode?: string
         activePath?: string
         emulatorInstance: Emulator | null
+        /** The chat's own, which fills its host without a frame: a host that frames it draws one. */
         style?: string
         canUpdateLanguage?: boolean
         additionalInstructions?: string
@@ -256,11 +257,5 @@
     theme="dark"
     {accent}
     avatarContext={avatarInstructions}
-    style={`width: 100%;
-            border-radius: var(--r-overlay);
-            border: solid 1px var(--wb-line, var(--tertiary));
-            height: 100%; 
-            box-shadow: var(--shadow-2);
-            ${style}
-    `}
+    style={`width: 100%; height: 100%; ${style}`}
 />

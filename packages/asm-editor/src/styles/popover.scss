@@ -1,7 +1,19 @@
 // A Popover (CONTEXT.md; design-system.md, D3): raised `--tertiary` over what it is about, edged
 // with its own text at 15%, on `--r-overlay` and `--shadow-3`. One with an arrow draws that surface
 // with `PopoverOutline` (components/shared/floating/), one without with `surface` here; the two
-// agree through `styles/elevation.ts`.
+// agree through `styles/elevation.ts` and the fills below, which both draw with.
+
+// How far an arrow stands out of a Popover's edge, and half its base: `POPOVER_ARROW` in
+// `styles/elevation.ts` (elevation.test.ts holds the two together), for a hover card placed by CSS
+// that leaves room for its arrow between itself and what it is about.
+$arrow: 6px;
+
+// The fills: translucent, blurring what is beneath, as the menus are, or solid, as the Tooltip and
+// the hover cards over data are, so that their text reads over a busy canvas (tooltips.md,
+// decision 11).
+$fill: color-mix(in srgb, var(--tertiary) 85%, transparent);
+$fill-solid: var(--tertiary);
+$blur: blur(4px);
 
 // What a Popover's content is drawn with, on its content root: the surface's text, and `--line`
 // redefined as that text at 15%, since the theme's line, a `--tertiary` tint, disappears on a
@@ -12,18 +24,31 @@
 }
 
 // A Popover drawn by CSS, for one with no arrow: the fill, edge, corner and shadow `PopoverOutline`
-// draws for one with an arrow. Translucent and blurring what is beneath, as the menus are, or
-// `$solid`, as the Tooltip and the hover cards over data are, so that their text reads over a busy
-// canvas (tooltips.md, decision 11).
+// draws for one with an arrow. Translucent and blurring what is beneath, or `$solid`.
 @mixin surface($solid: false) {
     @include content;
     border: 1px solid var(--line);
     border-radius: var(--r-overlay);
     box-shadow: var(--shadow-3);
     @if $solid {
-        background-color: var(--tertiary);
+        background-color: $fill-solid;
     } @else {
-        background-color: color-mix(in srgb, var(--tertiary) 85%, transparent);
-        backdrop-filter: blur(4px);
+        background-color: $fill;
+        backdrop-filter: $blur;
     }
+}
+
+// A Popover placed by hand in the browser's top layer, a manual popover (the Tooltip's card, the
+// context menu, the share menu; `anchoredPopover.svelte.ts` places the menus): fixed where its
+// script puts it (`left` and `top`) rather than centred as a popover is by default, and drawing no
+// surface of its own, since `PopoverOutline` behind its content draws it, arrow and all, reaching
+// past its box. No `display` here, which would override the popover's hiding.
+@mixin anchored {
+    @include content;
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
 }

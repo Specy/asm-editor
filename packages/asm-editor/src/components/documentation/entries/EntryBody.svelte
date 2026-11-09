@@ -158,12 +158,6 @@
         width: 100%;
         margin: 0;
     }
-    .entry-body :global(._markdown pre:has(code)) {
-        min-width: 0;
-        max-width: 100%;
-        margin: 0.3rem 0;
-        box-shadow: none;
-    }
     .entry-body :global(a),
     .entry-body :global(.doc-link) {
         color: var(--accent);

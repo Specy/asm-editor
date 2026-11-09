@@ -122,8 +122,7 @@
                     ? 'Fit the image to the pane'
                     : 'Show the image at its own size, a pixel for a pixel'
             )}
-            aria-pressed={actualSize}
-            active={actualSize}
+            pressed={actualSize}
             onClick={() => (actualSize = !actualSize)}
         >
             <FaExpand /><span>Actual size</span>
@@ -317,10 +316,6 @@
     }
     /* the notice's two actions, Buttons (D5), their icons a little smaller than their words */
     .pdf-actions :global(.btn) {
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-
         :global(svg) {
             width: var(--fs-small);
             height: var(--fs-small);

@@ -5,8 +5,9 @@
     import FeatureAccordion, {
         type AccordionFeature
     } from '#cmp/specific/landing/FeatureAccordion.svelte'
-    import { LANDING_TARGETS, hexStrip } from '#cmp/specific/landing/landing.ts'
+    import { LANDING_TARGETS } from '#cmp/specific/landing/landing.ts'
     import HeroBackdrop from '#cmp/specific/landing/HeroBackdrop.svelte'
+    import HexBytes from '#cmp/specific/landing/HexBytes.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
     import HeroLink from '#cmp/specific/landing/HeroLink.svelte'
@@ -45,7 +46,8 @@
     import { storedProjectCount } from '#lib/storage/projectCount.ts'
     import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
-    import { SITE_URL, jsonLdScriptTag, softwareApplicationLd, websiteLd } from '#lib/seo.ts'
+    import { SITE_URL, softwareApplicationLd, websiteLd } from '#lib/seo.ts'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>
@@ -313,29 +315,12 @@
     ]
 </script>
 
+<PageMeta
+    title="ASM Editor: online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80"
+    description="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
+    jsonLd={[softwareApplicationLd(), websiteLd()]}
+/>
 <svelte:head>
-    <title>ASM Editor: online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80</title>
-    <meta
-        name="description"
-        content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
-    />
-    <meta
-        property="og:description"
-        content="Write, learn and run M68K, MIPS, RISC-V, x86-64 and Z80 assembly code in your browser. View registers and memory, step and undo the execution."
-    />
-    <meta
-        property="og:title"
-        content="ASM Editor: online assembler & emulator for M68K, MIPS, RISC-V, x86-64 and Z80"
-    />
-    <!-- The page's schema.org description. {@html} is the only way to emit a <script>
-         from a component: <svelte:element this="script"> renders nothing in Svelte, and a
-         literal script tag here is taken as the component's own instance script. Safe
-         because the payload is machine generated and serializeJsonLd escapes < > and &,
-         so nothing interpolated can close the tag. -->
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    {@html jsonLdScriptTag(softwareApplicationLd())}
-    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-    {@html jsonLdScriptTag(websiteLd())}
     <!-- the page's body, its lede and its first screen's code are in Fira Code: fetched with the
          page, as Rubik is (app.html), by the same URL as its @font-face (styles/fonts.css) -->
     <link
@@ -358,17 +343,14 @@
     {@render rule()}
     <div class="band" aria-hidden="true">
         {#each [seed * 2, seed * 2 + 1] as row (row)}
-            <div class="hex">
-                {#each hexStrip(row) as segment, i (i)}{#if segment.hot}<b>{segment.text}</b
-                        >{:else}{segment.text}{/if}{/each}
-            </div>
+            <HexBytes seed={row} />
         {/each}
     </div>
     {@render rule()}
 {/snippet}
 
 {#snippet editorButton()}
-    <ButtonLink href={editorHref} style="gap: 0.6rem" {@attach tooltip('Open the editor')}>
+    <ButtonLink href={editorHref} {@attach tooltip('Open the editor')}>
         {#if shouldGoToCurrentProjects}
             <span class="icon" aria-hidden="true"><FaFolderOpen /></span>
             Go to your projects
@@ -416,19 +398,14 @@
                     </p>
                     <div class="actions">
                         {@render editorButton()}
-                        <ButtonLink href={coursesHref} kind="secondary" style="gap: 0.6rem">
+                        <ButtonLink href={coursesHref} kind="secondary">
                             <span class="icon" aria-hidden="true"><FaGraduationCap /></span>
                             Courses
                         </ButtonLink>
                     </div>
                     <!-- always takes its room, so the centred hero does not move when the browser offers the install -->
                     <div class="install actions" class:hidden={!installEvent}>
-                        <Button
-                            kind="secondary"
-                            style="gap: 0.6rem"
-                            onClick={install}
-                            disabled={!installEvent}
-                        >
+                        <Button kind="secondary" onClick={install} disabled={!installEvent}>
                             <span class="icon"><FaDownload /></span>
                             Install the app
                         </Button>
@@ -440,10 +417,8 @@
 
             <!-- one stream of hex bytes across the whole width, as in the dividers, under the cards -->
             <div class="quick-row">
-                <div class="quick-hex" aria-hidden="true">
-                    {#each hexStrip(100, 1000) as segment, i (i)}{#if segment.hot}<b
-                                >{segment.text}</b
-                            >{:else}{segment.text}{/if}{/each}
+                <div class="quick-hex">
+                    <HexBytes seed={100} bytes={1000} fill />
                 </div>
                 <nav class="frame quick-links" aria-label="Quick links">
                     <HeroLink href={resolve('/documentation')}>
@@ -586,7 +561,7 @@
                             {/if}
                         {:else}
                             <span class="play">
-                                <ButtonLink href={demo.path} style="gap: 0.6rem">
+                                <ButtonLink href={demo.path}>
                                     <span class="icon"><FaPlay /></span>
                                     Play {demo.name}
                                 </ButtonLink>
@@ -612,7 +587,7 @@
                     </p>
                 </div>
                 <div class="head-links">
-                    <ButtonLink href={resolve('/documentation')} style="gap: 0.6rem">
+                    <ButtonLink href={resolve('/documentation')}>
                         Open the documentation
                         <span class="chevron"><FaChevronRight /></span>
                     </ButtonLink>
@@ -726,8 +701,8 @@
                 </a>
             </nav>
             {@render rule()}
-            <div class="agents">
-                <AgentDocs level={2} />
+            <div class="agent-docs">
+                <AgentDocs look="landing" />
             </div>
         </section>
 
@@ -750,7 +725,6 @@
             <ButtonLink
                 href="https://doi.org/10.1109/EDUCON67543.2026.11574463"
                 kind="secondary"
-                style="gap: 0.6rem"
                 title="Read the EDUCON 2026 paper"
             >
                 Read the paper <span class="chevron"><FaExternalLinkAlt /></span>
@@ -761,15 +735,14 @@
 
         <section class="frame closing" aria-labelledby="closing-title">
             <!-- the dividers' bytes, much fainter, behind the whole section -->
-            <div class="closing-hex" aria-hidden="true">
-                {#each hexStrip(200, 1200) as segment, i (i)}{#if segment.hot}<b>{segment.text}</b
-                        >{:else}{segment.text}{/if}{/each}
+            <div class="closing-hex">
+                <HexBytes seed={200} bytes={1200} fill faint />
             </div>
             <h2 id="closing-title">Write your first program</h2>
             <p>Start from an empty Project, or open an example and change it.</p>
             <div class="actions">
                 {@render editorButton()}
-                <ButtonLink href={examplesHref} kind="secondary" style="gap: 0.6rem">
+                <ButtonLink href={examplesHref} kind="secondary">
                     <span class="icon" aria-hidden="true"><FaCode /></span>
                     Open an example
                 </ButtonLink>
@@ -782,6 +755,8 @@
 
 <style lang="scss">
     @use '../styles/visually-hidden.scss' as *;
+    @use '../styles/focus.scss' as *;
+    @use '../components/specific/landing/landing.scss';
 
     .landing {
         --inner: min(100% - 2rem, 76rem);
@@ -869,20 +844,6 @@
         mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
     }
 
-    .hex {
-        white-space: pre;
-        font-family: var(--font-mono);
-        font-size: 0.8rem;
-        line-height: 1.3;
-        letter-spacing: 0.08em;
-        color: color-mix(in srgb, var(--background-text) 16%, transparent);
-
-        b {
-            font-weight: 400;
-            color: color-mix(in srgb, var(--accent) 50%, transparent);
-        }
-    }
-
     .chevron {
         display: inline-flex;
         width: var(--fs-micro);
@@ -895,7 +856,7 @@
     .first-screen {
         display: flex;
         flex-direction: column;
-        min-height: calc(var(--screen-height) - 3.2rem);
+        min-height: calc(var(--screen-height) - var(--navbar-height));
     }
 
     .hero {
@@ -950,10 +911,7 @@
                 background: color-mix(in srgb, var(--dot) 16%, transparent);
             }
 
-            &:focus-visible {
-                outline: 2px solid var(--accent);
-                outline-offset: -2px;
-            }
+            @include focus-ring($inset: true);
 
             &:disabled {
                 cursor: progress;
@@ -1037,54 +995,23 @@
         overflow: hidden;
     }
 
+    /* the bytes behind the quick links, in the hero's fade: gone at the screen's edges, whole at
+       its middle */
     .quick-hex {
         position: absolute;
         inset: 0;
-        overflow: hidden;
-        font-family: var(--font-mono);
-        font-size: 0.8rem;
-        line-height: 1.45;
-        letter-spacing: 0.08em;
-        word-spacing: 0.1em;
-        text-align: justify;
-        color: color-mix(in srgb, var(--background-text) 16%, transparent);
         pointer-events: none;
         user-select: none;
-        /* the hero's fade: gone at the screen's edges, whole at its middle */
         mask-image: linear-gradient(90deg, transparent, #000 50%, transparent);
-
-        b {
-            font-weight: 400;
-            color: color-mix(in srgb, var(--accent) 50%, transparent);
-        }
     }
 
-    /* no background of its own, so the bytes show through the cards; the lines between them
-       are the cards' own borders, solid, each card's top and left one, pulled back a pixel so
-       those along the row's edges fall outside it and are cut off */
+    /* no background of its own, so the bytes show through the cards (HeroLink); the lines
+       between them are the cards' own borders, which those along the row's edges are cut off at */
     .quick-links {
         position: relative;
         display: flex;
         flex-wrap: wrap;
         overflow: hidden;
-    }
-
-    /* the cards a quarter see-through over the bytes, which show through faintly; a plain change of
-       colour under the pointer, with nothing moving or fading */
-    .quick-links :global(.link-element) {
-        position: relative;
-        background: color-mix(in srgb, var(--background) 75%, transparent);
-        color: var(--background-text);
-        transition: none;
-        margin: -1px 0 0 -1px;
-        /* the hairline drawn solid over the page, so the bytes do not show through it */
-        border-top: 1px solid color-mix(in srgb, var(--tertiary) 60%, var(--background));
-        border-left: 1px solid color-mix(in srgb, var(--tertiary) 60%, var(--background));
-
-        &:hover {
-            background: color-mix(in srgb, var(--accent) 14%, var(--background));
-            color: var(--background-text);
-        }
     }
 
     .section-head p,
@@ -1202,10 +1129,7 @@
             color: var(--secondary-text);
         }
 
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
+        @include focus-ring($inset: true);
 
         /* the line between two tabs, gone beside the open tab and the one under the pointer */
         &::after {
@@ -1251,10 +1175,6 @@
         &:hover {
             color: var(--secondary-text);
             background: color-mix(in srgb, var(--secondary) 55%, transparent);
-        }
-
-        &:focus-visible {
-            outline: 2px solid var(--accent);
         }
     }
 
@@ -1304,9 +1224,9 @@
             background: var(--hover-bg);
         }
 
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-        }
+        /* the keyboard's ring inside its round edge, as the other controls in the demo browser
+           draw theirs */
+        @include focus-ring($inset: true);
     }
 
     .address {
@@ -1335,10 +1255,6 @@
 
         &:hover {
             box-shadow: inset 0 0 0 1px var(--line-strong);
-        }
-
-        &:focus-visible {
-            outline: 2px solid var(--accent);
         }
     }
 
@@ -1463,35 +1379,11 @@
 
     /* a link inside a sentence, in the accent like the page's other text links */
     .inline-link {
-        color: var(--accent);
-        text-decoration: underline;
-        text-underline-offset: 0.25em;
-        text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
-
-        &:hover {
-            text-decoration-color: currentColor;
-        }
+        @include landing.accent-link;
     }
 
     .text-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        color: var(--accent);
-        font-family: var(--font-mono);
-        font-size: var(--fs-small);
-        text-decoration: underline;
-        text-underline-offset: 0.25em;
-        text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
-
-        &:hover {
-            text-decoration-color: currentColor;
-        }
-
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-        }
+        @include landing.standalone-link(var(--fs-small));
     }
 
     /* ---- the instruction sets ---- */
@@ -1657,13 +1549,12 @@
 
     /* ---- the navbar's Create project ---- */
 
-    /* `a.btn`, so this outweighs the Button's own size rule whichever stylesheet loads last (the
-       navbar's Donate and Star say why) */
+    /* outweighs the Button's own size rule, which weighs `.btn` and its scoping class only
+       (variants.scss), whichever stylesheet loads last */
     .create-project {
         display: flex;
 
-        :global(a.btn) {
-            gap: 0.5rem;
+        :global(.btn) {
             height: 2.2rem;
             padding: 0 1rem;
         }
@@ -1675,7 +1566,7 @@
     }
 
     @media (max-width: 760px) {
-        .create-project :global(a.btn) {
+        .create-project :global(.btn) {
             width: 2.2rem;
             padding: 0;
         }
@@ -1710,10 +1601,7 @@
             }
         }
 
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
+        @include focus-ring($inset: true);
     }
 
     .tile-title {
@@ -1742,21 +1630,8 @@
         font-size: var(--fs-small);
     }
 
-    .agents {
+    .agent-docs {
         padding: 2.5rem;
-
-        :global(section .heading) {
-            font-family: var(--font-read);
-            font-weight: 400;
-            font-size: var(--fs-h3);
-        }
-
-        :global(.agents > p) {
-            font-family: var(--font-mono);
-            font-size: var(--fs-small);
-            letter-spacing: 0.02em;
-            color: var(--text-muted);
-        }
     }
 
     /* ---- research ---- */
@@ -1833,25 +1708,12 @@
         position: absolute;
         inset: 0;
         z-index: -1;
-        overflow: hidden;
-        font-family: var(--font-mono);
-        font-size: 0.8rem;
-        line-height: 1.45;
-        letter-spacing: 0.08em;
-        word-spacing: 0.1em;
-        text-align: justify;
-        color: color-mix(in srgb, var(--background-text) 6%, transparent);
         pointer-events: none;
         user-select: none;
         mask-image:
             linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent),
             linear-gradient(180deg, transparent, #000 25%, #000 75%, transparent);
         mask-composite: intersect;
-
-        b {
-            font-weight: 400;
-            color: color-mix(in srgb, var(--accent) 18%, transparent);
-        }
     }
 
     /* ---- sizes ---- */
@@ -1878,7 +1740,7 @@
             padding: 1.5rem 1.25rem 2rem;
         }
 
-        .agents {
+        .agent-docs {
             padding: 1.5rem 1.25rem;
         }
     }
@@ -1937,13 +1799,6 @@
         .lights,
         .browser-tab img {
             display: none;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .arrow,
-        .viewport iframe {
-            transition: none;
         }
     }
 </style>

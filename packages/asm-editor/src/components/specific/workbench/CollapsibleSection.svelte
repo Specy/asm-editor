@@ -143,6 +143,9 @@
 </section>
 
 <style lang="scss">
+    @use '../../../styles/focus.scss' as *;
+    @use '../../../styles/radius.scss' as *;
+
     .collapsible {
         display: flex;
         flex-direction: column;
@@ -181,6 +184,10 @@
             border-bottom: none;
         }
 
+        /* the frame's top corners are the header's alone: past its rounded corners the panel's
+           surface covers the section's side edges and its well, which otherwise showed round the
+           curve while the header was pinned, as on a Documentation Chapter's (DocumentationBrowser;
+           owner, 2026-11-08) */
         .section-header {
             position: sticky;
             top: 0;
@@ -191,36 +198,7 @@
             border: var(--outline-edge);
             border-radius: 0.5rem 0.5rem 0 0;
             box-shadow: var(--shadow-1);
-        }
-
-        /* the frame's top corners are the header's alone: past its rounded corners the panel's
-           surface covers the section's side edges and its well, which otherwise showed round the
-           curve while the header was pinned, as on a Documentation Chapter's (DocumentationBrowser;
-           owner, 2026-11-08) */
-        .section-header::before,
-        .section-header::after {
-            content: '';
-            position: absolute;
-            top: -1px;
-            width: 0.5rem;
-            height: 0.5rem;
-            pointer-events: none;
-        }
-        .section-header::before {
-            left: -1px;
-            background: radial-gradient(
-                circle at 100% 100%,
-                transparent calc(0.5rem - 0.5px),
-                var(--wb-surface, var(--secondary)) calc(0.5rem + 0.5px)
-            );
-        }
-        .section-header::after {
-            right: -1px;
-            background: radial-gradient(
-                circle at 0 100%,
-                transparent calc(0.5rem - 0.5px),
-                var(--wb-surface, var(--secondary)) calc(0.5rem + 0.5px)
-            );
+            @include outside-corners(0.5rem, var(--wb-surface, var(--secondary)), $edge: 1px);
         }
 
         &.collapsed .section-header {
@@ -237,10 +215,7 @@
                 background-color: transparent;
             }
 
-            &:focus-visible {
-                outline: 2px solid var(--accent);
-                outline-offset: -2px;
-            }
+            @include focus-ring($inset: true);
         }
 
         .chevron {

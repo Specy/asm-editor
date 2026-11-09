@@ -767,6 +767,7 @@
                 files={emulator.registerFiles}
                 {pokeable}
                 canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
+                registerTakesPokes={(fileId, name) => emulator.registerTakesPokes(fileId, name)}
                 onPoke={pokeRegisters}
                 onRegisterClick={(register) => {
                     handleRegisterClick(register.value)
@@ -1101,9 +1102,12 @@
 
     /* the Workbench editor's card: the Build turning into Stop is what says the program is built,
        so there is no frame around the code while it runs, and only a program stopped on an error
-       gets a red one, drawn over the card's edge */
+       gets a red one, drawn over the card's edge. Its layers (the code at 2, the dock at 5, that
+       frame at 6) stack inside it, so what stands over the page (the navbar, a phone's sidebar, a
+       sticky footer) stands over all of the card without a z-index picked to beat them (D13) */
     .editor-border {
         position: relative;
+        isolation: isolate;
         display: flex;
         flex: 1;
         min-width: 0;

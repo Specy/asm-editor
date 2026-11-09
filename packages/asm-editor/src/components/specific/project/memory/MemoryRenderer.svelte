@@ -564,7 +564,7 @@
                             {@const text = pokeText ?? selectionReading(selectionValue.current)}
                             <input
                                 class="selection-input"
-                                class:refused={pokeReason !== null}
+                                aria-invalid={pokeReason !== null}
                                 title={pokeReason ??
                                     `Poke ${selectionValue.len} byte${selectionValue.len === 1 ? '' : 's'}`}
                                 aria-label="Poke memory"
@@ -695,6 +695,7 @@
 <style lang="scss">
     @use '../../../shared/button/tray.scss';
     @use '../../../../styles/field.scss';
+    @use '../../../../styles/type.scss';
 
     //the value fills its cell, so that in a page stretched taller than its rows need, a
     //Playground's, it is centred beside its address and a highlighted byte still covers the cell
@@ -786,10 +787,8 @@
     //the input the selection popup becomes while it is being poked, in the panel's own monospace
     //so the digits sit where the popup drew them
     .selection-input {
-        font-family: var(--font-mono);
+        @include type.machine-value;
         font-size: inherit;
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
         text-align: center;
         align-self: center;
         //`box-sizing: border-box` is global, so the padding is inside the width the popup sets and
@@ -802,7 +801,7 @@
     }
 
     //a commit that does not fit the selection: the input keeps what was typed and says why
-    .refused {
+    .selection-input[aria-invalid='true'] {
         outline: 2px solid var(--danger);
         outline-offset: -2px;
     }
@@ -814,15 +813,11 @@
         min-width: min-content;
         min-height: min-content;
         //Fira Code at the size and weight the bytes had in the system's monospace before the design
-        //system (owner, 2026-11-08): the sizes below are the old ones, Fira Code scaled to the
-        //x-height of Windows' Consolas, which it is about a tenth larger than at a size, and drawn
-        //at its regular 400, which global.css raises to 500 for the rest of the app's code. The
+        //system (owner, 2026-11-08; `type.machine-value`): the sizes below are the old ones. The
         //register views (RegisterFileRows, ValueDiffer, RegisterValueCard, CyclesLine) and the
         //memory controls draw their values the same way
-        font-family: var(--font-mono);
+        @include type.machine-value;
         font-size: 1rem;
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
         grid-template-columns: min-content;
         grid-template-rows: min-content;
         grid-template-areas:
@@ -873,7 +868,8 @@
         margin: 0 auto;
         padding: 0.45rem 0.6rem;
         font-size: var(--fs-small);
-        //in the interface's font, which the grid's adjustments to Fira Code are not for
+        //in the interface's font, which the grid's adjustments to Fira Code
+        //(`type.machine-value`) are not for
         font-size-adjust: none;
         font-variation-settings: normal;
         overflow-wrap: anywhere;

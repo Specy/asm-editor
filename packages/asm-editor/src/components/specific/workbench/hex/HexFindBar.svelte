@@ -151,6 +151,7 @@
 
 <style lang="scss">
     @use '../../../shared/button/tray.scss';
+    @use '../../../../styles/focus.scss';
 
     /* a Tray over the bytes' top right corner, as Monaco's find widget is over the code's */
     .hex-find-bar {
@@ -202,10 +203,7 @@
         text-align: right;
     }
     button {
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
+        @include focus.focus-ring($inset: true);
     }
     .go {
         display: grid;

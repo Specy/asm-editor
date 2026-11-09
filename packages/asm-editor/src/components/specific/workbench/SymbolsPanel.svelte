@@ -452,7 +452,7 @@
         >
             <strong class="ellipsis">{path}</strong>
             {#if entry}
-                <Badge class="entry-mark" tone="accent">ENTRY</Badge>
+                <Badge class="entry-mark" tone="accent" weight="medium">ENTRY</Badge>
             {/if}
         </div>
         <div class="symbols-controls">
@@ -792,7 +792,6 @@
         align-items: center;
         gap: 0.6rem;
         width: 100%;
-        height: 1.55rem;
         padding: 0 0.6rem 0 0.8rem;
         border: 0;
         color: inherit;
@@ -801,19 +800,11 @@
         font-size: var(--fs-caption);
         text-align: left;
         cursor: pointer;
+        @include rows.row(1.55rem);
 
-        &:hover,
-        &:focus-visible {
-            background: var(--hover-bg);
-        }
-
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
-
-        /* the row the cursor is in, the one opened */
-        &.current {
+        /* the row the cursor is in, the one opened, under the pointer too */
+        &.current,
+        &.current:hover:not(:disabled) {
             @include rows.selected;
         }
 

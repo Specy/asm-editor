@@ -491,17 +491,17 @@
             <!-- filled, at the page's size, each with its mark (owner, 2026-11-08) -->
             <div class="toolbar">
                 {#if open.size > 0 || unfolded.size > 0}
-                    <Button kind="secondary" style="gap: 0.5rem" onClick={collapseAll}>
+                    <Button kind="secondary" onClick={collapseAll}>
                         <Icon size="small"><FaCompressAlt /></Icon>
                         Collapse all
                     </Button>
                 {:else}
-                    <Button kind="secondary" style="gap: 0.5rem" onClick={() => expandAll()}>
+                    <Button kind="secondary" onClick={() => expandAll()}>
                         <Icon size="small"><FaExpandAlt /></Icon>
                         Expand all
                     </Button>
                 {/if}
-                <Button kind="secondary" style="gap: 0.5rem" onClick={() => expandAll(true)}>
+                <Button kind="secondary" onClick={() => expandAll(true)}>
                     <Icon size="small"><FaPrint /></Icon>
                     Print as PDF
                 </Button>
@@ -591,6 +591,7 @@
 
 <style lang="scss">
     @use '../../../styles/field.scss';
+    @use '../../../styles/radius.scss' as *;
 
     .documentation-browser {
         --documentation-spacing: 0.35rem;
@@ -602,15 +603,13 @@
         height: 100%;
         color: inherit;
     }
-    /* in line with the list under it: the same inset, and the same room kept for a scrollbar */
+    /* the same room on every side of the field, as round the search palette's (owner, 2026-11-09) */
     .search {
         display: flex;
         align-items: center;
         gap: 0.4rem;
         flex: none;
-        padding: 0.5rem var(--documentation-spacing);
-        overflow: hidden;
-        scrollbar-gutter: stable;
+        padding: 0.5rem;
     }
     .field {
         flex: 1;
@@ -745,37 +744,14 @@
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         border-radius: var(--chapter-radius) var(--chapter-radius) 0 0;
         box-shadow: var(--shadow-1);
-    }
-    /* The frame's top corners are the heading's alone: past its rounded corners the panel's
-       surface is painted over what the Chapter has there, its side edges and its well, which
-       otherwise showed round the curve, most of all while the heading is pinned over the body
-       scrolling under it (owner, 2026-11-08). Each corner is a square of the radius at the
-       heading's outer edge, clear inside the curve and the panel outside it, with a pixel's
-       blend so the curve stays smooth */
-    .chapter-title::before,
-    .chapter-title::after {
-        content: '';
-        position: absolute;
-        top: calc(-1 * var(--chapter-border-width));
-        width: var(--chapter-radius);
-        height: var(--chapter-radius);
-        pointer-events: none;
-        --corner-outside: var(--wb-surface, var(--secondary));
-    }
-    .chapter-title::before {
-        left: calc(-1 * var(--chapter-border-width));
-        background: radial-gradient(
-            circle at 100% 100%,
-            transparent calc(var(--chapter-radius) - 0.5px),
-            var(--corner-outside) calc(var(--chapter-radius) + 0.5px)
-        );
-    }
-    .chapter-title::after {
-        right: calc(-1 * var(--chapter-border-width));
-        background: radial-gradient(
-            circle at 0 100%,
-            transparent calc(var(--chapter-radius) - 0.5px),
-            var(--corner-outside) calc(var(--chapter-radius) + 0.5px)
+        /* The frame's top corners are the heading's alone: past its rounded corners the panel's
+           surface is painted over what the Chapter has there, its side edges and its well, which
+           otherwise showed round the curve, most of all while the heading is pinned over the body
+           scrolling under it (owner, 2026-11-08) */
+        @include outside-corners(
+            var(--chapter-radius),
+            var(--wb-surface, var(--secondary)),
+            $edge: var(--chapter-border-width)
         );
     }
     .chapter.folded .chapter-title {
@@ -823,6 +799,9 @@
         border-bottom: 1px solid
             var(--wb-line, color-mix(in srgb, var(--tertiary) 70%, transparent));
         box-shadow: var(--shadow-1);
+        /* the room under it the Chapter's last entry has under itself (0.5rem with the rows' gap),
+           so its first entry does not sit on the heading (owner, 2026-11-09) */
+        margin-bottom: 0.45rem;
     }
     /* a prose entry's title, brought back into view by Show less, lands below the pinned heading */
     .chapter :global(.prose-title) {
@@ -862,20 +841,16 @@
     .chevron.folded {
         transform: rotate(0deg);
     }
+    /* `/all`: pinned under the navbar, which the page scrolls under */
     .page .chapter-title {
-        top: 3.2rem;
+        top: var(--navbar-height);
         font-size: var(--fs-prose);
     }
     .page .category-title {
-        top: calc(3.2rem + var(--chapter-title-height, 2.6rem));
+        top: calc(var(--navbar-height) + var(--chapter-title-height, 2.6rem));
         font-size: var(--fs-small);
     }
     .page .category-group :global(.entry-row) {
-        scroll-margin-top: calc(3.2rem + var(--chapter-title-height, 2.6rem) + 2rem);
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .chevron {
-            transition: none;
-        }
+        scroll-margin-top: calc(var(--navbar-height) + var(--chapter-title-height, 2.6rem) + 2rem);
     }
 </style>

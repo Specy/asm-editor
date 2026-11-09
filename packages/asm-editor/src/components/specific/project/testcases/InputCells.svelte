@@ -62,6 +62,7 @@
                     size="sm"
                     quiet
                     class="remove"
+                    fill
                     label="Remove answer {i + 1}"
                     {@attach tooltip('Remove this answer')}
                     onClick={() => remove(i, false)}
@@ -85,6 +86,7 @@
 <style lang="scss">
     @use './testcases.scss' as *;
     @use '../../../../styles/field.scss';
+    @use '../../../../styles/radius.scss' as *;
 
     .cells {
         display: flex;
@@ -130,9 +132,14 @@
         color: var(--hint);
     }
 
+    /* the answer's ×, its box's whole height at its end, ruled off from the field as the number is
+       at the other end (owner, 2026-11-09) */
     .cell :global(.remove) {
         @include remove-button;
-        margin-right: 0.15rem;
+        --icon-button-cell: 1.9rem;
+        --icon-button-radius: 0 #{nested-radius(var(--r-control), $border: 1px)}
+            #{nested-radius(var(--r-control), $border: 1px)} 0;
+        border-left: 1px solid var(--tc-line);
     }
 
     .add {

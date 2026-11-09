@@ -558,9 +558,9 @@
         gap: 0.4rem;
         pointer-events: none;
         container-type: inline-size;
-        /* the tray's colour, which a disabled control sinks into: the code's darker shade where it
-           floats over the editor, the cards' own where a layout lays it out among them */
-        --tray: var(--execution-tray, var(--primary));
+        /* the tray's colour, which a disabled control sinks into: the code's darker shade, which
+           it floats over */
+        --tray: var(--primary);
     }
 
     /* each end one opaque tray lifted off the code by a shadow, its buttons sunk into it: the one
@@ -592,10 +592,6 @@
     .tool {
         user-select: none;
         @include tray.tool(0.8rem, 0.95rem);
-
-        :global(.icon) {
-            cursor: inherit;
-        }
     }
 
     /* sunk into the tray, in its own colours rather than see-through as other tools are */
@@ -704,10 +700,6 @@
         font-size: 0.95rem;
         font-weight: 500;
         user-select: none;
-
-        :global(.icon) {
-            cursor: inherit;
-        }
     }
 
     .optimization,

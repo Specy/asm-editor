@@ -227,15 +227,16 @@
 
 <style lang="scss">
     @use '../../../styles/outline.scss';
+    @use './exam.scss';
 
-    /* beside the part it shows, held in view under the navbar (3.2rem) while the page scrolls, its
+    /* beside the part it shows, held in view 1rem under the navbar while the page scrolls, its
        list scrolling when it is taller than the screen and its foot staying put */
     .exam-outline {
         position: sticky;
-        top: calc(3.2rem + 1rem);
+        top: calc(var(--navbar-height) + 1rem);
         display: flex;
         flex-direction: column;
-        max-height: calc(100dvh - 3.2rem - 2rem);
+        max-height: calc(var(--screen-height) - var(--navbar-height) - 2rem);
     }
 
     /* the rows as the shared outline draws them (styles/outline.scss): flush to the card's left
@@ -331,7 +332,7 @@
 
     /* a phone: the parts as a Select over the part shown, Add section and the footer's button on
        one line under it */
-    @media (max-width: 720px) {
+    @media (max-width: exam.$phone) {
         .exam-outline {
             position: static;
             max-height: none;

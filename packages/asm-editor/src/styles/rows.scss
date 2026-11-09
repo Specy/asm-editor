@@ -3,10 +3,33 @@
 // the surface's text at 10%, drawn from the row's own colour, so a row in a colour of its own
 // gives that colour to its contents (design-system-plan.md, Risks).
 
+@use 'focus' as *;
+
 // The current item, the one the person has (the Explorer's open File, a Select's chosen value,
 // the Search or Symbols panel's opened row): an accent tint and a 2px accent edge on its leading
 // side. The accent then always means "this is the one you have".
 @mixin selected {
     background-color: var(--selected-bg);
     box-shadow: inset 2px 0 0 var(--accent);
+}
+
+// A row in a panel's list that the pointer and the keyboard reach (the Search and Symbols panels'
+// results, the edit history, the Explorer's tree, the Pixel editor's tools): `$height` tall when
+// given, the hover tint under the pointer and on the row the keyboard is on, and the keyboard's
+// ring inside its edge, since the list round it clips what is outside its rows. A disabled row
+// takes no hover. The current one adds `selected`, after this.
+//
+//     @use '../styles/rows.scss';
+//     .item { @include rows.row(1.55rem); &.current { @include rows.selected; } }
+@mixin row($height: null) {
+    @if $height {
+        height: $height;
+    }
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+        background-color: var(--hover-bg);
+    }
+
+    @include focus-ring($inset: true);
 }

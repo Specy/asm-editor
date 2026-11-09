@@ -46,7 +46,7 @@
     import Badge from '#cmp/shared/misc/Badge.svelte'
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { placeCard, type Placement } from '#cmp/shared/floating/floating.ts'
-    import { popoverElevation } from '#src/styles/elevation.ts'
+    import { POPOVER_ARROW, popoverElevation } from '#src/styles/elevation.ts'
     import FileStatusLine from '../FileStatusLine.svelte'
     import FaPencilAlt from '~icons/fa-solid/pencil-alt'
     import FaSlash from '~icons/fa-solid/slash'
@@ -1094,8 +1094,6 @@
     let dropdownPlace = $state<Placement>({ top: 0, left: 0, side: 'bottom', arrow: 0 })
     let dropdownWidth = $state(0)
     let dropdownHeight = $state(0)
-    /** The card's arrow, which stands out of it towards its button. */
-    const DROPDOWN_ARROW = 6
     /** The button each card opens under; read when it is placed. */
     const anchors: Partial<Record<Dropdown, HTMLElement>> = {}
 
@@ -1152,7 +1150,7 @@
             {
                 side: 'bottom',
                 gap: 4,
-                arrow: DROPDOWN_ARROW,
+                arrow: POPOVER_ARROW,
                 radius: popoverElevation().radius,
                 align: 'start',
                 margin: 8,
@@ -1715,7 +1713,6 @@
                 height={dropdownHeight}
                 side={dropdownPlace.side}
                 at={dropdownPlace.arrow}
-                arrow={DROPDOWN_ARROW}
             />
             {#if of === 'pencil' || of === 'erase'}
                 <div class="setting">
@@ -1869,6 +1866,7 @@
 
 <style lang="scss">
     @use '../../../../styles/popover.scss';
+    @use '../../../../styles/rows.scss';
 
     .pixel-editor {
         /* what the toolbar's buttons sit on, which the rule within a split button is cut in */
@@ -2009,13 +2007,7 @@
             height: var(--fs-micro);
             transition: transform var(--dur-base);
         }
-        &:hover:not(:disabled) {
-            background: var(--hover-bg);
-        }
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
+        @include rows.row;
         &:disabled {
             opacity: 0.5;
             cursor: default;
@@ -2045,7 +2037,6 @@
         @include popover.content;
         position: fixed;
         inset: auto;
-        z-index: 100;
         display: flex;
         flex-direction: column;
         gap: 0.5rem;

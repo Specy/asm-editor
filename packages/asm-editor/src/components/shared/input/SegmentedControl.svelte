@@ -3,10 +3,10 @@
      * The choice of one of a few options, drawn as a rounded strip whose highlight slides to the one
      * picked, after genshin-music's `MultipleOptionSlider`. It is every such choice in the editor: the
      * Testcases' memory form, the execution dock's view switch, the Hex editor's byte order and
-     * Find kind, the create page's instruction set, and the strips of the Register file panel's
-     * header, where `SizeSelector` is this control with the Target's widths baked in, so every
-     * strip there is the same control at the same size. What switches what a panel shows is a
-     * `TabStrip`, not this
+     * Find kind, and the strips of the Register file panel's header, where `SizeSelector` is this
+     * control with the Target's widths baked in, so every strip there is the same control at the
+     * same size. What switches what a panel shows is a `TabStrip`, not this, and a pick among
+     * tiles (the instruction sets) an `InstructionSetPicker`
      * ([design-system.md](../../../../../../docs/design/design-system.md), D14).
      */
     import type { Component, Snippet } from 'svelte'
@@ -37,13 +37,6 @@
          */
         fill?: boolean
         /**
-         * The strip takes the whole width it is given, in equal columns, one per option, or as
-         * many as the `--segmented-columns` property round it asks for, the options wrapping onto
-         * more rows: the create page's six instruction sets go two rows of three on a phone. A
-         * column is never narrower than its label.
-         */
-        wrap?: boolean
-        /**
          * `sm` for a panel's or a tray's dense rows, `md` for a form, a little taller than its
          * `TextField`.
          */
@@ -63,19 +56,13 @@
         style = '',
         ariaLabel,
         fill = false,
-        wrap = false,
         size = 'sm',
         face
     }: Props = $props()
 
     let root: HTMLDivElement | undefined = $state()
-    /**
-     * Where the highlight sits, under the picked button: unknown until that button has a box. Its
-     * top and height only count when the strip wraps; on one row it spans the strip's height.
-     */
-    let highlight = $state<{ left: number; width: number; top: number; height: number } | null>(
-        null
-    )
+    /** Where the highlight sits, under the picked button: unknown until that button has a box. */
+    let highlight = $state<{ left: number; width: number } | null>(null)
 
     $effect(() => {
         const index = options.findIndex((option) => option.id === selected)
@@ -90,12 +77,7 @@
         const place = () => {
             //a control in a hidden panel has no box, and keeps its last place until it shows again
             if (button.offsetWidth === 0) return
-            highlight = {
-                left: button.offsetLeft,
-                width: button.offsetWidth,
-                top: button.offsetTop,
-                height: button.offsetHeight
-            }
+            highlight = { left: button.offsetLeft, width: button.offsetWidth }
         }
         place()
         //jsdom, which the component tests run in, has no ResizeObserver
@@ -108,15 +90,13 @@
 </script>
 
 <div
-    class="segmented-control slider"
+    class="segmented-control"
     class:measured={highlight !== null}
     class:fill
-    class:wrap
     class:md={size === 'md'}
     role={ariaLabel ? 'group' : undefined}
     aria-label={ariaLabel}
     {style}
-    style:--segmented-count={wrap ? options.length : undefined}
     bind:this={root}
 >
     {#each options as option (option.id)}
@@ -146,8 +126,6 @@
             class="segmented-control-highlight"
             style:left="calc({highlight.left}px + 0.1rem)"
             style:width="calc({highlight.width}px - 0.2rem)"
-            style:top={wrap ? `calc(${highlight.top}px + 0.1rem)` : undefined}
-            style:height={wrap ? `calc(${highlight.height}px - 0.2rem)` : undefined}
         ></span>
     {/if}
 </div>
@@ -156,18 +134,55 @@
     @use '../../../styles/focus.scss' as *;
     @use '../../../styles/radius.scss' as *;
 
+    // the strip: each option as wide as its label, sharing whatever room the strip is given beyond
+    // that, and the highlight slides under them to the one picked, resizing as it goes, inside a
+    // border of its colour. The highlight's corners are the strip's less its border and the gap
+    // around the highlight, so the two curves run parallel
     .segmented-control {
+        position: relative;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: auto;
+        width: fit-content;
         height: fit-content;
+        border: 1px solid var(--accent2);
+        border-radius: var(--r-control);
+        background-color: var(--primary);
+        isolation: isolate;
     }
 
     .segmented-control-button {
+        position: relative;
+        z-index: 1;
         display: flex;
         align-items: center;
         justify-content: center;
-        cursor: pointer;
+        padding: 0.25rem 0.6rem;
+        border-radius: 0.2rem;
+        color: var(--text-muted);
+        background-color: transparent;
         font-family: var(--font-ui);
         font-size: var(--fs-small);
         white-space: nowrap;
+        cursor: pointer;
+        transition: color var(--dur-fast);
+
+        &:hover {
+            color: var(--primary-text);
+        }
+
+        @include focus-ring($inset: true);
+    }
+
+    .segmented-control-button-selected,
+    .segmented-control-button-selected:hover {
+        color: var(--accent2-text);
+    }
+
+    // until the highlight has a place, before the first layout or in a panel never shown, the
+    // picked option wears its colour itself
+    .segmented-control:not(.measured) .segmented-control-button-selected {
+        background-color: var(--accent2);
     }
 
     .segmented-control-icon {
@@ -178,50 +193,7 @@
         margin-right: 0.35rem;
     }
 
-    // the strip: each option as wide as its label, sharing whatever room the strip is given beyond
-    // that, and the highlight slides under them to the one picked, resizing as it goes, inside a
-    // border of its colour. The highlight's corners are the strip's less its border and the gap
-    // around the highlight, so the two curves run parallel
-    .slider {
-        position: relative;
-        display: grid;
-        grid-auto-flow: column;
-        grid-auto-columns: auto;
-        width: fit-content;
-        border: 1px solid var(--accent2);
-        border-radius: var(--r-control);
-        background-color: var(--primary);
-        isolation: isolate;
-
-        .segmented-control-button {
-            position: relative;
-            z-index: 1;
-            padding: 0.25rem 0.6rem;
-            border-radius: 0.2rem;
-            color: var(--text-muted);
-            background-color: transparent;
-            transition: color var(--dur-fast);
-
-            &:hover {
-                color: var(--primary-text);
-            }
-
-            @include focus-ring($inset: true);
-        }
-
-        .segmented-control-button-selected,
-        .segmented-control-button-selected:hover {
-            color: var(--accent2-text);
-        }
-
-        // until the highlight has a place, before the first layout or in a panel never shown, the
-        // picked option wears its colour itself
-        &:not(.measured) .segmented-control-button-selected {
-            background-color: var(--accent2);
-        }
-    }
-
-    .slider.fill {
+    .segmented-control.fill {
         width: 100%;
         height: 100%;
         grid-auto-columns: minmax(0, 1fr);
@@ -233,29 +205,8 @@
 
     // a form's height, a little taller than its field: 40px for a row, the buttons 38px inside the
     // strip's edge with the same small label centred in them; the highlight, inset 0.1rem, follows
-    .slider.md .segmented-control-button {
+    .segmented-control.md .segmented-control-button {
         min-height: 2.375rem;
-    }
-
-    // equal columns that never squeeze a label, so a strip too narrow for all of them in a row
-    // wants fewer columns from its host rather than clipped words; a button is as wide as its
-    // column, so its side padding only sets how narrow a column can be
-    .slider.wrap {
-        width: 100%;
-        grid-auto-flow: row;
-        grid-template-columns: repeat(
-            var(--segmented-columns, var(--segmented-count)),
-            minmax(max-content, 1fr)
-        );
-
-        .segmented-control-button {
-            padding-inline: 0.35rem;
-        }
-
-        // placed on its button's row, from the top and height measured
-        .segmented-control-highlight {
-            bottom: auto;
-        }
     }
 
     .segmented-control-highlight {
@@ -267,12 +218,6 @@
         pointer-events: none;
         transition:
             left var(--dur-base) ease-out,
-            width var(--dur-base) ease-out,
-            top var(--dur-base) ease-out,
-            height var(--dur-base) ease-out;
-
-        @media (prefers-reduced-motion: reduce) {
-            transition: none;
-        }
+            width var(--dur-base) ease-out;
     }
 </style>

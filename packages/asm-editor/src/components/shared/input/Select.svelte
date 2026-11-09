@@ -5,7 +5,8 @@
      *
      * The public API is the native one this replaced — `options`, a bindable `value`, `title`,
      * `style`, `wrapperStyle`, `onChange`, and `disabled` on an option — plus an `item` snippet for
-     * rows that want more than a line of text. What a native select gives for free is
+     * rows that want more than a line of text, and a `look` for a control that is not drawn as a
+     * field, which a caller picks rather than undoing the field's look with `style`. What a native select gives for free is
      * re-implemented here on purpose: keyboard opening and navigation, Home and End, type ahead,
      * Escape to close without committing, a click outside to dismiss, disabled options skipped
      * rather than merely unclickable, and the label tied to the control. Focus stays on the button
@@ -30,11 +31,12 @@
      * be chosen, Right unfolds it and Left folds it, and Enter, Space or a click toggles one that
      * cannot be chosen; the `item` snippet's `toggle` is for a chevron on one that can.
      */
-    import { tick, type Component, type Snippet } from 'svelte'
+    import { tick, type Snippet } from 'svelte'
     import { cubicOut } from 'svelte/easing'
     import { DUR_BASE, motion } from '#src/styles/motion.ts'
     import type { HTMLButtonAttributes } from 'svelte/elements'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import RoundChevronDown from '~icons/ic/round-keyboard-arrow-down'
 
     type SelectOption = {
         key: string | number
@@ -73,10 +75,25 @@
         onToggle?: (option: SelectOption) => void
         /** Always opens the list above the control, as one at the bottom of the screen wants. */
         openAbove?: boolean
-        /** An icon drawn in place of the triangle, turned over while the list is open. */
-        chevron?: Component
         /** Smaller, for a panel's rows of settings. */
         compact?: boolean
+        /**
+         * How the control is drawn:
+         * - `field`, the default: a field, as TextField is (`styles/field.scss`).
+         * - `bare`: the text of the bar it sits in, the height of the bar (the bottom panel's
+         *   Program picker on its tab strip): no edge, fill, corner or hover tint of its own, in the
+         *   bar's colour and size, its text at 600; its padding on the bar's ends, less with
+         *   `compact` (a phone's strip).
+         * - `outlined`: an edge and no fill of its own, on whatever it sits on and in the text
+         *   colour round it: the Examples page's pickers on the navbar, roomier across, and, with
+         *   `compact`, the memory view's region picker beside its address box, which is drawn the
+         *   same way, in its smaller text. The host gives it the colours of its surface where they
+         *   are not those: `--select-edge` (the surface's `--line` unless set), `--select-fill`
+         *   (none) and `--select-text` (the text round it), in its own stylesheet.
+         */
+        look?: 'field' | 'bare' | 'outlined'
+        /** Fills the height of what holds it, as a control in a bar of controls does. */
+        fill?: boolean
         /**
          * A class on the list, for a caller that draws it in colours of its own (the memory
          * view's region picker, in its panel's): a rule from the caller reaches it with
@@ -100,8 +117,9 @@
         trigger,
         popupWidth,
         openAbove = false,
-        chevron,
         compact = false,
+        look = 'field',
+        fill = false,
         listClass,
         ...rest
     }: Props = $props()
@@ -356,7 +374,7 @@
 <!-- capture, so a scroll inside any container re-anchors the list and not just a scroll of the page -->
 <svelte:document onscrollcapture={() => open && place()} />
 
-<div class="wrapper" style={wrapperStyle}>
+<div class="wrapper" class:fill={fill || look === 'bare'} style={wrapperStyle}>
     {#if title}
         <div id={labelId}>{title}</div>
     {/if}
@@ -365,8 +383,9 @@
         type="button"
         {...rest}
         {disabled}
-        class="control"
+        class="control {look}"
         class:compact
+        class:fill={fill || look === 'bare'}
         {style}
         role="combobox"
         aria-haspopup="listbox"
@@ -381,14 +400,10 @@
         <span class="label ellipsis"
             >{#if trigger}{@render trigger()}{:else}{label}{/if}</span
         >
-        {#if chevron}
-            {@const Chevron = chevron}
-            <span class="chevron-icon" class:open aria-hidden="true"
-                ><Icon size="micro"><Chevron /></Icon></span
-            >
-        {:else}
-            <span class="chevron" aria-hidden="true"></span>
-        {/if}
+        <!-- a rounded chevron, turned over while the list is open (owner, 2026-11-09) -->
+        <span class="chevron" class:open aria-hidden="true"
+            ><Icon size="lead"><RoundChevronDown /></Icon></span
+        >
     </button>
 
     {#if open}
@@ -482,8 +497,50 @@
     }
 
     /* the hover every row and tool takes (D4), over its fill */
-    .control:hover:not(:disabled) {
+    .control:not(.bare):hover:not(:disabled) {
         background-image: linear-gradient(var(--hover-bg), var(--hover-bg));
+    }
+
+    /* the height of what holds it, which can then squeeze it in a row */
+    .wrapper.fill {
+        height: 100%;
+        min-width: 0;
+    }
+
+    .control.fill {
+        height: 100%;
+    }
+
+    /* the bar's own text (the Program picker on the bottom panel's strip), with no hover tint, as
+       the strip's tabs have none */
+    .control.bare {
+        gap: 0.45rem;
+        padding: 0 0.9rem 0 0.6rem;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: inherit;
+        font-weight: 600;
+
+        &.compact {
+            padding: 0 0.6rem 0 0.5rem;
+        }
+    }
+
+    /* an edge on what it sits on, in the text round it (the Examples page's pickers), and smaller
+       in a panel's row of controls (the memory view's region picker, in the size of the memory
+       panel's controls) */
+    .control.outlined {
+        padding: 0.35rem 1rem;
+        border-color: var(--select-edge, var(--line));
+        background-color: var(--select-fill, transparent);
+        color: var(--select-text, inherit);
+
+        &.compact {
+            gap: 0.4rem;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.8rem;
+        }
     }
 
     .control:disabled {
@@ -495,31 +552,18 @@
         min-width: 0;
     }
 
+    /* the glyph sits in the middle half of its box: the box reaches into the room round it, so
+       the chevron stands where the old triangle did and the control is no wider */
     .chevron {
-        flex-shrink: 0;
-        width: 0;
-        height: 0;
-        border-left: 0.32rem solid transparent;
-        border-right: 0.32rem solid transparent;
-        border-top: 0.36rem solid currentColor;
-        opacity: 0.8;
-    }
-
-    .chevron-icon {
         display: flex;
         flex-shrink: 0;
+        margin: -0.3rem -0.3rem -0.3rem -0.15rem;
         opacity: 0.8;
         transition: transform var(--dur-base) ease;
     }
 
-    .chevron-icon.open {
+    .chevron.open {
         transform: rotate(180deg);
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .chevron-icon {
-            transition: none;
-        }
     }
 
     /* fixed, not absolute: an absolutely positioned popup is part of the page's scrollable
@@ -528,11 +572,14 @@
        the control opened out rather than as a menu tinted over the page */
     .list {
         @include popover.surface($solid: true);
+        /* its corner, a Popover's unless the caller draws it on another (the memory view's region
+           list, on a control's), which the options inside it follow */
+        --surface-radius: var(--r-overlay);
+        border-radius: var(--surface-radius);
         background-color: field.$fill;
         color: field.$text;
         position: fixed;
         inset: auto;
-        z-index: 100;
         overflow-y: auto;
         overscroll-behavior: contain;
         margin: 0;
@@ -556,7 +603,7 @@
     .option {
         padding: 0.5rem 0.75rem;
         /* inside the list's 1px edge and 0.25rem padding, its curve parallel to the list's */
-        border-radius: nested-radius(var(--r-overlay), $border: 1px, $inset: 0.25rem);
+        border-radius: nested-radius(var(--surface-radius), $border: 1px, $inset: 0.25rem);
         cursor: pointer;
     }
 

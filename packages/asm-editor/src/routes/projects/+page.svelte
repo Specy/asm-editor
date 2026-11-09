@@ -20,6 +20,7 @@
     import Page from '#cmp/shared/layout/Page.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { resolve } from '$app/paths'
     import { projectDownload } from '#lib/projectArchive.ts'
     import { warmUpMonaco } from '#lib/monaco/warmUp.ts'
@@ -116,12 +117,7 @@
     })
 </script>
 
-<svelte:head>
-    <title>Projects - ASM Editor</title>
-    <meta name="description" content="Create, edit or delete your projects" />
-    <meta property="og:description" content="Create, edit or delete your projects" />
-    <meta property="og:title" content="Projects" />
-</svelte:head>
+<PageMeta title="Projects - ASM Editor" description="Create, edit or delete your projects" />
 
 <DefaultNavbar />
 <!-- the width and padding of the documentation and course pages -->
@@ -131,7 +127,7 @@
             <div class="top-row">
                 <Header noMargin>Your projects</Header>
                 <div class="top-row-buttons">
-                    <Button kind="secondary" bordered style="gap: 0.5rem" onClick={pickAndImport}>
+                    <Button kind="secondary" bordered onClick={pickAndImport}>
                         <Icon size="small">
                             <FaUpload />
                         </Icon>
@@ -154,7 +150,6 @@
                     {/if}
                     <ButtonLink
                         href={resolve('/projects/create')}
-                        style="gap: 0.5rem"
                         {@attach tooltip('Create a new project')}
                     >
                         <Icon size="small">

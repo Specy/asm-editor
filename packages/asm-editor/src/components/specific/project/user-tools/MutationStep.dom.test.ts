@@ -80,7 +80,6 @@ function renderInstruction(mutations: MutationOperation[], pc = 0x1000) {
         rows: () => rows().map((row) => row.textContent?.replace(/\s+/g, ' ').trim()),
         expandable: () => rows().map((row) => row.classList.contains('mutation')),
         text: () => target.textContent ?? '',
-        cycles: () => target.querySelector<HTMLElement>('.cycles'),
         expanded: () => rows().map((row) => row.classList.contains('expanded')),
         click: (index: number) => {
             rows()[index].click()
@@ -508,102 +507,5 @@ describe('library calls in the History', () => {
             await unmount(app)
             target.remove()
         }
-    })
-})
-
-/**
- * The cycles a step took, in its row, on a Target that counts them (M68K,
- * [m68k-machine.md](../../../../../../../docs/design/m68k-machine.md), decision 30).
- */
-describe('the cycles of a step in the History panel', () => {
-    const cyclesOf = (text: string) => text.replace(/\s+/g, ' ').match(/Cycles (\S+)/)?.[1]
-
-    it('says what an instruction took, and nothing for a step that carries no count', () => {
-        const row = renderInstruction([])
-        expect(row.text()).not.toContain('Cycles')
-        row.show({
-            kind: 'instruction',
-            mutations: [],
-            pc: 0x1000,
-            line: 3,
-            old_ccr: { bits: 0 },
-            new_ccr: { bits: 0 },
-            cycles: 1234
-        })
-        expect(cyclesOf(row.text())).toBe('1,234')
-        row.close()
-    })
-
-    it('says what taking an IRQ took, under its heading', () => {
-        const row = renderInstruction([])
-        row.show({
-            kind: 'irq',
-            mutations: [
-                {
-                    type: 'TakeException',
-                    value: { vector: 26, name: 'IRQ 2', from: 0x102an, handler: 0x102cn }
-                }
-            ],
-            pc: 0x102a,
-            line: -1,
-            old_ccr: { bits: 0 },
-            new_ccr: { bits: 0 },
-            cycles: 44
-        })
-        expect(row.text().replace(/\s+/g, ' ')).toContain('IRQ 2 → the handler at $102C')
-        expect(cyclesOf(row.text())).toBe('44')
-        row.close()
-    })
-
-    //a 68020 program's, which are the manual's cache case
-    it('marks an estimate, and says on hover why it is one', () => {
-        const row = renderInstruction([])
-        row.show({
-            kind: 'instruction',
-            mutations: [],
-            pc: 0x1000,
-            line: 3,
-            old_ccr: { bits: 0 },
-            new_ccr: { bits: 0 },
-            cycles: 8,
-            cyclesEstimate: true
-        })
-        expect(row.text().replace(/\s+/g, ' ')).toContain('Cycles ≈ 8')
-        expect(tooltipText(row.cycles())).toMatch(
-            /^An estimate\. 68020 timings depend on overlapping instruction execution/
-        )
-        row.close()
-    })
-
-    //a 68000 program's whose `opt bit` gave it a bit field, which takes the 68020's time
-    it('says a bit field under opt bit is why a 68000 program’s count is an estimate', () => {
-        const target = document.createElement('div')
-        document.body.appendChild(target)
-        const app = mount(MutationsRenderer, {
-            target,
-            props: {
-                language: 'M68K',
-                processor: '68000 with bit fields',
-                statusRegisterNames: [],
-                steps: [
-                    {
-                        kind: 'instruction',
-                        mutations: [],
-                        pc: 0x1000,
-                        line: 3,
-                        old_ccr: { bits: 0 },
-                        new_ccr: { bits: 0 },
-                        cycles: 8,
-                        cyclesEstimate: true
-                    }
-                ]
-            }
-        })
-        flushSync()
-        expect(tooltipText(target.querySelector('.cycles'))).toMatch(
-            /^An estimate\. Bit-field instructions enabled by opt bit/
-        )
-        void unmount(app)
-        target.remove()
     })
 })

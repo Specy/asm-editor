@@ -916,6 +916,11 @@ export type BaseEmulatorActions = {
     /** Whether that one register of that Register file may be poked; the PC never may. */
     canPokeRegister: (fileId: string, register: string) => boolean
     /**
+     * Whether that register takes Pokes whenever `canPoke` holds: the panels draw its Poke button
+     * from this, and enable it from `canPokeRegister`.
+     */
+    registerTakesPokes: (fileId: string, register: string) => boolean
+    /**
      * Pokes one or more registers of one Register file as a single step of the Undo history. False
      * when the Poke was refused or changed nothing; throws when a value does not fit its register.
      */

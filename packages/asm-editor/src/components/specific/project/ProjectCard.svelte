@@ -145,7 +145,6 @@
             color={ThemeStore.textOfColor(accent)}
             href={resolve('/projects/[project]', { project: project.id })}
             size="sm"
-            style="gap: 0.45rem"
             title="Open this project"
         >
             Open

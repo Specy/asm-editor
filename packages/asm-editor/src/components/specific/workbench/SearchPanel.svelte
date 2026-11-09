@@ -479,7 +479,7 @@
                     <label {@attach tooltip(place.title)}>
                         <Switch
                             checked={lookIn[place.key]}
-                            style="--switch-width: 1.9rem; --switch-height: 1.05rem; --switch-padding: 0.15rem"
+                            size="sm"
                             onChange={(checked) => search.setLookIn(place.key, checked)}
                         />
                         {place.label}
@@ -809,6 +809,14 @@
     }
 
     /* its fields shown: tinted as under the pointer, and in the panel's text */
+    /* Files to include and exclude, square and as tall as the field beside it (owner, 2026-11-09) */
+    .query-row > :global(.details) {
+        align-self: stretch;
+        width: auto;
+        height: auto;
+        aspect-ratio: 1;
+    }
+
     .query-row :global(.details[aria-expanded='true']) {
         color: inherit;
         background-color: var(--hover-bg);
@@ -938,9 +946,11 @@
         color: var(--text-muted);
     }
 
+    /* the instruction before a query, in the middle of the panel's width (owner, 2026-11-09) */
     .note {
         margin: 0;
         padding: 0.3rem var(--search-text-inset);
+        text-align: center;
         font-size: var(--fs-caption);
         line-height: 1.4;
         color: var(--hint);
@@ -979,23 +989,13 @@
         display: flex;
         align-items: center;
         gap: 0.4rem;
-        height: 1.55rem;
         padding: 0 0.6rem 0 0.4rem;
         cursor: pointer;
         white-space: nowrap;
         /* a long list lays out and paints only the rows in view */
         content-visibility: auto;
         contain-intrinsic-size: auto 1.55rem;
-
-        &:hover,
-        &:focus-visible {
-            background: var(--hover-bg);
-        }
-
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
+        @include rows.row(1.55rem);
     }
 
     .touch .item {
@@ -1070,7 +1070,9 @@
             padding-left: 2.4rem;
         }
 
-        &.opened {
+        /* the row opened, under the pointer too */
+        &.opened,
+        &.opened:hover:not(:disabled) {
             @include rows.selected;
         }
     }

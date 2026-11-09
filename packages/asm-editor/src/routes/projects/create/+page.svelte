@@ -1,6 +1,5 @@
 <script lang="ts">
     import { languageLabel } from '#lib/languages/languageLabel.ts'
-    import { languageAccent } from '#lib/languages/languageColors.ts'
     import {
         LANGUAGE_ORDER,
         languageCapabilities,
@@ -16,14 +15,16 @@
     import Select from '#cmp/shared/input/Select.svelte'
     import InstructionSetPicker from '#cmp/shared/input/InstructionSetPicker.svelte'
     import Textarea from '#cmp/shared/input/Textarea.svelte'
-    import Title from '#cmp/shared/layout/Header.svelte'
+    import PageHead from '#cmp/shared/layout/PageHead.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
     import Form from '#cmp/shared/layout/Form.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
+    import LanguageSquare from '#cmp/shared/misc/LanguageSquare.svelte'
     import { toast } from '#stores/toastStore.ts'
     import { type AvailableLanguages, makeProject } from '#lib/Project.svelte.ts'
     import { ProjectStore } from '#stores/projectsStore.svelte.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import { stuckToBottom } from '#lib/stuckToBottom.ts'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import type { PageData } from './$types'
@@ -48,6 +49,8 @@
 
     let name = $state('')
     let description = $state('')
+    /** Whether the footer is held at the window's bottom over the fields, which raises it with a shadow. */
+    let footerStuck = $state(false)
     let language: AvailableLanguages = $state('RISC-V-64')
 
     /** The mark of each thing a set can do, as the owner's mockup draws them (2026-11-08). */
@@ -147,20 +150,20 @@
      in it, its title over it: the owner's call of 2026-11-08 (design-system.md, D8) -->
 <Page hasNavbar cropped="70rem" contentStyle="padding: 1rem">
     <div class="create-project">
-        <header class="page-head">
-            <Title style="margin-bottom: 0.5rem">Create new project</Title>
-            {#if data.gettingStarted}
-                <p class="guide">
-                    New to ASM Editor? <a
-                        href={resolve('/blog/posts/[slug]', { slug: data.gettingStarted })}
-                        >Follow the getting-started guide</a
-                    >.
-                </p>
-            {/if}
-        </header>
+        <PageHead
+            title="Create new project"
+            centred
+            lead={data.gettingStarted ? guide : undefined}
+        />
+        {#snippet guide()}
+            New to ASM Editor? <a
+                href={resolve('/blog/posts/[slug]', { slug: data.gettingStarted! })}
+                >Follow the getting-started guide</a
+            >.
+        {/snippet}
         <!-- the owner's mockup of 2026-11-08: two sections under header bands, then a footer with
              what will be created at the left and the actions at the right -->
-        <Card padding="0">
+        <Card>
             <Form onSubmit={create}>
                 <h2 class="band first">Instruction set</h2>
                 <div class="section">
@@ -215,13 +218,13 @@
                         bind:value={description}
                     />
                 </div>
-                <div class="card-footer">
+                <div
+                    class="card-footer"
+                    class:stuck={footerStuck}
+                    {@attach stuckToBottom((stuck) => (footerStuck = stuck))}
+                >
                     <p class="summary">
-                        <span
-                            class="language-square"
-                            style:background-color={languageAccent(language)}
-                            aria-hidden="true"
-                        ></span>
+                        <LanguageSquare {language} />
                         <!-- the set and the template apart by the row's gap, no mark between them -->
                         <span class="summary-language">{languageLabel(language)}</span>
                         {#if selected}<span class="ellipsis">{selected.name}</span>{/if}
@@ -234,7 +237,7 @@
                         >
                             Cancel
                         </ButtonLink>
-                        <Button type="submit" style="gap: 0.45rem">
+                        <Button type="submit">
                             Create project
                             <Icon size="caption"><FaArrowRight /></Icon>
                         </Button>
@@ -255,68 +258,35 @@
 
 <style lang="scss">
     @use '../../../styles/field.scss';
-    @use '../../../styles/radius.scss' as *;
+    @use '../../../styles/form-card.scss';
 
     /* centred in the page's column (a flex column, where auto margins would shrink it to its
        content without the width); the title starts where the other index pages' titles do, and
-       room between the drop zone and the footer */
+       room between the drop zone and the footer. The form's parts start 1.25rem in, 1rem on a
+       phone (styles/form-card.scss) */
     .create-project {
         width: 100%;
         max-width: 40rem;
         margin: 0 auto;
         padding-top: 1.5rem;
         padding-bottom: 4rem;
+        @include form-card.inset;
 
         @media screen and (max-width: 650px) {
             padding: 0.75rem 0 3rem;
         }
     }
 
-    .page-head {
-        margin-bottom: 1.5rem;
-        text-align: center;
-    }
-
-    .guide {
-        margin: 0;
-        line-height: 1.6;
-        color: var(--text-muted);
-
-        a {
-            color: var(--accent);
-        }
-    }
-
-    /* a section's header, a band a shade lighter than the Card over a rule, as the Workbench's
-       folding sections draw theirs (CollapsibleSection); the second one is ruled off above too */
+    /* the sections' headers, the first the Card's top */
     .band {
-        margin: 0;
-        padding: 0.6rem 1.25rem;
-        background-color: var(--wb-section-header);
-        border-block: 1px solid var(--line);
-        font: 700 var(--fs-small) / 1.4 var(--font-ui);
-        color: var(--secondary-text);
+        @include form-card.band;
     }
-    /* the first band is the Card's top, its corners inside the Card's 1px edge */
     .band.first {
-        border-top: none;
-        border-radius: nested-radius(var(--wb-radius), $border: 1px)
-            nested-radius(var(--wb-radius), $border: 1px) 0 0;
+        @include form-card.band-first;
     }
 
     .section {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        padding: 0.85rem 1.25rem 1rem;
-    }
-
-    /* drawn as the home page's instruction-set bar draws its squares */
-    .language-square {
-        flex: none;
-        width: 0.5rem;
-        height: 0.5rem;
-        border-radius: 2px;
+        @include form-card.section;
     }
 
     .capabilities {
@@ -363,9 +333,7 @@
 
     /* a label over its control, as the shared fields draw theirs */
     .field {
-        display: flex;
-        flex-direction: column;
-        gap: 0.3rem;
+        @include form-card.labelled;
     }
 
     .template-option-name {
@@ -385,36 +353,20 @@
         color: var(--text-muted);
     }
 
-    /* a rule across the card, its edge's hairline, over what will be created at the left and the
-       actions at the right; on a phone the summary takes a line of its own over the actions.
-       Held at the window's bottom while the Card's end is below it, so a set can be picked and
-       created at once, and back in its place in the Card once the page reaches it (owner,
-       2026-11-08): the Card's fill, so what scrolls under it does not show through, and its
-       lower corners inside the Card's 1px edge */
+    /* what will be created at the left and the actions at the right, held at the window's bottom
+       while the Card's end is below it (styles/form-card.scss) */
     .card-footer {
-        position: sticky;
-        bottom: 0;
-        z-index: 1;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem 1rem;
-        padding: 0.7rem 1.25rem;
-        border-top: 1px solid var(--line);
-        background-color: var(--wb-surface);
-        border-radius: 0 0 nested-radius(var(--wb-radius), $border: 1px)
-            nested-radius(var(--wb-radius), $border: 1px);
+        @include form-card.sticky-footer;
     }
 
     .summary {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        min-width: 0;
-        margin: 0;
-        font: var(--fs-small) / 1.4 var(--font-mono);
-        color: var(--text-muted);
+        @include form-card.summary;
+    }
+    /* a phone keeps the footer to its actions: the set and the template are on the page above */
+    @media (max-width: form-card.$phone) {
+        .summary {
+            display: none;
+        }
     }
 
     .summary-language {
@@ -422,21 +374,7 @@
     }
 
     .actions {
-        display: flex;
-        gap: 0.5rem;
-        margin-left: auto;
-    }
-
-    @media (max-width: 600px) {
-        .band {
-            padding: 0.55rem 1rem;
-        }
-        .section {
-            padding: 0.8rem 1rem 1rem;
-        }
-        .card-footer {
-            padding: 0.7rem 1rem;
-        }
+        @include form-card.actions;
     }
 
     .import-drop {

@@ -120,6 +120,9 @@
 </div>
 
 <style lang="scss">
+    @use '../../../styles/focus.scss' as *;
+    @use './landing.scss';
+
     .accordion {
         display: grid;
         grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
@@ -164,10 +167,7 @@
             color: var(--background-text);
         }
 
-        &:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: -2px;
-        }
+        @include focus-ring($inset: true);
     }
 
     .open button {
@@ -248,20 +248,8 @@
     }
 
     .more {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
         margin-top: 1.2rem;
-        color: var(--accent);
-        font-family: var(--font-mono);
-        font-size: var(--fs-body);
-        text-decoration: underline;
-        text-underline-offset: 0.25em;
-        text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
-
-        &:hover {
-            text-decoration-color: currentColor;
-        }
+        @include landing.standalone-link(var(--fs-body));
     }
 
     .chevron {
@@ -339,17 +327,6 @@
             margin: 1.4rem -1.25rem 0;
             border: none;
             border-radius: 0;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .open .panel {
-            animation: none;
-        }
-
-        .plus,
-        .preview img {
-            transition: none;
         }
     }
 </style>

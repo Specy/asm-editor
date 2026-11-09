@@ -1,0 +1,25 @@
+// The home page's links in words (routes/+page.svelte, FeatureAccordion): in the accent, underlined
+// in a fainter accent that comes up to the full one under the pointer.
+
+// a link inside a sentence
+@mixin accent-link {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 0.25em;
+    text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+
+    &:hover {
+        text-decoration-color: currentColor;
+    }
+}
+
+// a link on a line of its own, in Fira Code as the page's text is, its chevron 0.4rem after its
+// words
+@mixin standalone-link($font-size) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: $font-size;
+    @include accent-link;
+}

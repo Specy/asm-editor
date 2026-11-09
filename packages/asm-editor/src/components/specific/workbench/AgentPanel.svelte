@@ -35,7 +35,7 @@
         additionalInstructions={projectAgentInstructions(project.language)}
         workflows={PROJECT_AGENT_WORKFLOWS}
         {searchPlace}
-        style="border-radius: 0; border: none; box-shadow: none; background: transparent; flex: 1; min-height: 0;"
+        style="background: transparent; flex: 1; min-height: 0;"
     />
 </div>
 

@@ -7,6 +7,7 @@
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
     import AgentSidebarFrame from '#cmp/shared/agent/AgentSidebarFrame.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
     import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import { defaultEntryPath, makeProject, type AvailableLanguages } from '#lib/Project.svelte.ts'
@@ -25,12 +26,13 @@
     let latestExampleSignature = $state<string | null>(null)
     let agentVisible = $derived(!editorLanguage || agentOpen || isMobile)
 
+    //alone on the page the chat keeps a hairline edge and a shadow, square-cornered
     let agentStyle = $derived(
         editorLanguage
             ? isMobile
-                ? 'border-radius: 0; border: none; box-shadow: none;'
-                : 'border-radius: 0; border: none; box-shadow: none; opacity: 0.82;'
-            : 'min-height: 100%; border-radius: 0'
+                ? ''
+                : 'opacity: 0.82;'
+            : 'min-height: 100%; border: solid 1px var(--wb-line, var(--tertiary)); box-shadow: var(--shadow-2);'
     )
 
     $effect(() => {
@@ -66,10 +68,7 @@
     })
 </script>
 
-<svelte:head>
-    <title>AI Chat - ASM Editor</title>
-    <meta name="description" content="Chat with the AI assistant" />
-</svelte:head>
+<PageMeta title="AI Chat - ASM Editor" description="Chat with the AI assistant" />
 
 <div class="chat-page fills-screen" class:has-example={!!editorLanguage}>
     <DefaultNavbar exclude={['ai-chat']}>
@@ -99,7 +98,7 @@
         open={agentVisible}
         floating={!!editorLanguage}
         stackOnPhones
-        verticalOffset="var(--nav-height)"
+        verticalOffset="var(--navbar-height)"
     >
         <DefaultCodingAgent
             {project}
@@ -153,8 +152,7 @@
 
 <style lang="scss">
     .chat-page {
-        --nav-height: 3.2rem;
-        --agent-phone-height: min(75dvh, calc(100dvh - var(--nav-height)));
+        --agent-phone-height: min(75dvh, calc(100dvh - var(--navbar-height)));
         position: fixed;
         inset: 0;
         width: 100vw;
@@ -162,13 +160,13 @@
         background: var(--background);
         overflow: hidden;
         z-index: 20;
-        padding: calc(var(--nav-height) + 0.5rem) 0 0 0;
+        padding: calc(var(--navbar-height) + 0.5rem) 0 0 0;
         display: flex;
     }
 
     .emulator-stage {
         position: absolute;
-        top: var(--nav-height);
+        top: var(--navbar-height);
         right: 0;
         bottom: 0;
         left: 0;
@@ -203,7 +201,7 @@
     @media (max-width: 900px) {
         .chat-page {
             gap: 2rem;
-            padding: var(--nav-height) 0 0 0;
+            padding: var(--navbar-height) 0 0 0;
             overflow-x: hidden;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
@@ -219,8 +217,8 @@
             right: auto;
             bottom: auto;
             left: auto;
-            height: calc(100dvh - var(--nav-height) + 30.5rem);
-            flex: 0 0 calc(100dvh - var(--nav-height) + 30.5rem);
+            height: calc(100dvh - var(--navbar-height) + 30.5rem);
+            flex: 0 0 calc(100dvh - var(--navbar-height) + 30.5rem);
             min-height: 0;
         }
 

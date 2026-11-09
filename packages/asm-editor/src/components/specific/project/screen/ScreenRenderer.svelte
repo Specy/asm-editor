@@ -21,6 +21,7 @@
         type X86Input
     } from '#lib/languages/peripherals/x86Input.ts'
     import type { ScreenHeader } from './screenHeader'
+    import { rootFontSize } from '#src/styles/rem.ts'
 
     /**
      * The Screen panel: the canvas a program's graphical output is painted on, and the only place
@@ -213,8 +214,6 @@
      */
     let showDrawingBuffer = $derived(preferencesStore.values.showDrawingBuffer.value)
     let showingDrawingBuffer = $derived(showDrawingBuffer && doubleBuffering)
-
-    const rootFontSize = () => parseFloat(getComputedStyle(document.documentElement).fontSize)
 
     /**
      * The window's box comes from the viewport and the Screen (`screenWindow.ts`): it hugs the
@@ -578,8 +577,7 @@
             kind="ghost"
             size="sm"
             class="screen-action"
-            active={showingDrawingBuffer}
-            aria-pressed={showingDrawingBuffer}
+            pressed={showingDrawingBuffer}
             {@attach tooltip(
                 showingDrawingBuffer
                     ? 'Show the visible buffer again'
@@ -597,8 +595,7 @@
         kind="ghost"
         size="sm"
         class="screen-action"
-        active={integerScaling}
-        aria-pressed={integerScaling}
+        pressed={integerScaling}
         {@attach tooltip(
             integerScaling
                 ? 'Integer scaling is on. Click to turn it off and fill the available space.'
@@ -681,10 +678,11 @@
 {#if expanded}
     <!-- a zero-sized fixed layer, so the window inside it is placed in viewport coordinates (which
          is what the draggable's own clamping assumes) without ever covering the page it floats on.
-         Its z-index puts it over the page and over the floating Debug tools at 10, the window the
-         program draws in being the one worth keeping in sight, and under everything the app opens
-         *over* a page: a maximized side panel at 12, a tablet's backdrop at 11 (after it in the
-         page, so in front) and its drawer at 12, the input prompt and the toasts at 20. The window
+         Its layer, what floats over the page (`--z-float`), puts it over the page and over the
+         floating Debug tools (`--z-window`), the window the program draws in being the one worth
+         keeping in sight, and under everything the app opens *over* a page: a maximized side
+         panel and a tablet's drawer (`--z-drawer`), a tablet's backdrop in the same layer (after
+         it in the page, so in front), the input prompt and the toasts (`--z-tray`). The window
          has no backdrop and leaves the page interactive on purpose, so a panel the user just
          opened has to come out in front of it -->
     <div class="screen-window-layer">
@@ -779,7 +777,6 @@
     /* the bar's toggles, small ghost Buttons (D5) that keep the bar's height: a pressed one is the
        accent, as the drawing buffer shown in place of the visible one is */
     :global(.btn.ghost.sm.screen-action) {
-        gap: 0.3rem;
         padding: 0.15rem 0.4rem;
     }
 
@@ -815,7 +812,7 @@
         left: 0;
         width: 0;
         height: 0;
-        z-index: 11;
+        z-index: var(--z-float);
     }
 
     /* the window's body: the draggable's own bar carries the title and the controls, so this is

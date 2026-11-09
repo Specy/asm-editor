@@ -84,7 +84,7 @@
                 if (!name) return
                 ThemeStore.createNewAndSet(name)
             }}
-            style="flex-basis: 100%; padding: 1rem; gap: 0.5rem; border-radius: 0.5rem"
+            style="flex-basis: 100%; padding: 1rem; border-radius: 0.5rem"
         >
             <Icon>
                 <FaPlus />

@@ -73,7 +73,6 @@
     /* the view's buttons, small ghosts (D5), their icon beside their words, in the line's own size
        and weight of text */
     .file-status .tools :global(.tool) {
-        gap: 0.35rem;
         font-size: inherit;
         font-weight: inherit;
 

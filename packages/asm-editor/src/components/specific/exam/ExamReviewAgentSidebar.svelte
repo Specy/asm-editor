@@ -25,8 +25,5 @@
 </script>
 
 <AgentSidebarFrame bind:open {openSize} {verticalOffset}>
-    <ExamReviewAgent
-        {...agent}
-        style="border-radius: 0; border: none; box-shadow: none; opacity: 0.82;"
-    />
+    <ExamReviewAgent {...agent} style="opacity: 0.82;" />
 </AgentSidebarFrame>

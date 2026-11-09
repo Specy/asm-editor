@@ -29,7 +29,9 @@
      * Two looks. `strip` is the Workbench's: a band a shade darker than the panel (`--wb-strip`),
      * ruled underneath, each tab ruled on its right, the picked one in the panel's own colour and
      * open at the bottom onto it, the others dimmed; its height is `--tab-strip-height`, 2rem
-     * unless the host sets it. `panel` is the Register files': a bar outlined above the panel, its
+     * unless the host sets it, and the picked tab's colour `--tab-strip-picked`, the panel's
+     * `--secondary` unless the host's panel is drawn in another (the embed builder's Share frame,
+     * on a field's fill). `panel` is the Register files': a bar outlined above the panel, its
      * tabs sharing its width, the picked one a raised piece of the bar the panel below belongs to;
      * its top corners are `--tab-strip-radius`, 0.5rem unless the host sets it.
      */
@@ -63,6 +65,12 @@
         /** Draws a tab's face in place of its label, in the host's own scoped styles. */
         tab?: Snippet<[T, boolean]>
         /**
+         * The `strip`'s tabs show only an icon, which the host's `tab` draws (the bottom panel's
+         * tabs where the panel is narrow): narrower, and each named by its label for a screen
+         * reader. Give each tab a `title` for its Tooltip.
+         */
+        iconOnly?: boolean
+        /**
          * More attributes for a tab's button, such as a native `title` or drag handlers. The strip's
          * own (its role, focus, click and keys) come after them and win.
          */
@@ -84,6 +92,7 @@
         look = 'strip',
         scroll = true,
         tab,
+        iconOnly = false,
         tabAttributes,
         panelId,
         children,
@@ -168,7 +177,12 @@
     }
 </script>
 
-<div class="tab-strip {look}" class:scroll={scroll && look === 'strip'} {style}>
+<div
+    class="tab-strip {look}"
+    class:scroll={scroll && look === 'strip'}
+    class:icon-only={iconOnly}
+    {style}
+>
     <div
         class="tabs"
         role="tablist"
@@ -180,7 +194,9 @@
         {#each tabs as item, index (item.id)}
             {@const isSelected = item.id === selected}
             <div class="tab" class:selected={isSelected} class:closable={!!onclose} role="none">
+                <!-- an icon's name first, so that a host's own aria-label overrides it -->
                 <button
+                    aria-label={iconOnly ? item.label : undefined}
                     {...tabAttributes?.(item)}
                     type="button"
                     class="tab-select"
@@ -205,6 +221,7 @@
                     <IconButton
                         size="sm"
                         quiet
+                        fill={look === 'strip'}
                         class="tab-close"
                         tabindex={item.id === rovingId ? 0 : -1}
                         label="Close {item.label}"
@@ -266,11 +283,6 @@
         @include focus-ring($inset: true);
     }
 
-    /* a closable tab's close, a little apart from its name */
-    .tab :global(.tab-close) {
-        margin-left: 0.3rem;
-    }
-
     /* the Workbench's strip: a band a shade darker than the panel, ruled underneath, each tab ruled
        on its right, and the picked tab in the panel's colour, open at the bottom onto it. The rule
        is each part's own bottom border rather than the strip's with the tabs laid over it, which at
@@ -307,13 +319,18 @@
             }
 
             &.selected {
-                background-color: var(--secondary);
-                border-bottom-color: var(--secondary);
+                background-color: var(--tab-strip-picked, var(--secondary));
+                border-bottom-color: var(--tab-strip-picked, var(--secondary));
             }
         }
 
         .tab-select {
             padding: 0 1rem;
+        }
+
+        /* an icon alone needs less room round it than a word */
+        &.icon-only .tab-select {
+            padding: 0 0.75rem;
         }
 
         /* the name is the tab's own button up to its close button, which ends the tab */
@@ -325,14 +342,11 @@
                 padding: 0 0 0 0.9rem;
             }
 
-            /* its close fills the tab's height at the tab's end, square-cornered, its hover running
-               from the strip's top to the tab's rule, as the editor's own end of the strip does */
+            /* its close fills the tab's height at the tab's end (IconButton's `fill`), square-
+               cornered, its hover running from the strip's top to the tab's rule, as the editor's
+               own end of the strip does */
             :global(.tab-close) {
-                align-self: stretch;
-                width: 1.9rem;
-                height: auto;
-                margin-left: 0;
-                border-radius: 0;
+                --icon-button-cell: 1.9rem;
             }
         }
     }

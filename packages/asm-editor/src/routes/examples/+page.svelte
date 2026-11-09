@@ -6,6 +6,7 @@
     import { browser } from '$app/env'
     import Page from '#cmp/shared/layout/Page.svelte'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import Select from '#cmp/shared/input/Select.svelte'
     import Button from '#cmp/shared/button/Button.svelte'
     import ButtonLink from '#cmp/shared/button/ButtonLink.svelte'
@@ -161,13 +162,10 @@
     }
 </script>
 
-<svelte:head>
-    <title>{selected ? `${selected.label} - Examples` : 'Examples'} - ASM Editor</title>
-    <meta
-        name="description"
-        content="Open and run example projects for M68K, MIPS, RISC-V, x86-64 and Z80."
-    />
-</svelte:head>
+<PageMeta
+    title="{selected ? `${selected.label} - Examples` : 'Examples'} - ASM Editor"
+    description="Open and run example projects for M68K, MIPS, RISC-V, x86-64 and Z80."
+/>
 
 <svelte:window
     onmessage={receiveChange}
@@ -201,6 +199,7 @@
                                     void chooseIsa(value).catch(() => undefined)
                                 }}
                                 disabled={status !== 'loaded'}
+                                look="outlined"
                                 wrapperStyle="width: 100%;"
                             />
                         </div>
@@ -213,6 +212,7 @@
                                     void choose(id).catch(() => undefined)
                                 }}
                                 disabled={!options.length}
+                                look="outlined"
                                 wrapperStyle="width: 100%;"
                             >
                                 {#snippet trigger()}
@@ -248,10 +248,8 @@
                         <ButtonLink
                             href={editorPath}
                             disabled={!editorPath}
-                            aria-disabled={!editorPath}
                             target="_blank"
                             rel="noopener"
-                            style="gap: 0.5rem"
                         >
                             <span class="button-icon" aria-hidden="true"><FaExternalLinkAlt /></span
                             >
@@ -300,7 +298,11 @@
         min-height: 0;
         overflow: hidden;
     }
+    /* the pickers outlined on the navbar (Select's `outlined`): a --tertiary edge, the text in
+       --tertiary-text */
     .examples-toolbar {
+        --select-edge: var(--tertiary);
+        --select-text: var(--tertiary-text);
         display: flex;
         flex: 1 1 40rem;
         min-width: 0;
@@ -308,12 +310,6 @@
         justify-content: flex-end;
         align-items: center;
         gap: 0.5rem;
-    }
-    .examples-toolbar :global(.control) {
-        background-color: transparent;
-        color: var(--tertiary-text);
-        border: 1px solid var(--tertiary);
-        padding: 0.35rem 1rem;
     }
     /* only a layout box on phones, where the two pickers share one line */
     .pickers {

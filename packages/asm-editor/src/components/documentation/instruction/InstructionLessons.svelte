@@ -65,7 +65,6 @@
 <style>
     /* closed, a line of text like the header's other facts */
     .lessons {
-        --rule: color-mix(in srgb, var(--tertiary) 85%, transparent);
         max-width: 80ch;
         min-width: 0;
         font-size: var(--fs-small);
@@ -120,19 +119,16 @@
     .more:hover {
         text-decoration: underline;
     }
-    .more:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-    }
 
-    /* open, ruled like the instruction's own boxes: one Lecture a row, its Course beside it */
+    /* open, ruled like the instruction's own boxes (InstructionDocumentView's --doc-rule): one
+       Lecture a row, its Course beside it */
     .open ul {
         display: grid;
         grid-template-columns: minmax(0, max-content) max-content;
         width: fit-content;
         max-width: 100%;
         margin: 0.45rem 0;
-        border: 1px solid var(--rule);
+        border: 1px solid var(--doc-rule);
         border-radius: var(--wb-radius, var(--r-control));
     }
     .open li {
@@ -141,7 +137,7 @@
         grid-template-columns: subgrid;
         column-gap: 1.5rem;
         padding: 0.45rem 0.8rem;
-        border-top: 1px solid var(--rule);
+        border-top: 1px solid var(--doc-rule);
     }
     .open li:first-child {
         border-top: none;

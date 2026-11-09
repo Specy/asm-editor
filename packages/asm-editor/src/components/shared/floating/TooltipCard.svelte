@@ -8,7 +8,7 @@
      */
     import { untrack } from 'svelte'
     import { shortcutLabel } from '#stores/shortcutsStore.ts'
-    import { tooltipRadius } from '#src/styles/elevation.ts'
+    import { POPOVER_ARROW, tooltipRadius } from '#src/styles/elevation.ts'
     import { DUR_FAST, EASE_OUT, prefersLessMotion } from '#src/styles/motion.ts'
     import PopoverOutline from './PopoverOutline.svelte'
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
@@ -17,7 +17,6 @@
 
     let { tooltip }: { tooltip: Tooltip } = $props()
 
-    const ARROW = 6
     const GAP = 6
     /**
      * The corner the outline is drawn with, which the arrow keeps clear of: a control's, smaller
@@ -45,7 +44,7 @@
             {
                 side: tooltip.placement,
                 gap: GAP,
-                arrow: ARROW,
+                arrow: POPOVER_ARROW,
                 radius: RADIUS,
                 align: 'center',
                 margin: MARGIN,
@@ -60,10 +59,10 @@
 
     /** Where the arrow's tip is in the card's box, which it grows out of. */
     function tip(): [x: number, y: number] {
-        if (side === 'top') return [arrowAt, height + ARROW]
-        if (side === 'bottom') return [arrowAt, -ARROW]
-        if (side === 'left') return [width + ARROW, arrowAt]
-        return [-ARROW, arrowAt]
+        if (side === 'top') return [arrowAt, height + POPOVER_ARROW]
+        if (side === 'bottom') return [arrowAt, -POPOVER_ARROW]
+        if (side === 'left') return [width + POPOVER_ARROW, arrowAt]
+        return [-POPOVER_ARROW, arrowAt]
     }
 
     function opening(instant: boolean) {
@@ -147,7 +146,7 @@
     onpointerenter={(event) => event.pointerType !== 'touch' && tooltip.keep()}
     onpointerleave={(event) => event.pointerType !== 'touch' && tooltip.leave()}
 >
-    <PopoverOutline {width} {height} {side} at={arrowAt} arrow={ARROW} radius={RADIUS} solid />
+    <PopoverOutline {width} {height} {side} at={arrowAt} corner="control" solid />
     <!-- the comma for the description only, which a screen reader reads as "Undo, Ctrl+Z" -->
     <span class="content" id={tooltip.contentId}
         >{#if typeof tooltip.content === 'string'}{tooltip.content}{:else}{@render tooltip.content()}{/if}{#if tooltip.shortcut}<span
@@ -161,19 +160,13 @@
     @use '../../../styles/popover.scss';
 
     /* placed by hand rather than by the popover's centring, and drawing no surface of its own: the
-       outline is its background, border and shadow, a solid Popover's on a control's corner; no
-       display of its own either, which would override the popover's hiding */
+       outline is its background, border and shadow, a solid Popover's on a control's corner
+       (popover.anchored) */
     .tooltip {
-        @include popover.content;
-        position: fixed;
-        inset: auto;
+        @include popover.anchored;
         width: max-content;
         max-width: min(18rem, calc(100vw - 8px));
-        margin: 0;
         padding: 0.3rem 0.55rem;
-        overflow: visible;
-        border: 0;
-        background: transparent;
         font-size: var(--fs-small);
         line-height: 1.35;
         text-align: left;

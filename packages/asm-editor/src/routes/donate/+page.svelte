@@ -93,18 +93,6 @@
 </div>
 
 <style>
-    .intro {
-        display: flex;
-        flex-direction: column;
-        gap: 0.8rem;
-    }
-    .intro p {
-        margin: 0;
-    }
-    .intro a {
-        color: var(--accent);
-        text-decoration: underline;
-    }
     .platforms {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));

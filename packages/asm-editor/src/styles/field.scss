@@ -1,6 +1,7 @@
 // A field a person types into (design-system-plan.md, stage 3, item 5): `TextField`, and the
-// boxes that hold a field with marks of their own, a search icon, an `0x`, a clear button
-// (`SearchField`, the memory view's address). One fill, a step from the panel's `--secondary`
+// boxes that hold a field with marks of their own, a search icon, a clear button (`SearchField`,
+// a Testcase's cells). The memory view's address box keeps the look it had before (register
+// O-07) and draws itself. One fill, a step from the panel's `--secondary`
 // towards `--tertiary`, in the panel's text; one edge, the surface's `--line`, so that the field
 // still reads on a `--tertiary` surface such as a Popover, which redefines it; one corner,
 // `--r-control`; the placeholder in `--hint` at 70%. The colours are the Testcase fields' from

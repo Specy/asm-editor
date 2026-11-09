@@ -37,6 +37,13 @@
         else if (ui.activePanel === entry.id) ui.drawerOpen = false
         else ui.open(entry.id)
     }
+
+    /** What a rail icon's dot says, the Testcases result, read as part of the icon's name: a
+     *  button's own name is all a screen reader reads of it, so a label on the dot would not be. */
+    const DOT_WORDS: Record<NonNullable<RailEntry['dot']>, string> = {
+        success: 'every Testcase passed',
+        error: 'a Testcase failed'
+    }
 </script>
 
 {#snippet railButton(entry: RailEntry)}
@@ -45,7 +52,7 @@
         class="rail-button"
         class:active
         {@attach tooltip(entry.tooltip ?? entry.title, { placement: 'right' })}
-        aria-label={entry.title}
+        aria-label={entry.dot ? `${entry.title}, ${DOT_WORDS[entry.dot]}` : entry.title}
         aria-pressed={entry.action ? undefined : active}
         onclick={() => press(entry)}
     >

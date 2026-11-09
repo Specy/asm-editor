@@ -19,6 +19,7 @@
     } from '#lib/languages/registerFormats.ts'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import { SvelteSet } from 'svelte/reactivity'
 
     /**
      * The rows of one Register file: the grid of names and values the CPU panel has always drawn,
@@ -57,6 +58,14 @@
         pokeable?: boolean
         /** Whether that register of this file may be poked; everything is when nothing is passed. */
         canPokeRegister?: (register: string) => boolean
+        /**
+         * Whether that register takes Pokes whenever the panel does, the Emulator's
+         * `registerTakesPokes`: its values are drawn as Poke buttons, which `pokeable` and
+         * `canPokeRegister` enable and disable without drawing them again, so a Run or a Step
+         * taking the Core changes an attribute of each value rather than every value. Left out,
+         * it is what `canPokeRegister` says now, and the values are drawn again as that changes.
+         */
+        takesPokes?: (register: string) => boolean
         /** One commit, which is one Poke: usually one write, a MIPS paired double two. */
         onPoke?: (writes: RegisterPoke[]) => void
         /**
@@ -93,6 +102,7 @@
         onRegisterClick,
         pokeable = false,
         canPokeRegister,
+        takesPokes,
         onPoke,
         valueMenu,
         hex,
@@ -219,10 +229,20 @@
     let openedText = $state('')
     let editedReason: string | null = $state(null)
 
-    /** Whether a row takes Pokes: the page's flag, the Emulator's answer, and a row with a value. */
-    function isPokeable(row: Row): boolean {
-        if (!pokeable || !onPoke) return false
+    /**
+     * Whether a row's values are Poke buttons: a panel that takes Pokes, a row with a value, and a
+     * register that takes them whenever the panel does (`takesPokes`).
+     */
+    function hasPokeButtons(row: Row): boolean {
+        if (!onPoke || decorative) return false
         if (row.rendered.blank || row.rendered.chunks.length === 0) return false
+        if (takesPokes) return takesPokes(row.register.name)
+        return pokeable && (canPokeRegister ? canPokeRegister(row.register.name) : true)
+    }
+
+    /** Whether a row takes Pokes now: the page's flag, the Emulator's answer, and a row with a value. */
+    function isPokeable(row: Row): boolean {
+        if (!pokeable || !hasPokeButtons(row)) return false
         return canPokeRegister ? canPokeRegister(row.register.name) : true
     }
 
@@ -308,6 +328,13 @@
         editedRegister = null
     })
 
+    /**
+     * The rows whose whole-value card (`RegisterValueCard`) the pointer has asked for, by register
+     * name: a card is built on its row's first hover, which shows it by CSS in the same frame,
+     * rather than one hidden card per row kept up to date on every Step.
+     */
+    const cardRows = new SvelteSet<string>()
+
     /** Whether a row's value has a menu: an integer, which names an address, with a value to read. */
     function hasValueMenu(row: Row): boolean {
         return !!valueMenu && row.integer && !row.rendered.blank && row.rendered.chunks.length > 0
@@ -388,8 +415,12 @@
             reader is left with a value they cannot read
         -->
         {@const rowPosition = rowIndex === 0 ? 'bottom' : position}
-        <div class="register-wrapper">
-            {#if !decorative}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+            class="register-wrapper"
+            onpointerenter={decorative ? undefined : () => cardRows.add(row.register.name)}
+        >
+            {#if !decorative && cardRows.has(row.register.name)}
                 <RegisterValueCard>
                     {#if !row.hexadecimal}
                         0x{row.register.toHex()}
@@ -436,16 +467,16 @@
                     in the hover above it
                 -->
                 {#each row.rendered.chunks as chunk, chunkIndex (chunkIndex)}
-                    {#if !isPokeable(row)}
+                    {#if !hasPokeButtons(row)}
                         {@render chunkCell(row, chunk, rowPosition)}
-                    {:else if isEditing(row, chunkIndex)}
+                    {:else if isEditing(row, chunkIndex) && isPokeable(row)}
                         <!--
                             the chunk being poked, sized to the text it opened on so the row does
                             not jump, and marked when the last commit was refused
                         -->
                         <input
                             class="chunk-input"
-                            class:refused={editedReason !== null}
+                            aria-invalid={editedReason !== null}
                             title={editedReason ?? ''}
                             aria-label="Poke {row.register.name}"
                             style="width: calc({Math.max(editedText.length, 2)}ch + 0.2rem);"
@@ -456,10 +487,23 @@
                             onblur={commit}
                         />
                     {:else}
+                        <!--
+                            while a Run, a Build or a Step that waits takes the Core, the button
+                            stays and says it is unavailable: drawing every value again each time
+                            was most of what a Step cost. `aria-disabled` rather than `disabled`,
+                            which some browsers keep the pointer events the value's hover card is
+                            built on from reaching inside; out of the tab order, as the read-only
+                            cell was
+                        -->
+                        {@const enabled = isPokeable(row)}
                         <button
                             class="chunk-button"
-                            title="Poke {row.register.name}"
-                            onclick={() => openInput(row, chunkIndex, chunk)}
+                            aria-disabled={enabled ? undefined : 'true'}
+                            tabindex={enabled ? undefined : -1}
+                            title={enabled ? `Poke ${row.register.name}` : undefined}
+                            onclick={() => {
+                                if (isPokeable(row)) openInput(row, chunkIndex, chunk)
+                            }}
                         >
                             {@render chunkCell(row, chunk, rowPosition)}
                         </button>
@@ -482,6 +526,7 @@
 
 <style lang="scss">
     @use '../../../../styles/field.scss';
+    @use '../../../../styles/type.scss';
 
     .registers {
         height: fit-content;
@@ -628,12 +673,24 @@
         }
     }
 
+    //a button that takes no Poke now is drawn as the read-only cell it stands for: the cell's own
+    //cursors, a changed value's included
+    .chunk-button[aria-disabled='true'] {
+        cursor: default;
+
+        :global(.tooltip-base) {
+            cursor: default;
+        }
+
+        :global(.tooltip-base.modified) {
+            cursor: pointer;
+        }
+    }
+
     //the input the chunk becomes while it is being poked, drawn in the row's own monospace so the
     //digits stay where they were
     .chunk-input {
-        font-family: var(--font-mono);
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
+        @include type.machine-value;
         font-size: inherit;
         text-align: center;
         //the box the read-only cell has, digit for digit: `box-sizing: border-box` is global, so
@@ -652,7 +709,7 @@
     }
 
     //a commit the helper refused: the input keeps what was typed and says why in its title
-    .refused {
+    .chunk-input[aria-invalid='true'] {
         outline: 2px solid var(--danger);
         outline-offset: -2px;
     }
@@ -663,8 +720,6 @@
         justify-content: center;
         flex: 1;
         opacity: 0.4;
-        font-family: var(--font-mono);
-        font-size-adjust: ex-height 0.49;
-        font-variation-settings: 'wght' 400;
+        @include type.machine-value;
     }
 </style>

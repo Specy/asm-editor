@@ -7,21 +7,16 @@
      */
     import Page from '#cmp/shared/layout/Page.svelte'
     import Header from '#cmp/shared/layout/Header.svelte'
+    import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
     import { chapters } from '#lib/documentation/m68k/m68k.ts'
 </script>
 
-<svelte:head>
-    <title>M68K Complete Documentation - ASM Editor</title>
-    <meta
-        name="description"
-        content="Complete M68K documentation in a single page. Includes all instructions, addressing modes, condition codes, directives, and assembler features."
-    />
-    <meta
-        property="og:description"
-        content="Complete M68K documentation in a single page. Includes all instructions, addressing modes, condition codes, directives, and assembler features."
-    />
-</svelte:head>
+<PageMeta
+    title="M68K Complete Documentation - ASM Editor"
+    description="Complete M68K documentation in a single page. Includes all instructions, addressing modes, condition codes, directives, and assembler features."
+    type="article"
+/>
 
 <Page cropped="70rem" contentStyle="padding: 1rem; gap: 1rem;">
     <Header>M68K Complete Documentation</Header>
