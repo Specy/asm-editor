@@ -121,6 +121,17 @@
             "query": "GetCWD service 17",
             "top": 5,
             "expect": "risc-v/syscalls/17"
+        },
+        {
+            "query": "come back from a function",
+            "top": 3,
+            "expect": "risc-v/instructions/ret"
+        },
+        {
+            "query": "jump if a register is zero",
+            "top": 3,
+            "expect": "risc-v/instructions/beqz",
+            "meaning": true
         }
     ]
 }

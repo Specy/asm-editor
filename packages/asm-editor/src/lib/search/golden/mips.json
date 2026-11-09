@@ -106,6 +106,55 @@
             "query": "seed random generator service 40",
             "top": 5,
             "expect": "mips/syscalls/40"
+        },
+        {
+            "query": "lw $t0, 4($sp)",
+            "first": "mips/instructions/lw"
+        },
+        {
+            "query": "add $t0, $t1, $t2",
+            "first": "mips/instructions/add"
+        },
+        {
+            "query": "add two numbers",
+            "top": 3,
+            "expect": "mips/instructions/add",
+            "meaning": true
+        },
+        {
+            "query": "directive for strings",
+            "top": 3,
+            "expect": [
+                "mips/directives/ascii",
+                "mips/directives/asciiz",
+                "mips/directives/asciz",
+                "mips/directives/string"
+            ],
+            "meaning": true
+        },
+        {
+            "query": "quit with an error code",
+            "top": 3,
+            "expect": "mips/syscalls/17"
+        },
+        {
+            "query": "put a constant in a register",
+            "top": 3,
+            "expect": "mips/instructions/li",
+            "meaning": true
+        },
+        {
+            "query": "pause for a few milliseconds",
+            "top": 3,
+            "expect": "mips/syscalls/32"
+        },
+        {
+            "query": "end directive",
+            "first": "mips/directives/end"
+        },
+        {
+            "query": "sp register",
+            "first": "mips/registers/$sp"
         }
     ]
 }

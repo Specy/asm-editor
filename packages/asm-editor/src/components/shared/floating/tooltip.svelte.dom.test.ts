@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync } from 'svelte'
-import { TOOLTIP_DELAY, tooltip } from './tooltip.svelte.ts'
+import { TOOLTIP_DELAY, pointTooltip, tooltip } from './tooltip.svelte.ts'
 
 beforeEach(() => {
     vi.useFakeTimers()
@@ -255,5 +255,22 @@ describe('the Tooltip', () => {
         flushSync()
         expect(button.hasAttribute('aria-describedby')).toBe(false)
         expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(0)
+    })
+
+    it('shows and closes for an element the pointer cannot reach, as something over it reports', () => {
+        const word = document.createElement('span')
+        document.body.appendChild(word)
+        attach(word, 'M68K results first')
+        //(the card the test before closed keeps the Tooltips warm, so this one may show at once)
+        pointTooltip(word, true)
+        wait(TOOLTIP_DELAY)
+        expect(shown(word)).toBe(true)
+        pointTooltip(word, false)
+        wait(150)
+        expect(shown(word)).toBe(false)
+        //an element without a Tooltip is left alone
+        pointTooltip(trigger(), true)
+        wait(TOOLTIP_DELAY)
+        expect(document.querySelectorAll('[role="tooltip"][data-shown]')).toHaveLength(0)
     })
 })

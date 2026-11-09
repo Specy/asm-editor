@@ -1,0 +1,60 @@
+{
+    "scope": "site",
+    "queries": [
+        { "query": "mips add", "first": "mips/instructions/add" },
+        { "query": "mips print integer", "first": "mips/syscalls/1" },
+        {
+            "query": "m68k multiply numbers",
+            "top": 1,
+            "expect": ["m68k/instructions/muls", "m68k/instructions/mulu"],
+            "meaning": true
+        },
+        {
+            "query": "riscv exit program",
+            "top": 2,
+            "expect": ["risc-v/syscalls/10", "risc-v/syscalls/93"]
+        },
+        {
+            "query": "x86 exit the program",
+            "top": 2,
+            "expect": ["x86/syscalls/syscall-exit_group", "x86/syscalls/syscall-exit"]
+        },
+        { "query": "z80 print a character", "first": "z80/input-output/char" },
+        { "query": "m68k print a number", "first": "m68k/trap-tasks/task-3" },
+        { "query": "68000 exceptions", "first": "m68k/exceptions/exceptions" },
+        {
+            "query": "what is the stack",
+            "top": 3,
+            "expect": "assembly-basics/think-in-assembly/the-stack#"
+        },
+        { "query": "addressing modes on the 68000", "first": "m68k/addressing-modes/overview" },
+        {
+            "query": "lecture on loops",
+            "top": 3,
+            "expect": "assembly-basics/think-in-assembly/loops#"
+        },
+        {
+            "query": "libc function to compare strings",
+            "top": 3,
+            "expect": [
+                "mips/runtime-library/strcmp",
+                "risc-v/runtime-library/strcmp",
+                "x86/runtime-library/strcmp"
+            ],
+            "meaning": true
+        },
+        {
+            "query": "test instruction",
+            "first": "x86/instructions/test"
+        },
+        {
+            "query": "tst instruction in m68k",
+            "first": "m68k/instructions/tst"
+        },
+        {
+            "query": "what is the instruction set",
+            "first": "assembly-basics/introduction/instruction-set#",
+            "meaning": true
+        }
+    ]
+}

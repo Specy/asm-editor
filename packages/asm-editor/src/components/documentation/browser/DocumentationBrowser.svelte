@@ -40,7 +40,8 @@
     import { resolveDocumentationLink, type DocumentationTarget } from '#lib/documentation/links.ts'
     import type { SearchResult } from '#lib/search/engine.ts'
     import { LiveSearch } from '#lib/search/liveSearch.svelte.ts'
-    import { queryTerms } from '#lib/search/queryTerms.ts'
+    import { OUTDATED_INDEX_MESSAGE } from '#lib/search/outdatedIndex.ts'
+    import { highlightedTerms } from '#lib/search/queryModifiers.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { DocumentationLanguage, SearchScope } from '#lib/search/scope.ts'
     import EntryRow from './EntryRow.svelte'
@@ -77,6 +78,13 @@
          * processor brought. Unknown, or given Chapters, they show everything, as the site does.
          */
         m68kDialect?: M68kDialect
+        /**
+         * The names of the instructions on the lines of the Problems' errors, whose entries the
+         * results lift a little ([the design record](../../../../../../docs/design/documentation-search.md),
+         * Searching in plain English, The Problems panel): the Workbench's panel only. A change
+         * reorders the results as more of the index does, unless the reader holds them.
+         */
+        favour?: readonly string[]
     }
 
     let {
@@ -86,7 +94,8 @@
         variant = 'panel',
         disableLinks = false,
         request = null,
-        m68kDialect
+        m68kDialect,
+        favour
     }: Props = $props()
 
     let loaded = $state<ProgramDocumentation | null>(null)
@@ -230,12 +239,13 @@
     let input = $state<HTMLInputElement>()
     let scroller = $state<HTMLDivElement>()
 
-    const terms = $derived(queryTerms(query))
+    const terms = $derived(highlightedTerms(query, scope))
     const searching = $derived(query.trim().length > 0)
 
     const live = new LiveSearch({
         query: () => query,
         scope: () => scope,
+        favour: () => favour ?? [],
         limit: 30,
         delay: 120,
         onAnswer: (answer) => {
@@ -421,6 +431,7 @@
                     {scope}
                     bind:value={() => query, setQuery}
                     bind:el={input}
+                    couples={live.couples}
                     placeholder="Search the documentation"
                     label="Search the documentation"
                 />
@@ -449,7 +460,9 @@
             ontouchmove={hold}
             onkeydown={hold}
         >
-            {#if shown.length === 0 && live.failed}
+            {#if shown.length === 0 && live.outdated}
+                <EmptyState>{OUTDATED_INDEX_MESSAGE}</EmptyState>
+            {:else if shown.length === 0 && live.failed}
                 <EmptyState
                     >Search could not load. Check the connection, then type again.</EmptyState
                 >

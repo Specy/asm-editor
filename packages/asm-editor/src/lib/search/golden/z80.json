@@ -62,6 +62,16 @@
             "query": "Terminal character port newline Enter",
             "top": 1,
             "expect": "z80/input-output/char"
+        },
+        {
+            "query": "flip every bit of a",
+            "top": 3,
+            "expect": "z80/instructions/cpl"
+        },
+        {
+            "query": "what is the instruction set",
+            "first": "assembly-basics/introduction/instruction-set#",
+            "meaning": true
         }
     ]
 }

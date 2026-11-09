@@ -174,6 +174,277 @@ Lecture section that must be in the top three, run against the real index. The f
 always runs; the meaning half runs wherever `.cache/` holds the model, which includes CI, because
 PR validation gets the same cached fetch step as the build.
 
+2026-11-09 (owner): the golden files guide the tuning rather than fix it. A deliberate change to the
+ranking that breaks a golden query rewrites the query; no graded measure or held-back set of
+queries is kept, as not worth it at this project's scale, and no weight is tuned to the last
+decimal to make a file pass.
+
+## Searching in plain English
+
+Grilled with the owner on 2026-11-09, after a brainstorm of what would make search answer questions
+typed in plain English better, then revised the same day after two reviews: one of the plan against
+the code, one of the idea, both of which tested their claims on the real index (a copy of the engine
+reproduced all 142 golden queries first). The owner took every revision the reviews led to. Terms
+are the glossary's, with two new ones: **Entry question** and **Search modifier**. The
+[implementation plan](./plain-english-search-plan.md) orders the work. Every number below is a
+starting value, tuned against the golden files during the work.
+
+### Entry questions ([ADR 0079](../adr/0079-entry-questions-are-written-once-and-committed.md))
+
+- **Every Documentation entry has Entry questions, except the x86 Extensions.** Usually three, more
+  for an entry that answers more kinds of question. Lecture sections have none: they are long, written
+  to teach, and already use the reader's words. The Extensions are lists of other instructions, whose
+  questions would only compete with the real entries.
+- **Written once, checked, committed.** A language model writes them and the build only reads the
+  committed file; the questions are not made again on every build, and no model provider or key is
+  in the repository or in CI.
+    - Haiku writes them; Opus checks each entry's questions beside the entry and flags any the entry
+      does not answer. A pilot first has both models write the questions of two Chapters, MIPS
+      Syscalls (50 entries, plain) and M68K Exceptions (20, hard); if Haiku's questions are flagged
+      much more often than Opus's, the harder Chapters go to Opus. (x86 SSE was the first choice of
+      a hard Chapter, but its instructions are in the Extensions, which have no Entry questions.)
+    - The writer sees the Chapter's other entries, and the checker also flags a question that another
+      entry of the Chapter answers as well: M68K trap tasks 3, 20 and 17 all answer "how do I print a
+      number" within 0.01 of one another today, and questions that do not tell them apart would not
+      help.
+    - The owner reads a sample of about fifty, and afterwards what the checking agent flags.
+    - They read like a student asking, in English: tasks ("how do I…"), ideas ("what is…") and
+      symptoms ("why is my number negative"). At least half leave out the entry's own name, and none
+      names another language.
+- **Nothing breaks, nothing blocks.** Each entry's questions are stored with a hash of the text they
+  were written from. An edited entry keeps its questions, marked stale; a new entry has none until the
+  script is run; questions of an entry that was renamed or removed are ignored. A check lists what is
+  missing, stale or orphaned and never fails the build.
+- **In the index, words and the entry's own vector.** An entry's questions are words of its own,
+  searched with the rest of its text, and they come first in the text its one vector is made from.
+  A hand test on 14 M68K entries found this as good as a second vector made from the questions
+  alone (the right answers' ranks summed 13 against 12, from 36 without questions), and it adds
+  nothing to the download, where the second vector would have added about 0.65 MB to the 2.45 MB
+  index. An entry longer than the 1,800 characters the model reads (72 of them, the Extensions left
+  out) gets more vectors for the rest of its text, which carry no words of their own.
+
+### Matching
+
+- **Stemming on prose, done by the engine.** "divides" finds "divide" and "strings" finds "string".
+  Orama splits a query into words once for every field, so its own stemming would stem the query
+  against names too ("movs" found `mov`) and would merge 26 pairs of mnemonics in titles (`bts` and
+  `bt`, `loope` and `loop`). The engine instead keeps a stemmed copy of the prose in fields of its own
+  and searches it with a stemmed query, and names, titles and code with the query as typed. A stem
+  matches whole words only, not as the start of longer ones, or "operation" (stem "oper") would match
+  "operand" everywhere.
+- **The words half and the meaning half, fused on fixed scales.** Orama's hybrid mode divides each
+  half by its own best score, so a weak best match looks as certain as a strong one. The meaning
+  half's similarity is already absolute; the words half's score is brought to a fixed scale (a
+  saturation such as score / (score + c)); the two are then weighted and added. Rank fusion, the first
+  choice, was dropped: it loses how strong a match is just as much, and with it every multiplier below
+  turned into a filter or a pin (with the usual constant, ×1.25 lifted the 16th result above the
+  first). The fixed rules (the exact name first, a section at its best window) and every weight apply
+  after the fusion.
+- **Question or name, by its words.** How much the meaning half counts follows the share of a query's
+  words, stop words aside, that are names, numbers or code (`$t0`, `.data`, `move.l`): all of them, as
+  in `syscall 10`, leans on words; none, as in "print integer", leans on meaning; a share in between,
+  in proportion. A single word leans on words, as before.
+- **A name that is also an English word counts as a word.** M68K has 46 entry names that are English
+  words, MIPS 49, x86 113 and Z80 57: `stop`, `end`, `not`, `set`, `break`, `leave`, `loop`, `test`,
+  `if`, `zero`. "why does my loop not stop" already answers with `STOP`, `END` and `NOT`. A name the
+  Lectures use at least three times as an ordinary word, outside code, is word-like: in a question it
+  counts as a word, for the share above and for the boost below, unless it is typed as code (in
+  capitals, or with a size suffix, a `$`, a `.` or a `#`). The list is worked out by the build from the
+  Lectures, so nobody keeps it.
+- **Names inside a question are boosted, not pinned.** "how does dbra work" lifts `dbra`: a name in a
+  question raises its entry, which must still match the rest of the question. Word-like names and
+  stop words are not boosted (`add` is word-like in every language, so "add two numbers" finds `add`
+  by meaning instead), nor are syscalls, whose names are everyday verbs (`rename`, `read`). A query
+  that is only a name is still pinned, and in a search over several languages the named language's
+  entries are pinned first. Commas and brackets split names, so a pasted `lw $t0, 4($sp)` lifts `lw`,
+  `$t0` and `$sp`; an operand written as code (`$t0`, `#15`, `d0`) makes the line count as code, so
+  `add $t0, $t1, $t2` lifts `add`, while a plain number does not ("wait 5 seconds" leaves MIPS `wait`
+  alone). Nor does a stop word or a word in capitals, unless the line looks like code (a comma, or an
+  operand written as code): "what does the test I added check" leaves x86 `test` alone, as "we" does.
+  With its kind's noun beside it, a name is pinned instead: a couple (Search modifiers, below).
+- **A scope scores the same whatever else is loaded.** The browser's one search worker holds every
+  shard any box has loaded, and the navbar's search loads them all. Orama's BM25 reads the number of
+  documents, each field's average length and how many documents hold a word, so in one database for
+  every shard a language's box ranked differently once the site's search had been used (70 of the
+  322 golden query and mode pairs changed their top 3, and six failed). Each shard is now a database
+  of its own, and its words are scored with the statistics of the scope's shards together, as one
+  database of them would score them: the results are those of a database of the scope alone. Each
+  shard's own statistics were tried first and lost the tuning: a shard that says the most about a
+  word counts it the least, so the General course's lecture fell out of "what is the stack" and
+  `djnz` out of "decrement b and jump if not zero" (six golden failures, mean reciprocal rank 0.916 to
+  0.881 by words). Each half keeps the scope's best 80 units of a search, each shard asked for as many.
+- **A hyphenated word is searched in its parts too.** "sign-extend a byte" finds what "sign extend a
+  byte" finds: the stemmed query splits it as the stemmed text does, and the words as typed get its
+  parts beside it, since Orama keeps `sign-extend` whole.
+- **A synonym table, written after the Entry questions.** One committed table of the reader's words
+  and phrases and the Documentation's words for them, added to the words half only, replacing the
+  hard-coded list of 27 synonyms. Rows were written only for the golden queries that still failed
+  once the questions were in: four shipped (print → display, read → input, colour → color, pause →
+  sleep and delay). Of the old list, nothing else helped any golden query and several rows hurt
+  (exit → end put the `end` directives ahead of the exit syscalls), so they were dropped. The owner
+  reviews the table.
+
+### Search modifiers
+
+- **A language's name, where a search covers several languages.** In the site's and the Courses'
+  scopes, a query naming one ("m68k multiply numbers") ranks that language first: every other
+  language's results count a quarter, the General course's count fully, and two named languages both
+  count fully. It prefers rather than filters. The name is left out of both halves unless it is the
+  whole query. Its aliases count: 68k, 68000, Motorola, EASy68K; MARS; RARS, riscv, risc v, rv32, rv64;
+  x64, x86-64, amd64, Intel, NASM. In a scope of one language a name is an ordinary word, neither
+  stripped nor shown: rv64, NASM and 68000 are subjects of their own language's Documentation ("which
+  instructions are rv64 only").
+- **A kind word favours the Chapters of its kind.** With other words, these lift the Chapters that
+  hold that kind of entry, their overview prose included: directive, pseudo-op; syscall, system call,
+  trap task (the syscalls and the M68K trap tasks alike); addressing mode; condition code; port;
+  screen command; library, libc, C function (the Runtime library); lecture, lesson, tutorial, course
+  (Lecture sections). Singular or plural. The favoured results get a small lift; the rest are left as
+  they are. A kind word counts only where the scope has such a Chapter, and the word stays in the
+  query. Halving every other kind, the first rule, broke five golden queries, because each Chapter's
+  overview entries are prose, and made ordinary questions misfire ("what is the instruction pointer"
+  lost `rip`). So instruction, opcode, mnemonic, register, flag, trap, service and runtime are not kind
+  words, nor are "function" ("call a function" means a subroutine) and "example" (the Courses and the
+  instructions both have them). Beside a name, most of them make a couple instead (below).
+- **A name with its kind's noun beside it is a couple, and comes first.** "test instruction", "end
+  directive", "printf function", "sp register", or the other way round, "instruction tst",
+  "register $t0": a name next to a noun of its kind, with only white space between them, pins the
+  entries of that kind it names, as a query that is only a name pins them, before everything else.
+  The rest of the query ranks what follows. The nouns, singular only: instruction, opcode, mnemonic
+  (an x86 Extensions entry counts, as its instructions name it); directive, pseudo-op, pseudo op;
+  syscall, system call, trap task (the syscalls and the trap tasks); register; flag; condition code;
+  addressing mode; port; screen command; function (the Runtime library). The name is matched as an
+  exact name is, a directive's dot optional and an M68K size suffix read, and with a MIPS register's
+  `$` optional ("sp register"), but not for a number or a stop word ("CP0 register 13", "look at
+  register $t0"). In a scope of several languages the named language's entries come first, then the
+  scope's order; several couples pin in the order typed. A couple's noun is not also a kind word:
+  "end directive" lifts no other directive. Only the engine knows the names, so the worker's answer
+  reports each couple's offsets and words, and the box marks them once it has the answer.
+    - Why: alone, `test` counts as English, since the Lectures use it so, and "test instruction" put
+      x86 `test` second in x86, behind the Testcases page, and out of the navbar's first five. The
+      noun says the word is a name. Both orders, because readers write both ("the tst instruction",
+      "the instruction tst").
+    - Before its noun any name of that kind counts, a word-like name or a stop word too ("and
+      instruction", "in instruction" for x86 `in`), since the noun makes it plain. An article is the
+      exception, unless typed as code ("A register"): it stands where a name stands and is often one
+      (the Z80 register `a`, the x86 condition code `a`, the M68K addressing mode `an`), so "what is a
+      register" would pin `a`. After its noun only a name that is not word-like counts, unless typed
+      as code: "what is an instruction set" must not pin Z80 `set`, while "instruction tst" pins
+      `tst`. A word of a two-word noun names nothing else ("system call instruction" is not `call`).
+    - The cost, accepted: a word before a noun is read as a name wherever one exists. Over the 7,975
+      Entry questions and 16,740 sentences of the Lectures the rule found 24 and 74 different
+      couples, and the wrong ones were of four sorts: a preposition or a conjunction ("in instruction
+      operands" pins x86 `in`, "registers and instruction names" MIPS `and`, "bytes or instruction"
+      RISC-V `or`), "illegal instruction exception" (M68K `illegal`), "FP register" meaning a
+      floating-point one (MIPS `$fp`), and a sentence that starts "A register pair" (the Z80 `a`,
+      its article in capitals).
+- **Shown in the text, not beside it.** The palette's and the Documentation panel's boxes draw a
+  Search modifier in the accent colour, in place in the text, with no chip or line of their own.
+  Pointing at one shows a Tooltip saying what it did ("M68K results first", "Directives first"); a
+  screen reader hears the same, in words kept off the screen. On a phone the colour stands alone. The
+  Symbols and Search panels' filters, which search the Project, have none. A couple is one mark over
+  its two words and the space between them ("The tst instruction first"), drawn once the answer that
+  found it is in and only while the box holds the query it answers, since after another keystroke its
+  offsets could be another word's.
+
+### The Problems panel
+
+- **An error lifts the instruction on its line, a little.** In the Workbench's Documentation panel,
+  the instruction or directive that starts the line of each error in an assembly File (after any
+  label) counts 1.25 times. Not warnings, not C, not the message's words, which differ across the five
+  Cores. Nothing in the box shows it, since it does not come from what was typed. The agents see the
+  errors themselves and do not get it. The line is read from the text the Diagnostics are about,
+  the last complete analysis's (or the Build's, in the snapshot view), so typing on the line changes
+  nothing until the analysis catches up, and an edit above it never shifts it onto another line.
+- **A deliberate exception.** It is the one place where the order depends on more than the scope and
+  the query, against "the same order everywhere" (Ranking) and the search as a plain function of
+  scope and query (The agents' search tool). It is kept small for that reason.
+
+### Status (2026-11-09)
+
+Implemented on `feat/plain-english-search` by agents following the
+[plan](./plain-english-search-plan.md), uncommitted for the owner's review.
+
+- **Entry questions.** All 2,421 entries have them, 7,975 questions in all. A pilot of Haiku against
+  Opus on MIPS Syscalls and M68K Exceptions, checked blind, flagged about 19% of Haiku's questions
+  (on the plain Chapter as much as on the hard one) and under 2% of Opus's, so Opus wrote every
+  Chapter. An Opus checker then read every Chapter, flagged 1 to 3% and rewrote what it flagged. The
+  Runtime library's questions, and those of the Chapters MIPS and RISC-V share, were written once and
+  copied by identical text.
+- **The values the tuning settled on** (`RANKING` in `engine.ts`): words saturation 40; weights 0.7 /
+  0.3 for names and 0.35 / 0.65 for words; questions boost 2; Lecture sections 0.85 (from 0.75, so
+  that "what is the stack" keeps its lecture against entries whose questions mention the stack);
+  x86 Extensions 0.6 and Runtime library functions 0.3, unchanged; other languages 0.25; kind lift
+  1.25 (at 1.5 a golden query held by 0.001); name boost 1.5; Problems boost 1.25. A Runtime library
+  function counts fully when "library" or "libc" asks for it.
+- **Measured on the golden queries that existed before this work** (mean reciprocal rank, words
+  only / words and meaning): 0.891 / 0.929 before, 0.928 / 0.957 after; the queries added with the
+  work pass too. The site scope's own queries went from 0.38 to 0.96 with the language preference.
+  On 57 questions in a student's own words, written apart from the golden files, 0.28 / 0.48 before
+  the Entry questions were indexed and 0.46 / 0.70 after. The index grew by 4% (2.47 to 2.57 MB
+  compressed), and a search takes about as long as before.
+- **Not solved:** "why does my loop not stop" still answers with M68K `STOP` and the x86 `loop`
+  instructions first. Not matching word-like names against names inside a question fixed it but
+  broke eight golden queries ("clear the screen", "print a character").
+- **Couples** (2026-11-09, the owner's rule): a name with its kind's noun pins its entries ("test
+  instruction" puts x86 `test` first); 11 golden queries added, none of the others' expectations
+  changed.
+- **Small calls made in the work:**
+    - A kind word works with a language's name as its other word ("mips syscalls").
+    - The lecture kind words do nothing in the Courses' scope, where every result is a lecture.
+    - Search modifiers are not drawn while text is selected or composed, so selection and input
+      methods stay the browser's own.
+    - In M68K, a word in the first column is a label only where s68k reads it as one: a mnemonic
+      there (`rts`) is still the instruction. In Z80 every word in the first column is a label, with
+      or without its colons, a mnemonic too, as the Z80 assembler reads it: `loop    djnz loop`
+      favours `djnz`, and `nop` alone in the first column is a label.
+    - A shard of another format says that the site was updated and the page needs a reload. The
+      search remembers it: no shard is fetched again, and a later search says so at once.
+- **Reviewed.** An independent review of the whole branch found six problems, all fixed: word
+  statistics shared by every loaded shard, so a language's results changed once the navbar's search
+  had loaded the rest (70 of 322 golden query and mode pairs moved; now none, and the golden test
+  runs every query on an engine holding all 11 shards to keep it so); "I" or a capitalised word
+  counting as code; hyphenated words left out of the stemmed half; an outdated index fetched again
+  on every query; the favoured names following every keystroke; Z80 labels without a colon.
+- **For the owner:**
+    - The accent colour as text is below 4.5:1 contrast in some themes (MIPS 3.3:1, a light custom
+      theme 1.6:1), the question S3-97 left open for all accent text.
+    - Scoring a shard with its scope's statistics reaches into Orama 3.1.18's index component (its
+      `relevance` object and the index's fields). An Orama upgrade can break it; the all-shards
+      golden test would then fail.
+    - About 95 x86 syscall entries have no description, only registers, so their questions can only
+      use the call's name; MIPS `mulo`'s text never says what it does on overflow.
+    - The editor's Z80 highlighting and label list read a mnemonic in the first column as an
+      instruction, where the Z80 assembler reads it as a label.
+    - Review the synonym table (four rows) and a sample of the Entry questions, as agreed.
+
+### Considered and left out
+
+- **A graded test set of plain-English queries and held-back Entry questions.** Not worth it at this
+  scale (above).
+- **Rank fusion** and **a second vector per entry for its questions**: see Matching and Entry
+  questions.
+- **Spelling corrections** from the index's own words, with a dotted underline in the box. Tried on
+  the real vocabulary: "devide" is one edit from divide, device and decide, so it was never
+  corrected, and 6 to 7% of correctly spelled words missing from a scope were "corrected"
+  (segfault to default, dereference to reference). The meaning half copes with typos, and a single
+  word keeps Orama's tolerance.
+- **Comparisons** ("lw vs lb" pinning both): little use for its complexity; the boost already lifts
+  both names.
+- **A pasted line of code as a rule of its own**, pinning the instruction and its registers: the name
+  boost covers it, and the editor's hover already explains the instruction under the cursor.
+- **Retrying without a preference** when the named language has no close match: the Search modifier
+  is on show, so the reader can delete it, and silently overriding it would contradict the highlight.
+  Orama's words half already matches any of a query's words, so dropping the weakest word changed
+  nothing either.
+- **A reranker**, a second model reordering the first twenty results.
+- **Number notations** (`$FF`, `0FFh`, `0xff`), **"the MIPS equivalent of `movem`"**, **reading the kind
+  of question** ("what is" favouring lectures), **a preference for the reader's current language**
+  (each language's pages already search that language alone), and **indexing the Examples or the
+  editor's own how-tos**.
+- **Anything new in the results**, such as an answer card, why a result matched, or an "Ask the
+  assistant" row: not now.
+- **Languages other than English.** The search is English only; `mdbr-leaf-ir` is too.
+
 ## The agents' search tool
 
 - **A `search_documentation` tool in this work**, for every agent built on the default coding agent

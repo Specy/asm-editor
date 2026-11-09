@@ -20,6 +20,11 @@ export type LectureSection = {
     title: string | null
     /** The text a reader reads, inline code kept, code blocks and exercise solutions left out. */
     prose: string
+    /**
+     * The prose without its inline code: the words a reader reads as words, which the search counts
+     * to tell an instruction's name from the English word it also is (`loop`, `stop`).
+     */
+    words: string
     /** The section's code blocks (playgrounds and plain fences), testcase fences left out. */
     code: string
     /** The comments of that code, which say in words what it does. */
@@ -62,6 +67,7 @@ const BLOCKS = new Set(['paragraph', 'heading', 'tableCell', 'listItem', 'blockq
 
 class Collector {
     prose: string[] = []
+    words: string[] = []
     code: string[] = []
     comments: string[] = []
     /** Open `<details>` blocks: an Exercise's solution, which is not what the section says. */
@@ -84,19 +90,25 @@ class Collector {
         }
         if (node.type === 'text' || node.type === 'inlineCode') {
             this.prose.push(node.value)
+            this.words.push(node.type === 'text' ? node.value : ' ')
             return
         }
         if (node.type === 'image') {
             this.prose.push(node.alt ?? '')
+            this.words.push(node.alt ?? '')
             return
         }
         if (node.type === 'break') {
             this.prose.push('\n')
+            this.words.push('\n')
             return
         }
         if ('children' in node) {
             for (const child of node.children as Nodes[]) this.add(child)
-            if (BLOCKS.has(node.type)) this.prose.push('\n')
+            if (BLOCKS.has(node.type)) {
+                this.prose.push('\n')
+                this.words.push('\n')
+            }
         }
     }
 }
@@ -137,6 +149,7 @@ export function splitLecture(source: string): LectureSection[] {
             slug: draft.slug,
             title: draft.title,
             prose: tidy(collector.prose.join('')),
+            words: tidy(collector.words.join('')),
             code: collector.code.join('\n\n'),
             comments: collector.comments.join('\n'),
             markdown:

@@ -1,0 +1,4746 @@
+{
+    "mips/directives/2byte": {
+        "hash": "6b7c7de9b1b53e0f",
+        "questions": [
+            "what does .2byte do",
+            "is there another directive that stores halfwords like .half",
+            "how do I store a 2-byte value"
+        ]
+    },
+    "mips/directives/4byte": {
+        "hash": "37880ba7044bf768",
+        "questions": [
+            "what does .4byte do",
+            "is there another directive that works like .word",
+            "how do I store a 4-byte value"
+        ]
+    },
+    "mips/directives/align": {
+        "hash": "fb3a42cca3e29a94",
+        "questions": [
+            "how do I align data to a word boundary",
+            "why does .align 2 mean 4 bytes",
+            "is the align number a byte count or an exponent"
+        ]
+    },
+    "mips/directives/ascii": {
+        "hash": "4b3099d9b0b8aa3b",
+        "questions": [
+            "how do I store a string without a null terminator",
+            "my string keeps printing the text that follows it",
+            "difference between .ascii and .asciiz"
+        ]
+    },
+    "mips/directives/asciiz": {
+        "hash": "44beeb75e0d5ac77",
+        "questions": [
+            "how do I declare a string",
+            "how do I store text that ends with a zero byte",
+            "what is a C-style string",
+            "what does .asciiz do"
+        ]
+    },
+    "mips/directives/asciz": {
+        "hash": "8a8d80233400c792",
+        "questions": [
+            "is .asciz a typo for .asciiz",
+            "another spelling of the null-terminated string directive",
+            "which directives add a zero byte after the text"
+        ]
+    },
+    "mips/directives/balign": {
+        "hash": "522e17c24e7dd295",
+        "questions": [
+            "how do I align to 8 bytes by writing 8",
+            "align to a byte count instead of a power of two",
+            "what does .balign do"
+        ]
+    },
+    "mips/directives/bss": {
+        "hash": "cb4fa731bab5a605",
+        "questions": [
+            "which section is for uninitialized data",
+            "where should a large uninitialized buffer go",
+            "what is the bss section"
+        ]
+    },
+    "mips/directives/byte": {
+        "hash": "b57a297b224b44ad",
+        "questions": [
+            "how do I declare an array of bytes",
+            "how do I store 8-bit values in memory",
+            "what does .byte do"
+        ]
+    },
+    "mips/directives/comm": {
+        "hash": "d4d4b00d796cb1d9",
+        "questions": [
+            "how do I declare an uninitialized global variable",
+            "what does .comm total, 4, 4 mean",
+            "reserve space for a variable without switching section"
+        ]
+    },
+    "mips/directives/data": {
+        "hash": "bfb2ff2f414dbb68",
+        "questions": [
+            "where do I declare my variables",
+            "where do variables with starting values go",
+            "what does .data do"
+        ]
+    },
+    "mips/directives/double": {
+        "hash": "92e2028393640dad",
+        "questions": [
+            "how do I declare a double variable",
+            "where do I write a 64-bit floating point constant",
+            "store a double precision number in memory"
+        ]
+    },
+    "mips/directives/end": {
+        "hash": "08c576786704b012",
+        "questions": [
+            "what does .end mean",
+            "does .end stop my program",
+            "how do I mark where a function ends for debugging tools",
+            "is the end of function marker needed for my code to run"
+        ]
+    },
+    "mips/directives/end_macro": {
+        "hash": "ab45225d6a6b1599",
+        "questions": [
+            "how do I end a macro definition",
+            "what line closes a macro",
+            "what does .end_macro do"
+        ]
+    },
+    "mips/directives/ent": {
+        "hash": "fb0be320506f1c59",
+        "questions": [
+            "what does .ent mean",
+            "how do I mark where a function starts for debugging tools",
+            "is the function start marker needed for my code to run"
+        ]
+    },
+    "mips/directives/eqv": {
+        "hash": "0ede485b713e7875",
+        "questions": [
+            "how do I define a constant",
+            "is there a #define in assembly",
+            "how do I give a name to a number",
+            "what does .eqv do"
+        ]
+    },
+    "mips/directives/extern": {
+        "hash": "3c936dc36ea5de74",
+        "questions": [
+            "how do I use a variable defined in another file",
+            "how do I declare an outside data symbol and its size",
+            "what does .extern do"
+        ]
+    },
+    "mips/directives/float": {
+        "hash": "3043b336ef3357e2",
+        "questions": [
+            "how do I declare a float variable",
+            "how do I put a 32-bit floating point constant in memory",
+            "store a single precision number in the data section"
+        ]
+    },
+    "mips/directives/frame": {
+        "hash": "12b7d20a2d526d93",
+        "questions": [
+            "what does .frame do",
+            "can I ignore the frame directive in compiled code",
+            "describe a function's stack size and return register for a debugger"
+        ]
+    },
+    "mips/directives/global": {
+        "hash": "d720b066e957ac3e",
+        "questions": [
+            "is .global the same as .globl",
+            "should I write globl or global",
+            "another spelling of the directive that exports a label"
+        ]
+    },
+    "mips/directives/globl": {
+        "hash": "683544f65f9efea3",
+        "questions": [
+            "how do I make a label visible to other files",
+            "how do I export a function so another file can call it",
+            "what does .globl main do"
+        ]
+    },
+    "mips/directives/half": {
+        "hash": "5edf95eda8f89d61",
+        "questions": [
+            "how do I declare 16-bit numbers",
+            "how do I store a list of 2-byte values",
+            "what is a halfword"
+        ]
+    },
+    "mips/directives/include": {
+        "hash": "3c1bd9bd9f7e5bcb",
+        "questions": [
+            "how do I include another assembly file",
+            "how do I pull in code from a separate file",
+            "what does .include do"
+        ]
+    },
+    "mips/directives/kdata": {
+        "hash": "5bd1c5158e274e11",
+        "questions": [
+            "how do I declare variables for kernel mode",
+            "what is the kernel data section",
+            "what does .kdata do"
+        ]
+    },
+    "mips/directives/ktext": {
+        "hash": "7f5b74cf67e2bac7",
+        "questions": [
+            "where do I write kernel mode instructions",
+            "what is the kernel code section",
+            "what does .ktext do"
+        ]
+    },
+    "mips/directives/lcomm": {
+        "hash": "bd625fa1877b8300",
+        "questions": [
+            "how do I declare an uninitialized static variable",
+            "reserve space for a variable only this file uses",
+            "what does .lcomm mean in compiler output"
+        ]
+    },
+    "mips/directives/local": {
+        "hash": "abe667e47734ef90",
+        "questions": [
+            "how do I make a label private to one file",
+            "does .local hide my symbol from other files",
+            "mark a symbol as local for the linker"
+        ]
+    },
+    "mips/directives/macro": {
+        "hash": "d8364c402c253d04",
+        "questions": [
+            "how do I define a macro",
+            "how do I write a reusable block of code",
+            "what does .macro do"
+        ]
+    },
+    "mips/directives/p2align": {
+        "hash": "352dd060403a200e",
+        "questions": [
+            "what does .p2align do",
+            "is there another name for .align",
+            "align the next item to 2 to the power n bytes"
+        ]
+    },
+    "mips/directives/rdata": {
+        "hash": "78c7f1e301348798",
+        "questions": [
+            "where do I put read-only data like string literals",
+            "is read-only data stored separately in this simulator",
+            "what does .rdata do"
+        ]
+    },
+    "mips/directives/sbss": {
+        "hash": "4e25bb60f674e9cd",
+        "questions": [
+            "what does .sbss mean",
+            "can I write something else instead of .bss",
+            "which directives start an uninitialized data section"
+        ]
+    },
+    "mips/directives/sdata": {
+        "hash": "dabbef05a478499a",
+        "questions": [
+            "what does .sdata do",
+            "is there another name for the .rdata directive",
+            "which directives start a read-only data section"
+        ]
+    },
+    "mips/directives/section": {
+        "hash": "c4436759bcd206e3",
+        "questions": [
+            "how do I switch to a section by its name",
+            "can I use .rodata and .bss sections here",
+            "what does .section .rodata do"
+        ]
+    },
+    "mips/directives/set": {
+        "hash": "d7110f60c3f182d9",
+        "questions": [
+            "how do I change assembler settings",
+            "how do I let my code use the $at register",
+            "what does .set noat do"
+        ]
+    },
+    "mips/directives/space": {
+        "hash": "a506536806f80bdc",
+        "questions": [
+            "how do I reserve a buffer of bytes",
+            "how do I make room for an array without giving values",
+            "what does .space do"
+        ]
+    },
+    "mips/directives/string": {
+        "hash": "8a8d80233400c792",
+        "questions": [
+            "what does .string do",
+            "is there another name for .asciiz",
+            "does the string directive add a null terminator"
+        ]
+    },
+    "mips/directives/text": {
+        "hash": "1b732c1563e87c6e",
+        "questions": [
+            "where do I write the program's instructions",
+            "which section holds the code",
+            "what does .text mean"
+        ]
+    },
+    "mips/directives/what-directives-are": {
+        "hash": "46ad41d622eb6c06",
+        "questions": [
+            "what is an assembler directive",
+            "does the processor run directives",
+            "difference between a directive and an instruction",
+            "what are lines like .data and .text for"
+        ]
+    },
+    "mips/directives/word": {
+        "hash": "a8786d6eaa43ee3f",
+        "questions": [
+            "how do I declare an array of 32-bit integers",
+            "how do I define a 4-byte variable with a value",
+            "what does .word do"
+        ]
+    },
+    "mips/directives/zero": {
+        "hash": "6392114059acb5f6",
+        "questions": [
+            "how do I reserve a block of bytes set to zero",
+            "is there another directive that works like .space",
+            "what does .zero do"
+        ]
+    },
+    "mips/input-controller/events": {
+        "hash": "60ab44c62c61d9e5",
+        "questions": [
+            "how do I tell a key press from a key release",
+            "where was the mouse when the user clicked",
+            "how do I read the mouse wheel",
+            "does the key code change with the keyboard layout",
+            "why do I keep getting events while a key is held down"
+        ]
+    },
+    "mips/input-controller/first-program": {
+        "hash": "70d7bc3b8abb2846",
+        "questions": [
+            "example program that reacts to the arrow keys",
+            "how do I end the program when escape is pressed",
+            "how do I check that the input device is there before using it"
+        ]
+    },
+    "mips/input-controller/from-c": {
+        "hash": "23dacf6112b6b5b5",
+        "questions": [
+            "how do I read the keyboard and mouse in C",
+            "how do I check if a key is held in C",
+            "C constants for mouse buttons in events and in the pointer",
+            "C program that moves a dot with the arrow keys"
+        ]
+    },
+    "mips/input-controller/full-queue": {
+        "hash": "6fba437c322208fd",
+        "questions": [
+            "what happens when too many input events arrive",
+            "what does a dropped event mean",
+            "my program missed some key presses",
+            "how many events can wait at once"
+        ]
+    },
+    "mips/input-controller/hears-nothing": {
+        "hash": "4c9c15d4a01efd1c",
+        "questions": [
+            "why does my program get no key or mouse events in a testcase",
+            "the click I made before pressing run was ignored",
+            "input stops working when the bitmap display base is 0xffff0000",
+            "a key I held before starting shows up late"
+        ]
+    },
+    "mips/input-controller/key-codes": {
+        "hash": "a21645ff129e40a1",
+        "questions": [
+            "list of key codes for every key",
+            "what is the code of the space bar",
+            "are left and right shift different keys",
+            "ready-made constants for key codes in assembly",
+            "why do media keys and Fn send nothing"
+        ]
+    },
+    "mips/input-controller/key-state": {
+        "hash": "ffee7eb5f42f324d",
+        "questions": [
+            "how do I check if a key is held down right now",
+            "how do I move something while the player holds an arrow key",
+            "which byte and bit tell me a key is pressed",
+            "a quick key press between frames was missed"
+        ]
+    },
+    "mips/input-controller/pointer": {
+        "hash": "c187a53cddb43042",
+        "questions": [
+            "how do I get the mouse position",
+            "how do I check if a mouse button is held",
+            "how do I find the screen pixel under the mouse",
+            "why is there no event when the mouse moves"
+        ]
+    },
+    "mips/input-controller/registers": {
+        "hash": "16bb3aa991437e6b",
+        "questions": [
+            "what is at address 0xffff0300",
+            "how do I know how many events are waiting",
+            "why did my program lose an event when I read it twice",
+            "program stops after I write to the control register",
+            "can the keyboard and mouse device raise interrupts"
+        ]
+    },
+    "mips/input-controller/typed-characters": {
+        "hash": "a80261ce9d9e63cf",
+        "questions": [
+            "should I use the keyboard registers or the input controller for text",
+            "why do I get key codes instead of letters",
+            "old typed characters show up when I read a character later",
+            "how do I throw away characters waiting in the keyboard"
+        ]
+    },
+    "mips/input-controller/undo": {
+        "hash": "957283c1f847eef0",
+        "questions": [
+            "what happens to key events when I undo",
+            "after undo my program reads an old key press again",
+            "why does undo not move the mouse pointer back"
+        ]
+    },
+    "mips/input-controller/waiting": {
+        "hash": "9e1860bc825ab4e5",
+        "questions": [
+            "how do I wait for input without busy looping",
+            "my program reaches the instruction limit while waiting for a key",
+            "why is my polling loop filling the undo history"
+        ]
+    },
+    "mips/input-controller/what-the-input-controller-is": {
+        "hash": "6cc6cf08be7cf351",
+        "questions": [
+            "what is the input controller",
+            "can my program read arrow keys, shift and function keys",
+            "how do I give the keyboard back to the editor",
+            "keys go to the editor instead of my program",
+            "why did my held keys get released when I clicked away"
+        ]
+    },
+    "mips/instructions/abs": {
+        "hash": "572b775c7ee1a511",
+        "questions": [
+            "how do I get the absolute value of an integer",
+            "turn a negative integer into a positive one",
+            "what does abs give for -7"
+        ]
+    },
+    "mips/instructions/abs.d": {
+        "hash": "fa1173d8cb38b11d",
+        "questions": [
+            "absolute value of a double",
+            "make a negative double-precision number positive",
+            "how does abs.d change the bits of a double"
+        ]
+    },
+    "mips/instructions/abs.s": {
+        "hash": "3f7c558bd200a972",
+        "questions": [
+            "absolute value of a float",
+            "make a negative single-precision float positive",
+            "does taking the absolute value of a NaN float raise an error"
+        ]
+    },
+    "mips/instructions/add": {
+        "hash": "629874b883d8cd2b",
+        "questions": [
+            "how do I sum two registers",
+            "program stops with an overflow error when adding two signed numbers",
+            "difference between add and addu",
+            "catch signed overflow when adding"
+        ]
+    },
+    "mips/instructions/add.d": {
+        "hash": "82e5eeb03957180f",
+        "questions": [
+            "how do I add two doubles",
+            "why must double registers be even numbered",
+            "how many decimal digits does a double keep"
+        ]
+    },
+    "mips/instructions/add.s": {
+        "hash": "ec6c8d1d5a8768a0",
+        "questions": [
+            "how do I add two floats",
+            "how many decimal digits does a single-precision float keep",
+            "add 1.5 and 2.25 as single precision"
+        ]
+    },
+    "mips/instructions/addi": {
+        "hash": "8f182714f45e2af6",
+        "questions": [
+            "add a constant to a register and trap on overflow",
+            "largest constant I can add in one instruction",
+            "adding an immediate stops the program with an overflow exception"
+        ]
+    },
+    "mips/instructions/addiu": {
+        "hash": "cfeef629bb293898",
+        "questions": [
+            "how do I add a constant to a register",
+            "does the u in addiu mean the number is unsigned",
+            "increment a counter without an overflow error"
+        ]
+    },
+    "mips/instructions/addu": {
+        "hash": "e859d30a4433fea2",
+        "questions": [
+            "add two registers without an overflow exception",
+            "how do I add two unsigned numbers",
+            "can addu be used for signed numbers"
+        ]
+    },
+    "mips/instructions/and": {
+        "hash": "b072299bd21ec8b7",
+        "questions": [
+            "bitwise and of two registers",
+            "how do I isolate certain bits of a value",
+            "clear bits using a mask stored in a register"
+        ]
+    },
+    "mips/instructions/andi": {
+        "hash": "bccd23ed8fb2ab67",
+        "questions": [
+            "how do I keep only the low 4 bits of a number",
+            "is the andi constant sign-extended",
+            "test whether a bit is set using a constant mask"
+        ]
+    },
+    "mips/instructions/b": {
+        "hash": "ec918582b95f1c1a",
+        "questions": [
+            "always branch to a label",
+            "skip over some code without a condition",
+            "what does B label do"
+        ]
+    },
+    "mips/instructions/bal": {
+        "hash": "43d3d2f9423f579e",
+        "questions": [
+            "call a subroutine with a branch instead of a jump",
+            "branch to a label and save the return address in $ra",
+            "what is the difference between bal and b"
+        ]
+    },
+    "mips/instructions/bc1f": {
+        "hash": "1d3791b92e01b7f4",
+        "questions": [
+            "branch when a float comparison is false",
+            "bclf is not a valid instruction",
+            "branch if a specific FP condition flag is not set"
+        ]
+    },
+    "mips/instructions/bc1t": {
+        "hash": "01b1cd2662b1f0c2",
+        "questions": [
+            "branch if a float comparison is true",
+            "branch if a chosen FP condition flag is set",
+            "bclt is not recognized by the assembler"
+        ]
+    },
+    "mips/instructions/beq": {
+        "hash": "622f4b085596f3be",
+        "questions": [
+            "branch if two registers are equal",
+            "how do I write an if else in assembly",
+            "how far away can a branch target be",
+            "jump to a label when a register equals a constant"
+        ]
+    },
+    "mips/instructions/beqz": {
+        "hash": "5002e8381788d7f3",
+        "questions": [
+            "branch if a register is zero",
+            "leave a loop when the counter reaches 0",
+            "what does beqz $t0 do"
+        ]
+    },
+    "mips/instructions/bge": {
+        "hash": "66d1257b05cd6950",
+        "questions": [
+            "branch if x is greater than or equal to y",
+            "jump when a counter is at least a limit",
+            "bge with negative numbers"
+        ]
+    },
+    "mips/instructions/bgeu": {
+        "hash": "499cd3d70241d46a",
+        "questions": [
+            "branch if x is greater than or equal to y as unsigned",
+            "why is -2 greater than 1 in an unsigned branch",
+            "bgeu vs bge"
+        ]
+    },
+    "mips/instructions/bgez": {
+        "hash": "559d9f94ba9810df",
+        "questions": [
+            "branch if a number is not negative",
+            "test the sign bit and branch",
+            "branch if $t0 is greater than or equal to zero"
+        ]
+    },
+    "mips/instructions/bgezal": {
+        "hash": "995aaab8f0e83ab7",
+        "questions": [
+            "call a function only if a value is not negative",
+            "branch if zero or positive and save the return address",
+            "how do I return after bgezal"
+        ]
+    },
+    "mips/instructions/bgt": {
+        "hash": "838644db412d042a",
+        "questions": [
+            "branch if x is greater than y",
+            "jump when a value is bigger than a constant",
+            "loop while one signed number is greater than another"
+        ]
+    },
+    "mips/instructions/bgtu": {
+        "hash": "259e248ed6f25055",
+        "questions": [
+            "branch if x is greater than y as unsigned",
+            "branch if an unsigned value is above a limit",
+            "difference between bgt and bgtu"
+        ]
+    },
+    "mips/instructions/bgtz": {
+        "hash": "8722ec38488565f3",
+        "questions": [
+            "branch if a number is positive",
+            "loop while a counter is greater than 0",
+            "difference between bgtz and bgez"
+        ]
+    },
+    "mips/instructions/ble": {
+        "hash": "7a5103141a0e4fdf",
+        "questions": [
+            "branch if x is less than or equal to y",
+            "jump when a value is at most a constant",
+            "keep looping until i passes n"
+        ]
+    },
+    "mips/instructions/bleu": {
+        "hash": "02a12fd9d15d3422",
+        "questions": [
+            "branch if x is less than or equal to y as unsigned",
+            "branch if an unsigned value is not above a limit",
+            "difference between ble and bleu"
+        ]
+    },
+    "mips/instructions/blez": {
+        "hash": "63edc8442c0472a0",
+        "questions": [
+            "branch if a number is zero or negative",
+            "stop a loop when the count drops to 0 or below",
+            "what does blez test"
+        ]
+    },
+    "mips/instructions/blt": {
+        "hash": "349e5358a31430eb",
+        "questions": [
+            "branch if x is less than y",
+            "loop while the index is below the count",
+            "jump when a value is smaller than a constant"
+        ]
+    },
+    "mips/instructions/bltu": {
+        "hash": "b14712f764c18c9b",
+        "questions": [
+            "branch if x is less than y as unsigned",
+            "branch if an unsigned value is below a limit",
+            "difference between blt and bltu"
+        ]
+    },
+    "mips/instructions/bltz": {
+        "hash": "df625cb9d2715811",
+        "questions": [
+            "how do I check if a value is negative",
+            "branch when $t0 is below zero",
+            "bltz vs blez"
+        ]
+    },
+    "mips/instructions/bltzal": {
+        "hash": "62db209afc43a249",
+        "questions": [
+            "call a function only if a value is negative",
+            "branch if negative and save the return address",
+            "what does bltzal put in $ra"
+        ]
+    },
+    "mips/instructions/bne": {
+        "hash": "85912977c78e14c4",
+        "questions": [
+            "branch if two registers are not equal",
+            "keep looping until a counter reaches the end",
+            "jump when a value is different from a constant"
+        ]
+    },
+    "mips/instructions/bnez": {
+        "hash": "fc6ccef0ce2c54e0",
+        "questions": [
+            "branch if a register is not zero",
+            "loop while a value is nonzero",
+            "what does bnez do"
+        ]
+    },
+    "mips/instructions/break": {
+        "hash": "fe23ff1a815c7887",
+        "questions": [
+            "how do I stop the program at a point for debugging",
+            "insert a software breakpoint in my code",
+            "program halts with a breakpoint exception"
+        ]
+    },
+    "mips/instructions/c.eq.d": {
+        "hash": "12bb3a58935223e0",
+        "questions": [
+            "check if two doubles are equal",
+            "compare double-precision values for equality and branch",
+            "store a double equality result in condition flag 1"
+        ]
+    },
+    "mips/instructions/c.eq.s": {
+        "hash": "1a900b1b66d76934",
+        "questions": [
+            "check if two floats are equal",
+            "branch when two single-precision values are the same",
+            "what does the 1 mean in c.eq.s 1, $f0, $f1"
+        ]
+    },
+    "mips/instructions/c.f.d": {
+        "hash": "96e3b89e6fa4b969",
+        "questions": [
+            "double compare that is always false",
+            "set a condition flag to false with a double compare",
+            "why does c.f.d never set the flag"
+        ]
+    },
+    "mips/instructions/c.f.s": {
+        "hash": "d38e752c8c71d5b9",
+        "questions": [
+            "float compare that is always false",
+            "clear a chosen FP condition flag with a float compare",
+            "what is c.f.s for"
+        ]
+    },
+    "mips/instructions/c.le.d": {
+        "hash": "a704f4f6e0fbcd42",
+        "questions": [
+            "check if one double is less than or equal to another",
+            "branch if $f2 is less than or equal to $f4",
+            "less or equal compare of doubles into a chosen condition flag"
+        ]
+    },
+    "mips/instructions/c.le.s": {
+        "hash": "5ec480ac0f7e3653",
+        "questions": [
+            "check if one float is less than or equal to another",
+            "branch if $f0 is less than or equal to $f1",
+            "less or equal compare of floats into a chosen condition flag"
+        ]
+    },
+    "mips/instructions/c.lt.d": {
+        "hash": "e9abfa35b2bfcfb9",
+        "questions": [
+            "check if one double is less than another",
+            "branch if $f2 is less than $f4",
+            "what does c.lt.d 1, $f2, $f4 do"
+        ]
+    },
+    "mips/instructions/c.lt.s": {
+        "hash": "95b04ab52fac38c8",
+        "questions": [
+            "check if one float is less than another",
+            "branch if $f0 is less than $f1",
+            "what does c.lt.s 1, $f0, $f1 do"
+        ]
+    },
+    "mips/instructions/c.nge.d": {
+        "hash": "6af18b96635d6cc4",
+        "questions": [
+            "what does not greater than or equal mean for doubles",
+            "signalling double compare that is true for less than or NaN",
+            "difference between c.nge.d and c.ult.d"
+        ]
+    },
+    "mips/instructions/c.nge.s": {
+        "hash": "6441352e474cfc8c",
+        "questions": [
+            "what does not greater than or equal mean for floats",
+            "signalling float compare that is true for less than or NaN",
+            "difference between c.nge.s and c.ult.s"
+        ]
+    },
+    "mips/instructions/c.ngl.d": {
+        "hash": "fe32f17687c932e7",
+        "questions": [
+            "what does not greater or less than mean for doubles",
+            "signalling double compare that is true for equal or NaN",
+            "difference between c.ngl.d and c.ueq.d"
+        ]
+    },
+    "mips/instructions/c.ngl.s": {
+        "hash": "84478774ae0c1863",
+        "questions": [
+            "what does not greater or less than mean for floats",
+            "signalling float compare that is true for equal or NaN",
+            "difference between c.ngl.s and c.ueq.s"
+        ]
+    },
+    "mips/instructions/c.ngle.d": {
+        "hash": "7d8ef246b42f07e5",
+        "questions": [
+            "signalling compare that is true only when a double is NaN",
+            "what does not greater, less or equal mean for doubles",
+            "difference between c.ngle.d and c.un.d"
+        ]
+    },
+    "mips/instructions/c.ngle.s": {
+        "hash": "0327aa1cf4a8e8c6",
+        "questions": [
+            "signalling compare that is true only when a float is NaN",
+            "what does not greater, less or equal mean for floats",
+            "difference between c.ngle.s and c.un.s"
+        ]
+    },
+    "mips/instructions/c.ngt.d": {
+        "hash": "97ea01a00a258161",
+        "questions": [
+            "check if a double is not greater than another",
+            "signalling double compare that is true for less, equal or NaN",
+            "difference between c.ngt.d and c.ule.d"
+        ]
+    },
+    "mips/instructions/c.ngt.s": {
+        "hash": "83f04823e3f67e69",
+        "questions": [
+            "check if a float is not greater than another",
+            "signalling float compare that is true for less, equal or NaN",
+            "difference between c.ngt.s and c.ule.s"
+        ]
+    },
+    "mips/instructions/c.ole.d": {
+        "hash": "799a3bdb3108d590",
+        "questions": [
+            "double less or equal compare that is false if either value is NaN",
+            "ordered less than or equal for double precision",
+            "branch if a double is at most another and neither is NaN"
+        ]
+    },
+    "mips/instructions/c.ole.s": {
+        "hash": "aeb7edc6f826bcd2",
+        "questions": [
+            "float less or equal compare that is false if either value is NaN",
+            "ordered less than or equal for single precision",
+            "branch if a float is at most another and neither is NaN"
+        ]
+    },
+    "mips/instructions/c.olt.d": {
+        "hash": "6b822208b4d08966",
+        "questions": [
+            "double less than compare that is false if either value is NaN",
+            "ordered less than for double precision",
+            "branch if a double is below another and neither is NaN"
+        ]
+    },
+    "mips/instructions/c.olt.s": {
+        "hash": "754c613664ccda83",
+        "questions": [
+            "float less than compare that is false if either value is NaN",
+            "ordered less than for single precision",
+            "branch if a float is below another and neither is NaN"
+        ]
+    },
+    "mips/instructions/c.seq.d": {
+        "hash": "45cb321c427feca6",
+        "questions": [
+            "signalling equality compare for doubles",
+            "difference between c.seq.d and c.eq.d",
+            "does the signalling double equality compare raise an exception here"
+        ]
+    },
+    "mips/instructions/c.seq.s": {
+        "hash": "fb253958de1bd325",
+        "questions": [
+            "signalling equality compare for floats",
+            "difference between c.seq.s and c.eq.s",
+            "does the signalling float equality compare raise an exception here"
+        ]
+    },
+    "mips/instructions/c.sf.d": {
+        "hash": "7bbe011331175817",
+        "questions": [
+            "signalling double compare that is never true",
+            "difference between c.sf.d and c.f.d",
+            "does the always-false signalling double compare raise exceptions"
+        ]
+    },
+    "mips/instructions/c.sf.s": {
+        "hash": "a8f6e18b6cb5a434",
+        "questions": [
+            "signalling float compare that is never true",
+            "difference between c.sf.s and c.f.s",
+            "does the always-false signalling float compare raise exceptions"
+        ]
+    },
+    "mips/instructions/c.ueq.d": {
+        "hash": "bd0831befc27370f",
+        "questions": [
+            "check if two doubles are equal or either is NaN",
+            "unordered or equal compare for double precision",
+            "c.ueq.d vs c.eq.d"
+        ]
+    },
+    "mips/instructions/c.ueq.s": {
+        "hash": "958570866975052a",
+        "questions": [
+            "check if two floats are equal or either is NaN",
+            "unordered or equal compare for single precision",
+            "c.ueq.s vs c.eq.s"
+        ]
+    },
+    "mips/instructions/c.ule.d": {
+        "hash": "146bddb8a8e5c053",
+        "questions": [
+            "double less or equal compare that is also true for NaN",
+            "unordered or less than or equal for double precision",
+            "c.ule.d vs c.ole.d"
+        ]
+    },
+    "mips/instructions/c.ule.s": {
+        "hash": "2cf68a47c6520d5b",
+        "questions": [
+            "float less or equal compare that is also true for NaN",
+            "unordered or less than or equal for single precision",
+            "c.ule.s vs c.ole.s"
+        ]
+    },
+    "mips/instructions/c.ult.d": {
+        "hash": "2154e34aeeef239a",
+        "questions": [
+            "double less than compare that is also true for NaN",
+            "unordered or less than for double precision",
+            "c.ult.d vs c.olt.d"
+        ]
+    },
+    "mips/instructions/c.ult.s": {
+        "hash": "22959ebf0909d985",
+        "questions": [
+            "float less than compare that is also true for NaN",
+            "unordered or less than for single precision",
+            "c.ult.s vs c.olt.s"
+        ]
+    },
+    "mips/instructions/c.un.d": {
+        "hash": "619a4d494c75c209",
+        "questions": [
+            "how do I check if a double is NaN",
+            "test whether either of two doubles is not a number",
+            "what does unordered mean when comparing doubles"
+        ]
+    },
+    "mips/instructions/c.un.s": {
+        "hash": "0a21140b3b5535ac",
+        "questions": [
+            "how do I check if a float is NaN",
+            "test whether either of two floats is not a number",
+            "what does unordered mean when comparing floats"
+        ]
+    },
+    "mips/instructions/ceil.w.d": {
+        "hash": "fabe11406dbab2db",
+        "questions": [
+            "round a double up to the next whole number",
+            "double to integer rounding toward positive infinity",
+            "ceiling of a negative double like -1.5"
+        ]
+    },
+    "mips/instructions/ceil.w.s": {
+        "hash": "db5c8ccf5f2e9cb2",
+        "questions": [
+            "round a float up to an integer",
+            "ceiling of a single-precision number",
+            "why does the ceiling of -1.5 give -1"
+        ]
+    },
+    "mips/instructions/cfc1": {
+        "hash": "840a64de16fae51b",
+        "questions": [
+            "read the FPU control and status register",
+            "copy the FP condition codes into an integer register",
+            "what does the rounding mode field read as"
+        ]
+    },
+    "mips/instructions/clo": {
+        "hash": "b1e84077c1f5e5aa",
+        "questions": [
+            "count the leading 1 bits of a register",
+            "what does clo return if every bit is set",
+            "what does count leading ones mean"
+        ]
+    },
+    "mips/instructions/clz": {
+        "hash": "1427afda0ddf60b9",
+        "questions": [
+            "count leading zeros of a number",
+            "compute floor of log base 2 of an integer",
+            "what does clz return for 0"
+        ]
+    },
+    "mips/instructions/ctc1": {
+        "hash": "051099d9f31669f1",
+        "questions": [
+            "write to the FPU control register",
+            "can I change the floating point rounding mode",
+            "set the FP condition flags from an integer register"
+        ]
+    },
+    "mips/instructions/cvt.d.s": {
+        "hash": "0b509c0b69315ffc",
+        "questions": [
+            "convert a float to a double",
+            "does converting single to double lose precision",
+            "widen a 32-bit float into a register pair"
+        ]
+    },
+    "mips/instructions/cvt.d.w": {
+        "hash": "c329113920344838",
+        "questions": [
+            "convert an integer to a double",
+            "use an integer register value in double-precision math",
+            "is the integer treated as signed when converting to double"
+        ]
+    },
+    "mips/instructions/cvt.s.d": {
+        "hash": "81e4895951deb9a4",
+        "questions": [
+            "convert a double to a float",
+            "does converting double to single lose precision",
+            "narrow a double into one FP register"
+        ]
+    },
+    "mips/instructions/cvt.s.w": {
+        "hash": "9395db50cf7efe1d",
+        "questions": [
+            "convert an integer to a float",
+            "how do I get 7.0 as a float from the integer 7",
+            "turn a signed int in $f1 into single precision"
+        ]
+    },
+    "mips/instructions/cvt.w.d": {
+        "hash": "f31a564435557919",
+        "questions": [
+            "convert a double to an integer",
+            "turn the double 2.0 into the integer 2",
+            "move the integer result of a double conversion to $t0"
+        ]
+    },
+    "mips/instructions/cvt.w.s": {
+        "hash": "abbbe1e6c25eaf9a",
+        "questions": [
+            "convert a float to an integer",
+            "turn the float 2.0 into the integer 2",
+            "get the integer value of a float into $t0"
+        ]
+    },
+    "mips/instructions/div": {
+        "hash": "148b6efd07d58346",
+        "questions": [
+            "how do I divide two integers",
+            "where do the quotient and remainder go after dividing",
+            "dividing by zero gives a strange result",
+            "div with two operands vs three"
+        ]
+    },
+    "mips/instructions/div.d": {
+        "hash": "ce8c2211878404c0",
+        "questions": [
+            "divide two doubles",
+            "precise division of decimal numbers",
+            "do div.d registers have to be even"
+        ]
+    },
+    "mips/instructions/div.s": {
+        "hash": "7f161afdac254239",
+        "questions": [
+            "divide two floats",
+            "what happens when I divide a float by zero",
+            "single-precision division result in $f0"
+        ]
+    },
+    "mips/instructions/divu": {
+        "hash": "4ced54fec4d5bd42",
+        "questions": [
+            "divide two unsigned integers",
+            "unsigned division with the quotient in LO and remainder in HI",
+            "difference between div and divu"
+        ]
+    },
+    "mips/instructions/eret": {
+        "hash": "940d0d5d8b66ca05",
+        "questions": [
+            "how do I return from an exception handler",
+            "how are interrupts re-enabled after a handler",
+            "jump back to the address saved in EPC"
+        ]
+    },
+    "mips/instructions/floor.w.d": {
+        "hash": "08a63d693834a63c",
+        "questions": [
+            "round a double down to an integer",
+            "double to integer rounding toward negative infinity",
+            "floor of -1.5 as a double"
+        ]
+    },
+    "mips/instructions/floor.w.s": {
+        "hash": "a9906941f20f2a05",
+        "questions": [
+            "round a float down to an integer",
+            "why does the floor of -1.5 give -2",
+            "move the floor of a float into an integer register"
+        ]
+    },
+    "mips/instructions/j": {
+        "hash": "6abb9f8743d8aa33",
+        "questions": [
+            "jump to a label without a condition",
+            "how far away can a jump target be",
+            "what does J target do"
+        ]
+    },
+    "mips/instructions/jal": {
+        "hash": "be12e94b2f8cd7af",
+        "questions": [
+            "how do I call a function",
+            "where is the return address saved when calling a function",
+            "jal vs j"
+        ]
+    },
+    "mips/instructions/jalr": {
+        "hash": "071c90dcc9bcbc02",
+        "questions": [
+            "call a function through a function pointer",
+            "call an address computed at runtime and come back",
+            "jalr with one register vs two"
+        ]
+    },
+    "mips/instructions/jr": {
+        "hash": "b7027e1da347d449",
+        "questions": [
+            "how do I return from a function",
+            "jump to an address stored in a register",
+            "what does jr $ra do"
+        ]
+    },
+    "mips/instructions/l.d": {
+        "hash": "fd224a3b44d5b5e2",
+        "questions": [
+            "load a double from memory",
+            "read a .double variable by its label",
+            "which two registers does l.d fill"
+        ]
+    },
+    "mips/instructions/l.s": {
+        "hash": "66237c5e5798a2f0",
+        "questions": [
+            "load a float from memory",
+            "read a .float variable into an FP register",
+            "what does l.s $f0, 0($t0) do"
+        ]
+    },
+    "mips/instructions/la": {
+        "hash": "75f5594f1dbeef04",
+        "questions": [
+            "how do I get the address of a label",
+            "load the address of a string into $a0",
+            "where does my .data variable start in memory"
+        ]
+    },
+    "mips/instructions/lb": {
+        "hash": "7701d37eddda81b4",
+        "questions": [
+            "load a signed byte from memory",
+            "why does byte 0xFF load as -1",
+            "lb or lbu which one should I use"
+        ]
+    },
+    "mips/instructions/lbu": {
+        "hash": "c7a05223327a2cfd",
+        "questions": [
+            "load a byte without sign extension",
+            "load a byte as a value from 0 to 255",
+            "my byte shows as 0xFFFFFFFF, how do I get 255"
+        ]
+    },
+    "mips/instructions/ld": {
+        "hash": "d0dc66edfb65a3a7",
+        "questions": [
+            "load 64 bits into two integer registers",
+            "read two words from memory in one instruction",
+            "what is a doubleword load"
+        ]
+    },
+    "mips/instructions/ldc1": {
+        "hash": "4cef8d8a3cd9a4e1",
+        "questions": [
+            "what does the c1 in ldc1 mean",
+            "why must the FP register be even when loading a double",
+            "address alignment for loading a double"
+        ]
+    },
+    "mips/instructions/lh": {
+        "hash": "8cfbc60f31fe154b",
+        "questions": [
+            "load a signed 16-bit value from memory",
+            "why does halfword 0x8123 load as a negative number",
+            "halfword load address must be even"
+        ]
+    },
+    "mips/instructions/lhu": {
+        "hash": "ea0b9d6ddd4ce489",
+        "questions": [
+            "load an unsigned 16-bit value from memory",
+            "halfword loads as negative, how do I keep it positive",
+            "lh vs lhu"
+        ]
+    },
+    "mips/instructions/li": {
+        "hash": "b3d868a4e49e5667",
+        "questions": [
+            "how do I put a number in a register",
+            "load a large 32-bit constant like 100000",
+            "set a register to a negative number"
+        ]
+    },
+    "mips/instructions/ll": {
+        "hash": "0d5fac648e51351d",
+        "questions": [
+            "load a word for a lock-free update",
+            "what is load linked",
+            "is ll different from lw in this simulator"
+        ]
+    },
+    "mips/instructions/lui": {
+        "hash": "7fa877bf08c71698",
+        "questions": [
+            "put a value in the top half of a register",
+            "build a 32-bit constant with two instructions",
+            "what is %hi(label) for"
+        ]
+    },
+    "mips/instructions/lw": {
+        "hash": "6ef83ae7df1150a8",
+        "questions": [
+            "how do I read an integer from memory",
+            "load the value at the top of the stack",
+            "why does loading a word fail on an unaligned address"
+        ]
+    },
+    "mips/instructions/lwc1": {
+        "hash": "4541655bc5018cd5",
+        "questions": [
+            "what does the c1 in lwc1 mean",
+            "copy a word from memory straight into $f0",
+            "word alignment for loading a float"
+        ]
+    },
+    "mips/instructions/lwl": {
+        "hash": "a2958062097127b4",
+        "questions": [
+            "load the most significant bytes from an unaligned address",
+            "how do lwl and lwr work together",
+            "why did only the top bytes of my register change"
+        ]
+    },
+    "mips/instructions/lwr": {
+        "hash": "38e4398ea992ab03",
+        "questions": [
+            "load the least significant bytes from an unaligned address",
+            "why did only the low bytes of my register change",
+            "second half of an unaligned word load"
+        ]
+    },
+    "mips/instructions/madd": {
+        "hash": "0aa344fdb156575e",
+        "questions": [
+            "multiply two numbers and add to a running total",
+            "how do I compute a dot product",
+            "add the product of two registers to HI and LO"
+        ]
+    },
+    "mips/instructions/maddu": {
+        "hash": "b060f668f49f1fac",
+        "questions": [
+            "multiply two unsigned numbers and add to a running total",
+            "unsigned sum of products in HI and LO",
+            "how do I read the result of maddu"
+        ]
+    },
+    "mips/instructions/mfc0": {
+        "hash": "485b0f9708c8c0b4",
+        "questions": [
+            "read the exception cause in my handler",
+            "read the timer Count register",
+            "get the bad address after a memory error",
+            "what is coprocessor 0"
+        ]
+    },
+    "mips/instructions/mfc1": {
+        "hash": "75e3337902bd028b",
+        "questions": [
+            "move a float register to an integer register",
+            "see the raw bits of a float",
+            "get the result of a float to int conversion into $t0"
+        ]
+    },
+    "mips/instructions/mfc1.d": {
+        "hash": "26bc15b297bde6fb",
+        "questions": [
+            "copy a double from FP registers into two integer registers",
+            "get the raw bits of a double",
+            "move $f2 and $f3 into $t0 and $t1"
+        ]
+    },
+    "mips/instructions/mfhi": {
+        "hash": "9d9134e59e5289e5",
+        "questions": [
+            "read the remainder from HI after a division",
+            "read the high 32 bits of a multiply result",
+            "what does mfhi do"
+        ]
+    },
+    "mips/instructions/mflo": {
+        "hash": "0651d18af9c3bb94",
+        "questions": [
+            "get the quotient after a division",
+            "read the result of mult",
+            "read LO before the next multiply or divide overwrites it"
+        ]
+    },
+    "mips/instructions/mov.d": {
+        "hash": "bcd7deec89a5efab",
+        "questions": [
+            "copy a double from one FP register to another",
+            "does mov.d convert the value",
+            "keep a copy of a double before changing it"
+        ]
+    },
+    "mips/instructions/mov.s": {
+        "hash": "f3a18f7aeb10c867",
+        "questions": [
+            "copy a float from one FP register to another",
+            "how do I copy $f1 into $f0",
+            "does mov.s change the bits"
+        ]
+    },
+    "mips/instructions/move": {
+        "hash": "9d564ee90584f84b",
+        "questions": [
+            "copy one register to another",
+            "set $t1 equal to $t2",
+            "what does move $t2, $t0 do"
+        ]
+    },
+    "mips/instructions/movf": {
+        "hash": "4763d9995519e943",
+        "questions": [
+            "copy an integer register when the FP condition is false",
+            "set an integer register when c.lt.s is false",
+            "movf with a condition flag number"
+        ]
+    },
+    "mips/instructions/movf.d": {
+        "hash": "61fff72f1b75a435",
+        "questions": [
+            "copy a double only if a float comparison was false",
+            "why did movf.d not copy my double",
+            "choose between two doubles after a failed comparison"
+        ]
+    },
+    "mips/instructions/movf.s": {
+        "hash": "c2e1a215976131ce",
+        "questions": [
+            "copy a float only if the FP condition flag is false",
+            "why did movf.s leave the register unchanged",
+            "pick a float value when a comparison is false"
+        ]
+    },
+    "mips/instructions/movn": {
+        "hash": "3ca124e1ad184760",
+        "questions": [
+            "copy a value only if another register is not zero",
+            "if x is not 0 then copy b into a without a branch",
+            "movn vs movz"
+        ]
+    },
+    "mips/instructions/movn.d": {
+        "hash": "6cf0aee85245fd54",
+        "questions": [
+            "copy a double only if an integer register is not zero",
+            "choose a double based on a nonzero integer flag",
+            "which registers must be even for movn.d"
+        ]
+    },
+    "mips/instructions/movn.s": {
+        "hash": "10fc1ea5a5e7a832",
+        "questions": [
+            "copy a float only if an integer register is not zero",
+            "pick a float when an integer register holds 1",
+            "conditional float move when $t3 is nonzero"
+        ]
+    },
+    "mips/instructions/movt": {
+        "hash": "ad81179c78fe93e7",
+        "questions": [
+            "copy an integer register when a float comparison is true",
+            "set an integer register when c.lt.s is true",
+            "movt with a condition flag number"
+        ]
+    },
+    "mips/instructions/movt.d": {
+        "hash": "7f1a5935f85adff4",
+        "questions": [
+            "copy a double only if a float comparison was true",
+            "choose a double after a successful comparison",
+            "movt.d with condition flag 0"
+        ]
+    },
+    "mips/instructions/movt.s": {
+        "hash": "eecab6994e45b417",
+        "questions": [
+            "copy a float only if the FP condition flag is true",
+            "pick a float value when a comparison is true",
+            "movt.s with condition flag 0"
+        ]
+    },
+    "mips/instructions/movz": {
+        "hash": "275cd8ea7fda7294",
+        "questions": [
+            "copy a value only if another register is zero",
+            "if x is 0 then copy b into a without a branch",
+            "what does movz do"
+        ]
+    },
+    "mips/instructions/movz.d": {
+        "hash": "7409730296fbe43c",
+        "questions": [
+            "copy a double only if an integer register is zero",
+            "choose a double when an integer flag is cleared",
+            "which registers must be even for movz.d"
+        ]
+    },
+    "mips/instructions/movz.s": {
+        "hash": "381b73dde24dea0e",
+        "questions": [
+            "copy a float only if an integer register is zero",
+            "pick a float when an integer register holds 0",
+            "conditional float move when $t3 is zero"
+        ]
+    },
+    "mips/instructions/msub": {
+        "hash": "934b5a310f4f49a1",
+        "questions": [
+            "multiply and subtract from a running total",
+            "subtract a signed product from HI and LO",
+            "compute 100 minus 6 times 7 in HI and LO"
+        ]
+    },
+    "mips/instructions/msubu": {
+        "hash": "f7946d0bf1ede1ae",
+        "questions": [
+            "multiply two unsigned numbers and subtract from a running total",
+            "subtract an unsigned product from the accumulator",
+            "how do I read the result after msubu"
+        ]
+    },
+    "mips/instructions/mtc0": {
+        "hash": "df6c44e71f4c90db",
+        "questions": [
+            "how do I start the timer",
+            "change the return address of an exception handler",
+            "write a value into a coprocessor 0 register"
+        ]
+    },
+    "mips/instructions/mtc1": {
+        "hash": "42a5a7e933e0d8bb",
+        "questions": [
+            "move an integer into a float register",
+            "put a raw bit pattern into an FP register",
+            "get an integer into $f registers before converting it"
+        ]
+    },
+    "mips/instructions/mtc1.d": {
+        "hash": "b90d90e5fa0e5497",
+        "questions": [
+            "build a double from two integer registers",
+            "copy $t0 and $t1 into $f2 and $f3",
+            "set a double register pair from raw bits"
+        ]
+    },
+    "mips/instructions/mthi": {
+        "hash": "cde3fcba021a628a",
+        "questions": [
+            "set the HI register directly",
+            "clear HI before a multiply-accumulate",
+            "overwrite the remainder held in HI"
+        ]
+    },
+    "mips/instructions/mtlo": {
+        "hash": "9191472485db78ed",
+        "questions": [
+            "set the LO register directly",
+            "is the LO register writable",
+            "start LO at a value before accumulating"
+        ]
+    },
+    "mips/instructions/mul": {
+        "hash": "33d77d8795260ce9",
+        "questions": [
+            "how do I multiply two numbers",
+            "multiply a register by a constant",
+            "does mul detect overflow"
+        ]
+    },
+    "mips/instructions/mul.d": {
+        "hash": "bf57505e6cd1b096",
+        "questions": [
+            "multiply two doubles",
+            "multiply decimal numbers with double precision",
+            "do mul.d registers have to be even"
+        ]
+    },
+    "mips/instructions/mul.s": {
+        "hash": "78efcb4f0e3a5a09",
+        "questions": [
+            "multiply two floats",
+            "multiply 1.5 by 2.25 in single precision",
+            "what does mul.s store in $f0"
+        ]
+    },
+    "mips/instructions/mulo": {
+        "hash": "59b5b70f02151daa",
+        "questions": [
+            "signed multiplication with overflow",
+            "multiplication with overflow by a 32-bit constant",
+            "what does mulo $t2, $t0, $t1 give"
+        ]
+    },
+    "mips/instructions/mulou": {
+        "hash": "1c9b8ae416954460",
+        "questions": [
+            "unsigned multiplication with overflow",
+            "unsigned multiplication with overflow by a constant",
+            "what does mulou do"
+        ]
+    },
+    "mips/instructions/mult": {
+        "hash": "14a62e1beebb7d0f",
+        "questions": [
+            "multiply two numbers and get a 64-bit result",
+            "where does the result of mult go",
+            "multiply large numbers without losing the high bits"
+        ]
+    },
+    "mips/instructions/multu": {
+        "hash": "1cca997b72182f00",
+        "questions": [
+            "multiply two unsigned numbers and get the full 64-bit product",
+            "which register holds the high half of an unsigned product",
+            "how do I read the result of multu"
+        ]
+    },
+    "mips/instructions/mulu": {
+        "hash": "b39c32da113610d0",
+        "questions": [
+            "multiply two unsigned numbers into a register",
+            "unsigned multiply into a register and keep the high half in HI",
+            "unsigned multiply by a constant into a register"
+        ]
+    },
+    "mips/instructions/neg": {
+        "hash": "8a4076aaabe9b71c",
+        "questions": ["how do I negate an integer", "turn 7 into -7", "multiply a register by -1"]
+    },
+    "mips/instructions/neg.d": {
+        "hash": "d0f7e081473e5284",
+        "questions": [
+            "negate a double",
+            "flip the sign bit of a double-precision value",
+            "multiply a double by -1"
+        ]
+    },
+    "mips/instructions/neg.s": {
+        "hash": "5d3cff819d667761",
+        "questions": [
+            "negate a float",
+            "flip the sign bit of a single-precision value",
+            "multiply a float by -1"
+        ]
+    },
+    "mips/instructions/negu": {
+        "hash": "52b3453f6c6288a2",
+        "questions": [
+            "negate an integer without an overflow trap",
+            "neg vs negu",
+            "negation that wraps instead of trapping"
+        ]
+    },
+    "mips/instructions/nop": {
+        "hash": "fa215223e6177c9b",
+        "questions": [
+            "instruction that does nothing",
+            "what fills a delay slot",
+            "what does machine code 0x00000000 mean"
+        ]
+    },
+    "mips/instructions/nor": {
+        "hash": "05c3d2e5daed8d4a",
+        "questions": [
+            "bitwise nor of two registers",
+            "why is there no real NOT instruction",
+            "set bits that are 0 in both values"
+        ]
+    },
+    "mips/instructions/not": {
+        "hash": "62d91c27ad09c99b",
+        "questions": [
+            "how do I flip all the bits of a register",
+            "what is the bitwise complement of 0xF",
+            "one's complement of a number"
+        ]
+    },
+    "mips/instructions/or": {
+        "hash": "f061a1adeb03c7b3",
+        "questions": [
+            "how do I set specific bits of a value",
+            "bitwise or of two registers",
+            "combine two bit masks"
+        ]
+    },
+    "mips/instructions/ori": {
+        "hash": "d5ed58873d08b0eb",
+        "questions": [
+            "set certain bits using a constant",
+            "load a small non-negative constant into a register",
+            "is the ori constant sign-extended"
+        ]
+    },
+    "mips/instructions/pref": {
+        "hash": "14d006e114dc1f74",
+        "questions": [
+            "what does a prefetch hint do",
+            "does pref change anything in this simulator",
+            "compiler output contains a cache hint instruction"
+        ]
+    },
+    "mips/instructions/rem": {
+        "hash": "1f444ec141a88f30",
+        "questions": [
+            "how do I compute x mod y",
+            "get the remainder in one instruction without mfhi",
+            "remainder of 7 divided by 3"
+        ]
+    },
+    "mips/instructions/remu": {
+        "hash": "424254d7c573d9a8",
+        "questions": [
+            "remainder of an unsigned division",
+            "unsigned modulo by a constant",
+            "what does remu do"
+        ]
+    },
+    "mips/instructions/rol": {
+        "hash": "f881e18edf1865fd",
+        "questions": [
+            "rotate bits to the left",
+            "shift left and wrap the top bits around",
+            "rotate left by an amount in a register"
+        ]
+    },
+    "mips/instructions/ror": {
+        "hash": "825daffbe9667c34",
+        "questions": [
+            "rotate bits to the right",
+            "rotate right by a register amount or a constant",
+            "circular shift right of a word"
+        ]
+    },
+    "mips/instructions/rotr": {
+        "hash": "11e636ce2e023501",
+        "questions": [
+            "shift right without losing bits",
+            "rotate right by a fixed number of bits",
+            "difference between rotr and srl"
+        ]
+    },
+    "mips/instructions/rotrv": {
+        "hash": "e03e106c90bfcaf2",
+        "questions": [
+            "what is 7 rotated right by 3 bits",
+            "only the low 5 bits of the rotate amount are used",
+            "rotrv vs rotr"
+        ]
+    },
+    "mips/instructions/round.w.d": {
+        "hash": "f5bbce652c914ae5",
+        "questions": [
+            "round a double to the nearest integer",
+            "round half to even for doubles",
+            "-1.5 as a double rounds to which integer"
+        ]
+    },
+    "mips/instructions/round.w.s": {
+        "hash": "b351396380cabd02",
+        "questions": [
+            "round a float to the nearest integer",
+            "why does a float ending in .5 round to an even number",
+            "what does round.w.s give for -1.5"
+        ]
+    },
+    "mips/instructions/s.d": {
+        "hash": "0335225679a05417",
+        "questions": [
+            "store a double to memory",
+            "write a double into a variable by its label",
+            "which registers does s.d write to memory"
+        ]
+    },
+    "mips/instructions/s.s": {
+        "hash": "122ab82da27b0ad2",
+        "questions": [
+            "store a float to memory",
+            "save a float into a .float variable",
+            "write $f0 to memory"
+        ]
+    },
+    "mips/instructions/sb": {
+        "hash": "df0061e65e720830",
+        "questions": [
+            "store a byte in memory",
+            "write a single character into a string buffer",
+            "what happens to the upper bits when storing a byte"
+        ]
+    },
+    "mips/instructions/sc": {
+        "hash": "1a03e559170b1ed7",
+        "questions": [
+            "how do I know if an atomic store succeeded",
+            "can store conditional fail in this simulator",
+            "finish an atomic update started with ll"
+        ]
+    },
+    "mips/instructions/sd": {
+        "hash": "a6352f6e83781dc7",
+        "questions": [
+            "store two registers as 64 bits",
+            "write a doubleword to memory",
+            "store a 64-bit integer held in a register pair"
+        ]
+    },
+    "mips/instructions/sdc1": {
+        "hash": "b749a4585c55b3cd",
+        "questions": [
+            "store a double to a label using %hi and %lo",
+            "why must the FP register be even when storing a double",
+            "address alignment for storing a double"
+        ]
+    },
+    "mips/instructions/seb": {
+        "hash": "79cdc995b8ea4ec0",
+        "questions": [
+            "sign extend a byte to 32 bits",
+            "turn a byte loaded with lbu back into a signed number",
+            "what does seb do to 0x80FF"
+        ]
+    },
+    "mips/instructions/seh": {
+        "hash": "c713d9ec2e6004fc",
+        "questions": [
+            "sign extend a 16-bit value",
+            "turn a halfword loaded with lhu into a signed number",
+            "convert a short to a signed int"
+        ]
+    },
+    "mips/instructions/seq": {
+        "hash": "81d15dc1ad04d950",
+        "questions": [
+            "set a register to 1 if two values are equal",
+            "store true or false for x equals y",
+            "what does seq $t1, $t2, 5 do"
+        ]
+    },
+    "mips/instructions/sge": {
+        "hash": "fd4e01538778f233",
+        "questions": [
+            "set a register to 1 if x is greater than or equal to y",
+            "why is -1 greater or equal to 1 false here",
+            "greater or equal test against a constant giving 0 or 1"
+        ]
+    },
+    "mips/instructions/sgeu": {
+        "hash": "b6369a693acd570e",
+        "questions": [
+            "set a register to 1 if x is greater than or equal to y as unsigned",
+            "why is -1 greater or equal to 1 true when unsigned",
+            "sgeu vs sge"
+        ]
+    },
+    "mips/instructions/sgt": {
+        "hash": "336ac010b0db9e9e",
+        "questions": [
+            "set a register to 1 if x is greater than y",
+            "store whether one signed number is bigger than another",
+            "what does sgt give for -1 and 1"
+        ]
+    },
+    "mips/instructions/sgtu": {
+        "hash": "5701b0e7f30484d1",
+        "questions": [
+            "set a register to 1 if x is greater than y as unsigned",
+            "unsigned greater than test giving 0 or 1",
+            "why is 0xFFFFFFFF bigger than 1 here"
+        ]
+    },
+    "mips/instructions/sh": {
+        "hash": "0989756c4621f025",
+        "questions": [
+            "store a 16-bit value in memory",
+            "store the low half of a register",
+            "halfword store must be on an even address"
+        ]
+    },
+    "mips/instructions/sle": {
+        "hash": "fb32a7b9c51c1d2a",
+        "questions": [
+            "set a register to 1 if x is less than or equal to y",
+            "less or equal test giving true or false",
+            "signed less or equal against a constant"
+        ]
+    },
+    "mips/instructions/sleu": {
+        "hash": "58bcf55e65b947f3",
+        "questions": [
+            "set a register to 1 if x is less than or equal to y as unsigned",
+            "unsigned less or equal test giving 0 or 1",
+            "why is -1 less or equal to 1 false when unsigned"
+        ]
+    },
+    "mips/instructions/sll": {
+        "hash": "22c1c1b88979847e",
+        "questions": [
+            "how do I multiply by a power of 2",
+            "shift bits to the left by a constant",
+            "does shifting left check for overflow"
+        ]
+    },
+    "mips/instructions/sllv": {
+        "hash": "e0046d703ea69fd8",
+        "questions": [
+            "shift left by an amount in a register",
+            "variable shift left",
+            "why does shifting by 33 shift by only 1"
+        ]
+    },
+    "mips/instructions/slt": {
+        "hash": "29b6d0b5ef508945",
+        "questions": [
+            "set a register to 1 if x is less than y",
+            "compare two numbers without branching",
+            "how do I branch on the result of slt"
+        ]
+    },
+    "mips/instructions/slti": {
+        "hash": "c0f76a7b37ec0525",
+        "questions": [
+            "set a register to 1 if it is below a constant",
+            "check a loop bound without loading the limit",
+            "range check with a signed constant"
+        ]
+    },
+    "mips/instructions/sltiu": {
+        "hash": "cffb280b760b2c51",
+        "questions": [
+            "set a register to 1 if it is below a constant, unsigned",
+            "is the sltiu immediate sign-extended",
+            "why is -1 not below 1 in an unsigned compare"
+        ]
+    },
+    "mips/instructions/sltu": {
+        "hash": "7400275902074cf0",
+        "questions": [
+            "compare two memory addresses",
+            "unsigned less than between two registers",
+            "slt vs sltu with negative numbers"
+        ]
+    },
+    "mips/instructions/sne": {
+        "hash": "38c4d8a8edd76270",
+        "questions": [
+            "set a register to 1 if two values differ",
+            "store whether x is not equal to y",
+            "not equal test against a constant giving 0 or 1"
+        ]
+    },
+    "mips/instructions/sqrt.d": {
+        "hash": "9c3264eaa0a412f8",
+        "questions": [
+            "square root of a double",
+            "why is the square root of a negative double NaN",
+            "compute a square root with double precision"
+        ]
+    },
+    "mips/instructions/sqrt.s": {
+        "hash": "b2239d2c2ec615fc",
+        "questions": [
+            "square root of a float",
+            "square root of a negative float gives NaN",
+            "how do I take the square root of 2.25 as a float"
+        ]
+    },
+    "mips/instructions/sra": {
+        "hash": "60469fb7c94a6bbe",
+        "questions": [
+            "shift right keeping the sign of a negative number",
+            "divide a signed number by a power of 2",
+            "why does -8 shifted right by 1 give -4"
+        ]
+    },
+    "mips/instructions/srav": {
+        "hash": "91ab16a4f1f1fa34",
+        "questions": [
+            "shift a signed value right by an amount in a register",
+            "srav vs sra",
+            "arithmetic shift right by a variable amount"
+        ]
+    },
+    "mips/instructions/srl": {
+        "hash": "9fd98e61a14a597a",
+        "questions": [
+            "divide an unsigned number by a power of 2",
+            "shift bits right filling with zeros",
+            "why does shifting a negative number right make it positive"
+        ]
+    },
+    "mips/instructions/srlv": {
+        "hash": "edfe40c0ea9fc313",
+        "questions": [
+            "shift right by an amount in a register, filling with zeros",
+            "srlv vs srl",
+            "unsigned shift right by an amount computed at runtime"
+        ]
+    },
+    "mips/instructions/sub": {
+        "hash": "f0aebc68a6699174",
+        "questions": [
+            "how do I subtract two numbers",
+            "subtraction stops the program with an overflow exception",
+            "difference between sub and subu"
+        ]
+    },
+    "mips/instructions/sub.d": {
+        "hash": "6473d4fdebc8737b",
+        "questions": [
+            "subtract two doubles",
+            "subtract decimal numbers with double precision",
+            "do sub.d registers have to be even"
+        ]
+    },
+    "mips/instructions/sub.s": {
+        "hash": "079ccb0d881301ed",
+        "questions": [
+            "subtract two floats",
+            "single-precision subtraction",
+            "what does sub.s store in $f0"
+        ]
+    },
+    "mips/instructions/subi": {
+        "hash": "4796251f143c9e29",
+        "questions": [
+            "subtract a constant from a register",
+            "decrement a counter by a fixed amount",
+            "subtracting a constant stops on signed overflow"
+        ]
+    },
+    "mips/instructions/subiu": {
+        "hash": "cf35c9b1a1ba1ba5",
+        "questions": [
+            "subtract a constant without an overflow trap",
+            "does subiu trap on overflow",
+            "subtract a constant and let the result wrap around"
+        ]
+    },
+    "mips/instructions/subu": {
+        "hash": "9a870e98b469b2ba",
+        "questions": [
+            "subtract without an overflow exception",
+            "why does 0 minus 1 give 0xFFFFFFFF",
+            "which subtract instruction is used most"
+        ]
+    },
+    "mips/instructions/sw": {
+        "hash": "c61f28b4dd8b2ac2",
+        "questions": [
+            "how do I write an integer to memory",
+            "save a register on the stack",
+            "storing a word fails on an address not divisible by 4"
+        ]
+    },
+    "mips/instructions/swc1": {
+        "hash": "4e8feb3a5073b2e0",
+        "questions": [
+            "store a float to a label using %hi and %lo",
+            "copy the 32 bits of an FP register to memory",
+            "word alignment for storing a float"
+        ]
+    },
+    "mips/instructions/swl": {
+        "hash": "ead43ba31a4e6d90",
+        "questions": [
+            "store the most significant bytes at an unaligned address",
+            "how do swl and swr work together",
+            "why did an unaligned store change only two bytes"
+        ]
+    },
+    "mips/instructions/swr": {
+        "hash": "5fc718bd10225d26",
+        "questions": [
+            "store the least significant bytes at an unaligned address",
+            "second half of an unaligned word store",
+            "why did swr change three bytes"
+        ]
+    },
+    "mips/instructions/sync": {
+        "hash": "9834a16c7b345c97",
+        "questions": [
+            "what does sync do in this simulator",
+            "memory barrier between loads and stores",
+            "make another processor see my stores in order"
+        ]
+    },
+    "mips/instructions/syscall": {
+        "hash": "e460de1c31fe271d",
+        "questions": [
+            "how do I call an operating system service",
+            "which register selects the service number",
+            "list of common service numbers like print integer and exit",
+            "what does syscall do"
+        ]
+    },
+    "mips/instructions/teq": {
+        "hash": "bdf3ba1644776da5",
+        "questions": [
+            "stop the program if two registers are equal",
+            "guard against dividing by zero",
+            "how do I add an assertion to my code"
+        ]
+    },
+    "mips/instructions/teqi": {
+        "hash": "276f0ccd61231b8d",
+        "questions": [
+            "stop the program if a register equals a constant",
+            "check a register against a known constant at runtime",
+            "trap if equal with an immediate value"
+        ]
+    },
+    "mips/instructions/tge": {
+        "hash": "57d892e5d702bd1e",
+        "questions": [
+            "stop the program if x is greater than or equal to y",
+            "trap when a value reaches a limit",
+            "signed greater or equal trap"
+        ]
+    },
+    "mips/instructions/tgei": {
+        "hash": "9c54258f4904482f",
+        "questions": [
+            "trap if a register is at least a constant",
+            "stop when a signed value reaches a fixed maximum",
+            "what does tgei $t0, 5 do"
+        ]
+    },
+    "mips/instructions/tgeiu": {
+        "hash": "66647dfa80679692",
+        "questions": [
+            "trap if an unsigned register is at least a constant",
+            "is the tgeiu immediate sign-extended",
+            "stop the program when an unsigned count hits a fixed number"
+        ]
+    },
+    "mips/instructions/tgeu": {
+        "hash": "6aef5aa96f4bd8f0",
+        "questions": [
+            "stop the program if x is greater than or equal to y as unsigned",
+            "unsigned bounds check that halts the program",
+            "what does tgeu $t0, $t1 do"
+        ]
+    },
+    "mips/instructions/tlt": {
+        "hash": "87c9e991f86c7f3a",
+        "questions": [
+            "stop the program if x is less than y",
+            "trap when a value drops below a minimum",
+            "signed less than trap"
+        ]
+    },
+    "mips/instructions/tlti": {
+        "hash": "aa0c182b4606847a",
+        "questions": [
+            "trap if a register is below a constant",
+            "stop when a signed value is under a fixed minimum",
+            "what does tlti $t0, 5 do"
+        ]
+    },
+    "mips/instructions/tltiu": {
+        "hash": "d9601ec97a3756dd",
+        "questions": [
+            "trap if an unsigned register is below a constant",
+            "is the tltiu immediate sign-extended",
+            "unsigned less than constant check that halts"
+        ]
+    },
+    "mips/instructions/tltu": {
+        "hash": "32ed284cb18182ee",
+        "questions": [
+            "stop the program if x is less than y as unsigned",
+            "unsigned less than trap between two registers",
+            "what does tltu do with 4 and 5"
+        ]
+    },
+    "mips/instructions/tne": {
+        "hash": "6b39edae028fbfa0",
+        "questions": [
+            "stop the program if two values differ",
+            "assert that two registers are equal",
+            "opposite of teq"
+        ]
+    },
+    "mips/instructions/tnei": {
+        "hash": "b8697f5c1870c7a1",
+        "questions": [
+            "stop the program if a register is not a given constant",
+            "assert that a register holds an expected constant",
+            "trap if not equal with an immediate value"
+        ]
+    },
+    "mips/instructions/trunc.w.d": {
+        "hash": "a360d9fb3235016c",
+        "questions": [
+            "drop the fractional part of a double",
+            "convert a double to int rounding toward zero",
+            "truncate -1.5 as a double"
+        ]
+    },
+    "mips/instructions/trunc.w.s": {
+        "hash": "5040feaed2a238ba",
+        "questions": [
+            "C style int cast of a float",
+            "drop the decimal part of a float",
+            "round a float toward zero"
+        ]
+    },
+    "mips/instructions/ulh": {
+        "hash": "348ad6a6d16b1d16",
+        "questions": [
+            "load a 16-bit value from an odd address",
+            "unaligned signed halfword load",
+            "read two bytes at any address as a signed number"
+        ]
+    },
+    "mips/instructions/ulhu": {
+        "hash": "8062f77db396041b",
+        "questions": [
+            "load an unsigned 16-bit value from an odd address",
+            "unaligned halfword load without sign extension",
+            "read two bytes at any address as 0 to 65535"
+        ]
+    },
+    "mips/instructions/ulw": {
+        "hash": "6c0448c36cf45f23",
+        "questions": [
+            "load a word from an address not divisible by 4",
+            "read 32 bits starting at any byte",
+            "fix an unaligned word load"
+        ]
+    },
+    "mips/instructions/ush": {
+        "hash": "f511eb06d5a83979",
+        "questions": [
+            "store a halfword at an odd address",
+            "unaligned 16-bit store",
+            "write the low two bytes of a register at any address"
+        ]
+    },
+    "mips/instructions/usw": {
+        "hash": "57ca33962513d3b8",
+        "questions": [
+            "store a word at an address not divisible by 4",
+            "unaligned word store",
+            "write 4 bytes starting at any byte address"
+        ]
+    },
+    "mips/instructions/wait": {
+        "hash": "2cb0903211e64fba",
+        "questions": [
+            "how do I idle until an interrupt arrives",
+            "why does wait not pause the program",
+            "does a loop around an idle instruction still use up instructions"
+        ]
+    },
+    "mips/instructions/wsbh": {
+        "hash": "fec43d43f99f1c6a",
+        "questions": [
+            "swap the two bytes of each halfword",
+            "convert a word between little and big endian",
+            "what does wsbh do to 0xAABBCCDD"
+        ]
+    },
+    "mips/instructions/xor": {
+        "hash": "6a68c0ee51f7da77",
+        "questions": [
+            "how do I toggle bits",
+            "exclusive or of two registers",
+            "check which bits differ between two values",
+            "simple encryption by flipping bits"
+        ]
+    },
+    "mips/instructions/xori": {
+        "hash": "c5745194a84c9ee8",
+        "questions": [
+            "toggle bits with a constant",
+            "flip the lowest bit of a number",
+            "is the xori constant sign-extended"
+        ]
+    },
+    "mips/interrupts/compatibility": {
+        "hash": "12619f2c0a9a2daf",
+        "questions": [
+            "why does my interrupt code behave differently in another simulator",
+            "is a key typed while interrupts are off lost",
+            "what does the wait instruction do here",
+            "is the timer always running like on real hardware"
+        ]
+    },
+    "mips/interrupts/debugging": {
+        "hash": "f6c157be8e0a058e",
+        "questions": [
+            "how do I step through an interrupt handler",
+            "why did step jump to 0x80000180",
+            "how do I debug the main program without landing in the handler",
+            "can I undo out of an interrupt handler"
+        ]
+    },
+    "mips/interrupts/enabling": {
+        "hash": "b46b0347a77b6066",
+        "questions": [
+            "when does the processor take an interrupt",
+            "are interrupts on when my program starts",
+            "how do I keep one interrupt source quiet"
+        ]
+    },
+    "mips/interrupts/exceptions": {
+        "hash": "312f115de05c8754",
+        "questions": [
+            "how do I handle an error instead of the program stopping",
+            "how do I skip the instruction that failed",
+            "my exception handler keeps running over and over",
+            "how do I find out which exception happened",
+            "does syscall enter my exception handler"
+        ]
+    },
+    "mips/interrupts/from-c": {
+        "hash": "131f3d2df4ec8d7c",
+        "questions": [
+            "how do I use interrupts from a C program",
+            "how do I read and set the timer from C",
+            "how do I make sure my handler file is linked into a C program",
+            "can I write the interrupt handler in C"
+        ]
+    },
+    "mips/interrupts/handler": {
+        "hash": "b4c4e09e139a8b9f",
+        "questions": [
+            "where do I put my interrupt handler",
+            "how do I return from an interrupt handler",
+            "which registers can my handler use without saving them",
+            "registers change unexpectedly after my handler runs",
+            "why should a handler avoid lw with a label"
+        ]
+    },
+    "mips/interrupts/interrupts-and-the-timer": {
+        "hash": "54aeb38989881410",
+        "questions": [
+            "what is an interrupt",
+            "what can interrupt my program",
+            "how do interrupts work",
+            "why doesn't my program get any interrupts"
+        ]
+    },
+    "mips/interrupts/keyboard": {
+        "hash": "eedc4efbcf7f56da",
+        "questions": [
+            "how do I get an interrupt when a key is typed",
+            "how do I echo typed keys without polling",
+            "how do I get an interrupt after each character is printed",
+            "my keyboard interrupt keeps firing"
+        ]
+    },
+    "mips/interrupts/timer": {
+        "hash": "6cad3d07892874a2",
+        "questions": [
+            "how do I set up a timer interrupt",
+            "how do I get an interrupt again and again at a fixed rate",
+            "does the timer count seconds or instructions",
+            "timer interrupt never comes when I set compare to the current count"
+        ]
+    },
+    "mips/midi-and-audio/debugging": {
+        "hash": "9f725f84ef640c86",
+        "questions": [
+            "does MIDI music keep playing when I pause or hit a breakpoint",
+            "what happens to queued audio when I undo a write",
+            "is sound played in a testcase",
+            "MIDI and audio stop working with the bitmap display at 0xffff0000"
+        ]
+    },
+    "mips/midi-and-audio/fifo": {
+        "hash": "a251290423a5f475",
+        "questions": [
+            "how many audio frames can I queue",
+            "why is there a delay before my sound plays",
+            "how do I keep the audio from running out",
+            "why does changing the rate cut off my sound"
+        ]
+    },
+    "mips/midi-and-audio/first-midi-program": {
+        "hash": "358fb1409317ec6e",
+        "questions": [
+            "example program that plays a scale on a piano",
+            "how do I start a note and stop it later",
+            "what bytes do I send to play middle C",
+            "assembly routine that sends one byte to the MIDI port"
+        ]
+    },
+    "mips/midi-and-audio/first-sampled-program": {
+        "hash": "f3d0b35000af156b",
+        "questions": [
+            "how do I make a square wave sound",
+            "example program that plays a 400 Hz tone",
+            "my audio program waits forever",
+            "why does sound keep playing after my program ends"
+        ]
+    },
+    "mips/midi-and-audio/from-c": {
+        "hash": "097794e80b03ec15",
+        "questions": [
+            "how do I play sound samples from C",
+            "how do I send MIDI bytes from C",
+            "C program that plays notes and a tone",
+            "how does sim_pcm_write work in stereo"
+        ]
+    },
+    "mips/midi-and-audio/midi-and-services": {
+        "hash": "c1e975663a363e3c",
+        "questions": [
+            "can I use the MIDI port together with the note services",
+            "changing the instrument on the port did not change my service notes",
+            "do the note services and the MIDI port share a volume control"
+        ]
+    },
+    "mips/midi-and-audio/midi-busy": {
+        "hash": "a2970a6d8f49292a",
+        "questions": [
+            "why are some of my MIDI bytes dropped",
+            "how fast does the MIDI port send bytes",
+            "why don't my notes start at exactly the same time",
+            "how do I stop every note at once"
+        ]
+    },
+    "mips/midi-and-audio/midi-messages": {
+        "hash": "b04ca2a917f9e81e",
+        "questions": [
+            "how do I play drums",
+            "list of instrument numbers",
+            "my instrument is one off from the list",
+            "how do I bend the pitch of a note",
+            "how do I set the volume of a channel",
+            "how do I play a chord"
+        ]
+    },
+    "mips/midi-and-audio/midi-registers": {
+        "hash": "4a732748ffacb292",
+        "questions": [
+            "what is at address 0xffff0340",
+            "which register do I write MIDI bytes to",
+            "why does MIDI status always have bit 7 set",
+            "why do status and command share one address"
+        ]
+    },
+    "mips/midi-and-audio/overview": {
+        "hash": "bf7516681c45fdc0",
+        "questions": [
+            "which way of making sound should I use",
+            "how do I play a game soundtrack while the program runs",
+            "can my program generate its own audio waveform",
+            "how do I check that the MIDI port and audio output are there",
+            "where is the button to mute my program's sound"
+        ]
+    },
+    "mips/midi-and-audio/pcm-registers": {
+        "hash": "b9468f90b30a01c6",
+        "questions": [
+            "what is at address 0xffff0350",
+            "how do I turn the audio output on in stereo",
+            "how do I set the sample rate",
+            "nothing plays when I write samples"
+        ]
+    },
+    "mips/midi-and-audio/samples": {
+        "hash": "08528d3a02c0e3ff",
+        "questions": [
+            "what is the difference between a sample and a frame",
+            "how do I pack two samples into one word",
+            "which sample rate should I pick",
+            "can I copy WAV sample data straight to the audio output",
+            "what is the highest pitch I can play at a given rate"
+        ]
+    },
+    "mips/registers/$a0 - $a3": {
+        "hash": "a28848a9532a8acc",
+        "questions": [
+            "how do I pass arguments to a function",
+            "where do the fifth and later arguments go",
+            "what are $a0 to $a3 for"
+        ]
+    },
+    "mips/registers/$at": {
+        "hash": "009d466b2b6063bb",
+        "questions": [
+            "what is $at used for",
+            "why does the assembler reserve register 1",
+            "pseudo-instructions stopped working after .set noat",
+            "which register do li and la use behind the scenes"
+        ]
+    },
+    "mips/registers/$fp": {
+        "hash": "848c9bcf4ee00a42",
+        "questions": [
+            "what is the frame pointer",
+            "is $s8 the same as $fp",
+            "when do I need a frame pointer"
+        ]
+    },
+    "mips/registers/$gp": {
+        "hash": "87ea4592f0f97e5c",
+        "questions": [
+            "what is the global pointer",
+            "what does $gp point to",
+            "how are small global variables reached in one instruction"
+        ]
+    },
+    "mips/registers/$k0 - $k1": {
+        "hash": "30dffae2454860d0",
+        "questions": [
+            "which registers are reserved for interrupt handlers",
+            "my register value changed on its own",
+            "can I use $k0 and $k1 in my program"
+        ]
+    },
+    "mips/registers/$ra": {
+        "hash": "12ef574480f95334",
+        "questions": [
+            "what holds the address my function returns to",
+            "my function returns to the wrong place after calling another function",
+            "where does jal save the return address"
+        ]
+    },
+    "mips/registers/$s0 - $s7": {
+        "hash": "d6bdfefc3f589395",
+        "questions": [
+            "which registers keep their value across a call",
+            "which registers must my function restore before returning",
+            "what are saved registers"
+        ]
+    },
+    "mips/registers/$sp": {
+        "hash": "5dc7a2678cabeadb",
+        "questions": [
+            "what is the stack pointer",
+            "where is the top of the stack",
+            "who adjusts the stack pointer when a function is called"
+        ]
+    },
+    "mips/registers/$t0 - $t7": {
+        "hash": "5594597b24e8fc68",
+        "questions": [
+            "which registers can I use for scratch values",
+            "why did my value change after calling a function",
+            "do I need to save temporary registers before a call"
+        ]
+    },
+    "mips/registers/$t8 - $t9": {
+        "hash": "53e1e15926bd9ccf",
+        "questions": [
+            "are there more temporary registers than t0 to t7",
+            "which register holds the called function's address in PIC code",
+            "what are $t8 and $t9"
+        ]
+    },
+    "mips/registers/$v0 - $v1": {
+        "hash": "ded5651fa196e1c4",
+        "questions": [
+            "where does a function put its return value",
+            "which register holds the syscall number",
+            "where does a 64-bit return value go",
+            "what is $v0 for"
+        ]
+    },
+    "mips/registers/$zero": {
+        "hash": "8dc3f8726a04148e",
+        "questions": [
+            "which register always holds 0",
+            "why is my register still 0 after I write to it",
+            "what is $zero for"
+        ]
+    },
+    "mips/registers/cp0": {
+        "hash": "eec0c08fd163b7e5",
+        "questions": [
+            "what is coprocessor 0 for",
+            "what happens on an exception when there is no handler",
+            "how do I read and write coprocessor 0 registers",
+            "which registers does an exception change"
+        ]
+    },
+    "mips/registers/cp0-$11 (compare)": {
+        "hash": "38f75eb53b5dee8e",
+        "questions": [
+            "when does the compare register cause an interrupt",
+            "how do I clear a pending timer interrupt",
+            "is the timer on before I write compare"
+        ]
+    },
+    "mips/registers/cp0-$12 (status)": {
+        "hash": "0bc189e9f6ef2c33",
+        "questions": [
+            "how do I disable interrupts",
+            "why are no more interrupts taken inside my handler",
+            "what is the exception level bit",
+            "what is the starting value of status"
+        ]
+    },
+    "mips/registers/cp0-$13 (cause)": {
+        "hash": "a29152dac77cc946",
+        "questions": [
+            "how do I find out what caused an exception",
+            "what does exception code 4 mean",
+            "which interrupt source is asking",
+            "why do I see 0x10 instead of code 4"
+        ]
+    },
+    "mips/registers/cp0-$14 (epc)": {
+        "hash": "511f9b0b87363b1d",
+        "questions": [
+            "which address does eret return to",
+            "how do I skip the faulting instruction in my handler",
+            "should I add 4 to epc after an interrupt"
+        ]
+    },
+    "mips/registers/cp0-$8 (vaddr)": {
+        "hash": "2ee6a37aee3e5674",
+        "questions": [
+            "which memory address caused my address error",
+            "what does the vaddr register hold",
+            "is the bad address saved for exceptions other than address errors"
+        ]
+    },
+    "mips/registers/cp0-$9 (count)": {
+        "hash": "e9daec3bc9d26f4b",
+        "questions": [
+            "how do I count how many instructions ran",
+            "does the timer counter measure real time",
+            "why is count not zero when main starts",
+            "how do I set the timer counter to a new value"
+        ]
+    },
+    "mips/registers/fpu": {
+        "hash": "cddb775c76c3cdbc",
+        "questions": [
+            "what is the floating point coprocessor",
+            "how do I move a value between integer and float registers",
+            "how do I convert an integer to a float",
+            "how do I load a float constant",
+            "why is there no li.s"
+        ]
+    },
+    "mips/registers/fpu-$f0 - $f31": {
+        "hash": "c44b7a498bdfac88",
+        "questions": [
+            "which registers hold floating point numbers",
+            "where do float arguments go in a function call",
+            "which register returns a float result"
+        ]
+    },
+    "mips/registers/fpu-Condition flags": {
+        "hash": "bce75cfdeeac18bb",
+        "questions": [
+            "how do I branch on a float comparison",
+            "where does c.lt.s store its result",
+            "how do I keep several float comparisons at once"
+        ]
+    },
+    "mips/registers/fpu-Double precision pairs": {
+        "hash": "c3e7769f39b3b181",
+        "questions": [
+            "how is a double stored in the float registers",
+            "why can't I use an odd register with a double",
+            "why are odd rows blank in the double view"
+        ]
+    },
+    "mips/registers/general-registers": {
+        "hash": "5e69e82c58e4d0f1",
+        "questions": [
+            "how many registers does the processor have",
+            "what are the HI and LO registers",
+            "what are the three tabs in the registers panel",
+            "what is a coprocessor"
+        ]
+    },
+    "mips/runtime-library/_Exit": {
+        "hash": "1b0fa5fb3e8fe285",
+        "questions": [
+            "quit immediately without running atexit handlers",
+            "what is the difference between exit and _Exit",
+            "end the program right now with a status code, skipping cleanup"
+        ]
+    },
+    "mips/runtime-library/__assert_fail": {
+        "hash": "c9fb449b6bcdb08e",
+        "questions": [
+            "program stopped with an Assertion failed message",
+            "what happens when an assert condition is false",
+            "where does the assert macro print its message"
+        ]
+    },
+    "mips/runtime-library/abort": {
+        "hash": "3607bb317e3cd0c9",
+        "questions": [
+            "why did my program end with status 134",
+            "stop the program abnormally",
+            "difference between abort and exit"
+        ]
+    },
+    "mips/runtime-library/abs": {
+        "hash": "54b501eb96a4a121",
+        "questions": [
+            "absolute value of an int",
+            "how do I make a negative int positive",
+            "what does abs(-5) return"
+        ]
+    },
+    "mips/runtime-library/acos": {
+        "hash": "415a22d732714351",
+        "questions": [
+            "inverse cosine of a number",
+            "find the angle whose cosine is x",
+            "what range of angles does acos return"
+        ]
+    },
+    "mips/runtime-library/aligned_alloc": {
+        "hash": "d037d35978094ea2",
+        "questions": [
+            "allocate memory aligned to a 64-byte boundary",
+            "which alignment values can I ask for when allocating",
+            "malloc with a specific alignment"
+        ]
+    },
+    "mips/runtime-library/asctime": {
+        "hash": "67950dddb974cce2",
+        "questions": [
+            "convert a struct tm to a readable date string",
+            "print a date like Mon Jan 15 10:30:00 2024",
+            "why does the asctime string end with a newline"
+        ]
+    },
+    "mips/runtime-library/asin": {
+        "hash": "db773f59e2baf443",
+        "questions": [
+            "inverse sine of a number",
+            "find the angle whose sine is x",
+            "what range of angles does asin return"
+        ]
+    },
+    "mips/runtime-library/atan": {
+        "hash": "678e2def83ebcf50",
+        "questions": [
+            "inverse tangent of a number",
+            "find the angle whose tangent is x",
+            "what range of angles does atan return"
+        ]
+    },
+    "mips/runtime-library/atan2": {
+        "hash": "b11a7fbba3d93f8c",
+        "questions": [
+            "angle of a point (x, y) from the origin",
+            "atan gives the wrong quadrant for negative x",
+            "difference between atan and atan2"
+        ]
+    },
+    "mips/runtime-library/atexit": {
+        "hash": "262f12808a83c035",
+        "questions": [
+            "run my function automatically when the program ends",
+            "in what order do registered exit functions run",
+            "check that my cleanup function was registered"
+        ]
+    },
+    "mips/runtime-library/atof": {
+        "hash": "f5bbacefda7ead8a",
+        "questions": [
+            "convert a string to a double",
+            "read a decimal fraction like 3.14 out of a string",
+            "does atof report invalid input"
+        ]
+    },
+    "mips/runtime-library/atoi": {
+        "hash": "01b400fb14f03f80",
+        "questions": [
+            "convert a string to an int",
+            "turn a char array of digits into an int",
+            "does atoi report invalid input",
+            "why does atoi not read hex numbers"
+        ]
+    },
+    "mips/runtime-library/atol": {
+        "hash": "3bdba4f4dbd7267f",
+        "questions": [
+            "convert a string to a long",
+            "parse a decimal number into a long without error checking",
+            "difference between atoi and atol"
+        ]
+    },
+    "mips/runtime-library/atoll": {
+        "hash": "0cf33bb5beb2a6a6",
+        "questions": [
+            "convert a string to a long long",
+            "parse a big decimal number from text into a long long",
+            "difference between atol and atoll"
+        ]
+    },
+    "mips/runtime-library/bsearch": {
+        "hash": "332b3d536680fecf",
+        "questions": [
+            "binary search in a sorted array",
+            "look up a key in a sorted table with a compare function",
+            "what does bsearch return when the key is missing"
+        ]
+    },
+    "mips/runtime-library/calloc": {
+        "hash": "67fa1cbb039e2ad3",
+        "questions": [
+            "allocate memory that starts zeroed",
+            "difference between malloc and calloc",
+            "allocating a huge zeroed array returns NULL"
+        ]
+    },
+    "mips/runtime-library/cbrt": {
+        "hash": "2267576472de1fb1",
+        "questions": ["cube root of a number", "what number cubed gives x", "what does cbrt do"]
+    },
+    "mips/runtime-library/ceil": {
+        "hash": "d38fef28237a59f0",
+        "questions": [
+            "round a double up to a whole number",
+            "what does ceil(-2.5) return",
+            "round toward plus infinity for doubles"
+        ]
+    },
+    "mips/runtime-library/ceilf": {
+        "hash": "e566f6b0079d7fc6",
+        "questions": [
+            "round a float up to a whole number",
+            "float version of ceil",
+            "what does ceilf do"
+        ]
+    },
+    "mips/runtime-library/clearerr": {
+        "hash": "62bba9317ecd94bc",
+        "questions": [
+            "clear a stream's error after a failed read",
+            "keep reading a stream after it hit end of file",
+            "feof stays true, how do I reset it"
+        ]
+    },
+    "mips/runtime-library/clock": {
+        "hash": "ad46d0834a950163",
+        "questions": [
+            "measure how long part of my program takes",
+            "convert processor time ticks to seconds",
+            "does time spent waiting for input count",
+            "how many instructions per second does the simulator run",
+            "why does clock go back after undo"
+        ]
+    },
+    "mips/runtime-library/closedir": {
+        "hash": "75b22a43a1468596",
+        "questions": [
+            "close a folder after listing its files",
+            "free a DIR opened by opendir",
+            "what does closedir return"
+        ]
+    },
+    "mips/runtime-library/compiled-programs": {
+        "hash": "41771fba8d7e589a",
+        "questions": [
+            "how do I read command line arguments in C",
+            "argc is always 1, how do I pass arguments to my program",
+            "what is in argv[0]",
+            "how much memory can my C program use",
+            "can undo go back to before main starts",
+            "where does my compiled program start running"
+        ]
+    },
+    "mips/runtime-library/copysign": {
+        "hash": "f1865f007deaec5c",
+        "questions": [
+            "give one number the sign of another",
+            "make x negative when y is negative",
+            "what does copysign do"
+        ]
+    },
+    "mips/runtime-library/cos": {
+        "hash": "87c337e8cff33bc7",
+        "questions": [
+            "cosine of a double angle",
+            "why does cos(90) not return 0",
+            "does the double cosine function take degrees or radians"
+        ]
+    },
+    "mips/runtime-library/cosf": {
+        "hash": "20b995e5f42168b7",
+        "questions": [
+            "cosine of a float angle",
+            "cos for float values",
+            "does cosf take degrees or radians"
+        ]
+    },
+    "mips/runtime-library/cosh": {
+        "hash": "16a512d1b8770a28",
+        "questions": [
+            "hyperbolic cosine of a number",
+            "what does cosh do",
+            "hyperbolic cos in math.h"
+        ]
+    },
+    "mips/runtime-library/ctime": {
+        "hash": "b529d515e3ac6a84",
+        "questions": [
+            "convert a time_t to a readable date string",
+            "difference between ctime and asctime",
+            "print the result of time() as a date"
+        ]
+    },
+    "mips/runtime-library/difftime": {
+        "hash": "a4c6c9f910014785",
+        "questions": [
+            "seconds between two time_t values",
+            "elapsed wall-clock seconds between two time() calls",
+            "what does difftime return"
+        ]
+    },
+    "mips/runtime-library/div": {
+        "hash": "b7c2ed9ec09b9ab3",
+        "questions": [
+            "quotient and remainder of two ints in one call",
+            "what is in a div_t",
+            "what does div return"
+        ]
+    },
+    "mips/runtime-library/exit": {
+        "hash": "a38b22f7ff841652",
+        "questions": [
+            "end the program with a status code",
+            "is buffered output written out when the program ends",
+            "run static destructors and cleanup when quitting",
+            "what does exit do before the program stops"
+        ]
+    },
+    "mips/runtime-library/exp": {
+        "hash": "e257e3dde12aa8cd",
+        "questions": [
+            "e to the power x for a double",
+            "exponential function e^x on doubles",
+            "what does exp(1) return"
+        ]
+    },
+    "mips/runtime-library/expf": {
+        "hash": "0f285c48d9e2e49a",
+        "questions": [
+            "e to the power x for a float",
+            "exponential of a float without using double",
+            "difference between exp and expf"
+        ]
+    },
+    "mips/runtime-library/expm1": {
+        "hash": "0395cf269eab9450",
+        "questions": [
+            "e^x minus 1 accurately for small x",
+            "exp(x) - 1 loses precision near zero",
+            "what does expm1 do"
+        ]
+    },
+    "mips/runtime-library/fabs": {
+        "hash": "f8a2e7ed9ebab9f5",
+        "questions": [
+            "absolute value of a double",
+            "abs() truncates my double, what should I use",
+            "difference between abs and fabs"
+        ]
+    },
+    "mips/runtime-library/fabsf": {
+        "hash": "47694065d95e1743",
+        "questions": [
+            "absolute value of a float",
+            "make a negative float positive",
+            "what does fabsf do"
+        ]
+    },
+    "mips/runtime-library/fclose": {
+        "hash": "a211998f488ca2f5",
+        "questions": [
+            "close a file opened with fopen",
+            "what does fclose return on an error",
+            "release a FILE stream when I'm done with it"
+        ]
+    },
+    "mips/runtime-library/feof": {
+        "hash": "3cfa266308a8d5b2",
+        "questions": [
+            "check whether I reached the end of a file",
+            "loop until the end of a file",
+            "difference between feof and ferror"
+        ]
+    },
+    "mips/runtime-library/ferror": {
+        "hash": "919a0a5fc19f2cf4",
+        "questions": [
+            "check whether a read or write on a stream failed",
+            "tell a read error apart from end of file",
+            "what does ferror return"
+        ]
+    },
+    "mips/runtime-library/fflush": {
+        "hash": "aec4e132e2e82bce",
+        "questions": [
+            "force pending output to be written now",
+            "flush every output stream at once",
+            "printed text shows up late, how do I push it out"
+        ]
+    },
+    "mips/runtime-library/fgetc": {
+        "hash": "73620b516c591d4b",
+        "questions": [
+            "read one character from a file",
+            "why does fgetc return an int instead of a char",
+            "detect end of file while reading a file character by character"
+        ]
+    },
+    "mips/runtime-library/fgetpos": {
+        "hash": "361543cd4cfde682",
+        "questions": [
+            "save the current position in a file to come back later",
+            "what is fpos_t used for",
+            "difference between fgetpos and ftell"
+        ]
+    },
+    "mips/runtime-library/fgets": {
+        "hash": "4ac00328a36ad804",
+        "questions": [
+            "read a whole line of text into a buffer",
+            "why does my string end with a newline after reading a line",
+            "read a line without overflowing the buffer",
+            "fgets returns NULL"
+        ]
+    },
+    "mips/runtime-library/floor": {
+        "hash": "8bfaa5b139f88e63",
+        "questions": [
+            "round a double down to a whole number",
+            "what does floor(-2.5) return",
+            "round toward minus infinity for doubles"
+        ]
+    },
+    "mips/runtime-library/floorf": {
+        "hash": "a9a1c5befee08c2b",
+        "questions": [
+            "round a float down to a whole number",
+            "floor that returns a float",
+            "floorf vs floor"
+        ]
+    },
+    "mips/runtime-library/fmax": {
+        "hash": "2637ffc3d076c8ca",
+        "questions": [
+            "larger of two doubles",
+            "max of two numbers when one is NaN",
+            "what does fmax do"
+        ]
+    },
+    "mips/runtime-library/fmin": {
+        "hash": "29c454e47fa41437",
+        "questions": [
+            "smaller of two doubles",
+            "min of two numbers when one is NaN",
+            "what does fmin do"
+        ]
+    },
+    "mips/runtime-library/fmod": {
+        "hash": "2f3464d101a116a5",
+        "questions": [
+            "remainder of dividing two doubles",
+            "the % operator does not work on doubles",
+            "sign of fmod's result for negative numbers"
+        ]
+    },
+    "mips/runtime-library/fmodf": {
+        "hash": "171bf3a7c455ff17",
+        "questions": [
+            "remainder of dividing two floats",
+            "% on float values gives an error",
+            "what does fmodf do"
+        ]
+    },
+    "mips/runtime-library/folders": {
+        "hash": "43dffad6abe854d9",
+        "questions": [
+            "what functions can I use to work with folders",
+            "the folder I created is gone after the program ends",
+            "tell the end of a folder listing apart from an error",
+            "what do ENOENT, ENOTDIR and EISDIR mean",
+            "can I move a folder into another folder"
+        ]
+    },
+    "mips/runtime-library/fopen": {
+        "hash": "4ad1ff8e52b295e6",
+        "questions": [
+            "open a file for reading or writing",
+            "fopen returns NULL, how do I find out why",
+            "which mode strings can I open a file with"
+        ]
+    },
+    "mips/runtime-library/fprintf": {
+        "hash": "ba2370707c276d14",
+        "questions": [
+            "write formatted text to a file",
+            "print a formatted message to stderr",
+            "how many bytes did fprintf write"
+        ]
+    },
+    "mips/runtime-library/fputc": {
+        "hash": "7199fd75930c4f2a",
+        "questions": [
+            "write one character to a file",
+            "save a file one byte at a time",
+            "what does fputc return on error"
+        ]
+    },
+    "mips/runtime-library/fputs": {
+        "hash": "26ba65bd7d7c4e16",
+        "questions": [
+            "write a string to a file",
+            "why is there no newline after writing a string to a file",
+            "difference between puts and fputs"
+        ]
+    },
+    "mips/runtime-library/fread": {
+        "hash": "613931bebf751e7b",
+        "questions": [
+            "read binary data from a file into a buffer",
+            "load an array of structs from a file",
+            "why does fread return fewer items than I asked for"
+        ]
+    },
+    "mips/runtime-library/free": {
+        "hash": "d3de98c16bc53d12",
+        "questions": [
+            "give back memory I got from malloc",
+            "is it safe to free a NULL pointer",
+            "release a block from calloc, realloc or aligned_alloc"
+        ]
+    },
+    "mips/runtime-library/freopen": {
+        "hash": "b61561b7260010ef",
+        "questions": [
+            "make scanf read from a file instead of the keyboard",
+            "redirect stdout into a file",
+            "reopen a stream on a different file"
+        ]
+    },
+    "mips/runtime-library/frexp": {
+        "hash": "2dc12e06393ea35a",
+        "questions": [
+            "split a double into mantissa and exponent",
+            "get the binary exponent of a double",
+            "what does frexp return"
+        ]
+    },
+    "mips/runtime-library/from-assembly": {
+        "hash": "43cc908865023a55",
+        "questions": [
+            "how do I call printf from assembly",
+            "undefined symbol when calling a C function from assembly",
+            "where is the setting to link the C library to my assembly code",
+            "which registers hold the arguments for a C library call",
+            "do I need to align the stack before calling a library function",
+            "where does a C function put its return value"
+        ]
+    },
+    "mips/runtime-library/fscanf": {
+        "hash": "0b995f08af20042f",
+        "questions": [
+            "read numbers from a text file",
+            "how many values were read from the file",
+            "fscanf returns EOF"
+        ]
+    },
+    "mips/runtime-library/fseek": {
+        "hash": "308b2270d53caa63",
+        "questions": ["move to a position in a file", "go to the end of a file", "fseek returns -1"]
+    },
+    "mips/runtime-library/fsetpos": {
+        "hash": "26df2ca0d3038e01",
+        "questions": [
+            "go back to a position I saved earlier in a file",
+            "restore a stream position from an fpos_t",
+            "difference between fsetpos and fseek"
+        ]
+    },
+    "mips/runtime-library/ftell": {
+        "hash": "d9a2d59ed1af73ff",
+        "questions": [
+            "get the current offset in a file",
+            "how many bytes into the file is the next read",
+            "what does ftell return on error"
+        ]
+    },
+    "mips/runtime-library/fwrite": {
+        "hash": "518efd7add2b1e1a",
+        "questions": [
+            "write binary data to a file",
+            "save an array of structs to a file",
+            "fwrite returns less than count"
+        ]
+    },
+    "mips/runtime-library/getc": {
+        "hash": "98b9c35d19e3b631",
+        "questions": [
+            "read the next character from an open file",
+            "is getc the same as fgetc",
+            "shorter name for fgetc"
+        ]
+    },
+    "mips/runtime-library/getchar": {
+        "hash": "9e8f3efb6c531ce1",
+        "questions": [
+            "read one character the user types",
+            "read standard input one char at a time until EOF",
+            "what does getchar return at the end of input"
+        ]
+    },
+    "mips/runtime-library/getenv": {
+        "hash": "5e92a3eca1372adc",
+        "questions": [
+            "read an environment variable",
+            "why does getenv always return NULL",
+            "can my program see environment variables"
+        ]
+    },
+    "mips/runtime-library/gmtime": {
+        "hash": "624b93145f4bd4a6",
+        "questions": [
+            "break a time_t into year, month, day and hour",
+            "convert seconds since 1970 to a UTC date",
+            "why does gmtime return NULL"
+        ]
+    },
+    "mips/runtime-library/hypot": {
+        "hash": "385fc31bc59dac0e",
+        "questions": [
+            "length of the hypotenuse of a right triangle",
+            "distance between two points",
+            "sqrt(x*x + y*y) overflows"
+        ]
+    },
+    "mips/runtime-library/imaxabs": {
+        "hash": "d216bc2c2fe5114e",
+        "questions": [
+            "absolute value of an intmax_t",
+            "abs from inttypes.h",
+            "what does imaxabs do"
+        ]
+    },
+    "mips/runtime-library/imaxdiv": {
+        "hash": "ddfe29e89aff9238",
+        "questions": [
+            "quotient and remainder of two intmax_t values",
+            "what is imaxdiv_t",
+            "div for intmax_t from inttypes.h"
+        ]
+    },
+    "mips/runtime-library/isalnum": {
+        "hash": "f2d463ea78030f51",
+        "questions": [
+            "check if a character is a letter or a digit",
+            "keep only letters and digits from a string",
+            "isalnum vs isalpha"
+        ]
+    },
+    "mips/runtime-library/isalpha": {
+        "hash": "5ae1c01b19e1583e",
+        "questions": [
+            "check if a character is a letter",
+            "count the letters in a string",
+            "what does isalpha return"
+        ]
+    },
+    "mips/runtime-library/isblank": {
+        "hash": "e175649e84673417",
+        "questions": [
+            "check if a character is a space or a tab",
+            "difference between isblank and isspace",
+            "skip spaces and tabs but not newlines"
+        ]
+    },
+    "mips/runtime-library/iscntrl": {
+        "hash": "908d824abf75b003",
+        "questions": [
+            "check if a char is a control character",
+            "find invisible control codes in a string",
+            "what does iscntrl return"
+        ]
+    },
+    "mips/runtime-library/isdigit": {
+        "hash": "7f4df84ad16e6d55",
+        "questions": [
+            "check if a character is a digit 0 to 9",
+            "validate that input contains only numbers",
+            "why does isdigit return a number other than 1"
+        ]
+    },
+    "mips/runtime-library/isgraph": {
+        "hash": "1c0267f5e88975ed",
+        "questions": [
+            "check if a character is printable and not a space",
+            "difference between isgraph and isprint",
+            "find visible characters in a string"
+        ]
+    },
+    "mips/runtime-library/islower": {
+        "hash": "49fb51ed8ae02ea2",
+        "questions": [
+            "check if a character is a lowercase letter",
+            "test for a small letter a to z",
+            "what does islower return"
+        ]
+    },
+    "mips/runtime-library/isprint": {
+        "hash": "f4a5a880f265f00b",
+        "questions": [
+            "check if a character is printable",
+            "is space a printable character",
+            "remove unprintable characters from a string but keep spaces"
+        ]
+    },
+    "mips/runtime-library/ispunct": {
+        "hash": "a76a8b90081e8861",
+        "questions": [
+            "check if a character is punctuation",
+            "remove punctuation from a string",
+            "which characters count as punctuation for ispunct"
+        ]
+    },
+    "mips/runtime-library/isspace": {
+        "hash": "761613b45ddc2227",
+        "questions": [
+            "check if a character is whitespace",
+            "skip spaces, tabs and newlines",
+            "which characters count as white space"
+        ]
+    },
+    "mips/runtime-library/isupper": {
+        "hash": "b0110c5f42f9ee76",
+        "questions": [
+            "check if a character is uppercase",
+            "test for a capital letter A to Z",
+            "what does isupper return"
+        ]
+    },
+    "mips/runtime-library/isxdigit": {
+        "hash": "68c0646eda22639e",
+        "questions": [
+            "check if a character is a hex digit",
+            "validate a hexadecimal string",
+            "what does isxdigit accept"
+        ]
+    },
+    "mips/runtime-library/labs": {
+        "hash": "dc0ca6d897882962",
+        "questions": [
+            "absolute value of a long",
+            "make a negative long positive",
+            "difference between abs and labs"
+        ]
+    },
+    "mips/runtime-library/ldexp": {
+        "hash": "25288bf13cb8bdb0",
+        "questions": [
+            "multiply a double by a power of two",
+            "x times 2 to the n without pow",
+            "what does ldexp compute"
+        ]
+    },
+    "mips/runtime-library/ldiv": {
+        "hash": "0df3ef6c861ec00b",
+        "questions": [
+            "quotient and remainder of two longs",
+            "what is ldiv_t",
+            "div for long values"
+        ]
+    },
+    "mips/runtime-library/llabs": {
+        "hash": "ee38f490a3431aeb",
+        "questions": [
+            "absolute value of a long long",
+            "make a negative long long positive",
+            "difference between labs and llabs"
+        ]
+    },
+    "mips/runtime-library/lldiv": {
+        "hash": "bd585ffdce60ae97",
+        "questions": [
+            "quotient and remainder of two long longs",
+            "what is lldiv_t",
+            "what does lldiv return"
+        ]
+    },
+    "mips/runtime-library/localtime": {
+        "hash": "f3d8e010e32e541d",
+        "questions": [
+            "what time zone do programs run in",
+            "why does localtime give UTC",
+            "convert a time_t to local date and time"
+        ]
+    },
+    "mips/runtime-library/log": {
+        "hash": "ac98f7bff1971f12",
+        "questions": ["natural logarithm of a double", "ln of a double", "is log base e or base 10"]
+    },
+    "mips/runtime-library/log10": {
+        "hash": "6924c84001d2a9c4",
+        "questions": [
+            "base-10 logarithm of a double",
+            "common logarithm in C",
+            "what does log10 return"
+        ]
+    },
+    "mips/runtime-library/log2": {
+        "hash": "fa644abdb3c829aa",
+        "questions": [
+            "base-2 logarithm of a double",
+            "which power of two gives x",
+            "what does log2 return"
+        ]
+    },
+    "mips/runtime-library/logf": {
+        "hash": "b61c40ae6e6b48c8",
+        "questions": [
+            "natural logarithm of a float",
+            "ln of a float value",
+            "logf or log for float variables"
+        ]
+    },
+    "mips/runtime-library/malloc": {
+        "hash": "46ca1f1ed8cc0b1c",
+        "questions": [
+            "allocate memory while the program runs",
+            "make an array whose size I only know at run time",
+            "why does my allocated memory contain garbage values",
+            "malloc returns NULL",
+            "is malloc memory aligned for any type"
+        ]
+    },
+    "mips/runtime-library/memchr": {
+        "hash": "1dc41850df2e2a1a",
+        "questions": [
+            "find the first occurrence of a byte in a buffer",
+            "search the first n bytes of memory for a character",
+            "what does memchr return when the byte is missing"
+        ]
+    },
+    "mips/runtime-library/memcmp": {
+        "hash": "0e79c8d02669ff07",
+        "questions": [
+            "compare two blocks of memory byte by byte",
+            "check whether two arrays hold the same bytes",
+            "does memory comparison treat bytes as signed or unsigned"
+        ]
+    },
+    "mips/runtime-library/memcpy": {
+        "hash": "33d8be9143eceb27",
+        "questions": [
+            "copy bytes from one buffer to another",
+            "copy an array or struct in memory",
+            "difference between memcpy and memmove"
+        ]
+    },
+    "mips/runtime-library/memmove": {
+        "hash": "7e145fde9fd1f634",
+        "questions": [
+            "copy bytes when source and destination overlap",
+            "shift the elements of an array by one place",
+            "memcpy gives wrong data with overlapping memory"
+        ]
+    },
+    "mips/runtime-library/memset": {
+        "hash": "84a5a727fb8130c0",
+        "questions": [
+            "fill a block of memory with one byte value",
+            "clear an array to all zeros",
+            "memset with 1 does not set my ints to 1"
+        ]
+    },
+    "mips/runtime-library/mkdir": {
+        "hash": "9f5b8df3ec330418",
+        "questions": [
+            "create a folder from my program",
+            "mkdir fails with EEXIST",
+            "create a folder inside one that does not exist yet"
+        ]
+    },
+    "mips/runtime-library/mktime": {
+        "hash": "915380d18335fbe9",
+        "questions": [
+            "convert year, month and day back into a time_t",
+            "fix a date with day 32 or month 13",
+            "mktime returns -1"
+        ]
+    },
+    "mips/runtime-library/modf": {
+        "hash": "6705dd69e329b21a",
+        "questions": [
+            "split a double into integer and fractional parts",
+            "get the part after the decimal point",
+            "what does modf store in ip"
+        ]
+    },
+    "mips/runtime-library/opendir": {
+        "hash": "10cfcbf8b65107e4",
+        "questions": [
+            "open a folder to list what's in it",
+            "why does opendir return NULL",
+            "error when opening a file as a directory"
+        ]
+    },
+    "mips/runtime-library/perror": {
+        "hash": "a329fe2a0bf8c4ef",
+        "questions": [
+            "print what errno means to stderr",
+            "show why fopen failed as text",
+            "what does perror print"
+        ]
+    },
+    "mips/runtime-library/pow": {
+        "hash": "7c54e39c3c5e4848",
+        "questions": [
+            "raise a double to a power",
+            "square or cube a double",
+            "C has no power operator, what do I use"
+        ]
+    },
+    "mips/runtime-library/powf": {
+        "hash": "89d273eb9040b0fb",
+        "questions": [
+            "raise a float to a power",
+            "float version of pow",
+            "when should I use powf instead of pow"
+        ]
+    },
+    "mips/runtime-library/printf": {
+        "hash": "f66d82b30a4b9b52",
+        "questions": [
+            "how do I print a variable in C",
+            "print formatted text to standard output",
+            "how many bytes did printf write",
+            "printf returned a negative value"
+        ]
+    },
+    "mips/runtime-library/putc": {
+        "hash": "66f3561d21fde0e4",
+        "questions": [
+            "write a character to an open file",
+            "is putc the same as fputc",
+            "shorter name for fputc"
+        ]
+    },
+    "mips/runtime-library/putchar": {
+        "hash": "5da907f91d6b5e38",
+        "questions": [
+            "print a single character to the console",
+            "print a newline character by itself",
+            "what does putchar return"
+        ]
+    },
+    "mips/runtime-library/puts": {
+        "hash": "033650ce6179a5cc",
+        "questions": [
+            "print a line of text with a newline",
+            "why is there an extra blank line after my string",
+            "difference between puts and printf"
+        ]
+    },
+    "mips/runtime-library/qsort": {
+        "hash": "56a362286fa9cb68",
+        "questions": [
+            "sort an array in C",
+            "sort an array in place without making a copy",
+            "sort an array of structs by a field"
+        ]
+    },
+    "mips/runtime-library/rand": {
+        "hash": "f142829e17b11e95",
+        "questions": [
+            "generate a random integer",
+            "what range of values does rand return",
+            "pseudo-random number generator in C"
+        ]
+    },
+    "mips/runtime-library/readdir": {
+        "hash": "8dc86459ef5853c9",
+        "questions": [
+            "list the files in a folder",
+            "loop over every entry of a directory",
+            "why does the listing start with . and .."
+        ]
+    },
+    "mips/runtime-library/reading-the-library": {
+        "hash": "3309c56f807f7e20",
+        "questions": [
+            "how do I see the source code of printf",
+            "where are the library functions in the file list",
+            "jump from a call to the code of the library function"
+        ]
+    },
+    "mips/runtime-library/realloc": {
+        "hash": "6fc91b47b9026ab6",
+        "questions": [
+            "grow an array I allocated with malloc",
+            "does resizing memory move my data",
+            "realloc returns NULL, is the old block lost"
+        ]
+    },
+    "mips/runtime-library/remove": {
+        "hash": "3f7fde4e20bd367b",
+        "questions": [
+            "delete a file or an empty folder",
+            "standard C way to delete a file",
+            "what does remove return when it fails"
+        ]
+    },
+    "mips/runtime-library/rename": {
+        "hash": "5a9310835e0838fb",
+        "questions": [
+            "change the name of a file",
+            "move a file into another folder",
+            "rename fails with EISDIR",
+            "does renaming overwrite an existing file"
+        ]
+    },
+    "mips/runtime-library/rewind": {
+        "hash": "b37c28130e03efe6",
+        "questions": [
+            "go back to the start of a file",
+            "read a file a second time from the beginning",
+            "does rewind clear the error flag"
+        ]
+    },
+    "mips/runtime-library/rmdir": {
+        "hash": "0fd766a0e665d7f2",
+        "questions": [
+            "delete an empty folder",
+            "rmdir fails with ENOTEMPTY",
+            "delete a folder that still has files in it"
+        ]
+    },
+    "mips/runtime-library/round": {
+        "hash": "5c0b203fe27ec339",
+        "questions": [
+            "nearest whole number to a double",
+            "how does rounding a double treat 2.5 and -2.5",
+            "round half away from zero"
+        ]
+    },
+    "mips/runtime-library/roundf": {
+        "hash": "fd2f084df34c3a6d",
+        "questions": [
+            "nearest whole number to a float",
+            "rounding a float that ends in .5",
+            "what does roundf do"
+        ]
+    },
+    "mips/runtime-library/scalbn": {
+        "hash": "9a3ec894cb6722b8",
+        "questions": [
+            "scale a double by 2 to the n",
+            "is scalbn the same as ldexp",
+            "multiply a double by 2, 4 or 8"
+        ]
+    },
+    "mips/runtime-library/scanf": {
+        "hash": "8d99b035b8e08f33",
+        "questions": [
+            "read a number the user types",
+            "check whether scanf read all my values",
+            "scanf returns EOF",
+            "read formatted input from the keyboard"
+        ]
+    },
+    "mips/runtime-library/setbuf": {
+        "hash": "664462f8df6f0d31",
+        "questions": [
+            "turn off buffering for a stream",
+            "what does setbuf with NULL do",
+            "give a stream a BUFSIZ output buffer"
+        ]
+    },
+    "mips/runtime-library/setvbuf": {
+        "hash": "c3e193d002cf494a",
+        "questions": [
+            "make output line buffered",
+            "check whether changing a stream's buffering worked",
+            "setvbuf fails on an input stream"
+        ]
+    },
+    "mips/runtime-library/sin": {
+        "hash": "14c545cda5597476",
+        "questions": [
+            "sine of a double angle",
+            "why does sin(90) not return 1",
+            "does the double sine function take degrees or radians"
+        ]
+    },
+    "mips/runtime-library/sincos": {
+        "hash": "6cd561b5c769926f",
+        "questions": [
+            "sine and cosine of a double in one call",
+            "why does my program call sincos when I only wrote sin and cos",
+            "GNU extension that gives sine and cosine together"
+        ]
+    },
+    "mips/runtime-library/sincosf": {
+        "hash": "4a96055c532b994e",
+        "questions": [
+            "sine and cosine of a float in one call",
+            "float version of sincos",
+            "is sincosf standard C"
+        ]
+    },
+    "mips/runtime-library/sinf": {
+        "hash": "cd1ab73d0ee189bc",
+        "questions": [
+            "sine of a float angle",
+            "sin for float values in radians",
+            "what does sinf do"
+        ]
+    },
+    "mips/runtime-library/sinh": {
+        "hash": "1d801d510a12d754",
+        "questions": [
+            "hyperbolic sine of a number",
+            "what does sinh do",
+            "hyperbolic sin in math.h"
+        ]
+    },
+    "mips/runtime-library/snprintf": {
+        "hash": "029866278996ee7e",
+        "questions": [
+            "format text into a string without overflowing the buffer",
+            "sprintf with a size limit",
+            "why does snprintf return more than my buffer size"
+        ]
+    },
+    "mips/runtime-library/sprintf": {
+        "hash": "43a2e646770dc2d7",
+        "questions": [
+            "format a number into a string",
+            "convert an int to a string",
+            "build a string with printf-style formatting"
+        ]
+    },
+    "mips/runtime-library/sqrt": {
+        "hash": "bdcb22b7c6f1feaa",
+        "questions": [
+            "square root of a double",
+            "how accurate is sqrt",
+            "take the root of a double value"
+        ]
+    },
+    "mips/runtime-library/sqrtf": {
+        "hash": "22fccf8ab9ab64a5",
+        "questions": [
+            "square root of a float",
+            "square root without converting a float to double",
+            "difference between sqrt and sqrtf"
+        ]
+    },
+    "mips/runtime-library/srand": {
+        "hash": "d6be4ad0383f9f93",
+        "questions": [
+            "seed the random number generator",
+            "rand gives the same numbers every run",
+            "repeat the same random sequence"
+        ]
+    },
+    "mips/runtime-library/sscanf": {
+        "hash": "2257319508cef225",
+        "questions": [
+            "parse numbers out of a string",
+            "read values from a string instead of input",
+            "how many values did sscanf read"
+        ]
+    },
+    "mips/runtime-library/standard-input": {
+        "hash": "cef7653f4b260338",
+        "questions": [
+            "how do I send end of input from the console",
+            "my program is waiting for input, where do I type it",
+            "the next read gets leftover text from the line before",
+            "what happens when a testcase runs out of input"
+        ]
+    },
+    "mips/runtime-library/stat": {
+        "hash": "b354625c7fa79319",
+        "questions": [
+            "check if a file exists",
+            "get the size of a file",
+            "is a path a folder or a file"
+        ]
+    },
+    "mips/runtime-library/stepping": {
+        "hash": "5529040e397c5ab5",
+        "questions": [
+            "how do I step into printf one instruction at a time",
+            "step over runs the whole library call at once",
+            "can I undo a call to a library function",
+            "why does stepping stop in my compare function during qsort",
+            "how do I step through the startup code before main"
+        ]
+    },
+    "mips/runtime-library/strcat": {
+        "hash": "c3eb1c6cc349c9a4",
+        "questions": [
+            "join two strings together",
+            "add a word to the end of a string",
+            "what does strcat return"
+        ]
+    },
+    "mips/runtime-library/strchr": {
+        "hash": "42d7aec8b3f00f44",
+        "questions": [
+            "find the first occurrence of a character in a string",
+            "check whether a string contains a character",
+            "what does strchr return when the character is missing"
+        ]
+    },
+    "mips/runtime-library/strcmp": {
+        "hash": "d7770f53692df261",
+        "questions": [
+            "check whether two strings are equal",
+            "comparing strings with == does not work",
+            "which of two strings comes first alphabetically"
+        ]
+    },
+    "mips/runtime-library/strcoll": {
+        "hash": "5c937468a3618698",
+        "questions": [
+            "compare two strings using the current locale",
+            "locale-aware string comparison",
+            "is strcoll different from strcmp"
+        ]
+    },
+    "mips/runtime-library/strcpy": {
+        "hash": "297de231cb37d422",
+        "questions": [
+            "copy one string into another",
+            "put text into a char array after it is declared",
+            "does strcpy copy the null terminator"
+        ]
+    },
+    "mips/runtime-library/strcspn": {
+        "hash": "86470def0594aa1b",
+        "questions": [
+            "count characters until the first of a set appears",
+            "index of the first comma or space in a string",
+            "what does strcspn return"
+        ]
+    },
+    "mips/runtime-library/strdup": {
+        "hash": "389ee1fd738933f1",
+        "questions": [
+            "make a copy of a string in newly allocated memory",
+            "allocate and copy a string in one call",
+            "do I need to free the copy from strdup"
+        ]
+    },
+    "mips/runtime-library/strerror": {
+        "hash": "1ced8a2279223237",
+        "questions": [
+            "turn an error number into a readable message",
+            "put the errno message into my own output",
+            "what does strerror return"
+        ]
+    },
+    "mips/runtime-library/strlen": {
+        "hash": "ebe44297ee5a4d0d",
+        "questions": [
+            "get the length of a string",
+            "number of characters before the NUL",
+            "does strlen count the terminating zero"
+        ]
+    },
+    "mips/runtime-library/strncat": {
+        "hash": "285186f6ef2953c3",
+        "questions": [
+            "append at most n characters to a string",
+            "string append with a length limit",
+            "does strncat add a null terminator"
+        ]
+    },
+    "mips/runtime-library/strncmp": {
+        "hash": "6645e3844d550869",
+        "questions": [
+            "compare only the first n characters of two strings",
+            "check if a string starts with a prefix",
+            "what does strncmp return"
+        ]
+    },
+    "mips/runtime-library/strncpy": {
+        "hash": "97e7fee5f92c1013",
+        "questions": [
+            "copy at most n characters of a string",
+            "string has no null terminator after copying n characters",
+            "why does strncpy pad with zeros"
+        ]
+    },
+    "mips/runtime-library/strndup": {
+        "hash": "edf45994720b45d5",
+        "questions": [
+            "copy the first n characters of a string into new memory",
+            "make a new substring from the start of a string",
+            "is the copy from strndup terminated"
+        ]
+    },
+    "mips/runtime-library/strnlen": {
+        "hash": "2bc3c4bf5bcdb0d3",
+        "questions": [
+            "length of a string, but at most n",
+            "count characters without reading past the end of a buffer",
+            "what does strnlen return"
+        ]
+    },
+    "mips/runtime-library/strpbrk": {
+        "hash": "01335b74478b6a44",
+        "questions": [
+            "find the first of several characters in a string",
+            "pointer to the first digit or vowel in a string",
+            "what does strpbrk return"
+        ]
+    },
+    "mips/runtime-library/strrchr": {
+        "hash": "7f72e60e60eb559f",
+        "questions": [
+            "find the last occurrence of a character in a string",
+            "get the file extension after the last dot",
+            "what does strrchr return when not found"
+        ]
+    },
+    "mips/runtime-library/strspn": {
+        "hash": "ec11c2dcb94262ec",
+        "questions": [
+            "count leading spaces in a string",
+            "length of the start made only of allowed characters",
+            "what does strspn return"
+        ]
+    },
+    "mips/runtime-library/strstr": {
+        "hash": "078f9e47a31558f0",
+        "questions": [
+            "find a substring inside a string",
+            "check whether a string contains another string",
+            "what does strstr return when nothing matches"
+        ]
+    },
+    "mips/runtime-library/strtod": {
+        "hash": "3f3f061780fc7e86",
+        "questions": [
+            "convert a string to a double with error checking",
+            "find where a decimal number ends in a string",
+            "what does strtod do with the end pointer"
+        ]
+    },
+    "mips/runtime-library/strtof": {
+        "hash": "93d3d2a3640dc312",
+        "questions": [
+            "convert a string to a float",
+            "parse a float from text and check for errors",
+            "strtof vs strtod"
+        ]
+    },
+    "mips/runtime-library/strtoimax": {
+        "hash": "22835ee88ba39a95",
+        "questions": [
+            "convert a string to intmax_t",
+            "parse a hex or octal string into intmax_t",
+            "strtoimax with base 0"
+        ]
+    },
+    "mips/runtime-library/strtok": {
+        "hash": "b00b100cd07e3e02",
+        "questions": [
+            "split a string into words",
+            "split a line by commas",
+            "why does strtok take NULL the second time"
+        ]
+    },
+    "mips/runtime-library/strtol": {
+        "hash": "d60678533a37a981",
+        "questions": [
+            "convert a hex string like 0x1F to a long",
+            "parse a binary string into a long",
+            "what does base 0 mean in strtol",
+            "check that the whole string was a valid long"
+        ]
+    },
+    "mips/runtime-library/strtoll": {
+        "hash": "f2da67934548fc3b",
+        "questions": [
+            "convert a string to a long long in any base",
+            "parse a large hex value into a long long",
+            "strtoll vs strtol"
+        ]
+    },
+    "mips/runtime-library/strtoul": {
+        "hash": "2edfa17c57a8d8cc",
+        "questions": [
+            "convert a string to an unsigned long",
+            "parse a hex address into an unsigned long",
+            "what does strtoul do"
+        ]
+    },
+    "mips/runtime-library/strtoull": {
+        "hash": "39abf0a675d4e2dc",
+        "questions": [
+            "convert a string to an unsigned long long",
+            "parse a big hex string into an unsigned long long",
+            "difference between strtoul and strtoull"
+        ]
+    },
+    "mips/runtime-library/strtoumax": {
+        "hash": "a3064683f32f52a2",
+        "questions": [
+            "convert a string to uintmax_t",
+            "parse a hex string into uintmax_t",
+            "what does strtoumax do"
+        ]
+    },
+    "mips/runtime-library/strxfrm": {
+        "hash": "c18265d6b61b2a6e",
+        "questions": [
+            "copy at most n bytes of a string and get the source length back",
+            "how big a buffer does a transformed string need",
+            "is strxfrm just a copy in the C locale"
+        ]
+    },
+    "mips/runtime-library/tan": {
+        "hash": "22f0b1fa15a94107",
+        "questions": [
+            "tangent of a double angle",
+            "does tan take degrees or radians",
+            "why does the tangent of 45.0 not give 1"
+        ]
+    },
+    "mips/runtime-library/tanf": {
+        "hash": "fefd4d4dbd87ce45",
+        "questions": ["tangent of a float angle", "float version of tan", "does tanf use radians"]
+    },
+    "mips/runtime-library/tanh": {
+        "hash": "cb49b901cff0a332",
+        "questions": [
+            "hyperbolic tangent of a number",
+            "what does tanh do",
+            "hyperbolic tan in math.h"
+        ]
+    },
+    "mips/runtime-library/time": {
+        "hash": "235b07d7ae03c373",
+        "questions": [
+            "get the current time in seconds",
+            "how many seconds since January 1 1970",
+            "why is the date 2000 in a testcase"
+        ]
+    },
+    "mips/runtime-library/tolower": {
+        "hash": "92315bee7a628050",
+        "questions": [
+            "convert a character to lowercase",
+            "make a string lowercase",
+            "what does tolower do with a digit"
+        ]
+    },
+    "mips/runtime-library/toupper": {
+        "hash": "0f72c9b66f29a6fb",
+        "questions": [
+            "convert a character to uppercase",
+            "make a string all capitals",
+            "what does toupper do with a non-letter"
+        ]
+    },
+    "mips/runtime-library/trunc": {
+        "hash": "6331f53bad927fe5",
+        "questions": [
+            "drop the fractional part of a double",
+            "round a double toward zero",
+            "difference between trunc and floor for negatives"
+        ]
+    },
+    "mips/runtime-library/truncf": {
+        "hash": "dc7cefbe764d8d32",
+        "questions": [
+            "drop the fractional part of a float",
+            "round a float toward zero",
+            "truncf vs trunc"
+        ]
+    },
+    "mips/runtime-library/ungetc": {
+        "hash": "bdc51288912f4515",
+        "questions": [
+            "put a character back after reading it",
+            "peek at the next character without consuming it",
+            "what does ungetc return on failure"
+        ]
+    },
+    "mips/runtime-library/unlink": {
+        "hash": "d64227c7316d57d0",
+        "questions": [
+            "delete a file but never a folder",
+            "deleting a folder fails with EISDIR",
+            "difference between unlink and rmdir"
+        ]
+    },
+    "mips/runtime-library/vfprintf": {
+        "hash": "a3436136493ca1a5",
+        "questions": [
+            "logging function that prints a format to stderr",
+            "pass a va_list to fprintf",
+            "what is vfprintf for"
+        ]
+    },
+    "mips/runtime-library/vfscanf": {
+        "hash": "ecd30f1a418774ee",
+        "questions": [
+            "pass a va_list to fscanf",
+            "my own function that reads formatted data from a file",
+            "what is vfscanf for"
+        ]
+    },
+    "mips/runtime-library/vprintf": {
+        "hash": "649650797c2147a5",
+        "questions": [
+            "write my own function that takes a format like printf",
+            "pass ... arguments on to printf",
+            "what does vprintf do"
+        ]
+    },
+    "mips/runtime-library/vscanf": {
+        "hash": "f7d3709bc81c55bb",
+        "questions": [
+            "call scanf with a va_list",
+            "my own scanf-like function reading standard input",
+            "what does vscanf do"
+        ]
+    },
+    "mips/runtime-library/vsnprintf": {
+        "hash": "989b995ae3bb2e58",
+        "questions": [
+            "my own snprintf-like function with a size limit",
+            "format a va_list into a buffer safely",
+            "vsnprintf vs vsprintf"
+        ]
+    },
+    "mips/runtime-library/vsprintf": {
+        "hash": "6c5b6b59306a440c",
+        "questions": [
+            "use a va_list with sprintf",
+            "format variable arguments into a string",
+            "what does vsprintf do"
+        ]
+    },
+    "mips/runtime-library/vsscanf": {
+        "hash": "31c67dc3435436a1",
+        "questions": [
+            "pass a va_list to sscanf",
+            "parse a string inside my own variadic function",
+            "what does vsscanf do"
+        ]
+    },
+    "mips/screen/bitmap-display": {
+        "hash": "b081f40cd4c54256",
+        "questions": [
+            "how do I draw a pixel",
+            "how do I set a pixel's color",
+            "how do I change the display size",
+            "drawing on the screen overwrites my other data",
+            "how do I find the address of the pixel below"
+        ]
+    },
+    "mips/screen/keyboard-and-display": {
+        "hash": "41dce7b0517d4814",
+        "questions": [
+            "how do I check if a key has been typed",
+            "how do I read a typed character from memory-mapped io",
+            "how do I print a character by storing to memory",
+            "how do I clear the console",
+            "why don't arrow keys show up in the receiver"
+        ]
+    },
+    "mips/screen/pictures": {
+        "hash": "cc83d2132859896a",
+        "questions": [
+            "how do I draw a sprite from an image file",
+            "how do I make a new picture for my program",
+            "where do the pixels start in a BMP file",
+            "my 24-bit BMP draws upside down",
+            "are my picture edits saved"
+        ]
+    },
+    "mips/screen/program-time": {
+        "hash": "55a8457e5674a812",
+        "questions": [
+            "how do I measure elapsed time",
+            "does the clock keep running while the program is paused",
+            "why does my testcase say the date is in 2000",
+            "how do I wait some milliseconds"
+        ]
+    },
+    "mips/screen/screen-directive": {
+        "hash": "8e43a8c7b5031bd2",
+        "questions": [
+            "how do I set the screen size in my program",
+            "how do I point the display at a label",
+            "can the display be any size like 224 by 288",
+            "why does my screen comment give a warning",
+            "does the display popover override my code"
+        ]
+    },
+    "mips/screen/screen-keyboard-and-console": {
+        "hash": "429b3253c607dc49",
+        "questions": [
+            "what devices can my program use",
+            "do I need to connect or set up the screen before running",
+            "where is the screen panel"
+        ]
+    },
+    "mips/synth/envelope": {
+        "hash": "67469471eb3c23a1",
+        "questions": [
+            "how do I make a note fade in and fade out",
+            "what are attack, decay, sustain and release",
+            "my note does not play again when I set the gate a second time",
+            "what unit are the attack and release times in"
+        ]
+    },
+    "mips/synth/frequencies": {
+        "hash": "8ea40848faf3493f",
+        "questions": [
+            "what frequency is middle C",
+            "table of note frequencies in Hz",
+            "how do I go up an octave"
+        ]
+    },
+    "mips/synth/from-c": {
+        "hash": "f0ba8437e11dcac8",
+        "questions": [
+            "how do I use the synth from C",
+            "C function to play a note on a synth channel",
+            "C program that plays a scale on the synth"
+        ]
+    },
+    "mips/synth/registers": {
+        "hash": "0a5520b5a41d22d7",
+        "questions": [
+            "where are each channel's sound registers",
+            "how do I find the address of channel 3",
+            "should I write the frequency with sh or sb",
+            "what is the largest volume value"
+        ]
+    },
+    "mips/synth/running": {
+        "hash": "cea3d6a485c6a294",
+        "questions": [
+            "does a synth note keep sounding when I pause",
+            "what happens to synth notes when the program ends",
+            "why does undo make my note play again",
+            "how do I mute the synth"
+        ]
+    },
+    "mips/synth/samples": {
+        "hash": "eb2b4358391e7cfc",
+        "questions": [
+            "how do I play a recorded sound",
+            "how do I copy sound data into the synth",
+            "how do I loop a sample",
+            "changing my buffer after the copy does not change the sound",
+            "how do I play a sample an octave higher"
+        ]
+    },
+    "mips/synth/synth": {
+        "hash": "5c090b851030994c",
+        "questions": [
+            "what is the synth",
+            "how do I make chiptune sounds like old consoles",
+            "how many sounds can play at the same time",
+            "how do I start a note and let it fade out",
+            "can I tell whether a channel is still sounding"
+        ]
+    },
+    "mips/synth/waveforms": {
+        "hash": "87e3a551984ba53d",
+        "questions": [
+            "how do I play a square wave",
+            "how do I make a noise sound for drums",
+            "which wave shape sounds like a flute",
+            "why do high notes sound at the wrong pitch"
+        ]
+    },
+    "mips/synth/wavetables": {
+        "hash": "a69b7634dc6788aa",
+        "questions": [
+            "how do I design my own waveform",
+            "how are 4-bit samples packed two to a byte",
+            "where in memory is a channel's custom wave shape"
+        ]
+    },
+    "mips/syscalls/1": {
+        "hash": "fb8c6e9294c7928a",
+        "questions": [
+            "how do I print a number",
+            "how do I output the integer in $a0",
+            "what does li $v0, 1 before syscall do"
+        ]
+    },
+    "mips/syscalls/10": {
+        "hash": "592751068824c0c6",
+        "questions": [
+            "how do I end my program",
+            "what does li $v0, 10 do",
+            "how do I finish successfully with exit code 0"
+        ]
+    },
+    "mips/syscalls/1026": {
+        "hash": "19a7079f31cd9fa4",
+        "questions": [
+            "how do I delete a file",
+            "why does deleting a path return -21",
+            "what does -2 mean when deleting a file"
+        ]
+    },
+    "mips/syscalls/1030": {
+        "hash": "c89ab3a028317a41",
+        "questions": [
+            "how do I create a folder",
+            "why does my new folder vanish after the run",
+            "what does -17 mean when creating a folder",
+            "creating a folder inside a missing folder fails with -2"
+        ]
+    },
+    "mips/syscalls/1031": {
+        "hash": "3478967302a68b9a",
+        "questions": [
+            "how do I delete a folder",
+            "why can't I remove a folder that has files in it",
+            "what does -39 mean"
+        ]
+    },
+    "mips/syscalls/1034": {
+        "hash": "15b62cd68cf23be0",
+        "questions": [
+            "how do I rename a file",
+            "how do I move a file into another folder",
+            "does renaming overwrite an existing file",
+            "why can't I move a folder"
+        ]
+    },
+    "mips/syscalls/1038": {
+        "hash": "2916938ae9145005",
+        "questions": [
+            "how do I get the size of a file",
+            "how do I tell if a path is a file or a folder",
+            "how do I check whether a file exists",
+            "how big a buffer does stat need"
+        ]
+    },
+    "mips/syscalls/1065": {
+        "hash": "a09cb511a3704850",
+        "questions": [
+            "how do I list the files in a folder",
+            "how do I tell files from folders in a listing",
+            "what does the folder listing buffer contain",
+            "why does listing a folder return -22"
+        ]
+    },
+    "mips/syscalls/11": {
+        "hash": "83fe9442fbe7319d",
+        "questions": [
+            "how do I print a single letter",
+            "how do I show one character on the screen",
+            "how do I output an ASCII code as a character"
+        ]
+    },
+    "mips/syscalls/12": {
+        "hash": "18a9e8f7b0db03e0",
+        "questions": [
+            "how do I read one key without pressing enter",
+            "what code does the enter key return",
+            "how do I get a single character the user types"
+        ]
+    },
+    "mips/syscalls/13": {
+        "hash": "12f515c3613104be",
+        "questions": [
+            "how do I open a file",
+            "how do I add text to the end of an existing file",
+            "what flags do I use to open a file for writing",
+            "what is a file descriptor",
+            "opening a file for reading returns -1"
+        ]
+    },
+    "mips/syscalls/14": {
+        "hash": "9eab1d276611631a",
+        "questions": [
+            "how do I read the contents of a file",
+            "how do I know when I reached the end of a file",
+            "why is there garbage after the text I read from a file",
+            "how do I read raw bytes from standard input",
+            "how do I send end of input in the terminal"
+        ]
+    },
+    "mips/syscalls/15": {
+        "hash": "2d152cb2ec79f57a",
+        "questions": [
+            "how do I save text into a file",
+            "how do I write to standard error",
+            "how do I print bytes without a zero terminator"
+        ]
+    },
+    "mips/syscalls/16": {
+        "hash": "f644c699c2e885f2",
+        "questions": [
+            "how do I close a file when I am done",
+            "how do I close a folder I opened",
+            "what goes in $a0 to close a file"
+        ]
+    },
+    "mips/syscalls/17": {
+        "hash": "f3a77fc108275d8b",
+        "questions": [
+            "how do I exit with an error code",
+            "how do I return a value from my program when it ends",
+            "where does the exit code show up"
+        ]
+    },
+    "mips/syscalls/2": {
+        "hash": "1a1178e5282455b7",
+        "questions": [
+            "how do I print a float",
+            "which register holds the float to print",
+            "print a single-precision number in $f12"
+        ]
+    },
+    "mips/syscalls/3": {
+        "hash": "633450161ef1166c",
+        "questions": [
+            "how do I print a double",
+            "how do I show a double-precision result",
+            "what does li $v0, 3 do"
+        ]
+    },
+    "mips/syscalls/30": {
+        "hash": "13672f5ed536c0c1",
+        "questions": [
+            "how do I get the current time",
+            "how do I measure elapsed time in milliseconds",
+            "why does the date say 2000 in a testcase",
+            "what is returned in $a0 and $a1 for the time"
+        ]
+    },
+    "mips/syscalls/31": {
+        "hash": "563f8bc98e52478e",
+        "questions": [
+            "how do I play a note without waiting",
+            "how do I play several notes at once",
+            "what happens with an invalid pitch or volume",
+            "why does a note keep playing after the program ends"
+        ]
+    },
+    "mips/syscalls/32": {
+        "hash": "15cfca9905baacf5",
+        "questions": [
+            "how do I wait half a second",
+            "does waiting count toward the instruction limit",
+            "why does the delay finish instantly in a testcase"
+        ]
+    },
+    "mips/syscalls/33": {
+        "hash": "da5fbfed11a8fb74",
+        "questions": [
+            "how do I play a melody one note after another",
+            "how do I play a note and wait until it finishes",
+            "why does my program pause while a note plays"
+        ]
+    },
+    "mips/syscalls/34": {
+        "hash": "739845179e49306e",
+        "questions": [
+            "how do I print a number in hex",
+            "why are there leading zeros in my hex output",
+            "what does li $v0, 34 do"
+        ]
+    },
+    "mips/syscalls/35": {
+        "hash": "4db9da3f5c9e11d5",
+        "questions": [
+            "how do I print the bits of a number",
+            "how do I show a value in base 2",
+            "why are there 32 digits when I print in binary"
+        ]
+    },
+    "mips/syscalls/36": {
+        "hash": "14555df3af6a7c0b",
+        "questions": [
+            "how do I print a number as unsigned",
+            "why does my large number print as negative",
+            "how do I print an unsigned integer"
+        ]
+    },
+    "mips/syscalls/4": {
+        "hash": "6c0c6d10d42d36fb",
+        "questions": [
+            "how do I print text",
+            "how do I print a message defined with .asciiz",
+            "what goes in $a0 to print a string",
+            "does the string need to end with a zero byte"
+        ]
+    },
+    "mips/syscalls/40": {
+        "hash": "2369f895e97e5fa2",
+        "questions": [
+            "how do I get the same random numbers every run",
+            "how do I set the starting seed for random numbers",
+            "does a seed give the same sequence as Java's Random"
+        ]
+    },
+    "mips/syscalls/41": {
+        "hash": "3f9f0beae5ba2817",
+        "questions": [
+            "how do I get a random number",
+            "how do I generate a random integer of any size",
+            "how do I fill a register with random bits"
+        ]
+    },
+    "mips/syscalls/42": {
+        "hash": "079bd60fd317b2a5",
+        "questions": [
+            "how do I get a random number in a range",
+            "how do I simulate rolling a dice",
+            "where do I put the upper limit for a random number"
+        ]
+    },
+    "mips/syscalls/43": {
+        "hash": "8d5e195ffed87572",
+        "questions": [
+            "how do I get a random float",
+            "how do I get a random fraction into a float register",
+            "what does li $v0, 43 do"
+        ]
+    },
+    "mips/syscalls/44": {
+        "hash": "7e181dcd61341818",
+        "questions": [
+            "how do I get a random double",
+            "random number as a double-precision value",
+            "what does li $v0, 44 do"
+        ]
+    },
+    "mips/syscalls/5": {
+        "hash": "87c10ddbee3750d8",
+        "questions": [
+            "how do I read a number the user types",
+            "where does the typed number end up after syscall",
+            "input error when I type text instead of a whole number"
+        ]
+    },
+    "mips/syscalls/50": {
+        "hash": "fcde8eb76b71d110",
+        "questions": [
+            "how do I ask the user to confirm in a popup",
+            "where does the message for a confirm popup go",
+            "what does li $v0, 50 do"
+        ]
+    },
+    "mips/syscalls/51": {
+        "hash": "52a8bf299b0ad30c",
+        "questions": [
+            "how do I ask for a whole number in a popup",
+            "where does the prompt go for an integer input dialog",
+            "what does li $v0, 51 do"
+        ]
+    },
+    "mips/syscalls/52": {
+        "hash": "50747db72d8e0d89",
+        "questions": [
+            "how do I ask for a float in a popup window",
+            "where does the prompt go for a float input dialog",
+            "what does li $v0, 52 do"
+        ]
+    },
+    "mips/syscalls/53": {
+        "hash": "d3fc5527645498e6",
+        "questions": [
+            "how do I ask for a double in a popup window",
+            "where does the prompt go for a double input dialog",
+            "what does li $v0, 53 do"
+        ]
+    },
+    "mips/syscalls/54": {
+        "hash": "053fff99cbfce9e6",
+        "questions": [
+            "how do I ask the user for text in a popup",
+            "why does text from an input dialog end with a newline",
+            "what does li $v0, 54 do"
+        ]
+    },
+    "mips/syscalls/55": {
+        "hash": "89a024d61b50ea2d",
+        "questions": [
+            "how do I show a message in a popup",
+            "how do I show an error message box",
+            "what does li $v0, 55 do"
+        ]
+    },
+    "mips/syscalls/56": {
+        "hash": "1ea8a97e499ed475",
+        "questions": [
+            "how do I show a number in a popup",
+            "how do I show a message followed by an integer in a dialog",
+            "what does li $v0, 56 do"
+        ]
+    },
+    "mips/syscalls/57": {
+        "hash": "21fd2ade5feef370",
+        "questions": [
+            "how do I show a float in a popup",
+            "show a message with a float value in a dialog",
+            "what does li $v0, 57 do"
+        ]
+    },
+    "mips/syscalls/58": {
+        "hash": "89d0aa869c232a18",
+        "questions": [
+            "how do I show a double in a popup",
+            "show a message with a double value in a dialog",
+            "what does li $v0, 58 do"
+        ]
+    },
+    "mips/syscalls/59": {
+        "hash": "a851c664016e10b8",
+        "questions": [
+            "how do I show two strings in a popup",
+            "show a message followed by another string in a dialog",
+            "what does li $v0, 59 do"
+        ]
+    },
+    "mips/syscalls/6": {
+        "hash": "0f1e000cbeb850b6",
+        "questions": [
+            "how do I read a float the user types",
+            "where does the typed float end up",
+            "how do I input a single-precision number"
+        ]
+    },
+    "mips/syscalls/62": {
+        "hash": "64d6a4b62413e3d1",
+        "questions": [
+            "how do I jump to a position in a file",
+            "how do I go back to the start of a file",
+            "how do I skip bytes in a file",
+            "why does seeking fail on standard input"
+        ]
+    },
+    "mips/syscalls/7": {
+        "hash": "2fbfcd7d81b6fc1d",
+        "questions": [
+            "how do I read a double from the keyboard",
+            "where does a typed double end up",
+            "how do I input a double-precision value"
+        ]
+    },
+    "mips/syscalls/8": {
+        "hash": "f3ebec5d069a55b4",
+        "questions": [
+            "how do I read a line of text the user types",
+            "why does my input string end with a newline",
+            "what happens if the user types more than the buffer holds",
+            "how do I read a name from the user"
+        ]
+    },
+    "mips/syscalls/9": {
+        "hash": "b127251874422f54",
+        "questions": [
+            "how do I allocate memory while the program runs",
+            "how do I get memory like malloc in assembly",
+            "what does sbrk do",
+            "how much heap memory can I get",
+            "runtime error when I allocate too much memory"
+        ]
+    },
+    "mips/syscalls/arguments": {
+        "hash": "4c39dbe87b586070",
+        "questions": [
+            "how do I pass command line arguments to my program",
+            "where do I find argc and argv at startup",
+            "how do I put a space inside one argument",
+            "why is argv[0] the program name instead of my input",
+            "how do I print the first word given on the command line"
+        ]
+    },
+    "mips/syscalls/asking-the-simulator-for-a-service": {
+        "hash": "f2010679341c4552",
+        "questions": [
+            "how does syscall work",
+            "what do I put in $v0 before syscall",
+            "where do the arguments of a syscall go",
+            "does syscall call an operating system",
+            "how do I use the same services from C"
+        ]
+    },
+    "mips/syscalls/folders": {
+        "hash": "a43e10a482497a46",
+        "questions": [
+            "can my program read files on my computer",
+            "where are the files my program creates",
+            "do file changes stay after the program ends",
+            "what folder do file paths start from",
+            "what do negative return values from file services mean",
+            "how do I create and list folders from C"
+        ]
+    },
+    "mips/syscalls/sound": {
+        "hash": "ae4ce564004cce00",
+        "questions": [
+            "how do I play music",
+            "what pitch number is middle C",
+            "which instrument number is a violin",
+            "how do I mute the sound my program plays",
+            "why is the first note delayed"
+        ]
+    },
+    "mips/using-c/compiling": {
+        "hash": "2b03035059ef1d3f",
+        "questions": [
+            "which compilers can I choose from",
+            "what does the optimization level change",
+            "how do I use my own header file",
+            "can I split my C program into several .c files",
+            "why do I need internet to compile",
+            "my C changes don't show up when I run"
+        ]
+    },
+    "mips/using-c/editing-help": {
+        "hash": "048a9cfa4266faaf",
+        "questions": [
+            "how do I see the list of simulator functions",
+            "does the editor autocomplete C code",
+            "how do I see a function's parameters while typing",
+            "autocomplete did not add the include for me"
+        ]
+    },
+    "mips/using-c/following-execution": {
+        "hash": "5eba26a6de1c0041",
+        "questions": [
+            "how do I see which assembly a C line became",
+            "how do I set a breakpoint on a C line",
+            "my C breakpoints disappeared after reopening the project",
+            "why does one C line take many steps"
+        ]
+    },
+    "mips/using-c/libraries": {
+        "hash": "9ce15c9e64e9f8df",
+        "questions": [
+            "can I use printf and scanf",
+            "can I use std::vector",
+            "how do I read a number the user types in C",
+            "how do I send end of input in the terminal",
+            "does C++ support exceptions here"
+        ]
+    },
+    "mips/using-c/linking-project-files": {
+        "hash": "ea7abbe472f76578",
+        "questions": [
+            "how do I call an assembly function from C",
+            "why is my assembly file left out of the build",
+            "can I use .eqv in a file linked with C",
+            "how do I include an exception handler with a C program",
+            "why do I need extern C to call assembly from C++"
+        ]
+    },
+    "mips/using-c/overview": {
+        "hash": "b00a9053d7f99900",
+        "questions": [
+            "how do I write a program in C",
+            "hello world in C",
+            "how do I run a C program",
+            "can I write my program in C++"
+        ]
+    },
+    "mips/using-c/screen-and-devices": {
+        "hash": "c2563ab92765f46b",
+        "questions": [
+            "how do I draw on the screen from C",
+            "how do I compute a pixel's index from x and y in C",
+            "which C functions talk to the keyboard and console",
+            "which screen sizes can a C program declare"
+        ]
+    }
+}

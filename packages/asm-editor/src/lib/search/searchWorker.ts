@@ -3,9 +3,11 @@ import { Tokenizer } from '@huggingface/tokenizers'
 import * as ort from 'onnxruntime-web/wasm'
 import ortWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url'
 import { Embedder } from './embedding'
-import { SearchEngine, type SearchResult } from './engine'
+import { prepareSearch, SearchEngine, type SearchResult } from './engine'
 import { SEARCH_MODEL, type SearchModelUrls } from './model'
-import { isPayload } from './payload'
+import { OutdatedIndexError } from './outdatedIndex'
+import { isOtherFormat, isPayload } from './payload'
+import type { QueryCouple } from './queryModifiers'
 import type { SearchScope, ShardId } from './scope'
 
 /**
@@ -23,9 +25,22 @@ import type { SearchScope, ShardId } from './scope'
 export type WorkerRequest =
     | { id: number; type: 'load-shard'; shard: ShardId; url: string }
     | { id: number; type: 'load-model'; urls: SearchModelUrls }
-    | { id: number; type: 'search'; scope: SearchScope; query: string; limit: number }
+    | {
+          id: number
+          type: 'search'
+          scope: SearchScope
+          query: string
+          limit: number
+          /** The names the Workbench's Documentation panel favours (`SearchEngine.search`). */
+          favour?: string[]
+      }
 
-export type SearchAnswer = { results: SearchResult[]; mode: 'text' | 'hybrid' }
+export type SearchAnswer = {
+    results: SearchResult[]
+    mode: 'text' | 'hybrid'
+    /** The query's couples ("tst instruction"), whose entries come first, for the box to mark. */
+    couples: QueryCouple[]
+}
 
 export type WorkerResponse =
     /**
@@ -34,7 +49,8 @@ export type WorkerResponse =
      */
     | { type: 'ready' }
     | { id: number; ok: true; value: unknown }
-    | { id: number; ok: false; error: string }
+    /** `outdated`: a shard of another format, which only a reload of the page fixes. */
+    | { id: number; ok: false; error: string; outdated?: boolean }
 
 const engine = SearchEngine.create()
 let embedder: Embedder | null = null
@@ -48,6 +64,7 @@ async function loadShard(shard: ShardId, url: string): Promise<void> {
             const response = await fetch(url, { priority: 'high' })
             if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`)
             const payload: unknown = await response.json()
+            if (isOtherFormat(payload)) throw new OutdatedIndexError()
             if (!isPayload(payload)) throw new Error(`${url} is not a search shard`)
             await engine.add(payload)
         })()
@@ -98,13 +115,21 @@ async function loadModel(urls: SearchModelUrls): Promise<void> {
     })
 }
 
-async function search(scope: SearchScope, query: string, limit: number): Promise<SearchAnswer> {
+async function search(
+    scope: SearchScope,
+    query: string,
+    limit: number,
+    favour: string[] | undefined
+): Promise<SearchAnswer> {
+    // the golden queries prepare a query the same way, so they test what this does
+    const { embed, options } = prepareSearch(engine, query, scope)
     const vector =
-        embedder && engine.hasVectors(scope) && query.trim()
-            ? (await embedder.embed([query], 'query'))[0]
+        embedder && engine.hasVectors(scope) && embed.trim()
+            ? (await embedder.embed([embed], 'query'))[0]
             : null
-    const results = await engine.search(query, { scope, vector, limit })
-    return { results, mode: vector ? 'hybrid' : 'text' }
+    const results = await engine.search(query, { ...options, vector, limit, favour })
+    const couples = options.couples.map(({ start, end, label }) => ({ start, end, label }))
+    return { results, mode: vector ? 'hybrid' : 'text', couples }
 }
 
 async function handle(request: WorkerRequest): Promise<unknown> {
@@ -116,7 +141,7 @@ async function handle(request: WorkerRequest): Promise<unknown> {
             await loadModel(request.urls)
             return null
         case 'search':
-            return search(request.scope, request.query, request.limit)
+            return search(request.scope, request.query, request.limit, request.favour)
     }
 }
 
@@ -128,7 +153,8 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
             self.postMessage({
                 id: request.id,
                 ok: false,
-                error: error instanceof Error ? error.message : String(error)
+                error: error instanceof Error ? error.message : String(error),
+                outdated: error instanceof OutdatedIndexError
             } satisfies WorkerResponse)
     )
 }

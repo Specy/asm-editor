@@ -24,6 +24,18 @@ In the browser the model starts downloading in a Web Worker as soon as a page wi
 entered, unless the browser asks to save data; there is no Preference for it. Until it is ready,
 search is full-text only and a spinner in the search box says so while the reader types.
 
+**Amended 2026-11-09** ([the design record](../design/documentation-search.md), Searching in plain
+English): Orama still holds both halves, but no longer ranks with both. Its hybrid mode divides each
+half by its own best score, so a weak best match looked as certain as a strong one; the engine now
+searches the words half and the meaning half separately, brings the words' score to a fixed scale,
+and adds them, the meaning half's similarity being absolute already. The vectors that are not an
+entry's or a window's own words sit in an Orama database of their own, so they do not change the
+words half's scores. Each shard has its own databases, and its words are scored with the statistics
+of the scope's shards together, so a scope ranks the same whatever else the worker has loaded. A
+Documentation entry's vector is made from its **Entry questions**
+([ADR 0079](./0079-entry-questions-are-written-once-and-committed.md)) and its text, and an entry
+longer than the model reads gets more vectors for the rest.
+
 ## Considered options
 
 - **The asymmetric mode** (`snowflake-arctic-embed-m-v1.5` embedding documents at build time).

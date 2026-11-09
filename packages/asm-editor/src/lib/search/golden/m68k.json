@@ -76,7 +76,7 @@
         },
         {
             "query": "post increment",
-            "top": 1,
+            "top": 2,
             "expect": "m68k/addressing-modes/indirect-post-pre-increment"
         },
         {
@@ -105,6 +105,23 @@
                 "m68k/instructions/rts",
                 "m68k/think-in-assembly/bsr-rts-link-and-unlk#"
             ]
+        },
+        { "query": "how does dbra work", "first": "m68k/instructions/dbra" },
+        { "query": "add two numbers", "first": "m68k/instructions/add" },
+        { "query": "print a number in binary", "top": 3, "expect": "m68k/trap-tasks/task-15" },
+        { "query": "change the colour of lines", "top": 3, "expect": "m68k/trap-tasks/task-80" },
+        {
+            "query": "make my program pause for a bit",
+            "top": 3,
+            "expect": "m68k/trap-tasks/task-23"
+        },
+        {
+            "query": "instruction tst",
+            "first": "m68k/instructions/tst"
+        },
+        {
+            "query": "end directive",
+            "first": "m68k/directives/end"
         }
     ]
 }

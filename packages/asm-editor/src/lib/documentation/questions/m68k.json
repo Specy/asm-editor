@@ -1,0 +1,2198 @@
+{
+    "m68k/addressing-modes/68020": {
+        "hash": "df55ec60baac6347",
+        "questions": [
+            "what addressing modes does the 68020 add",
+            "what do bd and od mean in an operand",
+            "assembler says my operand needs a later processor",
+            "when does the assembler switch to a wider 68020 encoding"
+        ]
+    },
+    "m68k/addressing-modes/address-register-displacement": {
+        "hash": "9b30ed56dab18050",
+        "questions": [
+            "what does the number before (a0) mean",
+            "how do I read memory a few bytes past an address register",
+            "what is the largest offset I can put before (a0)",
+            "is (4,a0) the same as 4(a0)"
+        ]
+    },
+    "m68k/addressing-modes/address-register-indexed": {
+        "hash": "75d17e89bd135653",
+        "questions": [
+            "how do I index into an array with a register",
+            "what does (a0,d1) mean",
+            "index register above 32767 gives the wrong address",
+            "what offset range is allowed with an index register"
+        ]
+    },
+    "m68k/addressing-modes/base-displacements": {
+        "hash": "e3e142cd8ea3fdb9",
+        "questions": [
+            "how do I use an offset larger than 32767 with an index register",
+            "what does .l after a displacement inside parentheses do",
+            "why does a forward label make my displacement four bytes",
+            "is the label in ([table,pc,d1.w*4]) an address or a distance"
+        ]
+    },
+    "m68k/addressing-modes/bit-fields": {
+        "hash": "bf1864ab4c4537bf",
+        "questions": [
+            "what does {24:8} after a register mean",
+            "how do I split a 16-bit colour into red, green and blue",
+            "how do I read bits that span two bytes in memory",
+            "can I use bit field instructions on the 68000",
+            "which bit does offset 0 start from"
+        ]
+    },
+    "m68k/addressing-modes/control-registers": {
+        "hash": "c8cb6a512fcdb87b",
+        "questions": [
+            "what does vbr hold",
+            "what are the source and destination function codes",
+            "label rejected because the name is a reserved register",
+            "what registers does the 68010 add for supervisor code"
+        ]
+    },
+    "m68k/addressing-modes/direct": {
+        "hash": "55e1fa11730ce3a2",
+        "questions": [
+            "is sp the same register as a7",
+            "which registers are data registers and which are address registers",
+            "what does Rn mean in the instruction forms"
+        ]
+    },
+    "m68k/addressing-modes/effective-address": {
+        "hash": "19e37f59417baf62",
+        "questions": [
+            "how do I access memory at a fixed address like $2000",
+            "what does .w or .l after an address do",
+            "why does a label defined further down make the instruction bigger",
+            "how do I read a variable by its label"
+        ]
+    },
+    "m68k/addressing-modes/immediate": {
+        "hash": "bcd2c5f72edb3acd",
+        "questions": [
+            "what does # mean before a number",
+            "how do I write a hex or binary constant",
+            "what is the difference between #label and label",
+            "can I put a character in quotes as a number",
+            "how big can a constant be for a byte operation"
+        ]
+    },
+    "m68k/addressing-modes/indirect": {
+        "hash": "203037f4ee79be54",
+        "questions": [
+            "what do parentheses around a0 mean",
+            "how do I use a register as a pointer",
+            "how do I read the value at the address stored in a0",
+            "what is the difference between a0 and (a0)"
+        ]
+    },
+    "m68k/addressing-modes/indirect-post-pre-increment": {
+        "hash": "c741be6af1848e48",
+        "questions": [
+            "how do I walk through an array with a pointer",
+            "how much does a0 increase after (a0)+",
+            "how do I push a value with -(sp)",
+            "why does a byte push move sp by 2",
+            "instruction accepts (a0) but rejects (a0)+"
+        ]
+    },
+    "m68k/addressing-modes/long-branches": {
+        "hash": "beb86d19254bf596",
+        "questions": [
+            "branch out of range with a target more than 32 KB away",
+            "how do I call a subroutine more than 32 KB away",
+            "what does .l on bra or bsr do",
+            "forward branch too far even with the 68020 selected"
+        ]
+    },
+    "m68k/addressing-modes/memory-indirect": {
+        "hash": "31fa43eb51e3352c",
+        "questions": [
+            "what do square brackets mean in an operand",
+            "how do I follow a pointer stored in memory",
+            "how do I build a jump table",
+            "pick a string from a table of string addresses",
+            "difference between preindexed and postindexed",
+            "why does lea with brackets cause a bus error"
+        ]
+    },
+    "m68k/addressing-modes/overview": {
+        "hash": "f55201e4ef1b6c81",
+        "questions": [
+            "what does <ea> mean in the instruction syntax",
+            "what is an addressing mode",
+            "can an operand be a register, memory or a constant",
+            "why is my operand not allowed for this instruction"
+        ]
+    },
+    "m68k/addressing-modes/program-counter-relative": {
+        "hash": "eb9f66713f93b8f4",
+        "questions": [
+            "what does table(pc) mean",
+            "why can't I store to a label using (pc)",
+            "how far away can the label in label(pc) be",
+            "what address does (pc,d0.w) use without a label"
+        ]
+    },
+    "m68k/addressing-modes/register-pairs": {
+        "hash": "ab6e1dcf80696579",
+        "questions": [
+            "what does a colon between two registers mean",
+            "which register holds the high half of a 64-bit product",
+            "which register of the pair gets the remainder",
+            "how do I write the two addresses for cas2"
+        ]
+    },
+    "m68k/addressing-modes/scaled-index": {
+        "hash": "b5bb9055eecddfe8",
+        "questions": [
+            "how do I index an array of longs without multiplying by 4",
+            "what does *4 after d1 mean in an operand",
+            "can I use a data register as a pointer",
+            "why does (d0) only use the low word"
+        ]
+    },
+    "m68k/addressing-modes/status-registers": {
+        "hash": "a5a468f5adb6ccb5",
+        "questions": [
+            "what is the difference between sr and ccr",
+            "how do I copy the flags into a data register",
+            "which instructions can write the flags register directly"
+        ]
+    },
+    "m68k/addressing-modes/suppressed-registers": {
+        "hash": "2915fbeccefb6ee5",
+        "questions": [
+            "what does za0 mean in disassembled code",
+            "how do I make a register add nothing to the address",
+            "warning that my label name is ambiguous inside parentheses",
+            "can I use zd0 as a label"
+        ]
+    },
+    "m68k/addressing-modes/user-stack-pointer": {
+        "hash": "98d9a926eaf83ee8",
+        "questions": [
+            "what is usp",
+            "how does supervisor code set a user program's stack",
+            "which register is the stack pointer in user mode"
+        ]
+    },
+    "m68k/assembler-features/immediate-and-absolute-arithmetics": {
+        "hash": "4d492e6a0f42b299",
+        "questions": [
+            "can I write a calculation as an operand instead of a number",
+            "is the math in #$F*10 done when the program runs",
+            "how do I use label+2 as an immediate value",
+            "can I use parentheses and mix hex and binary in an expression"
+        ]
+    },
+    "m68k/condition-codes/cc": {
+        "hash": "32d5af8f8ce5a8cb",
+        "questions": [
+            "branch when the carry flag is clear",
+            "set a byte when there is no carry",
+            "trap only when there is no carry"
+        ]
+    },
+    "m68k/condition-codes/condition-codes-flags": {
+        "hash": "515626008d212525",
+        "questions": [
+            "what are the five condition flags",
+            "what is the difference between carry and overflow",
+            "what is the extend flag for",
+            "how can I tell if a result was negative",
+            "why does cmp leave X unchanged"
+        ]
+    },
+    "m68k/condition-codes/cs": {
+        "hash": "7d24f38c69a7734a",
+        "questions": [
+            "branch if the carry flag is set",
+            "what does bcs test",
+            "which instructions can test for carry set"
+        ]
+    },
+    "m68k/condition-codes/eq": {
+        "hash": "16e4cedc29cb0b27",
+        "questions": [
+            "branch if two numbers are the same",
+            "jump if the result was zero",
+            "how do I check that cmp found a match"
+        ]
+    },
+    "m68k/condition-codes/ge": {
+        "hash": "ead2d7df5433bac2",
+        "questions": [
+            "branch if greater than or equal",
+            "how do I check that a value is at least some minimum",
+            "which flags does bge use"
+        ]
+    },
+    "m68k/condition-codes/gt": {
+        "hash": "bc362893504b2099",
+        "questions": ["branch if greater than", "jump if greater but not equal", "what does bgt do"]
+    },
+    "m68k/condition-codes/hi": {
+        "hash": "44fad6b6bd8792c2",
+        "questions": [
+            "branch if one unsigned value is higher than another",
+            "which flags does bhi check",
+            "unsigned version of greater than"
+        ]
+    },
+    "m68k/condition-codes/hs": {
+        "hash": "2951f35a462d7bf3",
+        "questions": [
+            "branch if an unsigned value is higher or the same",
+            "which flag does bhs test",
+            "what does hs mean"
+        ]
+    },
+    "m68k/condition-codes/le": {
+        "hash": "37941a35be9431fc",
+        "questions": [
+            "branch if less than or equal",
+            "jump when a value is at most a limit",
+            "what conditions make ble branch"
+        ]
+    },
+    "m68k/condition-codes/lo": {
+        "hash": "9a0d8145808dbc6a",
+        "questions": [
+            "jump if an unsigned number is below another",
+            "what does lo stand for",
+            "set a byte when unsigned lower"
+        ]
+    },
+    "m68k/condition-codes/ls": {
+        "hash": "7b7197dd0a623fd6",
+        "questions": [
+            "jump if an unsigned number is lower or the same",
+            "what flags does bls look at",
+            "set a byte when carry or zero is set"
+        ]
+    },
+    "m68k/condition-codes/lt": {
+        "hash": "d71d18f597b61d46",
+        "questions": [
+            "branch if a value is less than another",
+            "what flags does blt check",
+            "set a byte when the comparison gave less than"
+        ]
+    },
+    "m68k/condition-codes/mi": {
+        "hash": "845dcfad860d7fec",
+        "questions": [
+            "branch if a value is negative",
+            "jump when the N flag is set",
+            "what does mi stand for"
+        ]
+    },
+    "m68k/condition-codes/ne": {
+        "hash": "06f48e46db2e022d",
+        "questions": [
+            "branch if two values are not equal",
+            "jump when the result is not zero",
+            "which flag does bne look at"
+        ]
+    },
+    "m68k/condition-codes/pl": {
+        "hash": "d2b47ed53f552eee",
+        "questions": [
+            "branch if a number is not negative",
+            "what does pl mean",
+            "jump when the N flag is clear"
+        ]
+    },
+    "m68k/condition-codes/status-register": {
+        "hash": "605a2eb75b3aae74",
+        "questions": [
+            "what does each bit of the status register mean",
+            "why is sr $2000 when my program starts",
+            "how is ccr related to sr",
+            "what do I2, I1 and I0 mean",
+            "does arithmetic ever change the system byte of sr"
+        ]
+    },
+    "m68k/condition-codes/vc": {
+        "hash": "a07cc9989e1c40f4",
+        "questions": [
+            "branch when the overflow flag is clear",
+            "how do I continue only when the add did not overflow",
+            "set a flag byte when there was no overflow"
+        ]
+    },
+    "m68k/condition-codes/vs": {
+        "hash": "a37b4670078c4f2b",
+        "questions": [
+            "branch if the result overflowed",
+            "when does bvs jump",
+            "test whether the overflow flag is set"
+        ]
+    },
+    "m68k/condition-codes/what-condition-codes-are": {
+        "hash": "cad0a47a4adf088d",
+        "questions": [
+            "what are condition codes",
+            "how does my program decide what to do after a comparison",
+            "does bcc mean any condition or carry clear",
+            "do all instructions change the flags",
+            "what is the difference between tst and cmp"
+        ]
+    },
+    "m68k/directives/dc": {
+        "hash": "9ee012c30b11f990",
+        "questions": [
+            "how do I store a string in memory",
+            "how do I define an array of numbers",
+            "why does my text have extra zero bytes",
+            "what size is dc without a suffix",
+            "why is there an empty byte before my word data"
+        ]
+    },
+    "m68k/directives/dcb": {
+        "hash": "3eba41e275e7ad24",
+        "questions": [
+            "how do I fill a block of memory with the same value",
+            "what does dcb.b 50, 1 do",
+            "how do I make an array where every element starts at 0"
+        ]
+    },
+    "m68k/directives/ds": {
+        "hash": "19c7b43c88280c16",
+        "questions": [
+            "how do I reserve space for a buffer",
+            "make room for 100 longs without setting them",
+            "what is the difference between ds and dc"
+        ]
+    },
+    "m68k/directives/end": {
+        "hash": "edd7779e38d74a2e",
+        "questions": [
+            "how do I set the entry point of my program",
+            "why is my code after end ignored",
+            "what does end START mean at the bottom of the file"
+        ]
+    },
+    "m68k/directives/equ": {
+        "hash": "a2424ae83337fd5f",
+        "questions": [
+            "how do I define a constant",
+            "what does name equ 10 mean",
+            "symbol already defined error when I change a constant"
+        ]
+    },
+    "m68k/directives/fail": {
+        "hash": "12f0f125451c5c78",
+        "questions": [
+            "how do I stop the build with my own error message",
+            "what does fail do",
+            "assembly error shows a message someone wrote in the source"
+        ]
+    },
+    "m68k/directives/incbin": {
+        "hash": "4e19be98cda80b19",
+        "questions": [
+            "how do I put a binary file's bytes into my program",
+            "embed a sprite image in my program",
+            "what does incbin do"
+        ]
+    },
+    "m68k/directives/include": {
+        "hash": "dbc96da238999877",
+        "questions": [
+            "how do I use code from another file",
+            "where does include look for the file",
+            "file in a subfolder is not found when assembling"
+        ]
+    },
+    "m68k/directives/list": {
+        "hash": "d82b08f238c71d69",
+        "questions": [
+            "what does list do",
+            "does turning the assembly listing on change my program",
+            "old code switches the listing on, is that needed here"
+        ]
+    },
+    "m68k/directives/memory": {
+        "hash": "b60ca9689e0eb0c0",
+        "questions": [
+            "how do I make an address range read-only",
+            "why does a write to this address cause a bus error",
+            "how do I keep user mode code out of some addresses",
+            "what is the difference between rom and read",
+            "what does memory rom $8000,$8FFF do"
+        ]
+    },
+    "m68k/directives/nolist": {
+        "hash": "d82b08f238c71d69",
+        "questions": [
+            "what does nolist do",
+            "does turning the assembly listing off change my program",
+            "old code hides lines from the listing, does that matter"
+        ]
+    },
+    "m68k/directives/offset": {
+        "hash": "a21e5d8604097cbb",
+        "questions": [
+            "how do I define the layout of a struct",
+            "name field positions without reserving memory",
+            "what does org * do after a structure",
+            "how do I read a struct field through a0"
+        ]
+    },
+    "m68k/directives/opt": {
+        "hash": "372431428af0fb2e",
+        "questions": [
+            "how do I switch to the 68020 instruction set",
+            "which processor is used by default",
+            "error that an instruction needs a later processor",
+            "can an included file choose a different processor",
+            "what does opt bit do"
+        ]
+    },
+    "m68k/directives/org": {
+        "hash": "b52cd164edf758f7",
+        "questions": [
+            "how do I place my code at a specific address",
+            "what does org $1000 do",
+            "how do I change where the next data goes in memory"
+        ]
+    },
+    "m68k/directives/page": {
+        "hash": "d82b08f238c71d69",
+        "questions": [
+            "what does page do",
+            "does a form feed in the assembly listing do anything",
+            "old code starts a new listing sheet, is that needed here"
+        ]
+    },
+    "m68k/directives/reg": {
+        "hash": "bb244617e785bd0d",
+        "questions": [
+            "how do I give a list of registers a name",
+            "what does saved reg d0-d3/a0-a2 mean",
+            "can movem take a named register list"
+        ]
+    },
+    "m68k/directives/section": {
+        "hash": "6b60a86416dcab5e",
+        "questions": [
+            "how do I keep code and data in separate places",
+            "why did my data end up at address 0",
+            "how do I go back to writing code after some data",
+            "where does section 0 start"
+        ]
+    },
+    "m68k/directives/set": {
+        "hash": "e0dffdb6f99ac3cb",
+        "questions": [
+            "how do I define a symbol I can change later",
+            "how do I increase a counter while assembling",
+            "what is the difference between set and equ"
+        ]
+    },
+    "m68k/directives/simhalt": {
+        "hash": "a5d455041596cf99",
+        "questions": [
+            "how do I pause execution at the end of my code",
+            "why does my program run into my data",
+            "why does my program pause instead of finishing",
+            "what are the FFFF FFFF words after my code",
+            "what does simhalt do"
+        ]
+    },
+    "m68k/exceptions/68010": {
+        "hash": "8b8724580a0e081f",
+        "questions": [
+            "how do I move the vector table to another address",
+            "how can one handler tell which exception called it",
+            "why is the exception frame eight bytes instead of six",
+            "what is loop mode for dbra",
+            "why does move from sr fail in user mode on the 68010",
+            "how do I select the 68010 processor"
+        ]
+    },
+    "m68k/exceptions/68020": {
+        "hash": "3d4f0451004d7fb6",
+        "questions": [
+            "what does the 68020 add to exceptions",
+            "does the editor simulate the instruction cache",
+            "what do cacr and caar do",
+            "does self-modifying code work"
+        ]
+    },
+    "m68k/exceptions/68020-cycles": {
+        "hash": "96a35a37da642374",
+        "questions": [
+            "why are 68020 cycle counts only estimates",
+            "what does ≈ mean next to Cycles",
+            "does the timing include cache misses",
+            "why does the log say the total is approximate"
+        ]
+    },
+    "m68k/exceptions/68020-frames": {
+        "hash": "4ae3b5c75f1292bf",
+        "questions": [
+            "how does a handler find the address of the instruction that raised it",
+            "why is the frame twelve bytes after a chk",
+            "where is the failed address in a 68020 bus error frame",
+            "what are format $A and $B frames"
+        ]
+    },
+    "m68k/exceptions/68020-trace": {
+        "hash": "16ecf6f5c3b62e10",
+        "questions": [
+            "how do I get control only at branches and jumps",
+            "what is the difference between T0 and T1",
+            "does move to ccr trigger T0 tracing"
+        ]
+    },
+    "m68k/exceptions/cycles": {
+        "hash": "5c4bed694a5c65b9",
+        "questions": [
+            "how do I measure how long my code takes",
+            "how many cycles does an instruction take",
+            "how do I turn a cycle count into seconds",
+            "does the counter show real elapsed time",
+            "why does printing with trap #15 cost no time"
+        ]
+    },
+    "m68k/exceptions/exceptions": {
+        "hash": "0bab31ec8b3ab505",
+        "questions": [
+            "what is an exception",
+            "what happens when an error interrupts my program",
+            "can my program trigger an exception on purpose",
+            "do exceptions work the same on every processor"
+        ]
+    },
+    "m68k/exceptions/format-error": {
+        "hash": "4fe152c7dd1d4d47",
+        "questions": [
+            "what is a format error",
+            "program crashes when my handler returns with rte",
+            "rte found an exception frame with format $3",
+            "what happens if I push something in a handler and forget to pop it"
+        ]
+    },
+    "m68k/exceptions/frames": {
+        "hash": "db79906259e16bef",
+        "questions": [
+            "where is the return address in an exception handler",
+            "my illegal instruction handler runs again and again",
+            "how do I skip the instruction that caused the exception",
+            "how do I find the address that caused an address error",
+            "can a handler return after a bus error",
+            "how many bytes does an exception push"
+        ]
+    },
+    "m68k/exceptions/handlers": {
+        "hash": "c1aa761b18bd2dee",
+        "questions": [
+            "how do I handle division by zero",
+            "how do I return from an exception handler",
+            "how do I install my own error handler",
+            "my registers are different after the handler returns",
+            "how can I see the handler running in the call stack"
+        ]
+    },
+    "m68k/exceptions/interrupts": {
+        "hash": "160601a63f743a56",
+        "questions": [
+            "how do I run code on a timer",
+            "how do I react to key presses without polling",
+            "how do I wait for the next timer tick",
+            "why is my interrupt handler never called",
+            "where does the handler address for level 2 go",
+            "why does my timer count fewer ticks than expected"
+        ]
+    },
+    "m68k/exceptions/master-stack": {
+        "hash": "fbf70e0bd0e59186",
+        "questions": [
+            "what is the master stack",
+            "what does the M bit in sr do",
+            "my program breaks after I set the M bit",
+            "which stack does a7 use on the 68020",
+            "how do I give each task its own supervisor stack"
+        ]
+    },
+    "m68k/exceptions/modes": {
+        "hash": "d7aad9b7e1828335",
+        "questions": [
+            "how do I switch to user mode",
+            "why does move to sr fail in my user code",
+            "which instructions need supervisor mode",
+            "where does the user stack pointer start",
+            "how does user code get back to supervisor mode"
+        ]
+    },
+    "m68k/exceptions/no-handler": {
+        "hash": "ac6b3b3bbaf4a79a",
+        "questions": [
+            "what does holds no handler mean",
+            "why did my program stop at a division by zero",
+            "program halts when the stack pointer is odd",
+            "what happens if no handler is installed"
+        ]
+    },
+    "m68k/exceptions/odd-addresses": {
+        "hash": "3df1634b2868a08e",
+        "questions": [
+            "can I read a word from an unaligned address",
+            "why does my word access cause an address error",
+            "can instructions start at an odd address",
+            "should I still align words and longs"
+        ]
+    },
+    "m68k/exceptions/the-vector-table": {
+        "hash": "06eef08415ac1e9a",
+        "questions": [
+            "where is the address of the divide by zero handler",
+            "how do I find a vector's address from its number",
+            "what causes a bus error",
+            "what are line A and line F",
+            "why does an unused vector hold $FFFFFFFF"
+        ]
+    },
+    "m68k/exceptions/throwaway-frame": {
+        "hash": "54e111e28562fa68",
+        "questions": [
+            "what is a throwaway frame",
+            "why does an interrupt push two frames",
+            "what is a format $1 frame",
+            "which stack does my interrupt handler run on when M is set"
+        ]
+    },
+    "m68k/exceptions/trace": {
+        "hash": "c48e4c96c8ed623c",
+        "questions": [
+            "how do I run code after every instruction",
+            "how could I write my own single-step debugger",
+            "what does ori #$8000, sr do",
+            "what is the T bit in the status register"
+        ]
+    },
+    "m68k/exceptions/traps": {
+        "hash": "a6a6ecedc0cdb516",
+        "questions": [
+            "how do I make my own system call",
+            "where do I put the handler for trap #0",
+            "how do I add my own task numbers to trap #15",
+            "what happens with a task number the simulator does not know"
+        ]
+    },
+    "m68k/exceptions/what-the-processor-does": {
+        "hash": "1c09e8f875f7a419",
+        "questions": [
+            "what does the processor do when an exception happens",
+            "why does the handler run in supervisor mode",
+            "does rte restore the flags of the interrupted code",
+            "which stack does the exception push onto"
+        ]
+    },
+    "m68k/instructions/abcd": {
+        "hash": "b6c3b4a5afa1d58c",
+        "questions": [
+            "how do I add numbers kept as two decimal digits per byte",
+            "add a decimal number stored in several bytes",
+            "why clear X and set Z before the first abcd"
+        ]
+    },
+    "m68k/instructions/add": {
+        "hash": "b25ebc06c4fc6cfa",
+        "questions": [
+            "how do I add two numbers",
+            "which operand gets the result of an addition",
+            "sum a value in memory into a register",
+            "what happens when the destination is an address register"
+        ]
+    },
+    "m68k/instructions/adda": {
+        "hash": "4d42b698aca5f226",
+        "questions": [
+            "how do I add to an address register",
+            "why doesn't adding to a0 change the flags",
+            "move a pointer forward by a number of bytes",
+            "is a word added to a0 sign extended"
+        ]
+    },
+    "m68k/instructions/addi": {
+        "hash": "53de970c00c857ec",
+        "questions": [
+            "how do I add a constant like 1000 to a register",
+            "add a fixed number to a value in memory",
+            "what does addi.w #4, d1 do"
+        ]
+    },
+    "m68k/instructions/addq": {
+        "hash": "f601308c906a1601",
+        "questions": [
+            "how do I add a small number like 1 to a register",
+            "why can't I add 10 with addq",
+            "does adding a small number to an address register change the flags"
+        ]
+    },
+    "m68k/instructions/addx": {
+        "hash": "05e18331fe414f6b",
+        "questions": [
+            "how do I add two 64-bit numbers",
+            "add with the carry from the previous addition",
+            "why set Z before a chain of additions"
+        ]
+    },
+    "m68k/instructions/and": {
+        "hash": "72aa1bf8b92d8f06",
+        "questions": [
+            "bitwise and of two registers",
+            "where does the result of and.l d0, d1 go",
+            "keep only the bits that are set in both values"
+        ]
+    },
+    "m68k/instructions/andi": {
+        "hash": "a47d659e845e5aa0",
+        "questions": [
+            "bitwise and with a constant value",
+            "how do I and a value in memory with $FF",
+            "can andi work on the condition code register"
+        ]
+    },
+    "m68k/instructions/asd": {
+        "hash": "bae83608c4460114",
+        "questions": [
+            "shift a negative number right and keep it negative",
+            "how do I detect that a left shift changed the sign",
+            "what does asd mean"
+        ]
+    },
+    "m68k/instructions/bcc": {
+        "hash": "1289ece2c5e49046",
+        "questions": [
+            "how do I jump only when a condition is true",
+            "how do I write an if in assembly",
+            "conditional branch target out of range",
+            "what does .s after beq mean"
+        ]
+    },
+    "m68k/instructions/bchg": {
+        "hash": "b1c4c6789586202d",
+        "questions": [
+            "how do I toggle one bit",
+            "how can I tell if a bit was set before I flipped it",
+            "what does bchg #5, d3 do"
+        ]
+    },
+    "m68k/instructions/bclr": {
+        "hash": "c527a03269dd6e72",
+        "questions": [
+            "how do I clear one bit",
+            "check a bit and set it to 0 in one step",
+            "what does bclr d2, d7 do"
+        ]
+    },
+    "m68k/instructions/bfchg": {
+        "hash": "d2527ac94d7bd2a7",
+        "questions": [
+            "how do I invert a range of bits in a register",
+            "flip bits in memory that don't start on a byte boundary",
+            "what does bfchg do"
+        ]
+    },
+    "m68k/instructions/bfclr": {
+        "hash": "2b0ce5c9d6150b0b",
+        "questions": [
+            "how do I clear a range of bits",
+            "clear the low 12 bits of d0",
+            "what does bfclr do"
+        ]
+    },
+    "m68k/instructions/bfexts": {
+        "hash": "c77c2e5e1df937ab",
+        "questions": [
+            "extract a signed value packed in some bits",
+            "why did extracting %1110 give -2",
+            "what does bfexts do"
+        ]
+    },
+    "m68k/instructions/bfextu": {
+        "hash": "bb71cd8a65859d11",
+        "questions": [
+            "extract an unsigned number from a group of bits",
+            "pull the 5-bit red value out of a colour",
+            "why is N set after an unsigned extract"
+        ]
+    },
+    "m68k/instructions/bfffo": {
+        "hash": "3fe2d06fa8d4beb8",
+        "questions": [
+            "how do I count leading zeros",
+            "find the highest set bit in a register",
+            "find the first marked slot in a bitmap",
+            "what does bfffo return when every bit is 0"
+        ]
+    },
+    "m68k/instructions/bfins": {
+        "hash": "738d69f682b94b5d",
+        "questions": [
+            "how do I write a value into a few bits without touching the rest",
+            "store a 5-bit number into the top of a byte",
+            "what does bfins do"
+        ]
+    },
+    "m68k/instructions/bfset": {
+        "hash": "d4ffef6affff560c",
+        "questions": [
+            "how do I set a range of bits to 1",
+            "set bits 4 through 1 of a byte in memory",
+            "what does bfset do"
+        ]
+    },
+    "m68k/instructions/bftst": {
+        "hash": "a770621d51f8a146",
+        "questions": [
+            "how do I check if a group of bits is all zero",
+            "test a field of bits without changing it",
+            "what does bftst do"
+        ]
+    },
+    "m68k/instructions/bkpt": {
+        "hash": "505f680dcb44c4eb",
+        "questions": [
+            "what does bkpt do in this editor",
+            "illegal instruction exception at a breakpoint instruction",
+            "how do I pause my program while debugging"
+        ]
+    },
+    "m68k/instructions/bra": {
+        "hash": "fd39e879e9ba65ad",
+        "questions": [
+            "how do I always jump to another label",
+            "what is the difference between bra.s and bra.w",
+            "how far can an unconditional branch reach"
+        ]
+    },
+    "m68k/instructions/bset": {
+        "hash": "650574f49e35655b",
+        "questions": [
+            "how do I set one bit to 1",
+            "turn on a bit and find out if it was already on",
+            "what does bset #1, d1 do"
+        ]
+    },
+    "m68k/instructions/bsr": {
+        "hash": "a3c3320adf7634cc",
+        "questions": [
+            "how do I call a subroutine by its label",
+            "subroutine call says the target is out of range",
+            "what does bsr do"
+        ]
+    },
+    "m68k/instructions/btst": {
+        "hash": "74719c8d38f73877",
+        "questions": [
+            "how do I check whether a bit is set",
+            "why is the Z flag set when the tested bit is 0",
+            "what does btst do"
+        ]
+    },
+    "m68k/instructions/cas": {
+        "hash": "2c92c0cfaac4c534",
+        "questions": [
+            "how do I update a shared value without an interrupt getting in between",
+            "what is compare and swap",
+            "how do I know if cas wrote the new value",
+            "retry loop for an atomic update"
+        ]
+    },
+    "m68k/instructions/cas2": {
+        "hash": "7ee5f0185c111e52",
+        "questions": [
+            "how do I update two related values together",
+            "what happens if only one of the two compares matches",
+            "what does cas2 do"
+        ]
+    },
+    "m68k/instructions/chk": {
+        "hash": "199df5db9a94b051",
+        "questions": [
+            "how do I check that an index is between 0 and a limit",
+            "why did my program end at a bounds check",
+            "what does chk do"
+        ]
+    },
+    "m68k/instructions/chk2": {
+        "hash": "a01e3c1402694eed",
+        "questions": [
+            "raise an exception when a value is outside a minimum and maximum",
+            "what does chk2 do",
+            "where does the handler return after a range check fails"
+        ]
+    },
+    "m68k/instructions/clr": {
+        "hash": "8cd187340366e3f6",
+        "questions": [
+            "how do I set a register to zero",
+            "zero a variable in memory",
+            "why did clr only clear the low word"
+        ]
+    },
+    "m68k/instructions/cmp": {
+        "hash": "6566ab483b8393fa",
+        "questions": [
+            "how do I compare two numbers",
+            "which operand does cmp subtract from which",
+            "does comparing change either value"
+        ]
+    },
+    "m68k/instructions/cmp2": {
+        "hash": "a50827d6ec38ebf8",
+        "questions": [
+            "check if a value is between two bounds without an exception",
+            "how do I branch when a value is outside a range",
+            "which flag tells me cmp2 found the value out of range"
+        ]
+    },
+    "m68k/instructions/cmpa": {
+        "hash": "0233e0625b267f73",
+        "questions": [
+            "how do I compare an address register with a value",
+            "is a word sign extended when compared with a0",
+            "what does cmpa do"
+        ]
+    },
+    "m68k/instructions/cmpi": {
+        "hash": "9e34de526ef2dc7c",
+        "questions": [
+            "how do I compare a register with a constant",
+            "check if a byte in memory equals a number",
+            "what does cmpi do"
+        ]
+    },
+    "m68k/instructions/cmpm": {
+        "hash": "db4c17b9e76b43ba",
+        "questions": [
+            "how do I compare two strings in memory",
+            "compare two areas of memory through two moving pointers",
+            "what does cmpm do"
+        ]
+    },
+    "m68k/instructions/dbcc": {
+        "hash": "b9ebc7b72cb59bac",
+        "questions": [
+            "how do I loop until a condition is met or a counter runs out",
+            "why does my loop run one time more than the counter",
+            "my loop counter above 65535 doesn't work",
+            "what does dbne do"
+        ]
+    },
+    "m68k/instructions/dbra": {
+        "hash": "5fd04d876508e4de",
+        "questions": [
+            "how do I repeat code a number of times",
+            "what does dbra do",
+            "my countdown loop stops at -1 instead of 0"
+        ]
+    },
+    "m68k/instructions/divs": {
+        "hash": "ca3939357895873a",
+        "questions": [
+            "how do I divide signed numbers",
+            "where does the remainder of a signed division go",
+            "why didn't divs change my register",
+            "divide a signed 64-bit number held in two registers"
+        ]
+    },
+    "m68k/instructions/divsl": {
+        "hash": "e91335ea2b7d9aa2",
+        "questions": [
+            "how do I get the quotient and remainder of a signed 32-bit division",
+            "why does -7 divided by 2 leave a remainder of -1",
+            "what does divsl do"
+        ]
+    },
+    "m68k/instructions/divu": {
+        "hash": "46cbe2e5b228fa0d",
+        "questions": [
+            "how do I divide two unsigned numbers",
+            "divide an unsigned 64-bit number held in two registers",
+            "why is the result unchanged when the quotient is over 65535",
+            "what does divu put in the high word"
+        ]
+    },
+    "m68k/instructions/divul": {
+        "hash": "fd360a1a7f74c822",
+        "questions": [
+            "unsigned 32-bit division with quotient and remainder",
+            "what does divul do",
+            "is the old value of the remainder register used in an unsigned divide"
+        ]
+    },
+    "m68k/instructions/eor": {
+        "hash": "00a8b7a867e146c1",
+        "questions": [
+            "how do I xor two values",
+            "which operand receives the exclusive or result",
+            "what does eor do"
+        ]
+    },
+    "m68k/instructions/eori": {
+        "hash": "2c0e9c50b90eb6ad",
+        "questions": [
+            "how do I xor a value with a constant",
+            "xor the condition code register",
+            "what does eori do"
+        ]
+    },
+    "m68k/instructions/exg": {
+        "hash": "42ab605dcaf2985e",
+        "questions": [
+            "how do I swap the values of two registers",
+            "can I exchange only part of two registers",
+            "what does exg do"
+        ]
+    },
+    "m68k/instructions/ext": {
+        "hash": "c42249b79529761d",
+        "questions": [
+            "how do I convert a signed byte to a word",
+            "make a signed word into a long",
+            "negative byte looks like a big positive word",
+            "what does ext.l do"
+        ]
+    },
+    "m68k/instructions/extb": {
+        "hash": "6e0b8d1936a51b1f",
+        "questions": [
+            "how do I convert a signed byte straight to a long",
+            "why does $80 become $FFFFFF80",
+            "what does extb do"
+        ]
+    },
+    "m68k/instructions/illegal": {
+        "hash": "d8737acb8cccca7d",
+        "questions": [
+            "how do I mark code that must never run",
+            "my handler keeps returning to the same instruction",
+            "what does illegal do"
+        ]
+    },
+    "m68k/instructions/jmp": {
+        "hash": "33d109cbd98ba4b6",
+        "questions": [
+            "how do I jump to the address in a0",
+            "go to an address computed at run time",
+            "what does jmp do"
+        ]
+    },
+    "m68k/instructions/jsr": {
+        "hash": "dc6c49808ba88204",
+        "questions": [
+            "how do I call a subroutine through a pointer",
+            "call the code at a0 plus 4",
+            "what does jsr do"
+        ]
+    },
+    "m68k/instructions/lea": {
+        "hash": "0c293c674b088a1a",
+        "questions": [
+            "how do I get the address of a label into a register",
+            "set a1 to a0 plus 4",
+            "does lea read the memory at the address"
+        ]
+    },
+    "m68k/instructions/link": {
+        "hash": "371c9c0747609ddd",
+        "questions": [
+            "how do I reserve space on the stack for local variables",
+            "what does link a6, #-16 do",
+            "why use a negative number to reserve local space"
+        ]
+    },
+    "m68k/instructions/lsd": {
+        "hash": "5561a3dd47509734",
+        "questions": [
+            "shift right and fill the top bits with zeros",
+            "how do I move every bit left by 3 places",
+            "what does lsr do"
+        ]
+    },
+    "m68k/instructions/move": {
+        "hash": "c0ee2e1f39ecde3e",
+        "questions": [
+            "how do I copy a value from one place to another",
+            "how do I put a number into a register",
+            "which operand does move write to",
+            "how can user code read the condition codes"
+        ]
+    },
+    "m68k/instructions/movea": {
+        "hash": "8012c29a4c6cf250",
+        "questions": [
+            "how do I load a value into an address register",
+            "why don't the flags change when I copy into a0",
+            "why does a negative word become a negative long in a0"
+        ]
+    },
+    "m68k/instructions/movec": {
+        "hash": "b74edd3d5dbe1e1f",
+        "questions": [
+            "how do I set the vector base register",
+            "copy a control register into a data register",
+            "privilege violation when writing vbr in user mode",
+            "what does movec do"
+        ]
+    },
+    "m68k/instructions/movem": {
+        "hash": "f028af8ca6fb7450",
+        "questions": [
+            "how do I save registers at the start of a subroutine",
+            "restore saved registers before returning",
+            "what does d0-d3/a0-a2 mean in a register list",
+            "why are the registers stored in a different order than I wrote them"
+        ]
+    },
+    "m68k/instructions/movep": {
+        "hash": "aa8483b08f87de4f",
+        "questions": [
+            "how do I write a word to alternate bytes in memory",
+            "read a value stored in every second byte",
+            "what does movep do"
+        ]
+    },
+    "m68k/instructions/moveq": {
+        "hash": "69ee46f5158253ee",
+        "questions": [
+            "how do I load a small number into a data register",
+            "why does moveq #200 make d0 negative",
+            "does loading a small constant clear the rest of the register"
+        ]
+    },
+    "m68k/instructions/moves": {
+        "hash": "557924d0f3635ce3",
+        "questions": [
+            "what does moves do",
+            "how does supervisor code reach another address space",
+            "move data using the source and destination function codes"
+        ]
+    },
+    "m68k/instructions/muls": {
+        "hash": "70088c1cd59b7d9c",
+        "questions": [
+            "how do I multiply two signed numbers",
+            "signed multiply ignores the upper half of my register",
+            "how do I get a 64-bit signed product",
+            "what does muls do"
+        ]
+    },
+    "m68k/instructions/mulu": {
+        "hash": "e269d7a08d685d8b",
+        "questions": [
+            "how do I multiply two unsigned numbers",
+            "unsigned multiply ignores the high word of the register",
+            "how do I get the full 64-bit unsigned product",
+            "what does mulu do"
+        ]
+    },
+    "m68k/instructions/nbcd": {
+        "hash": "fc587f48d374ddd5",
+        "questions": [
+            "how do I make a packed decimal number negative",
+            "negate a decimal number stored in several bytes",
+            "what does nbcd do"
+        ]
+    },
+    "m68k/instructions/neg": {
+        "hash": "a4fffbed9551edd7",
+        "questions": [
+            "how do I change the sign of a number",
+            "negating only changed the low word of my register",
+            "what does neg do"
+        ]
+    },
+    "m68k/instructions/negx": {
+        "hash": "c3866f9b7be0da8a",
+        "questions": [
+            "how do I negate a 64-bit number",
+            "why set Z and clear X before negating in parts",
+            "what does negx do"
+        ]
+    },
+    "m68k/instructions/nop": {
+        "hash": "9af90430afb6689f",
+        "questions": [
+            "instruction that does nothing",
+            "what does nop do",
+            "does an empty instruction change the flags"
+        ]
+    },
+    "m68k/instructions/not": {
+        "hash": "4e391c3067a03dcc",
+        "questions": [
+            "how do I invert every bit of a register",
+            "bitwise not of a value",
+            "flip all bits of only the low byte"
+        ]
+    },
+    "m68k/instructions/or": {
+        "hash": "52ebf0a9bcdd79ac",
+        "questions": [
+            "bitwise or of two registers",
+            "which operand gets the result of or",
+            "or a value in memory into a register"
+        ]
+    },
+    "m68k/instructions/ori": {
+        "hash": "ae0fc32731526b6d",
+        "questions": [
+            "bitwise or with a constant",
+            "set bits in memory with an immediate value",
+            "can ori change the condition codes register"
+        ]
+    },
+    "m68k/instructions/pack": {
+        "hash": "ab3900631231fff7",
+        "questions": [
+            "how do I convert two ASCII digits into one decimal byte",
+            "turn the text 42 into $42",
+            "what does the adjustment number in pack do"
+        ]
+    },
+    "m68k/instructions/pea": {
+        "hash": "d6c2f64b639063e6",
+        "questions": [
+            "how do I push an address onto the stack",
+            "push a pointer without loading it into a register first",
+            "what does pea do"
+        ]
+    },
+    "m68k/instructions/reset": {
+        "hash": "a824dfbcaa579570",
+        "questions": [
+            "what does reset do",
+            "restart instruction does not restart the program",
+            "do my registers change when the processor signals external devices"
+        ]
+    },
+    "m68k/instructions/rod": {
+        "hash": "7af2e414517a61d0",
+        "questions": [
+            "how do I rotate the bits of a register",
+            "rotate a word in memory",
+            "what does ror do"
+        ]
+    },
+    "m68k/instructions/roxd": {
+        "hash": "a5c62f85d3c2fae9",
+        "questions": [
+            "how do I rotate bits through the X flag",
+            "what does roxr do",
+            "can I rotate a memory word through extend"
+        ]
+    },
+    "m68k/instructions/rtd": {
+        "hash": "a82a90f2315ee878",
+        "questions": [
+            "how do I return and pop the arguments in one instruction",
+            "so the caller doesn't need to clean the stack after a call",
+            "what does rtd #8 do"
+        ]
+    },
+    "m68k/instructions/rte": {
+        "hash": "414d507f99000634",
+        "questions": [
+            "how do I return from an exception handler",
+            "how does a handler get back to user mode",
+            "why does rte give a privilege violation"
+        ]
+    },
+    "m68k/instructions/rtr": {
+        "hash": "6f70177a5fa060fa",
+        "questions": [
+            "how do I return and restore the condition codes",
+            "what order are the flags and return address popped in",
+            "what does rtr do"
+        ]
+    },
+    "m68k/instructions/rts": {
+        "hash": "b2289502b93b6214",
+        "questions": [
+            "how do I return from a subroutine",
+            "where does a subroutine return to",
+            "what does rts do"
+        ]
+    },
+    "m68k/instructions/sbcd": {
+        "hash": "8d13a8f6ec2a4186",
+        "questions": [
+            "how do I subtract packed decimal numbers",
+            "subtract a decimal number stored in several bytes",
+            "how does the borrow pass to the next byte in decimal subtraction"
+        ]
+    },
+    "m68k/instructions/scc": {
+        "hash": "5c713cad9e67a699",
+        "questions": [
+            "turn a condition into a true or false byte",
+            "why is the byte $FF instead of 1 after setting on a condition",
+            "what does seq d0 do"
+        ]
+    },
+    "m68k/instructions/stop": {
+        "hash": "64b3ca714b5e323c",
+        "questions": [
+            "how do I wait for an interrupt without a busy loop",
+            "why does Step do nothing while the program waits",
+            "what does stop #$2000 do",
+            "privilege violation when waiting for an interrupt"
+        ]
+    },
+    "m68k/instructions/sub": {
+        "hash": "45c41537a37558b8",
+        "questions": [
+            "how do I subtract one number from another",
+            "which operand is subtracted from which",
+            "what happens when the destination of sub is an address register"
+        ]
+    },
+    "m68k/instructions/suba": {
+        "hash": "c90b596ebc8b0276",
+        "questions": [
+            "how do I subtract from an address register",
+            "why doesn't subtracting from a0 change the flags",
+            "move a pointer back by some bytes"
+        ]
+    },
+    "m68k/instructions/subi": {
+        "hash": "c62643be643158d2",
+        "questions": [
+            "how do I subtract a constant from a register",
+            "subtract a fixed number from a value in memory",
+            "what does subi #1, d3 do"
+        ]
+    },
+    "m68k/instructions/subq": {
+        "hash": "a6555a9b715fe4ae",
+        "questions": [
+            "how do I subtract 1 from a register",
+            "why can't I subtract 10 with subq",
+            "does subtracting a small number from an address register change the flags"
+        ]
+    },
+    "m68k/instructions/subx": {
+        "hash": "34407700f084bcb1",
+        "questions": [
+            "how do I subtract two 64-bit numbers",
+            "subtract with the borrow from the previous part",
+            "why set Z before a chain of subtractions"
+        ]
+    },
+    "m68k/instructions/swap": {
+        "hash": "3fb8b2038f6cdc8b",
+        "questions": [
+            "how do I exchange the high and low words of a register",
+            "get the upper 16 bits of d0 into the lower 16",
+            "what does swap do"
+        ]
+    },
+    "m68k/instructions/tas": {
+        "hash": "e8e97eb4a264b443",
+        "questions": [
+            "test a byte and set its highest bit in one instruction",
+            "what does tas do",
+            "are the flags from the byte before or after bit 7 is set"
+        ]
+    },
+    "m68k/instructions/trap": {
+        "hash": "055ecca1c26c8930",
+        "questions": [
+            "how do I install my own handler for trap #3",
+            "where is the vector for each software interrupt number",
+            "how do I call the simulator's text input and output"
+        ]
+    },
+    "m68k/instructions/trapcc": {
+        "hash": "65f6fc99cf3dbec6",
+        "questions": [
+            "raise an exception only when a condition is true",
+            "how can a handler tell which conditional trap called it",
+            "what does trapeq do"
+        ]
+    },
+    "m68k/instructions/trapv": {
+        "hash": "39b126c2796cff99",
+        "questions": [
+            "how do I raise an exception when arithmetic overflows",
+            "program ended after an overflow check",
+            "what does trapv do"
+        ]
+    },
+    "m68k/instructions/tst": {
+        "hash": "cc6f78505f7d0fd0",
+        "questions": [
+            "how do I check if a value is zero",
+            "test whether a number is negative",
+            "what does tst do"
+        ]
+    },
+    "m68k/instructions/unlk": {
+        "hash": "e8c3c73d0ccffedf",
+        "questions": [
+            "in what order does unlink set sp and pop the register",
+            "restore the stack pointer and frame register at the end of a subroutine",
+            "what does unlk a0 do"
+        ]
+    },
+    "m68k/instructions/unpk": {
+        "hash": "36da63f187c9110f",
+        "questions": [
+            "how do I turn a packed decimal byte into two ASCII digits",
+            "convert $42 into the text 42",
+            "what does the #$3030 adjustment in unpk do"
+        ]
+    },
+    "m68k/shift-directions/what-shift-directions-are": {
+        "hash": "36769c87535502fb",
+        "questions": [
+            "what do the l and r at the end of lsl and lsr mean",
+            "which way does asr move the bits",
+            "how do I choose left or right for a rotate",
+            "which instructions take a direction letter"
+        ]
+    },
+    "m68k/synth/envelope": {
+        "hash": "67469471eb3c23a1",
+        "questions": [
+            "how do I make a note fade out slowly",
+            "what are attack, decay, sustain and release",
+            "why doesn't writing the gate again replay the note",
+            "what unit are the envelope times in"
+        ]
+    },
+    "m68k/synth/frequencies": {
+        "hash": "8ea40848faf3493f",
+        "questions": [
+            "what frequency is middle C",
+            "how do I play a note an octave higher",
+            "list of musical notes and their Hz",
+            "why is my note slightly out of tune"
+        ]
+    },
+    "m68k/synth/registers": {
+        "hash": "28bdc93e769c6c34",
+        "questions": [
+            "what address does each sound channel start at",
+            "how do I set a channel's volume",
+            "which byte turns a note on and off",
+            "should I write the frequency with move.w or move.b"
+        ]
+    },
+    "m68k/synth/running": {
+        "hash": "cea3d6a485c6a294",
+        "questions": [
+            "why does my note keep sounding while the program is paused",
+            "undo made a note start playing again",
+            "why is there no sound from the synth in testcases",
+            "what happens to playing notes when the program ends"
+        ]
+    },
+    "m68k/synth/samples": {
+        "hash": "e2f45cbfb677794c",
+        "questions": [
+            "how do I play raw sound samples",
+            "how do I copy my sample bytes into the sound chip",
+            "can the synth play a WAV file directly",
+            "how do I loop a sample",
+            "why does my sample only play once",
+            "how do I change the pitch of a sample"
+        ]
+    },
+    "m68k/synth/synth": {
+        "hash": "ce1eaeb1d8c12731",
+        "questions": [
+            "what is the synth",
+            "how do I play several sounds at the same time",
+            "how do I start a note and then let it fade",
+            "how can my program tell if a note is still playing",
+            "Log says my data overlaps the sound chip registers"
+        ]
+    },
+    "m68k/synth/waveforms": {
+        "hash": "87e3a551984ba53d",
+        "questions": [
+            "what sound shapes can a channel play",
+            "how do I make a square wave",
+            "how do I make a drum or cymbal sound",
+            "why do high notes sound at the wrong pitch",
+            "what does frequency 0 do to a channel"
+        ]
+    },
+    "m68k/synth/wavetables": {
+        "hash": "c6679f36fed6d82c",
+        "questions": [
+            "how do I draw my own waveform shape",
+            "how are 4-bit samples packed into each byte",
+            "where is each channel's custom wave stored"
+        ]
+    },
+    "m68k/trap-tasks/calling-trap-15": {
+        "hash": "13d39d8e0b269a88",
+        "questions": [
+            "how do I call a simulator task",
+            "which register selects the task",
+            "what services does trap #15 provide",
+            "what happens with a task number that doesn't exist",
+            "can I undo text my program printed"
+        ]
+    },
+    "m68k/trap-tasks/colors": {
+        "hash": "dd875863e4236568",
+        "questions": [
+            "how do I write a color as a number",
+            "why are my colors swapped between red and blue",
+            "can I use color names instead of numbers",
+            "what order are the color bytes in"
+        ]
+    },
+    "m68k/trap-tasks/cycles": {
+        "hash": "2562c1469240184e",
+        "questions": [
+            "which tasks count processor cycles",
+            "how do I count the cycles of one section of code",
+            "does the cycle counter follow the processor I selected"
+        ]
+    },
+    "m68k/trap-tasks/differences": {
+        "hash": "42ab22c7b3431916",
+        "questions": [
+            "why does my program not receive my typing",
+            "why did input switch from the console to the screen",
+            "can I switch input back to the console",
+            "where do I type when my program asks for input"
+        ]
+    },
+    "m68k/trap-tasks/files": {
+        "hash": "c816915ec15e97b2",
+        "questions": [
+            "can my program read files on my computer",
+            "how many files can be open at once",
+            "what do the result codes in D0.W mean after a file task",
+            "do file changes stay after the program ends"
+        ]
+    },
+    "m68k/trap-tasks/graphics": {
+        "hash": "9ef51fdbc1c8a3fb",
+        "questions": [
+            "how do I draw graphics on the screen",
+            "where is (0, 0) on the screen",
+            "what happens when I draw outside the screen",
+            "can coordinates be negative"
+        ]
+    },
+    "m68k/trap-tasks/input": {
+        "hash": "78f6d8948f1828bd",
+        "questions": [
+            "how do I read the keyboard and mouse",
+            "should I poll the keyboard or use interrupts",
+            "what does the screen need to receive key presses"
+        ]
+    },
+    "m68k/trap-tasks/interrupts": {
+        "hash": "6c159dc7257a146f",
+        "questions": [
+            "which address holds the handler for an interrupt level",
+            "why does my interrupt handler never run",
+            "why does Run stop twice at the same breakpoint",
+            "what must an interrupt handler preserve before it returns",
+            "what happens when two interrupts arrive at once"
+        ]
+    },
+    "m68k/trap-tasks/key-codes": {
+        "hash": "b066e64c422a3467",
+        "questions": [
+            "what are the key codes for the arrow keys",
+            "what code does the space bar have",
+            "does holding shift change a letter's key code",
+            "key code for F1"
+        ]
+    },
+    "m68k/trap-tasks/pictures": {
+        "hash": "26fa81423587714b",
+        "questions": [
+            "how do I draw a picture from a BMP file",
+            "how do I make a sprite in the editor",
+            "where do the pixels start in a BMP file",
+            "colors read from a BMP look wrong",
+            "my program doesn't see changes I drew in the picture"
+        ]
+    },
+    "m68k/trap-tasks/sound": {
+        "hash": "f3924fefc705ec3f",
+        "questions": [
+            "what is the difference between the two sound players",
+            "which WAV encodings can my program play",
+            "why won't my WAV file play",
+            "can my program play MIDI music"
+        ]
+    },
+    "m68k/trap-tasks/sound-differences": {
+        "hash": "e16258cdc12b873b",
+        "questions": [
+            "how do I mute my program's sound",
+            "how many sounds can play at the same time",
+            "why does my MIDI file sound different",
+            "why is there a delay before the first note",
+            "do looping sounds keep playing after the program ends",
+            "do I need Windows or DirectX installed"
+        ]
+    },
+    "m68k/trap-tasks/task-0": {
+        "hash": "63f5dff16059ae54",
+        "questions": [
+            "how do I print a string with a known length and a new line",
+            "print part of a string then go to the next line",
+            "what goes in d1 when printing a line with task 0"
+        ]
+    },
+    "m68k/trap-tasks/task-1": {
+        "hash": "815cd8765abd842d",
+        "questions": [
+            "print a string with a length in d1 without a new line",
+            "print part of a string and stay on the same line",
+            "what does task 1 do"
+        ]
+    },
+    "m68k/trap-tasks/task-11": {
+        "hash": "1ca8a27d137cf21a",
+        "questions": [
+            "how do I clear the screen",
+            "move the cursor to a row and column before printing",
+            "how do I find where the cursor is",
+            "why did clearing remove my drawings too"
+        ]
+    },
+    "m68k/trap-tasks/task-12": {
+        "hash": "9b842cd1849abe6e",
+        "questions": [
+            "how do I hide what the user types",
+            "turn input echo back on",
+            "does Enter still start a new line with echo off"
+        ]
+    },
+    "m68k/trap-tasks/task-13": {
+        "hash": "7fbe873bcaf87071",
+        "questions": [
+            "how do I print a string followed by a new line",
+            "how do I print hello world",
+            "what does task 13 print"
+        ]
+    },
+    "m68k/trap-tasks/task-14": {
+        "hash": "845a097f0710e1e1",
+        "questions": [
+            "how do I print a string without a new line",
+            "print two strings on the same line",
+            "what does task 14 do"
+        ]
+    },
+    "m68k/trap-tasks/task-15": {
+        "hash": "9da610a55bc8673a",
+        "questions": [
+            "how do I print a number in hex",
+            "how do I print a number in binary",
+            "print an unsigned number",
+            "error naming D2.B when printing a number"
+        ]
+    },
+    "m68k/trap-tasks/task-16": {
+        "hash": "ecb2d94b463fc9f0",
+        "questions": [
+            "how do I hide the input prompt",
+            "stop Enter from moving to the next line",
+            "what is the ? shown while my program waits for input"
+        ]
+    },
+    "m68k/trap-tasks/task-17": {
+        "hash": "423991fd60e9a49f",
+        "questions": [
+            "how do I print a message followed by a number",
+            "show a label next to a value in one call",
+            "what does task 17 do"
+        ]
+    },
+    "m68k/trap-tasks/task-18": {
+        "hash": "b1fa0beb5db370d9",
+        "questions": [
+            "how do I ask the user for a number with a prompt",
+            "print a question and read the answer as a number",
+            "what does task 18 do"
+        ]
+    },
+    "m68k/trap-tasks/task-19": {
+        "hash": "967fff83249da965",
+        "questions": [
+            "how do I check if a key is held down",
+            "check several keys at once for a game",
+            "get the last key pressed and released",
+            "why does my game miss quick key taps"
+        ]
+    },
+    "m68k/trap-tasks/task-2": {
+        "hash": "927ccaaa7025e94d",
+        "questions": [
+            "how do I read a line of text the user types",
+            "why is my input cut off after 79 characters",
+            "how do I get the length of what was typed"
+        ]
+    },
+    "m68k/trap-tasks/task-20": {
+        "hash": "c95c4abce6192892",
+        "questions": [
+            "how do I line up numbers in columns",
+            "print a number right aligned in a fixed width",
+            "how do I left align a number in a field"
+        ]
+    },
+    "m68k/trap-tasks/task-23": {
+        "hash": "881da5a6f3a9735c",
+        "questions": [
+            "how do I wait for half a second",
+            "how do I pace an animation",
+            "why does my program not actually wait in a testcase"
+        ]
+    },
+    "m68k/trap-tasks/task-24": {
+        "hash": "ab63e59b26562275",
+        "questions": [
+            "how do I disable the simulator's keyboard shortcuts",
+            "does task 24 do anything",
+            "do I need to turn off shortcut keys for my game"
+        ]
+    },
+    "m68k/trap-tasks/task-3": {
+        "hash": "1ca60d072eb68ec8",
+        "questions": [
+            "how do I print a number",
+            "print a negative number in decimal",
+            "how do I output an integer stored in d1"
+        ]
+    },
+    "m68k/trap-tasks/task-30": {
+        "hash": "9a8a3936f08410fe",
+        "questions": [
+            "how do I reset the cycle count to zero",
+            "start counting cycles from here",
+            "can undo restore the cycle count"
+        ]
+    },
+    "m68k/trap-tasks/task-31": {
+        "hash": "0463071924eb699d",
+        "questions": [
+            "how do I get the number of cycles so far",
+            "does the instruction that selects the task count in the cycles",
+            "why does the cycle count read 0"
+        ]
+    },
+    "m68k/trap-tasks/task-32": {
+        "hash": "8d9cc3cc4f7f92e5",
+        "questions": [
+            "how do I call a handler every 100 milliseconds",
+            "how do I turn a timer off",
+            "why does my handler count fewer ticks than expected",
+            "do timers keep running while paused"
+        ]
+    },
+    "m68k/trap-tasks/task-33": {
+        "hash": "f36815e0c613bdf2",
+        "questions": [
+            "how do I change the screen size",
+            "how big is the screen when a program starts",
+            "can my program go full screen"
+        ]
+    },
+    "m68k/trap-tasks/task-4": {
+        "hash": "3235f1ede7df6591",
+        "questions": [
+            "how do I read a number the user types",
+            "why does typing 12abc give 12",
+            "what happens if the user types letters instead of a number"
+        ]
+    },
+    "m68k/trap-tasks/task-5": {
+        "hash": "14ff7bc123377d43",
+        "questions": [
+            "how do I read a single key without waiting for Enter",
+            "press any key to continue",
+            "what value does Enter give when reading a key"
+        ]
+    },
+    "m68k/trap-tasks/task-50": {
+        "hash": "59741ba5d7b689bf",
+        "questions": [
+            "how do I close every open file",
+            "free all file numbers at once",
+            "what does task 50 do"
+        ]
+    },
+    "m68k/trap-tasks/task-51": {
+        "hash": "30b404765bdfbb3d",
+        "questions": [
+            "how do I open a file to read it",
+            "why does opening a file return 3",
+            "why did opening a file give -1"
+        ]
+    },
+    "m68k/trap-tasks/task-52": {
+        "hash": "b8717d611a1b8fab",
+        "questions": [
+            "how do I create a new file",
+            "does creating a file erase the old one",
+            "can creating a file make its folders too"
+        ]
+    },
+    "m68k/trap-tasks/task-53": {
+        "hash": "93602afae9c736f2",
+        "questions": [
+            "how do I read bytes from an open file",
+            "how do I know when I reached the end of the file",
+            "why does reading 0 bytes give an error"
+        ]
+    },
+    "m68k/trap-tasks/task-54": {
+        "hash": "3650136c377611aa",
+        "questions": [
+            "how do I save bytes into an open file",
+            "why does my write return error 2",
+            "does writing past the end make the file bigger"
+        ]
+    },
+    "m68k/trap-tasks/task-55": {
+        "hash": "652384341f0b58a4",
+        "questions": [
+            "how do I jump to a byte offset in a file",
+            "what happens when I seek past the end",
+            "can I read from the middle of a file"
+        ]
+    },
+    "m68k/trap-tasks/task-56": {
+        "hash": "0a7ca410e5d7aee3",
+        "questions": [
+            "how do I close a file when I'm done",
+            "why does closing return 2",
+            "can a file number be reused after closing"
+        ]
+    },
+    "m68k/trap-tasks/task-57": {
+        "hash": "edd8d54b5f4dac23",
+        "questions": [
+            "how do I remove a file",
+            "can I still use a file after deleting it",
+            "what does task 57 return when there is no file"
+        ]
+    },
+    "m68k/trap-tasks/task-58": {
+        "hash": "e86c7118789cd3a8",
+        "questions": [
+            "how do I let the user choose a file",
+            "ask the user for a file name to save",
+            "what happens when the user cancels the file prompt"
+        ]
+    },
+    "m68k/trap-tasks/task-59": {
+        "hash": "5379630d226d15fd",
+        "questions": [
+            "how do I check if a file exists",
+            "is a file read only",
+            "why does checking a folder say there is no file"
+        ]
+    },
+    "m68k/trap-tasks/task-6": {
+        "hash": "6529bdbdf5ce3991",
+        "questions": [
+            "how do I print a single character",
+            "print a letter given its ASCII code",
+            "what does task 6 do"
+        ]
+    },
+    "m68k/trap-tasks/task-60": {
+        "hash": "ed1d72f92af81271",
+        "questions": [
+            "how do I get an interrupt when the mouse is clicked",
+            "run a handler when the mouse moves",
+            "why does my testcase never get mouse interrupts"
+        ]
+    },
+    "m68k/trap-tasks/task-61": {
+        "hash": "1c2e68ddb977600e",
+        "questions": [
+            "how do I get the mouse position",
+            "how do I check if a mouse button was clicked",
+            "detect a double click",
+            "mouse coordinates when the screen is zoomed"
+        ]
+    },
+    "m68k/trap-tasks/task-62": {
+        "hash": "f8c9dfa126723c4a",
+        "questions": [
+            "how do I get an interrupt when a key is pressed",
+            "run a handler on key release",
+            "why does my key handler miss some key presses"
+        ]
+    },
+    "m68k/trap-tasks/task-7": {
+        "hash": "d1616ed5e8ff740d",
+        "questions": [
+            "how do I check if a key was pressed without waiting",
+            "does checking for a key remove it from the input",
+            "poll the keyboard in a game loop"
+        ]
+    },
+    "m68k/trap-tasks/task-70": {
+        "hash": "8c75650327b03764",
+        "questions": [
+            "how do I play a WAV file",
+            "what should my program do when the sound player is busy",
+            "why can't checking D0 for zero catch a missing sound file"
+        ]
+    },
+    "m68k/trap-tasks/task-71": {
+        "hash": "7d6a54b8f85b9b0a",
+        "questions": [
+            "how do I load a sound to play later",
+            "what happens when I load a file that doesn't exist",
+            "what does task 71 return"
+        ]
+    },
+    "m68k/trap-tasks/task-72": {
+        "hash": "abe932d0e8fb8777",
+        "questions": [
+            "how do I play a sound I loaded earlier",
+            "why is D0 unchanged after playing an empty slot",
+            "what does task 72 do"
+        ]
+    },
+    "m68k/trap-tasks/task-73": {
+        "hash": "722d1dd9cedababe",
+        "questions": [
+            "how do I play several sounds mixed together",
+            "how do I play a MIDI file",
+            "can DirectMusic segment files play"
+        ]
+    },
+    "m68k/trap-tasks/task-74": {
+        "hash": "64ac4d1852e5b630",
+        "questions": [
+            "how do I load a MIDI file to play later",
+            "preload a sound for mixing with others",
+            "what happens when a file loaded for the DirectX player can't be played"
+        ]
+    },
+    "m68k/trap-tasks/task-75": {
+        "hash": "0fdcb230e6d756d9",
+        "questions": [
+            "how do I play a preloaded sound mixed with others",
+            "play a preloaded MIDI from its slot",
+            "why does playing a mixed sound slot return 0"
+        ]
+    },
+    "m68k/trap-tasks/task-76": {
+        "hash": "3dd933cd9909fbe7",
+        "questions": [
+            "how do I loop a WAV file",
+            "how do I stop a WAV that is playing",
+            "why doesn't control 2 stop my sound"
+        ]
+    },
+    "m68k/trap-tasks/task-77": {
+        "hash": "313a5d72eb1c90f9",
+        "questions": [
+            "how do I loop a MIDI file",
+            "stop every mixed sound at once",
+            "stop all sounds started from one slot"
+        ]
+    },
+    "m68k/trap-tasks/task-8": {
+        "hash": "f014c5c2ffc98856",
+        "questions": [
+            "how do I read the current time",
+            "why does the clock value go back to zero",
+            "what time does a testcase see"
+        ]
+    },
+    "m68k/trap-tasks/task-80": {
+        "hash": "9a726879977a974b",
+        "questions": [
+            "how do I change the color of lines I draw",
+            "what sets the color of drawn text",
+            "how do I pick the outline color of a shape"
+        ]
+    },
+    "m68k/trap-tasks/task-81": {
+        "hash": "9b01ed61051d49a8",
+        "questions": [
+            "how do I change the color shapes are filled with",
+            "which color does a flood fill use",
+            "how do I choose the inside color of an ellipse"
+        ]
+    },
+    "m68k/trap-tasks/task-82": {
+        "hash": "e99aad7fd1baec82",
+        "questions": [
+            "how do I color a single pixel",
+            "does pen width change the size of a pixel I plot",
+            "what does task 82 do"
+        ]
+    },
+    "m68k/trap-tasks/task-83": {
+        "hash": "986012cf02f3a108",
+        "questions": [
+            "how do I read the color of a pixel on the screen",
+            "which image does reading a pixel use with double buffering",
+            "what color does a pixel outside the screen give"
+        ]
+    },
+    "m68k/trap-tasks/task-84": {
+        "hash": "e509e62831d122e3",
+        "questions": [
+            "how do I draw a line between two points",
+            "where does the drawing point end up after a line",
+            "what does task 84 do"
+        ]
+    },
+    "m68k/trap-tasks/task-85": {
+        "hash": "2b9a0e06cce5c392",
+        "questions": [
+            "how do I draw a line from the last point to a new one",
+            "draw a path of connected lines",
+            "what does task 85 do"
+        ]
+    },
+    "m68k/trap-tasks/task-86": {
+        "hash": "3a77b5b47b71c43b",
+        "questions": [
+            "how do I set the drawing point without drawing",
+            "choose where the next connected line starts",
+            "what does task 86 do"
+        ]
+    },
+    "m68k/trap-tasks/task-87": {
+        "hash": "db5fc31581d94e5b",
+        "questions": [
+            "how do I draw a filled rectangle",
+            "why is my rectangle missing its right and bottom edge",
+            "draw a box with an outline and a different fill"
+        ]
+    },
+    "m68k/trap-tasks/task-88": {
+        "hash": "9ef48dce047a9c2d",
+        "questions": [
+            "how do I draw a circle",
+            "draw a filled oval inside a rectangle",
+            "what does task 88 do"
+        ]
+    },
+    "m68k/trap-tasks/task-89": {
+        "hash": "c6059d5da602c081",
+        "questions": [
+            "how do I fill an area with color",
+            "paint bucket fill from a point",
+            "does filling spread diagonally"
+        ]
+    },
+    "m68k/trap-tasks/task-9": {
+        "hash": "d7391077f8f5892b",
+        "questions": [
+            "how do I end my program",
+            "how do I exit instead of pausing at simhalt",
+            "what does task 9 do"
+        ]
+    },
+    "m68k/trap-tasks/task-90": {
+        "hash": "386ee202b057d7f4",
+        "questions": [
+            "how do I draw only the outline of a rectangle",
+            "draw a hollow box",
+            "what does task 90 do"
+        ]
+    },
+    "m68k/trap-tasks/task-91": {
+        "hash": "871cfdc538d03527",
+        "questions": [
+            "how do I draw an empty circle",
+            "draw only the outline of an ellipse",
+            "what does task 91 do"
+        ]
+    },
+    "m68k/trap-tasks/task-92": {
+        "hash": "40a3fb1f1f9cc8f0",
+        "questions": [
+            "how do I draw off screen and show it all at once",
+            "how do I turn on double buffering",
+            "which mode should I use for animated sprites",
+            "why does drawing mode 3 stop my program with an error"
+        ]
+    },
+    "m68k/trap-tasks/task-93": {
+        "hash": "5ff0047d88388581",
+        "questions": [
+            "how do I draw thicker lines",
+            "change the thickness of rectangle outlines",
+            "what does task 93 do"
+        ]
+    },
+    "m68k/trap-tasks/task-94": {
+        "hash": "f030dd3d46ba1dd0",
+        "questions": [
+            "how do I show what I drew with double buffering",
+            "nothing appears on screen after drawing in mode 17",
+            "what does task 94 do"
+        ]
+    },
+    "m68k/trap-tasks/task-95": {
+        "hash": "f75d6f24490f3fcc",
+        "questions": [
+            "how do I put text at an exact x, y on the screen",
+            "draw a label on top of my drawing",
+            "what color is text drawn at a position"
+        ]
+    },
+    "m68k/trap-tasks/task-96": {
+        "hash": "d3b7e4a9eca8dfb1",
+        "questions": [
+            "where is the current drawing point",
+            "read back the pen position after drawing a line",
+            "what does task 96 return"
+        ]
+    },
+    "m68k/trap-tasks/text": {
+        "hash": "e09498db6666fa22",
+        "questions": [
+            "where does printed text appear",
+            "what character encoding does output use",
+            "why are accented letters blank on the screen",
+            "how big is each character cell"
+        ]
+    },
+    "m68k/trap-tasks/time": {
+        "hash": "67d8ee6a4cae8fbf",
+        "questions": [
+            "what unit do the time tasks count in",
+            "which tasks read the clock and pause the program",
+            "how does my program keep track of time"
+        ]
+    },
+    "m68k/trap-tasks/unsupported": {
+        "hash": "7136a6d5ed2bff6a",
+        "questions": [
+            "why does my program stop with an unsupported task error",
+            "can my program open a network connection",
+            "can I use a serial port",
+            "can my program print to a printer",
+            "can I change the font of printed text"
+        ]
+    }
+}

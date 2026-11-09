@@ -117,6 +117,7 @@ import {
     type ProgramDisplay
 } from '#lib/languages/programDisplay.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'
+import { favouredNames } from './favouredNames'
 import {
     buildSource,
     isCurrentBuildLocation,
@@ -579,6 +580,11 @@ export class WorkbenchSession {
     private languageSession = $state.raw<ProjectLanguageSession>()
     languageAnalysis = $state.raw<ProjectAnalysisSnapshot>()
     liveLanguageDiagnostics = $state.raw<Diagnostic[]>([])
+    /**
+     * The sources the last complete analysis read, whose lines its Diagnostics are about: the live
+     * Files run ahead of them while the next analysis is on its way.
+     */
+    analysedSources = $state.raw<BuildSources>()
     languageAnalysisPending = $state(false)
     analysisSpinnerVisible = $state(false)
 
@@ -863,6 +869,21 @@ export class WorkbenchSession {
             }
             return counts
         })
+        this.documentationFavourKey = $derived.by(() => {
+            const sources =
+                this.sourceView === 'snapshot'
+                    ? this.emulator.buildSources
+                    : (this.analysedSources ?? this.sourceInput)
+            return favouredNames(
+                this.activeDiagnostics,
+                sources?.files ?? {},
+                sources?.entry,
+                this.project.language
+            ).join('\n')
+        })
+        this.documentationFavour = $derived(
+            this.documentationFavourKey ? this.documentationFavourKey.split('\n') : []
+        )
         this.worstSeverity = $derived.by<Diagnostic['severity'] | undefined>(() => {
             let worst: Diagnostic['severity'] | undefined
             for (const diagnostic of this.activeDiagnostics) {
@@ -1246,6 +1267,20 @@ export class WorkbenchSession {
     declare readonly diagnosticCounts: Record<string, { errors: number; warnings: number }>
     /** The worst severity among the Diagnostics, for the colour of the Problems badge. */
     declare readonly worstSeverity: Diagnostic['severity'] | undefined
+    /**
+     * What the Documentation panel's results favour ([documentation-search.md](../../../../../docs/design/documentation-search.md),
+     * The Problems panel): the instructions on the lines of the errors the Problems tab lists
+     * (`favouredNames`), read from the sources the Diagnostics are about, the Build's in the
+     * snapshot view and otherwise those the last complete analysis read. Typing on an error's line
+     * changes nothing until the analysis catches up, so the favour neither follows each keystroke
+     * nor reads a line an edit has moved.
+     */
+    declare readonly documentationFavour: string[]
+    /**
+     * The same as one string, so that a new analysis with the same errors, or an edit, gives the
+     * panel the same list and searches nothing again.
+     */
+    declare private readonly documentationFavourKey: string
     //MARS, RARS and x86's guest put the screen's geometry in the user's hands: the M68K's and the
     //Z80's programs size their own screen, so there is nothing to configure
     declare readonly configurableDisplay: boolean
@@ -1288,6 +1323,8 @@ export class WorkbenchSession {
             // their Monaco ranges remain stable until their replacements are ready.
             if (snapshot && !pending) {
                 this.languageAnalysis = snapshot
+                //an answer that is not pending is about the session's current sources
+                this.analysedSources = session.sources
                 this.liveLanguageDiagnostics = snapshot.diagnostics
                     .filter(
                         (diagnostic) =>
