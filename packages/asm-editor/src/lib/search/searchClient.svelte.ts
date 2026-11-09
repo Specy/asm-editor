@@ -315,7 +315,8 @@ class SearchClient {
      * The ranked results for a query in a scope, by words, and by meaning once the model is ready.
      * It waits for the whole scope's index, unless `partial`: then it answers as soon as any of it
      * is in, from what is in. `favour` names the entries the Workbench's Documentation panel lifts
-     * a little, the instructions on the lines of the Problems' errors; nothing else passes it.
+     * a little, the instructions on the lines of the Problems' errors; nothing else passes it. The
+     * answer's couples ("tst instruction") are by their offsets in `query`.
      */
     async search(
         scope: SearchScope,
@@ -323,7 +324,7 @@ class SearchClient {
         limit = 20,
         options: { partial?: boolean; favour?: readonly string[] } = {}
     ): Promise<SearchAnswer> {
-        if (!browser || !query.trim()) return { results: [], mode: 'text' }
+        if (!browser || !query.trim()) return { results: [], mode: 'text', couples: [] }
         const whole = this.loadScope(scope)
         this.warm()
         if (options.partial) {

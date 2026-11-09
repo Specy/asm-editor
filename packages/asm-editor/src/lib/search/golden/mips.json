@@ -147,6 +147,14 @@
             "query": "pause for a few milliseconds",
             "top": 3,
             "expect": "mips/syscalls/32"
+        },
+        {
+            "query": "end directive",
+            "first": "mips/directives/end"
+        },
+        {
+            "query": "sp register",
+            "first": "mips/registers/$sp"
         }
     ]
 }

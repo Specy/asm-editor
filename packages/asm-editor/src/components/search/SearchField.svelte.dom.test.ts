@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import { TOOLTIP_DELAY } from '#cmp/shared/floating/tooltip.svelte.ts'
+import type { AnsweredCouples } from '#lib/search/queryModifiers.ts'
 import { SITE_SCOPE, languageScope, type SearchScope } from '#lib/search/scope.ts'
 import SearchField from './SearchField.svelte'
 
@@ -35,10 +36,10 @@ afterEach(() => {
     document.body.replaceChildren()
 })
 
-function open(value: string, scope?: SearchScope) {
+function open(value: string, scope?: SearchScope, couples?: AnsweredCouples) {
     const target = document.createElement('div')
     document.body.append(target)
-    const props = $state({ value, scope })
+    const props = $state({ value, scope, couples })
     const app = mount(SearchField, { target, props })
     dispose = () => void unmount(app)
     flushSync()
@@ -226,5 +227,64 @@ describe("a search box's Search modifiers", () => {
         input.dispatchEvent(new Event('compositionend'))
         flushSync()
         expect(marks(target)).toEqual(['m68k'])
+    })
+})
+
+describe("a search box's couples", () => {
+    const query = 'tst instruction in m68k'
+    const answered: AnsweredCouples = {
+        query,
+        couples: [{ start: 0, end: 15, label: 'The tst instruction first' }]
+    }
+
+    it('draws a couple the answer found as one mark over both words, and says what it did', () => {
+        const { target, input } = open(query, SITE_SCOPE, answered)
+        expect(marks(target)).toEqual(['tst instruction', 'm68k'])
+        expect(drawnText(target)).toBe(query)
+        expect(drawsOwnText(input)).toBe(false)
+        expect(heard(target)).toBe('The tst instruction first. M68K results first.')
+    })
+
+    it("shows the couple's Tooltip anywhere on its two words", () => {
+        const { target, input } = open(query, SITE_SCOPE, answered)
+        const [couple] = target.querySelectorAll<HTMLElement>('.mark')
+        couple.getBoundingClientRect = () => rect(0, 120)
+        target.querySelector<HTMLElement>('.query-marks .view')!.getBoundingClientRect = () =>
+            rect(0, 300)
+        //on the space between its words
+        pointer(input, 'pointermove', 30)
+        wait(TOOLTIP_DELAY)
+        expect(cards()).toEqual(['The tst instruction first'])
+    })
+
+    it('draws a couple only while the box holds the query its answer is for', () => {
+        const { target, props } = open(query, SITE_SCOPE, answered)
+        //typed on: the offsets could be another word's, until the next answer
+        props.value = 'tst instruction in m68k please'
+        flushSync()
+        expect(marks(target)).toEqual(['m68k'])
+        expect(heard(target)).toBe('M68K results first.')
+        //the answered query again, with white space round it, which the search left out
+        props.value = '  tst instruction in m68k '
+        flushSync()
+        expect(marks(target)).toEqual(['tst instruction', 'm68k'])
+        props.couples = { query: '', couples: [] }
+        flushSync()
+        expect(marks(target)).toEqual(['m68k'])
+    })
+
+    it("marks a couple's noun as the couple, not as a kind word", () => {
+        const mips = languageScope('mips')
+        const { target, props } = open('end directive', mips)
+        //before the answer, the noun is a kind word
+        expect(marks(target)).toEqual(['directive'])
+        expect(heard(target)).toBe('Directives first.')
+        props.couples = {
+            query: 'end directive',
+            couples: [{ start: 0, end: 13, label: 'The end directive first' }]
+        }
+        flushSync()
+        expect(marks(target)).toEqual(['end directive'])
+        expect(heard(target)).toBe('The end directive first.')
     })
 })

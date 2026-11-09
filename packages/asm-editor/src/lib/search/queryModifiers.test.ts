@@ -200,6 +200,27 @@ describe('kind words', () => {
         expect(readQuery('read a port', SITE_SCOPE, ['port']).kinds).toEqual(['port'])
     })
 
+    it('reads no kind word inside a couple, which the engine passes apart', () => {
+        const query = 'the end directive, then any directive for strings'
+        const couple = { start: 4, end: 17 }
+        expect(readQuery(query, SITE_SCOPE, undefined, [couple]).marks).toEqual([
+            {
+                start: query.lastIndexOf('directive'),
+                end: query.lastIndexOf('directive') + 9,
+                modifier: 'kind',
+                label: 'Directives first'
+            }
+        ])
+        // a couple's noun alone is no kind word, and nothing else is lifted
+        const whole = { start: 0, end: 13 }
+        expect(readQuery('end directive', languageScope('mips'), undefined, [whole])).toEqual({
+            text: 'end directive',
+            languages: [],
+            kinds: [],
+            marks: []
+        })
+    })
+
     it('names the syscalls the way the languages in view call them', () => {
         expect(marked('syscall to print', languageScope('m68k'))).toEqual([
             'syscall|kind|Trap tasks first'

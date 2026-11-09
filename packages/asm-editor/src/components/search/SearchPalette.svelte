@@ -236,6 +236,7 @@
                     {scope}
                     bind:value={query}
                     bind:el={input}
+                    couples={live.couples}
                     {placeholder}
                     label={placeholder}
                     role="combobox"

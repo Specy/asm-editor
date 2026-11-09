@@ -211,7 +211,9 @@ describe('the Documentation panel beside an M68K program', () => {
                 result('m68k/instructions/extb', 'extb', true),
                 result('m68k/instructions/ext', 'ext', true),
                 result('m68k/exceptions/68020', '68020')
-            ]
+            ],
+            mode: 'text',
+            couples: []
         } as Awaited<ReturnType<typeof searchClient.search>>)
         const { target } = await panel({ processor: '68000', bitFields: false })
         const input = target.querySelector<HTMLInputElement>('input')!

@@ -16,12 +16,20 @@
      * text, drawn under the field by `QueryMarks`, which shows what each did in a Tooltip; screen
      * readers hear the same words from a second live region beside the status
      * ([the design record](../../../../../docs/design/documentation-search.md), Search modifiers).
+     * A couple ("tst instruction") is one mark over both its words, drawn once the answer that found
+     * it is in (`couples`, from LiveSearch) and only while the box still holds the query it answers:
+     * after another keystroke its offsets could be another word's.
      */
     import type { Component, Snippet } from 'svelte'
     import FaSearch from '~icons/fa-solid/search'
     import FaTimes from '~icons/fa-solid/times'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
-    import { readQuery } from '#lib/search/queryModifiers.ts'
+    import {
+        readQuery,
+        scopeKinds,
+        type AnsweredCouples,
+        type QueryMark
+    } from '#lib/search/queryModifiers.ts'
     import type { SearchScope } from '#lib/search/scope.ts'
     import type { HTMLInputAttributes } from 'svelte/elements'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
@@ -54,6 +62,8 @@
         invalid?: boolean
         /** Controls at its end, before the clear button, such as a search's options. */
         end?: Snippet
+        /** The couples of the answer shown under it, and the query that answer is for. */
+        couples?: AnsweredCouples
     }
 
     let {
@@ -69,6 +79,7 @@
         clearLabel = 'Clear the search',
         invalid = false,
         end,
+        couples,
         ...rest
     }: Props = $props()
 
@@ -83,8 +94,31 @@
         if (scope) searchClient.warm(scope)
     }
 
-    const marks = $derived(scope ? readQuery(value ?? '', scope).marks : [])
-    /** What the Search modifiers did, once each, for screen readers. */
+    /**
+     * The couples of the answer, while the box holds the query it answers: the worker searched it
+     * trimmed, so they move by the white space before it.
+     */
+    const coupleMarks = $derived.by((): QueryMark[] => {
+        const text = value ?? ''
+        if (!scope || !couples?.query || text.trim() !== couples.query) return []
+        const shift = text.length - text.trimStart().length
+        return couples.couples.map(({ start, end, label }) => ({
+            start: start + shift,
+            end: end + shift,
+            modifier: 'couple',
+            label
+        }))
+    })
+    /** The Search modifiers and the couples, in the order typed; a couple's noun is no kind word. */
+    const marks = $derived(
+        scope
+            ? [
+                  ...readQuery(value ?? '', scope, scopeKinds(scope), coupleMarks).marks,
+                  ...coupleMarks
+              ].sort((a, b) => a.start - b.start)
+            : []
+    )
+    /** What the Search modifiers and the couples did, once each, for screen readers. */
     const markWords = $derived(
         [...new Set(marks.map((mark) => mark.label))].map((label) => `${label}.`).join(' ')
     )

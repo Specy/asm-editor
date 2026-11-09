@@ -7,6 +7,7 @@ import { prepareSearch, SearchEngine, type SearchResult } from './engine'
 import { SEARCH_MODEL, type SearchModelUrls } from './model'
 import { OutdatedIndexError } from './outdatedIndex'
 import { isOtherFormat, isPayload } from './payload'
+import type { QueryCouple } from './queryModifiers'
 import type { SearchScope, ShardId } from './scope'
 
 /**
@@ -34,7 +35,12 @@ export type WorkerRequest =
           favour?: string[]
       }
 
-export type SearchAnswer = { results: SearchResult[]; mode: 'text' | 'hybrid' }
+export type SearchAnswer = {
+    results: SearchResult[]
+    mode: 'text' | 'hybrid'
+    /** The query's couples ("tst instruction"), whose entries come first, for the box to mark. */
+    couples: QueryCouple[]
+}
 
 export type WorkerResponse =
     /**
@@ -122,7 +128,8 @@ async function search(
             ? (await embedder.embed([embed], 'query'))[0]
             : null
     const results = await engine.search(query, { ...options, vector, limit, favour })
-    return { results, mode: vector ? 'hybrid' : 'text' }
+    const couples = options.couples.map(({ start, end, label }) => ({ start, end, label }))
+    return { results, mode: vector ? 'hybrid' : 'text', couples }
 }
 
 async function handle(request: WorkerRequest): Promise<unknown> {

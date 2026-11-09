@@ -42,6 +42,19 @@
                 "x86/runtime-library/strcmp"
             ],
             "meaning": true
+        },
+        {
+            "query": "test instruction",
+            "first": "x86/instructions/test"
+        },
+        {
+            "query": "tst instruction in m68k",
+            "first": "m68k/instructions/tst"
+        },
+        {
+            "query": "what is the instruction set",
+            "first": "assembly-basics/introduction/instruction-set#",
+            "meaning": true
         }
     ]
 }

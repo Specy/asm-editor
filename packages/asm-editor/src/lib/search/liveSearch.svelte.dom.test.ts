@@ -27,7 +27,11 @@ const { LiveSearch } = await import('./liveSearch.svelte')
 
 const mips = languageScope('mips')
 const answerOf = (...keys: string[]) =>
-    ({ results: keys.map((key) => ({ key })), mode: 'text' }) as unknown as SearchAnswer
+    ({
+        results: keys.map((key) => ({ key })),
+        mode: 'text',
+        couples: []
+    }) as unknown as SearchAnswer
 const keysOf = (live: InstanceType<typeof LiveSearch>) => live.results.map((result) => result.key)
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5))
 
@@ -219,6 +223,41 @@ describe('a search box’s results', () => {
             favour: ['addi']
         })
         expect(keysOf(live)).toEqual(['addi', 'add'])
+    })
+
+    it('bring the couples their answer found, with the query that answer is for', async () => {
+        const couple = { start: 0, end: 15, label: 'The add instruction first' }
+        searchClient.search.mockResolvedValueOnce({ ...answerOf('add'), couples: [couple] })
+        const { live, state } = mount({ query: 'add instruction' })
+        expect(live.couples).toEqual({ query: '', couples: [] })
+        await settle()
+        expect(live.couples).toEqual({ query: 'add instruction', couples: [couple] })
+
+        //until the next answer, the couples stay with the query they were found in
+        let finish!: (answer: SearchAnswer) => void
+        searchClient.search.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+        state.query = 'add instructions'
+        flushSync()
+        await settle()
+        expect(live.couples).toEqual({ query: 'add instruction', couples: [couple] })
+        finish(answerOf('add'))
+        await settle()
+        expect(live.couples).toEqual({ query: 'add instructions', couples: [] })
+
+        //none for a failed search, nor for an empty box
+        searchClient.search.mockResolvedValueOnce({ ...answerOf('add'), couples: [couple] })
+        state.query = 'add instruction'
+        flushSync()
+        await settle()
+        expect(live.couples.couples).toEqual([couple])
+        searchClient.search.mockRejectedValueOnce(new Error('HTTP 404'))
+        state.query = 'add instruction now'
+        flushSync()
+        await settle()
+        expect(live.couples).toEqual({ query: '', couples: [] })
+        state.query = ''
+        flushSync()
+        expect(live.couples).toEqual({ query: '', couples: [] })
     })
 
     it('are not searched for a box that is not open, nor for an empty query', async () => {

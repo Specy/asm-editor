@@ -1,6 +1,6 @@
 import { count, create, insertMultiple, search as oramaSearch, type AnyOrama } from '@orama/orama'
 import { index as oramaIndex } from '@orama/orama/components'
-import { hasCodeName } from '#lib/documentation/entryKinds.ts'
+import { hasCodeName, type EntryKind } from '#lib/documentation/entryKinds.ts'
 import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
 import { VECTOR_DIMS } from './model'
 import {
@@ -9,7 +9,14 @@ import {
     type SectionDocument,
     type ShardPayload
 } from './payload'
-import { modifierKindOf, readQuery, type ModifierKind, type QueryModifiers } from './queryModifiers'
+import { findCouples } from './queryCouples'
+import {
+    modifierKindOf,
+    readQuery,
+    type ModifierKind,
+    type QueryCouple,
+    type QueryModifiers
+} from './queryModifiers'
 import { courseLanguage, shardsOf, type SearchScope, type ShardId } from './scope'
 import { isStopWord, queryTerms } from './queryTerms'
 import { englishWords, stemmedText, stemmedWord } from './stemming'
@@ -35,10 +42,11 @@ import { expandedTerms } from './synonyms'
  * stack".
  *
  * The multipliers of a kind of result then apply, and those of the query's Search modifiers
- * (`queryModifiers.ts`) and of the names inside a question, then two fixed rules: an entry named
- * exactly what was typed comes first, and a Lecture section appears once. The same order serves
- * the panel, the palette and the agents, but for one exception: the Workbench's Documentation
- * panel favours the instructions on the lines of the Problems' errors (`favour`).
+ * (`queryModifiers.ts`) and of the names inside a question, then two fixed rules: the entries a
+ * couple names ("tst instruction", `queryCouples.ts`) and an entry named exactly what was typed
+ * come first, and a Lecture section appears once. The same order serves the panel, the palette
+ * and the agents, but for one exception: the Workbench's Documentation panel favours the
+ * instructions on the lines of the Problems' errors (`favour`).
  */
 
 /** Values tuned against the golden queries in `golden/`. */
@@ -211,10 +219,19 @@ export type EntryResult = {
     kind: 'entry'
     key: string
     score: number
-    /** Its name is exactly what was typed. */
+    /** Pinned: its name is exactly what was typed, or a couple's name ("tst instruction"). */
     exact: boolean
     entry: EntryDocument
 }
+
+/** Where an entry is: its shard, and its index among the shard's entries. */
+type EntryRef = { shard: ShardId; ref: number }
+
+/**
+ * A name with its kind's noun beside it in a query (`queryCouples.ts`): where it is, what the box
+ * says of it, and the entries it pins.
+ */
+export type Couple = QueryCouple & { entries: EntryRef[] }
 
 export type SectionResult = {
     kind: 'section'
@@ -578,9 +595,59 @@ export class SearchEngine {
         return [...kinds]
     }
 
-    /** A query's Search modifiers, with the kinds of Chapter the loaded shards have. */
-    modifiersOf(query: string, scope: SearchScope): QueryModifiers {
-        return readQuery(query, scope, this.modifierKinds(scope))
+    /**
+     * A query's Search modifiers and couples, with the kinds of Chapter and the names the loaded
+     * shards have. A language's name is never part of a couple, and a word in a couple is not
+     * also a kind word: "end directive" pins the `end` directive and lifts no other.
+     */
+    readSearch(
+        query: string,
+        scope: SearchScope
+    ): { modifiers: QueryModifiers; couples: Couple[] } {
+        const kinds = this.modifierKinds(scope)
+        const read = readQuery(query, scope, kinds)
+        const shards = shardsOf(scope).filter((shard) => this.shards.has(shard))
+        const couples = findCouples<EntryRef>(
+            query,
+            {
+                entries: (name, entryKinds) => this.coupledEntries(name, entryKinds, shards),
+                kindOf: ({ shard, ref }) => this.shards.get(shard)!.entries[ref].entryKind,
+                wordLike: (name) => this.isWordLike(name, shards)
+            },
+            read.marks.filter((mark) => mark.modifier === 'language')
+        )
+        if (couples.length === 0) return { modifiers: read, couples }
+        return { modifiers: readQuery(query, scope, kinds, couples), couples }
+    }
+
+    /**
+     * The entries of these kinds in scope that a couple's name names, by the spellings an exact
+     * name also stands for (a directive's dot, an M68K size suffix) and, the noun making it safe,
+     * a MIPS register without its `$` ("sp register"). Only a name that starts with a letter and is
+     * not a stop word drops its `$`: "CP0 register 13" is not `$13`, nor "look at register $t0"
+     * `$at`.
+     */
+    private coupledEntries(
+        name: string,
+        kinds: readonly EntryKind[],
+        shards: ShardId[]
+    ): EntryRef[] {
+        const groups = nameVariants(name)
+        const bare = groups[0]?.[0] ?? ''
+        if (/^\p{L}/u.test(bare) && !isStopWord(bare)) groups[0] = [...groups[0], `$${bare}`]
+        for (const spellings of groups) {
+            const matches = spellings
+                .flatMap((spelling) => this.names.get(spelling) ?? [])
+                .filter(
+                    (match) =>
+                        shards.includes(match.shard) &&
+                        kinds.includes(this.shards.get(match.shard)!.entries[match.ref].entryKind)
+                )
+            if (matches.length > 0) {
+                return [...new Map(matches.map((m) => [`${m.shard}:${m.ref}`, m])).values()]
+            }
+        }
+        return []
     }
 
     async search(
@@ -591,6 +658,8 @@ export class SearchEngine {
             limit?: number
             /** Read from the query when left out; `prepareSearch` reads them once for both. */
             modifiers?: QueryModifiers
+            /** The query's couples, read with the modifiers when left out. */
+            couples?: readonly Couple[]
             /**
              * Names whose entries count `RANKING.problemBoost` times: the instructions on the
              * lines of the Problems' errors, which only the Workbench's Documentation panel
@@ -602,7 +671,10 @@ export class SearchEngine {
         if (!query.trim()) return []
         const shards = shardsOf(options.scope).filter((shard) => this.shards.has(shard))
         if (shards.length === 0) return []
-        const modifiers = options.modifiers ?? this.modifiersOf(query, options.scope)
+        const read =
+            options.modifiers && options.couples ? null : this.readSearch(query, options.scope)
+        const modifiers = options.modifiers ?? read!.modifiers
+        const couples = options.couples ?? read!.couples
         const term = modifiers.text.trim()
         if (!term) return []
         const limit = options.limit ?? 20
@@ -637,10 +709,20 @@ export class SearchEngine {
             (a, b) =>
                 Number(!languages.has(shardLanguage(a))) - Number(!languages.has(shardLanguage(b)))
         )
-        for (const exact of this.exactEntries(term, pinOrder)) {
-            const entry = this.shards.get(exact.shard)!.entries[exact.ref]
-            const key = `${exact.shard}:e:${exact.ref}`
+        const inPinOrder = (refs: EntryRef[]) =>
+            refs
+                .filter((match) => pinOrder.includes(match.shard))
+                .sort((a, b) => pinOrder.indexOf(a.shard) - pinOrder.indexOf(b.shard))
+        // each couple's entries in the order typed, then those named exactly what was typed
+        const pins = [
+            ...couples.flatMap((couple) => inPinOrder(couple.entries)),
+            ...this.exactEntries(term, pinOrder)
+        ]
+        for (const pin of pins) {
+            const key = `${pin.shard}:e:${pin.ref}`
+            if (seen.has(key)) continue
             seen.add(key)
+            const entry = this.shards.get(pin.shard)!.entries[pin.ref]
             exacts.push({ kind: 'entry', key, score: Infinity, exact: true, entry })
         }
         // a result's score, and how to make it once it is known to be shown: a section's excerpt
@@ -990,21 +1072,24 @@ export class SearchEngine {
 export type PreparedSearch = {
     /** The text the model turns into the query vector: the query without its language words. */
     embed: string
-    /** The options of `search`, beside the vector and the limit. */
-    options: { scope: SearchScope; modifiers: QueryModifiers }
+    /**
+     * The options of `search`, beside the vector and the limit. The couples are also what an
+     * answer reports, for a search box to mark.
+     */
+    options: { scope: SearchScope; modifiers: QueryModifiers; couples: Couple[] }
 }
 
 /**
  * How a query is searched ([the plan](../../../../../docs/design/plain-english-search-plan.md),
- * phase 3): its Search modifiers read once, with the kinds of Chapter the engine has loaded, and
- * the text the model reads. The worker and the golden queries both call this, so the golden files
- * test what the worker does.
+ * phase 3): its Search modifiers and couples read once, with the kinds of Chapter and the names
+ * the engine has loaded, and the text the model reads. The worker and the golden queries both call
+ * this, so the golden files test what the worker does.
  */
 export function prepareSearch(
     engine: SearchEngine,
     query: string,
     scope: SearchScope
 ): PreparedSearch {
-    const modifiers = engine.modifiersOf(query, scope)
-    return { embed: modifiers.text, options: { scope, modifiers } }
+    const { modifiers, couples } = engine.readSearch(query, scope)
+    return { embed: modifiers.text, options: { scope, modifiers, couples } }
 }

@@ -261,6 +261,7 @@ starting value, tuned against the golden files during the work.
   `add $t0, $t1, $t2` lifts `add`, while a plain number does not ("wait 5 seconds" leaves MIPS `wait`
   alone). Nor does a stop word or a word in capitals, unless the line looks like code (a comma, or an
   operand written as code): "what does the test I added check" leaves x86 `test` alone, as "we" does.
+  With its kind's noun beside it, a name is pinned instead: a couple (Search modifiers, below).
 - **A scope scores the same whatever else is loaded.** The browser's one search worker holds every
   shard any box has loaded, and the navbar's search loads them all. Orama's BM25 reads the number of
   documents, each field's average length and how many documents hold a word, so in one database for
@@ -303,12 +304,47 @@ starting value, tuned against the golden files during the work.
   overview entries are prose, and made ordinary questions misfire ("what is the instruction pointer"
   lost `rip`). So instruction, opcode, mnemonic, register, flag, trap, service and runtime are not kind
   words, nor are "function" ("call a function" means a subroutine) and "example" (the Courses and the
-  instructions both have them).
+  instructions both have them). Beside a name, most of them make a couple instead (below).
+- **A name with its kind's noun beside it is a couple, and comes first.** "test instruction", "end
+  directive", "printf function", "sp register", or the other way round, "instruction tst",
+  "register $t0": a name next to a noun of its kind, with only white space between them, pins the
+  entries of that kind it names, as a query that is only a name pins them, before everything else.
+  The rest of the query ranks what follows. The nouns, singular only: instruction, opcode, mnemonic
+  (an x86 Extensions entry counts, as its instructions name it); directive, pseudo-op, pseudo op;
+  syscall, system call, trap task (the syscalls and the trap tasks); register; flag; condition code;
+  addressing mode; port; screen command; function (the Runtime library). The name is matched as an
+  exact name is, a directive's dot optional and an M68K size suffix read, and with a MIPS register's
+  `$` optional ("sp register"), but not for a number or a stop word ("CP0 register 13", "look at
+  register $t0"). In a scope of several languages the named language's entries come first, then the
+  scope's order; several couples pin in the order typed. A couple's noun is not also a kind word:
+  "end directive" lifts no other directive. Only the engine knows the names, so the worker's answer
+  reports each couple's offsets and words, and the box marks them once it has the answer.
+    - Why: alone, `test` counts as English, since the Lectures use it so, and "test instruction" put
+      x86 `test` second in x86, behind the Testcases page, and out of the navbar's first five. The
+      noun says the word is a name. Both orders, because readers write both ("the tst instruction",
+      "the instruction tst").
+    - Before its noun any name of that kind counts, a word-like name or a stop word too ("and
+      instruction", "in instruction" for x86 `in`), since the noun makes it plain. An article is the
+      exception, unless typed as code ("A register"): it stands where a name stands and is often one
+      (the Z80 register `a`, the x86 condition code `a`, the M68K addressing mode `an`), so "what is a
+      register" would pin `a`. After its noun only a name that is not word-like counts, unless typed
+      as code: "what is an instruction set" must not pin Z80 `set`, while "instruction tst" pins
+      `tst`. A word of a two-word noun names nothing else ("system call instruction" is not `call`).
+    - The cost, accepted: a word before a noun is read as a name wherever one exists. Over the 7,975
+      Entry questions and 16,740 sentences of the Lectures the rule found 24 and 74 different
+      couples, and the wrong ones were of four sorts: a preposition or a conjunction ("in instruction
+      operands" pins x86 `in`, "registers and instruction names" MIPS `and`, "bytes or instruction"
+      RISC-V `or`), "illegal instruction exception" (M68K `illegal`), "FP register" meaning a
+      floating-point one (MIPS `$fp`), and a sentence that starts "A register pair" (the Z80 `a`,
+      its article in capitals).
 - **Shown in the text, not beside it.** The palette's and the Documentation panel's boxes draw a
   Search modifier in the accent colour, in place in the text, with no chip or line of their own.
   Pointing at one shows a Tooltip saying what it did ("M68K results first", "Directives first"); a
   screen reader hears the same, in words kept off the screen. On a phone the colour stands alone. The
-  Symbols and Search panels' filters, which search the Project, have none.
+  Symbols and Search panels' filters, which search the Project, have none. A couple is one mark over
+  its two words and the space between them ("The tst instruction first"), drawn once the answer that
+  found it is in and only while the box holds the query it answers, since after another keystroke its
+  offsets could be another word's.
 
 ### The Problems panel
 
@@ -349,6 +385,9 @@ Implemented on `feat/plain-english-search` by agents following the
 - **Not solved:** "why does my loop not stop" still answers with M68K `STOP` and the x86 `loop`
   instructions first. Not matching word-like names against names inside a question fixed it but
   broke eight golden queries ("clear the screen", "print a character").
+- **Couples** (2026-11-09, the owner's rule): a name with its kind's noun pins its entries ("test
+  instruction" puts x86 `test` first); 11 golden queries added, none of the others' expectations
+  changed.
 - **Small calls made in the work:**
     - A kind word works with a language's name as its other word ("mips syscalls").
     - The lecture kind words do nothing in the Courses' scope, where every result is a lecture.

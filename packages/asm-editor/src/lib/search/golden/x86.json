@@ -238,6 +238,18 @@
             "query": "prepare edx before a signed division",
             "top": 3,
             "expect": "x86/instructions/cdq"
+        },
+        {
+            "query": "test instruction",
+            "first": "x86/instructions/test"
+        },
+        {
+            "query": "loop instruction",
+            "first": "x86/instructions/loop"
+        },
+        {
+            "query": "and instruction",
+            "first": "x86/instructions/and"
         }
     ]
 }

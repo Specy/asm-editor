@@ -114,6 +114,14 @@
             "query": "make my program pause for a bit",
             "top": 3,
             "expect": "m68k/trap-tasks/task-23"
+        },
+        {
+            "query": "instruction tst",
+            "first": "m68k/instructions/tst"
+        },
+        {
+            "query": "end directive",
+            "first": "m68k/directives/end"
         }
     ]
 }

@@ -559,7 +559,7 @@ _Avoid_: baked question, synthetic query, FAQ, doc2query
 
 ## Search modifier
 
-A word in a Documentation search's query that changes how the results are ranked rather than what they match: a language's name or alias, in a search that covers several languages, or a kind word such as "directive" or "syscall", where the scope has that kind of Chapter. The palette's and the Documentation panel's search boxes draw it in the accent colour and say what it did when pointed at, so a reader learns to write it on purpose.
+A word in a Documentation search's query that changes how the results are ranked rather than what they match: a language's name or alias, in a search that covers several languages, or a kind word such as "directive" or "syscall", where the scope has that kind of Chapter. A name with its kind's noun beside it, in either order, is a couple ("tst instruction", "register $t0"): it puts the entries of that kind with that name first, as a query of the name alone does, and its noun is no kind word. The palette's and the Documentation panel's search boxes draw a Search modifier in the accent colour, a couple as one mark over both its words, and say what it did when pointed at, so a reader learns to write it on purpose.
 _Avoid_: filter (nothing is removed), operator, keyword, trigger
 
 ## Course

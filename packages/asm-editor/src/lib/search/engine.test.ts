@@ -1000,3 +1000,183 @@ describe('the Problems boost', () => {
         )
     })
 })
+
+describe('couples', () => {
+    /**
+     * M68K and x86 Documentation: `test` the x86 instruction, which the Lectures use as a word, the
+     * M68K `tst`, `stop` and `end`, an entry whose words match "test instruction" best, and a MIPS
+     * register spelled with its `$`.
+     */
+    async function engineOf() {
+        const engine = SearchEngine.create()
+        const directive = (name: string) =>
+            entry(name, `The ${name} directive.`, {
+                id: `m68k/directives/${name}`,
+                chapter: 'directives',
+                chapterTitle: 'Directives',
+                entryKind: 'directive'
+            })
+        await engine.add(
+            createPayload(
+                {
+                    shard: 'docs-m68k',
+                    entries: [
+                        entry('tst', 'Compares a value with zero and sets the flags.'),
+                        entry('stop', 'Stops the processor until an interrupt.'),
+                        entry('testcases', 'Each test instruction of a Testcase, a test test.', {
+                            id: 'm68k/executables/testcases',
+                            entryKind: 'prose',
+                            names: []
+                        }),
+                        directive('end'),
+                        directive('org')
+                    ],
+                    sections: [],
+                    windows: [],
+                    wordLikeNames: ['stop', 'end']
+                },
+                null,
+                null
+            )
+        )
+        const x86 = (name: string, summary: string) =>
+            entry(name, summary, { id: `x86/instructions/${name}`, language: 'x86' })
+        await engine.add(
+            createPayload(
+                {
+                    shard: 'docs-x86',
+                    entries: [
+                        x86('test', 'Ands two operands and sets the flags.'),
+                        x86('tst', 'Not a real x86 instruction, made up to share a name.')
+                    ],
+                    sections: [],
+                    windows: [],
+                    wordLikeNames: ['test']
+                },
+                null,
+                null
+            )
+        )
+        await engine.add(
+            createPayload(
+                {
+                    shard: 'docs-mips',
+                    entries: [
+                        entry('$sp', 'The stack pointer.', {
+                            id: 'mips/registers/$sp',
+                            language: 'mips',
+                            entryKind: 'register'
+                        }),
+                        entry('$at', 'The assembler temporary.', {
+                            id: 'mips/registers/$at',
+                            language: 'mips',
+                            entryKind: 'register'
+                        })
+                    ],
+                    sections: [],
+                    windows: []
+                },
+                null,
+                null
+            )
+        )
+        return engine
+    }
+
+    const pinned = (results: SearchResult[]) =>
+        results.filter((result) => result.kind === 'entry' && result.exact).map(idOf)
+
+    it("pins a couple's entries first, the rest of the query ranking what follows", async () => {
+        const engine = await engineOf()
+        const scope = languageScope('x86', false)
+        const results = await engine.search('test instruction', { scope })
+        expect(results[0]).toMatchObject({ kind: 'entry', exact: true, score: Infinity })
+        expect(pinned(results)).toEqual(['x86/instructions/test'])
+        // without its noun, `test` is an ordinary word and the best match by words comes first
+        const site = await engine.search('test instruction', { scope: SITE_SCOPE })
+        expect(idOf(site[0])).toBe('x86/instructions/test')
+        expect(idOf(site[1])).toBe('m68k/executables/testcases')
+    })
+
+    it("pins the named language's entries first, then the scope's order", async () => {
+        const engine = await engineOf()
+        expect(pinned(await engine.search('tst instruction', { scope: SITE_SCOPE }))).toEqual([
+            'm68k/instructions/tst',
+            'x86/instructions/tst'
+        ])
+        expect(
+            pinned(await engine.search('tst instruction in x86', { scope: SITE_SCOPE }))
+        ).toEqual(['x86/instructions/tst', 'm68k/instructions/tst'])
+    })
+
+    it('pins several couples in the order typed', async () => {
+        const engine = await engineOf()
+        const scope = languageScope('m68k', false)
+        expect(pinned(await engine.search('org directive or tst instruction', { scope }))).toEqual([
+            'm68k/directives/org',
+            'm68k/instructions/tst'
+        ])
+        expect(
+            pinned(await engine.search('instruction tst after the org directive', { scope }))
+        ).toEqual(['m68k/instructions/tst', 'm68k/directives/org'])
+    })
+
+    it('reads a name after its noun only when it is no ordinary word', async () => {
+        const engine = await engineOf()
+        const scope = languageScope('m68k', false)
+        expect(pinned(await engine.search('stop instruction', { scope }))).toEqual([
+            'm68k/instructions/stop'
+        ])
+        expect(pinned(await engine.search('instruction stop', { scope }))).toEqual([])
+        expect(pinned(await engine.search('instruction STOP', { scope }))).toEqual([
+            'm68k/instructions/stop'
+        ])
+        // an exact name of another kind is no couple
+        expect(pinned(await engine.search('tst directive', { scope }))).toEqual([])
+    })
+
+    it("reads a directive without its dot and a MIPS register without its '$'", async () => {
+        const engine = await engineOf()
+        const mips = languageScope('mips', false)
+        expect(pinned(await engine.search('sp register', { scope: mips }))).toEqual([
+            'mips/registers/$sp'
+        ])
+        // a stop word keeps its meaning: "look at" is not `$at`
+        expect(pinned(await engine.search('look at register $sp', { scope: mips }))).toEqual([
+            'mips/registers/$sp'
+        ])
+        const m68k = languageScope('m68k', false)
+        expect(pinned(await engine.search('the .end directive', { scope: m68k }))).toEqual([
+            'm68k/directives/end'
+        ])
+        expect(pinned(await engine.search('tst.l instruction', { scope: m68k }))).toEqual([
+            'm68k/instructions/tst'
+        ])
+    })
+
+    it('makes a kind word of a couple no Search modifier, and reports the couples', async () => {
+        const engine = await engineOf()
+        const scope = languageScope('m68k', false)
+        const coupled = prepareSearch(engine, 'end directive', scope)
+        expect(coupled.options.modifiers).toMatchObject({ kinds: [], marks: [] })
+        expect(coupled.options.couples).toEqual([
+            {
+                start: 0,
+                end: 13,
+                label: 'The end directive first',
+                entries: [{ shard: 'docs-m68k', ref: 3 }]
+            }
+        ])
+        // with no name beside it, the kind word lifts its Chapter as before
+        expect(prepareSearch(engine, 'directive for the end', scope).options).toMatchObject({
+            modifiers: { kinds: ['directive'] },
+            couples: []
+        })
+        // a language's name is never the name of a couple
+        const site = prepareSearch(engine, 'TST instruction in m68k', SITE_SCOPE)
+        expect(site.options.modifiers.languages).toEqual(['m68k'])
+        expect(
+            site.options.couples.map(({ start, end, label }) => ({ start, end, label }))
+        ).toEqual([{ start: 0, end: 15, label: 'The TST instruction first' }])
+    })
+})

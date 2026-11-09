@@ -431,6 +431,7 @@
                     {scope}
                     bind:value={() => query, setQuery}
                     bind:el={input}
+                    couples={live.couples}
                     placeholder="Search the documentation"
                     label="Search the documentation"
                 />

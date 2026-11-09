@@ -25,14 +25,28 @@ export type ModifierKind =
     | 'library'
     | 'lecture'
 
-/** A Search modifier in the typed query, by its offsets there, and what it did in plain words. */
+/**
+ * A Search modifier in the typed query, by its offsets there, and what it did in plain words. A
+ * couple's mark spans its name, its noun and the space between them.
+ */
 export type QueryMark = {
     start: number
     end: number
-    modifier: 'language' | 'kind'
+    modifier: 'language' | 'kind' | 'couple'
     /** What the Tooltip and a screen reader say, such as "M68K results first". */
     label: string
 }
+
+/**
+ * A name with its kind's noun beside it ("tst instruction", "register $t0"), which pins the
+ * entries it names: by its offsets in the query searched, and what it did in plain words ("The
+ * tst instruction first"). Only the engine knows the names, so an answer reports its query's
+ * couples (`queryCouples.ts`) and a search box marks them once it has one.
+ */
+export type QueryCouple = { start: number; end: number; label: string }
+
+/** The couples of the answer a search box shows, and the query that answer is for. */
+export type AnsweredCouples = { query: string; couples: QueryCouple[] }
 
 export type QueryModifiers = {
     /**
@@ -165,12 +179,14 @@ const WORD = /[\p{L}\p{N}_$.#%'-]+/gu
  * only for the languages it searches. Kind words count only with other words beside them and only
  * for the `kinds` the scope has: the engine passes the kinds of the shards it has loaded, a box
  * leaves them out for every kind the scope can have. Matched case-insensitively, as whole words,
- * the longest phrase first ("x86-64" before "x86").
+ * the longest phrase first ("x86-64" before "x86"). Nothing in `apart`, the query's couples, is
+ * a modifier: the noun of "end directive" names the kind of `END`, it does not lift directives.
  */
 export function readQuery(
     query: string,
     scope: SearchScope,
-    kinds: Iterable<ModifierKind> = scopeKinds(scope)
+    kinds: Iterable<ModifierKind> = scopeKinds(scope),
+    apart: readonly { start: number; end: number }[] = []
 ): QueryModifiers {
     const searched = scopeLanguages(scope)
     const allowed = new Set(kinds)
@@ -207,6 +223,8 @@ export function readQuery(
     )
     const found: { start: number; end: number; phrase: Phrase }[] = []
     for (const match of query.matchAll(pattern)) {
+        const end = match.index + match[0].length
+        if (apart.some((span) => match.index < span.end && end > span.start)) continue
         const group = match.findIndex((value, index) => index > 0 && value !== undefined)
         found.push({
             start: match.index,

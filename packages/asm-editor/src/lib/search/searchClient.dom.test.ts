@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { languageScope } from './scope'
 
-type Posted = { id: number; type: string; shard?: string; favour?: string[] }
+type Posted = { id: number; type: string; shard?: string; query?: string; favour?: string[] }
 
 /** What the client posted to its workers, in order. */
 const posted: Posted[] = []
@@ -48,8 +48,15 @@ vi.mock('./searchWorker?worker', () => ({
 /** How a request is answered: done, failed, or failed on a shard of another format. */
 type Outcome = boolean | 'outdated'
 
+/** The couple the worker finds in "add instruction", as the engine would. */
+const ADD_INSTRUCTION = { start: 0, end: 15, label: 'The add instruction first' }
+
 function reply(worker: EventTarget, message: Posted, ok: Outcome = true) {
-    const value = message.type === 'search' ? { results: [], mode: 'text' } : undefined
+    const couples = message.type === 'search' && message.query === 'add instruction'
+    const value =
+        message.type === 'search'
+            ? { results: [], mode: 'text', couples: couples ? [ADD_INSTRUCTION] : [] }
+            : undefined
     const data =
         ok === true
             ? { id: message.id, ok: true, value }
@@ -252,6 +259,13 @@ describe('search client index', () => {
         expect(searches.map((message) => 'favour' in message)).toEqual([true, false, false])
     })
 
+    it('passes on the couples the worker found, and none for an empty query', async () => {
+        const client = await freshClient()
+        expect((await client.search(mips, 'add instruction')).couples).toEqual([ADD_INSTRUCTION])
+        expect((await client.search(mips, 'add')).couples).toEqual([])
+        expect(await client.search(mips, '  ')).toEqual({ results: [], mode: 'text', couples: [] })
+    })
+
     it('changes the answer key as shards and the model arrive', async () => {
         heldTypes.add('load-shard')
         heldTypes.add('load-model')
@@ -295,7 +309,7 @@ describe('search client worker', () => {
         await settle()
         expect(posted).toEqual([])
         workers[0].announce()
-        await expect(result).resolves.toEqual({ results: [], mode: 'text' })
+        await expect(result).resolves.toEqual({ results: [], mode: 'text', couples: [] })
         expect(types().slice(0, 3)).toEqual(['load-shard', 'load-shard', 'load-shard'])
         expect(types()).toContain('search')
     })
@@ -311,7 +325,8 @@ describe('search client worker', () => {
         startup = 'ready'
         await expect(client.search(mips, 'add')).resolves.toEqual({
             results: [],
-            mode: 'text'
+            mode: 'text',
+            couples: []
         })
         expect(workers).toHaveLength(2)
     })

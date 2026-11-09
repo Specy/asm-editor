@@ -1,7 +1,10 @@
 import { untrack } from 'svelte'
 import { OutdatedIndexError } from './outdatedIndex'
+import type { AnsweredCouples } from './queryModifiers'
 import { searchClient, type SearchAnswer, type SearchResult } from './searchClient.svelte'
 import type { SearchScope } from './scope'
+
+const NO_COUPLES: AnsweredCouples = { query: '', couples: [] }
 
 type Source = {
     /** What is in the box. */
@@ -37,6 +40,10 @@ type Source = {
  * A change of the favoured names (`favour`) asks again as a new shard does: it changes the order,
  * not the query, so it never lets go of results the reader holds.
  *
+ * The couples the shown answer found ("tst instruction"), which only the engine can find, come
+ * with the query that answer is for (`couples`): the box marks them while it still holds that
+ * query, and not once the reader types on.
+ *
  * Made while a component initialises: its effects live as long as the component.
  */
 export class LiveSearch {
@@ -50,6 +57,11 @@ export class LiveSearch {
      * since the page was opened, and only a reload helps, not the connection.
      */
     outdated = $state(false)
+    /**
+     * The couples of the shown answer, by their offsets in the query it answers, which is beside
+     * them: none before the first answer or after a failed search.
+     */
+    couples = $state<AnsweredCouples>(NO_COUPLES)
 
     /** The reader has started on the results. */
     private held = false
@@ -75,6 +87,7 @@ export class LiveSearch {
             if (!active || !text || !scope) {
                 this.results = []
                 this.searched = ''
+                this.couples = NO_COUPLES
                 this.failed = false
                 this.outdated = false
                 return
@@ -126,6 +139,7 @@ export class LiveSearch {
             if (mine !== this.generation) return
             this.results = answer.results
             this.searched = text
+            this.couples = { query: text, couples: answer.couples }
             this.failed = false
             this.outdated = false
             this.source.onAnswer?.(answer)
@@ -133,6 +147,7 @@ export class LiveSearch {
             if (mine !== this.generation) return
             this.results = []
             this.searched = text
+            this.couples = NO_COUPLES
             this.failed = true
             this.outdated = error instanceof OutdatedIndexError
         } finally {
