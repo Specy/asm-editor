@@ -11,16 +11,23 @@
      * its change is announced; on a narrow box only the spinner shows and the words are left to
      * screen readers. The Symbols and Search panels' filters have no scope: they match the
      * Project's own text.
+     *
+     * A box with a scope marks the query's Search modifiers in the accent colour, in place in the
+     * text, drawn under the field by `QueryMarks`, which shows what each did in a Tooltip; screen
+     * readers hear the same words from a second live region beside the status
+     * ([the design record](../../../../../docs/design/documentation-search.md), Search modifiers).
      */
     import type { Component, Snippet } from 'svelte'
     import FaSearch from '~icons/fa-solid/search'
     import FaTimes from '~icons/fa-solid/times'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
+    import { readQuery } from '#lib/search/queryModifiers.ts'
     import type { SearchScope } from '#lib/search/scope.ts'
     import type { HTMLInputAttributes } from 'svelte/elements'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import IconButton from '#cmp/shared/button/IconButton.svelte'
     import Spinner from '#cmp/shared/misc/Spinner.svelte'
+    import QueryMarks from './QueryMarks.svelte'
 
     interface Props extends Omit<HTMLInputAttributes, 'value' | 'size'> {
         value: string
@@ -75,6 +82,12 @@
     const warm = () => {
         if (scope) searchClient.warm(scope)
     }
+
+    const marks = $derived(scope ? readQuery(value ?? '', scope).marks : [])
+    /** What the Search modifiers did, once each, for screen readers. */
+    const markWords = $derived(
+        [...new Set(marks.map((mark) => mark.label))].map((label) => `${label}.`).join(' ')
+    )
 </script>
 
 <div
@@ -92,18 +105,23 @@
             <Icon />
         {/if}
     </span>
-    <input
-        bind:this={el}
-        bind:value
-        type="search"
-        spellcheck="false"
-        autocomplete="off"
-        aria-label={label}
-        aria-busy={scope ? loading !== null : undefined}
-        oninput={warm}
-        {placeholder}
-        {...rest}
-    />
+    <span class="typed">
+        {#if scope}
+            <QueryMarks input={el} value={value ?? ''} {marks} />
+        {/if}
+        <input
+            bind:this={el}
+            bind:value
+            type="search"
+            spellcheck="false"
+            autocomplete="off"
+            aria-label={label}
+            aria-busy={scope ? loading !== null : undefined}
+            oninput={warm}
+            {placeholder}
+            {...rest}
+        />
+    </span>
     {#if scope}
         <!-- the index's wait is shown in the list under the box, these words only read out -->
         <span
@@ -117,6 +135,8 @@
             {#if loading === 'index'}Loading search…{:else if loading === 'model'}Matching words
                 until meaning search loads…{/if}
         </span>
+        <!-- what the marks in the text say when pointed at, read out as they change -->
+        <span class="visually-hidden" role="status">{markWords}</span>
     {/if}
     {@render end?.()}
     {#if clearable && value}
@@ -245,9 +265,22 @@
         height: var(--fs-caption);
         font-size: 0.75rem;
     }
+    /* the field and, with a scope, its query drawn under it (QueryMarks), in the field's place */
+    .typed {
+        position: relative;
+        display: flex;
+        flex: 1;
+        min-width: 0;
+    }
+    /* positioned, so it is drawn over the query under it */
     input {
+        position: relative;
         flex: 1;
         padding: 0;
+    }
+    /* its text drawn by QueryMarks, its caret still its own (the text colour) */
+    input[data-drawn-under] {
+        -webkit-text-fill-color: transparent;
     }
     input::-webkit-search-cancel-button {
         display: none;

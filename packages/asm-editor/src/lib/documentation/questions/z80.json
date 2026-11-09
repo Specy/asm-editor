@@ -1,0 +1,1713 @@
+{
+    "z80/directives/align": {
+        "hash": "bc1b83d9e9d6ac8b",
+        "questions": [
+            "how do I pad until the address is a multiple of a number",
+            "make the next label start on an even address",
+            "what does align do"
+        ]
+    },
+    "z80/directives/code": {
+        "hash": "245b7247ae9c244c",
+        "questions": [
+            "how do I start a new segment",
+            "split my program into separate code sections",
+            "what does #code do"
+        ]
+    },
+    "z80/directives/defb": {
+        "hash": "86f016864a307450",
+        "questions": [
+            "how do I store a string in memory",
+            "how do I declare a list of byte values",
+            "how do I put text in my program",
+            "what does db mean"
+        ]
+    },
+    "z80/directives/defs": {
+        "hash": "5e25579e6229539c",
+        "questions": [
+            "how do I fill a block of memory with the same byte",
+            "how do I reserve space for a buffer",
+            "what does ds do"
+        ]
+    },
+    "z80/directives/defw": {
+        "hash": "39bfad8b4e59811d",
+        "questions": [
+            "how do I store a 16 bit number in memory",
+            "how do I make a table of two byte values",
+            "what does dw mean"
+        ]
+    },
+    "z80/directives/else": {
+        "hash": "53943017b7f3a07c",
+        "questions": [
+            "assemble other code when the condition is false",
+            "how do I write the otherwise part of a conditional block",
+            "what does else do in the assembler"
+        ]
+    },
+    "z80/directives/end": {
+        "hash": "953934ba39dcc118",
+        "questions": [
+            "how do I mark the end of the source file",
+            "how do I set the entry point of my program",
+            "what does END followed by a label mean"
+        ]
+    },
+    "z80/directives/endif": {
+        "hash": "b379f8dafe5eb992",
+        "questions": [
+            "how do I close a conditional block",
+            "what ends an if in the assembler",
+            "what does endc mean"
+        ]
+    },
+    "z80/directives/endlocal": {
+        "hash": "000b3a3c96db3f06",
+        "questions": [
+            "how do I end a local scope",
+            "close the scope I opened for local labels",
+            "what does #endlocal do"
+        ]
+    },
+    "z80/directives/endm": {
+        "hash": "7da5140e8a2ccb30",
+        "questions": [
+            "how do I end a macro",
+            "what keyword closes a macro definition",
+            "what does endm do"
+        ]
+    },
+    "z80/directives/equ": {
+        "hash": "dde5f347bab41c11",
+        "questions": [
+            "how do I define a constant",
+            "how do I give a number a name",
+            "use a name instead of a magic number",
+            "what does equ do"
+        ]
+    },
+    "z80/directives/error": {
+        "hash": "f1ff0ca293b4d667",
+        "questions": [
+            "how do I force the build to fail",
+            "make the assembler stop on purpose",
+            "what does the error directive do"
+        ]
+    },
+    "z80/directives/if": {
+        "hash": "80b567a9eb377229",
+        "questions": [
+            "how do I assemble code only when a condition is true",
+            "how do I start a conditional block",
+            "leave out part of the code depending on a constant"
+        ]
+    },
+    "z80/directives/include": {
+        "hash": "f6455fade9ac09be",
+        "questions": [
+            "how do I use code from another file",
+            "how do I split my program into several files",
+            "how do I import a library folder",
+            "what does #include do"
+        ]
+    },
+    "z80/directives/insert": {
+        "hash": "6e43952329093fc7",
+        "questions": [
+            "how do I put a binary file into my program",
+            "embed an image file at assembly time",
+            "what does #insert do"
+        ]
+    },
+    "z80/directives/local": {
+        "hash": "b98b111875fdee12",
+        "questions": [
+            "how do I start a local scope",
+            "make labels local to one routine",
+            "what does #local do"
+        ]
+    },
+    "z80/directives/long": {
+        "hash": "e41e90805c209ede",
+        "questions": [
+            "how do I store a 32 bit number",
+            "how do I make a table of 32 bit values",
+            "what does .long do"
+        ]
+    },
+    "z80/directives/macro": {
+        "hash": "26287badeadb22e0",
+        "questions": [
+            "how do I define a macro",
+            "how do I make my own shorthand for a group of instructions",
+            "start a reusable block that the assembler expands"
+        ]
+    },
+    "z80/directives/org": {
+        "hash": "005c6c99b9c40475",
+        "questions": [
+            "how do I choose where my code goes in memory",
+            "how do I put code at a specific address",
+            "what does .org 0x8000 mean"
+        ]
+    },
+    "z80/directives/target": {
+        "hash": "6f3a859ab6a666f6",
+        "questions": [
+            "how do I build a rom image",
+            "choose between a binary file and a rom as output",
+            "what does #target do"
+        ]
+    },
+    "z80/directives/title": {
+        "hash": "951625c1298182ab",
+        "questions": [
+            "how do I give my program a title",
+            "how do I name my program",
+            "what does .title do"
+        ]
+    },
+    "z80/directives/what-directives-are": {
+        "hash": "ef1c27ba038270e6",
+        "questions": [
+            "what is a directive",
+            "what is the difference between a directive and an instruction",
+            "does the cpu run directives",
+            "what are assembler directives for",
+            "will code written for another assembler work here"
+        ]
+    },
+    "z80/input-output/audio": {
+        "hash": "35c2fad5d9497069",
+        "questions": [
+            "how do I make sound",
+            "what can the audio ports do",
+            "what is the difference between a note that overlaps and a note that waits",
+            "why is there no sound in a testcase"
+        ]
+    },
+    "z80/input-output/char": {
+        "hash": "0664df3438af06d2",
+        "questions": [
+            "how do I print a string",
+            "how do I print a single letter",
+            "how do I print a newline",
+            "how do I read text the user types",
+            "why does \\n not start a new line in my string",
+            "why does input come from the screen instead of the terminal"
+        ]
+    },
+    "z80/input-output/colors": {
+        "hash": "72862fef6cc17c9a",
+        "questions": [
+            "how do I make a color",
+            "what value gives yellow",
+            "how are colors stored in one byte",
+            "list of color codes"
+        ]
+    },
+    "z80/input-output/command-buffering-off": {
+        "hash": "deab447a12b8047c",
+        "questions": [
+            "how do I make drawing show up right away",
+            "how do I turn double buffering off",
+            "why did my last off-screen frame never appear"
+        ]
+    },
+    "z80/input-output/command-buffering-on": {
+        "hash": "8faea6fd773d0a0e",
+        "questions": [
+            "how do I stop my animation flickering",
+            "what is double buffering",
+            "draw a frame off screen before showing it"
+        ]
+    },
+    "z80/input-output/command-clear": {
+        "hash": "b4893ddbe1671f1c",
+        "questions": [
+            "how do I clear the screen",
+            "how do I set the background color",
+            "how do I wipe everything drawn so far",
+            "why do scrolled text rows have the wrong background color"
+        ]
+    },
+    "z80/input-output/command-ellipse": {
+        "hash": "385b1b6941fd903d",
+        "questions": [
+            "how do I draw a filled circle",
+            "draw an oval inside a bounding box",
+            "how do I draw an ellipse"
+        ]
+    },
+    "z80/input-output/command-ellipse-outline": {
+        "hash": "f282a4188bd79ba1",
+        "questions": [
+            "how do I draw an empty circle",
+            "draw just the outline of an oval",
+            "what does command 7 draw"
+        ]
+    },
+    "z80/input-output/command-flood-fill": {
+        "hash": "b4d04a508792e069",
+        "questions": [
+            "how do I fill an area like a paint bucket",
+            "color in the inside of a shape I already drew",
+            "what is flood fill"
+        ]
+    },
+    "z80/input-output/command-line": {
+        "hash": "75c59392d0ba6b79",
+        "questions": [
+            "how do I draw a line between two points",
+            "how do I draw a diagonal across the screen",
+            "where is the drawing position after drawing from x y to x2 y2"
+        ]
+    },
+    "z80/input-output/command-line-to": {
+        "hash": "decee3a11d872f1e",
+        "questions": [
+            "how do I draw a shape made of connected lines",
+            "how do I draw a polyline",
+            "continue drawing from where the last line ended"
+        ]
+    },
+    "z80/input-output/command-mode-cells": {
+        "hash": "09f7a63d0ccc2f8a",
+        "questions": [
+            "how do I switch the screen to trs-80 mode",
+            "switch to the character cell display from code",
+            "what does command 14 do"
+        ]
+    },
+    "z80/input-output/command-mode-drawing": {
+        "hash": "8f0cb441c955f2bd",
+        "questions": [
+            "how do I go back to drawing after trs-80 mode",
+            "does the picture stay when I switch back to drawing",
+            "is 0x3c00 normal memory again after switching back"
+        ]
+    },
+    "z80/input-output/command-move-to": {
+        "hash": "52e2c0723efddfa6",
+        "questions": [
+            "how do I move the pen without drawing",
+            "set the starting point before drawing connected lines",
+            "what does command 3 do"
+        ]
+    },
+    "z80/input-output/command-pixel": {
+        "hash": "ae76b70403cb3150",
+        "questions": [
+            "how do I draw a single dot",
+            "what does writing 0 to port 0x27 do",
+            "why does pen width not make my pixel bigger"
+        ]
+    },
+    "z80/input-output/command-present": {
+        "hash": "66000556937ae116",
+        "questions": [
+            "how do I show the frame I drew off screen",
+            "what does present do when double buffering is off",
+            "how do I ask the screen to repaint"
+        ]
+    },
+    "z80/input-output/command-rectangle": {
+        "hash": "859e3b5e7342afc5",
+        "questions": [
+            "how do I draw a filled box",
+            "fill an area with a color and outline it",
+            "why is my rectangle missing its right and bottom edge"
+        ]
+    },
+    "z80/input-output/command-rectangle-outline": {
+        "hash": "7dbe60658acfb4b0",
+        "questions": [
+            "how do I draw an empty rectangle",
+            "draw a box border without filling the inside",
+            "what does command 5 draw"
+        ]
+    },
+    "z80/input-output/command-resize": {
+        "hash": "4dd4a4d3a39cb304",
+        "questions": [
+            "how do I change the screen size",
+            "how do I make the screen 256 pixels wide",
+            "why did my drawing disappear when I changed the size"
+        ]
+    },
+    "z80/input-output/console": {
+        "hash": "a47a4048e16bebc5",
+        "questions": [
+            "what are the console ports",
+            "which port prints which format",
+            "why does my text appear on the screen as well as the terminal"
+        ]
+    },
+    "z80/input-output/hex": {
+        "hash": "16b8eb4306dd0065",
+        "questions": [
+            "how do I print a value in base 16",
+            "how do I show a byte as two digits like FF",
+            "can the user type 0x or $ before a value",
+            "how do I read a hex value from the user"
+        ]
+    },
+    "z80/input-output/key_available": {
+        "hash": "95d2f7a555320275",
+        "questions": [
+            "how do I check if a key was typed without waiting",
+            "how do I wait for a key press and then read it",
+            "does polling for typed input work in a testcase"
+        ]
+    },
+    "z80/input-output/key_last_down": {
+        "hash": "0c3e79d4e8500f11",
+        "questions": [
+            "which key did the user press most recently",
+            "how do I get a key code without missing quick presses",
+            "why does the same key code keep coming back"
+        ]
+    },
+    "z80/input-output/key_last_up": {
+        "hash": "dc4d74c59d97e2a5",
+        "questions": [
+            "how do I know when a key is let go",
+            "which key was released most recently",
+            "what does port 0x33 return"
+        ]
+    },
+    "z80/input-output/key_state": {
+        "hash": "19843b2f481d58da",
+        "questions": [
+            "how do I check if an arrow key is held down",
+            "how do I move a player with wasd",
+            "why does a held key read as pressed every time"
+        ]
+    },
+    "z80/input-output/keyboard": {
+        "hash": "fd4b94cc63c65186",
+        "questions": [
+            "how does keyboard input work",
+            "what are the key codes for the arrow keys",
+            "why is enter 0x0D here but 0x0A when reading characters"
+        ]
+    },
+    "z80/input-output/mouse": {
+        "hash": "b7976c409587bea0",
+        "questions": [
+            "how does mouse input work",
+            "what are the mouse ports",
+            "are mouse coordinates in screen pixels"
+        ]
+    },
+    "z80/input-output/mouse-views": {
+        "hash": "7a4755bc153614d9",
+        "questions": [
+            "what should b hold before reading the mouse",
+            "how do I get the position of the last click",
+            "what is the difference between the current mouse state and the last press"
+        ]
+    },
+    "z80/input-output/mouse_buttons": {
+        "hash": "ed32a92c0593092a",
+        "questions": [
+            "how do I check if the left button is down",
+            "how do I detect a double click",
+            "was shift held when the user clicked",
+            "how do I detect a right click"
+        ]
+    },
+    "z80/input-output/mouse_events": {
+        "hash": "8c10d9915f13c5d1",
+        "questions": [
+            "how do I tell a new click from one I already handled",
+            "my program reacts to the same click twice",
+            "how many mouse events have happened"
+        ]
+    },
+    "z80/input-output/mouse_x": {
+        "hash": "a74a4d1e11d9680b",
+        "questions": [
+            "how do I get the horizontal position of the pointer",
+            "does zooming the panel change the mouse coordinates",
+            "how do I print where the pointer is when the button is held"
+        ]
+    },
+    "z80/input-output/mouse_y": {
+        "hash": "23050aa441e2ee4f",
+        "questions": [
+            "how do I get the vertical position of the pointer",
+            "is the pointer's height counted from the top or the bottom",
+            "what is port 0x41"
+        ]
+    },
+    "z80/input-output/note_duration": {
+        "hash": "1946a843aa294163",
+        "questions": [
+            "how do I make a note last longer",
+            "how long does a note play by default",
+            "how do I set a note length over 255 milliseconds"
+        ]
+    },
+    "z80/input-output/note_instrument": {
+        "hash": "661cc1a12be42ad3",
+        "questions": [
+            "how do I make notes sound like a violin",
+            "how do I change the sound from piano to something else",
+            "what instrument numbers are there"
+        ]
+    },
+    "z80/input-output/note_play": {
+        "hash": "de07abdd03ee4576",
+        "questions": [
+            "how do I play a chord",
+            "how do I start a sound without stopping the program",
+            "what pitch number is middle c",
+            "how do I play a note"
+        ]
+    },
+    "z80/input-output/note_play_wait": {
+        "hash": "46f1945874a48fd6",
+        "questions": [
+            "how do I play a melody",
+            "how do I wait until a note finishes",
+            "why does my program still wait when the sound is muted"
+        ]
+    },
+    "z80/input-output/note_volume": {
+        "hash": "ed2e3ef6e72538e0",
+        "questions": [
+            "how do I make notes quieter",
+            "how loud are notes by default",
+            "what is the loudest volume"
+        ]
+    },
+    "z80/input-output/number": {
+        "hash": "1b957a6dc543bc75",
+        "questions": [
+            "how do I print an unsigned value in decimal",
+            "how do I read a number the user types",
+            "why does my program stop with an error when I type letters"
+        ]
+    },
+    "z80/input-output/pictures": {
+        "hash": "def339deebf8247c",
+        "questions": [
+            "how do I draw a sprite from an image file",
+            "how do I load a bmp into my program",
+            "where do the pixels start in an inserted bmp",
+            "how do I make a new picture to draw in",
+            "why does my picture look slanted"
+        ]
+    },
+    "z80/input-output/ports": {
+        "hash": "75920320d839b01c",
+        "questions": [
+            "how does my program talk to the outside world",
+            "are there system calls",
+            "what is an i/o port",
+            "why does reading an unused port give 0xFF",
+            "which port reads wait and which return at once",
+            "how do I compute the port number at run time"
+        ]
+    },
+    "z80/input-output/screen": {
+        "hash": "a142ba59f9c96f1f",
+        "questions": [
+            "how do I draw on the screen",
+            "how big is the screen",
+            "why can't I draw beyond 255 pixels"
+        ]
+    },
+    "z80/input-output/screen-commands": {
+        "hash": "364fdc44eb9e6c92",
+        "questions": [
+            "what drawing commands are there",
+            "does one write to the command port draw one shape",
+            "how do the drawing commands use the coordinates I set"
+        ]
+    },
+    "z80/input-output/screen_command": {
+        "hash": "9f8777bf57928260",
+        "questions": [
+            "why does nothing draw after I set the colors and coordinates",
+            "which drawing operation ran last",
+            "how do I draw a yellow ellipse on a blue background"
+        ]
+    },
+    "z80/input-output/screen_cursor_column": {
+        "hash": "aa7e20fc48e0c93e",
+        "questions": [
+            "how do I print text at a position on the screen",
+            "set the column where text appears",
+            "how many columns of text fit on the screen"
+        ]
+    },
+    "z80/input-output/screen_cursor_row": {
+        "hash": "5b5ef6b6fc6b5b59",
+        "questions": [
+            "how do I move the text cursor down to a line",
+            "how many rows of text fit on the screen",
+            "what happens if I set the row past the bottom"
+        ]
+    },
+    "z80/input-output/screen_fill_color": {
+        "hash": "f45f3deb6c6fdf97",
+        "questions": [
+            "how do I set the color inside a shape",
+            "which color does clearing the screen use",
+            "how do I draw a green square with a white outline"
+        ]
+    },
+    "z80/input-output/screen_pen_color": {
+        "hash": "8205d5bbe21b77fe",
+        "questions": [
+            "how do I change the drawing color",
+            "how do I change the text color on the screen",
+            "how do I draw a red pixel",
+            "how do I read back the current pen color"
+        ]
+    },
+    "z80/input-output/screen_pen_width": {
+        "hash": "d8eca903c48c7e72",
+        "questions": [
+            "how do I draw thicker lines",
+            "set how many pixels wide an outline is",
+            "what does a width of 0 do"
+        ]
+    },
+    "z80/input-output/screen_pixel": {
+        "hash": "318fed8d9e09ae7f",
+        "questions": [
+            "how do I read the color of a point on the screen",
+            "how do I check what is already drawn at x y",
+            "what color do I get when reading outside the screen"
+        ]
+    },
+    "z80/input-output/screen_x": {
+        "hash": "f581fdbd658d43d0",
+        "questions": [
+            "how do I set the x coordinate of a pixel",
+            "which port sets the left edge of a shape",
+            "where is the middle of the screen"
+        ]
+    },
+    "z80/input-output/screen_x2": {
+        "hash": "de47ef587e0f209a",
+        "questions": [
+            "how do I set where a line ends",
+            "which port sets the right edge of a rectangle",
+            "is x2 used when drawing a single pixel"
+        ]
+    },
+    "z80/input-output/screen_y": {
+        "hash": "1660e24f89238f25",
+        "questions": [
+            "how do I set the y coordinate for drawing",
+            "how do I set the height when resizing the screen",
+            "what is port 0x24"
+        ]
+    },
+    "z80/input-output/screen_y2": {
+        "hash": "bb47175489709be4",
+        "questions": [
+            "how do I set the y of a line's end point",
+            "second y coordinate for shapes",
+            "what is port 0x26"
+        ]
+    },
+    "z80/input-output/signed": {
+        "hash": "34635c88f3d75ea8",
+        "questions": [
+            "how do I print a negative value",
+            "my result prints as 251 instead of -5",
+            "print a byte as -128 to 127",
+            "how do I print a signed number"
+        ]
+    },
+    "z80/input-output/sound": {
+        "hash": "d505e9f157806308",
+        "questions": [
+            "how do pitch numbers map to piano keys",
+            "how do I mute the sound",
+            "why is the first note delayed",
+            "how many notes can play at once",
+            "should I use the audio ports or the sound chip"
+        ]
+    },
+    "z80/input-output/sound-chip": {
+        "hash": "a58d7de1c19fc7d0",
+        "questions": [
+            "how do I make square wave tones",
+            "how do I play noise",
+            "how do I work out the period for a frequency",
+            "what period gives each musical note",
+            "how do I make the volume fade over time",
+            "why does the chip keep sounding while my program is paused"
+        ]
+    },
+    "z80/input-output/sound_chip_read": {
+        "hash": "5d2e2992170685b1",
+        "questions": [
+            "how do I read back a sound chip register",
+            "why does the value I read back differ from what I wrote",
+            "why do registers 14 and 15 read 0xFF"
+        ]
+    },
+    "z80/input-output/sound_chip_select": {
+        "hash": "b0690e9d9483b756",
+        "questions": [
+            "how do I choose which chip register to write",
+            "how do I play a 440 hz tone",
+            "do I have to select the register again before every write"
+        ]
+    },
+    "z80/input-output/sound_chip_write": {
+        "hash": "4be582edac46a874",
+        "questions": [
+            "how do I set a sound chip register value",
+            "how do I play a chord on the sound chip",
+            "how do I restart the envelope"
+        ]
+    },
+    "z80/input-output/the-trs-80-display": {
+        "hash": "207a036f04ca21fb",
+        "questions": [
+            "which video memory address shows column x of row y",
+            "where is video memory",
+            "how do I read the keyboard in trs-80 mode",
+            "how do I draw block graphics with characters",
+            "how do I start a program already in trs-80 mode",
+            "why doesn't my printed text show on the trs-80 screen"
+        ]
+    },
+    "z80/input-output/time": {
+        "hash": "38bb5fd08f3d5c0e",
+        "questions": [
+            "how do I control timing in my program",
+            "can I still stop my program while it waits",
+            "what timing ports are there"
+        ]
+    },
+    "z80/input-output/time_frame": {
+        "hash": "55c2517df9578fbb",
+        "questions": [
+            "how do I keep my animation at a steady speed",
+            "my animation runs way too fast",
+            "should I present before or after waiting for the frame"
+        ]
+    },
+    "z80/input-output/time_now": {
+        "hash": "f827afa73b99c17d",
+        "questions": [
+            "how do I measure how long something takes",
+            "how do I get the current time",
+            "how do I read all four bytes of the timer",
+            "why does the clock stay at 0 in a testcase"
+        ]
+    },
+    "z80/input-output/time_wait": {
+        "hash": "b01fe2319a595ebe",
+        "questions": [
+            "how do I pause the program for half a second",
+            "why does my delay finish instantly in a testcase",
+            "what unit is the wait in"
+        ]
+    },
+    "z80/input-output/word": {
+        "hash": "8c70084bd5dd3a4a",
+        "questions": [
+            "how do I print a value bigger than 255",
+            "how do I print hl in decimal",
+            "where does the high byte come from when printing a 16 bit value"
+        ]
+    },
+    "z80/instructions/adc": {
+        "hash": "eea4adb8aee6f1a0",
+        "questions": [
+            "how do I include the carry when adding",
+            "how do I add a register pair and the carry to hl",
+            "why is my sum one more than expected",
+            "what is the difference between add and adc"
+        ]
+    },
+    "z80/instructions/add": {
+        "hash": "69300a4130b855f5",
+        "questions": [
+            "how do I sum two numbers in registers",
+            "how do I do 16 bit addition",
+            "which registers can I add to",
+            "why can't I add to b directly"
+        ]
+    },
+    "z80/instructions/and": {
+        "hash": "d2a27640be5a3469",
+        "questions": [
+            "how do I mask bits in a",
+            "how do I keep only some bits of a byte",
+            "which register gets the result of a bitwise and"
+        ]
+    },
+    "z80/instructions/bit": {
+        "hash": "888ad3c51534c82e",
+        "questions": [
+            "how do I check whether bit 7 of a is set",
+            "test one binary digit of a register without changing it",
+            "which flag tells me the tested digit was 0"
+        ]
+    },
+    "z80/instructions/call": {
+        "hash": "869fae356fe5940e",
+        "questions": [
+            "how do I run a subroutine and come back",
+            "where is the return address saved when jumping to a routine",
+            "how do I call a routine only if a flag is set"
+        ]
+    },
+    "z80/instructions/ccf": {
+        "hash": "ef08a8457b21e451",
+        "questions": [
+            "how do I flip the carry flag",
+            "what does complement carry mean",
+            "what does ccf do"
+        ]
+    },
+    "z80/instructions/cp": {
+        "hash": "7a9d4af0930ba7f7",
+        "questions": [
+            "how do I compare two numbers",
+            "how do I check if a equals a value",
+            "how do I compare without changing a",
+            "what does cp do"
+        ]
+    },
+    "z80/instructions/cpd": {
+        "hash": "7183b161f19b57e4",
+        "questions": [
+            "compare a with a byte in memory and move the pointer down",
+            "check one byte at a time searching backwards",
+            "what does cpd do"
+        ]
+    },
+    "z80/instructions/cpdr": {
+        "hash": "8954ee84158006a3",
+        "questions": [
+            "how do I search memory backwards for a value",
+            "how do I limit how many bytes a backward search looks at",
+            "how do I know whether cpdr found a match"
+        ]
+    },
+    "z80/instructions/cpi": {
+        "hash": "fc602ea015de70ce",
+        "questions": [
+            "compare a with memory and move hl forward",
+            "compare a with the byte at hl and count down bc",
+            "what does cpi do"
+        ]
+    },
+    "z80/instructions/cpir": {
+        "hash": "eacb1b6845c8f921",
+        "questions": [
+            "how do I find a character in a string",
+            "search forward through memory for a value",
+            "did cpir find the byte or run out of bytes"
+        ]
+    },
+    "z80/instructions/cpl": {
+        "hash": "9b6acd5733ecceb0",
+        "questions": [
+            "how do I flip all the bits of a",
+            "how do I do a bitwise not",
+            "what is one's complement",
+            "what does cpl do"
+        ]
+    },
+    "z80/instructions/daa": {
+        "hash": "9a1e797635634703",
+        "questions": [
+            "how do I fix a after adding two bcd numbers",
+            "how do I make each half of a byte hold a decimal digit",
+            "what does daa do"
+        ]
+    },
+    "z80/instructions/dec": {
+        "hash": "524f3fcbe0c6dd71",
+        "questions": [
+            "how do I subtract one from a register",
+            "how do I decrease a 16 bit register pair",
+            "does dec change the carry flag"
+        ]
+    },
+    "z80/instructions/di": {
+        "hash": "185c90e326e492b9",
+        "questions": [
+            "how do I disable interrupts",
+            "what does resetting the interrupt flip-flops do",
+            "what does di do"
+        ]
+    },
+    "z80/instructions/djnz": {
+        "hash": "5cca69f1260267a5",
+        "questions": [
+            "how do I repeat something ten times",
+            "how do I make a loop that counts down",
+            "what does djnz do"
+        ]
+    },
+    "z80/instructions/ei": {
+        "hash": "ffa2ea6425ff37f6",
+        "questions": [
+            "how do I enable interrupts",
+            "when do interrupts start after enabling them",
+            "what does ei do"
+        ]
+    },
+    "z80/instructions/ex": {
+        "hash": "756b30de5e263440",
+        "questions": [
+            "how do I swap de and hl",
+            "how do I swap hl with the top of the stack",
+            "how do I switch to the alternate accumulator and flags",
+            "what does ex af,af' do"
+        ]
+    },
+    "z80/instructions/exx": {
+        "hash": "b84b4c8469f5ef3f",
+        "questions": [
+            "how do I switch to the second register set",
+            "swap bc, de and hl with their alternate copies",
+            "what does exx do"
+        ]
+    },
+    "z80/instructions/halt": {
+        "hash": "70ff7a4e27511b41",
+        "questions": [
+            "how do I stop the cpu from running",
+            "how do I wait for an interrupt",
+            "what does halt do"
+        ]
+    },
+    "z80/instructions/im": {
+        "hash": "d597acc8c489f8fe",
+        "questions": [
+            "how do I choose the interrupt mode",
+            "which interrupt modes are there",
+            "what does im 2 do"
+        ]
+    },
+    "z80/instructions/in": {
+        "hash": "22643745c0d4bcfb",
+        "questions": [
+            "how do I read a byte from a port",
+            "why does in r,(c) also use b",
+            "difference between in a,(n) and in r,(c)"
+        ]
+    },
+    "z80/instructions/inc": {
+        "hash": "592a8bb62cb38f6e",
+        "questions": [
+            "how do I add one to a register",
+            "how do I move a pointer to the next byte",
+            "does inc change the carry flag"
+        ]
+    },
+    "z80/instructions/ind": {
+        "hash": "c953f484cabf6203",
+        "questions": [
+            "how do I read a port byte into memory and move hl down",
+            "input one byte from a device to memory going backwards",
+            "what does ind do"
+        ]
+    },
+    "z80/instructions/indr": {
+        "hash": "45f518b6127560c9",
+        "questions": [
+            "how do I read a block of bytes from a port into memory backwards",
+            "fill a buffer from a port starting at its end",
+            "what does indr do"
+        ]
+    },
+    "z80/instructions/ini": {
+        "hash": "1bbe4bd9089ae33e",
+        "questions": [
+            "how do I read a port byte into memory and move to the next address",
+            "can reading a port into memory change the carry flag",
+            "what does ini do"
+        ]
+    },
+    "z80/instructions/inir": {
+        "hash": "d0695893f918e0f2",
+        "questions": [
+            "how do I read many bytes from a port into a buffer",
+            "which register counts the bytes read from a port",
+            "how many bytes does inir read"
+        ]
+    },
+    "z80/instructions/jp": {
+        "hash": "acbf5a15a667d1ad",
+        "questions": [
+            "how do I jump to a label",
+            "how do I jump to an address held in a register",
+            "how do I make a conditional jump",
+            "how do I jump when the sign flag is set"
+        ]
+    },
+    "z80/instructions/jr": {
+        "hash": "72c884926ce5b573",
+        "questions": [
+            "how far can a relative jump reach",
+            "why is my jr target out of range",
+            "which conditions can a relative jump test"
+        ]
+    },
+    "z80/instructions/ld": {
+        "hash": "bbaa13b0593dd743",
+        "questions": [
+            "how do I put a number in a register",
+            "how do I copy one register to another",
+            "how do I read a byte from memory",
+            "how do I store a register to memory",
+            "how do I load a 16 bit value into hl",
+            "how do I set the stack pointer"
+        ]
+    },
+    "z80/instructions/ldd": {
+        "hash": "ffb030cec5454362",
+        "questions": [
+            "how do I copy one byte and move both pointers down",
+            "copy memory backwards one byte at a time",
+            "what does ldd do"
+        ]
+    },
+    "z80/instructions/lddr": {
+        "hash": "ff136ff9fd593a88",
+        "questions": [
+            "how do I copy a block of memory backwards",
+            "set how many bytes a backward copy moves",
+            "what does lddr do"
+        ]
+    },
+    "z80/instructions/ldi": {
+        "hash": "ab4f14cdd1411985",
+        "questions": [
+            "how do I copy one byte from hl to de and move both forward",
+            "how do I tell when the copy count runs out",
+            "what does ldi do"
+        ]
+    },
+    "z80/instructions/ldir": {
+        "hash": "ee018c41b88ca664",
+        "questions": [
+            "how do I copy a block of memory",
+            "how do I copy a string to another address",
+            "how do I set how many bytes to copy",
+            "which registers does ldir use"
+        ]
+    },
+    "z80/instructions/neg": {
+        "hash": "f88676f5c6208f6e",
+        "questions": [
+            "how do I make a number negative",
+            "how do I compute zero minus a",
+            "how do I get the two's complement of a",
+            "what does neg do"
+        ]
+    },
+    "z80/instructions/nop": {
+        "hash": "36588588b419a48c",
+        "questions": [
+            "is there an instruction that does nothing",
+            "does an empty instruction change any flags",
+            "what does nop do"
+        ]
+    },
+    "z80/instructions/or": {
+        "hash": "2eec2a2fe8d97f82",
+        "questions": [
+            "how do I turn on some bits of a byte",
+            "how do I combine two bit patterns",
+            "can I or a with a constant"
+        ]
+    },
+    "z80/instructions/otdr": {
+        "hash": "cae2ef3fe10955a8",
+        "questions": [
+            "how do I send a block of memory to a port backwards",
+            "output a buffer to a device starting at its end",
+            "what does otdr do"
+        ]
+    },
+    "z80/instructions/otir": {
+        "hash": "31e0c9bce50311cf",
+        "questions": [
+            "how do I send a whole buffer to a port",
+            "write many bytes to a device with one instruction",
+            "how does otir know how many bytes to send"
+        ]
+    },
+    "z80/instructions/out": {
+        "hash": "7da8d60b8b0e87b2",
+        "questions": [
+            "how do I write a byte to a port",
+            "how do I send a register other than a to a port",
+            "difference between out (n),a and out (c),r"
+        ]
+    },
+    "z80/instructions/outd": {
+        "hash": "c5813758bbd4160b",
+        "questions": [
+            "how do I send a byte from memory to a port and move hl down",
+            "output one byte to a device going backwards through memory",
+            "what does outd do"
+        ]
+    },
+    "z80/instructions/outi": {
+        "hash": "bf99ea37fbfb8b2c",
+        "questions": [
+            "how do I send a byte from memory to a port and advance hl",
+            "can writing memory to a port change the carry flag",
+            "what does outi do"
+        ]
+    },
+    "z80/instructions/pop": {
+        "hash": "5c0e976e43410e57",
+        "questions": [
+            "how do I get a value back off the stack",
+            "how do I restore registers I saved earlier",
+            "which registers can I take off the stack"
+        ]
+    },
+    "z80/instructions/push": {
+        "hash": "704873464761a89c",
+        "questions": [
+            "how do I save a register on the stack",
+            "which registers can I save on the stack",
+            "does the stack pointer go up or down when saving"
+        ]
+    },
+    "z80/instructions/res": {
+        "hash": "e385364f52502a38",
+        "questions": [
+            "how do I turn off a single bit",
+            "change one bit to 0 without touching the others",
+            "what does res do"
+        ]
+    },
+    "z80/instructions/ret": {
+        "hash": "b18988b2f1b0ab8e",
+        "questions": [
+            "how do I return from a subroutine",
+            "how do I return only when a flag is set",
+            "my subroutine returns to the wrong place"
+        ]
+    },
+    "z80/instructions/reti": {
+        "hash": "d7777ec2817f878f",
+        "questions": [
+            "how do I return from an interrupt handler",
+            "signal the device that an interrupt has finished",
+            "what is the difference between ret and reti"
+        ]
+    },
+    "z80/instructions/retn": {
+        "hash": "62e286adb7eda7b2",
+        "questions": [
+            "how do I return from a non-maskable interrupt",
+            "how are interrupts allowed again after an nmi handler",
+            "what does retn do"
+        ]
+    },
+    "z80/instructions/rl": {
+        "hash": "8ace1fa28bf7cae5",
+        "questions": [
+            "how do I rotate a byte in memory left through the carry",
+            "how do I shift the carry into bit 0 of a register",
+            "what does rl do"
+        ]
+    },
+    "z80/instructions/rla": {
+        "hash": "7675ea5cf2c63c4e",
+        "questions": [
+            "how do I rotate a left through the carry",
+            "move the old carry into bit 0 of a",
+            "what does rla do"
+        ]
+    },
+    "z80/instructions/rlc": {
+        "hash": "34b1615213c01491",
+        "questions": [
+            "how do I rotate a register left so the top bit wraps around",
+            "circular rotate left of a byte in memory",
+            "what does rlc do"
+        ]
+    },
+    "z80/instructions/rlca": {
+        "hash": "902d4da20af9554b",
+        "questions": [
+            "how do I rotate a left so bit 7 comes back in at bit 0",
+            "circular rotate of a to the left",
+            "what does rlca do"
+        ]
+    },
+    "z80/instructions/rld": {
+        "hash": "44e12415a2a8ed0a",
+        "questions": [
+            "how do I rotate nibbles left between a and memory",
+            "move the low 4 bits of a memory byte into its high 4 bits",
+            "what does rld do"
+        ]
+    },
+    "z80/instructions/rr": {
+        "hash": "91173cb24c680c64",
+        "questions": [
+            "how do I rotate a byte in memory right through the carry",
+            "how do I move the carry into bit 7 of a register",
+            "what does rr do"
+        ]
+    },
+    "z80/instructions/rra": {
+        "hash": "aa8a2a1c1362a162",
+        "questions": [
+            "how do I rotate a right through the carry",
+            "move the old carry into the top bit of a",
+            "what does rra do"
+        ]
+    },
+    "z80/instructions/rrc": {
+        "hash": "1a1263bc4510b5ca",
+        "questions": [
+            "how do I rotate a register right so the low bit wraps to the top",
+            "circular rotate right of a byte in memory",
+            "what does rrc do"
+        ]
+    },
+    "z80/instructions/rrca": {
+        "hash": "03786e1d1996ee95",
+        "questions": [
+            "how do I rotate a right so bit 0 wraps around to bit 7",
+            "where does bit 0 go when a is rotated right in a circle",
+            "what does rrca do"
+        ]
+    },
+    "z80/instructions/rrd": {
+        "hash": "636daff43307d7af",
+        "questions": [
+            "how do I rotate nibbles right between a and memory",
+            "move the high 4 bits of a memory byte into its low 4 bits",
+            "what does rrd do"
+        ]
+    },
+    "z80/instructions/rst": {
+        "hash": "fc4908a0caebdf1b",
+        "questions": [
+            "how do I call a routine at address 0x38",
+            "which addresses can a restart jump to",
+            "what does rst do"
+        ]
+    },
+    "z80/instructions/sbc": {
+        "hash": "6b8c1ed9032e10c6",
+        "questions": [
+            "how do I subtract with a borrow",
+            "how do I subtract 16 bit values in hl",
+            "why is my result one less than expected",
+            "what is the difference between sub and sbc"
+        ]
+    },
+    "z80/instructions/scf": {
+        "hash": "e71724bb85685107",
+        "questions": [
+            "how do I set the carry flag",
+            "what happens to the other flags when I force carry on",
+            "what does scf do"
+        ]
+    },
+    "z80/instructions/set": {
+        "hash": "58fac1e74d023b89",
+        "questions": [
+            "how do I turn on a single bit",
+            "change one bit to 1 without touching the others",
+            "how do I set a bit in a byte in memory"
+        ]
+    },
+    "z80/instructions/sla": {
+        "hash": "95ef02b565db8d7b",
+        "questions": [
+            "how do I shift a register left",
+            "shift left with a zero coming into bit 0",
+            "what does sla do"
+        ]
+    },
+    "z80/instructions/sll": {
+        "hash": "d072707a53408396",
+        "questions": [
+            "how do I shift left and put a 1 into bit 0",
+            "is there a shift that brings in a one instead of a zero",
+            "what does sll do"
+        ]
+    },
+    "z80/instructions/sra": {
+        "hash": "1f378ff196765c8b",
+        "questions": [
+            "how do I shift a register right keeping bit 7",
+            "which right shift leaves the top bit unchanged",
+            "what does sra do"
+        ]
+    },
+    "z80/instructions/srl": {
+        "hash": "92d06deef353c285",
+        "questions": [
+            "how do I shift a register right",
+            "shift right with a zero coming into bit 7",
+            "what does srl do"
+        ]
+    },
+    "z80/instructions/sub": {
+        "hash": "6c32e153644296a7",
+        "questions": [
+            "how do I subtract two numbers",
+            "how do I subtract a constant from a",
+            "what does sub b do"
+        ]
+    },
+    "z80/instructions/xor": {
+        "hash": "9eecfb5dda34fcf1",
+        "questions": [
+            "how do I toggle bits with a mask",
+            "can I exclusive or a with a byte in memory",
+            "what does xor do"
+        ]
+    },
+    "z80/registers-and-flags/condition-c": {
+        "hash": "e9b190afa8242dfe",
+        "questions": [
+            "how do I jump if there was a carry",
+            "is the c in jp c the same as register c",
+            "branch when the carry flag is set"
+        ]
+    },
+    "z80/registers-and-flags/condition-codes": {
+        "hash": "cac081e64431dea0",
+        "questions": [
+            "what are condition codes",
+            "how do I jump only when a condition holds",
+            "which conditions work with jr",
+            "how do I make a call or return depend on the flags"
+        ]
+    },
+    "z80/registers-and-flags/condition-m": {
+        "hash": "1ca4fdb9b2a8fdf5",
+        "questions": [
+            "how do I jump if a number is negative",
+            "branch when the sign flag is set",
+            "what does jp m mean"
+        ]
+    },
+    "z80/registers-and-flags/condition-nc": {
+        "hash": "8bd31a1cd598d7d4",
+        "questions": [
+            "how do I jump if there was no carry",
+            "branch when the carry flag is clear",
+            "what does nc mean"
+        ]
+    },
+    "z80/registers-and-flags/condition-nv": {
+        "hash": "85f0589564094dcd",
+        "questions": [
+            "is there another way to write po",
+            "why is there a second name for the no overflow condition",
+            "what does nv mean"
+        ]
+    },
+    "z80/registers-and-flags/condition-nz": {
+        "hash": "88e41fb0905cf12b",
+        "questions": [
+            "how do I jump if a result is not zero",
+            "condition for when the zero flag is clear",
+            "what does nz mean"
+        ]
+    },
+    "z80/registers-and-flags/condition-p": {
+        "hash": "e5035521f4822f3b",
+        "questions": [
+            "how do I jump if the result is not negative",
+            "branch when the sign flag is clear",
+            "what does the plus condition mean"
+        ]
+    },
+    "z80/registers-and-flags/condition-pe": {
+        "hash": "e22d24ee56a15776",
+        "questions": [
+            "how do I jump if there was signed overflow",
+            "jump when parity is even",
+            "what does pe mean"
+        ]
+    },
+    "z80/registers-and-flags/condition-po": {
+        "hash": "a39bb08a2790fa5b",
+        "questions": [
+            "how do I jump if parity is odd",
+            "branch if no signed overflow happened",
+            "what does po mean"
+        ]
+    },
+    "z80/registers-and-flags/condition-v": {
+        "hash": "a46b7530c75c1769",
+        "questions": [
+            "is there another way to write pe",
+            "which overflow condition do other assemblers use",
+            "what does the v condition mean"
+        ]
+    },
+    "z80/registers-and-flags/condition-z": {
+        "hash": "a1b3add76fa190fa",
+        "questions": [
+            "how do I jump if the result is zero",
+            "condition for when the zero flag is set",
+            "what does jp z mean"
+        ]
+    },
+    "z80/registers-and-flags/flag-c": {
+        "hash": "683bdc8388639e79",
+        "questions": [
+            "how do I know if an addition went past 255",
+            "which flag shows a borrow after a subtraction",
+            "where does the bit go when I shift",
+            "what does the carry flag mean"
+        ]
+    },
+    "z80/registers-and-flags/flag-h": {
+        "hash": "b88e9561e4960f99",
+        "questions": [
+            "what is a carry out of the low nibble",
+            "why does bcd arithmetic need an extra flag",
+            "what does the half carry flag mean"
+        ]
+    },
+    "z80/registers-and-flags/flag-n": {
+        "hash": "569fcda064185e16",
+        "questions": [
+            "which flag says the last operation was a subtraction",
+            "how does daa know whether I added or subtracted",
+            "what is the n flag",
+            "what is the add/subtract flag for"
+        ]
+    },
+    "z80/registers-and-flags/flag-p-v": {
+        "hash": "cab0181b10802dce",
+        "questions": [
+            "how do I detect signed overflow",
+            "how do I check if a byte has an even number of 1 bits",
+            "why does one flag mean both parity and overflow",
+            "what is the overflow flag"
+        ]
+    },
+    "z80/registers-and-flags/flag-s": {
+        "hash": "112e3891a3789efc",
+        "questions": [
+            "which flag tells me the result is negative",
+            "why is my result treated as negative when it is over 127",
+            "what does the sign flag mean"
+        ]
+    },
+    "z80/registers-and-flags/flag-z": {
+        "hash": "1d81b400d015f3c3",
+        "questions": [
+            "how do I tell if a calculation gave zero",
+            "which flag goes on when a register reaches zero",
+            "what does the zero flag mean"
+        ]
+    },
+    "z80/registers-and-flags/flags": {
+        "hash": "ee6829afeecec271",
+        "questions": [
+            "what are the flags",
+            "which instructions change the flags",
+            "what is the status register"
+        ]
+    },
+    "z80/registers-and-flags/operand-cc": {
+        "hash": "cf2c2835f8da236b",
+        "questions": [
+            "which instructions can take a condition",
+            "what can I write after jp and a comma",
+            "what does cc mean in jp cc"
+        ]
+    },
+    "z80/registers-and-flags/operand-dd": {
+        "hash": "9ba284aabb13768b",
+        "questions": [
+            "how far can the offset from ix be",
+            "can the index offset be negative",
+            "what does dd mean in an index address"
+        ]
+    },
+    "z80/registers-and-flags/operand-hl": {
+        "hash": "6738ff3a20f562e0",
+        "questions": [
+            "how do I read the byte hl points to",
+            "what do the brackets around hl mean",
+            "can I use (hl) instead of a register"
+        ]
+    },
+    "z80/registers-and-flags/operand-ix-dd": {
+        "hash": "3c57154751181c81",
+        "questions": [
+            "how do I read a byte at ix plus an offset",
+            "what does ld a,(ix+2) do",
+            "does iy plus an offset work the same way"
+        ]
+    },
+    "z80/registers-and-flags/operand-nn": {
+        "hash": "8f4b608d20805488",
+        "questions": [
+            "can I use a character like 'A' as a value",
+            "what range of numbers fits in an 8 bit operand",
+            "can an immediate value be negative",
+            "what does nn mean"
+        ]
+    },
+    "z80/registers-and-flags/operand-nnnn": {
+        "hash": "8b8e0d001a21a28b",
+        "questions": [
+            "can I use a label where an address is expected",
+            "what is the largest 16 bit value or address",
+            "what does nnnn mean"
+        ]
+    },
+    "z80/registers-and-flags/operand-offset": {
+        "hash": "c39ffaf519701435",
+        "questions": [
+            "why do I get an error that my jump target is out of reach",
+            "do I write a label or a number for a relative jump",
+            "what does offset mean in jr offset"
+        ]
+    },
+    "z80/registers-and-flags/operands": {
+        "hash": "c49276cef6046cb1",
+        "questions": [
+            "what do nn and dd mean in instruction forms",
+            "how do I read the operand placeholders in the tables",
+            "how do I write ld (ix+dd), nn in a real program"
+        ]
+    },
+    "z80/registers-and-flags/register-a": {
+        "hash": "2518e6f8699ea4d5",
+        "questions": [
+            "what is the accumulator",
+            "where does the result of an 8 bit addition go",
+            "why can't I load B straight from a memory address",
+            "what is register A for"
+        ]
+    },
+    "z80/registers-and-flags/register-af": {
+        "hash": "e5c1d391162debcd",
+        "questions": [
+            "how do I save the flags on the stack",
+            "which instructions treat a and the flags as one pair",
+            "what is af"
+        ]
+    },
+    "z80/registers-and-flags/register-af-alternate": {
+        "hash": "c13a7a19134d8701",
+        "questions": [
+            "what is the alternate accumulator",
+            "is there a second copy of a and the flags",
+            "what are the alternate flags used for",
+            "what is af prime"
+        ]
+    },
+    "z80/registers-and-flags/register-b": {
+        "hash": "37e5cbd6d944be2d",
+        "questions": [
+            "what is B used for",
+            "which register holds the loop count",
+            "is b a general purpose register or a counter"
+        ]
+    },
+    "z80/registers-and-flags/register-bc": {
+        "hash": "5d83cc73a39c6a1f",
+        "questions": [
+            "which register pair counts bytes for block copies",
+            "why does in a,(c) use b as well as c",
+            "what is bc used for"
+        ]
+    },
+    "z80/registers-and-flags/register-bc-alternate": {
+        "hash": "75b24e4d422d4ab4",
+        "questions": [
+            "what is the alternate bc register",
+            "how do I use the second copy of bc",
+            "which instruction swaps bc with bc'"
+        ]
+    },
+    "z80/registers-and-flags/register-c": {
+        "hash": "9ad2fbdd52eb466e",
+        "questions": [
+            "what is register C for",
+            "which register holds the port number",
+            "what does the (c) in out (c),a mean"
+        ]
+    },
+    "z80/registers-and-flags/register-d": {
+        "hash": "94b4fa126da8fe11",
+        "questions": [
+            "what is register D",
+            "how do I get the high byte of de",
+            "is d a general purpose register"
+        ]
+    },
+    "z80/registers-and-flags/register-de": {
+        "hash": "3559e378b224a35e",
+        "questions": [
+            "how do I set where a block copy writes to",
+            "which register points at the destination of ldir",
+            "what is de used for"
+        ]
+    },
+    "z80/registers-and-flags/register-de-alternate": {
+        "hash": "c4640d3e408ade85",
+        "questions": ["what is the alternate de", "is there a backup copy of de", "what is de'"]
+    },
+    "z80/registers-and-flags/register-e": {
+        "hash": "324ab2ec8890c6a0",
+        "questions": [
+            "what is register E",
+            "how do I get the low byte of de",
+            "which half of de is e"
+        ]
+    },
+    "z80/registers-and-flags/register-f": {
+        "hash": "b6df2e8bc189a38b",
+        "questions": [
+            "where are the flags stored",
+            "how do I read the flags into a register",
+            "why can't I write ld a,f",
+            "what is in F"
+        ]
+    },
+    "z80/registers-and-flags/register-h": {
+        "hash": "682c3be16e9e38e6",
+        "questions": [
+            "what is register H",
+            "how do I get the high byte of hl",
+            "is h the top half of hl"
+        ]
+    },
+    "z80/registers-and-flags/register-hl": {
+        "hash": "1a9958433e92947c",
+        "questions": [
+            "how do I add two 16 bit numbers",
+            "which register do I use as a memory pointer",
+            "why can't I add de to bc",
+            "what is hl used for"
+        ]
+    },
+    "z80/registers-and-flags/register-hl-alternate": {
+        "hash": "17634b55feae57eb",
+        "questions": ["what is the alternate hl", "where does hl go when I use exx", "what is hl'"]
+    },
+    "z80/registers-and-flags/register-i": {
+        "hash": "c582ce305999976d",
+        "questions": [
+            "what is the interrupt vector register",
+            "where is the interrupt table in mode 2",
+            "do interrupts happen in this emulator",
+            "what is the i register"
+        ]
+    },
+    "z80/registers-and-flags/register-ix": {
+        "hash": "59e2a9d59b391325",
+        "questions": [
+            "why do index register instructions take an extra byte",
+            "why is (ix+2) slower than (hl)",
+            "what is an index register",
+            "what is ix"
+        ]
+    },
+    "z80/registers-and-flags/register-ixh": {
+        "hash": "e4436e8f50faa286",
+        "questions": [
+            "how do I get the high byte of ix",
+            "can I use the top half of ix as an 8 bit register",
+            "is ixh documented"
+        ]
+    },
+    "z80/registers-and-flags/register-ixl": {
+        "hash": "26a74204588f84e4",
+        "questions": [
+            "how do I read the low byte of ix",
+            "use the bottom half of ix on its own",
+            "why is ixl called undocumented"
+        ]
+    },
+    "z80/registers-and-flags/register-iy": {
+        "hash": "92165306e0719075",
+        "questions": [
+            "is there a second index register",
+            "which register is identical to ix",
+            "how is iy different from ix"
+        ]
+    },
+    "z80/registers-and-flags/register-iyh": {
+        "hash": "a1d698ff4f120141",
+        "questions": [
+            "how do I get the high byte of iy",
+            "8 bit access to the top half of iy",
+            "what is iyh"
+        ]
+    },
+    "z80/registers-and-flags/register-iyl": {
+        "hash": "93ad66fa9075b345",
+        "questions": [
+            "how do I get the low byte of iy",
+            "can I load a value into the lower half of iy",
+            "does the emulator support iyl"
+        ]
+    },
+    "z80/registers-and-flags/register-l": {
+        "hash": "b0a2909fda0e0401",
+        "questions": [
+            "what is register L",
+            "how do I get the low byte of hl",
+            "which half of hl is l"
+        ]
+    },
+    "z80/registers-and-flags/register-pc": {
+        "hash": "5c244bc6aca3d4ed",
+        "questions": [
+            "what is the program counter",
+            "how do I know which instruction runs next",
+            "what does pc hold"
+        ]
+    },
+    "z80/registers-and-flags/register-r": {
+        "hash": "d0f822580a872e91",
+        "questions": [
+            "how do I get a cheap random number",
+            "what is the memory refresh register",
+            "why does R keep changing"
+        ]
+    },
+    "z80/registers-and-flags/register-sp": {
+        "hash": "1d96b98354bab5f8",
+        "questions": [
+            "what is the stack pointer",
+            "which way does the stack grow",
+            "where does the stack start",
+            "what is sp"
+        ]
+    },
+    "z80/registers-and-flags/registers": {
+        "hash": "53c6b4c1a530b23d",
+        "questions": [
+            "what registers does the cpu have",
+            "how many registers are there",
+            "which registers pair up into 16 bit registers",
+            "why are there two sets of registers"
+        ]
+    }
+}

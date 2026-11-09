@@ -549,8 +549,18 @@ _Avoid_: chunk, passage, paragraph
 
 ## Search scope
 
-What one search looks through, set by the place it is made from rather than chosen by the reader. For a language, its **Documentation**, its **Language course** and the **General course**, whether the search starts in the **Workbench**, the language's documentation pages or the Language course. On a General course page and on the list of Courses, the General course and every Language course, with no Documentation. In an **Exam**, the Documentation alone, so no **Example** hands a student a finished program. Only the Documentation's search has one: the **Search panel**'s "Look in" ticks are the reader's choice, and are not called a scope.
+What one search looks through, set by the place it is made from rather than chosen by the reader. For a language, its **Documentation**, its **Language course** and the **General course**, whether the search starts in the **Workbench**, the language's documentation pages or the Language course. On a General course page and on the list of Courses, the General course and every Language course, with no Documentation. In the navbar's search, on any page, every language's Documentation and every Course. In an **Exam**, the Documentation alone, so no **Example** hands a student a finished program. Only the Documentation's search has one: the **Search panel**'s "Look in" ticks are the reader's choice, and are not called a scope.
 _Avoid_: corpus, index, search set, filter
+
+## Entry question
+
+A question a reader might ask that one **Documentation entry** answers, phrased the way a student would ask it, written once by a language model, checked, and committed beside the Documentation rather than made by the build. An entry usually has three, and more where it answers more kinds of question; search matches them as if the entry said them. The x86 Extensions entries and **Lecture sections** have none.
+_Avoid_: baked question, synthetic query, FAQ, doc2query
+
+## Search modifier
+
+A word in a Documentation search's query that changes how the results are ranked rather than what they match: a language's name or alias, in a search that covers several languages, or a kind word such as "directive" or "syscall", where the scope has that kind of Chapter. The palette's and the Documentation panel's search boxes draw it in the accent colour and say what it did when pointed at, so a reader learns to write it on purpose.
+_Avoid_: filter (nothing is removed), operator, keyword, trigger
 
 ## Course
 

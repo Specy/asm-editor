@@ -15,6 +15,11 @@ const STOP_WORDS = new Set(
     )
 )
 
+/** Whether a word is one a question can do without (`the`, `how`, `of`). */
+export function isStopWord(word: string): boolean {
+    return STOP_WORDS.has(word.toLowerCase())
+}
+
 /** The words of a query the full-text half searches for. */
 export function textTerms(query: string): string {
     const words = query.trim().split(/\s+/)

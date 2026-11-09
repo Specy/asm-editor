@@ -11,7 +11,13 @@ import type { DocumentationLanguage, ShardId } from './scope'
  * phase 0); the browser builds the Orama database from this instead.
  */
 
-export const PAYLOAD_FORMAT = 1
+/**
+ * Raised whenever a reader of an older shard would misread a newer one. Format 2 added an entry's
+ * questions, the vectors of a long entry's further windows (`entryWindows`) and a Documentation
+ * shard's word-like names ([the plan](../../../../../docs/design/plain-english-search-plan.md),
+ * phase 2). A page left open across the deploy that changes it has to be reloaded.
+ */
+export const PAYLOAD_FORMAT = 2
 
 /** A Documentation entry, as the index holds it. */
 export type EntryDocument = {
@@ -37,6 +43,11 @@ export type EntryDocument = {
     text: string
     /** An authored description, read with a lower weight than `text`. Optional, as `category` is. */
     detail?: string
+    /**
+     * Its **Entry questions** ([ADR 0079](../../../../../docs/adr/0079-entry-questions-are-written-once-and-committed.md)),
+     * read first by its vector. Left out when it has none.
+     */
+    questions?: string[]
     code: string
     href: string
 }
@@ -63,6 +74,16 @@ export type WindowDocument = {
     text: string
 }
 
+/**
+ * A further vector of a Documentation entry longer than the model reads, made from the text past
+ * what its first vector read. It has no words of its own, so the shard carries no text for it:
+ * the build embeds the text, the browser needs only the vector.
+ */
+export type EntryWindowDocument = {
+    /** Index into the shard's `entries`. */
+    entry: number
+}
+
 export type ShardPayload = {
     format: typeof PAYLOAD_FORMAT
     shard: ShardId
@@ -72,15 +93,27 @@ export type ShardPayload = {
     entries: EntryDocument[]
     sections: SectionDocument[]
     windows: WindowDocument[]
-    /** int8, `dims` per unit: every entry, then every window. `null` with `model`. */
+    /** The further vectors of long entries, in entry order. Empty in a Course's shard. */
+    entryWindows: EntryWindowDocument[]
+    /**
+     * A Documentation shard's entry names that the Lectures use as ordinary words (`stop`, `loop`,
+     * `test`): in a question they count as words, not names. Empty in a Course's shard.
+     */
+    wordLikeNames: string[]
+    /**
+     * int8, `dims` per vector: each entry's first, then `entryWindows`, then `windows` (no shard has
+     * both entries and Lecture windows). `null` with `model`.
+     */
     vectors: string | null
 }
 
-export type ShardContent = Pick<ShardPayload, 'shard' | 'entries' | 'sections' | 'windows'>
+/** What a shard holds besides its vectors; the lists a shard may lack are empty by default. */
+export type ShardContent = Pick<ShardPayload, 'shard' | 'entries' | 'sections' | 'windows'> &
+    Partial<Pick<ShardPayload, 'entryWindows' | 'wordLikeNames'>>
 
-/** How many vectors a shard holds: one per entry and one per window. */
-export function unitCount(content: Pick<ShardPayload, 'entries' | 'windows'>): number {
-    return content.entries.length + content.windows.length
+/** How many vectors a shard holds: one per entry, per entry window and per Lecture window. */
+export function unitCount(content: ShardContent): number {
+    return content.entries.length + (content.entryWindows?.length ?? 0) + content.windows.length
 }
 
 export function createPayload(
@@ -97,6 +130,8 @@ export function createPayload(
     return {
         format: PAYLOAD_FORMAT,
         ...content,
+        entryWindows: content.entryWindows ?? [],
+        wordLikeNames: content.wordLikeNames ?? [],
         model: vectors ? model : null,
         dims: VECTOR_DIMS,
         vectors: bytes ? toBase64(new Uint8Array(bytes.buffer)) : null
@@ -118,6 +153,18 @@ export function isPayload(value: unknown): value is ShardPayload {
         typeof payload.shard === 'string' &&
         Array.isArray(payload.entries) &&
         Array.isArray(payload.sections) &&
-        Array.isArray(payload.windows)
+        Array.isArray(payload.windows) &&
+        Array.isArray(payload.entryWindows) &&
+        Array.isArray(payload.wordLikeNames)
     )
+}
+
+/**
+ * Whether a value is a shard of another format than this code reads: one written before or after
+ * the deploy that loaded the page, which a reload brings in step.
+ */
+export function isOtherFormat(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) return false
+    const format = (value as { format?: unknown }).format
+    return typeof format === 'number' && format !== PAYLOAD_FORMAT
 }

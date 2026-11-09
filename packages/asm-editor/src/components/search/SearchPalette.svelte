@@ -15,9 +15,9 @@
      * from the first shard in, then again as more of the index and the model arrive, until the
      * reader moves through them with ↑ and ↓, points at one or scrolls them.
      *
-     * It loads with the page: its words come from `queryTerms.ts` and its entries' kinds from
-     * `entryKinds.ts`, so neither the search engine (Orama, in the search worker) nor the lecture
-     * parser comes with it.
+     * It loads with the page: its words and Search modifiers come from `queryTerms.ts` and
+     * `queryModifiers.ts` and its entries' kinds from `entryKinds.ts`, so neither the search
+     * engine (Orama, in the search worker) nor the lecture parser comes with it.
      */
     import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import Spinner from '#cmp/shared/misc/Spinner.svelte'
@@ -35,8 +35,9 @@
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { resolveHref } from '#lib/hrefs.ts'
     import type { SearchResult } from '#lib/search/engine.ts'
-    import { queryTerms } from '#lib/search/queryTerms.ts'
+    import { highlightedTerms } from '#lib/search/queryModifiers.ts'
     import { LiveSearch } from '#lib/search/liveSearch.svelte.ts'
+    import { OUTDATED_INDEX_MESSAGE } from '#lib/search/outdatedIndex.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { SearchScope } from '#lib/search/scope.ts'
     import HighlightedText from './HighlightedText.svelte'
@@ -85,7 +86,7 @@
     let list = $state<HTMLUListElement>()
     let opener: HTMLElement | null = null
 
-    const terms = $derived(queryTerms(query))
+    const terms = $derived(highlightedTerms(query, scope))
 
     // counted untracked: the count is read to be raised, which would otherwise run this forever
     $effect(() => {
@@ -332,7 +333,11 @@
                             {/if}
                         </li>
                     {/each}
-                    {#if results.length === 0 && live.failed}
+                    {#if results.length === 0 && live.outdated}
+                        <li class="empty" role="presentation">
+                            <EmptyState>{OUTDATED_INDEX_MESSAGE}</EmptyState>
+                        </li>
+                    {:else if results.length === 0 && live.failed}
                         <li class="empty" role="presentation">
                             <EmptyState
                                 >Search could not load. Check the connection, then type again.</EmptyState

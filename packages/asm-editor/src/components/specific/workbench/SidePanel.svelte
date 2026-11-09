@@ -12,7 +12,10 @@
      * decision 18). Search finds text in the Project's Files, Listings and Pseudocode, and can be
      * maximized too ([annotations-and-search.md](../../../../../../docs/design/annotations-and-search.md),
      * decisions 23 to 29). The Documentation of an M68K Project follows the processor its program
-     * chooses ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36).
+     * chooses ([m68k-machine.md](../../../../../../docs/design/m68k-machine.md), decision 36), and
+     * its results lift a little the instructions on the lines of the Problems' errors
+     * ([documentation-search.md](../../../../../../docs/design/documentation-search.md), The
+     * Problems panel).
      */
     import type { Processor } from '@specy/s68k'
     import Icon from '#cmp/shared/layout/Icon.svelte'
@@ -284,6 +287,7 @@
                         disableLinks={!context.documentationLinks}
                         request={ui.documentationRequest}
                         m68kDialect={documentationDialect}
+                        favour={session.documentationFavour}
                     />
                 {:else if entry.id === 'agent'}
                     <!-- the AI assistant's code loads when its panel is opened -->

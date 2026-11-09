@@ -5,6 +5,7 @@ import { SvelteMap } from 'svelte/reactivity'
 import { lazyLoad } from '#lib/lazyLoad.ts'
 import type { SearchResult } from './engine'
 import type { SearchModelUrls } from './model'
+import { OutdatedIndexError } from './outdatedIndex'
 import { shardsOf, type SearchScope, type ShardId } from './scope'
 import type { SearchAnswer, WorkerRequest, WorkerResponse } from './searchWorker'
 
@@ -31,7 +32,8 @@ import type { SearchAnswer, WorkerRequest, WorkerResponse } from './searchWorker
  * A worker that fails to load or dies fails the requests waiting on it, and the next request starts
  * a fresh worker, which loads the shards it is asked for again. A model the dead one had, or was
  * loading, is not asked for again, any more than one whose download failed: search goes on with
- * words.
+ * words. A shard of another format means the site was updated since the page loaded: no shard is
+ * asked for again after it, so a search of a scope missing one says so at once.
  */
 export type ModelStatus =
     /** Not asked for yet, or waiting for the index to come first. */
@@ -102,6 +104,12 @@ class SearchClient {
     private readonly shardStates = new SvelteMap<ShardId, ShardState>()
     /** Shard loads not yet settled, which the model waits for. */
     private inFlight = 0
+    /**
+     * A shard came in another format than this page reads: the site was updated, so every shard
+     * not in yet would too, and only a reload helps. Nothing more is fetched; a search of a scope
+     * missing any fails at once.
+     */
+    private outdated = false
     /** Something asked for the model; it starts once the index in flight is in. */
     private modelWanted = false
     private modelLoad: Promise<void> | null = null
@@ -135,6 +143,7 @@ class SearchClient {
             if (!waiting) return
             this.pending.delete(response.id)
             if (response.ok) waiting.resolve(response.value)
+            else if (response.outdated) waiting.reject(new OutdatedIndexError())
             else waiting.reject(new Error(response.error))
         })
         // A worker that fails to load or dies answers nothing: fail what waits on it, and let the
@@ -169,10 +178,21 @@ class SearchClient {
         for (const pending of waiting) pending.reject(new Error(message))
     }
 
-    /** One shard, once; a failed one is asked for again by the next scope that needs it. */
+    /**
+     * One shard, once; a failed one is asked for again by the next scope that needs it, unless the
+     * index is outdated, which no request mends.
+     */
     private loadShard(shard: ShardId): Promise<void> {
         const known = this.shards.get(shard)
         if (known) return known
+        if (this.outdated) {
+            const outdated = Promise.reject(new OutdatedIndexError())
+            // its callers handle it; this keeps an unwatched copy from being reported
+            outdated.catch(() => undefined)
+            this.shards.set(shard, outdated)
+            this.shardStates.set(shard, 'failed')
+            return outdated
+        }
         const loading = this.request<void>({ type: 'load-shard', shard, url: shardUrl(shard) })
         this.shards.set(shard, loading)
         this.shardStates.set(shard, 'loading')
@@ -182,10 +202,12 @@ class SearchClient {
                 () => {
                     if (this.shards.get(shard) === loading) this.shardStates.set(shard, 'ready')
                 },
-                () => {
+                (error: unknown) => {
                     if (this.shards.get(shard) !== loading) return
-                    this.shards.delete(shard)
                     this.shardStates.set(shard, 'failed')
+                    // an outdated shard stays failed, answering at once without a request
+                    if (error instanceof OutdatedIndexError) this.outdated = true
+                    else this.shards.delete(shard)
                 }
             )
             .finally(() => {
@@ -292,13 +314,14 @@ class SearchClient {
     /**
      * The ranked results for a query in a scope, by words, and by meaning once the model is ready.
      * It waits for the whole scope's index, unless `partial`: then it answers as soon as any of it
-     * is in, from what is in.
+     * is in, from what is in. `favour` names the entries the Workbench's Documentation panel lifts
+     * a little, the instructions on the lines of the Problems' errors; nothing else passes it.
      */
     async search(
         scope: SearchScope,
         query: string,
         limit = 20,
-        options: { partial?: boolean } = {}
+        options: { partial?: boolean; favour?: readonly string[] } = {}
     ): Promise<SearchAnswer> {
         if (!browser || !query.trim()) return { results: [], mode: 'text' }
         const whole = this.loadScope(scope)
@@ -309,7 +332,9 @@ class SearchClient {
         } else {
             await whole
         }
-        return this.request<SearchAnswer>({ type: 'search', scope, query, limit })
+        // a copy: what a component passes may be a proxy, which a worker message cannot carry
+        const favour = options.favour?.length ? { favour: [...options.favour] } : {}
+        return this.request<SearchAnswer>({ type: 'search', scope, query, limit, ...favour })
     }
 }
 

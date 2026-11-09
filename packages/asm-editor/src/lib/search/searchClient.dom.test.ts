@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { languageScope } from './scope'
 
-type Posted = { id: number; type: string; shard?: string }
+type Posted = { id: number; type: string; shard?: string; favour?: string[] }
 
 /** What the client posted to its workers, in order. */
 const posted: Posted[] = []
@@ -45,16 +45,22 @@ vi.mock('./searchWorker?worker', () => ({
     }
 }))
 
-function reply(worker: EventTarget, message: Posted, ok = true) {
+/** How a request is answered: done, failed, or failed on a shard of another format. */
+type Outcome = boolean | 'outdated'
+
+function reply(worker: EventTarget, message: Posted, ok: Outcome = true) {
     const value = message.type === 'search' ? { results: [], mode: 'text' } : undefined
-    const data = ok
-        ? { id: message.id, ok: true, value }
-        : { id: message.id, ok: false, error: 'HTTP 404' }
+    const data =
+        ok === true
+            ? { id: message.id, ok: true, value }
+            : ok === 'outdated'
+              ? { id: message.id, ok: false, error: 'outdated', outdated: true }
+              : { id: message.id, ok: false, error: 'HTTP 404' }
     worker.dispatchEvent(new MessageEvent('message', { data }))
 }
 
 /** Answers the first held request that matches, as loaded or as failed. */
-function answer(match: (message: Posted) => boolean, ok = true) {
+function answer(match: (message: Posted) => boolean, ok: Outcome = true) {
     const index = unanswered.findIndex(({ message }) => match(message))
     if (index < 0) throw new Error('no such request is waiting')
     const [{ message, worker }] = unanswered.splice(index, 1)
@@ -180,6 +186,43 @@ describe('search client index', () => {
         expect(client.indexStatus(mips)).toBe('failed')
     })
 
+    it('says a shard of another format needs the page reloaded, not the connection checked', async () => {
+        heldTypes.add('load-shard')
+        const client = await freshClient()
+        const { OutdatedIndexError } = await import('./outdatedIndex')
+        const failed = client.search(mips, 'add', 20, { partial: true }).catch((error) => error)
+        await settle()
+        for (const name of ['docs-mips', 'lectures-mips', 'lectures-assembly-basics']) {
+            answer(shard(name), 'outdated')
+        }
+        const error = await failed
+        expect(error).toBeInstanceOf(OutdatedIndexError)
+        expect(error.message).toMatch(/Reload the page/)
+    })
+
+    it('remembers an outdated index: later searches fail at once, fetching nothing', async () => {
+        heldTypes.add('load-shard')
+        const client = await freshClient()
+        const { OutdatedIndexError } = await import('./outdatedIndex')
+        const first = client.search(mips, 'add', 20, { partial: true }).catch((error) => error)
+        await settle()
+        for (const name of ['docs-mips', 'lectures-mips', 'lectures-assembly-basics']) {
+            answer(shard(name), 'outdated')
+        }
+        expect(await first).toBeInstanceOf(OutdatedIndexError)
+        posted.length = 0
+        const again = client.search(mips, 'add', 20, { partial: true }).catch((error) => error)
+        //no "Loading search…" in between
+        expect(client.indexStatus(mips)).toBe('failed')
+        expect(await again).toBeInstanceOf(OutdatedIndexError)
+        //nor for another scope's shards: the whole site was updated
+        const x86 = languageScope('x86')
+        const elsewhere = client.search(x86, 'add', 20, { partial: true }).catch((error) => error)
+        expect(client.indexStatus(x86)).toBe('failed')
+        expect(await elsewhere).toBeInstanceOf(OutdatedIndexError)
+        expect(types()).not.toContain('load-shard')
+    })
+
     it('answers a partial search from the first shard in, without waiting for the rest', async () => {
         heldTypes.add('load-shard')
         const client = await freshClient()
@@ -191,6 +234,22 @@ describe('search client index', () => {
         answer(shard('lectures-mips'))
         await vi.waitFor(() => expect(partial).toHaveBeenCalled())
         expect(whole).not.toHaveBeenCalled()
+    })
+
+    it('passes the names a search favours to the worker, and none when it has none', async () => {
+        const client = await freshClient()
+        const favour = ['lw', 'sw']
+        await client.search(mips, 'load', 20, { favour })
+        await client.search(mips, 'load', 20, { favour: [] })
+        await client.search(mips, 'load')
+        const searches = posted.filter((message) => message.type === 'search')
+        expect(searches.map((message) => message.favour)).toEqual([
+            ['lw', 'sw'],
+            undefined,
+            undefined
+        ])
+        expect(searches[0].favour).not.toBe(favour)
+        expect(searches.map((message) => 'favour' in message)).toEqual([true, false, false])
     })
 
     it('changes the answer key as shards and the model arrive', async () => {

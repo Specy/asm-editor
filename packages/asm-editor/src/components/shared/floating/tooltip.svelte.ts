@@ -197,14 +197,19 @@ export class Tooltip {
         if (this.open) this.#hideTimer = setTimeout(() => this.hide(), HIDE_AFTER)
     }
 
-    #onEnter = (event: PointerEvent) => {
-        if (event.pointerType === 'touch') return
+    /** The pointer came onto the element: shows the card after the delay, or at once when warm. */
+    enter() {
         this.#dismissed = false
         clearTimeout(this.#hideTimer)
         if (this.open) return
         clearTimeout(this.#showTimer)
         if (warm()) this.show()
         else this.#showTimer = setTimeout(() => this.show(), this.delay)
+    }
+
+    #onEnter = (event: PointerEvent) => {
+        if (event.pointerType === 'touch') return
+        this.enter()
     }
 
     #onLeave = (event: PointerEvent) => {
@@ -344,6 +349,18 @@ function onScroll(event: Event) {
     const scrolled = event.target
     if (!current || !(scrolled instanceof Node)) return
     if (scrolled === document || scrolled.contains(current.trigger)) current.hide()
+}
+
+/**
+ * The pointer came onto (`true`) or left (`false`) an element with a Tooltip that cannot take the
+ * pointer itself, which something over it reports instead: a word drawn under a text field, which
+ * the field says the pointer is on (SearchField's Search modifiers). The card shows and closes as
+ * it would for the pointer on the element. An element with no Tooltip is left alone.
+ */
+export function pointTooltip(element: HTMLElement, pointed: boolean) {
+    const tip = instances.get(element)
+    if (pointed) tip?.enter()
+    else tip?.leave()
 }
 
 /**

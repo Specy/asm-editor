@@ -1,0 +1,6 @@
+[
+    { "reader": "print", "documentation": ["display"] },
+    { "reader": "read", "documentation": ["input"] },
+    { "reader": "colour", "documentation": ["color"] },
+    { "reader": "pause", "documentation": ["sleep", "delay"] }
+]

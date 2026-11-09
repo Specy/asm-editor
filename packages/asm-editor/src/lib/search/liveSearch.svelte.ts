@@ -1,4 +1,5 @@
 import { untrack } from 'svelte'
+import { OutdatedIndexError } from './outdatedIndex'
 import { searchClient, type SearchAnswer, type SearchResult } from './searchClient.svelte'
 import type { SearchScope } from './scope'
 
@@ -14,6 +15,12 @@ type Source = {
     delay: number
     /** Each answer shown, first or refreshed: what the box opens or selects with it. */
     onAnswer?: (answer: SearchAnswer) => void
+    /**
+     * The names whose entries count a little more: the instructions on the lines of the
+     * Problems' errors, which only the Workbench's Documentation panel passes
+     * (`searchClient.search`).
+     */
+    favour?: () => readonly string[]
 }
 
 /**
@@ -27,6 +34,9 @@ type Source = {
  * at one, scrolling them or opening one. They then stay as they are, under the reader, until the
  * query changes.
  *
+ * A change of the favoured names (`favour`) asks again as a new shard does: it changes the order,
+ * not the query, so it never lets go of results the reader holds.
+ *
  * Made while a component initialises: its effects live as long as the component.
  */
 export class LiveSearch {
@@ -35,6 +45,11 @@ export class LiveSearch {
     searched = $state('')
     /** The last search failed: its index could not be loaded, or the search worker stopped. */
     failed = $state(false)
+    /**
+     * It failed because the index is of another format than the page reads: the site was updated
+     * since the page was opened, and only a reload helps, not the connection.
+     */
+    outdated = $state(false)
 
     /** The reader has started on the results. */
     private held = false
@@ -42,8 +57,15 @@ export class LiveSearch {
     private generation = 0
     /** The generation of the search under way, if one is. */
     private running: number | null = null
+    /**
+     * The favoured names as one string: a new analysis with the same errors gives the same names
+     * in a new list, which asks nothing again.
+     */
+    declare private readonly favourKey: string
 
     constructor(private readonly source: Source) {
+        this.favourKey = $derived((source.favour?.() ?? []).join('\n'))
+
         $effect(() => {
             const text = source.query().trim()
             const scope = source.scope()
@@ -54,6 +76,7 @@ export class LiveSearch {
                 this.results = []
                 this.searched = ''
                 this.failed = false
+                this.outdated = false
                 return
             }
             const timer = setTimeout(() => void this.run(scope, text), source.delay)
@@ -63,7 +86,7 @@ export class LiveSearch {
         $effect(() => {
             const scope = source.scope()
             if (!scope) return
-            searchClient.answerKey(scope)
+            this.refreshKey(scope)
             untrack(() => this.refresh(scope))
         })
     }
@@ -71,6 +94,14 @@ export class LiveSearch {
     /** The reader has started on the results: they stay as they are until the query changes. */
     hold() {
         this.held = true
+    }
+
+    /**
+     * Changes whenever the shown query could be answered differently: more of the index or the
+     * model arrived, or the favoured names changed.
+     */
+    private refreshKey(scope: SearchScope): string {
+        return `${searchClient.answerKey(scope)}\0${this.favourKey}`
     }
 
     /** The shown query again, for what arrived since it was answered, unless the reader holds it. */
@@ -85,25 +116,29 @@ export class LiveSearch {
     private async run(scope: SearchScope, text: string) {
         const mine = ++this.generation
         this.running = mine
-        const key = searchClient.answerKey(scope)
+        const key = this.refreshKey(scope)
+        const favour = this.favourKey ? { favour: this.favourKey.split('\n') } : {}
         try {
             const answer = await searchClient.search(scope, text, this.source.limit, {
-                partial: true
+                partial: true,
+                ...favour
             })
             if (mine !== this.generation) return
             this.results = answer.results
             this.searched = text
             this.failed = false
+            this.outdated = false
             this.source.onAnswer?.(answer)
-        } catch {
+        } catch (error) {
             if (mine !== this.generation) return
             this.results = []
             this.searched = text
             this.failed = true
+            this.outdated = error instanceof OutdatedIndexError
         } finally {
             if (this.running === mine) this.running = null
         }
-        // a shard or the model that came while it ran
-        if (searchClient.answerKey(scope) !== key) this.refresh(scope)
+        // a shard or the model that came while it ran, or other favoured names
+        if (this.refreshKey(scope) !== key) this.refresh(scope)
     }
 }

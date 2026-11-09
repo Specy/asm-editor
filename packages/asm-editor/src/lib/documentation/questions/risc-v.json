@@ -1,0 +1,5124 @@
+{
+    "risc-v/directives/2byte": {
+        "hash": "d18e396db9113aee",
+        "questions": [
+            "what does .2byte do",
+            "is there another directive that stores halfwords like .half",
+            "another spelling for storing 16-bit values"
+        ]
+    },
+    "risc-v/directives/4byte": {
+        "hash": "35c352b170c55282",
+        "questions": [
+            "what does .4byte do",
+            "is there another directive that works like .word",
+            "another spelling for storing 32-bit words"
+        ]
+    },
+    "risc-v/directives/8byte": {
+        "hash": "a9c3c7cfa7c81b9d",
+        "questions": [
+            "what does .8byte do",
+            "is there another directive that works like .dword",
+            "another spelling for storing 64-bit values"
+        ]
+    },
+    "risc-v/directives/align": {
+        "hash": "12ab6d8d376e8ec0",
+        "questions": [
+            "how do I align data to a word boundary",
+            "why does .align 2 mean 4 bytes",
+            "is the align number a byte count or an exponent"
+        ]
+    },
+    "risc-v/directives/ascii": {
+        "hash": "365ea4a921b0739c",
+        "questions": [
+            "how do I store a string without a null terminator",
+            "my string keeps printing the text that follows it",
+            "difference between .ascii and .asciz"
+        ]
+    },
+    "risc-v/directives/asciz": {
+        "hash": "32179d66ba595141",
+        "questions": [
+            "how do I declare a string",
+            "how do I store text that ends with a zero byte",
+            "what does .asciz do"
+        ]
+    },
+    "risc-v/directives/balign": {
+        "hash": "8d7acb7906effc40",
+        "questions": [
+            "how do I align to 8 bytes by writing 8",
+            "align to a byte count instead of a power of two",
+            "what does .balign do"
+        ]
+    },
+    "risc-v/directives/bss": {
+        "hash": "0e3e4acd87469a0a",
+        "questions": [
+            "which section is for uninitialized data",
+            "where should a large zeroed buffer go",
+            "what is the bss section"
+        ]
+    },
+    "risc-v/directives/byte": {
+        "hash": "35f03f987f661eb4",
+        "questions": [
+            "how do I declare an array of bytes",
+            "how do I store 8-bit values in memory",
+            "what does .byte do"
+        ]
+    },
+    "risc-v/directives/comm": {
+        "hash": "ee187b423b8c8258",
+        "questions": [
+            "how do I declare an uninitialized global variable",
+            "reserve space for a global symbol with a size and alignment",
+            "what does .comm mean in compiler output"
+        ]
+    },
+    "risc-v/directives/data": {
+        "hash": "cdb7b1aa1848fe0d",
+        "questions": [
+            "where do I declare my variables",
+            "which section holds my program's data",
+            "what does .data do"
+        ]
+    },
+    "risc-v/directives/double": {
+        "hash": "de13403335f6bc37",
+        "questions": [
+            "how do I declare a double variable",
+            "how do I store a double precision constant like 3.14",
+            "put a 64-bit floating point value in memory"
+        ]
+    },
+    "risc-v/directives/dword": {
+        "hash": "38188af923678b82",
+        "questions": [
+            "how do I declare a 64-bit integer",
+            "how do I store an 8-byte value in the data section",
+            "what is a double-word"
+        ]
+    },
+    "risc-v/directives/end_macro": {
+        "hash": "70f203c2c6b091a3",
+        "questions": [
+            "how do I end a macro definition",
+            "what line closes a macro",
+            "what does .end_macro do"
+        ]
+    },
+    "risc-v/directives/eqv": {
+        "hash": "ca092a45489f6033",
+        "questions": [
+            "how do I define a constant",
+            "is there a #define in assembly",
+            "how do I give a name to a number",
+            "what does .eqv do"
+        ]
+    },
+    "risc-v/directives/extern": {
+        "hash": "3c936dc36ea5de74",
+        "questions": [
+            "how do I use a variable defined in another file",
+            "how do I declare an outside data symbol and its size",
+            "what does .extern do"
+        ]
+    },
+    "risc-v/directives/float": {
+        "hash": "aa3829f515fa4ba5",
+        "questions": [
+            "how do I declare a float variable",
+            "how do I store a single precision constant like 3.14",
+            "put a 32-bit floating point value in memory"
+        ]
+    },
+    "risc-v/directives/global": {
+        "hash": "c46f82736b39f110",
+        "questions": [
+            "is .global the same as .globl",
+            "should I write globl or global",
+            "another spelling of the directive that exports a label"
+        ]
+    },
+    "risc-v/directives/globl": {
+        "hash": "554324cf9c8f47b2",
+        "questions": [
+            "how do I make a label visible to other files",
+            "how do I mark main as the program's entry point",
+            "what does .globl main do"
+        ]
+    },
+    "risc-v/directives/half": {
+        "hash": "beadb0e67cec3b5a",
+        "questions": [
+            "how do I declare 16-bit numbers",
+            "how do I store a list of 2-byte values",
+            "what is a halfword"
+        ]
+    },
+    "risc-v/directives/include": {
+        "hash": "3f973676cb752351",
+        "questions": [
+            "how do I include another assembly file",
+            "how do I pull in code from a separate file",
+            "do I put the file name in quotes when including a file"
+        ]
+    },
+    "risc-v/directives/lcomm": {
+        "hash": "e5799ef4f6253416",
+        "questions": [
+            "how do I declare an uninitialized static variable",
+            "reserve space for a variable only this file uses",
+            "what does .lcomm mean in compiler output"
+        ]
+    },
+    "risc-v/directives/macro": {
+        "hash": "2e0195e60a42c5c3",
+        "questions": [
+            "how do I define a macro",
+            "how do I avoid writing the same lines over and over",
+            "what does .macro do"
+        ]
+    },
+    "risc-v/directives/p2align": {
+        "hash": "163c1c173a7932d7",
+        "questions": [
+            "what does .p2align do",
+            "is there another name for .align",
+            "align the next item to 2 to the power n bytes"
+        ]
+    },
+    "risc-v/directives/sbss": {
+        "hash": "c9ad700d28e8bd3b",
+        "questions": [
+            "what does .sbss mean",
+            "can I write something else instead of .bss",
+            "is sbss a different section from bss"
+        ]
+    },
+    "risc-v/directives/section": {
+        "hash": "b4268e9db2e00db5",
+        "questions": [
+            "how do I switch to a section by its name",
+            "can I use .rodata and .bss sections here",
+            "is read-only data kept apart from .data in this simulator"
+        ]
+    },
+    "risc-v/directives/space": {
+        "hash": "f563d5b477c527ca",
+        "questions": [
+            "how do I reserve a buffer of bytes",
+            "how do I make room for an array without giving values",
+            "what does .space do"
+        ]
+    },
+    "risc-v/directives/string": {
+        "hash": "9cf572fe6cfa8d66",
+        "questions": [
+            "is .string the same as .asciz",
+            "what does the string directive do",
+            "another name for the null-terminated string directive"
+        ]
+    },
+    "risc-v/directives/text": {
+        "hash": "a8ec2fd0adccb316",
+        "questions": [
+            "where do I write the program's instructions",
+            "which section holds the code",
+            "how do I switch back to code after declaring data"
+        ]
+    },
+    "risc-v/directives/what-directives-are": {
+        "hash": "e5d09480c753760b",
+        "questions": [
+            "what is an assembler directive",
+            "does the processor run directives",
+            "difference between a directive and an instruction",
+            "what are lines like .data and .text for"
+        ]
+    },
+    "risc-v/directives/word": {
+        "hash": "9b9c22aeeca8e066",
+        "questions": [
+            "how do I declare an array of 32-bit integers",
+            "how do I define a 4-byte variable with a value",
+            "what does .word do"
+        ]
+    },
+    "risc-v/directives/zero": {
+        "hash": "93e9e98e6fad50d5",
+        "questions": [
+            "how do I reserve a block of bytes set to zero",
+            "is there another directive that works like .space",
+            "what does .zero do"
+        ]
+    },
+    "risc-v/input-controller/events": {
+        "hash": "13ba9de275582008",
+        "questions": [
+            "how do I tell a key press from a key release",
+            "where was the mouse when the user clicked",
+            "how do I read the mouse wheel",
+            "does the key code change with the keyboard layout",
+            "why do I keep getting events while a key is held down",
+            "how do I take an event word apart into its fields"
+        ]
+    },
+    "risc-v/input-controller/first-program": {
+        "hash": "70d7bc3b8abb2846",
+        "questions": [
+            "example program that reacts to the arrow keys",
+            "how do I end the program when escape is pressed",
+            "how do I check that the input device is there before using it"
+        ]
+    },
+    "risc-v/input-controller/from-c": {
+        "hash": "23dacf6112b6b5b5",
+        "questions": [
+            "how do I read the keyboard and mouse in C",
+            "how do I check if a key is held in C",
+            "C constants for mouse buttons in events and in the pointer",
+            "C program that moves a dot with the arrow keys"
+        ]
+    },
+    "risc-v/input-controller/full-queue": {
+        "hash": "6fba437c322208fd",
+        "questions": [
+            "what happens when too many input events arrive",
+            "what does a dropped event mean",
+            "my program missed some key presses",
+            "how many events can wait at once"
+        ]
+    },
+    "risc-v/input-controller/hears-nothing": {
+        "hash": "2d9086035f73f3b4",
+        "questions": [
+            "why does my program get no key or mouse events in a testcase",
+            "the click I made before pressing run was ignored",
+            "input stops working when the bitmap display base is 0xffff0000",
+            "a key I held before starting shows up late"
+        ]
+    },
+    "risc-v/input-controller/key-codes": {
+        "hash": "a21645ff129e40a1",
+        "questions": [
+            "list of key codes for every key",
+            "what is the code of the space bar",
+            "are left and right shift different keys",
+            "ready-made constants for key codes in assembly",
+            "why do media keys and Fn send nothing"
+        ]
+    },
+    "risc-v/input-controller/key-state": {
+        "hash": "ffee7eb5f42f324d",
+        "questions": [
+            "how do I check if a key is held down right now",
+            "how do I move something while the player holds an arrow key",
+            "which byte and bit tell me a key is pressed",
+            "a quick key press between frames was missed"
+        ]
+    },
+    "risc-v/input-controller/pointer": {
+        "hash": "c187a53cddb43042",
+        "questions": [
+            "how do I get the mouse position",
+            "how do I check if a mouse button is held",
+            "how do I find the screen pixel under the mouse",
+            "why is there no event when the mouse moves"
+        ]
+    },
+    "risc-v/input-controller/registers": {
+        "hash": "16bb3aa991437e6b",
+        "questions": [
+            "what is at address 0xffff0300",
+            "how do I know how many events are waiting",
+            "why did my program lose an event when I read it twice",
+            "program stops after I write to the control register",
+            "can the keyboard and mouse device raise interrupts"
+        ]
+    },
+    "risc-v/input-controller/risc-v-64": {
+        "hash": "79146648695af526",
+        "questions": [
+            "does the input controller work the same on the 64-bit target",
+            "key bitmap word reads as negative on 64-bit",
+            "how do I sign-extend the wheel code on 64-bit",
+            "an ld from the input registers lost an event"
+        ]
+    },
+    "risc-v/input-controller/typed-characters": {
+        "hash": "a80261ce9d9e63cf",
+        "questions": [
+            "should I use the keyboard registers or the input controller for text",
+            "why do I get key codes instead of letters",
+            "old typed characters show up when I read a character later",
+            "how do I throw away characters waiting in the keyboard"
+        ]
+    },
+    "risc-v/input-controller/undo": {
+        "hash": "957283c1f847eef0",
+        "questions": [
+            "what happens to key events when I undo",
+            "after undo my program reads an old key press again",
+            "why does undo not move the mouse pointer back"
+        ]
+    },
+    "risc-v/input-controller/waiting": {
+        "hash": "9e1860bc825ab4e5",
+        "questions": [
+            "how do I wait for input without busy looping",
+            "my program reaches the instruction limit while waiting for a key",
+            "why is my polling loop filling the undo history"
+        ]
+    },
+    "risc-v/input-controller/what-the-input-controller-is": {
+        "hash": "58b01471f37a8c43",
+        "questions": [
+            "what is the input controller",
+            "can my program read arrow keys, shift and function keys",
+            "can my program use the mouse",
+            "keys go to the editor instead of my program",
+            "how do I give keyboard control back to the editor",
+            "why did my held keys get released when I clicked away"
+        ]
+    },
+    "risc-v/instructions/add": {
+        "hash": "1ce90b77113baa57",
+        "questions": [
+            "how do I add two registers",
+            "get the sum of two numbers in a register",
+            "plus operation in assembly"
+        ]
+    },
+    "risc-v/instructions/add.uw": {
+        "hash": "bb80b82f81568575",
+        "questions": [
+            "add an unsigned 32-bit index to a 64-bit base address",
+            "zero-extend the low 32 bits and add in one instruction",
+            "what happens to the upper half of the first register in add.uw"
+        ]
+    },
+    "risc-v/instructions/addi": {
+        "hash": "e33e7a37cfa0e75a",
+        "questions": [
+            "how do I add a constant to a register",
+            "how do I subtract a constant from a register",
+            "increment a counter by 1",
+            "how big can the immediate in addi be"
+        ]
+    },
+    "risc-v/instructions/addiw": {
+        "hash": "0c19b609ee942414",
+        "questions": [
+            "add a constant to a 32-bit value in 64-bit mode",
+            "add an immediate and sign-extend the 32-bit result",
+            "why does addiw make 2147483647 plus 1 negative"
+        ]
+    },
+    "risc-v/instructions/addw": {
+        "hash": "24b4d3e3e144797d",
+        "questions": [
+            "add two 32-bit integers in 64-bit mode",
+            "add two registers using only their low 32 bits",
+            "sum of two registers wraps around at 32 bits on rv64"
+        ]
+    },
+    "risc-v/instructions/amoadd.d": {
+        "hash": "05b4d3f21e581eb0",
+        "questions": [
+            "how do I atomically add to a 64-bit double word in memory",
+            "increment a shared 64-bit counter safely",
+            "atomic fetch and add on a double word"
+        ]
+    },
+    "risc-v/instructions/amoadd.w": {
+        "hash": "64370cf3d55fa6ef",
+        "questions": [
+            "how do I atomically add to a word in memory",
+            "increment a shared 32-bit counter safely",
+            "read the old value of a word and add to it in one step"
+        ]
+    },
+    "risc-v/instructions/amoand.d": {
+        "hash": "ca7a4e53eddf808f",
+        "questions": [
+            "atomically clear bits of a double word in memory",
+            "clear a bit mask in a shared 64-bit variable",
+            "atomic AND on a 64-bit value in memory"
+        ]
+    },
+    "risc-v/instructions/amoand.w": {
+        "hash": "4c6b3c9c64de9240",
+        "questions": [
+            "atomically clear bits of a word in memory",
+            "clear a bit mask in a shared 32-bit variable",
+            "atomic AND on a word that returns the old value"
+        ]
+    },
+    "risc-v/instructions/amomax.d": {
+        "hash": "4a0b8ff7fcb60854",
+        "questions": [
+            "atomically keep the larger of a register and a double word in memory, signed",
+            "atomic signed maximum on a 64-bit value",
+            "raise a 64-bit value in memory to a new signed maximum in one step"
+        ]
+    },
+    "risc-v/instructions/amomax.w": {
+        "hash": "2530d277613581cc",
+        "questions": [
+            "atomically keep the larger of a register and a memory word, signed",
+            "atomic signed maximum on a 32-bit word",
+            "raise a word in memory to a new signed maximum in one step"
+        ]
+    },
+    "risc-v/instructions/amomaxu.d": {
+        "hash": "4ce528f24b174a01",
+        "questions": [
+            "atomically keep the larger of a register and a double word in memory, unsigned",
+            "atomic unsigned maximum on a 64-bit value",
+            "raise a 64-bit value in memory to a new unsigned maximum in one step"
+        ]
+    },
+    "risc-v/instructions/amomaxu.w": {
+        "hash": "4e283b6a82b770c7",
+        "questions": [
+            "atomically keep the larger of a register and a memory word, unsigned",
+            "atomic unsigned maximum on a 32-bit word",
+            "raise a word in memory to a new unsigned maximum in one step"
+        ]
+    },
+    "risc-v/instructions/amomin.d": {
+        "hash": "96b9f3854b1b0c2b",
+        "questions": [
+            "atomically keep the smaller of a register and a double word in memory, signed",
+            "atomic signed minimum on a 64-bit value",
+            "lower a 64-bit value in memory to a new signed minimum in one step"
+        ]
+    },
+    "risc-v/instructions/amomin.w": {
+        "hash": "74769b3cf7cfcbb1",
+        "questions": [
+            "atomically keep the smaller of a register and a memory word, signed",
+            "atomic signed minimum on a 32-bit word",
+            "lower a word in memory to a new signed minimum in one step"
+        ]
+    },
+    "risc-v/instructions/amominu.d": {
+        "hash": "b6ec666c8e79a90f",
+        "questions": [
+            "atomically keep the smaller of a register and a double word in memory, unsigned",
+            "atomic unsigned minimum on a 64-bit value",
+            "lower a 64-bit value in memory to a new unsigned minimum in one step"
+        ]
+    },
+    "risc-v/instructions/amominu.w": {
+        "hash": "616fe572c559fab6",
+        "questions": [
+            "atomically keep the smaller of a register and a memory word, unsigned",
+            "atomic unsigned minimum on a 32-bit word",
+            "lower a word in memory to a new unsigned minimum in one step"
+        ]
+    },
+    "risc-v/instructions/amoor.d": {
+        "hash": "3cdf38abe1970215",
+        "questions": [
+            "atomically set bits of a double word in memory",
+            "set a bit mask in a shared 64-bit variable",
+            "atomic OR on a 64-bit value in memory"
+        ]
+    },
+    "risc-v/instructions/amoor.w": {
+        "hash": "3dfd06eb8fa5ce88",
+        "questions": [
+            "atomically set bits of a word in memory",
+            "set a bit mask in a shared 32-bit variable",
+            "atomic OR on a word that returns the old value"
+        ]
+    },
+    "risc-v/instructions/amoswap.d": {
+        "hash": "f4b4f123e8889a9d",
+        "questions": [
+            "spinlock using a 64-bit lock variable",
+            "atomically exchange a register with a double word in memory",
+            "swap a 64-bit value in memory and get the old one back"
+        ]
+    },
+    "risc-v/instructions/amoswap.w": {
+        "hash": "d1500b1280de721e",
+        "questions": [
+            "how do I build a spinlock on a 32-bit lock word",
+            "atomically exchange a register with a word in memory",
+            "write a word to memory and get the old value back atomically"
+        ]
+    },
+    "risc-v/instructions/amoxor.d": {
+        "hash": "46bf5e65a282747e",
+        "questions": [
+            "atomically toggle bits of a double word in memory",
+            "atomic XOR on a 64-bit value that returns the old value",
+            "xor a register into a 64-bit memory location atomically"
+        ]
+    },
+    "risc-v/instructions/amoxor.w": {
+        "hash": "b7059931806e5f62",
+        "questions": [
+            "atomically toggle bits of a word in memory",
+            "atomic XOR on a 32-bit word that returns the old value",
+            "xor a register into a word in memory atomically"
+        ]
+    },
+    "risc-v/instructions/and": {
+        "hash": "d029272a7db11361",
+        "questions": [
+            "bitwise AND of two registers",
+            "keep only the bits that are set in both registers",
+            "mask a value using a mask held in another register"
+        ]
+    },
+    "risc-v/instructions/andi": {
+        "hash": "42f4aa3b15f8da52",
+        "questions": [
+            "how do I mask bits with a constant",
+            "keep only the low 4 bits of a register",
+            "bitwise AND of a register and an immediate"
+        ]
+    },
+    "risc-v/instructions/andn": {
+        "hash": "56bc70626b1e23a7",
+        "questions": [
+            "clear the bits of one register that are set in another",
+            "AND with the inverse of a register",
+            "remove a set of flags from a value in one instruction"
+        ]
+    },
+    "risc-v/instructions/auipc": {
+        "hash": "2d688b7ddae9018f",
+        "questions": [
+            "how do I read the program counter into a register",
+            "make an address relative to the current instruction",
+            "what does auipc t0, 1 do"
+        ]
+    },
+    "risc-v/instructions/b": {
+        "hash": "ec918582b95f1c1a",
+        "questions": [
+            "unconditional branch to a label",
+            "what does a plain b label do",
+            "branch every time with no comparison"
+        ]
+    },
+    "risc-v/instructions/bclr": {
+        "hash": "b087ce01d6e4f584",
+        "questions": [
+            "clear the bit whose number is in a register",
+            "turn off one bit chosen at run time",
+            "what does bclr t2, t0, t1 do"
+        ]
+    },
+    "risc-v/instructions/bclri": {
+        "hash": "81841668e3ecb406",
+        "questions": [
+            "clear bit 3 of a register",
+            "turn off a single bit at a fixed position",
+            "clear one bit using a constant bit number"
+        ]
+    },
+    "risc-v/instructions/beq": {
+        "hash": "97390aef08254b93",
+        "questions": [
+            "how do I jump if two registers are equal",
+            "branch when two values match",
+            "go to a label if a equals b"
+        ]
+    },
+    "risc-v/instructions/beqz": {
+        "hash": "74524df07efa6af8",
+        "questions": [
+            "jump if a register is zero",
+            "branch when a counter reaches 0",
+            "go to a label if x equals zero"
+        ]
+    },
+    "risc-v/instructions/bext": {
+        "hash": "87e5ec400066f09e",
+        "questions": [
+            "get the bit whose number is in a register as 0 or 1",
+            "check whether a bit chosen at run time is set",
+            "extract a single bit with a variable position"
+        ]
+    },
+    "risc-v/instructions/bexti": {
+        "hash": "1d240a854fa8cb80",
+        "questions": [
+            "get bit 5 of a register as 0 or 1",
+            "check whether a fixed bit is set",
+            "extract a single bit at a constant position"
+        ]
+    },
+    "risc-v/instructions/bge": {
+        "hash": "1248ecc227c9f86a",
+        "questions": [
+            "branch if one register is greater than or equal to another",
+            "go to a label if a is at least b, signed",
+            "jump when x is not less than y"
+        ]
+    },
+    "risc-v/instructions/bgeu": {
+        "hash": "14a4023f8342983a",
+        "questions": [
+            "branch if greater or equal, comparing as unsigned",
+            "go to a label if a is at least b, unsigned",
+            "unsigned greater-or-equal where 0xFFFFFFFF counts as large"
+        ]
+    },
+    "risc-v/instructions/bgez": {
+        "hash": "abbe2ee602e3ec2c",
+        "questions": [
+            "branch if a number is not negative",
+            "jump when a register is zero or positive",
+            "go to a label if x is at least zero"
+        ]
+    },
+    "risc-v/instructions/bgt": {
+        "hash": "4f8d3b77f96cdb1a",
+        "questions": [
+            "branch if one register is greater than another",
+            "go to a label if a is bigger than b",
+            "jump when x is strictly greater than y, signed"
+        ]
+    },
+    "risc-v/instructions/bgtu": {
+        "hash": "39a866c7ec5ea855",
+        "questions": [
+            "branch if greater than, comparing as unsigned",
+            "go to a label if a is bigger than b, unsigned",
+            "unsigned greater-than jump"
+        ]
+    },
+    "risc-v/instructions/bgtz": {
+        "hash": "34ad27321d2abbad",
+        "questions": [
+            "branch if a register is positive",
+            "jump when a value is greater than zero",
+            "go to a label if x is above zero"
+        ]
+    },
+    "risc-v/instructions/binv": {
+        "hash": "9c454d4d7d0ffe63",
+        "questions": [
+            "flip the bit whose number is in a register",
+            "toggle one bit chosen at run time",
+            "why does binv turn 13 into 9"
+        ]
+    },
+    "risc-v/instructions/binvi": {
+        "hash": "bfb6985dc0671fda",
+        "questions": [
+            "toggle bit 2 of a register",
+            "flip a single bit at a fixed position",
+            "invert one bit using a constant bit number"
+        ]
+    },
+    "risc-v/instructions/ble": {
+        "hash": "4611947fe84c4e31",
+        "questions": [
+            "branch if one register is less than or equal to another",
+            "go to a label if a is at most b",
+            "jump when x is not greater than y, signed"
+        ]
+    },
+    "risc-v/instructions/bleu": {
+        "hash": "2476e050c19091d6",
+        "questions": [
+            "branch if less or equal, comparing as unsigned",
+            "go to a label if a is at most b, unsigned",
+            "unsigned less-or-equal jump"
+        ]
+    },
+    "risc-v/instructions/blez": {
+        "hash": "982d386d77586d86",
+        "questions": [
+            "branch if a register is zero or negative",
+            "jump when a value is not positive",
+            "go to a label if x is at most zero"
+        ]
+    },
+    "risc-v/instructions/blt": {
+        "hash": "30958a5773a6dc21",
+        "questions": [
+            "branch if one register is less than another",
+            "go to a label if a is smaller than b",
+            "jump when a signed number is below another"
+        ]
+    },
+    "risc-v/instructions/bltu": {
+        "hash": "b290b74ebd980e74",
+        "questions": [
+            "branch if less than, comparing as unsigned",
+            "go to a label if a is smaller than b, unsigned",
+            "compare two values as unsigned and jump if the first is smaller"
+        ]
+    },
+    "risc-v/instructions/bltz": {
+        "hash": "6b5c177fbbc5e19c",
+        "questions": [
+            "branch if a register is negative",
+            "jump when a value is less than zero",
+            "go to a label if x is below zero"
+        ]
+    },
+    "risc-v/instructions/bne": {
+        "hash": "ff34079055a07fd6",
+        "questions": [
+            "branch if two registers are different",
+            "go to a label if a is not equal to b",
+            "keep looping while two registers differ"
+        ]
+    },
+    "risc-v/instructions/bnez": {
+        "hash": "75bbdcb315f2512f",
+        "questions": [
+            "branch if a register is not zero",
+            "jump when a value is nonzero",
+            "loop back while the counter is not zero"
+        ]
+    },
+    "risc-v/instructions/bset": {
+        "hash": "55ad9227aaddbb6c",
+        "questions": [
+            "set the bit whose number is in a register",
+            "turn on one bit chosen at run time",
+            "which bits of t3 does bset use as the bit number"
+        ]
+    },
+    "risc-v/instructions/bseti": {
+        "hash": "2fa598a885223b42",
+        "questions": [
+            "set bit 2 of a register to 1",
+            "turn on a single bit at a fixed position",
+            "set one bit using a constant bit number"
+        ]
+    },
+    "risc-v/instructions/call": {
+        "hash": "6db40040ac321498",
+        "questions": [
+            "how do I call a function",
+            "reach a far-away subroutine and save the return address",
+            "subroutine is too far away for jal"
+        ]
+    },
+    "risc-v/instructions/clz": {
+        "hash": "e8360c18d12f580d",
+        "questions": [
+            "count leading zeros of a number",
+            "find the highest 1 bit in a register",
+            "what does clz give when the value is 0"
+        ]
+    },
+    "risc-v/instructions/clzw": {
+        "hash": "c22762e7043498a9",
+        "questions": [
+            "count leading zeros of the low 32 bits in 64-bit mode",
+            "highest set bit of a 32-bit value on rv64",
+            "leading zero count of a word, 32 when it is zero"
+        ]
+    },
+    "risc-v/instructions/cpop": {
+        "hash": "807aa89a43bd75ab",
+        "questions": [
+            "count the 1 bits in a register",
+            "population count instruction",
+            "how many flags are set in a bitmask"
+        ]
+    },
+    "risc-v/instructions/cpopw": {
+        "hash": "e3498bbd4274aaa8",
+        "questions": [
+            "count the 1 bits in the low 32 bits",
+            "population count of a 32-bit word in 64-bit mode",
+            "count set bits ignoring the upper half of the register"
+        ]
+    },
+    "risc-v/instructions/csrc": {
+        "hash": "5420f197cf7d1d4a",
+        "questions": [
+            "how do I turn off bits in a control and status register",
+            "clear CSR bits using a mask held in a register",
+            "disable a bit in a CSR and leave the others alone"
+        ]
+    },
+    "risc-v/instructions/csrci": {
+        "hash": "4fecfcef35bfc793",
+        "questions": [
+            "turn off bits of a CSR using a constant",
+            "clear CSR bits without putting the mask in a register first",
+            "clear one bit of a control register with an immediate"
+        ]
+    },
+    "risc-v/instructions/csrr": {
+        "hash": "17c0993d137f9f99",
+        "questions": [
+            "how do I read a control and status register",
+            "read a CSR without changing it",
+            "copy a CSR into a general register"
+        ]
+    },
+    "risc-v/instructions/csrrc": {
+        "hash": "a76365de6263342d",
+        "questions": [
+            "read a CSR and clear bits from a register at the same time",
+            "atomic read and clear of CSR bits",
+            "get the old CSR value while clearing bits in it"
+        ]
+    },
+    "risc-v/instructions/csrrci": {
+        "hash": "9fcd0172fdc47e2c",
+        "questions": [
+            "read a CSR and clear bits from a constant in one step",
+            "atomic read and clear of CSR bits with an immediate",
+            "get the old CSR value while clearing bits from a 5-bit mask"
+        ]
+    },
+    "risc-v/instructions/csrrs": {
+        "hash": "8fb009b2b09ddbcb",
+        "questions": [
+            "read a CSR and set bits from a register at the same time",
+            "atomic read and set of CSR bits",
+            "get the old CSR value while setting bits in it"
+        ]
+    },
+    "risc-v/instructions/csrrsi": {
+        "hash": "f0cc911f9c475bbc",
+        "questions": [
+            "read a CSR and set bits from a constant in one step",
+            "atomic read and set of CSR bits with an immediate",
+            "get the old CSR value while setting bits from a 5-bit mask"
+        ]
+    },
+    "risc-v/instructions/csrrw": {
+        "hash": "9ac8b4ce69e1ec13",
+        "questions": [
+            "swap a register with a CSR in one step",
+            "read the old CSR value while writing a new one",
+            "atomic read and write of a control and status register"
+        ]
+    },
+    "risc-v/instructions/csrrwi": {
+        "hash": "060e38584a7cc6e4",
+        "questions": [
+            "read a CSR and write a constant into it in one step",
+            "swap a small constant into a CSR and keep the old value",
+            "atomic read and write of a CSR with an immediate"
+        ]
+    },
+    "risc-v/instructions/csrs": {
+        "hash": "6d75b0ca3188ce67",
+        "questions": [
+            "how do I turn on bits in a control and status register",
+            "set CSR bits using a mask held in a register",
+            "enable a bit in a CSR and leave the others alone"
+        ]
+    },
+    "risc-v/instructions/csrsi": {
+        "hash": "2cf1435b37de9e31",
+        "questions": [
+            "turn on bits of a CSR using a constant",
+            "set CSR bits without putting the mask in a register first",
+            "set one bit of a control register with an immediate"
+        ]
+    },
+    "risc-v/instructions/csrw": {
+        "hash": "534b4bd810eb4a81",
+        "questions": [
+            "how do I write a control and status register",
+            "overwrite a CSR with a register's value",
+            "replace a CSR's whole value, not just some bits"
+        ]
+    },
+    "risc-v/instructions/csrwi": {
+        "hash": "296c528de2f2ea40",
+        "questions": [
+            "write a small constant into a control and status register",
+            "set a CSR to an immediate without using a register",
+            "how big can the constant in csrwi be"
+        ]
+    },
+    "risc-v/instructions/ctz": {
+        "hash": "7f8d439410d82782",
+        "questions": [
+            "count trailing zeros of a number",
+            "find the lowest 1 bit in a register",
+            "what does ctz give when the value is 0"
+        ]
+    },
+    "risc-v/instructions/ctzw": {
+        "hash": "ee17b7233385210e",
+        "questions": [
+            "count trailing zeros of the low 32 bits in 64-bit mode",
+            "lowest set bit of a 32-bit value on rv64",
+            "trailing zero count of a word, 32 when it is zero"
+        ]
+    },
+    "risc-v/instructions/div": {
+        "hash": "ac0c820fb89cb3ae",
+        "questions": [
+            "how do I divide two integers",
+            "signed division of two registers",
+            "divide numbers that can be negative"
+        ]
+    },
+    "risc-v/instructions/divu": {
+        "hash": "9267bab8ce563402",
+        "questions": [
+            "how do I divide unsigned numbers",
+            "unsigned integer division quotient",
+            "divide without treating the top bit as a sign"
+        ]
+    },
+    "risc-v/instructions/divuw": {
+        "hash": "c078eb7c48995d1e",
+        "questions": [
+            "divide 32-bit unsigned integers in 64-bit mode",
+            "unsigned division of the low 32 bits",
+            "unsigned int division on rv64"
+        ]
+    },
+    "risc-v/instructions/divw": {
+        "hash": "43ee303a574fa9f2",
+        "questions": [
+            "divide 32-bit signed integers in 64-bit mode",
+            "signed division using only the low 32 bits",
+            "int division on rv64"
+        ]
+    },
+    "risc-v/instructions/ebreak": {
+        "hash": "0fcf280ee5256645",
+        "questions": [
+            "how do I put a breakpoint in my code",
+            "stop and let the debugger take control",
+            "why does my program stop at ebreak"
+        ]
+    },
+    "risc-v/instructions/ecall": {
+        "hash": "1218904891cdb2bf",
+        "questions": [
+            "how do I make a system call",
+            "which register holds the system call number",
+            "call a simulator service from my program"
+        ]
+    },
+    "risc-v/instructions/fabs.d": {
+        "hash": "069afb3a7fa3143d",
+        "questions": [
+            "absolute value of a double",
+            "remove the minus sign from a double",
+            "make a negative double-precision number positive"
+        ]
+    },
+    "risc-v/instructions/fabs.s": {
+        "hash": "8d4eb7a7ba9c9c1f",
+        "questions": [
+            "absolute value of a float",
+            "remove the minus sign from a float",
+            "make a negative single-precision number positive"
+        ]
+    },
+    "risc-v/instructions/fadd.d": {
+        "hash": "73d1a050776da745",
+        "questions": [
+            "how do I add two doubles",
+            "double-precision addition",
+            "sum of two double registers"
+        ]
+    },
+    "risc-v/instructions/fadd.s": {
+        "hash": "ba384c2836ecec15",
+        "questions": [
+            "how do I add two floats",
+            "single-precision addition",
+            "sum of two float registers"
+        ]
+    },
+    "risc-v/instructions/fclass.d": {
+        "hash": "7cbaae92e13be835",
+        "questions": [
+            "check whether a double is NaN",
+            "classify a double-precision value as zero, normal or NaN",
+            "test what kind of number a double register holds"
+        ]
+    },
+    "risc-v/instructions/fclass.s": {
+        "hash": "ae246e3102b12caf",
+        "questions": [
+            "check whether a float is NaN",
+            "classify a single-precision value as zero, normal or NaN",
+            "test what kind of number a float register holds"
+        ]
+    },
+    "risc-v/instructions/fcvt.d.l": {
+        "hash": "91da0e4821d65bd4",
+        "questions": [
+            "convert a 64-bit integer to a double",
+            "cast a long to double",
+            "can I convert a 64-bit integer to double in 32-bit mode"
+        ]
+    },
+    "risc-v/instructions/fcvt.d.lu": {
+        "hash": "9425a1c2ac320b9f",
+        "questions": [
+            "convert an unsigned 64-bit integer to a double",
+            "cast an unsigned long to double",
+            "uint64_t to double in 64-bit mode"
+        ]
+    },
+    "risc-v/instructions/fcvt.d.s": {
+        "hash": "1fa57bf3ac3705ff",
+        "questions": [
+            "how do I convert a float to a double",
+            "widen single precision to double precision",
+            "cast a float to double"
+        ]
+    },
+    "risc-v/instructions/fcvt.d.w": {
+        "hash": "a6f2ef22db89c2ac",
+        "questions": [
+            "how do I convert an integer to a double",
+            "cast an int to double",
+            "use an int register value in a double calculation"
+        ]
+    },
+    "risc-v/instructions/fcvt.d.wu": {
+        "hash": "734c63769195ed76",
+        "questions": [
+            "convert an unsigned integer to a double",
+            "cast an unsigned int to double",
+            "convert an unsigned int to double so large values stay positive"
+        ]
+    },
+    "risc-v/instructions/fcvt.l.d": {
+        "hash": "c8c5b10aa7ca3699",
+        "questions": [
+            "convert a double to a 64-bit integer",
+            "cast a double to long",
+            "round a double to a signed 64-bit integer"
+        ]
+    },
+    "risc-v/instructions/fcvt.l.s": {
+        "hash": "f539ec16468ab3c9",
+        "questions": [
+            "convert a float to a 64-bit integer",
+            "cast a float to long",
+            "round a float to a signed 64-bit integer"
+        ]
+    },
+    "risc-v/instructions/fcvt.lu.d": {
+        "hash": "036d9cc1ff3506dc",
+        "questions": [
+            "convert a double to an unsigned 64-bit integer",
+            "cast a double to unsigned long",
+            "round a double to a uint64_t"
+        ]
+    },
+    "risc-v/instructions/fcvt.lu.s": {
+        "hash": "d19850f83847ffc7",
+        "questions": [
+            "convert a float to an unsigned 64-bit integer",
+            "cast a float to unsigned long",
+            "round a float to a uint64_t"
+        ]
+    },
+    "risc-v/instructions/fcvt.s.d": {
+        "hash": "248d4b1b1c8e9f22",
+        "questions": [
+            "how do I convert a double to a float",
+            "narrow double precision to single precision",
+            "cast a double to float"
+        ]
+    },
+    "risc-v/instructions/fcvt.s.l": {
+        "hash": "4cd319b3400ff0fc",
+        "questions": [
+            "convert a 64-bit integer to a float",
+            "cast a long to float",
+            "int64_t to single precision in 64-bit mode"
+        ]
+    },
+    "risc-v/instructions/fcvt.s.lu": {
+        "hash": "ed41e5cffeb0876a",
+        "questions": [
+            "convert an unsigned 64-bit integer to a float",
+            "cast an unsigned long to float",
+            "uint64_t to single precision in 64-bit mode"
+        ]
+    },
+    "risc-v/instructions/fcvt.s.w": {
+        "hash": "6b267a6f26eee883",
+        "questions": [
+            "how do I convert an integer to a float",
+            "cast an int to float",
+            "turn a loop counter into a float for a calculation"
+        ]
+    },
+    "risc-v/instructions/fcvt.s.wu": {
+        "hash": "043a94925dbcde5c",
+        "questions": [
+            "convert an unsigned integer to a float",
+            "cast an unsigned int to float",
+            "convert an unsigned int to float so large values stay positive"
+        ]
+    },
+    "risc-v/instructions/fcvt.w.d": {
+        "hash": "d4026028e2cc4a2a",
+        "questions": [
+            "how do I convert a double to an integer",
+            "cast a double to int",
+            "round a double to a signed 32-bit int"
+        ]
+    },
+    "risc-v/instructions/fcvt.w.s": {
+        "hash": "31c138e4517779c9",
+        "questions": [
+            "how do I convert a float to an integer",
+            "cast a float to int",
+            "does converting a float to int round the value"
+        ]
+    },
+    "risc-v/instructions/fcvt.wu.d": {
+        "hash": "1297554f3ed399ea",
+        "questions": [
+            "convert a double to an unsigned integer",
+            "cast a double to unsigned int",
+            "round a double to an unsigned 32-bit int"
+        ]
+    },
+    "risc-v/instructions/fcvt.wu.s": {
+        "hash": "3729d2d91298d1ba",
+        "questions": [
+            "convert a float to an unsigned integer",
+            "cast a float to unsigned int",
+            "round a float to an unsigned 32-bit int"
+        ]
+    },
+    "risc-v/instructions/fdiv.d": {
+        "hash": "30a6890391be9846",
+        "questions": [
+            "how do I divide two doubles",
+            "double-precision division",
+            "divide and keep the fractional part, double"
+        ]
+    },
+    "risc-v/instructions/fdiv.s": {
+        "hash": "7fddd79cea03fe8a",
+        "questions": [
+            "how do I divide two floats",
+            "single-precision division",
+            "divide and keep the fractional part, float"
+        ]
+    },
+    "risc-v/instructions/fence": {
+        "hash": "df5208cf52735ea9",
+        "questions": [
+            "order memory accesses as other threads see them",
+            "make earlier stores visible to another thread before later ones",
+            "why does fence seem to do nothing here"
+        ]
+    },
+    "risc-v/instructions/fence.i": {
+        "hash": "b7ab97a2db092116",
+        "questions": [
+            "make newly written instructions take effect",
+            "self-modifying code: sync instruction fetch after storing code",
+            "what is fence.i for"
+        ]
+    },
+    "risc-v/instructions/feq.d": {
+        "hash": "9faccf7608964cea",
+        "questions": [
+            "compare two doubles for equality",
+            "set an integer register to 1 if two doubles are equal",
+            "what does feq.d write when the doubles differ"
+        ]
+    },
+    "risc-v/instructions/feq.s": {
+        "hash": "00b20701c87c0092",
+        "questions": [
+            "compare two floats for equality",
+            "set an integer register to 1 if two floats are equal",
+            "what does feq.s write when the floats differ"
+        ]
+    },
+    "risc-v/instructions/fge.d": {
+        "hash": "ceee771833f5af97",
+        "questions": [
+            "check if a double is greater than or equal to another",
+            "double greater-or-equal result in an integer register",
+            "is one double not less than another, as 0 or 1"
+        ]
+    },
+    "risc-v/instructions/fge.s": {
+        "hash": "81941edf791c59dc",
+        "questions": [
+            "check if a float is greater than or equal to another",
+            "float greater-or-equal result in an integer register",
+            "test that a float is not less than another"
+        ]
+    },
+    "risc-v/instructions/fgt.d": {
+        "hash": "0d3869a059da8236",
+        "questions": [
+            "check if one double is greater than another",
+            "double greater-than result in an integer register",
+            "does a double exceed another, as 0 or 1"
+        ]
+    },
+    "risc-v/instructions/fgt.s": {
+        "hash": "9f79024b4a45e7e6",
+        "questions": [
+            "check if one float is greater than another",
+            "float greater-than result in an integer register",
+            "test that a float exceeds another"
+        ]
+    },
+    "risc-v/instructions/fld": {
+        "hash": "b3e8a8cab478919f",
+        "questions": [
+            "how do I load a double from memory",
+            "read a .double variable into a float register",
+            "fld f1, label, t3: what is t3 for"
+        ]
+    },
+    "risc-v/instructions/fle.d": {
+        "hash": "44f7d4f144c150a0",
+        "questions": [
+            "check if a double is less than or equal to another",
+            "double less-or-equal result in an integer register",
+            "is one double not greater than another, as 0 or 1"
+        ]
+    },
+    "risc-v/instructions/fle.s": {
+        "hash": "8fae4b24e35b46fe",
+        "questions": [
+            "check if a float is less than or equal to another",
+            "float less-or-equal result in an integer register",
+            "test that a float is not greater than another"
+        ]
+    },
+    "risc-v/instructions/flt.d": {
+        "hash": "1c790ee7ea81d404",
+        "questions": [
+            "check if one double is less than another",
+            "double less-than result in an integer register",
+            "is one double below another, as 0 or 1"
+        ]
+    },
+    "risc-v/instructions/flt.s": {
+        "hash": "ef637a1d37d6c37b",
+        "questions": [
+            "check if one float is less than another",
+            "float less-than result in an integer register",
+            "test that a float is below another"
+        ]
+    },
+    "risc-v/instructions/flw": {
+        "hash": "508b3a0ed91a1aa5",
+        "questions": [
+            "how do I load a float from memory",
+            "read a .float variable into a float register",
+            "load a float directly from a label"
+        ]
+    },
+    "risc-v/instructions/fmadd.d": {
+        "hash": "2a7563924aadaf20",
+        "questions": [
+            "multiply two doubles and add a third in one instruction",
+            "fused multiply-add, double precision",
+            "multiply and add doubles with only one rounding"
+        ]
+    },
+    "risc-v/instructions/fmadd.s": {
+        "hash": "0b60bbd869633c99",
+        "questions": [
+            "multiply two floats and add a third in one instruction",
+            "fused multiply-add, single precision",
+            "multiply and add floats with only one rounding"
+        ]
+    },
+    "risc-v/instructions/fmax.d": {
+        "hash": "debbae82ca764432",
+        "questions": [
+            "how do I get the larger of two doubles",
+            "max of two double-precision numbers",
+            "keep a double from going below a limit"
+        ]
+    },
+    "risc-v/instructions/fmax.s": {
+        "hash": "7d48949c8ad7ae12",
+        "questions": [
+            "how do I get the larger of two floats",
+            "max of two single-precision numbers",
+            "keep a float from going below a limit"
+        ]
+    },
+    "risc-v/instructions/fmin.d": {
+        "hash": "8d1a9079678036a2",
+        "questions": [
+            "how do I get the smaller of two doubles",
+            "min of two double-precision numbers",
+            "keep a double from going above a limit"
+        ]
+    },
+    "risc-v/instructions/fmin.s": {
+        "hash": "6823d5aa3b48541c",
+        "questions": [
+            "how do I get the smaller of two floats",
+            "min of two single-precision numbers",
+            "keep a float from going above a limit"
+        ]
+    },
+    "risc-v/instructions/fmsub.d": {
+        "hash": "423557946875f504",
+        "questions": [
+            "multiply two doubles and subtract a third in one instruction",
+            "fused multiply-subtract, double precision",
+            "multiply then subtract doubles with one rounding"
+        ]
+    },
+    "risc-v/instructions/fmsub.s": {
+        "hash": "2cc3415b4c86d449",
+        "questions": [
+            "multiply two floats and subtract a third in one instruction",
+            "fused multiply-subtract, single precision",
+            "multiply then subtract floats with one rounding"
+        ]
+    },
+    "risc-v/instructions/fmul.d": {
+        "hash": "57ea3d46994d4250",
+        "questions": [
+            "how do I multiply two doubles",
+            "double-precision multiplication",
+            "scale a double by a factor"
+        ]
+    },
+    "risc-v/instructions/fmul.s": {
+        "hash": "d2b8ef59207cfa96",
+        "questions": [
+            "how do I multiply two floats",
+            "single-precision multiplication",
+            "scale a float by a factor"
+        ]
+    },
+    "risc-v/instructions/fmv.d": {
+        "hash": "9405b53058de25d1",
+        "questions": [
+            "copy a double from one f register to another",
+            "mv equivalent for doubles",
+            "what does fmv.d f2, f1 do"
+        ]
+    },
+    "risc-v/instructions/fmv.d.x": {
+        "hash": "0151517cbb66397c",
+        "questions": [
+            "copy 64 integer bits into a double register unchanged",
+            "load a double constant from its bit pattern",
+            "why does fmv.d.x not work in 32-bit mode"
+        ]
+    },
+    "risc-v/instructions/fmv.s": {
+        "hash": "27bee9ab8ad623d4",
+        "questions": [
+            "copy a float from one f register to another",
+            "is there a mv instruction for float registers",
+            "what does fmv.s f2, f1 do"
+        ]
+    },
+    "risc-v/instructions/fmv.s.x": {
+        "hash": "bca0a5d27916e27e",
+        "questions": [
+            "is fmv.s.x the same as fmv.w.x",
+            "old name for fmv.w.x",
+            "older code uses a different name to move bits into a float register"
+        ]
+    },
+    "risc-v/instructions/fmv.w.x": {
+        "hash": "6d34b4b68a1f546f",
+        "questions": [
+            "copy the bits of an integer register into a float register",
+            "load 1.0 into a float register from its bit pattern",
+            "why does moving the integer 1 into a float register not give 1.0"
+        ]
+    },
+    "risc-v/instructions/fmv.x.d": {
+        "hash": "2a75aaa802b42040",
+        "questions": [
+            "get the raw bits of a double into an integer register",
+            "why is 1.0 shown as 0x3FF0000000000000",
+            "copy a double register to an integer register in 64-bit mode"
+        ]
+    },
+    "risc-v/instructions/fmv.x.s": {
+        "hash": "fa1968fc5f760c29",
+        "questions": [
+            "is fmv.x.s the same as fmv.x.w",
+            "old name for fmv.x.w",
+            "older code uses a different name to move float bits to an integer register"
+        ]
+    },
+    "risc-v/instructions/fmv.x.w": {
+        "hash": "427fc731ac55c6eb",
+        "questions": [
+            "get the raw bits of a float into an integer register",
+            "why is 1.0 shown as 0x3F800000 in an integer register",
+            "inspect the bit pattern of a float"
+        ]
+    },
+    "risc-v/instructions/fneg.d": {
+        "hash": "d5a300d6b82143e0",
+        "questions": [
+            "negate a double",
+            "flip the sign of a double-precision value",
+            "multiply a double by minus one"
+        ]
+    },
+    "risc-v/instructions/fneg.s": {
+        "hash": "d6265b4584a8e9af",
+        "questions": [
+            "negate a float",
+            "flip the sign of a single-precision value",
+            "multiply a float by minus one"
+        ]
+    },
+    "risc-v/instructions/fnmadd.d": {
+        "hash": "9c151e41132c442f",
+        "questions": [
+            "multiply two doubles, add a third and negate the result",
+            "negated fused multiply-add, double precision",
+            "negative of a product plus a double in one step"
+        ]
+    },
+    "risc-v/instructions/fnmadd.s": {
+        "hash": "103908f3cab544a5",
+        "questions": [
+            "multiply two floats, add a third and negate the result",
+            "negated fused multiply-add, single precision",
+            "negative of a product plus a float in one step"
+        ]
+    },
+    "risc-v/instructions/fnmsub.d": {
+        "hash": "4a97b54a77563d85",
+        "questions": [
+            "subtract a product of two doubles from a third",
+            "negated fused multiply-subtract, double precision",
+            "negative of a product minus a double in one step"
+        ]
+    },
+    "risc-v/instructions/fnmsub.s": {
+        "hash": "96b3a24ace7ece75",
+        "questions": [
+            "subtract a product of two floats from a third",
+            "negated fused multiply-subtract, single precision",
+            "negative of a product minus a float in one step"
+        ]
+    },
+    "risc-v/instructions/frcsr": {
+        "hash": "028f595e071595fe",
+        "questions": [
+            "how do I read the floating point control and status register",
+            "copy fcsr into an integer register",
+            "what does frcsr t1 do"
+        ]
+    },
+    "risc-v/instructions/frflags": {
+        "hash": "4bb630a71410ad81",
+        "questions": [
+            "how do I read the floating point exception flags",
+            "find out if a float operation raised an exception flag",
+            "copy fflags into a register"
+        ]
+    },
+    "risc-v/instructions/frrm": {
+        "hash": "c9079477f5bd94f3",
+        "questions": [
+            "how do I read the floating point rounding mode",
+            "which rounding mode are float operations using",
+            "copy frm into a register"
+        ]
+    },
+    "risc-v/instructions/frsr": {
+        "hash": "e35c201351e7fd61",
+        "questions": [
+            "is frsr the same as frcsr",
+            "alias that reads the FP control and status register",
+            "short name for reading fcsr"
+        ]
+    },
+    "risc-v/instructions/fscsr": {
+        "hash": "bf9d0a2a4c874517",
+        "questions": [
+            "how do I write the floating point control and status register",
+            "swap a new value into fcsr and keep the old one",
+            "fscsr with one register instead of two"
+        ]
+    },
+    "risc-v/instructions/fsd": {
+        "hash": "0ab45e16a69436f8",
+        "questions": [
+            "how do I store a double to memory",
+            "save a double-precision result to memory",
+            "store a double at a label's address"
+        ]
+    },
+    "risc-v/instructions/fsflags": {
+        "hash": "00a65b34003ca423",
+        "questions": [
+            "how do I clear the floating point exception flags",
+            "set fflags and get the old flags back",
+            "write new FP exception flags from a register"
+        ]
+    },
+    "risc-v/instructions/fsgnj.d": {
+        "hash": "76a0ae89f9c694d6",
+        "questions": [
+            "copy the sign of one double onto another",
+            "copysign for double-precision values",
+            "sign injection, double"
+        ]
+    },
+    "risc-v/instructions/fsgnj.s": {
+        "hash": "8550aace32f3af83",
+        "questions": [
+            "copy the sign of one float onto another",
+            "copysign for single-precision values",
+            "sign injection, float"
+        ]
+    },
+    "risc-v/instructions/fsgnjn.d": {
+        "hash": "5b6e2a116ff9a798",
+        "questions": [
+            "give a double the opposite sign of another",
+            "make a double positive when another double is negative",
+            "inverted sign injection, double"
+        ]
+    },
+    "risc-v/instructions/fsgnjn.s": {
+        "hash": "a6bf4041686c8509",
+        "questions": [
+            "give a float the opposite sign of another",
+            "make a float positive when another float is negative",
+            "inverted sign injection, float"
+        ]
+    },
+    "risc-v/instructions/fsgnjx.d": {
+        "hash": "7cb74b3767d3cb13",
+        "questions": [
+            "flip a double's sign when another double is negative",
+            "xor the sign bits of two doubles",
+            "xor sign injection, double"
+        ]
+    },
+    "risc-v/instructions/fsgnjx.s": {
+        "hash": "e59bd7baa6e6df8a",
+        "questions": [
+            "flip a float's sign when another float is negative",
+            "xor the sign bits of two floats",
+            "xor sign injection, float"
+        ]
+    },
+    "risc-v/instructions/fsqrt.d": {
+        "hash": "50996973a5cb4531",
+        "questions": [
+            "how do I take the square root of a double",
+            "sqrt of a double-precision value",
+            "is there a square root instruction for doubles"
+        ]
+    },
+    "risc-v/instructions/fsqrt.s": {
+        "hash": "7f9fc76057ce43ef",
+        "questions": [
+            "how do I take the square root of a float",
+            "sqrt of a single-precision value",
+            "is there a square root instruction for floats"
+        ]
+    },
+    "risc-v/instructions/fsrm": {
+        "hash": "86b339fb3ce66552",
+        "questions": [
+            "how do I change the floating point rounding mode",
+            "set frm and get the old rounding mode back",
+            "write a new rounding mode from a register"
+        ]
+    },
+    "risc-v/instructions/fssr": {
+        "hash": "39c5281a20d3fcb6",
+        "questions": [
+            "is fssr the same as fscsr",
+            "alias that swaps the FP control and status register",
+            "short name for writing fcsr"
+        ]
+    },
+    "risc-v/instructions/fsub.d": {
+        "hash": "2fbd781c3424054f",
+        "questions": [
+            "how do I subtract two doubles",
+            "double-precision subtraction",
+            "difference of two double registers"
+        ]
+    },
+    "risc-v/instructions/fsub.s": {
+        "hash": "d6e89881c21c0ef1",
+        "questions": [
+            "how do I subtract two floats",
+            "single-precision subtraction",
+            "difference of two float registers"
+        ]
+    },
+    "risc-v/instructions/fsw": {
+        "hash": "a94fd996d43dd978",
+        "questions": [
+            "how do I store a float to memory",
+            "save a single-precision result to memory",
+            "store a float at a label's address"
+        ]
+    },
+    "risc-v/instructions/j": {
+        "hash": "a8e7dbe39007c1a6",
+        "questions": [
+            "how do I jump to a label",
+            "goto in assembly",
+            "jump over code that should not run"
+        ]
+    },
+    "risc-v/instructions/jal": {
+        "hash": "ee9269c44e60c752",
+        "questions": [
+            "jump to a label and save the return address",
+            "jump and link to a subroutine",
+            "save the return address in a register other than ra"
+        ]
+    },
+    "risc-v/instructions/jalr": {
+        "hash": "da43ad8ddcf87d5b",
+        "questions": [
+            "call a function whose address is in a register",
+            "call through a function pointer",
+            "jump to an address in a register and save where to return"
+        ]
+    },
+    "risc-v/instructions/jr": {
+        "hash": "9dee01823cd002dd",
+        "questions": [
+            "jump to an address held in a register",
+            "indirect jump in assembly",
+            "what does jr t0 do"
+        ]
+    },
+    "risc-v/instructions/la": {
+        "hash": "54d39a47725bc8a4",
+        "questions": [
+            "how do I get the address of a variable",
+            "pointer to a string in the data section",
+            "register holds 0x10010000 instead of my variable's value"
+        ]
+    },
+    "risc-v/instructions/lb": {
+        "hash": "9fc5a33f7be9ec52",
+        "questions": [
+            "how do I load a byte from memory",
+            "read one character of a string into a register",
+            "why does loading the byte 0x80 give -128"
+        ]
+    },
+    "risc-v/instructions/lbu": {
+        "hash": "42edafd6e26c97f4",
+        "questions": [
+            "load a byte without sign extension",
+            "load an unsigned byte so 0x80 becomes 128",
+            "read a byte value from 0 to 255"
+        ]
+    },
+    "risc-v/instructions/ld": {
+        "hash": "d1e21590a8087b9e",
+        "questions": [
+            "how do I load a 64-bit value from memory",
+            "read a .dword variable into a register",
+            "load a double word integer, not a floating-point double"
+        ]
+    },
+    "risc-v/instructions/lh": {
+        "hash": "bf5f5532c9da214b",
+        "questions": [
+            "how do I load a 16-bit halfword",
+            "read a signed short from memory",
+            "why does 0xFF80 load as -128"
+        ]
+    },
+    "risc-v/instructions/lhu": {
+        "hash": "231ace5b4f8dda03",
+        "questions": [
+            "load a 16-bit value without sign extension",
+            "read an unsigned short from memory",
+            "load a halfword as 0 to 65535"
+        ]
+    },
+    "risc-v/instructions/li": {
+        "hash": "b9e9650eeb18535b",
+        "questions": [
+            "how do I put a number in a register",
+            "load a large constant that needs more than 12 bits",
+            "why does li turn into several instructions"
+        ]
+    },
+    "risc-v/instructions/lr.d": {
+        "hash": "22d2ff361cb371f6",
+        "questions": [
+            "load a double word and reserve its address",
+            "start an atomic read-modify-write on a 64-bit value",
+            "what pairs with sc.d"
+        ]
+    },
+    "risc-v/instructions/lr.w": {
+        "hash": "29465e59489bc300",
+        "questions": [
+            "load a word and reserve its address",
+            "start an atomic read-modify-write on a 32-bit value",
+            "what pairs with sc.w"
+        ]
+    },
+    "risc-v/instructions/lui": {
+        "hash": "44df5454ff1974fb",
+        "questions": [
+            "set the upper 20 bits of a register",
+            "why is the lui value 4096 times what I wrote",
+            "load the high part of a label's address"
+        ]
+    },
+    "risc-v/instructions/lw": {
+        "hash": "6641f1f382bf19b8",
+        "questions": [
+            "how do I load a word from memory",
+            "read an int variable into a register",
+            "load the value stored at a label",
+            "why does a loaded word turn negative in 64-bit mode"
+        ]
+    },
+    "risc-v/instructions/lwu": {
+        "hash": "326a666b7ec57191",
+        "questions": [
+            "load a 32-bit word without sign extension in 64-bit mode",
+            "read an unsigned int into a 64-bit register",
+            "keep a 32-bit value positive when loading on rv64"
+        ]
+    },
+    "risc-v/instructions/max": {
+        "hash": "0d53790f3c003368",
+        "questions": [
+            "larger of two signed integers",
+            "maximum of two registers without a branch",
+            "max(a, b) in one instruction"
+        ]
+    },
+    "risc-v/instructions/maxu": {
+        "hash": "c4438d21f7f2314c",
+        "questions": [
+            "larger of two unsigned integers",
+            "unsigned maximum of two registers",
+            "maximum where 0xFFFFFFFF counts as the biggest"
+        ]
+    },
+    "risc-v/instructions/min": {
+        "hash": "8e25c7d324351626",
+        "questions": [
+            "smaller of two signed integers",
+            "minimum of two registers without a branch",
+            "min(a, b) in one instruction"
+        ]
+    },
+    "risc-v/instructions/minu": {
+        "hash": "c42f62fa928e5a9c",
+        "questions": [
+            "smaller of two unsigned integers",
+            "unsigned minimum of two registers",
+            "minimum where negative-looking values count as large"
+        ]
+    },
+    "risc-v/instructions/mul": {
+        "hash": "255acba998dbb796",
+        "questions": [
+            "how do I multiply two numbers",
+            "product of two registers",
+            "why is my product wrong for very large numbers"
+        ]
+    },
+    "risc-v/instructions/mulh": {
+        "hash": "15b20301ea2fc0bc",
+        "questions": [
+            "get the upper half of a signed product",
+            "signed product too big for one register",
+            "mulh vs mul"
+        ]
+    },
+    "risc-v/instructions/mulhsu": {
+        "hash": "0fab0582d69cccbe",
+        "questions": [
+            "upper half of a signed times unsigned product",
+            "multiply a signed number by an unsigned one and keep the high bits",
+            "mixed signed and unsigned multiplication"
+        ]
+    },
+    "risc-v/instructions/mulhu": {
+        "hash": "f429bc1e92ee901c",
+        "questions": [
+            "upper half of an unsigned multiplication",
+            "multiply 0xFFFFFFFF by 2 and get the high word",
+            "unsigned product too big for one register"
+        ]
+    },
+    "risc-v/instructions/mulw": {
+        "hash": "05fa030f63f8c92c",
+        "questions": [
+            "multiply 32-bit integers in 64-bit mode",
+            "int multiplication on rv64",
+            "multiply the low 32 bits and sign-extend the result"
+        ]
+    },
+    "risc-v/instructions/mv": {
+        "hash": "b4a4c2c88335c82a",
+        "questions": [
+            "how do I copy one register to another",
+            "move a value into a different register",
+            "assign one variable to another in registers"
+        ]
+    },
+    "risc-v/instructions/neg": {
+        "hash": "d34fdf90f7ff7383",
+        "questions": [
+            "how do I negate an integer",
+            "make a positive number negative",
+            "multiply a register by minus one"
+        ]
+    },
+    "risc-v/instructions/negw": {
+        "hash": "02000a1864b06f04",
+        "questions": [
+            "negate a 32-bit integer in 64-bit mode",
+            "negate only the low 32 bits",
+            "change the sign of an int on rv64"
+        ]
+    },
+    "risc-v/instructions/nop": {
+        "hash": "2e59784a989f36c7",
+        "questions": [
+            "an instruction that does nothing",
+            "leave an empty slot in the code",
+            "what does nop do"
+        ]
+    },
+    "risc-v/instructions/not": {
+        "hash": "74e7ca42fba2b1f0",
+        "questions": [
+            "flip every bit of a register",
+            "bitwise NOT of a value",
+            "why does inverting 13 give -14"
+        ]
+    },
+    "risc-v/instructions/or": {
+        "hash": "770382b8cb30eb84",
+        "questions": [
+            "bitwise OR of two registers",
+            "combine the bits of two registers",
+            "set the bits of one register that are set in another"
+        ]
+    },
+    "risc-v/instructions/orc.b": {
+        "hash": "559f072794ae2aea",
+        "questions": [
+            "find a zero byte inside a word",
+            "set each nonzero byte to 0xFF",
+            "check which bytes of a register are zero"
+        ]
+    },
+    "risc-v/instructions/ori": {
+        "hash": "b2bb582897b4b0a5",
+        "questions": [
+            "turn on bits with a constant mask",
+            "OR a register with an immediate",
+            "set flags in a register using a constant"
+        ]
+    },
+    "risc-v/instructions/orn": {
+        "hash": "d6831183ae756038",
+        "questions": [
+            "OR with the inverted bits of another register",
+            "set every bit that is clear in the mask",
+            "what does orn compute"
+        ]
+    },
+    "risc-v/instructions/rdcycle": {
+        "hash": "f0356ec72591567b",
+        "questions": [
+            "how do I count clock cycles",
+            "measure how many cycles a piece of code takes",
+            "read the cycle counter"
+        ]
+    },
+    "risc-v/instructions/rdcycleh": {
+        "hash": "6d69afb2a76ad3d9",
+        "questions": [
+            "read the upper 32 bits of the cycle counter",
+            "what does rdcycleh read",
+            "cycle count does not fit in 32 bits on rv32"
+        ]
+    },
+    "risc-v/instructions/rdinstret": {
+        "hash": "bda681981dcecf56",
+        "questions": [
+            "count how many instructions have run",
+            "read the retired instruction counter",
+            "measure code by instruction count"
+        ]
+    },
+    "risc-v/instructions/rdinstreth": {
+        "hash": "830232852af61131",
+        "questions": [
+            "upper 32 bits of the instruction count",
+            "instruction count does not fit in 32 bits on rv32",
+            "read instreth"
+        ]
+    },
+    "risc-v/instructions/rdtime": {
+        "hash": "63bd39f49fb65e37",
+        "questions": [
+            "how do I read the current time",
+            "measure elapsed time in my program",
+            "read the real-time counter"
+        ]
+    },
+    "risc-v/instructions/rdtimeh": {
+        "hash": "30c459039a2e09b7",
+        "questions": [
+            "upper 32 bits of the time counter",
+            "time counter does not fit in 32 bits on rv32",
+            "read timeh"
+        ]
+    },
+    "risc-v/instructions/rem": {
+        "hash": "64ceb67b60fba3d8",
+        "questions": [
+            "how do I get the remainder of a division",
+            "modulo of two signed integers",
+            "check if one number divides another evenly"
+        ]
+    },
+    "risc-v/instructions/remu": {
+        "hash": "e55a7ff33ff46e74",
+        "questions": [
+            "remainder of unsigned division",
+            "unsigned modulo of two registers",
+            "modulo without treating the top bit as a sign"
+        ]
+    },
+    "risc-v/instructions/remuw": {
+        "hash": "088bbaff138803e1",
+        "questions": [
+            "remainder of 32-bit unsigned integers in 64-bit mode",
+            "unsigned int modulo on rv64",
+            "unsigned remainder of the low 32 bits"
+        ]
+    },
+    "risc-v/instructions/remw": {
+        "hash": "375aba047fd05d68",
+        "questions": [
+            "remainder of 32-bit signed integers in 64-bit mode",
+            "int modulo on rv64",
+            "signed remainder using only the low 32 bits"
+        ]
+    },
+    "risc-v/instructions/ret": {
+        "hash": "20edd4dfc8a2bca1",
+        "questions": [
+            "how do I return from a function",
+            "go back to the caller",
+            "jump back to the address in ra"
+        ]
+    },
+    "risc-v/instructions/rev8": {
+        "hash": "d1ed40f30eb02805",
+        "questions": [
+            "reverse the byte order of a register",
+            "convert between little and big endian",
+            "why does rev8 turn 13 into 218103808"
+        ]
+    },
+    "risc-v/instructions/rol": {
+        "hash": "1662ff55014e8059",
+        "questions": [
+            "rotate a register left by an amount in a register",
+            "circular shift left",
+            "bits shifted out of the top come back at the bottom"
+        ]
+    },
+    "risc-v/instructions/rolw": {
+        "hash": "03157c9f5fa504ed",
+        "questions": [
+            "rotate the low 32 bits left in 64-bit mode",
+            "32-bit rotate left on rv64",
+            "circular shift left of an int by a register amount"
+        ]
+    },
+    "risc-v/instructions/ror": {
+        "hash": "0d104ffdc44d5149",
+        "questions": [
+            "rotate a register right by an amount in a register",
+            "circular shift right",
+            "bits shifted off the bottom reappear at the top"
+        ]
+    },
+    "risc-v/instructions/rori": {
+        "hash": "f8aaae63b8dd9958",
+        "questions": [
+            "rotate a register right by a constant",
+            "circular shift right by a fixed number of bits",
+            "what does rori t2, t0, 2 do"
+        ]
+    },
+    "risc-v/instructions/roriw": {
+        "hash": "c3d35c511f033967",
+        "questions": [
+            "rotate the low 32 bits right by a constant in 64-bit mode",
+            "32-bit rotate right by an immediate on rv64",
+            "circular shift right of an int by a fixed amount"
+        ]
+    },
+    "risc-v/instructions/rorw": {
+        "hash": "51fe3dad71369eab",
+        "questions": [
+            "rotate the low 32 bits right by a register amount in 64-bit mode",
+            "32-bit rotate right on rv64 with a variable count",
+            "circular shift right of an int by a variable amount"
+        ]
+    },
+    "risc-v/instructions/sb": {
+        "hash": "72bf895015fe9deb",
+        "questions": [
+            "how do I store a byte to memory",
+            "write one character into a string buffer",
+            "save the low 8 bits of a register"
+        ]
+    },
+    "risc-v/instructions/sc.d": {
+        "hash": "85033af842b133c1",
+        "questions": [
+            "store a double word only if the reservation still holds",
+            "store conditional of a 64-bit value failed with 1",
+            "retry loop for an atomic update of a 64-bit value"
+        ]
+    },
+    "risc-v/instructions/sc.w": {
+        "hash": "3aa374d7ab80d692",
+        "questions": [
+            "store a word only if the reservation still holds",
+            "why does sc.w set its result to 1",
+            "retry loop for an atomic update of a word"
+        ]
+    },
+    "risc-v/instructions/sd": {
+        "hash": "9ff126bebfd5fb7a",
+        "questions": [
+            "how do I store a 64-bit value to memory",
+            "save a register into a .dword variable",
+            "store a double word integer, not a floating-point double"
+        ]
+    },
+    "risc-v/instructions/seqz": {
+        "hash": "e74143f2fcd65b4f",
+        "questions": [
+            "set a register to 1 if a value is zero",
+            "test whether a number is zero as 0 or 1",
+            "logical not of a value, like !x"
+        ]
+    },
+    "risc-v/instructions/sext.b": {
+        "hash": "f760a4bab3837b84",
+        "questions": [
+            "sign-extend a byte to a full register",
+            "treat the low byte as a signed number",
+            "why does sext.b turn 128 into -128"
+        ]
+    },
+    "risc-v/instructions/sext.h": {
+        "hash": "fbbb86980e67ebcb",
+        "questions": [
+            "sign-extend a 16-bit value to a full register",
+            "treat the low 16 bits as a signed short",
+            "why does sext.h turn 32768 into -32768"
+        ]
+    },
+    "risc-v/instructions/sext.w": {
+        "hash": "c8d12c9070476891",
+        "questions": [
+            "sign-extend a 32-bit value to 64 bits",
+            "convert an int to a long in 64-bit mode",
+            "treat the low 32 bits as signed"
+        ]
+    },
+    "risc-v/instructions/sgt": {
+        "hash": "1b05b64fd5dd4d73",
+        "questions": [
+            "set a register to 1 if one value is greater than another",
+            "greater-than result as a boolean, signed",
+            "compare two signed numbers for greater without branching"
+        ]
+    },
+    "risc-v/instructions/sgtu": {
+        "hash": "8aa04fb6185111da",
+        "questions": [
+            "unsigned greater-than test giving 0 or 1",
+            "set 1 if a is bigger than b, unsigned",
+            "compare two unsigned registers without branching"
+        ]
+    },
+    "risc-v/instructions/sgtz": {
+        "hash": "83d24ef9230ed72f",
+        "questions": [
+            "set a register to 1 if a value is positive",
+            "test whether a number is above zero as 0 or 1",
+            "positive check without a branch"
+        ]
+    },
+    "risc-v/instructions/sh": {
+        "hash": "d7c8191b5cfdbca7",
+        "questions": [
+            "how do I store a 16-bit halfword",
+            "write a short to memory",
+            "save the low 16 bits of a register to an address"
+        ]
+    },
+    "risc-v/instructions/sh1add": {
+        "hash": "39f3cdc5659771e9",
+        "questions": [
+            "address of element i in an array of 2-byte values",
+            "base plus index times 2 in one instruction",
+            "shift left by one and add"
+        ]
+    },
+    "risc-v/instructions/sh1add.uw": {
+        "hash": "bceca1b889c4d4f1",
+        "questions": [
+            "base plus unsigned 32-bit index times 2 in 64-bit mode",
+            "index a halfword array with an unsigned int on rv64",
+            "zero-extend, shift left by 1 and add"
+        ]
+    },
+    "risc-v/instructions/sh2add": {
+        "hash": "73891a78cf3cbc60",
+        "questions": [
+            "address of element i in an array of words",
+            "base plus index times 4 in one instruction",
+            "index an int array without a separate shift"
+        ]
+    },
+    "risc-v/instructions/sh2add.uw": {
+        "hash": "30d144f7965dd42e",
+        "questions": [
+            "base plus unsigned 32-bit index times 4 in 64-bit mode",
+            "index a word array with an unsigned int on rv64",
+            "zero-extend, shift left by 2 and add"
+        ]
+    },
+    "risc-v/instructions/sh3add": {
+        "hash": "7db7df68294b9321",
+        "questions": [
+            "address of element i in an array of 8-byte values",
+            "base plus index times 8 in one instruction",
+            "index a long array without a separate shift"
+        ]
+    },
+    "risc-v/instructions/sh3add.uw": {
+        "hash": "d00e8418d1625c1e",
+        "questions": [
+            "base plus unsigned 32-bit index times 8 in 64-bit mode",
+            "index an array of 8-byte values with an unsigned int on rv64",
+            "zero-extend, shift left by 3 and add"
+        ]
+    },
+    "risc-v/instructions/sll": {
+        "hash": "f4c40ca4e876555e",
+        "questions": [
+            "shift left by an amount held in a register",
+            "multiply by a power of two chosen at run time",
+            "shift left by 32 leaves the value unchanged in 32-bit mode"
+        ]
+    },
+    "risc-v/instructions/slli": {
+        "hash": "10bf275c6351673c",
+        "questions": [
+            "shift a register left by a constant",
+            "multiply by 4 with a shift",
+            "what does slli t2, t0, 2 do"
+        ]
+    },
+    "risc-v/instructions/slli.uw": {
+        "hash": "e110df767c6bd863",
+        "questions": [
+            "zero-extend a 32-bit index and shift it left",
+            "scale an unsigned 32-bit index in 64-bit mode",
+            "unsigned int index times 4 without a separate zero extension"
+        ]
+    },
+    "risc-v/instructions/slliw": {
+        "hash": "a1eeae42eb88906c",
+        "questions": [
+            "shift a 32-bit value left by a constant in 64-bit mode",
+            "multiply an int by a power of two on rv64",
+            "shift the low 32 bits left and sign-extend"
+        ]
+    },
+    "risc-v/instructions/sllw": {
+        "hash": "468513c5cb7e16e5",
+        "questions": [
+            "shift the low 32 bits left by a register amount in 64-bit mode",
+            "32-bit shift left with a variable count on rv64",
+            "shift an int left and sign-extend, amount in a register"
+        ]
+    },
+    "risc-v/instructions/slt": {
+        "hash": "5899464871537546",
+        "questions": [
+            "set a register to 1 if one value is less than another",
+            "compare two signed numbers without branching",
+            "less-than result as a boolean, signed"
+        ]
+    },
+    "risc-v/instructions/slti": {
+        "hash": "37f81e318703789c",
+        "questions": [
+            "compare a register with a constant, 1 if less",
+            "is x less than 5, as 0 or 1",
+            "signed less-than test against an immediate"
+        ]
+    },
+    "risc-v/instructions/sltiu": {
+        "hash": "8f24f17165dfc046",
+        "questions": [
+            "unsigned compare with a constant, 1 if less",
+            "why does sltiu with -1 give 1",
+            "unsigned less-than test against an immediate"
+        ]
+    },
+    "risc-v/instructions/sltu": {
+        "hash": "d99b882b4b5bbd47",
+        "questions": [
+            "compare two unsigned numbers, 1 if less",
+            "unsigned less-than result as a boolean",
+            "why does sltu say 0xFFFFFFFF is not less than 1"
+        ]
+    },
+    "risc-v/instructions/sltz": {
+        "hash": "043170efbe9f46b2",
+        "questions": [
+            "set a register to 1 if a value is negative",
+            "test the sign of a number as 0 or 1",
+            "is x below zero, as a boolean"
+        ]
+    },
+    "risc-v/instructions/snez": {
+        "hash": "07b8a3426f35476c",
+        "questions": [
+            "set a register to 1 if a value is nonzero",
+            "convert any nonzero value to 1",
+            "turn a number into a true or false value"
+        ]
+    },
+    "risc-v/instructions/sra": {
+        "hash": "55f35ca1ef432b6a",
+        "questions": [
+            "arithmetic shift right by an amount in a register",
+            "signed shift right by a variable number of bits",
+            "keep the sign when shifting right by a register amount"
+        ]
+    },
+    "risc-v/instructions/srai": {
+        "hash": "5a4ce50363d679e1",
+        "questions": [
+            "arithmetic shift right by a constant",
+            "divide a signed number by 4 with a shift",
+            "shift a negative number right and keep it negative"
+        ]
+    },
+    "risc-v/instructions/sraiw": {
+        "hash": "14080c49c0d275c4",
+        "questions": [
+            "arithmetic shift right of a 32-bit value by a constant in 64-bit mode",
+            "signed int shift right by a constant on rv64",
+            "shift the low 32 bits right keeping the sign"
+        ]
+    },
+    "risc-v/instructions/sraw": {
+        "hash": "6e2d39a80922b877",
+        "questions": [
+            "arithmetic shift right of a 32-bit value by a register amount in 64-bit mode",
+            "signed int shift right by a register amount on rv64",
+            "shift a 32-bit int right with sign fill and a variable count"
+        ]
+    },
+    "risc-v/instructions/srl": {
+        "hash": "f2df1b5cc44aed64",
+        "questions": [
+            "logical shift right by an amount in a register",
+            "unsigned shift right by a variable number of bits",
+            "shift right filling with zeros, count held in a register"
+        ]
+    },
+    "risc-v/instructions/srli": {
+        "hash": "3ae4369804806c00",
+        "questions": [
+            "shift a register right by a constant",
+            "divide an unsigned number by 8 with a shift",
+            "shifting a negative number right by 1 gives a huge positive number"
+        ]
+    },
+    "risc-v/instructions/srliw": {
+        "hash": "877bd357c5852469",
+        "questions": [
+            "logical shift right of a 32-bit value by a constant in 64-bit mode",
+            "unsigned int shift right by a constant on rv64",
+            "shift the low 32 bits right filling with zeros"
+        ]
+    },
+    "risc-v/instructions/srlw": {
+        "hash": "4c6b76631138ffb7",
+        "questions": [
+            "logical shift right of a 32-bit value by a register amount in 64-bit mode",
+            "unsigned int shift right by a register amount on rv64",
+            "zero-filling 32-bit shift with a variable count"
+        ]
+    },
+    "risc-v/instructions/sub": {
+        "hash": "34cf9ee3f2f64b7a",
+        "questions": [
+            "how do I subtract two registers",
+            "difference of two numbers",
+            "minus operation in assembly"
+        ]
+    },
+    "risc-v/instructions/subw": {
+        "hash": "485a7b3fb1d28a42",
+        "questions": [
+            "subtract 32-bit integers in 64-bit mode",
+            "int subtraction on rv64",
+            "subtract using only the low 32 bits"
+        ]
+    },
+    "risc-v/instructions/sw": {
+        "hash": "a31af390c9be7b9c",
+        "questions": [
+            "how do I store a register to memory",
+            "save a value into a .word variable",
+            "sw with a label: what is the extra register for"
+        ]
+    },
+    "risc-v/instructions/tail": {
+        "hash": "f7c7ae3f8df1a90c",
+        "questions": [
+            "jump to a far function without saving a return address",
+            "tail call in assembly",
+            "end a function by jumping into another one"
+        ]
+    },
+    "risc-v/instructions/uret": {
+        "hash": "8366f0cd413c4bbc",
+        "questions": [
+            "return from an interrupt handler",
+            "how does an exception handler resume the program",
+            "go back to the address in uepc"
+        ]
+    },
+    "risc-v/instructions/wfi": {
+        "hash": "38eeacabcaa7c563",
+        "questions": [
+            "how do I wait for an interrupt",
+            "pause until the timer reaches timecmp",
+            "sleep without a busy loop",
+            "wait for a keyboard interrupt"
+        ]
+    },
+    "risc-v/instructions/xnor": {
+        "hash": "97b320a8629eea4b",
+        "questions": [
+            "find the bits where two registers agree",
+            "bitwise XNOR",
+            "NOT of XOR in one instruction"
+        ]
+    },
+    "risc-v/instructions/xor": {
+        "hash": "70dd660552f37327",
+        "questions": [
+            "bitwise XOR of two registers",
+            "flip the bits of one register that are set in another",
+            "check which bits differ between two values"
+        ]
+    },
+    "risc-v/instructions/xori": {
+        "hash": "dd32847eda0abf46",
+        "questions": [
+            "XOR a register with a constant",
+            "flip several bits at once with a constant mask",
+            "exclusive or with an immediate value"
+        ]
+    },
+    "risc-v/instructions/zext.b": {
+        "hash": "4e28c73cd2d39178",
+        "questions": [
+            "keep only the low byte of a register",
+            "zero-extend a byte to a full register",
+            "treat the low byte as unsigned 0 to 255"
+        ]
+    },
+    "risc-v/instructions/zext.h": {
+        "hash": "0f758bc43e1f5cc8",
+        "questions": [
+            "keep only the low 16 bits of a register",
+            "zero-extend a halfword to a full register",
+            "treat the low 16 bits as unsigned 0 to 65535"
+        ]
+    },
+    "risc-v/instructions/zext.w": {
+        "hash": "89643c303d74ccb9",
+        "questions": [
+            "keep only the low 32 bits in 64-bit mode",
+            "zero-extend a 32-bit value to 64 bits",
+            "convert an unsigned int to an unsigned long"
+        ]
+    },
+    "risc-v/interrupts/compatibility": {
+        "hash": "7c2491c6dac5331f",
+        "questions": [
+            "why does my interrupt code behave differently in another simulator",
+            "is a key typed while interrupts are off lost",
+            "do I need to connect a timer tool first",
+            "timer interrupts stop when the bitmap display base is 0xffff0000"
+        ]
+    },
+    "risc-v/interrupts/debugging": {
+        "hash": "f4591483314a8937",
+        "questions": [
+            "how do I step through an interrupt handler",
+            "why did step jump into my handler",
+            "how do I debug the main program without landing in the handler",
+            "can I undo out of an interrupt handler",
+            "why does my timer program finish instantly in a testcase"
+        ]
+    },
+    "risc-v/interrupts/exceptions": {
+        "hash": "95bc7c58c44e7656",
+        "questions": [
+            "how do I handle an error instead of the program stopping",
+            "how do I skip the instruction that failed",
+            "my exception handler keeps running over and over",
+            "how do I find out which exception happened",
+            "does ebreak enter my exception handler"
+        ]
+    },
+    "risc-v/interrupts/from-c": {
+        "hash": "fcb6208a993ae7ba",
+        "questions": [
+            "how do I use interrupts from a C program",
+            "how do I read and set the timer from C",
+            "how do I make sure my handler file is linked into a C program",
+            "can I write the interrupt handler in C"
+        ]
+    },
+    "risc-v/interrupts/handler": {
+        "hash": "0059f439908320c6",
+        "questions": [
+            "how do I set up an interrupt handler",
+            "how do I return from an interrupt handler",
+            "what does the processor do when an interrupt happens",
+            "registers change unexpectedly after my handler runs",
+            "how do I handle several interrupt sources with one handler"
+        ]
+    },
+    "risc-v/interrupts/interrupts-and-the-timer": {
+        "hash": "7735749859e116be",
+        "questions": [
+            "what is an interrupt",
+            "what can interrupt my program",
+            "how do interrupts work",
+            "how do I tell a keyboard interrupt from a display interrupt"
+        ]
+    },
+    "risc-v/interrupts/keyboard": {
+        "hash": "a56e820e5a2a714b",
+        "questions": [
+            "how do I get an interrupt when a key is typed",
+            "how do I echo typed keys without polling",
+            "how do I get an interrupt after each character is printed",
+            "my keyboard interrupt keeps firing",
+            "why do arrow keys not cause a keyboard interrupt"
+        ]
+    },
+    "risc-v/interrupts/timer": {
+        "hash": "a8186aa93a557438",
+        "questions": [
+            "how do I set up a timer interrupt",
+            "my timer interrupt only fires once",
+            "why do my timer ticks drift",
+            "does the timer keep counting while paused",
+            "which clock should I read to choose the next timer target"
+        ]
+    },
+    "risc-v/interrupts/wfi": {
+        "hash": "5d00e96024b54ba1",
+        "questions": [
+            "how do I sleep until an interrupt comes",
+            "what does wfi do",
+            "my program is stuck waiting at wfi",
+            "why does wfi return immediately",
+            "polling the time uses up the instruction limit"
+        ]
+    },
+    "risc-v/midi-and-audio/debugging": {
+        "hash": "df1ad77d54dbc3b0",
+        "questions": [
+            "does MIDI music keep playing when I pause or hit a breakpoint",
+            "what happens to queued audio when I undo a write",
+            "is sound played in a testcase",
+            "what happens to notes still sounding when the program ends",
+            "MIDI and audio stop working with the bitmap display at 0xffff0000"
+        ]
+    },
+    "risc-v/midi-and-audio/fifo": {
+        "hash": "a251290423a5f475",
+        "questions": [
+            "how many audio frames can I queue",
+            "why is there a delay before my sound plays",
+            "how do I keep the audio from running out",
+            "why does changing the rate cut off my sound"
+        ]
+    },
+    "risc-v/midi-and-audio/first-midi-program": {
+        "hash": "358fb1409317ec6e",
+        "questions": [
+            "example program that plays a scale on a piano",
+            "how do I start a note and stop it later",
+            "what bytes do I send to play middle C",
+            "assembly routine that sends one byte to the MIDI port"
+        ]
+    },
+    "risc-v/midi-and-audio/first-sampled-program": {
+        "hash": "f3d0b35000af156b",
+        "questions": [
+            "how do I make a square wave sound",
+            "example program that plays a 400 Hz tone",
+            "my audio program waits forever",
+            "why does sound keep playing after my program ends"
+        ]
+    },
+    "risc-v/midi-and-audio/from-c": {
+        "hash": "097794e80b03ec15",
+        "questions": [
+            "how do I play sound samples from C",
+            "how do I send MIDI bytes from C",
+            "C program that plays notes and a tone",
+            "how does sim_pcm_write work in stereo"
+        ]
+    },
+    "risc-v/midi-and-audio/midi-and-services": {
+        "hash": "2cf97649d3ee4717",
+        "questions": [
+            "can I use the MIDI port together with the note services",
+            "changing the instrument on the port did not change my service notes",
+            "do the note services and the MIDI port share a volume control"
+        ]
+    },
+    "risc-v/midi-and-audio/midi-busy": {
+        "hash": "a2970a6d8f49292a",
+        "questions": [
+            "why are some of my MIDI bytes dropped",
+            "how fast does the MIDI port send bytes",
+            "why don't my notes start at exactly the same time",
+            "how do I stop every note at once"
+        ]
+    },
+    "risc-v/midi-and-audio/midi-messages": {
+        "hash": "b04ca2a917f9e81e",
+        "questions": [
+            "how do I play drums",
+            "list of instrument numbers",
+            "my instrument is one off from the list",
+            "how do I bend the pitch of a note",
+            "how do I set the volume of a channel",
+            "how do I play a chord"
+        ]
+    },
+    "risc-v/midi-and-audio/midi-registers": {
+        "hash": "4a732748ffacb292",
+        "questions": [
+            "what is at address 0xffff0340",
+            "which register do I write MIDI bytes to",
+            "why does MIDI status always have bit 7 set",
+            "why do status and command share one address"
+        ]
+    },
+    "risc-v/midi-and-audio/overview": {
+        "hash": "0ea394adfe30444e",
+        "questions": [
+            "which way of making sound should I use",
+            "how do I play a game soundtrack while the program runs",
+            "can my program generate its own audio waveform",
+            "how do I check that the MIDI port and audio output are there",
+            "where is the button to mute my program's sound"
+        ]
+    },
+    "risc-v/midi-and-audio/pcm-registers": {
+        "hash": "b9468f90b30a01c6",
+        "questions": [
+            "what is at address 0xffff0350",
+            "how do I turn the audio output on in stereo",
+            "how do I set the sample rate",
+            "nothing plays when I write samples"
+        ]
+    },
+    "risc-v/midi-and-audio/risc-v-64": {
+        "hash": "fa84a5df2720cba5",
+        "questions": [
+            "do the MIDI and audio examples run on the 64-bit target",
+            "can I use sd to write to the sound registers",
+            "does lw sign extension change the sound register values on 64-bit",
+            "do the SIM_MIDI and SIM_PCM macros work on a 64-bit target"
+        ]
+    },
+    "risc-v/midi-and-audio/samples": {
+        "hash": "08528d3a02c0e3ff",
+        "questions": [
+            "what is the difference between a sample and a frame",
+            "how do I pack two samples into one word",
+            "which sample rate should I pick",
+            "can I copy WAV sample data straight to the audio output",
+            "what is the highest pitch I can play at a given rate"
+        ]
+    },
+    "risc-v/registers/csr": {
+        "hash": "9b63c5a4d17f2dae",
+        "questions": [
+            "what are control and status registers",
+            "how do I read a control register into t0",
+            "which operand comes first in csrw",
+            "why is csrw written the other way round in files linked with C"
+        ]
+    },
+    "risc-v/registers/csr-cycle-time-instret": {
+        "hash": "f2d1545de58193ad",
+        "questions": [
+            "how do I count how many instructions a piece of code runs",
+            "does cycle count real clock cycles",
+            "why does the time counter keep going while paused",
+            "which clock should I use for timer deadlines"
+        ]
+    },
+    "risc-v/registers/csr-cycleh-timeh-instreth": {
+        "hash": "f70fde7599014be7",
+        "questions": [
+            "how do I read a 64-bit counter on a 32-bit target",
+            "why read the high half of a counter twice",
+            "where are the upper 32 bits of the cycle count"
+        ]
+    },
+    "risc-v/registers/csr-fcsr": {
+        "hash": "4d2715593ee02d6a",
+        "questions": [
+            "how do I reset the float flags and set the rounding mode at once",
+            "what is the floating point control and status register",
+            "how are fflags and frm related"
+        ]
+    },
+    "risc-v/registers/csr-fflags": {
+        "hash": "cff5ac011f5c413b",
+        "questions": [
+            "how do I check if a float division by zero happened",
+            "how do I detect overflow in floating point math",
+            "how do I clear the floating point exception flags",
+            "why are my float error flags still set from an earlier operation"
+        ]
+    },
+    "risc-v/registers/csr-frm": {
+        "hash": "06461523daabe06c",
+        "questions": [
+            "how do I change the rounding mode for floats",
+            "what rounding does floating point use by default",
+            "how do I make float results truncate instead of round"
+        ]
+    },
+    "risc-v/registers/csr-ucause": {
+        "hash": "fe9ba0972c33b481",
+        "questions": [
+            "how do I find out what caused a trap",
+            "how do I tell an interrupt from an exception in my handler",
+            "what does cause 0x80000004 mean",
+            "why is the trap cause value different on a 64-bit target"
+        ]
+    },
+    "risc-v/registers/csr-uepc": {
+        "hash": "68b302fe5e72e120",
+        "questions": [
+            "which address does uret return to",
+            "how do I skip the instruction that caused an exception",
+            "should I add 4 to uepc after an interrupt"
+        ]
+    },
+    "risc-v/registers/csr-uie": {
+        "hash": "a14a30cb3e6d5365",
+        "questions": [
+            "how do I enable only the timer interrupt",
+            "which kinds of interrupt can I enable",
+            "which bit enables external interrupts",
+            "I enabled the timer source but no interrupt comes"
+        ]
+    },
+    "risc-v/registers/csr-uip": {
+        "hash": "0b5ac871dc8623f4",
+        "questions": [
+            "how do I trigger a software interrupt",
+            "how do I see which interrupts are waiting",
+            "can an interrupt stay pending while its source is disabled"
+        ]
+    },
+    "risc-v/registers/csr-uscratch": {
+        "hash": "ec023fac92ccfe18",
+        "questions": [
+            "is there a spare register my handler can use",
+            "where can a handler keep its own stack pointer",
+            "what is uscratch for"
+        ]
+    },
+    "risc-v/registers/csr-ustatus": {
+        "hash": "7a8e1e88b9a00a86",
+        "questions": [
+            "how do I turn interrupts on",
+            "why are interrupts off inside my handler",
+            "what is the UIE bit",
+            "how do interrupts get turned back on after the handler"
+        ]
+    },
+    "risc-v/registers/csr-utval": {
+        "hash": "f990db859fb2de43",
+        "questions": [
+            "which address did my failed load use",
+            "how do I tell a keyboard interrupt from a display interrupt",
+            "how do I find the instruction that could not be decoded"
+        ]
+    },
+    "risc-v/registers/csr-utvec": {
+        "hash": "37e4453ab9dd07a1",
+        "questions": [
+            "where do I put the address of my interrupt handler",
+            "how do I install an exception handler",
+            "my program stops with an error instead of running my handler"
+        ]
+    },
+    "risc-v/registers/fpu": {
+        "hash": "4fa4676be192f3dc",
+        "questions": [
+            "what are the floating point registers",
+            "how do I convert an integer to a float",
+            "how do I copy the raw bits of a float into an integer register",
+            "how do I branch on a float comparison",
+            "why does the panel show NaN when the register holds a double",
+            "how do I load and store a double"
+        ]
+    },
+    "risc-v/registers/fpu-fa0-fa7": {
+        "hash": "f26e1806148ac623",
+        "questions": [
+            "how do I pass a float or double to a function",
+            "where does a function return a float result",
+            "how do I pass an integer and a double to the same function"
+        ]
+    },
+    "risc-v/registers/fpu-fs0-fs1": {
+        "hash": "74b1b07b1cfb030a",
+        "questions": [
+            "which float registers keep their value across a call",
+            "must my function restore fs0 before returning",
+            "what are the floating point saved registers"
+        ]
+    },
+    "risc-v/registers/fpu-fs2-fs11": {
+        "hash": "8487b9f9c0ba77c4",
+        "questions": [
+            "why is fs2 numbered f18",
+            "why are the float register names out of order",
+            "are there more float saved registers"
+        ]
+    },
+    "risc-v/registers/fpu-ft0-ft7": {
+        "hash": "ca8398257a5131c9",
+        "questions": [
+            "which float registers can I use for scratch values",
+            "do float temporaries survive a function call",
+            "why do examples use ft0"
+        ]
+    },
+    "risc-v/registers/fpu-ft8-ft11": {
+        "hash": "ca696d7a242602fc",
+        "questions": [
+            "are there more float temporary registers",
+            "what are the last four float registers for",
+            "do f28 to f31 survive a call"
+        ]
+    },
+    "risc-v/registers/general-registers": {
+        "hash": "38792d6033d944d9",
+        "questions": [
+            "how many general purpose registers are there",
+            "should I write x5 or t0",
+            "why do registers have both a number and a name",
+            "what is the difference between saved and temporary registers",
+            "how many bits does a register hold"
+        ]
+    },
+    "risc-v/registers/general-registers-a0-a1": {
+        "hash": "285ad9504f43687e",
+        "questions": [
+            "how do I pass arguments to a function",
+            "where does a function put its return value",
+            "where does the second word of a two-part result go",
+            "where do ecall arguments and results go"
+        ]
+    },
+    "risc-v/registers/general-registers-a2-a7": {
+        "hash": "d9bd6bf1f3e1f456",
+        "questions": [
+            "where do the ninth and later arguments go",
+            "how many arguments can be passed in registers",
+            "which register holds the ecall service number",
+            "what is a7 used for"
+        ]
+    },
+    "risc-v/registers/general-registers-gp": {
+        "hash": "ed3a866450e6af58",
+        "questions": [
+            "what is the global pointer",
+            "should I change gp",
+            "how are global variables reached in one instruction"
+        ]
+    },
+    "risc-v/registers/general-registers-ra": {
+        "hash": "f6382797aab429b6",
+        "questions": [
+            "what holds the address my function returns to",
+            "my function returns to the wrong place after calling another function",
+            "where does jal save the return address",
+            "what does ret actually do"
+        ]
+    },
+    "risc-v/registers/general-registers-s0-also-written-fp": {
+        "hash": "f69a86fbc01df661",
+        "questions": [
+            "what is the frame pointer",
+            "is fp the same register as s0",
+            "when do I need a frame pointer"
+        ]
+    },
+    "risc-v/registers/general-registers-s1": {
+        "hash": "839d987dd09fc07f",
+        "questions": [
+            "which registers keep their value across a call",
+            "which registers must my function restore before returning",
+            "what is a saved register"
+        ]
+    },
+    "risc-v/registers/general-registers-s2-s11": {
+        "hash": "d4557dc8e7cb39f8",
+        "questions": [
+            "where do I keep a loop counter when the loop calls a function",
+            "my loop counter gets overwritten by a function call",
+            "are there more saved registers than s0 and s1"
+        ]
+    },
+    "risc-v/registers/general-registers-sp": {
+        "hash": "5ce4b5300954ca57",
+        "questions": [
+            "what is the stack pointer",
+            "how do I make room on the stack in a function",
+            "how should the stack be aligned at a call"
+        ]
+    },
+    "risc-v/registers/general-registers-t0-t2": {
+        "hash": "bceb58701c9b4e39",
+        "questions": [
+            "which registers can I use for scratch values",
+            "why did my value change after calling a function",
+            "do I need to save temporary registers before a call"
+        ]
+    },
+    "risc-v/registers/general-registers-t3-t6": {
+        "hash": "64000c7b9b024792",
+        "questions": [
+            "are there more temporary registers than t0 to t2",
+            "I ran out of temporary registers, which others can I use",
+            "do the extra temporaries survive a function call"
+        ]
+    },
+    "risc-v/registers/general-registers-tp": {
+        "hash": "6710519762da11bd",
+        "questions": [
+            "what is the thread pointer",
+            "can I use tp as an extra register",
+            "is there a register reserved for threads"
+        ]
+    },
+    "risc-v/registers/general-registers-zero": {
+        "hash": "3231a690466f4ce5",
+        "questions": [
+            "which register always holds 0",
+            "why is my register still 0 after I write to it",
+            "how does mv work without a move instruction",
+            "what is x0 for"
+        ]
+    },
+    "risc-v/registers/the-register-files": {
+        "hash": "534fb3d7609c7d7b",
+        "questions": [
+            "what kinds of registers does the processor have",
+            "what are the three tabs in the registers panel",
+            "where do I see the floating point registers in the editor"
+        ]
+    },
+    "risc-v/runtime-library/_Exit": {
+        "hash": "1b0fa5fb3e8fe285",
+        "questions": [
+            "quit immediately without running atexit handlers",
+            "what is the difference between exit and _Exit",
+            "end the program right now with a status code, skipping cleanup"
+        ]
+    },
+    "risc-v/runtime-library/__assert_fail": {
+        "hash": "c9fb449b6bcdb08e",
+        "questions": [
+            "program stopped with an Assertion failed message",
+            "what happens when an assert condition is false",
+            "where does the assert macro print its message"
+        ]
+    },
+    "risc-v/runtime-library/abort": {
+        "hash": "3607bb317e3cd0c9",
+        "questions": [
+            "why did my program end with status 134",
+            "stop the program abnormally",
+            "difference between abort and exit"
+        ]
+    },
+    "risc-v/runtime-library/abs": {
+        "hash": "54b501eb96a4a121",
+        "questions": [
+            "absolute value of an int",
+            "how do I make a negative int positive",
+            "what does abs(-5) return"
+        ]
+    },
+    "risc-v/runtime-library/acos": {
+        "hash": "415a22d732714351",
+        "questions": [
+            "inverse cosine of a number",
+            "find the angle whose cosine is x",
+            "what range of angles does acos return"
+        ]
+    },
+    "risc-v/runtime-library/aligned_alloc": {
+        "hash": "d037d35978094ea2",
+        "questions": [
+            "allocate memory aligned to a 64-byte boundary",
+            "which alignment values can I ask for when allocating",
+            "malloc with a specific alignment"
+        ]
+    },
+    "risc-v/runtime-library/asctime": {
+        "hash": "67950dddb974cce2",
+        "questions": [
+            "convert a struct tm to a readable date string",
+            "print a date like Mon Jan 15 10:30:00 2024",
+            "why does the asctime string end with a newline"
+        ]
+    },
+    "risc-v/runtime-library/asin": {
+        "hash": "db773f59e2baf443",
+        "questions": [
+            "inverse sine of a number",
+            "find the angle whose sine is x",
+            "what range of angles does asin return"
+        ]
+    },
+    "risc-v/runtime-library/atan": {
+        "hash": "678e2def83ebcf50",
+        "questions": [
+            "inverse tangent of a number",
+            "find the angle whose tangent is x",
+            "what range of angles does atan return"
+        ]
+    },
+    "risc-v/runtime-library/atan2": {
+        "hash": "b11a7fbba3d93f8c",
+        "questions": [
+            "angle of a point (x, y) from the origin",
+            "atan gives the wrong quadrant for negative x",
+            "difference between atan and atan2"
+        ]
+    },
+    "risc-v/runtime-library/atexit": {
+        "hash": "262f12808a83c035",
+        "questions": [
+            "run my function automatically when the program ends",
+            "in what order do registered exit functions run",
+            "check that my cleanup function was registered"
+        ]
+    },
+    "risc-v/runtime-library/atof": {
+        "hash": "f5bbacefda7ead8a",
+        "questions": [
+            "convert a string to a double",
+            "read a decimal fraction like 3.14 out of a string",
+            "does atof report invalid input"
+        ]
+    },
+    "risc-v/runtime-library/atoi": {
+        "hash": "01b400fb14f03f80",
+        "questions": [
+            "convert a string to an int",
+            "turn a char array of digits into an int",
+            "does atoi report invalid input",
+            "why does atoi not read hex numbers"
+        ]
+    },
+    "risc-v/runtime-library/atol": {
+        "hash": "3bdba4f4dbd7267f",
+        "questions": [
+            "convert a string to a long",
+            "parse a decimal number into a long without error checking",
+            "difference between atoi and atol"
+        ]
+    },
+    "risc-v/runtime-library/atoll": {
+        "hash": "0cf33bb5beb2a6a6",
+        "questions": [
+            "convert a string to a long long",
+            "parse a big decimal number from text into a long long",
+            "difference between atol and atoll"
+        ]
+    },
+    "risc-v/runtime-library/bsearch": {
+        "hash": "332b3d536680fecf",
+        "questions": [
+            "binary search in a sorted array",
+            "look up a key in a sorted table with a compare function",
+            "what does bsearch return when the key is missing"
+        ]
+    },
+    "risc-v/runtime-library/calloc": {
+        "hash": "67fa1cbb039e2ad3",
+        "questions": [
+            "allocate memory that starts zeroed",
+            "difference between malloc and calloc",
+            "allocating a huge zeroed array returns NULL"
+        ]
+    },
+    "risc-v/runtime-library/cbrt": {
+        "hash": "2267576472de1fb1",
+        "questions": ["cube root of a number", "what number cubed gives x", "what does cbrt do"]
+    },
+    "risc-v/runtime-library/ceil": {
+        "hash": "d38fef28237a59f0",
+        "questions": [
+            "round a double up to a whole number",
+            "what does ceil(-2.5) return",
+            "round toward plus infinity for doubles"
+        ]
+    },
+    "risc-v/runtime-library/ceilf": {
+        "hash": "e566f6b0079d7fc6",
+        "questions": [
+            "round a float up to a whole number",
+            "float version of ceil",
+            "what does ceilf do"
+        ]
+    },
+    "risc-v/runtime-library/clearerr": {
+        "hash": "62bba9317ecd94bc",
+        "questions": [
+            "clear a stream's error after a failed read",
+            "keep reading a stream after it hit end of file",
+            "feof stays true, how do I reset it"
+        ]
+    },
+    "risc-v/runtime-library/clock": {
+        "hash": "ad46d0834a950163",
+        "questions": [
+            "measure how long part of my program takes",
+            "convert processor time ticks to seconds",
+            "does time spent waiting for input count",
+            "how many instructions per second does the simulator run",
+            "why does clock go back after undo"
+        ]
+    },
+    "risc-v/runtime-library/closedir": {
+        "hash": "75b22a43a1468596",
+        "questions": [
+            "close a folder after listing its files",
+            "free a DIR opened by opendir",
+            "what does closedir return"
+        ]
+    },
+    "risc-v/runtime-library/compiled-programs": {
+        "hash": "6157f278b6a8350b",
+        "questions": [
+            "how do I read command line arguments in C",
+            "argc is always 1, how do I pass arguments to my program",
+            "what is in argv[0]",
+            "how much memory can my C program use",
+            "can undo go back to before main starts",
+            "what runs before main in a compiled program"
+        ]
+    },
+    "risc-v/runtime-library/copysign": {
+        "hash": "f1865f007deaec5c",
+        "questions": [
+            "give one number the sign of another",
+            "make x negative when y is negative",
+            "what does copysign do"
+        ]
+    },
+    "risc-v/runtime-library/cos": {
+        "hash": "87c337e8cff33bc7",
+        "questions": [
+            "cosine of a double angle",
+            "why does cos(90) not return 0",
+            "does the double cosine function take degrees or radians"
+        ]
+    },
+    "risc-v/runtime-library/cosf": {
+        "hash": "20b995e5f42168b7",
+        "questions": [
+            "cosine of a float angle",
+            "cos for float values",
+            "does cosf take degrees or radians"
+        ]
+    },
+    "risc-v/runtime-library/cosh": {
+        "hash": "16a512d1b8770a28",
+        "questions": [
+            "hyperbolic cosine of a number",
+            "what does cosh do",
+            "hyperbolic cos in math.h"
+        ]
+    },
+    "risc-v/runtime-library/ctime": {
+        "hash": "b529d515e3ac6a84",
+        "questions": [
+            "convert a time_t to a readable date string",
+            "difference between ctime and asctime",
+            "print the result of time() as a date"
+        ]
+    },
+    "risc-v/runtime-library/difftime": {
+        "hash": "a4c6c9f910014785",
+        "questions": [
+            "seconds between two time_t values",
+            "elapsed wall-clock seconds between two time() calls",
+            "what does difftime return"
+        ]
+    },
+    "risc-v/runtime-library/div": {
+        "hash": "b7c2ed9ec09b9ab3",
+        "questions": [
+            "quotient and remainder of two ints in one call",
+            "what is in a div_t",
+            "what does div return"
+        ]
+    },
+    "risc-v/runtime-library/exit": {
+        "hash": "a38b22f7ff841652",
+        "questions": [
+            "end the program with a status code",
+            "is buffered output written out when the program ends",
+            "run static destructors and cleanup when quitting",
+            "what does exit do before the program stops"
+        ]
+    },
+    "risc-v/runtime-library/exp": {
+        "hash": "e257e3dde12aa8cd",
+        "questions": [
+            "e to the power x for a double",
+            "exponential function e^x on doubles",
+            "what does exp(1) return"
+        ]
+    },
+    "risc-v/runtime-library/expf": {
+        "hash": "0f285c48d9e2e49a",
+        "questions": [
+            "e to the power x for a float",
+            "exponential of a float without using double",
+            "difference between exp and expf"
+        ]
+    },
+    "risc-v/runtime-library/expm1": {
+        "hash": "0395cf269eab9450",
+        "questions": [
+            "e^x minus 1 accurately for small x",
+            "exp(x) - 1 loses precision near zero",
+            "what does expm1 do"
+        ]
+    },
+    "risc-v/runtime-library/fabs": {
+        "hash": "f8a2e7ed9ebab9f5",
+        "questions": [
+            "absolute value of a double",
+            "abs() truncates my double, what should I use",
+            "difference between abs and fabs"
+        ]
+    },
+    "risc-v/runtime-library/fabsf": {
+        "hash": "47694065d95e1743",
+        "questions": [
+            "absolute value of a float",
+            "make a negative float positive",
+            "what does fabsf do"
+        ]
+    },
+    "risc-v/runtime-library/fclose": {
+        "hash": "a211998f488ca2f5",
+        "questions": [
+            "close a file opened with fopen",
+            "what does fclose return on an error",
+            "release a FILE stream when I'm done with it"
+        ]
+    },
+    "risc-v/runtime-library/feof": {
+        "hash": "3cfa266308a8d5b2",
+        "questions": [
+            "check whether I reached the end of a file",
+            "loop until the end of a file",
+            "difference between feof and ferror"
+        ]
+    },
+    "risc-v/runtime-library/ferror": {
+        "hash": "919a0a5fc19f2cf4",
+        "questions": [
+            "check whether a read or write on a stream failed",
+            "tell a read error apart from end of file",
+            "what does ferror return"
+        ]
+    },
+    "risc-v/runtime-library/fflush": {
+        "hash": "aec4e132e2e82bce",
+        "questions": [
+            "force pending output to be written now",
+            "flush every output stream at once",
+            "printed text shows up late, how do I push it out"
+        ]
+    },
+    "risc-v/runtime-library/fgetc": {
+        "hash": "73620b516c591d4b",
+        "questions": [
+            "read one character from a file",
+            "why does fgetc return an int instead of a char",
+            "detect end of file while reading a file character by character"
+        ]
+    },
+    "risc-v/runtime-library/fgetpos": {
+        "hash": "361543cd4cfde682",
+        "questions": [
+            "save the current position in a file to come back later",
+            "what is fpos_t used for",
+            "difference between fgetpos and ftell"
+        ]
+    },
+    "risc-v/runtime-library/fgets": {
+        "hash": "4ac00328a36ad804",
+        "questions": [
+            "read a whole line of text into a buffer",
+            "why does my string end with a newline after reading a line",
+            "read a line without overflowing the buffer",
+            "fgets returns NULL"
+        ]
+    },
+    "risc-v/runtime-library/floor": {
+        "hash": "8bfaa5b139f88e63",
+        "questions": [
+            "round a double down to a whole number",
+            "what does floor(-2.5) return",
+            "round toward minus infinity for doubles"
+        ]
+    },
+    "risc-v/runtime-library/floorf": {
+        "hash": "a9a1c5befee08c2b",
+        "questions": [
+            "round a float down to a whole number",
+            "floor that returns a float",
+            "floorf vs floor"
+        ]
+    },
+    "risc-v/runtime-library/fmax": {
+        "hash": "2637ffc3d076c8ca",
+        "questions": [
+            "larger of two doubles",
+            "max of two numbers when one is NaN",
+            "what does fmax do"
+        ]
+    },
+    "risc-v/runtime-library/fmin": {
+        "hash": "29c454e47fa41437",
+        "questions": [
+            "smaller of two doubles",
+            "min of two numbers when one is NaN",
+            "what does fmin do"
+        ]
+    },
+    "risc-v/runtime-library/fmod": {
+        "hash": "2f3464d101a116a5",
+        "questions": [
+            "remainder of dividing two doubles",
+            "the % operator does not work on doubles",
+            "sign of fmod's result for negative numbers"
+        ]
+    },
+    "risc-v/runtime-library/fmodf": {
+        "hash": "171bf3a7c455ff17",
+        "questions": [
+            "remainder of dividing two floats",
+            "% on float values gives an error",
+            "what does fmodf do"
+        ]
+    },
+    "risc-v/runtime-library/folders": {
+        "hash": "43dffad6abe854d9",
+        "questions": [
+            "what functions can I use to work with folders",
+            "the folder I created is gone after the program ends",
+            "tell the end of a folder listing apart from an error",
+            "what do ENOENT, ENOTDIR and EISDIR mean",
+            "can I move a folder into another folder"
+        ]
+    },
+    "risc-v/runtime-library/fopen": {
+        "hash": "4ad1ff8e52b295e6",
+        "questions": [
+            "open a file for reading or writing",
+            "fopen returns NULL, how do I find out why",
+            "which mode strings can I open a file with"
+        ]
+    },
+    "risc-v/runtime-library/fprintf": {
+        "hash": "ba2370707c276d14",
+        "questions": [
+            "write formatted text to a file",
+            "print a formatted message to stderr",
+            "how many bytes did fprintf write"
+        ]
+    },
+    "risc-v/runtime-library/fputc": {
+        "hash": "7199fd75930c4f2a",
+        "questions": [
+            "write one character to a file",
+            "save a file one byte at a time",
+            "what does fputc return on error"
+        ]
+    },
+    "risc-v/runtime-library/fputs": {
+        "hash": "26ba65bd7d7c4e16",
+        "questions": [
+            "write a string to a file",
+            "why is there no newline after writing a string to a file",
+            "difference between puts and fputs"
+        ]
+    },
+    "risc-v/runtime-library/fread": {
+        "hash": "613931bebf751e7b",
+        "questions": [
+            "read binary data from a file into a buffer",
+            "load an array of structs from a file",
+            "why does fread return fewer items than I asked for"
+        ]
+    },
+    "risc-v/runtime-library/free": {
+        "hash": "d3de98c16bc53d12",
+        "questions": [
+            "give back memory I got from malloc",
+            "is it safe to free a NULL pointer",
+            "release a block from calloc, realloc or aligned_alloc"
+        ]
+    },
+    "risc-v/runtime-library/freopen": {
+        "hash": "b61561b7260010ef",
+        "questions": [
+            "make scanf read from a file instead of the keyboard",
+            "redirect stdout into a file",
+            "reopen a stream on a different file"
+        ]
+    },
+    "risc-v/runtime-library/frexp": {
+        "hash": "2dc12e06393ea35a",
+        "questions": [
+            "split a double into mantissa and exponent",
+            "get the binary exponent of a double",
+            "what does frexp return"
+        ]
+    },
+    "risc-v/runtime-library/from-assembly": {
+        "hash": "aed35671085e1145",
+        "questions": [
+            "how do I call printf from assembly",
+            "undefined symbol when I call a C function from my assembly",
+            "where is the setting to link the C library to my assembly code",
+            "which registers hold the arguments of a C function call",
+            "how do I pass a floating point number to printf from assembly",
+            "where does a library function put its return value"
+        ]
+    },
+    "risc-v/runtime-library/fscanf": {
+        "hash": "0b995f08af20042f",
+        "questions": [
+            "read numbers from a text file",
+            "how many values were read from the file",
+            "fscanf returns EOF"
+        ]
+    },
+    "risc-v/runtime-library/fseek": {
+        "hash": "308b2270d53caa63",
+        "questions": ["move to a position in a file", "go to the end of a file", "fseek returns -1"]
+    },
+    "risc-v/runtime-library/fsetpos": {
+        "hash": "26df2ca0d3038e01",
+        "questions": [
+            "go back to a position I saved earlier in a file",
+            "restore a stream position from an fpos_t",
+            "difference between fsetpos and fseek"
+        ]
+    },
+    "risc-v/runtime-library/ftell": {
+        "hash": "d9a2d59ed1af73ff",
+        "questions": [
+            "get the current offset in a file",
+            "how many bytes into the file is the next read",
+            "what does ftell return on error"
+        ]
+    },
+    "risc-v/runtime-library/fwrite": {
+        "hash": "518efd7add2b1e1a",
+        "questions": [
+            "write binary data to a file",
+            "save an array of structs to a file",
+            "fwrite returns less than count"
+        ]
+    },
+    "risc-v/runtime-library/getc": {
+        "hash": "98b9c35d19e3b631",
+        "questions": [
+            "read the next character from an open file",
+            "is getc the same as fgetc",
+            "shorter name for fgetc"
+        ]
+    },
+    "risc-v/runtime-library/getchar": {
+        "hash": "9e8f3efb6c531ce1",
+        "questions": [
+            "read one character the user types",
+            "read standard input one char at a time until EOF",
+            "what does getchar return at the end of input"
+        ]
+    },
+    "risc-v/runtime-library/getenv": {
+        "hash": "5e92a3eca1372adc",
+        "questions": [
+            "read an environment variable",
+            "why does getenv always return NULL",
+            "can my program see environment variables"
+        ]
+    },
+    "risc-v/runtime-library/gmtime": {
+        "hash": "624b93145f4bd4a6",
+        "questions": [
+            "break a time_t into year, month, day and hour",
+            "convert seconds since 1970 to a UTC date",
+            "why does gmtime return NULL"
+        ]
+    },
+    "risc-v/runtime-library/hypot": {
+        "hash": "385fc31bc59dac0e",
+        "questions": [
+            "length of the hypotenuse of a right triangle",
+            "distance between two points",
+            "sqrt(x*x + y*y) overflows"
+        ]
+    },
+    "risc-v/runtime-library/imaxabs": {
+        "hash": "d216bc2c2fe5114e",
+        "questions": [
+            "absolute value of an intmax_t",
+            "abs from inttypes.h",
+            "what does imaxabs do"
+        ]
+    },
+    "risc-v/runtime-library/imaxdiv": {
+        "hash": "ddfe29e89aff9238",
+        "questions": [
+            "quotient and remainder of two intmax_t values",
+            "what is imaxdiv_t",
+            "div for intmax_t from inttypes.h"
+        ]
+    },
+    "risc-v/runtime-library/isalnum": {
+        "hash": "f2d463ea78030f51",
+        "questions": [
+            "check if a character is a letter or a digit",
+            "keep only letters and digits from a string",
+            "isalnum vs isalpha"
+        ]
+    },
+    "risc-v/runtime-library/isalpha": {
+        "hash": "5ae1c01b19e1583e",
+        "questions": [
+            "check if a character is a letter",
+            "count the letters in a string",
+            "what does isalpha return"
+        ]
+    },
+    "risc-v/runtime-library/isblank": {
+        "hash": "e175649e84673417",
+        "questions": [
+            "check if a character is a space or a tab",
+            "difference between isblank and isspace",
+            "skip spaces and tabs but not newlines"
+        ]
+    },
+    "risc-v/runtime-library/iscntrl": {
+        "hash": "908d824abf75b003",
+        "questions": [
+            "check if a char is a control character",
+            "find invisible control codes in a string",
+            "what does iscntrl return"
+        ]
+    },
+    "risc-v/runtime-library/isdigit": {
+        "hash": "7f4df84ad16e6d55",
+        "questions": [
+            "check if a character is a digit 0 to 9",
+            "validate that input contains only numbers",
+            "why does isdigit return a number other than 1"
+        ]
+    },
+    "risc-v/runtime-library/isgraph": {
+        "hash": "1c0267f5e88975ed",
+        "questions": [
+            "check if a character is printable and not a space",
+            "difference between isgraph and isprint",
+            "find visible characters in a string"
+        ]
+    },
+    "risc-v/runtime-library/islower": {
+        "hash": "49fb51ed8ae02ea2",
+        "questions": [
+            "check if a character is a lowercase letter",
+            "test for a small letter a to z",
+            "what does islower return"
+        ]
+    },
+    "risc-v/runtime-library/isprint": {
+        "hash": "f4a5a880f265f00b",
+        "questions": [
+            "check if a character is printable",
+            "is space a printable character",
+            "remove unprintable characters from a string but keep spaces"
+        ]
+    },
+    "risc-v/runtime-library/ispunct": {
+        "hash": "a76a8b90081e8861",
+        "questions": [
+            "check if a character is punctuation",
+            "remove punctuation from a string",
+            "which characters count as punctuation for ispunct"
+        ]
+    },
+    "risc-v/runtime-library/isspace": {
+        "hash": "761613b45ddc2227",
+        "questions": [
+            "check if a character is whitespace",
+            "skip spaces, tabs and newlines",
+            "which characters count as white space"
+        ]
+    },
+    "risc-v/runtime-library/isupper": {
+        "hash": "b0110c5f42f9ee76",
+        "questions": [
+            "check if a character is uppercase",
+            "test for a capital letter A to Z",
+            "what does isupper return"
+        ]
+    },
+    "risc-v/runtime-library/isxdigit": {
+        "hash": "68c0646eda22639e",
+        "questions": [
+            "check if a character is a hex digit",
+            "validate a hexadecimal string",
+            "what does isxdigit accept"
+        ]
+    },
+    "risc-v/runtime-library/labs": {
+        "hash": "dc0ca6d897882962",
+        "questions": [
+            "absolute value of a long",
+            "make a negative long positive",
+            "difference between abs and labs"
+        ]
+    },
+    "risc-v/runtime-library/ldexp": {
+        "hash": "25288bf13cb8bdb0",
+        "questions": [
+            "multiply a double by a power of two",
+            "x times 2 to the n without pow",
+            "what does ldexp compute"
+        ]
+    },
+    "risc-v/runtime-library/ldiv": {
+        "hash": "0df3ef6c861ec00b",
+        "questions": [
+            "quotient and remainder of two longs",
+            "what is ldiv_t",
+            "div for long values"
+        ]
+    },
+    "risc-v/runtime-library/llabs": {
+        "hash": "ee38f490a3431aeb",
+        "questions": [
+            "absolute value of a long long",
+            "make a negative long long positive",
+            "difference between labs and llabs"
+        ]
+    },
+    "risc-v/runtime-library/lldiv": {
+        "hash": "bd585ffdce60ae97",
+        "questions": [
+            "quotient and remainder of two long longs",
+            "what is lldiv_t",
+            "what does lldiv return"
+        ]
+    },
+    "risc-v/runtime-library/localtime": {
+        "hash": "f3d8e010e32e541d",
+        "questions": [
+            "what time zone do programs run in",
+            "why does localtime give UTC",
+            "convert a time_t to local date and time"
+        ]
+    },
+    "risc-v/runtime-library/log": {
+        "hash": "ac98f7bff1971f12",
+        "questions": ["natural logarithm of a double", "ln of a double", "is log base e or base 10"]
+    },
+    "risc-v/runtime-library/log10": {
+        "hash": "6924c84001d2a9c4",
+        "questions": [
+            "base-10 logarithm of a double",
+            "common logarithm in C",
+            "what does log10 return"
+        ]
+    },
+    "risc-v/runtime-library/log2": {
+        "hash": "fa644abdb3c829aa",
+        "questions": [
+            "base-2 logarithm of a double",
+            "which power of two gives x",
+            "what does log2 return"
+        ]
+    },
+    "risc-v/runtime-library/logf": {
+        "hash": "b61c40ae6e6b48c8",
+        "questions": [
+            "natural logarithm of a float",
+            "ln of a float value",
+            "logf or log for float variables"
+        ]
+    },
+    "risc-v/runtime-library/malloc": {
+        "hash": "46ca1f1ed8cc0b1c",
+        "questions": [
+            "allocate memory while the program runs",
+            "make an array whose size I only know at run time",
+            "why does my allocated memory contain garbage values",
+            "malloc returns NULL",
+            "is malloc memory aligned for any type"
+        ]
+    },
+    "risc-v/runtime-library/memchr": {
+        "hash": "1dc41850df2e2a1a",
+        "questions": [
+            "find the first occurrence of a byte in a buffer",
+            "search the first n bytes of memory for a character",
+            "what does memchr return when the byte is missing"
+        ]
+    },
+    "risc-v/runtime-library/memcmp": {
+        "hash": "0e79c8d02669ff07",
+        "questions": [
+            "compare two blocks of memory byte by byte",
+            "check whether two arrays hold the same bytes",
+            "does memory comparison treat bytes as signed or unsigned"
+        ]
+    },
+    "risc-v/runtime-library/memcpy": {
+        "hash": "33d8be9143eceb27",
+        "questions": [
+            "copy bytes from one buffer to another",
+            "copy an array or struct in memory",
+            "difference between memcpy and memmove"
+        ]
+    },
+    "risc-v/runtime-library/memmove": {
+        "hash": "7e145fde9fd1f634",
+        "questions": [
+            "copy bytes when source and destination overlap",
+            "shift the elements of an array by one place",
+            "memcpy gives wrong data with overlapping memory"
+        ]
+    },
+    "risc-v/runtime-library/memset": {
+        "hash": "84a5a727fb8130c0",
+        "questions": [
+            "fill a block of memory with one byte value",
+            "clear an array to all zeros",
+            "memset with 1 does not set my ints to 1"
+        ]
+    },
+    "risc-v/runtime-library/mkdir": {
+        "hash": "9f5b8df3ec330418",
+        "questions": [
+            "create a folder from my program",
+            "mkdir fails with EEXIST",
+            "create a folder inside one that does not exist yet"
+        ]
+    },
+    "risc-v/runtime-library/mktime": {
+        "hash": "915380d18335fbe9",
+        "questions": [
+            "convert year, month and day back into a time_t",
+            "fix a date with day 32 or month 13",
+            "mktime returns -1"
+        ]
+    },
+    "risc-v/runtime-library/modf": {
+        "hash": "6705dd69e329b21a",
+        "questions": [
+            "split a double into integer and fractional parts",
+            "get the part after the decimal point",
+            "what does modf store in ip"
+        ]
+    },
+    "risc-v/runtime-library/opendir": {
+        "hash": "10cfcbf8b65107e4",
+        "questions": [
+            "open a folder to list what's in it",
+            "why does opendir return NULL",
+            "error when opening a file as a directory"
+        ]
+    },
+    "risc-v/runtime-library/perror": {
+        "hash": "a329fe2a0bf8c4ef",
+        "questions": [
+            "print what errno means to stderr",
+            "show why fopen failed as text",
+            "what does perror print"
+        ]
+    },
+    "risc-v/runtime-library/pow": {
+        "hash": "7c54e39c3c5e4848",
+        "questions": [
+            "raise a double to a power",
+            "square or cube a double",
+            "C has no power operator, what do I use"
+        ]
+    },
+    "risc-v/runtime-library/powf": {
+        "hash": "89d273eb9040b0fb",
+        "questions": [
+            "raise a float to a power",
+            "float version of pow",
+            "when should I use powf instead of pow"
+        ]
+    },
+    "risc-v/runtime-library/printf": {
+        "hash": "f66d82b30a4b9b52",
+        "questions": [
+            "how do I print a variable in C",
+            "print formatted text to standard output",
+            "how many bytes did printf write",
+            "printf returned a negative value"
+        ]
+    },
+    "risc-v/runtime-library/putc": {
+        "hash": "66f3561d21fde0e4",
+        "questions": [
+            "write a character to an open file",
+            "is putc the same as fputc",
+            "shorter name for fputc"
+        ]
+    },
+    "risc-v/runtime-library/putchar": {
+        "hash": "5da907f91d6b5e38",
+        "questions": [
+            "print a single character to the console",
+            "print a newline character by itself",
+            "what does putchar return"
+        ]
+    },
+    "risc-v/runtime-library/puts": {
+        "hash": "033650ce6179a5cc",
+        "questions": [
+            "print a line of text with a newline",
+            "why is there an extra blank line after my string",
+            "difference between puts and printf"
+        ]
+    },
+    "risc-v/runtime-library/qsort": {
+        "hash": "56a362286fa9cb68",
+        "questions": [
+            "sort an array in C",
+            "sort an array in place without making a copy",
+            "sort an array of structs by a field"
+        ]
+    },
+    "risc-v/runtime-library/rand": {
+        "hash": "f142829e17b11e95",
+        "questions": [
+            "generate a random integer",
+            "what range of values does rand return",
+            "pseudo-random number generator in C"
+        ]
+    },
+    "risc-v/runtime-library/readdir": {
+        "hash": "8dc86459ef5853c9",
+        "questions": [
+            "list the files in a folder",
+            "loop over every entry of a directory",
+            "why does the listing start with . and .."
+        ]
+    },
+    "risc-v/runtime-library/reading-the-library": {
+        "hash": "79dbc33f22f0db93",
+        "questions": [
+            "how do I see the source code of printf",
+            "where are the library functions in the file list",
+            "open the assembly code of a library function I call",
+            "why are there files I can't edit in my file list"
+        ]
+    },
+    "risc-v/runtime-library/realloc": {
+        "hash": "6fc91b47b9026ab6",
+        "questions": [
+            "grow an array I allocated with malloc",
+            "does resizing memory move my data",
+            "realloc returns NULL, is the old block lost"
+        ]
+    },
+    "risc-v/runtime-library/remove": {
+        "hash": "3f7fde4e20bd367b",
+        "questions": [
+            "delete a file or an empty folder",
+            "standard C way to delete a file",
+            "what does remove return when it fails"
+        ]
+    },
+    "risc-v/runtime-library/rename": {
+        "hash": "5a9310835e0838fb",
+        "questions": [
+            "change the name of a file",
+            "move a file into another folder",
+            "rename fails with EISDIR",
+            "does renaming overwrite an existing file"
+        ]
+    },
+    "risc-v/runtime-library/rewind": {
+        "hash": "b37c28130e03efe6",
+        "questions": [
+            "go back to the start of a file",
+            "read a file a second time from the beginning",
+            "does rewind clear the error flag"
+        ]
+    },
+    "risc-v/runtime-library/rmdir": {
+        "hash": "0fd766a0e665d7f2",
+        "questions": [
+            "delete an empty folder",
+            "rmdir fails with ENOTEMPTY",
+            "delete a folder that still has files in it"
+        ]
+    },
+    "risc-v/runtime-library/round": {
+        "hash": "5c0b203fe27ec339",
+        "questions": [
+            "nearest whole number to a double",
+            "how does rounding a double treat 2.5 and -2.5",
+            "round half away from zero"
+        ]
+    },
+    "risc-v/runtime-library/roundf": {
+        "hash": "fd2f084df34c3a6d",
+        "questions": [
+            "nearest whole number to a float",
+            "rounding a float that ends in .5",
+            "what does roundf do"
+        ]
+    },
+    "risc-v/runtime-library/scalbn": {
+        "hash": "9a3ec894cb6722b8",
+        "questions": [
+            "scale a double by 2 to the n",
+            "is scalbn the same as ldexp",
+            "multiply a double by 2, 4 or 8"
+        ]
+    },
+    "risc-v/runtime-library/scanf": {
+        "hash": "8d99b035b8e08f33",
+        "questions": [
+            "read a number the user types",
+            "check whether scanf read all my values",
+            "scanf returns EOF",
+            "read formatted input from the keyboard"
+        ]
+    },
+    "risc-v/runtime-library/setbuf": {
+        "hash": "664462f8df6f0d31",
+        "questions": [
+            "turn off buffering for a stream",
+            "what does setbuf with NULL do",
+            "give a stream a BUFSIZ output buffer"
+        ]
+    },
+    "risc-v/runtime-library/setvbuf": {
+        "hash": "c3e193d002cf494a",
+        "questions": [
+            "make output line buffered",
+            "check whether changing a stream's buffering worked",
+            "setvbuf fails on an input stream"
+        ]
+    },
+    "risc-v/runtime-library/sin": {
+        "hash": "14c545cda5597476",
+        "questions": [
+            "sine of a double angle",
+            "why does sin(90) not return 1",
+            "does the double sine function take degrees or radians"
+        ]
+    },
+    "risc-v/runtime-library/sincos": {
+        "hash": "6cd561b5c769926f",
+        "questions": [
+            "sine and cosine of a double in one call",
+            "why does my program call sincos when I only wrote sin and cos",
+            "GNU extension that gives sine and cosine together"
+        ]
+    },
+    "risc-v/runtime-library/sincosf": {
+        "hash": "4a96055c532b994e",
+        "questions": [
+            "sine and cosine of a float in one call",
+            "float version of sincos",
+            "is sincosf standard C"
+        ]
+    },
+    "risc-v/runtime-library/sinf": {
+        "hash": "cd1ab73d0ee189bc",
+        "questions": [
+            "sine of a float angle",
+            "sin for float values in radians",
+            "what does sinf do"
+        ]
+    },
+    "risc-v/runtime-library/sinh": {
+        "hash": "1d801d510a12d754",
+        "questions": [
+            "hyperbolic sine of a number",
+            "what does sinh do",
+            "hyperbolic sin in math.h"
+        ]
+    },
+    "risc-v/runtime-library/snprintf": {
+        "hash": "029866278996ee7e",
+        "questions": [
+            "format text into a string without overflowing the buffer",
+            "sprintf with a size limit",
+            "why does snprintf return more than my buffer size"
+        ]
+    },
+    "risc-v/runtime-library/sprintf": {
+        "hash": "43a2e646770dc2d7",
+        "questions": [
+            "format a number into a string",
+            "convert an int to a string",
+            "build a string with printf-style formatting"
+        ]
+    },
+    "risc-v/runtime-library/sqrt": {
+        "hash": "bdcb22b7c6f1feaa",
+        "questions": [
+            "square root of a double",
+            "how accurate is sqrt",
+            "take the root of a double value"
+        ]
+    },
+    "risc-v/runtime-library/sqrtf": {
+        "hash": "22fccf8ab9ab64a5",
+        "questions": [
+            "square root of a float",
+            "square root without converting a float to double",
+            "difference between sqrt and sqrtf"
+        ]
+    },
+    "risc-v/runtime-library/srand": {
+        "hash": "d6be4ad0383f9f93",
+        "questions": [
+            "seed the random number generator",
+            "rand gives the same numbers every run",
+            "repeat the same random sequence"
+        ]
+    },
+    "risc-v/runtime-library/sscanf": {
+        "hash": "2257319508cef225",
+        "questions": [
+            "parse numbers out of a string",
+            "read values from a string instead of input",
+            "how many values did sscanf read"
+        ]
+    },
+    "risc-v/runtime-library/standard-input": {
+        "hash": "cef7653f4b260338",
+        "questions": [
+            "how do I send end of input from the console",
+            "my program is waiting for input, where do I type it",
+            "the next read gets leftover text from the line before",
+            "what happens when a testcase runs out of input"
+        ]
+    },
+    "risc-v/runtime-library/stat": {
+        "hash": "b354625c7fa79319",
+        "questions": [
+            "check if a file exists",
+            "get the size of a file",
+            "is a path a folder or a file"
+        ]
+    },
+    "risc-v/runtime-library/stepping": {
+        "hash": "078dc374d2dd3611",
+        "questions": [
+            "how do I step inside printf one instruction at a time",
+            "stepping skips over the whole printf call",
+            "can I undo a library call",
+            "why does stepping stop in my compare function during qsort",
+            "how do I step through the startup code before main",
+            "my program stopped with a runtime error, can I go back"
+        ]
+    },
+    "risc-v/runtime-library/strcat": {
+        "hash": "c3eb1c6cc349c9a4",
+        "questions": [
+            "join two strings together",
+            "add a word to the end of a string",
+            "what does strcat return"
+        ]
+    },
+    "risc-v/runtime-library/strchr": {
+        "hash": "42d7aec8b3f00f44",
+        "questions": [
+            "find the first occurrence of a character in a string",
+            "check whether a string contains a character",
+            "what does strchr return when the character is missing"
+        ]
+    },
+    "risc-v/runtime-library/strcmp": {
+        "hash": "d7770f53692df261",
+        "questions": [
+            "check whether two strings are equal",
+            "comparing strings with == does not work",
+            "which of two strings comes first alphabetically"
+        ]
+    },
+    "risc-v/runtime-library/strcoll": {
+        "hash": "5c937468a3618698",
+        "questions": [
+            "compare two strings using the current locale",
+            "locale-aware string comparison",
+            "is strcoll different from strcmp"
+        ]
+    },
+    "risc-v/runtime-library/strcpy": {
+        "hash": "297de231cb37d422",
+        "questions": [
+            "copy one string into another",
+            "put text into a char array after it is declared",
+            "does strcpy copy the null terminator"
+        ]
+    },
+    "risc-v/runtime-library/strcspn": {
+        "hash": "86470def0594aa1b",
+        "questions": [
+            "count characters until the first of a set appears",
+            "index of the first comma or space in a string",
+            "what does strcspn return"
+        ]
+    },
+    "risc-v/runtime-library/strdup": {
+        "hash": "389ee1fd738933f1",
+        "questions": [
+            "make a copy of a string in newly allocated memory",
+            "allocate and copy a string in one call",
+            "do I need to free the copy from strdup"
+        ]
+    },
+    "risc-v/runtime-library/strerror": {
+        "hash": "1ced8a2279223237",
+        "questions": [
+            "turn an error number into a readable message",
+            "put the errno message into my own output",
+            "what does strerror return"
+        ]
+    },
+    "risc-v/runtime-library/strlen": {
+        "hash": "ebe44297ee5a4d0d",
+        "questions": [
+            "get the length of a string",
+            "number of characters before the NUL",
+            "does strlen count the terminating zero"
+        ]
+    },
+    "risc-v/runtime-library/strncat": {
+        "hash": "285186f6ef2953c3",
+        "questions": [
+            "append at most n characters to a string",
+            "string append with a length limit",
+            "does strncat add a null terminator"
+        ]
+    },
+    "risc-v/runtime-library/strncmp": {
+        "hash": "6645e3844d550869",
+        "questions": [
+            "compare only the first n characters of two strings",
+            "check if a string starts with a prefix",
+            "what does strncmp return"
+        ]
+    },
+    "risc-v/runtime-library/strncpy": {
+        "hash": "97e7fee5f92c1013",
+        "questions": [
+            "copy at most n characters of a string",
+            "string has no null terminator after copying n characters",
+            "why does strncpy pad with zeros"
+        ]
+    },
+    "risc-v/runtime-library/strndup": {
+        "hash": "edf45994720b45d5",
+        "questions": [
+            "copy the first n characters of a string into new memory",
+            "make a new substring from the start of a string",
+            "is the copy from strndup terminated"
+        ]
+    },
+    "risc-v/runtime-library/strnlen": {
+        "hash": "2bc3c4bf5bcdb0d3",
+        "questions": [
+            "length of a string, but at most n",
+            "count characters without reading past the end of a buffer",
+            "what does strnlen return"
+        ]
+    },
+    "risc-v/runtime-library/strpbrk": {
+        "hash": "01335b74478b6a44",
+        "questions": [
+            "find the first of several characters in a string",
+            "pointer to the first digit or vowel in a string",
+            "what does strpbrk return"
+        ]
+    },
+    "risc-v/runtime-library/strrchr": {
+        "hash": "7f72e60e60eb559f",
+        "questions": [
+            "find the last occurrence of a character in a string",
+            "get the file extension after the last dot",
+            "what does strrchr return when not found"
+        ]
+    },
+    "risc-v/runtime-library/strspn": {
+        "hash": "ec11c2dcb94262ec",
+        "questions": [
+            "count leading spaces in a string",
+            "length of the start made only of allowed characters",
+            "what does strspn return"
+        ]
+    },
+    "risc-v/runtime-library/strstr": {
+        "hash": "078f9e47a31558f0",
+        "questions": [
+            "find a substring inside a string",
+            "check whether a string contains another string",
+            "what does strstr return when nothing matches"
+        ]
+    },
+    "risc-v/runtime-library/strtod": {
+        "hash": "3f3f061780fc7e86",
+        "questions": [
+            "convert a string to a double with error checking",
+            "find where a decimal number ends in a string",
+            "what does strtod do with the end pointer"
+        ]
+    },
+    "risc-v/runtime-library/strtof": {
+        "hash": "93d3d2a3640dc312",
+        "questions": [
+            "convert a string to a float",
+            "parse a float from text and check for errors",
+            "strtof vs strtod"
+        ]
+    },
+    "risc-v/runtime-library/strtoimax": {
+        "hash": "22835ee88ba39a95",
+        "questions": [
+            "convert a string to intmax_t",
+            "parse a hex or octal string into intmax_t",
+            "strtoimax with base 0"
+        ]
+    },
+    "risc-v/runtime-library/strtok": {
+        "hash": "b00b100cd07e3e02",
+        "questions": [
+            "split a string into words",
+            "split a line by commas",
+            "why does strtok take NULL the second time"
+        ]
+    },
+    "risc-v/runtime-library/strtol": {
+        "hash": "d60678533a37a981",
+        "questions": [
+            "convert a hex string like 0x1F to a long",
+            "parse a binary string into a long",
+            "what does base 0 mean in strtol",
+            "check that the whole string was a valid long"
+        ]
+    },
+    "risc-v/runtime-library/strtoll": {
+        "hash": "f2da67934548fc3b",
+        "questions": [
+            "convert a string to a long long in any base",
+            "parse a large hex value into a long long",
+            "strtoll vs strtol"
+        ]
+    },
+    "risc-v/runtime-library/strtoul": {
+        "hash": "2edfa17c57a8d8cc",
+        "questions": [
+            "convert a string to an unsigned long",
+            "parse a hex address into an unsigned long",
+            "what does strtoul do"
+        ]
+    },
+    "risc-v/runtime-library/strtoull": {
+        "hash": "39abf0a675d4e2dc",
+        "questions": [
+            "convert a string to an unsigned long long",
+            "parse a big hex string into an unsigned long long",
+            "difference between strtoul and strtoull"
+        ]
+    },
+    "risc-v/runtime-library/strtoumax": {
+        "hash": "a3064683f32f52a2",
+        "questions": [
+            "convert a string to uintmax_t",
+            "parse a hex string into uintmax_t",
+            "what does strtoumax do"
+        ]
+    },
+    "risc-v/runtime-library/strxfrm": {
+        "hash": "c18265d6b61b2a6e",
+        "questions": [
+            "copy at most n bytes of a string and get the source length back",
+            "how big a buffer does a transformed string need",
+            "is strxfrm just a copy in the C locale"
+        ]
+    },
+    "risc-v/runtime-library/tan": {
+        "hash": "22f0b1fa15a94107",
+        "questions": [
+            "tangent of a double angle",
+            "does tan take degrees or radians",
+            "why does the tangent of 45.0 not give 1"
+        ]
+    },
+    "risc-v/runtime-library/tanf": {
+        "hash": "fefd4d4dbd87ce45",
+        "questions": ["tangent of a float angle", "float version of tan", "does tanf use radians"]
+    },
+    "risc-v/runtime-library/tanh": {
+        "hash": "cb49b901cff0a332",
+        "questions": [
+            "hyperbolic tangent of a number",
+            "what does tanh do",
+            "hyperbolic tan in math.h"
+        ]
+    },
+    "risc-v/runtime-library/time": {
+        "hash": "235b07d7ae03c373",
+        "questions": [
+            "get the current time in seconds",
+            "how many seconds since January 1 1970",
+            "why is the date 2000 in a testcase"
+        ]
+    },
+    "risc-v/runtime-library/tolower": {
+        "hash": "92315bee7a628050",
+        "questions": [
+            "convert a character to lowercase",
+            "make a string lowercase",
+            "what does tolower do with a digit"
+        ]
+    },
+    "risc-v/runtime-library/toupper": {
+        "hash": "0f72c9b66f29a6fb",
+        "questions": [
+            "convert a character to uppercase",
+            "make a string all capitals",
+            "what does toupper do with a non-letter"
+        ]
+    },
+    "risc-v/runtime-library/trunc": {
+        "hash": "6331f53bad927fe5",
+        "questions": [
+            "drop the fractional part of a double",
+            "round a double toward zero",
+            "difference between trunc and floor for negatives"
+        ]
+    },
+    "risc-v/runtime-library/truncf": {
+        "hash": "dc7cefbe764d8d32",
+        "questions": [
+            "drop the fractional part of a float",
+            "round a float toward zero",
+            "truncf vs trunc"
+        ]
+    },
+    "risc-v/runtime-library/ungetc": {
+        "hash": "bdc51288912f4515",
+        "questions": [
+            "put a character back after reading it",
+            "peek at the next character without consuming it",
+            "what does ungetc return on failure"
+        ]
+    },
+    "risc-v/runtime-library/unlink": {
+        "hash": "d64227c7316d57d0",
+        "questions": [
+            "delete a file but never a folder",
+            "deleting a folder fails with EISDIR",
+            "difference between unlink and rmdir"
+        ]
+    },
+    "risc-v/runtime-library/vfprintf": {
+        "hash": "a3436136493ca1a5",
+        "questions": [
+            "logging function that prints a format to stderr",
+            "pass a va_list to fprintf",
+            "what is vfprintf for"
+        ]
+    },
+    "risc-v/runtime-library/vfscanf": {
+        "hash": "ecd30f1a418774ee",
+        "questions": [
+            "pass a va_list to fscanf",
+            "my own function that reads formatted data from a file",
+            "what is vfscanf for"
+        ]
+    },
+    "risc-v/runtime-library/vprintf": {
+        "hash": "649650797c2147a5",
+        "questions": [
+            "write my own function that takes a format like printf",
+            "pass ... arguments on to printf",
+            "what does vprintf do"
+        ]
+    },
+    "risc-v/runtime-library/vscanf": {
+        "hash": "f7d3709bc81c55bb",
+        "questions": [
+            "call scanf with a va_list",
+            "my own scanf-like function reading standard input",
+            "what does vscanf do"
+        ]
+    },
+    "risc-v/runtime-library/vsnprintf": {
+        "hash": "989b995ae3bb2e58",
+        "questions": [
+            "my own snprintf-like function with a size limit",
+            "format a va_list into a buffer safely",
+            "vsnprintf vs vsprintf"
+        ]
+    },
+    "risc-v/runtime-library/vsprintf": {
+        "hash": "6c5b6b59306a440c",
+        "questions": [
+            "use a va_list with sprintf",
+            "format variable arguments into a string",
+            "what does vsprintf do"
+        ]
+    },
+    "risc-v/runtime-library/vsscanf": {
+        "hash": "31c67dc3435436a1",
+        "questions": [
+            "pass a va_list to sscanf",
+            "parse a string inside my own variadic function",
+            "what does vsscanf do"
+        ]
+    },
+    "risc-v/screen/bitmap-display": {
+        "hash": "b081f40cd4c54256",
+        "questions": [
+            "how do I draw a pixel",
+            "how do I set a pixel's color",
+            "how do I change the display size",
+            "drawing on the screen overwrites my other data",
+            "how do I find the address of the pixel below"
+        ]
+    },
+    "risc-v/screen/keyboard-and-display": {
+        "hash": "41dce7b0517d4814",
+        "questions": [
+            "how do I check if a key has been typed",
+            "how do I read a typed character from memory-mapped io",
+            "how do I print a character by storing to memory",
+            "how do I clear the console",
+            "why don't arrow keys show up in the receiver"
+        ]
+    },
+    "risc-v/screen/pictures": {
+        "hash": "cc83d2132859896a",
+        "questions": [
+            "how do I draw a sprite from an image file",
+            "how do I make a new picture for my program",
+            "where do the pixels start in a BMP file",
+            "my 24-bit BMP draws upside down",
+            "are my picture edits saved"
+        ]
+    },
+    "risc-v/screen/program-time": {
+        "hash": "4abf555eacec3fb8",
+        "questions": [
+            "how do I measure elapsed time in milliseconds",
+            "does the clock keep running while the program is paused",
+            "my program hits the execution limit while waiting for a key",
+            "why does my testcase say the date is in 2000",
+            "why does a five second wait finish instantly in a testcase"
+        ]
+    },
+    "risc-v/screen/screen-directive": {
+        "hash": "8e43a8c7b5031bd2",
+        "questions": [
+            "how do I set the screen size in my program",
+            "how do I point the display at a label",
+            "can the display be any size like 224 by 288",
+            "why does my screen comment give a warning",
+            "does the display popover override my code"
+        ]
+    },
+    "risc-v/screen/screen-keyboard-and-console": {
+        "hash": "429b3253c607dc49",
+        "questions": [
+            "what devices can my program use",
+            "do I need to connect or set up the screen before running",
+            "where is the screen panel"
+        ]
+    },
+    "risc-v/synth/envelope": {
+        "hash": "67469471eb3c23a1",
+        "questions": [
+            "how do I make a note fade in and fade out",
+            "what are attack, decay, sustain and release",
+            "my note does not play again when I set the gate a second time",
+            "what unit are the attack and release times in"
+        ]
+    },
+    "risc-v/synth/frequencies": {
+        "hash": "8ea40848faf3493f",
+        "questions": [
+            "what frequency is middle C",
+            "table of note frequencies in Hz",
+            "how do I go up an octave"
+        ]
+    },
+    "risc-v/synth/from-c": {
+        "hash": "f0ba8437e11dcac8",
+        "questions": [
+            "how do I use the synth from C",
+            "C function to play a note on a synth channel",
+            "C program that plays a scale on the synth"
+        ]
+    },
+    "risc-v/synth/registers": {
+        "hash": "0a5520b5a41d22d7",
+        "questions": [
+            "where are each channel's sound registers",
+            "how do I find the address of channel 3",
+            "should I write the frequency with sh or sb",
+            "what is the largest volume value"
+        ]
+    },
+    "risc-v/synth/running": {
+        "hash": "cea3d6a485c6a294",
+        "questions": [
+            "does a synth note keep sounding when I pause",
+            "what happens to synth notes when the program ends",
+            "why does undo make my note play again",
+            "how do I mute the synth"
+        ]
+    },
+    "risc-v/synth/samples": {
+        "hash": "eb2b4358391e7cfc",
+        "questions": [
+            "how do I play a recorded sound",
+            "how do I copy sound data into the synth",
+            "how do I loop a sample",
+            "changing my buffer after the copy does not change the sound",
+            "how do I play a sample an octave higher"
+        ]
+    },
+    "risc-v/synth/synth": {
+        "hash": "643eb2ef4c4d86bb",
+        "questions": [
+            "what is the synth",
+            "how do I make retro game console sounds",
+            "how many sounds can play at the same time",
+            "example program that plays a note on the synth",
+            "can I tell whether a channel is still sounding",
+            "the synth is silent when the bitmap display is at 0xffff0000"
+        ]
+    },
+    "risc-v/synth/waveforms": {
+        "hash": "87e3a551984ba53d",
+        "questions": [
+            "how do I play a square wave",
+            "how do I make a noise sound for drums",
+            "which wave shape sounds like a flute",
+            "why do high notes sound at the wrong pitch"
+        ]
+    },
+    "risc-v/synth/wavetables": {
+        "hash": "a69b7634dc6788aa",
+        "questions": [
+            "how do I design my own waveform",
+            "how are 4-bit samples packed two to a byte",
+            "where in memory is a channel's custom wave shape"
+        ]
+    },
+    "risc-v/syscalls/1": {
+        "hash": "e5b4d984970ae364",
+        "questions": [
+            "how do I print a number",
+            "how do I output the integer in a0",
+            "how do I display the value of a register in the terminal"
+        ]
+    },
+    "risc-v/syscalls/10": {
+        "hash": "592751068824c0c6",
+        "questions": [
+            "how do I end my program",
+            "how do I finish with exit code 0",
+            "what does li a7, 10 do"
+        ]
+    },
+    "risc-v/syscalls/1024": {
+        "hash": "c72932a27c9abd86",
+        "questions": [
+            "how do I open a file",
+            "how do I add text to the end of an existing file",
+            "what flags do I use to open a file for writing",
+            "how do I open a file for both reading and writing",
+            "opening a file for reading returns -1"
+        ]
+    },
+    "risc-v/syscalls/1026": {
+        "hash": "d1a1e045bf23e501",
+        "questions": [
+            "how do I delete a file",
+            "why does deleting a path return -21",
+            "what does -2 mean when deleting a file"
+        ]
+    },
+    "risc-v/syscalls/1030": {
+        "hash": "9f62a5cdfd0d2d25",
+        "questions": [
+            "how do I create a folder",
+            "why does my new folder vanish after the run",
+            "what does -17 mean when creating a folder",
+            "creating a folder inside a missing folder fails with -2"
+        ]
+    },
+    "risc-v/syscalls/1031": {
+        "hash": "aeaaa96c26f1cef5",
+        "questions": [
+            "how do I delete a folder",
+            "why can't I remove a folder that has files in it",
+            "what does -39 mean"
+        ]
+    },
+    "risc-v/syscalls/1034": {
+        "hash": "4855a19dc8fbe170",
+        "questions": [
+            "how do I rename a file",
+            "how do I move a file into another folder",
+            "does renaming overwrite an existing file",
+            "why can't I move a folder"
+        ]
+    },
+    "risc-v/syscalls/1038": {
+        "hash": "7ab0e5c2c10067c1",
+        "questions": [
+            "how do I get the size of a file",
+            "how do I tell if a path is a file or a folder",
+            "how do I check whether a file exists",
+            "how big a buffer does stat need"
+        ]
+    },
+    "risc-v/syscalls/1065": {
+        "hash": "bdcd7a7c1afd2cc6",
+        "questions": [
+            "how do I list the files in a folder",
+            "how do I tell files from folders in a listing",
+            "what does the folder listing buffer contain",
+            "why does listing a folder return -22"
+        ]
+    },
+    "risc-v/syscalls/11": {
+        "hash": "9b9bcf3ad1c81cf7",
+        "questions": [
+            "how do I print a single letter",
+            "how do I output an ASCII code as a character",
+            "which byte of a0 is printed as a character"
+        ]
+    },
+    "risc-v/syscalls/12": {
+        "hash": "d2ac83e9c1fc70e6",
+        "questions": [
+            "how do I read one key without pressing enter",
+            "what code does the enter key return",
+            "how do I get a single character the user types"
+        ]
+    },
+    "risc-v/syscalls/17": {
+        "hash": "c878e30a3ca8e47f",
+        "questions": [
+            "how do I get the current folder",
+            "what is the working directory of my program",
+            "how big a buffer do I need for the current path"
+        ]
+    },
+    "risc-v/syscalls/2": {
+        "hash": "03d2a0a4dc485176",
+        "questions": [
+            "how do I print a float",
+            "which register holds the float to print",
+            "print a single precision value from fa0"
+        ]
+    },
+    "risc-v/syscalls/3": {
+        "hash": "454eba2bab48fffc",
+        "questions": [
+            "how do I print a double",
+            "how do I show a double precision result",
+            "which register holds the double to print"
+        ]
+    },
+    "risc-v/syscalls/30": {
+        "hash": "a0899243461f4e56",
+        "questions": [
+            "how do I get the current date and time",
+            "which registers hold the two halves of the time",
+            "why is the time in a testcase in the year 2000",
+            "does undo change the time my program read"
+        ]
+    },
+    "risc-v/syscalls/31": {
+        "hash": "8ecc1a561bbc9eef",
+        "questions": [
+            "how do I play a note without waiting",
+            "how do I play several notes at once",
+            "what happens with an invalid pitch or volume",
+            "why does a note keep playing after the program ends"
+        ]
+    },
+    "risc-v/syscalls/32": {
+        "hash": "d7bbbabe9a3a0378",
+        "questions": [
+            "how do I wait half a second",
+            "does waiting count toward the instruction limit",
+            "why does the delay finish instantly in a testcase"
+        ]
+    },
+    "risc-v/syscalls/33": {
+        "hash": "6e459b66e748ec0c",
+        "questions": [
+            "how do I play a melody one note after another",
+            "how do I play a note and wait until it finishes",
+            "why does my program pause while a note plays",
+            "muting does not make my notes shorter"
+        ]
+    },
+    "risc-v/syscalls/34": {
+        "hash": "cf453c4a319ea2a6",
+        "questions": [
+            "how do I print a number in hex",
+            "why are there leading zeros in my hex output",
+            "how do I show an address as hexadecimal"
+        ]
+    },
+    "risc-v/syscalls/35": {
+        "hash": "3bd1c2fb11b97140",
+        "questions": [
+            "how do I print the bits of a number",
+            "how do I show a value in base 2",
+            "why are there 32 digits when I print in binary"
+        ]
+    },
+    "risc-v/syscalls/36": {
+        "hash": "3764bebfbb4e05d0",
+        "questions": [
+            "how do I print a number as unsigned",
+            "why does my large number print as negative",
+            "how do I print 0xffffffff as 4294967295"
+        ]
+    },
+    "risc-v/syscalls/4": {
+        "hash": "e9e5450c7116eb52",
+        "questions": [
+            "how do I print text",
+            "how do I print a message defined with .asciz",
+            "what goes in a0 to print a string",
+            "does the string need to end with a zero byte"
+        ]
+    },
+    "risc-v/syscalls/40": {
+        "hash": "6c8381f6f5fc58fd",
+        "questions": [
+            "how do I get the same random numbers every run",
+            "how do I set the starting seed for random numbers",
+            "does a seed give the same sequence as Java's Random",
+            "why are my random numbers the same in every testcase run"
+        ]
+    },
+    "risc-v/syscalls/41": {
+        "hash": "c334c57e80c304db",
+        "questions": [
+            "how do I get a random integer",
+            "what does the generator ID in a0 mean",
+            "can I have two separate random sequences",
+            "can undo take back a random number"
+        ]
+    },
+    "risc-v/syscalls/42": {
+        "hash": "7b3780afa1eba7d5",
+        "questions": [
+            "how do I get a random number in a range",
+            "how do I simulate rolling a dice",
+            "where do I put the upper limit for a random number"
+        ]
+    },
+    "risc-v/syscalls/43": {
+        "hash": "9f06c1d051dde213",
+        "questions": [
+            "how do I get a random float",
+            "random number as a single precision float",
+            "how do I make my random floats repeatable"
+        ]
+    },
+    "risc-v/syscalls/44": {
+        "hash": "c6a8d63d272504a6",
+        "questions": [
+            "how do I get a random double",
+            "random number as a double precision value",
+            "how do I make my random doubles repeatable"
+        ]
+    },
+    "risc-v/syscalls/5": {
+        "hash": "bf552936760b159b",
+        "questions": [
+            "how do I read a number the user types",
+            "where does the typed integer end up",
+            "my program stops with an input error when I type letters"
+        ]
+    },
+    "risc-v/syscalls/50": {
+        "hash": "4c5c9e6bd3015b03",
+        "questions": [
+            "how do I ask the user to confirm in a popup",
+            "where does the message for a confirm dialog go",
+            "what does li a7, 50 do"
+        ]
+    },
+    "risc-v/syscalls/51": {
+        "hash": "c914a6bd73f5171e",
+        "questions": [
+            "how do I ask for a whole number in a popup",
+            "where does the prompt go for an integer input dialog",
+            "read an integer from a dialog box instead of the terminal"
+        ]
+    },
+    "risc-v/syscalls/52": {
+        "hash": "4f3cd9ebe60c7f38",
+        "questions": [
+            "how do I ask for a float in a popup window",
+            "where does the prompt go for a float input dialog",
+            "dialog box that asks for a single precision number"
+        ]
+    },
+    "risc-v/syscalls/53": {
+        "hash": "b23fe63594ed3b31",
+        "questions": [
+            "how do I ask for a double in a popup window",
+            "where does the prompt go for a double input dialog",
+            "dialog box that asks for a double precision number"
+        ]
+    },
+    "risc-v/syscalls/54": {
+        "hash": "cd246e440aecb5a5",
+        "questions": [
+            "how do I ask the user for text in a popup",
+            "why does text from an input dialog end with a newline",
+            "what happens if the dialog text is longer than my buffer"
+        ]
+    },
+    "risc-v/syscalls/55": {
+        "hash": "29aa85d7dd9e98e9",
+        "questions": [
+            "how do I show a message in a popup",
+            "how do I show an error message box",
+            "what does li a7, 55 do"
+        ]
+    },
+    "risc-v/syscalls/56": {
+        "hash": "204daa9a776d9b07",
+        "questions": [
+            "how do I show a number in a popup",
+            "how do I show a message followed by an integer in a dialog",
+            "show the result of my calculation in a message box"
+        ]
+    },
+    "risc-v/syscalls/57": {
+        "hash": "4ae2813b01197a5c",
+        "questions": [
+            "how do I close a file when I am done",
+            "how do I close a folder I opened",
+            "what goes in a0 to close a file"
+        ]
+    },
+    "risc-v/syscalls/58": {
+        "hash": "0f499523923c7868",
+        "questions": [
+            "how do I show a double in a popup",
+            "show a message with a double value in a dialog",
+            "which register holds the double for a message dialog"
+        ]
+    },
+    "risc-v/syscalls/59": {
+        "hash": "a7a711ea2eb3b305",
+        "questions": [
+            "how do I show two strings in a popup",
+            "show a message followed by another string in a dialog",
+            "how do I show the user's name in a message box"
+        ]
+    },
+    "risc-v/syscalls/6": {
+        "hash": "8e245effb0b0a935",
+        "questions": [
+            "how do I read a float the user types",
+            "where does a typed float end up",
+            "how do I input a single precision number"
+        ]
+    },
+    "risc-v/syscalls/60": {
+        "hash": "e43723fd2e03f06e",
+        "questions": [
+            "how do I show a float in a popup",
+            "show a message with a float value in a dialog",
+            "which register holds the float for a message dialog"
+        ]
+    },
+    "risc-v/syscalls/62": {
+        "hash": "b7892416e6c2fe32",
+        "questions": [
+            "how do I jump to a position in a file",
+            "how do I go back to the start of a file",
+            "how do I skip bytes in a file",
+            "why does seeking fail on standard input"
+        ]
+    },
+    "risc-v/syscalls/63": {
+        "hash": "d18e4c1d5af1e8fa",
+        "questions": [
+            "how do I read the contents of a file",
+            "how do I know when I reached the end of a file",
+            "why is there garbage after the text I read from a file",
+            "how do I read raw bytes from standard input",
+            "how do I send end of input in the terminal"
+        ]
+    },
+    "risc-v/syscalls/64": {
+        "hash": "090478e02e7aa2ea",
+        "questions": [
+            "how do I save text into a file",
+            "how do I write to standard error",
+            "how do I print bytes without a zero terminator"
+        ]
+    },
+    "risc-v/syscalls/7": {
+        "hash": "5248871e94d77141",
+        "questions": [
+            "how do I read a double from the keyboard",
+            "where does a typed double end up",
+            "how do I input a double precision value"
+        ]
+    },
+    "risc-v/syscalls/8": {
+        "hash": "1d214a9cfd7e9368",
+        "questions": [
+            "how do I read a line of text the user types",
+            "why does my input string end with a newline",
+            "what happens if the user types more than the buffer holds",
+            "how do I read a name from the user"
+        ]
+    },
+    "risc-v/syscalls/9": {
+        "hash": "4d54ad45f6d9a0ba",
+        "questions": [
+            "how do I allocate memory while the program runs",
+            "how do I get memory like malloc in assembly",
+            "how much heap memory can I get",
+            "runtime error when I allocate too much memory"
+        ]
+    },
+    "risc-v/syscalls/93": {
+        "hash": "84d89be8b115adde",
+        "questions": [
+            "how do I exit with an error code",
+            "how do I return a value from my program when it ends",
+            "where does the exit code show up"
+        ]
+    },
+    "risc-v/syscalls/arguments": {
+        "hash": "94bd131418093c40",
+        "questions": [
+            "how do I pass command line arguments to my program",
+            "where do I find argc and argv at startup",
+            "how do I put a space inside one argument",
+            "why is argv[0] the program name instead of my input",
+            "how do I print the first word given on the command line",
+            "my new arguments are ignored until I build again"
+        ]
+    },
+    "risc-v/syscalls/folders": {
+        "hash": "8b2ebb8732f16415",
+        "questions": [
+            "can my program read files on my computer",
+            "where are the files my program creates",
+            "do file changes stay after the program ends",
+            "what folder do file paths start from",
+            "what do negative return values from file services mean",
+            "how do I create and list folders from C"
+        ]
+    },
+    "risc-v/syscalls/making-a-syscall": {
+        "hash": "c471b7a8fc88a884",
+        "questions": [
+            "how does ecall work",
+            "what do I put in a7 before ecall",
+            "are these service numbers the same on a real operating system",
+            "do the same service numbers work on the 64-bit target",
+            "how do I use the same services from C"
+        ]
+    },
+    "risc-v/syscalls/sound": {
+        "hash": "b97acddfa6cb7997",
+        "questions": [
+            "how do I play music",
+            "what pitch number is middle C",
+            "which instrument number is a violin",
+            "how do I mute the sound my program plays",
+            "why is the first note delayed",
+            "how many notes can sound at once"
+        ]
+    },
+    "risc-v/using-c/compiling": {
+        "hash": "152098c6721230bd",
+        "questions": [
+            "which compilers can I choose from",
+            "what does the optimization level change",
+            "how do I use my own header file",
+            "can I split my C program into several .c files",
+            "why do I need internet to compile",
+            "my C changes don't show up when I run"
+        ]
+    },
+    "risc-v/using-c/editing-help": {
+        "hash": "048a9cfa4266faaf",
+        "questions": [
+            "how do I see the list of simulator functions",
+            "does the editor autocomplete C code",
+            "how do I see a function's parameters while typing",
+            "autocomplete did not add the include for me"
+        ]
+    },
+    "risc-v/using-c/following-execution": {
+        "hash": "5eba26a6de1c0041",
+        "questions": [
+            "how do I see which assembly a C line became",
+            "how do I set a breakpoint on a C line",
+            "my C breakpoints disappeared after reopening the project",
+            "why does one C line take many steps"
+        ]
+    },
+    "risc-v/using-c/libraries": {
+        "hash": "3bee231765ecf406",
+        "questions": [
+            "can I use printf and scanf",
+            "can I use std::vector",
+            "how do I read a number the user types in C",
+            "how do I send end of input in the terminal",
+            "does C++ support exceptions here",
+            "which C standard is used"
+        ]
+    },
+    "risc-v/using-c/linking-project-files": {
+        "hash": "46c457c3249573bd",
+        "questions": [
+            "how do I call an assembly function from C",
+            "why is my assembly file left out of the build",
+            "can I use .eqv in a file linked with C",
+            "csrw is rejected in an assembly file linked with C",
+            "why do I need extern C to call assembly from C++",
+            "my file with only a global constructor is not linked"
+        ]
+    },
+    "risc-v/using-c/overview": {
+        "hash": "ef88d6298bd7ef65",
+        "questions": [
+            "how do I write a program in C",
+            "hello world in C",
+            "how do I run a C program",
+            "can I write my program in C++",
+            "where does my printf output appear"
+        ]
+    },
+    "risc-v/using-c/screen-and-devices": {
+        "hash": "e99b71faef175d03",
+        "questions": [
+            "how do I draw on the screen from C",
+            "how do I compute a pixel's index from x and y in C",
+            "which C functions talk to the keyboard and console",
+            "which screen sizes can a C program declare"
+        ]
+    }
+}

@@ -97,6 +97,8 @@ describe('splitLecture', () => {
         expect(counting.slug).toBe('counting-down')
         expect(counting.title).toBe('Counting down')
         expect(counting.prose).toBe('A step\nInside\nFolded in.')
+        //inline code is a name, not a word
+        expect(splitLecture('Use `loop` to loop.')[0].words).toBe('Use to loop.')
         expect(counting.code).toContain('move.l #1, d0')
         expect(counting.comments).toBe('one into d0')
         expect(counting.code).not.toContain('secret')
