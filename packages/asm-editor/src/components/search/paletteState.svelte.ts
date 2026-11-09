@@ -1,4 +1,5 @@
 import { searchClient } from '#lib/search/searchClient.svelte.ts'
+import type { SearchScope } from '#lib/search/scope.ts'
 
 /**
  * Whether the page's search palette is open, and what to start it with. A page has one palette,
@@ -23,9 +24,35 @@ export const searchPalette = $state({
 
 export type PaletteOwner = 'page' | 'site'
 
-/** Opening the palette is a sign the reader means to search, so the model starts loading. */
-export function openSearchPalette(query = '', owner: PaletteOwner = 'page') {
+/** What each mounted palette searches, so a box that opens it can start loading its index. */
+const paletteScopes: Partial<Record<PaletteOwner, SearchScope>> = {}
+
+/** A palette's scope, for as long as it is mounted. Returns the cleanup. */
+export function registerPaletteScope(owner: PaletteOwner, scope: SearchScope): () => void {
+    paletteScopes[owner] = scope
+    return () => {
+        if (paletteScopes[owner] === scope) delete paletteScopes[owner]
+    }
+}
+
+/**
+ * Pointing at or focusing a search box, or opening its palette, is a sign the reader means to
+ * search: the palette's index starts downloading, and the model with it. A page loads neither on
+ * arrival, where most readers never search (the Courses page's six indexes were 1.4 MB).
+ */
+export function warmSearch(owner: PaletteOwner) {
     searchClient.warmModel()
+    const scope = paletteScopes[owner]
+    if (!scope) return
+    searchClient
+        .loadScope(scope)
+        .catch((error: Error) =>
+            console.warn(`search: could not load the index (${error.message})`)
+        )
+}
+
+export function openSearchPalette(query = '', owner: PaletteOwner = 'page') {
+    warmSearch(owner)
     searchPalette.query = query
     searchPalette.owner = owner
     searchPalette.open = true

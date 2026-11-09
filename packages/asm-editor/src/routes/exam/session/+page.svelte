@@ -63,8 +63,6 @@
     import FaAngleDoubleLeft from '~icons/fa-solid/angle-double-left'
     import FaAngleDoubleRight from '~icons/fa-solid/angle-double-right'
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import ExamReviewAgentSidebar from '#cmp/specific/exam/ExamReviewAgentSidebar.svelte'
-    import ExamReviewAgent from '#cmp/specific/exam/ExamReviewAgent.svelte'
     import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import type { Emulator } from '#lib/languages/Emulator.ts'
     import SparklesIcon from '#cmp/shared/agent/SparklesIcon.svelte'
@@ -907,15 +905,18 @@
 
 {#snippet reviewAgent(emulator: Emulator)}
     {#if exam && activeSection}
-        <ExamReviewAgent
-            {exam}
-            {sections}
-            submission={examSubmission}
-            activeSectionId={activeSection.id}
-            visibleAnswer={activeVisibleAnswer}
-            emulatorInstance={emulator}
-            style="flex: 1; min-height: 0;"
-        />
+        <!-- the review assistant's code loads when it is shown -->
+        {#await import('#cmp/specific/exam/ExamReviewAgent.svelte') then { default: ExamReviewAgent }}
+            <ExamReviewAgent
+                {exam}
+                {sections}
+                submission={examSubmission}
+                activeSectionId={activeSection.id}
+                visibleAnswer={activeVisibleAnswer}
+                emulatorInstance={emulator}
+                style="flex: 1; min-height: 0;"
+            />
+        {/await}
     {/if}
 {/snippet}
 
@@ -1473,16 +1474,18 @@
                         </div>
                     {/if}
                     {#if isReviewMode && AI_FEATURES_ENABLED && activeSection.type !== ExamSectionType.AssemblyCoding}
-                        <ExamReviewAgentSidebar
-                            bind:open={teacherAgentOpen}
-                            verticalOffset="3rem"
-                            exam={loadedExam}
-                            {sections}
-                            submission={examSubmission}
-                            activeSectionId={activeSection.id}
-                            visibleAnswer={activeVisibleAnswer}
-                            emulatorInstance={null}
-                        />
+                        {#await import('#cmp/specific/exam/ExamReviewAgentSidebar.svelte') then { default: ExamReviewAgentSidebar }}
+                            <ExamReviewAgentSidebar
+                                bind:open={teacherAgentOpen}
+                                verticalOffset="3rem"
+                                exam={loadedExam}
+                                {sections}
+                                submission={examSubmission}
+                                activeSectionId={activeSection.id}
+                                visibleAnswer={activeVisibleAnswer}
+                                emulatorInstance={null}
+                            />
+                        {/await}
                     {/if}
                 {/if}
             </div>

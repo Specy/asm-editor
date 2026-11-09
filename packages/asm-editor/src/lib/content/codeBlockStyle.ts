@@ -10,13 +10,15 @@ import { assemblyPaletteStyle } from './assemblyPalette'
  * theme stores, so a component that calls it inside `$derived` follows them.
  */
 export function codeBlockStyle(): string {
-    const palette = assemblyPaletteStyle(
-        ThemeStore.isColorDark(
-            ScopedTheme.theme?.theme.secondary.color ?? ThemeStore.theme.secondary.color
-        )
+    const dark = ThemeStore.isColorDark(
+        ScopedTheme.theme?.theme.secondary.color ?? ThemeStore.theme.secondary.color
     )
+    const palette = assemblyPaletteStyle(dark)
     return [
         palette,
+        //Monaco's indentation guides in its `vs-dark` and `vs` base themes, which the editor's own
+        //theme does not change (editorTheme.ts)
+        `--indent-guide: ${dark ? '#404040' : '#d3d3d3'}`,
         `--example-font-family: ${EDITOR_FONT.fontFamily}`,
         `--example-font-size: ${EDITOR_FONT.fontSize}px`,
         `--example-line-height: ${EDITOR_FONT.lineHeight}px`

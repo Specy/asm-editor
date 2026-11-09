@@ -4,13 +4,32 @@
     import { formatBlogDate } from '#lib/blog/date.ts'
     import TagLink from './TagLink.svelte'
     import Card from '#cmp/shared/layout/Card.svelte'
-    let { post }: { post: BlogPostSummary } = $props()
+    import { responsiveImage } from '#lib/images/responsive.ts'
+    interface Props {
+        post: BlogPostSummary
+        /**
+         * The first card of a page, whose picture is the largest thing on screen when the page
+         * opens: loaded at once and first, where the others wait until they are near the view.
+         */
+        priority?: boolean
+    }
+    let { post, priority = false }: Props = $props()
+    const picture = $derived(post.image ? responsiveImage(post.image.src) : undefined)
 </script>
 
 <!-- a Card whose title's link covers it, its tags above that link -->
 <Card element="article" class="blog-card" hoverTint={false}>
     {#if post.image}<div class="blog-card-image">
-            <img src={post.image.src} alt="" loading="lazy" width="1440" height="1000" />
+            <img
+                src={post.image.src}
+                srcset={picture?.srcset}
+                sizes="(max-width: 650px) 100vw, 540px"
+                alt=""
+                loading={priority ? 'eager' : 'lazy'}
+                fetchpriority={priority ? 'high' : undefined}
+                width="1440"
+                height="1000"
+            />
         </div>{/if}
     <div class="blog-card-body">
         {#if post.draft}<span class="blog-draft">Draft</span>{/if}

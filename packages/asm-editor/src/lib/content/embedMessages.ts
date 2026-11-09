@@ -17,3 +17,19 @@ export function isEmbedBuiltMessage(data: unknown): data is EmbedBuiltMessage {
         typeof (data as EmbedBuiltMessage).built === 'boolean'
     )
 }
+
+/**
+ * The embed's editor is drawn and its emulator loaded: it can be typed into and built. A page that
+ * shows the code as a plain block while the frame loads may put the frame in its place now.
+ */
+export const EMBED_READY_MESSAGE = 'asm-editor:embed-ready'
+
+export type EmbedReadyMessage = { type: typeof EMBED_READY_MESSAGE }
+
+export function isEmbedReadyMessage(data: unknown): data is EmbedReadyMessage {
+    return (
+        typeof data === 'object' &&
+        data !== null &&
+        (data as EmbedReadyMessage).type === EMBED_READY_MESSAGE
+    )
+}

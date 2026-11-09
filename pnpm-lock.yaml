@@ -362,6 +362,9 @@ importers:
       sass:
         specifier: ^1.107.1
         version: 1.108.0
+      sharp:
+        specifier: 0.35.5
+        version: 0.35.5(@types/node@26.6.6)
       svelte:
         specifier: ^5.57.3
         version: 5.57.3(@typescript-eslint/types@8.72.1)
@@ -5895,14 +5898,6 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: '@voidzero-dev/vite-plus-core@1.4.0(@types/node@22.20.5)(@volar/typescript@2.4.28(typescript@6.0.3))(esbuild@0.28.2)(sass@1.108.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(yaml@2.9.1)'
-
-  '@vitest/mocker@3.2.7(@voidzero-dev/vite-plus-core@1.4.0(@types/node@26.6.6)(@volar/typescript@2.4.28(typescript@6.0.3))(esbuild@0.28.2)(sass@1.108.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(yaml@2.9.1))':
-    dependencies:
-      '@vitest/spy': 3.2.7
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: '@voidzero-dev/vite-plus-core@1.4.0(@types/node@26.6.6)(@volar/typescript@2.4.28(typescript@6.0.3))(esbuild@0.28.2)(sass@1.108.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(yaml@2.9.1)'
 
   '@vitest/mocker@5.0.5(@voidzero-dev/vite-plus-core@1.4.0(@types/node@26.6.6)(@volar/typescript@2.4.28(typescript@6.0.3))(esbuild@0.28.2)(sass@1.108.0)(tsx@4.23.15)(typescript@6.0.3)(unrun@0.2.39)(yaml@2.9.1))':
     dependencies:

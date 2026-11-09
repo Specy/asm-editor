@@ -3,14 +3,16 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import {
     canonicalExampleId,
     defaultExample,
-    destinationPath,
-    exampleSharePath,
     examplesIsa,
-    examplesPath,
-    isExampleDestination,
     loadExample,
     parseExamplesIndex
 } from './examples.ts'
+import {
+    destinationPath,
+    exampleSharePath,
+    examplesPath,
+    isExampleDestination
+} from './exampleLinks.ts'
 import { makeProjectFromArchive } from './projectArchive.ts'
 import { compilationStatus } from './sourceCompilation/records.ts'
 import { programBuildSources } from './buildSources.ts'

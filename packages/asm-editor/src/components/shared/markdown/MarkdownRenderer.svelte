@@ -7,9 +7,13 @@
      * ([ADR 0053](../../../../../../docs/adr/0053-markdown-is-rendered-by-our-own-synchronous-pipeline.md)).
      */
     import { renderMarkdown, type MarkdownOptions } from '#lib/content/markdown.ts'
-    import { playgroundEmbedUrl } from '#lib/content/markdownPlaygrounds.ts'
-    import { isEmbedBuiltMessage } from '#lib/content/embedMessages.ts'
+    import { playgroundEmbedUrl, playgroundTitle } from '#lib/content/markdownPlaygrounds.ts'
+    import { isEmbedBuiltMessage, isEmbedReadyMessage } from '#lib/content/embedMessages.ts'
     import { colourCodeBlocksWithMonaco } from '#lib/content/monacoCodeBlocks.ts'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
+    import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
+    import { mount, unmount } from 'svelte'
+    import { DUR_FAST, motion } from '#src/styles/motion.ts'
     import { codeBlockStyle } from '#lib/content/codeBlockStyle.ts'
     import { generateTheme } from '#lib/monaco/editorTheme.ts'
     import './codeBlocks.css'
@@ -109,32 +113,134 @@
      * Each marked playground's embed, in place of the code block the render left: the same box,
      * so nothing around it moves. Built here rather than in the render, so a page that runs no
      * scripts, and a crawler, read the worked example as code.
+     *
+     * Each embed boots a whole editor, on this page's own main thread (the frame is ours), so it is
+     * built only when its code block comes within half a screen of the view: a lecture's reader is
+     * not held up by the editors further down, and one inside a closed `<details>` (an Exercise's
+     * solution) waits for it to open. `loading="lazy"` was not enough: the browser starts such a
+     * frame more than a screen ahead, which on a phone was the first one, at once.
      */
     $effect(() => {
         void html
         if (!content) return
-        for (const marked of content.querySelectorAll<HTMLElement>('[data-playground]')) {
-            const src = playgroundEmbedUrl({
-                info: marked.dataset.playground ?? '',
-                code:
-                    marked.tagName === 'PRE'
-                        ? (marked.querySelector(':scope > code')?.textContent?.trimEnd() ?? '')
-                        : '',
-                testcases: marked.dataset.testcases,
-                program: marked.dataset.program
-            })
-            if (!src) continue
-            const iframe = document.createElement('iframe')
-            iframe.className = marked.className
-            const box = marked.getAttribute('style')
-            if (box !== null) iframe.setAttribute('style', box)
-            if (marked.dataset.builtHeight) iframe.dataset.builtHeight = marked.dataset.builtHeight
-            //each embed boots a whole editor, so a lecture with five of them would boot five
-            //before the reader has scrolled to the second
-            iframe.setAttribute('loading', 'lazy')
-            iframe.src = src
-            marked.replaceWith(iframe)
+        const marked = content.querySelectorAll<HTMLElement>('[data-playground]')
+        if (marked.length === 0) return
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    if (!entry.isIntersecting) continue
+                    observer.unobserve(entry.target)
+                    embedPlayground(entry.target as HTMLElement)
+                }
+            },
+            { rootMargin: '50% 0px' }
+        )
+        for (const element of marked) observer.observe(element)
+        return () => observer.disconnect()
+    })
+
+    /**
+     * How long a frame whose page has loaded may take to say its editor is ready before it is shown
+     * anyway: an embed whose emulator failed to load shows why, which the code block would hide.
+     */
+    const READY_TIMEOUT_MS = 15_000
+
+    /** The frames still loading behind their code blocks, and how each takes its block's place. */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Read by the message listener when an embed is ready; nothing renders from it.
+    const loadingFrames = new Map<HTMLIFrameElement, () => void>()
+
+    /**
+     * The marked code block's embed. Its code stays on screen, readable and copyable, while the
+     * embed loads: the frame waits on top of it, at its size, invisible and out of reach
+     * (`inert`), and takes its place when its editor says it is ready (`embedMessages.ts`). It is
+     * never moved, which would load it again: it is inserted beside the block, laid over it, and
+     * goes back into the flow where the block was once the block is gone.
+     */
+    function embedPlayground(marked: HTMLElement) {
+        if (!marked.isConnected) return
+        const info = marked.dataset.playground ?? ''
+        const src = playgroundEmbedUrl({
+            info,
+            code:
+                marked.tagName === 'PRE'
+                    ? (marked.querySelector(':scope > code')?.textContent?.trimEnd() ?? '')
+                    : '',
+            testcases: marked.dataset.testcases,
+            program: marked.dataset.program
+        })
+        if (!src) return
+        const iframe = document.createElement('iframe')
+        iframe.className = marked.className
+        iframe.title = playgroundTitle(info)
+        if (marked.dataset.builtHeight) iframe.dataset.builtHeight = marked.dataset.builtHeight
+        const box = marked.getAttribute('style')
+        iframe.inert = true
+        iframe.dataset.loading = ''
+        iframe.style.cssText = 'position: absolute; margin: 0; opacity: 0; pointer-events: none;'
+        marked.setAttribute('aria-busy', 'true')
+        //a spinner at the code's top right corner, as long as the editor loads
+        const loading = document.createElement('span')
+        loading.className = 'playground-loading'
+        marked.append(loading)
+        const spinner = mount(Spinner, { target: loading })
+        const detachTooltip = tooltip('Loading the interactive emulator…')(loading)
+        marked.after(iframe)
+        //over the block, at its size, wherever the frame's containing block is
+        const overBlock = () => {
+            iframe.style.width = `${marked.offsetWidth}px`
+            iframe.style.height = `${marked.offsetHeight}px`
+            iframe.style.top = '0px'
+            iframe.style.left = '0px'
+            const frame = iframe.getBoundingClientRect()
+            const block = marked.getBoundingClientRect()
+            iframe.style.top = `${block.top - frame.top}px`
+            iframe.style.left = `${block.left - frame.left}px`
         }
+        overBlock()
+
+        let timer: ReturnType<typeof setTimeout> | undefined
+        //the editor fades in over the block in a moment, which hides what little still differs
+        //(the current line's highlight, the Build bar), laid over it again first in case the page
+        //moved while it loaded; then it takes the block's place
+        const takePlace = () => {
+            clearTimeout(timer)
+            if (!loadingFrames.delete(iframe)) return
+            const duration = motion(DUR_FAST)
+            if (duration === 0) return settle()
+            overBlock()
+            iframe.style.transition = `opacity ${duration}ms ease-out`
+            iframe.style.opacity = '1'
+            iframe.addEventListener('transitionend', settle, { once: true })
+            setTimeout(settle, duration + 100)
+        }
+        let settled = false
+        const settle = () => {
+            if (settled) return
+            settled = true
+            if (box !== null) iframe.setAttribute('style', box)
+            else iframe.removeAttribute('style')
+            iframe.inert = false
+            delete iframe.dataset.loading
+            detachTooltip?.()
+            void unmount(spinner)
+            marked.remove()
+        }
+        loadingFrames.set(iframe, takePlace)
+        iframe.addEventListener('load', () => (timer = setTimeout(takePlace, READY_TIMEOUT_MS)), {
+            once: true
+        })
+        iframe.src = src
+    }
+
+    $effect(() => {
+        const ready = (event: MessageEvent) => {
+            if (!isEmbedReadyMessage(event.data)) return
+            for (const [iframe, takePlace] of loadingFrames) {
+                if (iframe.contentWindow === event.source) takePlace()
+            }
+        }
+        window.addEventListener('message', ready)
+        return () => window.removeEventListener('message', ready)
     })
 
     /**
@@ -148,7 +254,7 @@
         const resize = (event: MessageEvent) => {
             if (!isEmbedBuiltMessage(event.data)) return
             for (const iframe of frames.querySelectorAll<HTMLIFrameElement>(
-                'iframe[data-built-height]'
+                'iframe[data-built-height]:not([data-loading])'
             )) {
                 if (iframe.contentWindow !== event.source) continue
                 iframe.style.height = event.data.built ? (iframe.dataset.builtHeight ?? '') : ''
@@ -378,6 +484,36 @@
         font-family: inherit;
     }
 
+    /* The embed's own card, drawn by the code block that stands in for it, so that the editor
+       replacing it looks like the same block coming to life: the embed pads itself by the
+       Playground's gap (0.25rem, `--wb-gap` in cards.css) when a page of ours frames it, and draws
+       its code card with a 1px edge in the line colour and a control's corners. A transparent
+       border gives the gap without changing the box, the background stops inside it, and an
+       inset ring draws the edge; the code then starts 1px inside that edge, where Monaco's first
+       line and its gutter are (the gutter itself is Monaco's, `code-gutter-spacing`). */
+    :global(._markdown pre.code-playground) {
+        position: relative;
+        border: 0.25rem solid transparent;
+        border-radius: calc(var(--r-control) + 0.25rem);
+        background-clip: padding-box;
+        box-shadow: inset 0 0 0 1px var(--line);
+        padding: 1px 1rem 0.4rem calc(1rem + 1px);
+    }
+
+    /* the code while its editor loads unseen over it: the pointer says it is on its way, and a
+       spinner in the corner, whose Tooltip says what is loading */
+    :global(._markdown pre.code-playground[aria-busy='true']) {
+        cursor: progress;
+    }
+    :global(._markdown pre.code-playground > .playground-loading) {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.6rem;
+        display: flex;
+        font-size: 1rem;
+        color: var(--text-muted);
+    }
+
     /* a collapsed block of a lecture (an Exercise's solution): an expanding item in the same centered
        column as the text and the playgrounds around it, the summary alone when closed, the frame
        around everything when open */
@@ -434,6 +570,12 @@
     :global(._markdown details > :not(summary)) {
         margin: 1rem;
     }
+    /* the text inside the frame fills it up to that inset: the column's width above is
+       `min(100%, …)`, which inside a frame narrower than the column is the frame's whole width,
+       and the inset's margins on top of it pushed the lines out past the right edge */
+    :global(._markdown details > :is(p, ul, ol, h1, h2, h3, h4, h5, h6)) {
+        width: auto;
+    }
 
     :global(._markdown .code-playground.in-details) {
         width: 100%;
@@ -445,6 +587,8 @@
 
     :global(._markdown pre.code-playground.in-details) {
         display: flex;
+        /* the frame is flush with the block's edges, the embed's card inside it is not */
+        border-radius: calc(var(--r-control) + 0.25rem) !important;
     }
 
     /* `simpleCode`, compact code (a Documentation entry, a lecture's card or an instruction in the

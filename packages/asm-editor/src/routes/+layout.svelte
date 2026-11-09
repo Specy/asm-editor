@@ -5,7 +5,7 @@
     import { page } from '$app/state'
     import ThemeProvider from '#cmp/shared/providers/ThemeProvider.svelte'
     import PromptProvider from '#cmp/shared/providers/PromptProvider.svelte'
-    import SearchPalette from '#cmp/search/SearchPalette.svelte'
+    import LazySearchPalette from '#cmp/search/LazySearchPalette.svelte'
     import { searchPalette } from '#cmp/search/paletteState.svelte.ts'
     import { SITE_SCOPE } from '#lib/search/scope.ts'
     import Footer from '#cmp/shared/layout/Footer.svelte'
@@ -87,7 +87,7 @@
                  hold a fixed palette inside it; only on pages with the navbar, so it never takes
                  Ctrl+K from the editor -->
             {#if searchPalette.navbars > 0}
-                <SearchPalette
+                <LazySearchPalette
                     site
                     scope={SITE_SCOPE}
                     placeholder="Search the documentation and the courses"

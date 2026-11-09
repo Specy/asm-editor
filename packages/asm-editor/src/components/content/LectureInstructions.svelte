@@ -39,7 +39,8 @@
         display: flex;
         flex-direction: column;
         gap: 0.8rem;
-        width: min(100%, 46rem);
+        /* the lecture text's column, which the page sets (--lecture-text-width) */
+        width: min(100%, var(--lecture-text-width, 46rem));
         margin: 2rem auto 0;
     }
     h2 {

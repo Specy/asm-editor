@@ -13,8 +13,10 @@ import type { SearchAnswer, WorkerRequest, WorkerResponse } from './searchWorker
  * The panel, the palette and the agents' tool all ask through `search`, the plain function the
  * plan promised, with nothing in it about the UI.
  *
- * Entering a page with a search box loads only its scope's word index (`preload`), once the page
- * has settled: around a megabyte compressed, enough to match words at once. The model (tens of
+ * A scope's word index (around a megabyte compressed, enough to match words at once) loads when
+ * the reader points at or focuses a search box or opens a palette ([paletteState](../../components/search/paletteState.svelte.ts),
+ * `warmSearch`); the Workbench, whose Documentation panel is one click away, loads its scope on
+ * arrival, once the page has settled (`preload`). The model (tens of
  * megabytes with its runtime) waits for a sign that the reader means to search: pointing at or
  * focusing a search box or launcher, opening the palette (Ctrl+K included), or typing a query
  * (`warmModel`, which `search` itself calls). It is then asked for once, unless the browser asks
@@ -191,9 +193,9 @@ class SearchClient {
     }
 
     /**
-     * What a page with a search box calls on arrival: the scope's shards, once the page has
-     * settled, so they do not compete with what the page itself is loading. Not the model, which
-     * waits for `warmModel`.
+     * The scope's shards, once the page has settled, so they do not compete with what the page
+     * itself is loading: what the Workbench calls on arrival. Not the model, which waits for
+     * `warmModel`.
      */
     preload(scope: SearchScope): void {
         if (!browser) return

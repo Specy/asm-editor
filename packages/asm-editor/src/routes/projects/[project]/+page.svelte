@@ -34,15 +34,14 @@
     import { serializer } from '#lib/json.ts'
     import { examSessionPath, parseLegacyProjectExamPayload } from '#lib/exam.ts'
     import { projectArchiveName, projectToArchive } from '#lib/projectArchive.ts'
+    import { ExampleNotFoundError, loadExample } from '#lib/examples.ts'
     import {
         destinationPath,
         EXAMPLE_CHANGE_MESSAGE,
         EXAMPLE_LEAVE_MESSAGE,
         exampleSharePath,
-        ExampleNotFoundError,
-        loadExample,
         type ExampleDestination
-    } from '#lib/examples.ts'
+    } from '#lib/exampleLinks.ts'
     import {
         readFullscreenDisplay,
         readShareStart,
@@ -299,7 +298,11 @@
         }
     }
 
-    /** Whether another page shows this one in a frame, which has its own chrome: no top bar then. */
+    /**
+     * Whether another page shows this one in a frame, which has its own chrome: no top bar then, and
+     * the Debug tools as sections of the debug column rather than floating windows, which would
+     * float over a frame a few hundred pixels tall (the home page's demo, the Examples page).
+     */
     let framed = $state(false)
 
     onMount(() => {
@@ -554,6 +557,7 @@
                         editJournals={journals}
                         onReady={startOnOpen}
                         header={framed ? undefined : projectTopBar}
+                        debugTools={framed ? 'sections' : undefined}
                         screenWindow={page.params.project === 'share' &&
                             readFullscreenDisplay(page.url.searchParams)}
                         onSave={async ({ silent }) => {

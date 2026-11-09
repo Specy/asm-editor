@@ -30,7 +30,10 @@
             <h2 id="start-here">Start here</h2>
         </div>
         <div class="blog-grid">
-            {#each data.featured as post (post.slug)}<PostCard {post} />{/each}
+            {#each data.featured as post, index (post.slug)}<PostCard
+                    {post}
+                    priority={index === 0}
+                />{/each}
         </div>
     </section>
 {/if}
@@ -40,7 +43,10 @@
             <h2 id="more-guides">More guides</h2>
         </div>
         <div class="blog-grid">
-            {#each data.recent as post (post.slug)}<PostCard {post} />{/each}
+            {#each data.recent as post, index (post.slug)}<PostCard
+                    {post}
+                    priority={index === 0 && !data.featured.length}
+                />{/each}
         </div>
     </section>
 {/if}

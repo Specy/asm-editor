@@ -21,5 +21,5 @@
     <p class="blog-lead">{data.tag.description}</p>
 </header>
 <div class="blog-grid">
-    {#each data.posts as post (post.slug)}<PostCard {post} />{/each}
+    {#each data.posts as post, index (post.slug)}<PostCard {post} priority={index === 0} />{/each}
 </div>

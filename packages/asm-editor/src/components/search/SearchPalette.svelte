@@ -10,6 +10,9 @@
      * sidebar, the navbar or a page would be broken by their transforms, and the theme's colours
      * live on the scope rather than on the document. While it is open the page under it holds
      * still (`lockPageScroll`); leaving the page closes it.
+     *
+     * Pages mount it through [LazySearchPalette](./LazySearchPalette.svelte), which loads it after
+     * the page and keeps Ctrl+K and the count of page palettes meanwhile.
      */
     import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { tick, untrack } from 'svelte'
@@ -31,8 +34,7 @@
     import HighlightedText from './HighlightedText.svelte'
     import SearchField from './SearchField.svelte'
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
-    import { closeSearchPalette, openSearchPalette, searchPalette } from './paletteState.svelte'
-    import { listenForSearchKey, typedInEditor } from './searchHotkey'
+    import { closeSearchPalette, searchPalette } from './paletteState.svelte'
     import { lockPageScroll } from '#lib/scrollLock.ts'
 
     interface Props {
@@ -61,21 +63,6 @@
     const terms = $derived(queryTerms(query))
 
     // counted untracked: the count is read to be raised, which would otherwise run this forever
-    $effect(() => {
-        if (site) return
-        untrack(() => searchPalette.pagePalettes++)
-        return () => untrack(() => searchPalette.pagePalettes--)
-    })
-
-    // the site's palette takes the key only where no page palette does, and never from an editor
-    $effect(() =>
-        listenForSearchKey((event) => {
-            if (!site) return void openSearchPalette()
-            if (searchPalette.pagePalettes > 0 || typedInEditor(event)) return false
-            openSearchPalette('', 'site')
-        })
-    )
-
     $effect(() => {
         if (!shown) return
         untrack(() => {

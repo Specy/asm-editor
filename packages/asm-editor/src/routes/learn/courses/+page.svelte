@@ -6,11 +6,9 @@
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import { resolve } from '$app/paths'
     import { courseAccent } from '#lib/languages/languageColors.ts'
-    import { onMount } from 'svelte'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
-    import SearchPalette from '#cmp/search/SearchPalette.svelte'
+    import LazySearchPalette from '#cmp/search/LazySearchPalette.svelte'
     import { COURSES_SCOPE, courseLanguage } from '#lib/search/scope.ts'
-    import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { resolveHref } from '#lib/hrefs.ts'
@@ -20,9 +18,6 @@
     }
 
     let { data }: Props = $props()
-
-    // the list of Courses searches every Course, as a General course page does
-    onMount(() => searchClient.preload(COURSES_SCOPE))
 </script>
 
 <DefaultNavbar />
@@ -73,7 +68,7 @@
         {/each}
     </div>
 </Page>
-<SearchPalette scope={COURSES_SCOPE} placeholder="Search in every course" />
+<LazySearchPalette scope={COURSES_SCOPE} placeholder="Search in every course" />
 
 <style>
     .courses {

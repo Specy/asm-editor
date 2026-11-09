@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vite-plus/test'
 import { readFileSync } from 'node:fs'
 import { splitLecture } from './lectureSections'
 import { renderMarkdown, type MarkdownOptions } from './markdown'
+import { indentGuideLevels } from './codeBlocks'
 
 //the playground modules reach the projects store, which opens its IndexedDB because this project
 //resolves `browser` as true; jsdom has none, so the database is stubbed away
@@ -182,6 +183,58 @@ describe('links', () => {
         expect(mark?.getAttribute('data-doc-href')).toBe('/documentation/m68k/instruction/movea')
         expect(mark?.textContent).toBe('MOVEA')
         expect(content.textContent).toContain('the web')
+    })
+})
+
+describe('indentation guides', () => {
+    it("follow Monaco's rule: a level per four columns, blank lines from the lines around them", () => {
+        const source = [
+            'start:',
+            '    move.l #1, d0',
+            '',
+            '\tmove.l #2, d1',
+            '        nop',
+            '',
+            'done:'
+        ].join('\n')
+        expect(indentGuideLevels(source)).toEqual([0, 1, 1, 1, 2, 1, 0])
+        expect(indentGuideLevels('\n    nop\n')).toEqual([0, 1, 0])
+    })
+
+    it("are drawn in a playground's code block, as one mark per run, and in no other", () => {
+        const source =
+            '```m68k|playground\nstart:\n    move.l #1, d0\n\n    move.l #2, d1\ndone:\n```\n'
+        const block = page(source).querySelector('pre.code-playground')!
+        const marks = [...block.querySelectorAll('code > .code-indent-guides > i')]
+        expect(marks.map((mark) => mark.getAttribute('style'))).toEqual([
+            '--from: 1; --lines: 3; --level: 0'
+        ])
+        expect(block.querySelector('code')!.textContent).toBe(
+            'start:\n    move.l #1, d0\n\n    move.l #2, d1\ndone:'
+        )
+        expect(page('```m68k\n    nop\n```\n').querySelector('.code-indent-guides')).toBeNull()
+    })
+})
+
+describe('pictures', () => {
+    it("offer the build's smaller copies of a static picture, at the text's width", () => {
+        const image = page(
+            '![The Workbench](/images/blog/getting-started/workbench.webp)\n'
+        ).querySelector('img')!
+        expect(image.getAttribute('srcset')).toMatch(
+            /^\/images\/blog\/getting-started\/workbench-480w\.webp 480w, \/images\/blog\/getting-started\/workbench-960w\.webp 960w, \/images\/blog\/getting-started\/workbench\.webp \d+w$/
+        )
+        expect(image.getAttribute('sizes')).toBe('(max-width: 760px) 100vw, 720px')
+    })
+
+    it("leave a picture without copies, or a Project File's, as written", () => {
+        expect(
+            page('![a](/images/noise2.png)\n').querySelector('img')!.hasAttribute('srcset')
+        ).toBe(false)
+        const untrusted = page('![a](/images/blog/getting-started/workbench.webp)\n', {
+            untrusted: true
+        })
+        expect(untrusted.querySelector('img')!.hasAttribute('srcset')).toBe(false)
     })
 })
 

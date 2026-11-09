@@ -8,11 +8,9 @@
      * loads as it comes in ([the design record](../../../../../docs/design/documentation-search.md)).
      */
     import type { Snippet } from 'svelte'
-    import { onMount } from 'svelte'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
-    import SearchPalette from '#cmp/search/SearchPalette.svelte'
+    import LazySearchPalette from '#cmp/search/LazySearchPalette.svelte'
     import type { SearchScope } from '#lib/search/scope.ts'
-    import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
     import MaskedScroll from '#cmp/shared/layout/MaskedScroll.svelte'
@@ -65,8 +63,6 @@
 
     let menuOpen = $state(false)
     const closeMenu = () => (menuOpen = false)
-
-    onMount(() => searchClient.preload(scope))
 </script>
 
 <ThemeScope {theme}>
@@ -95,5 +91,5 @@
         {/snippet}
     </Sidebar>
 
-    <SearchPalette {scope} {placeholder} />
+    <LazySearchPalette {scope} {placeholder} />
 </ThemeScope>

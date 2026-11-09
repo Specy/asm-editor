@@ -132,6 +132,12 @@ markdown stay components an entry names.
 - The model starts downloading in a Web Worker as soon as a page with a search box is entered, once
   the page is idle: the documentation pages, a Course's pages, and the Workbench, whose Documentation
   panel is one click away.
+- 2026-11-09 (owner, after a Lighthouse audit): the documentation pages and the Courses no longer
+  load their scope's word index on arrival either. It starts downloading when the reader points at
+  or focuses a search box or opens a palette, with the model; the Workbench still loads its scope
+  once the page is idle. The Courses page had fetched all six lecture indexes (1.4 MB of its
+  1.8 MB) for readers who mostly never search. The palette's own code also loads after the page
+  (`LazySearchPalette.svelte`), since it brought the Markdown parser to every page.
 - It does not download when the browser asks to save data (`navigator.connection.saveData`). That
   is the only way to stop it: the owner chose no Preference and no switch, so a reader without a
   data saver always gets the model.

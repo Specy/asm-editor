@@ -88,6 +88,8 @@
         padding: 0.2rem 0.8rem;
         border-bottom: 1px solid var(--wb-line, color-mix(in srgb, var(--hint) 30%, transparent));
         font-family: var(--font-mono);
+        /* the size of the Terminal's text under it */
+        font-size: var(--fs-small);
     }
 
     .line {

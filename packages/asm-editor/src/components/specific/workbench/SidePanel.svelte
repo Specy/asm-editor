@@ -28,7 +28,6 @@
     import DocumentationBrowser from '#cmp/documentation/browser/DocumentationBrowser.svelte'
     import { documentationLanguageOf } from '#lib/search/scope.ts'
     import { NO_PROGRAM_MESSAGE } from '#lib/workbench/WorkbenchSession.svelte.ts'
-    import AgentPanel from './AgentPanel.svelte'
     import SettingsPanel from './SettingsPanel.svelte'
     import SymbolsPanel from './SymbolsPanel.svelte'
     import EditHistoryPanel from './EditHistoryPanel.svelte'
@@ -287,7 +286,10 @@
                         m68kDialect={documentationDialect}
                     />
                 {:else if entry.id === 'agent'}
-                    <AgentPanel />
+                    <!-- the AI assistant's code loads when its panel is opened -->
+                    {#await import('./AgentPanel.svelte') then { default: AgentPanel }}
+                        <AgentPanel />
+                    {/await}
                 {:else if entry.id === 'settings'}
                     <SettingsPanel readonly={entry.access === 'readonly'} />
                 {:else if entry.content}

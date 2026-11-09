@@ -69,6 +69,21 @@ pre.code-block.code-gutter-spacing > .code-gutter {
     padding-right: calc(26px - 0.2rem);
 }
 
+/* A playground's code block draws Monaco's indentation guides (codeBlocks.ts), so the editor
+   replacing it brings no new lines: 1px wide at the left of each indentation level, the width of
+   four spaces apart, in the editor theme's colour (`--indent-guide`, codeBlockStyle.ts). */
+pre.code-block > code:has(> .code-indent-guides) {
+    position: relative;
+}
+.code-indent-guides > i {
+    position: absolute;
+    top: calc(var(--from) * var(--example-line-height, 22px));
+    left: calc(var(--level) * 4ch);
+    width: 1px;
+    height: calc(var(--lines) * var(--example-line-height, 22px));
+    background: var(--indent-guide, #404040);
+}
+
 pre.code-block.code-block-fill {
     flex: 1;
     min-height: 0;

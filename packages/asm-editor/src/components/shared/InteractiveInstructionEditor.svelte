@@ -42,6 +42,7 @@
     import CyclesLine from '#cmp/specific/project/cpu/CyclesLine.svelte'
     import TabStrip from '#cmp/shared/input/TabStrip.svelte'
     import { onMount, type Snippet, untrack } from 'svelte'
+    import { afterNextPaint } from '#lib/languages/ExecutionSlice.ts'
     import { getM68kErrorMessage } from '#lib/languages/M68K/M68kUtils.ts'
     import type {
         AvailableLanguages,
@@ -140,6 +141,11 @@
          * end of the execution dock floating over the bottom of the code.
          */
         dockActions?: DockAction[]
+        /**
+         * Called once, after the code editor is first drawn. It sits inside its emulator's loader, so
+         * by then the playground can be typed into and built.
+         */
+        onReady?: () => void
     }
 
     let {
@@ -166,7 +172,8 @@
         layout = 'small',
         initialRegisterFile = undefined,
         initialRegisterFormat = undefined,
-        dockActions = []
+        dockActions = [],
+        onReady
     }: Props = $props()
     const session = untrack(() => (project ? new PlaygroundSession(project) : undefined))
     //the code, the panel the file tabs switch
@@ -408,6 +415,13 @@
         }, 50)
     }
     let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
+
+    let readyReported = false
+    $effect(() => {
+        if (!editor || readyReported) return
+        readyReported = true
+        void afterNextPaint().then(() => onReady?.())
+    })
 
     $effect(() => {
         //Tracked read outside `untrack`, so editing the playground keeps arming the live check.

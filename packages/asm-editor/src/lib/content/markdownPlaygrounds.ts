@@ -13,6 +13,7 @@ import {
 import type { PlaygroundProgram } from './playgroundProgram'
 import { embedQuery } from './embedUrl'
 import { highlightedAssemblyCode } from './codeBlocks'
+import { languageLabel } from '#lib/languages/languageLabel.ts'
 
 /**
  * The **Playgrounds** of a rendered Markdown text ([the pipeline](./markdown.ts)). The render
@@ -315,4 +316,17 @@ export function playgroundEmbedUrl(marks: PlaygroundMarks): string | undefined {
         { code: marks.code, program, testcases: markedTestcases(marks.testcases) }
     )
     return `/embed?${query}`
+}
+
+/**
+ * The name a playground's frame is announced by, its language and what it is: "M68K playground",
+ * "RISC-V exercise", "C playground for MIPS".
+ */
+export function playgroundTitle(info: string): string {
+    const fence = parsePlaygroundFence(info)
+    if (!fence) return 'Code playground'
+    const kind = fence.isExercise ? 'exercise' : 'playground'
+    const target = languageLabel(fence.settings.language)
+    if (!fence.sourceLanguage) return `${target} ${kind}`
+    return `${fence.sourceLanguage === 'cpp' ? 'C++' : 'C'} ${kind} for ${target}`
 }

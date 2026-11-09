@@ -73,6 +73,7 @@
         "mdsvex": "^0.12.8",
         "onnxruntime-node": "1.31.1",
         "sass": "^1.107.1",
+        "sharp": "0.35.5",
         "svelte": "^5.57.3",
         "svelte-body": "^2.0.0",
         "svelte-check": "^4.7.7",

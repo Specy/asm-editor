@@ -15,16 +15,18 @@
     import {
         canonicalExampleId,
         defaultExample,
+        examplesIsa,
+        loadExamples,
+        type Example
+    } from '#lib/examples.ts'
+    import {
         destinationPath,
         EXAMPLE_CHANGE_MESSAGE,
         EXAMPLE_LEAVE_MESSAGE,
         exampleSharePath,
-        examplesIsa,
         examplesPath,
-        isExampleDestination,
-        loadExamples,
-        type Example
-    } from '#lib/examples.ts'
+        isExampleDestination
+    } from '#lib/exampleLinks.ts'
     import { copyText } from '#lib/utils.ts'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import '#cmp/specific/workbench/workbench.css'

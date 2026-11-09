@@ -93,6 +93,7 @@ function decorateCodeBlocks(tree: Root): void {
         names.add('code-block')
         if (typeof node.properties['data-playground'] === 'string') {
             names.add('code-gutter-spacing')
+            code.children.push(indentGuides(toString(code)))
         }
         node.properties = { ...node.properties, className: [...names] }
         node.children = node.children.filter(
@@ -106,6 +107,81 @@ function decorateCodeBlocks(tree: Root): void {
             children: [{ type: 'text', value: codeLineNumbers(toString(code)) }]
         })
     })
+}
+
+/** Monaco's tab and indent size, which the editors leave at its default. */
+const EDITOR_TAB_SIZE = 4
+
+/** How far a line is indented in columns, or -1 for a blank one: Monaco's `computeIndentLevel`. */
+function indentOf(line: string): number {
+    let indent = 0
+    for (const char of line) {
+        if (char === ' ') indent++
+        else if (char === '\t') indent = indent - (indent % EDITOR_TAB_SIZE) + EDITOR_TAB_SIZE
+        else return indent
+    }
+    return -1
+}
+
+/**
+ * How many indentation guides Monaco draws on each line of a text: one per level an indented line
+ * reaches, and for a blank line the level of the lines around it, by Monaco's own rule
+ * (`getLinesIndentGuides` in its guidesTextModelPart.js, without the off-side rule no assembly
+ * language has).
+ */
+export function indentGuideLevels(source: string): number[] {
+    const indents = source.split('\n').map(indentOf)
+    const content = (from: number, step: 1 | -1) => {
+        for (let index = from; index >= 0 && index < indents.length; index += step) {
+            if (indents[index] >= 0) return indents[index]
+        }
+        return -1
+    }
+    return indents.map((indent, index) => {
+        if (indent >= 0) return Math.ceil(indent / EDITOR_TAB_SIZE)
+        const above = content(index - 1, -1)
+        const below = content(index + 1, 1)
+        if (above === -1 || below === -1) return 0
+        if (above < below) return 1 + Math.floor(above / EDITOR_TAB_SIZE)
+        if (above === below) return Math.ceil(below / EDITOR_TAB_SIZE)
+        return 1 + Math.floor(below / EDITOR_TAB_SIZE)
+    })
+}
+
+/**
+ * The indentation guides of a playground's code block, which stands in for the editor until it
+ * loads: one mark per run of lines at each level, the 1px line Monaco draws there, placed by CSS
+ * (codeBlocks.css) from the line it starts on, how many lines it runs and its level. Empty, so the
+ * code's text, which the embed is built from, is unchanged.
+ */
+function indentGuides(source: string): Element {
+    const levels = indentGuideLevels(source)
+    const marks: Element[] = []
+    const deepest = Math.max(0, ...levels)
+    for (let level = 1; level <= deepest; level++) {
+        let start = -1
+        for (let line = 0; line <= levels.length; line++) {
+            const inside = line < levels.length && levels[line] >= level
+            if (inside && start < 0) start = line
+            if (!inside && start >= 0) {
+                marks.push({
+                    type: 'element',
+                    tagName: 'i',
+                    properties: {
+                        style: `--from: ${start}; --lines: ${line - start}; --level: ${level - 1}`
+                    },
+                    children: []
+                })
+                start = -1
+            }
+        }
+    }
+    return {
+        type: 'element',
+        tagName: 'span',
+        properties: { className: ['code-indent-guides'], ariaHidden: 'true' },
+        children: marks
+    }
 }
 
 /** The rehype plugin of the [Markdown pipeline](./markdown.ts) that decorates code blocks. */

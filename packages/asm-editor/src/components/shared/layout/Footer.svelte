@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { responsiveImage } from '#lib/images/responsive.ts'
     import FaGithub from '~icons/fa-brands/github'
     import FaCopyright from '~icons/fa-solid/copyright'
     import Icon from './Icon.svelte'
@@ -37,7 +38,13 @@
                     {@attach tooltip('View my other websites')}
                 >
                     <div class="logo-content">
-                        <img src="/images/logo.png" alt="logo" class="logo" />
+                        <img
+                            src="/images/logo.png"
+                            srcset={responsiveImage('/images/logo.png').srcset}
+                            sizes="32px"
+                            alt="logo"
+                            class="logo"
+                        />
                         <div>Specy</div>
                     </div>
                 </a>

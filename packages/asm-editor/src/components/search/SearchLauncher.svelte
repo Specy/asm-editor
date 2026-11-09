@@ -2,14 +2,12 @@
     /**
      * A box that opens the page's search palette: full width at the top of a landing page, compact
      * at the top of a sidebar. It looks like the box it opens, and what is typed into it goes on in
-     * the palette. Pointing at it or focusing it starts the search model loading, so it is on its
-     * way by the time the palette opens.
+     * the palette. Pointing at it or focusing it starts the palette's index and the search model
+     * loading, so they are on their way by the time the palette opens.
      */
     import FaSearch from '~icons/fa-solid/search'
-    import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import { shortcutLabel, shortcutsStore, ShortcutAction } from '#stores/shortcutsStore.ts'
-    import { openSearchPalette } from './paletteState.svelte'
-    import { SITE_SCOPE } from '#lib/search/scope.ts'
+    import { openSearchPalette, warmSearch } from './paletteState.svelte'
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
 
     interface Props {
@@ -22,16 +20,8 @@
     let { placeholder = 'Search', size = 'compact', site = false }: Props = $props()
     const owner = $derived(site ? 'site' : 'page')
 
-    /** The model, and for the site's search its index too: no page preloads every shard. */
-    function warm() {
-        searchClient.warmModel()
-        if (site)
-            searchClient
-                .loadScope(SITE_SCOPE)
-                .catch((error: Error) =>
-                    console.warn(`search: could not load the index (${error.message})`)
-                )
-    }
+    /** The palette's index and the model, on their way before the palette opens. */
+    const warm = () => warmSearch(owner)
 
     const key = $derived(
         [...$shortcutsStore.entries()].find(

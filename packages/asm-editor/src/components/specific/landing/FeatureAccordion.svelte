@@ -23,6 +23,7 @@
      */
     import FaPlus from '~icons/fa-solid/plus'
     import FaChevronRight from '~icons/fa-solid/chevron-right'
+    import { responsiveImage } from '#lib/images/responsive.ts'
 
     interface Props {
         features: AccordionFeature[]
@@ -92,6 +93,8 @@
                         <img
                             class="inline-shot"
                             src={feature.image}
+                            srcset={responsiveImage(feature.image).srcset}
+                            sizes="100vw"
                             alt={feature.alt}
                             width={feature.width}
                             height={feature.height}
@@ -106,6 +109,8 @@
         {#each features as feature, i (feature.title)}
             <img
                 src={feature.image}
+                srcset={responsiveImage(feature.image).srcset}
+                sizes="60vw"
                 alt=""
                 width={feature.width}
                 height={feature.height}

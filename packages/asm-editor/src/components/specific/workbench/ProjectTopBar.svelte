@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { responsiveImage } from '#lib/images/responsive.ts'
     import { resolve } from '$app/paths'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
@@ -62,7 +63,15 @@
                 onHome()
             }}
         >
-            <img class="logo" src="/favicon.png" alt="ASM Editor" width="20" height="20" />
+            <img
+                class="logo"
+                src="/favicon.png"
+                srcset={responsiveImage('/favicon.png').srcset}
+                sizes="20px"
+                alt="ASM Editor"
+                width="20"
+                height="20"
+            />
         </a>
     {/if}
     <button type="button" class="action back" title="Go back to your projects" onclick={onBack}>

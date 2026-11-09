@@ -475,6 +475,11 @@
         scrollbar-gutter: stable;
         padding: var(--terminal-padding, 0.5rem 0.5rem 0.5rem 0.8rem);
         font-family: var(--font-mono);
+        /* a step under the text around it, and its text a little quieter than the panel's, so the
+           output reads as a transcript rather than as the page (owner, 2026-11-09); the colours a
+           program prints keep their own */
+        font-size: var(--fs-small);
+        color: color-mix(in srgb, currentColor 85%, transparent);
         /* square unless its host's card rounds the corners it sits in (the bottom panel's lower
            two), so its ring and its read's outline follow that card's curve rather than being cut
            by it */

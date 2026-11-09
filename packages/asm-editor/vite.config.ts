@@ -7,6 +7,7 @@ import Icons from 'unplugin-icons/vite'
 import { defineConfig } from 'vite-plus'
 import { searchModelPlugin } from './scripts/search-model-plugin.ts'
 import { examplesPlugin } from './scripts/examples-plugin.ts'
+import { responsiveImagesPlugin } from './scripts/responsive-images-plugin.ts'
 
 /** The Cores and the example archives, built before the editor starts. */
 const BUILD_DEPENDENCIES = ['asm-editor-monorepo#build:cores', 'asm-editor-monorepo#build:examples']
@@ -97,7 +98,8 @@ export default defineConfig({
         }),
         wasm(),
         searchModelPlugin(),
-        examplesPlugin()
+        examplesPlugin(),
+        responsiveImagesPlugin()
     ],
     worker: {
         format: 'es',

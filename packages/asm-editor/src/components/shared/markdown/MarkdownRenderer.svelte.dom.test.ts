@@ -5,7 +5,7 @@ import MarkdownRenderer from './MarkdownRenderer.svelte'
 import { renderMarkdown } from '#lib/content/markdown.ts'
 import { decodePlaygroundProgram } from '#lib/content/playgroundProgram.ts'
 import { extractPlaygrounds } from '#lib/content/playgrounds.ts'
-import { EMBED_BUILT_MESSAGE } from '#lib/content/embedMessages.ts'
+import { EMBED_BUILT_MESSAGE, EMBED_READY_MESSAGE } from '#lib/content/embedMessages.ts'
 
 //the renderer reaches `#lib/Project.svelte.ts`, which reaches the projects store, which opens its
 //IndexedDB because this project resolves `browser` as true. jsdom has no IndexedDB and Dexie's
@@ -41,6 +41,60 @@ vi.mock('#lib/monaco/Monaco.ts', () => ({
 }))
 
 /**
+ * jsdom has no IntersectionObserver. This one reports each element it is given as in view at once,
+ * as a playground on screen is, unless `view.held`: then nothing is in view until `view.reveal()`.
+ */
+const view = {
+    held: false,
+    observers: new Set<FakeIntersectionObserver>(),
+    reveal() {
+        for (const observer of view.observers) observer.reveal()
+    }
+}
+class FakeIntersectionObserver {
+    private targets = new Set<Element>()
+    constructor(private callback: IntersectionObserverCallback) {
+        view.observers.add(this)
+    }
+    observe(target: Element) {
+        this.targets.add(target)
+        if (!view.held) this.report([target])
+    }
+    unobserve(target: Element) {
+        this.targets.delete(target)
+    }
+    disconnect() {
+        this.targets.clear()
+        view.observers.delete(this)
+    }
+    reveal() {
+        this.report([...this.targets])
+    }
+    private report(targets: Element[]) {
+        const entries = targets.map((target) => ({ target, isIntersecting: true }))
+        this.callback(
+            entries as IntersectionObserverEntry[],
+            this as unknown as IntersectionObserver
+        )
+    }
+}
+vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver)
+
+/**
+ * jsdom has no `matchMedia` either. The reader asks for less motion unless a test says otherwise,
+ * so an editor that is ready takes its block's place at once rather than after its fade.
+ */
+const media = { lessMotion: true }
+vi.stubGlobal('matchMedia', (query: string) => ({
+    media: query,
+    get matches() {
+        return query.includes('prefers-reduced-motion') && media.lessMotion
+    },
+    addEventListener() {},
+    removeEventListener() {}
+}))
+
+/**
  * What the mounted renderer adds to the render the pipeline's own tests read
  * ([markdown.dom.test.ts](../../../lib/content/markdown.dom.test.ts)): the Playgrounds' embeds in
  * place of their code blocks, and Monaco's colours where a host asks for them.
@@ -57,12 +111,26 @@ const PLAYGROUND = [
     ''
 ].join('\n')
 
-function render(source: string, options: Record<string, unknown> = {}) {
+/** Each embed still loading behind its code block says its editor is ready, as a loaded one does. */
+function ready(target: HTMLElement) {
+    for (const iframe of target.querySelectorAll<HTMLIFrameElement>('iframe[data-loading]')) {
+        window.dispatchEvent(
+            new MessageEvent('message', {
+                data: { type: EMBED_READY_MESSAGE },
+                source: iframe.contentWindow
+            })
+        )
+    }
+}
+
+/** The renderer mounted, its embeds loaded unless `loaded` is false. */
+function render(source: string, options: Record<string, unknown> = {}, loaded = true) {
     const target = document.createElement('div')
     document.body.appendChild(target)
     const props = $state({ source, ...options })
     const component = mount(MarkdownRenderer, { target, props })
     flushSync()
+    if (loaded) ready(target)
     return {
         target,
         props,
@@ -97,9 +165,85 @@ describe('playground embeds', () => {
             const iframe = target.querySelector('iframe')
             expect(iframe?.getAttribute('style')).toBe(block?.getAttribute('style'))
             expect(iframe?.getAttribute('class')).toBe(block?.getAttribute('class'))
-            expect(iframe?.getAttribute('loading')).toBe('lazy')
+            expect(iframe?.getAttribute('title')).toBe('M68K playground')
             expect(target.textContent).not.toContain('expectedRegisters')
         } finally {
+            cleanup()
+        }
+    })
+
+    it('wait until the code block comes near the view to boot the embed', () => {
+        view.held = true
+        const { target, cleanup } = render(PLAYGROUND)
+        try {
+            expect(target.querySelector('iframe')).toBeNull()
+            expect(target.querySelector('pre.code-playground')).not.toBeNull()
+            view.reveal()
+            expect(target.querySelector('iframe')).not.toBeNull()
+            ready(target)
+            expect(target.querySelector('pre.code-playground')).toBeNull()
+        } finally {
+            view.held = false
+            cleanup()
+        }
+    })
+
+    it('keep the code on screen, with the frame unseen over it, until its editor is ready', () => {
+        const { target, cleanup } = render(PLAYGROUND, {}, false)
+        try {
+            const block = target.querySelector<HTMLElement>('pre.code-playground')!
+            const box = block.getAttribute('style')
+            const iframe = target.querySelector('iframe')!
+            expect(block.getAttribute('aria-busy')).toBe('true')
+            //a spinner in its corner while the editor loads, gone with the block
+            expect(block.querySelector('.playground-loading svg')).not.toBeNull()
+            expect(block.nextElementSibling).toBe(iframe)
+            expect(iframe.inert).toBe(true)
+            expect(iframe.style.position).toBe('absolute')
+            expect(iframe.style.opacity).toBe('0')
+            ready(target)
+            expect(target.querySelector('pre.code-playground')).toBeNull()
+            expect(iframe.inert).toBe(false)
+            expect(iframe.hasAttribute('data-loading')).toBe(false)
+            expect(iframe.getAttribute('style')).toBe(box)
+        } finally {
+            cleanup()
+        }
+    })
+
+    it("fade the editor in over its code block before it takes the block's place", () => {
+        media.lessMotion = false
+        vi.useFakeTimers()
+        const { target, cleanup } = render(PLAYGROUND, {}, false)
+        try {
+            const iframe = target.querySelector('iframe')!
+            ready(target)
+            expect(iframe.style.opacity).toBe('1')
+            expect(iframe.style.transition).toContain('opacity')
+            expect(target.querySelector('pre.code-playground')).not.toBeNull()
+            vi.advanceTimersByTime(300)
+            expect(target.querySelector('pre.code-playground')).toBeNull()
+            expect(iframe.style.opacity).toBe('')
+        } finally {
+            media.lessMotion = true
+            vi.useRealTimers()
+            cleanup()
+        }
+    })
+
+    it('show the frame anyway when its loaded page never says its editor is ready', () => {
+        vi.useFakeTimers()
+        const { target, cleanup } = render(PLAYGROUND, {}, false)
+        try {
+            const iframe = target.querySelector('iframe')!
+            iframe.dispatchEvent(new Event('load'))
+            vi.advanceTimersByTime(14_000)
+            expect(target.querySelector('pre.code-playground')).not.toBeNull()
+            vi.advanceTimersByTime(1_000)
+            expect(target.querySelector('pre.code-playground')).toBeNull()
+            expect(iframe.inert).toBe(false)
+        } finally {
+            vi.useRealTimers()
             cleanup()
         }
     })
@@ -247,6 +391,7 @@ describe('playground embeds', () => {
         try {
             props.source = `Some words first.\n\n${PLAYGROUND}\n${PLAYGROUND}`
             flushSync()
+            ready(target)
             expect(target.querySelectorAll('iframe')).toHaveLength(2)
             expect(target.querySelector('p')?.textContent).toBe('Some words first.')
             props.source = 'Only words now.'

@@ -11,9 +11,6 @@
     import FaChevronRight from '~icons/fa-solid/chevron-right'
     import { page } from '$app/state'
     import Icon from '#cmp/shared/layout/Icon.svelte'
-    import FloatingAgentSidebar from '#cmp/shared/agent/FloatingAgentSidebar.svelte'
-    import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
-    import InteractiveInstructionEditor from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import type { SupportedLanguage } from '#cmp/shared/agent/DefaultCodingAgent.svelte'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import type { Emulator } from '#lib/languages/Emulator.ts'
@@ -45,6 +42,13 @@
             course: { name: data.course.name, pathname: coursePathname }
         })
     ])
+
+    /** The editor and emulator the AI assistant opens under the lecture, loaded when it does. */
+    const loadLectureEditor = () =>
+        Promise.all([
+            import('#cmp/shared/providers/EmulatorLoader.svelte'),
+            import('#cmp/shared/InteractiveInstructionEditor.svelte')
+        ])
 
     let editorLanguage: SupportedLanguage | null = $state(null)
     let editorCode = $state('')
@@ -154,89 +158,104 @@
                 Go deeper: this topic in {@render topicList(topicLinks.siblings)}.
             </p>
         {/if}
+        <LectureInstructions
+            groups={data.instructions}
+            language={courseLanguage(data.course.slug)}
+        />
     </div>
-    <LectureInstructions groups={data.instructions} language={courseLanguage(data.course.slug)} />
     {#if editorLanguage}
         <div class="editor-section" bind:this={editorSection}>
-            {#key editorLanguage}
-                <EmulatorLoader
-                    language={editorLanguage as AvailableLanguages}
-                    code={editorCode}
-                    bind:emulator={emulatorInstance}
-                    settings={{
-                        globalPageElementsPerRow: 4,
-                        globalPageSize: 4 * 8
-                    }}
-                >
-                    {#snippet children(emulator)}
-                        <InteractiveInstructionEditor
-                            bind:code={editorCode}
-                            language={editorLanguage as AvailableLanguages}
-                            {emulator}
-                            embedded={true}
-                            showConsole={true}
-                            showRegisters={true}
-                            showMemory={true}
-                            showFlags={true}
-                            forceMemoryRight={true}
-                        />
-                    {/snippet}
-                </EmulatorLoader>
-            {/key}
+            {#await loadLectureEditor() then [{ default: EmulatorLoader }, { default: InteractiveInstructionEditor }]}
+                {#key editorLanguage}
+                    <EmulatorLoader
+                        language={editorLanguage as AvailableLanguages}
+                        code={editorCode}
+                        bind:emulator={emulatorInstance}
+                        settings={{
+                            globalPageElementsPerRow: 4,
+                            globalPageSize: 4 * 8
+                        }}
+                    >
+                        {#snippet children(emulator)}
+                            <InteractiveInstructionEditor
+                                bind:code={editorCode}
+                                language={editorLanguage as AvailableLanguages}
+                                {emulator}
+                                embedded={true}
+                                showConsole={true}
+                                showRegisters={true}
+                                showMemory={true}
+                                showFlags={true}
+                                forceMemoryRight={true}
+                            />
+                        {/snippet}
+                    </EmulatorLoader>
+                {/key}
+            {/await}
         </div>
     {/if}
 
-    <Row justify="between" wrap gap="1rem" style="margin-top: 3rem">
-        {#if previousLecture}
-            <ButtonLink
-                style="gap: 1rem"
-                kind="secondary"
-                href={resolve('/learn/courses/[courseId]/[moduleId]/[lectureId]', {
-                    courseId: data.course.slug,
-                    moduleId: previousLecture.module.slug,
-                    lectureId: previousLecture.slug
-                })}
-            >
-                <Icon>
-                    <FaChevronLeft />
-                </Icon>
-                Previous Lecture
-            </ButtonLink>
-        {:else}
-            <div></div>
-        {/if}
+    <!-- after the editor, which takes the page's whole width, back in the text's column -->
+    <div class="reading">
+        <Row
+            justify="between"
+            wrap
+            gap="1rem"
+            style="width: min(100%, var(--lecture-text-width)); margin: 3rem auto 0"
+        >
+            {#if previousLecture}
+                <ButtonLink
+                    style="gap: 1rem"
+                    kind="secondary"
+                    href={resolve('/learn/courses/[courseId]/[moduleId]/[lectureId]', {
+                        courseId: data.course.slug,
+                        moduleId: previousLecture.module.slug,
+                        lectureId: previousLecture.slug
+                    })}
+                >
+                    <Icon>
+                        <FaChevronLeft />
+                    </Icon>
+                    Previous Lecture
+                </ButtonLink>
+            {:else}
+                <div></div>
+            {/if}
 
-        {#if nextLecture}
-            <ButtonLink
-                style="gap: 1rem"
-                href={resolve('/learn/courses/[courseId]/[moduleId]/[lectureId]', {
-                    courseId: data.course.slug,
-                    moduleId: nextLecture.module.slug,
-                    lectureId: nextLecture.slug
-                })}
-            >
-                Next Lecture
-                <Icon>
-                    <FaChevronRight />
-                </Icon>
-            </ButtonLink>
-        {:else}
-            <div></div>
-        {/if}
-    </Row>
+            {#if nextLecture}
+                <ButtonLink
+                    style="gap: 1rem"
+                    href={resolve('/learn/courses/[courseId]/[moduleId]/[lectureId]', {
+                        courseId: data.course.slug,
+                        moduleId: nextLecture.module.slug,
+                        lectureId: nextLecture.slug
+                    })}
+                >
+                    Next Lecture
+                    <Icon>
+                        <FaChevronRight />
+                    </Icon>
+                </ButtonLink>
+            {:else}
+                <div></div>
+            {/if}
+        </Row>
+    </div>
 </Page>
 
+<!-- the assistant's code loads only when it is turned on (AI_FEATURES_ENABLED) -->
 {#if AI_FEATURES_ENABLED}
-    <FloatingAgentSidebar
-        bind:open={lectureAgent.open}
-        openSize="28rem"
-        verticalOffset="var(--navbar-height)"
-        bind:editorLanguage
-        bind:editorCode
-        {emulatorInstance}
-        canUpdateLanguage={true}
-        searchPlace={{ language: courseLanguage(data.course.slug), lectures: true }}
-        additionalInstructions={`
+    {#await import('#cmp/shared/agent/FloatingAgentSidebar.svelte') then { default: FloatingAgentSidebar }}
+        <FloatingAgentSidebar
+            bind:open={lectureAgent.open}
+            openSize="28rem"
+            verticalOffset="var(--navbar-height)"
+            bind:editorLanguage
+            bind:editorCode
+            {emulatorInstance}
+            canUpdateLanguage={true}
+            searchPlace={{ language: courseLanguage(data.course.slug), lectures: true }}
+            additionalInstructions={`
         The user is reading the lecture "${data.lecture.name}" from the course "${data.course.name}".
         Lecture description: ${data.lecture.description}
         Course description: ${data.course.description}
@@ -251,50 +270,52 @@
         ${data.content}
         </lecture_content>
     `}
-        workflows={[
-            {
-                name: 'Teach with a runnable example (course lecture)',
-                intentTriggers: [
-                    'explain the lecture',
-                    'lecture topic',
-                    'demonstrate this concept',
-                    'show me an example',
-                    'walk me through it',
-                    'practice example',
-                    'how does this concept work',
-                    'what does this instruction do here',
-                    'run an example from the lesson'
-                ],
-                requiredTools: [
-                    'view_file',
-                    'compile',
-                    'list_breakpoints',
-                    'set_breakpoint',
-                    'remove_breakpoint',
-                    'run_to_completion',
-                    'step',
-                    'get_emulator_state',
-                    'write_to_file',
-                    'replace_file_content'
-                ],
-                verification:
-                    'Tie each explanation to lecture content and compile results; do not execute examples unless the user explicitly asks for execution.',
-                description: `
+            workflows={[
+                {
+                    name: 'Teach with a runnable example (course lecture)',
+                    intentTriggers: [
+                        'explain the lecture',
+                        'lecture topic',
+                        'demonstrate this concept',
+                        'show me an example',
+                        'walk me through it',
+                        'practice example',
+                        'how does this concept work',
+                        'what does this instruction do here',
+                        'run an example from the lesson'
+                    ],
+                    requiredTools: [
+                        'view_file',
+                        'compile',
+                        'list_breakpoints',
+                        'set_breakpoint',
+                        'remove_breakpoint',
+                        'run_to_completion',
+                        'step',
+                        'get_emulator_state',
+                        'write_to_file',
+                        'replace_file_content'
+                    ],
+                    verification:
+                        'Tie each explanation to lecture content and compile results; do not execute examples unless the user explicitly asks for execution.',
+                    description: `
 When the user asks a question about the lecture topic or for a demonstration of the concept being taught.
 1. Put a small focused example in the editor via write_to_file so the user can see it next to the lecture content. A markdown code block in chat is not enough — the editor lets them run and modify it.
 2. Compile the example and report whether it is valid.
 3. Do not call run_to_completion or step unless the user explicitly asks to execute/debug the example.
 4. If the user asks a follow-up, modify the example in-place via replace_file_content and compile again.
 `
-            }
-        ]}
-    />
+                }
+            ]}
+        />
+    {/await}
 {/if}
 
 <style>
     /* the lecture text's column, which the Markdown sets as 38em of its own text
-       (--md-text-width), so the title and these links start where the text does; the wrapper
-       lays out nothing of its own, its children staying the column's */
+       (--md-text-width), so the title, these links, the lesson's instructions and the Previous and
+       Next buttons start and end where the text does; the wrapper lays out nothing of its own, its
+       children staying the column's */
     .reading {
         display: contents;
         --lecture-text-width: calc(38 * var(--fs-prose));

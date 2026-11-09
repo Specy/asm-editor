@@ -42,12 +42,13 @@
         destinationPath,
         exampleSharePath,
         isExampleDestination
-    } from '#lib/examples.ts'
+    } from '#lib/exampleLinks.ts'
     import { storedProjectCount } from '#lib/storage/projectCount.ts'
     import { AI_FEATURES_ENABLED } from '#lib/Config.ts'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { SITE_URL, softwareApplicationLd, websiteLd } from '#lib/seo.ts'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
+    import { responsiveImage } from '#lib/images/responsive.ts'
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>
@@ -159,8 +160,13 @@
     }
     let browserWindow = $state<HTMLElement>()
     let demoFrame = $state<HTMLIFrameElement>()
-    /** Whether the screen is wide enough for the editor, which shows the demo at all. */
-    let showDemo = $state(false)
+    /**
+     * Whether the screen is wide enough for the editor, which shows the demo at all. The server's
+     * page has it, hidden by CSS on a narrow screen (`.demo`), so that a wide one shows it from the
+     * first paint: added once the page had loaded, it pushed everything under it down. A narrow
+     * screen drops it once the page knows.
+     */
+    let showDemo = $state(true)
     /** Whether the frame can load, which needs the browser to tell when the demo is on screen. */
     let canFrame = false
     let frameWanted = $state(false)
@@ -457,10 +463,11 @@
 
         {@render rule()}
 
-        <!-- only on a screen wide enough for the editor, added once the page knows: a phone gets
-             neither the frame nor its picture -->
+        <!-- only on a screen wide enough for the editor: hidden on a narrower one from the first
+             paint, and dropped once the page knows, so a phone gets neither the frame nor its
+             picture -->
         {#if showDemo}
-            <section class="frame showcase" aria-label="Examples running in the editor">
+            <section class="frame showcase demo" aria-label="Examples running in the editor">
                 <!-- the cover comes back once the pointer leaves the whole window, not on its way
                      to the tabs or the address bar -->
                 <div
@@ -482,7 +489,12 @@
                                     `Run the ${tab.language} ${tab.name} example here`
                                 )}
                             >
-                                <img src="/favicon.png" alt="" />
+                                <img
+                                    src="/favicon.png"
+                                    srcset={responsiveImage('/favicon.png').srcset}
+                                    sizes="16px"
+                                    alt=""
+                                />
                                 <span class="ellipsis">{tab.name}</span>
                                 <span class="close" aria-hidden="true"><FaTimes /></span>
                             </button>
@@ -534,6 +546,8 @@
                             {#if activeTab === 0}
                                 <img
                                     src="/images/ASM-RelayMaze.webp"
+                                    srcset={responsiveImage('/images/ASM-RelayMaze.webp').srcset}
+                                    sizes="(max-width: 1200px) 100vw, 1200px"
                                     alt="Relay Maze written in RISC-V assembly, running in ASM Editor"
                                     width="1917"
                                     height="909"
@@ -571,7 +585,7 @@
                 </div>
             </section>
 
-            {@render rule()}
+            <div class="demo-rule">{@render rule()}</div>
         {/if}
 
         <section class="frame docs" aria-labelledby="targets-title">
@@ -579,11 +593,10 @@
                 <div>
                     <h2 id="targets-title"><em>Documentation</em> for five Instruction Sets</h2>
                     <p>
-                        Read the interactive documentation of each ISA, with instructions,
-                        directives and system calls. With descriptions, examples and how to use
-                        them. Available <a class="inline-link" href={resolve('/documentation')}
-                            >here</a
-                        > or inside the editor.
+                        Read the <a class="inline-link" href={resolve('/documentation')}
+                            >interactive documentation of each instruction set</a
+                        > with its instructions, directives and system calls, each with a description
+                        and an example of how to use it, also available inside the editor.
                     </p>
                 </div>
                 <div class="head-links">
@@ -646,6 +659,8 @@
                             <div class="shot-inner">
                                 <img
                                     src={card.image}
+                                    srcset={responsiveImage(card.image).srcset}
+                                    sizes="(max-width: 900px) 100vw, 40vw"
                                     alt={card.alt}
                                     width={card.width}
                                     height={card.height}
@@ -1336,6 +1351,18 @@
         .icon {
             display: flex;
             width: var(--fs-caption);
+        }
+    }
+
+    /* the demo and the rule under it need the editor's width (`showDemo`, min-width 900px): on a
+       narrower screen they are hidden from the first paint, until the page drops them */
+    .demo-rule {
+        display: contents;
+    }
+    @media (max-width: 899.98px) {
+        .demo,
+        .demo-rule {
+            display: none;
         }
     }
 

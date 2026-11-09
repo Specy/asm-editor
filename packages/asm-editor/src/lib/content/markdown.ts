@@ -12,6 +12,7 @@ import { visit } from 'unist-util-visit'
 import { rehypeCodeBlocks } from './codeBlocks'
 import { HeadingSlugger } from './headings'
 import { rehypePlainPlaygrounds, rehypePlaygrounds } from './markdownPlaygrounds'
+import { responsiveImage } from '#lib/images/responsive.ts'
 
 /**
  * Markdown to HTML, for every Markdown text the app shows: one synchronous pipeline that the server
@@ -98,6 +99,28 @@ const UNTRUSTED_FORBIDDEN_TAGS = [
     'textarea'
 ]
 
+/**
+ * A picture in the text, drawn at most the text column's width (about 720 pixels: 38em of the
+ * reading size, or 70ch on a blog post), and the whole screen's on a phone.
+ */
+const TEXT_IMAGE_SIZES = '(max-width: 760px) 100vw, 720px'
+
+/**
+ * Lets the browser load a smaller copy of a static picture the build made one of
+ * ([responsive.ts](../images/responsive.ts)): a blog post's screenshots are 1440 to 1800 pixels
+ * wide and drawn 370 on a phone. Pictures without copies are left as they are.
+ */
+const rehypeResponsiveImages = () => (tree: Root) => {
+    visit(tree, 'element', (node: Element) => {
+        const src = node.properties.src
+        if (node.tagName !== 'img' || typeof src !== 'string' || node.properties.srcSet) return
+        const { srcset } = responsiveImage(src)
+        if (!srcset) return
+        node.properties.srcSet = srcset
+        node.properties.sizes = TEXT_IMAGE_SIZES
+    })
+}
+
 function sanitize(html: string, options: Required<MarkdownOptions>): string {
     if (options.untrusted)
         return DOMPurify.sanitize(html, { FORBID_TAGS: UNTRUSTED_FORBIDDEN_TAGS })
@@ -129,6 +152,7 @@ function createProcessor(options: Required<MarkdownOptions>) {
     if (options.links === 'disabled') processor.use(rehypeDisableLinks)
     if (options.untrusted) processor.use(rehypeStripStyles)
     if (options.headingIds) processor.use(rehypeHeadingIds)
+    if (!options.untrusted) processor.use(rehypeResponsiveImages)
     processor.use(options.playgrounds === 'code' ? rehypePlainPlaygrounds : rehypePlaygrounds)
     processor.use(rehypeCodeBlocks)
     return processor.use(rehypeStringify)

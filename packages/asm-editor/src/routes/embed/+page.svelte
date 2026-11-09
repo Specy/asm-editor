@@ -4,7 +4,12 @@
         hasBuiltProgram
     } from '#cmp/shared/InteractiveInstructionEditor.svelte'
     import type { Emulator } from '#lib/languages/Emulator.ts'
-    import { EMBED_BUILT_MESSAGE, type EmbedBuiltMessage } from '#lib/content/embedMessages.ts'
+    import {
+        EMBED_BUILT_MESSAGE,
+        EMBED_READY_MESSAGE,
+        type EmbedBuiltMessage,
+        type EmbedReadyMessage
+    } from '#lib/content/embedMessages.ts'
     import {
         type AvailableLanguages,
         cleanTestcases,
@@ -321,6 +326,13 @@
         generateCodeUrl(code, settings, testcases)
     })
 
+    //a framed embed tells the page around it once its editor can be used, so a lecture can keep
+    //showing the code as a plain block until then (`embedMessages.ts`)
+    function announceReady() {
+        if (!inIframe) return
+        window.parent.postMessage({ type: EMBED_READY_MESSAGE } satisfies EmbedReadyMessage, '*')
+    }
+
     //a frame whose panels wait for a Build tells the page around it when they come and go, so a
     //lecture can keep the frame as short as the code until then (`embedMessages.ts`)
     $effect(() => {
@@ -372,7 +384,8 @@
                     <div class="card-head">
                         <h2 id="preview-title">Preview</h2>
                         <p class="hint">
-                            The embed as readers will see it, starting with the code you leave here.
+                            Edit the code and customize the editor, this is a preview of what will
+                            be visible in your page.
                         </p>
                     </div>
                     <div class="card-body preview-body">
@@ -602,6 +615,7 @@
                         initialRegisterFile={settings.registerFile}
                         language={settings.language}
                         forceMemoryRight={true}
+                        onReady={announceReady}
                         dockActions={settings.openButton
                             ? [
                                   {

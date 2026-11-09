@@ -62,6 +62,12 @@
     width: min(100%, var(--md-text-width));
 }
 
+/* inside a collapsed block (an Exercise's answers) the text fills the frame up to its inset, as
+   MarkdownRenderer.svelte has it: the column's width would add that inset past the frame's edge */
+.content-pages main.content .reading-copy ._markdown details > :is(p, ul, ol) {
+    width: auto;
+}
+
 .content-pages main.content .reading-copy ._markdown :is(h2, h3, h4) {
     font-family: var(--font-ui);
     font-weight: 700;
