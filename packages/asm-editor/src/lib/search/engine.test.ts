@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { excerpt, queryTerms, SearchEngine } from './engine'
+import { excerpt, SearchEngine } from './engine'
+import { queryTerms } from './queryTerms'
 import { VECTOR_DIMS } from './model'
 import { createPayload, type EntryDocument, type SectionDocument } from './payload'
 import { languageScope } from './scope'

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { responsiveImage } from '#lib/images/responsive.ts'
+    import { SPECY_LOGO_SRCSET } from '#lib/images/logos.ts'
     import FaGithub from '~icons/fa-brands/github'
     import FaCopyright from '~icons/fa-solid/copyright'
     import Icon from './Icon.svelte'
@@ -40,7 +40,7 @@
                     <div class="logo-content">
                         <img
                             src="/images/logo.png"
-                            srcset={responsiveImage('/images/logo.png').srcset}
+                            srcset={SPECY_LOGO_SRCSET}
                             sizes="32px"
                             alt="logo"
                             class="logo"

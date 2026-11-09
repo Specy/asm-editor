@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { responsiveImage } from '#lib/images/responsive.ts'
+    import { APP_LOGO_SRCSET } from '#lib/images/logos.ts'
     import { resolve } from '$app/paths'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import { page } from '$app/state'
@@ -13,14 +13,11 @@
         if (path === section) return 'page'
         return path.startsWith(section + '/') ? 'true' : undefined
     }
-
-    /** The logo's smaller copies: the original is 512 pixels wide, drawn 35. */
-    const LOGO = responsiveImage('/favicon.png')
 </script>
 
 <nav class="main-links" class:compact aria-label="Main navigation">
     <a class="link logo" href={resolve('/')} {@attach tooltip('Go to the home')}>
-        <img src="/favicon.png" srcset={LOGO.srcset} sizes="36px" alt="ASM Editor home" />
+        <img src="/favicon.png" srcset={APP_LOGO_SRCSET} sizes="36px" alt="ASM Editor home" />
     </a>
     <a
         class="link"

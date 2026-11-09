@@ -136,8 +136,9 @@ markdown stay components an entry names.
   load their scope's word index on arrival either. It starts downloading when the reader points at
   or focuses a search box or opens a palette, with the model; the Workbench still loads its scope
   once the page is idle. The Courses page had fetched all six lecture indexes (1.4 MB of its
-  1.8 MB) for readers who mostly never search. The palette's own code also loads after the page
-  (`LazySearchPalette.svelte`), since it brought the Markdown parser to every page.
+  1.8 MB) for readers who mostly never search. The palette itself loads with the page:
+  it had brought the Markdown parser and Orama to every page, which now stay with the entries and
+  the search worker (`entryKinds.ts`, `queryTerms.ts`), leaving it about 7 KB compressed.
 - It does not download when the browser asks to save data (`navigator.connection.saveData`). That
   is the only way to stop it: the owner chose no Preference and no switch, so a reader without a
   data saver always gets the model.

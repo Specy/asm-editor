@@ -49,6 +49,7 @@
     import { SITE_URL, softwareApplicationLd, websiteLd } from '#lib/seo.ts'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { responsiveImage } from '#lib/images/responsive.ts'
+    import { APP_LOGO_SRCSET } from '#lib/images/logos.ts'
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>
@@ -491,7 +492,7 @@
                             >
                                 <img
                                     src="/favicon.png"
-                                    srcset={responsiveImage('/favicon.png').srcset}
+                                    srcset={APP_LOGO_SRCSET}
                                     sizes="16px"
                                     alt=""
                                 />

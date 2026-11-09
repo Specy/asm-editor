@@ -11,8 +11,9 @@
      * live on the scope rather than on the document. While it is open the page under it holds
      * still (`lockPageScroll`); leaving the page closes it.
      *
-     * Pages mount it through [LazySearchPalette](./LazySearchPalette.svelte), which loads it after
-     * the page and keeps Ctrl+K and the count of page palettes meanwhile.
+     * It loads with the page: its words come from `queryTerms.ts` and its entries' kinds from
+     * `entryKinds.ts`, so neither the search engine (Orama, in the search worker) nor the lecture
+     * parser comes with it.
      */
     import EmptyState from '#cmp/shared/misc/EmptyState.svelte'
     import { tick, untrack } from 'svelte'
@@ -22,19 +23,26 @@
     import FaArrowUp from '~icons/fa-solid/arrow-up'
     import { beforeNavigate, goto } from '$app/navigation'
     import type { ResolvedPathname } from '$app/types'
-    import { hasCodeName } from '#lib/documentation/entries.ts'
+    import { hasCodeName } from '#lib/documentation/entryKinds.ts'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import { categoryLabel } from '#lib/documentation/instructions/categories.ts'
     import { courseAccent, languageAccent } from '#lib/languages/languageColors.ts'
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
     import { resolveHref } from '#lib/hrefs.ts'
-    import { queryTerms, type SearchResult } from '#lib/search/engine.ts'
+    import type { SearchResult } from '#lib/search/engine.ts'
+    import { queryTerms } from '#lib/search/queryTerms.ts'
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import type { SearchScope } from '#lib/search/scope.ts'
     import HighlightedText from './HighlightedText.svelte'
     import SearchField from './SearchField.svelte'
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
-    import { closeSearchPalette, searchPalette } from './paletteState.svelte'
+    import {
+        closeSearchPalette,
+        openSearchPalette,
+        registerPaletteScope,
+        searchPalette
+    } from './paletteState.svelte'
+    import { listenForSearchKey, typedInEditor } from './searchHotkey'
     import { lockPageScroll } from '#lib/scrollLock.ts'
 
     interface Props {
@@ -63,6 +71,24 @@
     const terms = $derived(queryTerms(query))
 
     // counted untracked: the count is read to be raised, which would otherwise run this forever
+    $effect(() => {
+        if (site) return
+        untrack(() => searchPalette.pagePalettes++)
+        return () => untrack(() => searchPalette.pagePalettes--)
+    })
+
+    // the site's palette takes the key only where no page palette does, and never from an editor
+    $effect(() =>
+        listenForSearchKey((event) => {
+            if (!site) return void openSearchPalette()
+            if (searchPalette.pagePalettes > 0 || typedInEditor(event)) return false
+            openSearchPalette('', 'site')
+        })
+    )
+
+    // what this palette searches, which a search box loads when pointed at (paletteState.svelte.ts)
+    $effect(() => registerPaletteScope(site ? 'site' : 'page', scope))
+
     $effect(() => {
         if (!shown) return
         untrack(() => {

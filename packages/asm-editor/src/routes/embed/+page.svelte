@@ -157,6 +157,13 @@
     //apart by the Workbench's gap: the frame's own padding is that gap, so its cards line up with
     //the page's. A frame on someone else's site keeps the roomier padding
     let framedByUs = $state(false)
+    /**
+     * The theme of the page of ours that frames it, which it wears in place of its language's so
+     * the frame and the code block it replaces look alike: a built-in theme's id, or `none` for
+     * the reader's own (a blog post). Only a page of ours says; a frame elsewhere has its
+     * language's colours.
+     */
+    let pageTheme = $state<string | null>(null)
     let code = $state(BASE_CODE[blank.language])
     let project = $state<Project>()
     let loadedEmulator = $state<Emulator | null>(null)
@@ -175,6 +182,7 @@
         inIframe = window.self !== window.top
         framedByUs = inIframe && framedBySameOrigin()
         const params = page.url.searchParams
+        pageTheme = framedByUs ? params.get('theme') : null
         settings = inIframe ? readEmbedSettings(params) : builderSettings(params)
         code = readEmbedCode(params) ?? BASE_CODE[settings.language]
         testcases = cleanTestcases(readEmbedTestcases(params))
@@ -354,9 +362,11 @@
 
 <!-- The colours of the language the embed is showing, the way `/documentation/<language>` and a
      Language course do: an embed is nearly always framed inside one of those pages, and one that
-     kept the app's own colours would be the one purple-less rectangle on a MIPS page. Standalone,
-     it doubles as the preview of what the generated iframe will look like. -->
-<ThemeScope theme={LANGUAGE_THEMES[settings.language]}>
+     kept the app's own colours would be the one purple-less rectangle on a MIPS page. A page of
+     ours says which theme it wears (`pageTheme`), and a blog post wears the reader's own, so its
+     playgrounds do too. Standalone, it doubles as the preview of what the generated iframe will
+     look like. -->
+<ThemeScope theme={pageTheme ?? LANGUAGE_THEMES[settings.language]}>
     {#if inIframe}
         <!-- framed: the editor alone, filling the frame -->
         <Page fillsScreen>

@@ -2,12 +2,8 @@ import { error } from '@sveltejs/kit'
 import type { DocumentationLanguage } from '#lib/search/scope.ts'
 import { DOCUMENTATION_LANGUAGES } from '#lib/search/scope.ts'
 import { documentationFor } from '#lib/documentation/documentation.ts'
-import {
-    hasCodeName,
-    type Chapter,
-    type DocumentationEntry,
-    type EntryField
-} from '#lib/documentation/entries.ts'
+import type { Chapter, DocumentationEntry, EntryField } from '#lib/documentation/entries.ts'
+import { hasCodeName } from '#lib/documentation/entryKinds.ts'
 import {
     DOCUMENTATION_ABOUT,
     DOCUMENTATION_INTRO,

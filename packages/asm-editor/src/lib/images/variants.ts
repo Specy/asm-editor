@@ -6,8 +6,6 @@
  * original. Plain data, read by the plugin in Node and by the pages.
  */
 export const IMAGE_VARIANT_RULES: readonly { pattern: RegExp; widths: readonly number[] }[] = [
-    // the logo, drawn 20 to 35 pixels wide
-    { pattern: /^\/(favicon\.png|images\/logo\.png)$/, widths: [64, 128] },
     // the home page's screenshots and the blog's
     { pattern: /^\/images\/(ASM-[\w-]+|blog\/[\w/-]+)\.(webp|png)$/, widths: [480, 960] }
 ]

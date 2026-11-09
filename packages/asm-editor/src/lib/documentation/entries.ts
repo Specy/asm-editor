@@ -3,6 +3,7 @@ import type { DocumentationLanguage } from '#lib/search/scope.ts'
 import type { InstructionContent } from './instructions/content'
 import type { InstructionCategory, InstructionTag } from './instructions/categories'
 import type { InstructionDocument } from './instructions/document'
+import type { EntryKind } from './entryKinds'
 
 /**
  * The **Documentation** as a list of **Documentation entries** grouped in **Chapters**
@@ -14,21 +15,6 @@ import type { InstructionDocument } from './instructions/document'
  * `Z80-model.ts`…), which the editor's hovers, grammars and agent prompts keep reading directly;
  * nothing here is imported back by them.
  */
-
-export type EntryKind =
-    | 'instruction'
-    | 'directive'
-    | 'syscall'
-    | 'trap-task'
-    | 'register'
-    | 'flag'
-    | 'condition-code'
-    | 'addressing-mode'
-    | 'port'
-    | 'screen-command'
-    | 'extension-group'
-    | 'function'
-    | 'prose'
 
 /** A labelled value of an entry: a syscall's argument, a port's read side. `value` is markdown. */
 export type EntryField = { label: string; value: string }
@@ -62,24 +48,6 @@ export type EntryView =
           /** The language's own example program, where it has no authored Instruction example. */
           example?: string
       }
-
-/** Kinds whose names are code (`move`, `.data`, `$t0`), set in the code font; the rest are words. */
-const CODE_NAMED_KINDS = new Set<EntryKind>([
-    'instruction',
-    'function',
-    'directive',
-    'register',
-    'flag',
-    'condition-code'
-])
-
-/**
- * Whether an entry's name is code. An entry can say so itself, where its kind is spelled both ways:
- * an M68K addressing mode is named in words ("Direct"), a Z80 operand placeholder in code (`(hl)`).
- */
-export function hasCodeName(entry: { kind: EntryKind; codeName?: boolean }): boolean {
-    return entry.codeName ?? CODE_NAMED_KINDS.has(entry.kind)
-}
 
 export type DocumentationEntry = {
     /** `<language>/<chapter>/<anchor>`: stable, unique within the language. */

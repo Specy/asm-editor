@@ -78,8 +78,10 @@ function attachedTestcases(node: RootContent, info: string): Testcase[] {
 }
 
 /**
- * The box a playground occupies, which the code block the render leaves and the iframe that
- * replaces it on mount share: the swap has to move nothing around it. `details` is a collapsed
+ * The box a playground occupies (`playground-slot`), which holds the code block the render leaves
+ * and, once mounted, the iframe that replaces it: the swap happens inside it and moves nothing
+ * around it. It keeps turning its spinner when the reader asks for less motion (`keeps-moving`),
+ * since a spinner that stops no longer says that anything is under way. `details` is a collapsed
  * block (an Exercise's solution), which is itself the centered column and the frame, so a
  * playground inside one fills it instead of placing itself, and a large one widens the block.
  */
@@ -110,9 +112,8 @@ function playgroundBox(fence: PlaygroundFence, parent: Parent) {
           ? `height: ${screenHeight};`
           : ''
     return {
-        className: details ? ['code-playground', 'in-details'] : ['code-playground'],
-        //a fence that asks for no height of its own leaves it to the stylesheet, which gives the
-        //code block the same one as the iframe's min-height
+        className: ['playground-slot', 'keeps-moving', ...(details ? ['in-details'] : [])],
+        //a fence that asks for no height of its own leaves it to the stylesheet
         style: `${placement} ${height}`.trim(),
         ...(grows ? { 'data-built-height': screenHeight } : undefined)
     }
@@ -136,7 +137,7 @@ function markPlayground(
     info: string,
     testcases: Testcase[],
     parent: Parent
-): Element {
+): { node: Element; slot: Element['properties'] } {
     const codeNode = node.children?.find(
         (child): child is Element => child.type === 'element' && child.tagName === 'code'
     )
@@ -155,13 +156,18 @@ function markPlayground(
     }
     node.properties = {
         ...node.properties,
-        ...playgroundBox(fence, parent),
+        className: ['code-playground'],
         'data-playground': info,
         ...(testcases.length > 0
             ? { 'data-testcases': serializer.stringify(testcases) }
             : undefined)
     }
-    return node
+    return { node, slot: playgroundBox(fence, parent) }
+}
+
+/** A playground's code block in the box it and its iframe share. */
+function inSlot(placeholder: Element, slot: Element['properties']): Element {
+    return { type: 'element', tagName: 'div', properties: slot, children: [placeholder] }
 }
 
 /**
@@ -209,14 +215,20 @@ function transformPlaygrounds(parent: Parent): void {
                 //the testcase block and the whitespace before it go with the playground
                 index = following.index
             }
-            const marked = markPlayground(node, fence, info as string, testcases, parent)
+            const { node: marked, slot } = markPlayground(
+                node,
+                fence,
+                info as string,
+                testcases,
+                parent
+            )
             if (fence.file) {
                 const program = namedPlaygroundProgram(fence, fileNodes)
                 const properties = marked.properties
                 //Keep each source visible with its filename in the prerendered page. Only
                 //the wrapper becomes an iframe, so all files share one emulator.
                 marked.properties = { 'data-playground-file': true }
-                result.push({
+                const files: Element = {
                     type: 'element',
                     tagName: 'div',
                     properties: { ...properties, 'data-program': JSON.stringify(program) },
@@ -232,18 +244,27 @@ function transformPlaygrounds(parent: Parent): void {
                                 type: 'element' as const,
                                 tagName: 'div',
                                 properties: { className: ['playground-filename'] },
+                                //the name in a tab of its own, as the embed's strip shows it
                                 children: [
                                     {
-                                        type: 'text' as const,
-                                        value: playgroundFileName(fileInfo)!
+                                        type: 'element' as const,
+                                        tagName: 'span',
+                                        properties: {},
+                                        children: [
+                                            {
+                                                type: 'text' as const,
+                                                value: playgroundFileName(fileInfo)!
+                                            }
+                                        ]
                                     }
                                 ]
                             },
                             fileNode
                         ]
                     })
-                })
-            } else result.push(marked)
+                }
+                result.push(inSlot(files, slot))
+            } else result.push(inSlot(marked, slot))
             continue
         }
         //a testcase fence that attached to nothing is still not something a reader should read
@@ -266,6 +287,14 @@ export const rehypePlaygrounds = () => (tree: Root) => {
  */
 export const rehypePlainPlaygrounds = () => (tree: Root) => {
     transformPlaygrounds(tree)
+    //no box for an embed that never comes: each code block in place of its slot
+    visit(tree, 'element', (node: Element, index?: number, parent?: Parent) => {
+        const className = node.properties?.className
+        if (!parent || index === undefined) return
+        if (!Array.isArray(className) || !className.includes('playground-slot')) return
+        parent.children.splice(index, 1, ...(node.children as RootContent[]))
+        return index
+    })
     visit(tree, 'element', (node: Element) => {
         if (typeof node.properties?.['data-playground'] !== 'string') return
         node.properties = { className: ['plain-playground'] }

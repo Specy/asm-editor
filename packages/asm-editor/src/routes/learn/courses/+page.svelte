@@ -7,7 +7,7 @@
     import { resolve } from '$app/paths'
     import { courseAccent } from '#lib/languages/languageColors.ts'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
-    import LazySearchPalette from '#cmp/search/LazySearchPalette.svelte'
+    import SearchPalette from '#cmp/search/SearchPalette.svelte'
     import { COURSES_SCOPE, courseLanguage } from '#lib/search/scope.ts'
     import PageMeta from '#cmp/shared/layout/PageMeta.svelte'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
@@ -68,7 +68,7 @@
         {/each}
     </div>
 </Page>
-<LazySearchPalette scope={COURSES_SCOPE} placeholder="Search in every course" />
+<SearchPalette scope={COURSES_SCOPE} placeholder="Search in every course" />
 
 <style>
     .courses {

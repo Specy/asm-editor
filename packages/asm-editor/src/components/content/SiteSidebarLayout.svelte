@@ -9,7 +9,7 @@
      */
     import type { Snippet } from 'svelte'
     import SearchLauncher from '#cmp/search/SearchLauncher.svelte'
-    import LazySearchPalette from '#cmp/search/LazySearchPalette.svelte'
+    import SearchPalette from '#cmp/search/SearchPalette.svelte'
     import type { SearchScope } from '#lib/search/scope.ts'
     import DefaultNavbar from '#cmp/shared/layout/DefaultNavbar.svelte'
     import Column from '#cmp/shared/layout/Column.svelte'
@@ -91,5 +91,5 @@
         {/snippet}
     </Sidebar>
 
-    <LazySearchPalette {scope} {placeholder} />
+    <SearchPalette {scope} {placeholder} />
 </ThemeScope>

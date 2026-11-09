@@ -163,7 +163,3 @@ pre.code-block.code-block-fill {
     font-family: var(--example-font-family, var(--font-mono));
     font-size: var(--fs-small);
 }
-
-div.code-playground {
-    overflow: auto;
-}

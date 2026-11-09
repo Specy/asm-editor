@@ -51,6 +51,7 @@ export function warmSearch(owner: PaletteOwner) {
         )
 }
 
+/** Opening the palette is a sign the reader means to search: its index and the model start loading. */
 export function openSearchPalette(query = '', owner: PaletteOwner = 'page') {
     warmSearch(owner)
     searchPalette.query = query

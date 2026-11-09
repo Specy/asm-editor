@@ -216,6 +216,26 @@ describe('indentation guides', () => {
     })
 })
 
+describe('a playground with named files', () => {
+    it("draws each name as a tab and its code as the editor's, gutter and guides included", () => {
+        const source = [
+            '```c|playground|target=mips|file=main.c|console',
+            'int main(void) {',
+            '    return 0;',
+            '}',
+            '```',
+            ''
+        ].join('\n')
+        const block = page(source).querySelector('div.code-playground')!
+        expect(block.querySelector(':scope > .playground-filename > span')?.textContent).toBe(
+            'main.c'
+        )
+        const code = block.querySelector(':scope > pre.code-block')!
+        expect(code.classList.contains('code-gutter-spacing')).toBe(true)
+        expect(code.querySelectorAll('code > .code-indent-guides > i')).toHaveLength(1)
+    })
+})
+
 describe('pictures', () => {
     it("offer the build's smaller copies of a static picture, at the text's width", () => {
         const image = page(

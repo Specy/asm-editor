@@ -33,9 +33,9 @@ import {
     type Chapter,
     type DocumentationEntry,
     type EntryField,
-    type EntryKind,
     type EntrySwatch
 } from '../entries'
+import type { EntryKind } from '../entryKinds'
 import { m68kInstructionCategories } from './categories'
 import { m68kFormTags } from '../instructions/formTags'
 import { withInstructionCategory } from '../instructions/resolve'

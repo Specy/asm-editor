@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { flushSync, mount, unmount } from 'svelte'
 import lzstring from 'lz-string'
 import MarkdownRenderer from './MarkdownRenderer.svelte'
@@ -49,6 +49,9 @@ const view = {
     observers: new Set<FakeIntersectionObserver>(),
     reveal() {
         for (const observer of view.observers) observer.reveal()
+    },
+    hide() {
+        for (const observer of view.observers) observer.hide()
     }
 }
 class FakeIntersectionObserver {
@@ -70,8 +73,11 @@ class FakeIntersectionObserver {
     reveal() {
         this.report([...this.targets])
     }
-    private report(targets: Element[]) {
-        const entries = targets.map((target) => ({ target, isIntersecting: true }))
+    hide() {
+        this.report([...this.targets], false)
+    }
+    private report(targets: Element[], isIntersecting = true) {
+        const entries = targets.map((target) => ({ target, isIntersecting }))
         this.callback(
             entries as IntersectionObserverEntry[],
             this as unknown as IntersectionObserver
@@ -123,6 +129,11 @@ function ready(target: HTMLElement) {
     }
 }
 
+/** Past the moment a code block has to stay near the view before its embed is built. */
+function dwell() {
+    if (vi.isFakeTimers()) vi.advanceTimersByTime(300)
+}
+
 /** The renderer mounted, its embeds loaded unless `loaded` is false. */
 function render(source: string, options: Record<string, unknown> = {}, loaded = true) {
     const target = document.createElement('div')
@@ -130,6 +141,7 @@ function render(source: string, options: Record<string, unknown> = {}, loaded = 
     const props = $state({ source, ...options })
     const component = mount(MarkdownRenderer, { target, props })
     flushSync()
+    dwell()
     if (loaded) ready(target)
     return {
         target,
@@ -155,17 +167,21 @@ async function until<T>(read: () => T | null | undefined, what: string): Promise
 }
 
 describe('playground embeds', () => {
-    it('replace the code block with the embed, in the same box', () => {
-        const block = new DOMParser()
+    //the embeds wait for their code block to stay near the view, which these tests skip ahead
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    it('replace the code block with the embed, in the box they share', () => {
+        const rendered = new DOMParser()
             .parseFromString(renderMarkdown(PLAYGROUND), 'text/html')
-            .querySelector('pre.code-playground')
+            .querySelector('.playground-slot')
         const { target, cleanup } = render(PLAYGROUND)
         try {
             expect(target.querySelector('pre.code-playground')).toBeNull()
-            const iframe = target.querySelector('iframe')
-            expect(iframe?.getAttribute('style')).toBe(block?.getAttribute('style'))
-            expect(iframe?.getAttribute('class')).toBe(block?.getAttribute('class'))
-            expect(iframe?.getAttribute('title')).toBe('M68K playground')
+            const slot = target.querySelector('.playground-slot')!
+            expect(slot.getAttribute('style')).toBe(rendered?.getAttribute('style'))
+            expect([...slot.children].map((child) => child.tagName)).toEqual(['IFRAME'])
+            expect(slot.querySelector('iframe')?.getAttribute('title')).toBe('M68K playground')
             expect(target.textContent).not.toContain('expectedRegisters')
         } finally {
             cleanup()
@@ -179,6 +195,7 @@ describe('playground embeds', () => {
             expect(target.querySelector('iframe')).toBeNull()
             expect(target.querySelector('pre.code-playground')).not.toBeNull()
             view.reveal()
+            dwell()
             expect(target.querySelector('iframe')).not.toBeNull()
             ready(target)
             expect(target.querySelector('pre.code-playground')).toBeNull()
@@ -188,24 +205,39 @@ describe('playground embeds', () => {
         }
     })
 
+    it('build no embed for a code block a scroll only passes', () => {
+        view.held = true
+        const { target, cleanup } = render(PLAYGROUND)
+        try {
+            view.reveal()
+            vi.advanceTimersByTime(200)
+            view.hide()
+            vi.advanceTimersByTime(1_000)
+            expect(target.querySelector('iframe')).toBeNull()
+            view.reveal()
+            vi.advanceTimersByTime(300)
+            expect(target.querySelector('iframe')).not.toBeNull()
+        } finally {
+            view.held = false
+            cleanup()
+        }
+    })
+
     it('keep the code on screen, with the frame unseen over it, until its editor is ready', () => {
         const { target, cleanup } = render(PLAYGROUND, {}, false)
         try {
-            const block = target.querySelector<HTMLElement>('pre.code-playground')!
-            const box = block.getAttribute('style')
-            const iframe = target.querySelector('iframe')!
-            expect(block.getAttribute('aria-busy')).toBe('true')
-            //a spinner in its corner while the editor loads, gone with the block
-            expect(block.querySelector('.playground-loading svg')).not.toBeNull()
-            expect(block.nextElementSibling).toBe(iframe)
+            const block = target.querySelector('pre.code-playground')!
+            const slot = target.querySelector('.playground-slot')!
+            const iframe = slot.querySelector('iframe')!
+            //the box shows a spinner while the editor loads
+            expect(slot.getAttribute('aria-busy')).toBe('true')
             expect(iframe.inert).toBe(true)
-            expect(iframe.style.position).toBe('absolute')
-            expect(iframe.style.opacity).toBe('0')
+            expect(iframe.hasAttribute('data-loading')).toBe(true)
             ready(target)
-            expect(target.querySelector('pre.code-playground')).toBeNull()
+            expect(block.isConnected).toBe(false)
+            expect(slot.hasAttribute('aria-busy')).toBe(false)
             expect(iframe.inert).toBe(false)
             expect(iframe.hasAttribute('data-loading')).toBe(false)
-            expect(iframe.getAttribute('style')).toBe(box)
         } finally {
             cleanup()
         }
@@ -213,26 +245,32 @@ describe('playground embeds', () => {
 
     it("fade the editor in over its code block before it takes the block's place", () => {
         media.lessMotion = false
-        vi.useFakeTimers()
         const { target, cleanup } = render(PLAYGROUND, {}, false)
         try {
             const iframe = target.querySelector('iframe')!
             ready(target)
-            expect(iframe.style.opacity).toBe('1')
             expect(iframe.style.transition).toContain('opacity')
+            expect(iframe.hasAttribute('data-loading')).toBe(false)
             expect(target.querySelector('pre.code-playground')).not.toBeNull()
             vi.advanceTimersByTime(300)
             expect(target.querySelector('pre.code-playground')).toBeNull()
-            expect(iframe.style.opacity).toBe('')
+            expect(iframe.style.transition).toBe('')
         } finally {
             media.lessMotion = true
-            vi.useRealTimers()
+            cleanup()
+        }
+    })
+
+    it('ask the embed for the theme the page wears', () => {
+        const { target, cleanup } = render(PLAYGROUND)
+        try {
+            expect(embedUrl(target.querySelector('iframe')).searchParams.get('theme')).toBe('none')
+        } finally {
             cleanup()
         }
     })
 
     it('show the frame anyway when its loaded page never says its editor is ready', () => {
-        vi.useFakeTimers()
         const { target, cleanup } = render(PLAYGROUND, {}, false)
         try {
             const iframe = target.querySelector('iframe')!
@@ -243,7 +281,6 @@ describe('playground embeds', () => {
             expect(target.querySelector('pre.code-playground')).toBeNull()
             expect(iframe.inert).toBe(false)
         } finally {
-            vi.useRealTimers()
             cleanup()
         }
     })
@@ -342,19 +379,19 @@ describe('playground embeds', () => {
         const screen = ['```mips|playground|open-screen', '    nop', '```', ''].join('\n')
         const { target, cleanup } = render(`${screen}\n${screen}`)
         try {
-            const [first, second] = target.querySelectorAll('iframe')
+            const [first, second] = target.querySelectorAll<HTMLElement>('.playground-slot')
             expect(first.style.height).toBe('')
             expect(first.dataset.builtHeight).toBe('min(40rem, 85vh)')
             const tell = (built: boolean) =>
                 window.dispatchEvent(
                     new MessageEvent('message', {
                         data: { type: EMBED_BUILT_MESSAGE, built },
-                        source: first.contentWindow
+                        source: first.querySelector('iframe')!.contentWindow
                     })
                 )
             tell(true)
             expect(first.style.height).toBe('min(40rem, 85vh)')
-            //only the frame whose embed was built
+            //only the box whose embed was built
             expect(second.style.height).toBe('')
             tell(false)
             expect(first.style.height).toBe('')
@@ -366,9 +403,9 @@ describe('playground embeds', () => {
     it('keep a tall Screen at the height it asked for', () => {
         const { target, cleanup } = render('```mips|playground|open-screen|tall\n    nop\n```\n')
         try {
-            const iframe = target.querySelector('iframe')!
-            expect(iframe.style.height).toBe('80dvh')
-            expect(iframe.dataset.builtHeight).toBeUndefined()
+            const slot = target.querySelector<HTMLElement>('.playground-slot')!
+            expect(slot.style.height).toBe('80dvh')
+            expect(slot.dataset.builtHeight).toBeUndefined()
         } finally {
             cleanup()
         }
@@ -391,6 +428,7 @@ describe('playground embeds', () => {
         try {
             props.source = `Some words first.\n\n${PLAYGROUND}\n${PLAYGROUND}`
             flushSync()
+            dwell()
             ready(target)
             expect(target.querySelectorAll('iframe')).toHaveLength(2)
             expect(target.querySelector('p')?.textContent).toBe('Some words first.')

@@ -13,7 +13,8 @@
     import Card from '#cmp/shared/layout/Card.svelte'
     import { breadcrumbLd, documentationArticleLd } from '#lib/seo.ts'
     import { DOCUMENTATION_SITES } from '#lib/documentation/site.ts'
-    import { hasCodeName, type Chapter } from '#lib/documentation/entries.ts'
+    import type { Chapter } from '#lib/documentation/entries.ts'
+    import { hasCodeName } from '#lib/documentation/entryKinds.ts'
     import EntryBody from './entries/EntryBody.svelte'
 
     interface Props {

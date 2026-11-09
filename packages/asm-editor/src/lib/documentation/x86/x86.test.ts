@@ -16,12 +16,8 @@ import {
     entries as instructionPages,
     load as loadInstructionPage
 } from '../../../routes/documentation/x86/instruction/[instructionName]/+page.server'
-import {
-    documentationProblems,
-    hasCodeName,
-    type Chapter,
-    type DocumentationEntry
-} from '../entries'
+import { documentationProblems, type Chapter, type DocumentationEntry } from '../entries'
+import { hasCodeName } from '../entryKinds'
 import { x86SimBinding, x86SimPrototype } from './syscallBinding'
 import { chapters } from './x86'
 

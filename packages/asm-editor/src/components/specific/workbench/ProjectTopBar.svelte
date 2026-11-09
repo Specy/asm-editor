@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { responsiveImage } from '#lib/images/responsive.ts'
+    import { APP_LOGO_SRCSET } from '#lib/images/logos.ts'
     import { resolve } from '$app/paths'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
@@ -66,7 +66,7 @@
             <img
                 class="logo"
                 src="/favicon.png"
-                srcset={responsiveImage('/favicon.png').srcset}
+                srcset={APP_LOGO_SRCSET}
                 sizes="20px"
                 alt="ASM Editor"
                 width="20"

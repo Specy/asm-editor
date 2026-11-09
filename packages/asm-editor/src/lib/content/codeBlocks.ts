@@ -91,7 +91,11 @@ function decorateCodeBlocks(tree: Root): void {
             }
         }
         names.add('code-block')
-        if (typeof node.properties['data-playground'] === 'string') {
+        //a playground's code, or one file of it, stands in for the editor: Monaco's gutter and guides
+        if (
+            typeof node.properties['data-playground'] === 'string' ||
+            node.properties['data-playground-file'] === true
+        ) {
             names.add('code-gutter-spacing')
             code.children.push(indentGuides(toString(code)))
         }

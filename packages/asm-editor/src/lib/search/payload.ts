@@ -1,6 +1,6 @@
 import { dequantize, fromBase64, quantize, toBase64 } from './embedding'
 import { VECTOR_DIMS } from './model'
-import type { EntryKind } from '#lib/documentation/entries.ts'
+import type { EntryKind } from '#lib/documentation/entryKinds.ts'
 import type { InstructionCategory } from '#lib/documentation/instructions/categories.ts'
 import type { DocumentationLanguage, ShardId } from './scope'
 
