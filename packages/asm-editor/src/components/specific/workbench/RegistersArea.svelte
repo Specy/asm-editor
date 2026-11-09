@@ -78,6 +78,7 @@
             files={emulator.registerFiles}
             pokeable={session.pokeable}
             canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
+            registerTakesPokes={(fileId, name) => emulator.registerTakesPokes(fileId, name)}
             onPoke={(fileId, writes) => session.pokeRegisters(fileId, writes)}
             onRegisterClick={(register) => showInMemory(session, ui, register.value)}
             {valueMenu}

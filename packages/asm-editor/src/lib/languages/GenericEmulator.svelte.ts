@@ -2802,15 +2802,20 @@ export abstract class GenericEmulator<T, R extends string>
         )
     }
 
-    /**
-     * Whether that register of that Register file may be poked. The CPU file offers the registers a
-     * Testcase may seed, which is the set its Core has a setter for, minus the hidden ones (MIPS's
-     * `$zero`, RISC-V's `zero`) and minus the program counter under any spelling. Another file
-     * offers the rows its layout names, except one the last refresh blanked: an empty x87 stack slot
-     * holds no value to change.
-     */
+    /** Whether that register of that Register file may be poked now (`registerTakesPokes`). */
     canPokeRegister(fileId: string, register: string): boolean {
-        if (!this.canPoke) return false
+        return this.canPoke && this.registerTakesPokes(fileId, register)
+    }
+
+    /**
+     * Whether that register of that Register file takes Pokes whenever a Poke is possible, which
+     * is what the panels draw a Poke button for, enabled and disabled as `canPoke` changes rather
+     * than drawn again. The CPU file offers the registers a Testcase may seed, which is the set its
+     * Core has a setter for, minus the hidden ones (MIPS's `$zero`, RISC-V's `zero`) and minus the
+     * program counter under any spelling. Another file offers the rows its layout names, except one
+     * the last refresh blanked: an empty x87 stack slot holds no value to change.
+     */
+    registerTakesPokes(fileId: string, register: string): boolean {
         if (fileId === CPU_REGISTER_FILE_ID) {
             if (isProgramCounterName(register)) return false
             if (!this.state.startingRegisterNames.includes(register)) return false

@@ -79,6 +79,7 @@ function column({ language = 'X86', floating = true } = {}) {
             }
         ],
         canPokeRegister: () => true,
+        registerTakesPokes: () => true,
         memory: {
             global: {
                 address: 0x1000n,

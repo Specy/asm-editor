@@ -9,11 +9,16 @@ export interface BoundedValueHoverOptions {
      * the value, and nothing while it is hidden.
      */
     onPlace?: (place: { side: Side; at?: number } | undefined) => void
+    /**
+     * Called as the pointer enters the value, any pointer, before the card is shown or placed:
+     * where a card built on its first hover is built, so that it is placed with what it holds.
+     */
+    onEnter?: () => void
 }
 
 /** Position a value's tooltip within its panel and any enclosing scroll areas. */
 export function boundedValueHover(node: HTMLElement, options: BoundedValueHoverOptions = {}) {
-    let { boundary, onPlace } = options
+    let { boundary, onPlace, onEnter } = options
     const popup = node.querySelector<HTMLElement>('.hover-element')!
     const content = popup.querySelector<HTMLElement>('.hover-content')!
     const anchor = node.querySelector<HTMLElement>('.tooltip-base')!
@@ -116,14 +121,16 @@ export function boundedValueHover(node: HTMLElement, options: BoundedValueHoverO
     }
 
     function show(event: PointerEvent) {
+        onEnter?.()
         if (!boundary || event.pointerType === 'touch' || active) return
         active = true
         popup.classList.add('shown')
         place()
-        observer = new ResizeObserver(schedule)
-        observer.observe(boundary)
-        observer.observe(anchor)
-        observer.observe(content)
+        //none where there is no ResizeObserver (jsdom), as `elementSize` does without one
+        observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(schedule)
+        observer?.observe(boundary)
+        observer?.observe(anchor)
+        observer?.observe(content)
         window.addEventListener('resize', schedule)
         window.addEventListener('scroll', schedule, true)
     }
@@ -132,7 +139,7 @@ export function boundedValueHover(node: HTMLElement, options: BoundedValueHoverO
     node.addEventListener('pointerleave', hide)
     return {
         update(next: BoundedValueHoverOptions = {}) {
-            ;({ boundary, onPlace } = next)
+            ;({ boundary, onPlace, onEnter } = next)
             if (!boundary) hide()
             else if (active) schedule()
         },

@@ -93,6 +93,14 @@ function render(
         menus,
         target,
         cells,
+        /**
+         * The pointer on a byte, which builds its hover card (`ValueDiffer`); placing the card in
+         * its panel is the browser's, which jsdom does not lay out.
+         */
+        hover: (index: number) => {
+            cells()[index].parentElement!.dispatchEvent(new Event('pointerenter'))
+            flushSync()
+        },
         input: () => target.querySelector<HTMLInputElement>('.selection-input'),
         popup: () => target.querySelector<HTMLElement>('.selection-value'),
         /** A click on a byte, which is the one-byte selection the panel has always made. */
@@ -347,6 +355,23 @@ describe("a stack frame's bytes", () => {
     })
 })
 
+describe('hover cards', () => {
+    it("builds a byte's card on its first hover, and only that byte's", () => {
+        const panel = render()
+        const card = (index: number) =>
+            panel.cells()[index].closest('.memory-number')!.querySelector('.hover-content')!
+        try {
+            //every byte has the card's empty shell, which its panel places
+            expect(panel.cells().map((_, i) => card(i).childElementCount)).toEqual(Array(8).fill(0))
+            panel.hover(2)
+            expect(card(2).querySelector('.byte-value')?.textContent?.trim()).toBe('2')
+            expect(card(3).childElementCount).toBe(0)
+        } finally {
+            panel.close()
+        }
+    })
+})
+
 describe('bytes the Core could not read', () => {
     it('draws them without a value and says why under the page', () => {
         const panel = render({ unreadable: [0, 0, 0, 0, 0, 0, 1, 1] })
@@ -356,6 +381,8 @@ describe('bytes the Core could not read', () => {
         expect(text.slice(0, 6)).not.toContain('??')
         expect(text.slice(6)).toEqual(['??', '??'])
         //its hover says why
+        panel.hover(6)
+        panel.hover(7)
         const reasons = [...panel.target.querySelectorAll<HTMLElement>('.byte-error')]
         expect(reasons.map((reason) => reason.textContent?.trim())).toEqual([
             'address out of range',
@@ -428,6 +455,7 @@ it('tints device overlaps, preserves SP and selection highlights, and hovers bot
         expect(outline(0)).toContain(deviceOutline)
         expect(outline(1)).toContain(deviceOutline)
         expect(ui.cells()[1].getAttribute('style')).toContain('background-color: var(--accent2)')
+        ui.hover(0)
         expect(ui.target.querySelector('.region-hover')?.textContent).toBe(
             'Bitmap display · .data · Game::score (_ZN4Game5scoreE) (library)'
         )
@@ -519,8 +547,11 @@ it('outlines the Arguments in their colour, chunked and named by their parts', (
             '1px 0 1px 1px',
             '1px 1px 1px 0'
         ])
-        const hover = (index: number) =>
-            ui.cells()[index].closest('.memory-number')!.querySelector('.region-hover')?.textContent
+        const hover = (index: number) => {
+            ui.hover(index)
+            return ui.cells()[index].closest('.memory-number')!.querySelector('.region-hover')
+                ?.textContent
+        }
         expect(hover(1)).toBe('Arguments · argv+1')
         expect(hover(5)).toBe('Arguments · argv[0]+1')
     } finally {
@@ -570,6 +601,7 @@ it('outlines a region the machine defines over the program’s, and says what it
         expect(/--region-edges: ([^;]*);/.exec(cell(4).getAttribute('style')!)![1]).toBe(
             '1px 0 1px 1px'
         )
+        ui.hover(5)
         expect(cell(5).querySelector('.region-hover')?.textContent).toBe(
             'Exception vectors · Reset PC+1 · Section 0'
         )

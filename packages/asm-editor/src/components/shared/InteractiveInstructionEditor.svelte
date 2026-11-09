@@ -767,6 +767,7 @@
                 files={emulator.registerFiles}
                 {pokeable}
                 canPokeRegister={(fileId, name) => emulator.canPokeRegister(fileId, name)}
+                registerTakesPokes={(fileId, name) => emulator.registerTakesPokes(fileId, name)}
                 onPoke={pokeRegisters}
                 onRegisterClick={(register) => {
                     handleRegisterClick(register.value)

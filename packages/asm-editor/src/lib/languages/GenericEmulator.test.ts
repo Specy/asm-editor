@@ -2062,6 +2062,21 @@ describe('pokes', () => {
         expect(emulator.pokeLog).toEqual([])
     })
 
+    it('says which registers take Pokes whenever one is possible, for the panels to draw', async () => {
+        const emulator = await pokeableEmulator()
+        emulator.setSessionState({
+            startingRegisterNames: ['R0', 'zero', 'pc'],
+            hiddenRegisters: ['zero']
+        })
+        //a terminated program takes no Poke now, and its rows keep the buttons they had
+        emulator.setSessionState({ terminated: true })
+        expect(emulator.canPokeRegister(CPU_REGISTER_FILE_ID, 'R0')).toBe(false)
+        expect(emulator.registerTakesPokes(CPU_REGISTER_FILE_ID, 'R0')).toBe(true)
+        expect(emulator.registerTakesPokes(CPU_REGISTER_FILE_ID, 'zero')).toBe(false)
+        expect(emulator.registerTakesPokes(CPU_REGISTER_FILE_ID, 'pc')).toBe(false)
+        expect(emulator.registerTakesPokes('nosuchfile', 'f0')).toBe(false)
+    })
+
     it('refuses a row the Core blanked, which holds no value to change', async () => {
         const emulator = await pokeableEmulator()
         expect(emulator.canPokeRegister('fpu', 'f1')).toBe(true)

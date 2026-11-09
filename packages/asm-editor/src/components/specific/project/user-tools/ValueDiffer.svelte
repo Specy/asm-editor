@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { flushSync } from 'svelte'
+    import type { Attachment } from 'svelte/attachments'
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { elementSize } from '#cmp/shared/floating/elementSize.ts'
     import type { Side } from '#cmp/shared/floating/floating.ts'
@@ -42,6 +44,27 @@
 
     let cardWidth = $state(0)
     let cardHeight = $state(0)
+    /**
+     * Whether the card has been built: on the value's first hover, rather than one hidden card per
+     * value, outline, readings and all, kept up to date on every Step for a pointer that may never
+     * come (a register panel has dozens of values, a memory view hundreds). The CSS that shows it
+     * on hover finds it built in the same frame.
+     */
+    let built = $state(false)
+    function buildCard() {
+        if (built) return
+        built = true
+        //now, before the card shows, and before `boundedValueHover` measures it to place it
+        flushSync()
+    }
+    /** The card's size, for its outline, watched once it is built. */
+    const measureCard: Attachment<HTMLElement> = (node) => {
+        const size = elementSize(node, (width, height) => {
+            cardWidth = width
+            cardHeight = height
+        })
+        return () => size.destroy()
+    }
     /** Where `boundedValueHover` put the card: its side of the value and its arrow along it. */
     let placed = $state<{ side: Side; at?: number }>()
     //centred over or under the value when nothing bounds it, else where the bounds left it
@@ -68,21 +91,24 @@
 {#if decorative}
     {@render cell()}
 {:else}
+    <!-- the card's shell is there from the start, for `boundedValueHover` to place, and what it
+         holds is built on the first hover -->
     <div
         style="position: relative;"
-        use:boundedValueHover={{ boundary: hoverBoundary, onPlace: (place) => (placed = place) }}
+        use:boundedValueHover={{
+            boundary: hoverBoundary,
+            onPlace: (place) => (placed = place),
+            onEnter: buildCard
+        }}
     >
         <div
             class="hover-element"
             class:bounded={!!hoverBoundary}
             class:below={!hoverBoundary && hoverSide === 'below'}
             style={hoverElementStyle}
-            use:elementSize={(width, height) => {
-                cardWidth = width
-                cardHeight = height
-            }}
+            {@attach built && measureCard}
         >
-            {#if outline}
+            {#if built && outline}
                 <PopoverOutline
                     width={cardWidth}
                     height={cardHeight}
@@ -93,15 +119,17 @@
                 />
             {/if}
             <div class="hover-content">
-                {#if hoverValue}
-                    <div class:monospaced style={hoverValueElementStyle}>
-                        {@render hoverValue?.()}
-                    </div>
-                {/if}
-                {#if diff !== value}
-                    <div class="old-value" class:monospaced role="tooltip">
-                        {diff}
-                    </div>
+                {#if built}
+                    {#if hoverValue}
+                        <div class:monospaced style={hoverValueElementStyle}>
+                            {@render hoverValue?.()}
+                        </div>
+                    {/if}
+                    {#if diff !== value}
+                        <div class="old-value" class:monospaced role="tooltip">
+                            {diff}
+                        </div>
+                    {/if}
                 {/if}
             </div>
         </div>
