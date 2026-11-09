@@ -47,6 +47,7 @@
         readShareStart,
         shareStartQuery,
         startSharedProject,
+        whenOnScreen,
         type ShareStartAction
     } from '#lib/shareStart.ts'
     import type { WorkbenchSession } from '#lib/workbench/WorkbenchSession.svelte.ts'
@@ -114,12 +115,15 @@
         })
         if (startupRequested || page.params.project !== 'share') return
         startupRequested = true
-        void startSharedProject(opened, readShareStart(page.url.searchParams), signal).catch(
-            (error) => {
+        const action = readShareStart(page.url.searchParams)
+        if (!action) return
+        //a frame the reader has not reached yet starts once it shows
+        void whenOnScreen(signal)
+            .then(() => startSharedProject(opened, action, signal))
+            .catch((error) => {
                 console.error(error)
                 if (!signal.aborted) toast.error('Could not start this shared project')
-            }
-        )
+            })
     }
 
     /**

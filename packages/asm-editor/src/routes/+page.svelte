@@ -74,13 +74,58 @@
         installEvent = null
     }
 
+    const HOME_VISITED_KEY = 'asm-editor_home-visited'
+    /**
+     * Whether this browser showed the home page before, which this then records. A browser whose
+     * storage cannot be read counts as visited, so it loads nothing early.
+     */
+    function markHomeVisited(): boolean {
+        try {
+            if (localStorage.getItem(HOME_VISITED_KEY) !== null) return true
+            localStorage.setItem(HOME_VISITED_KEY, '1')
+            return false
+        } catch {
+            return true
+        }
+    }
+    /** Calls `start` once the page has loaded and the browser is idle. Returns a cancel. */
+    function whenPageIdle(start: () => void): () => void {
+        let cancelIdle: (() => void) | undefined
+        const idle = () => {
+            if ('requestIdleCallback' in window) {
+                const handle = window.requestIdleCallback(start, { timeout: 2000 })
+                cancelIdle = () => window.cancelIdleCallback(handle)
+            } else {
+                const handle = setTimeout(start, 500)
+                cancelIdle = () => clearTimeout(handle)
+            }
+        }
+        if (document.readyState === 'complete') idle()
+        else window.addEventListener('load', idle, { once: true })
+        return () => {
+            window.removeEventListener('load', idle)
+            cancelIdle?.()
+        }
+    }
+
     /**
      * How many Projects are stored, counted without reading them: `pending` until the count is
      * in, and undefined when the browser's storage could not be read.
      */
     let projectCount = $state<number | undefined | 'pending'>('pending')
     onMount(() => {
-        void storedProjectCount().then((count) => (projectCount = count))
+        const visited = markHomeVisited()
+        let cancelPreload: (() => void) | undefined
+        let gone = false
+        void storedProjectCount().then((count) => {
+            projectCount = count
+            //someone with Projects of their own was here before visits were recorded
+            if (!visited && count === 0 && !gone) cancelPreload = whenPageIdle(preloadDemo)
+        })
+        return () => {
+            gone = true
+            cancelPreload?.()
+        }
     })
     //a count that failed knows nothing of the projects, and their page says why
     let shouldGoToCurrentProjects = $derived(
@@ -97,6 +142,9 @@
      * the way each starts. The tabs of the browser drawn around it choose the example, which loads
      * again in the one frame. The frame loads once the window is close to the screen, and never on
      * a narrow one, where the editor would be too small to use: a picture or a link stands in.
+     * A first visit loads it as soon as the page is idle instead, so the editor is ready by the
+     * time the reader scrolls down to it; a returning reader, who mostly comes for the links to
+     * the editor, does not load it on every visit.
      */
     const DEMO_TABS = [
         { name: 'Relay Maze', id: 'risc-v-relay-maze', language: 'RISC-V' },
@@ -173,6 +221,29 @@
     let frameWanted = $state(false)
     let frameLoaded = $state(false)
     let frameKey = $state(0)
+    /**
+     * Whether the demo has been on screen. Until then a frame loaded early waits out of the page,
+     * fixed above the top of the screen at the size it will have (`.parked`): the editor takes the
+     * focus as it opens, and the focus would scroll the page down to a frame in its place.
+     */
+    let frameSeen = $state(false)
+    let viewport = $state<HTMLElement>()
+    let parkedSize = $state<{ width: number; height: number }>()
+    $effect(() => {
+        if (!viewport || frameSeen) return
+        const measure = () => {
+            const { width, height } = viewport!.getBoundingClientRect()
+            parkedSize = { width, height }
+        }
+        measure()
+        if (typeof ResizeObserver === 'undefined') return
+        const observer = new ResizeObserver(measure)
+        observer.observe(viewport)
+        return () => observer.disconnect()
+    })
+    function preloadDemo() {
+        if (canFrame && showDemo) frameWanted = true
+    }
     onMount(() => {
         const wide = window.matchMedia?.('(min-width: 900px)')
         if (!wide) return
@@ -196,6 +267,7 @@
             ([entry]) => {
                 if (!entry.isIntersecting) return
                 frameWanted = true
+                frameSeen = true
                 observer.disconnect()
             },
             // only once the window is well on screen: the editor takes the focus as it starts, which
@@ -542,8 +614,9 @@
                         class="viewport"
                         role="group"
                         aria-label={`The editor running ${demo.name}`}
+                        bind:this={viewport}
                     >
-                        {#if !frameLoaded}
+                        {#if !frameLoaded || !frameSeen}
                             {#if activeTab === 0}
                                 <img
                                     src="/images/ASM-RelayMaze.webp"
@@ -554,7 +627,7 @@
                                     height="909"
                                     loading="lazy"
                                 />
-                            {:else if frameWanted}
+                            {:else if frameWanted && frameSeen}
                                 <p class="loading">Opening {demo.name}…</p>
                             {/if}
                         {/if}
@@ -566,9 +639,15 @@
                                     title={`ASM Editor running the ${demo.name} example`}
                                     allow="clipboard-write; fullscreen; autoplay"
                                     class:loaded={frameLoaded}
+                                    class:parked={!frameSeen}
+                                    style:--parked-width={parkedSize && `${parkedSize.width}px`}
+                                    style:--parked-height={parkedSize && `${parkedSize.height}px`}
+                                    inert={!frameSeen}
                                     onload={() => (frameLoaded = true)}
                                 ></iframe>
                             {/key}
+                        {/if}
+                        {#if frameWanted && frameSeen}
                             {#if frameLoaded && !frameActive}
                                 <button type="button" class="activate" onclick={activateFrame}>
                                     <span class="activate-hint">Click to try the editor</span>
@@ -1302,8 +1381,20 @@
             transition: opacity 0.5s ease;
         }
 
-        iframe.loaded {
+        iframe.loaded:not(.parked) {
             opacity: 1;
+        }
+
+        /* a frame loaded before the reader reached it: fixed above the top of the screen, where
+           a focus inside it scrolls nothing, at the size it takes in its place, so the editor's
+           layout does not change as it moves in. `inert` keeps Tab out of it, though not the
+           editor's own calls to focus */
+        iframe.parked {
+            position: fixed;
+            inset: auto auto 100% 0;
+            width: var(--parked-width, 100%);
+            height: var(--parked-height, 100%);
+            pointer-events: none;
         }
     }
 

@@ -60,6 +60,33 @@ export function shareStartQuery(action?: ShareStartAction): string {
     return action ? `&${action}=true` : ''
 }
 
+/** How much of a framed page shows before its program starts. */
+const SHOWN_RATIO = 0.25
+
+/**
+ * Resolves once a quarter of this page shows on the reader's screen, at once for a page that is
+ * not in a frame. A framed page can load before the reader reaches it, as the home page's demo
+ * does on a first visit, and a program started there would run, and take the keyboard, unseen.
+ * Never resolves once `signal` aborts.
+ */
+export function whenOnScreen(signal: AbortSignal): Promise<void> {
+    if (window.self === window.top || typeof IntersectionObserver === 'undefined')
+        return Promise.resolve()
+    return new Promise((resolve) => {
+        // without a root, the frame's page is measured against the top page's screen
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.intersectionRatio < SHOWN_RATIO) return
+                observer.disconnect()
+                resolve()
+            },
+            { threshold: SHOWN_RATIO }
+        )
+        observer.observe(document.documentElement)
+        signal.addEventListener('abort', () => observer.disconnect(), { once: true })
+    })
+}
+
 /** Use the normal Build and Run actions once the host's Workbench is ready. */
 export async function startSharedProject(
     session: Pick<WorkbenchSession, 'build' | 'run' | 'debugSession'>,
