@@ -97,6 +97,13 @@
          * stops at it, so a program that fits has nothing to scroll and the wheel scrolls the page.
          */
         scrollPastEnd?: boolean
+        /**
+         * How much of the editor's bottom, in px, something laid over it covers, such as a
+         * Playground's execution dock: the code gets that much room after its last line, so it can
+         * be scrolled clear of the cover. An editor that scrolls past its end already can, and the
+         * room changes nothing there (Monaco takes it back out of the space past the end).
+         */
+        coveredBottom?: number
         editor?: monaco.editor.IStandaloneCodeEditor
         viewZones?: {
             afterLineNumber: number
@@ -176,6 +183,7 @@
         mappedBreakpoints = [],
         breakpointsEditable = true,
         scrollPastEnd = true,
+        coveredBottom = 0,
         editor = $bindable(),
         viewZones = [],
         buildArtifacts = [],
@@ -337,6 +345,7 @@
                 alwaysConsumeMouseWheel: scrollPastEnd
             },
             scrollBeyondLastLine: scrollPastEnd,
+            padding: { bottom: coveredBottom },
             colorDecorators: false,
             glyphMargin: true,
             //Monaco sizes the line-number column to the model's digit count and only uses this as
@@ -1182,6 +1191,10 @@
 
     $effect(() => {
         editor?.updateOptions({ readOnly: disabled })
+    })
+
+    $effect(() => {
+        editor?.updateOptions({ padding: { bottom: coveredBottom } })
     })
 </script>
 

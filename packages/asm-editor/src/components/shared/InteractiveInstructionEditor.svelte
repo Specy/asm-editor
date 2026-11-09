@@ -415,6 +415,8 @@
         }, 50)
     }
     let editor: monaco.editor.IStandaloneCodeEditor | undefined = $state()
+    /** The execution dock's height, which covers the bottom of the code it floats over. */
+    let dockHeight = $state(0)
 
     let readyReported = false
     $effect(() => {
@@ -669,6 +671,7 @@
                 {viewZones}
                 breakpointsEditable={!selectedIsSource}
                 scrollPastEnd={!embedded}
+                coveredBottom={dockHeight}
                 breakpoints={emulator.breakpoints
                     .filter(isLineBreakpoint)
                     .filter((breakpoint) => breakpoint.file === displayedAssemblyFile)
@@ -684,7 +687,7 @@
                 hasError={emulator.errors.length > 0}
             />
         </div>
-        <div class="floating-dock">
+        <div class="floating-dock" bind:offsetHeight={dockHeight}>
             <ExecutionDock
                 attached
                 fill={viewport.deviceClass === 'phone'}
