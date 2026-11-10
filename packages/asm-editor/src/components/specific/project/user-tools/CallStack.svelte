@@ -5,6 +5,12 @@
     import type { StackFrame } from '#lib/languages/commonLanguageFeatures.svelte.ts'
     interface Props {
         stack: StackFrame[]
+        /**
+         * How many frames the Call stack holds in all, when that can be more than `stack` lists: a
+         * routine that calls itself without end holds far more than are worth drawing, and the
+         * panel says how many it left out.
+         */
+        depth?: number
         onGoToLabel: (label: StackFrame) => void
         onGoToInstruction: (address: bigint) => void
         /**
@@ -13,7 +19,10 @@
         docked?: boolean
     }
 
-    let { stack, onGoToInstruction, onGoToLabel, docked = false }: Props = $props()
+    let { stack, depth, onGoToInstruction, onGoToLabel, docked = false }: Props = $props()
+
+    /** The frames below the ones listed, the oldest, which the panel does not draw. */
+    const unlisted = $derived(Math.max(0, (depth ?? 0) - stack.length))
 </script>
 
 <div class="call-stack-wrapper" class:docked>
@@ -59,6 +68,9 @@
                 </div>
             {/if}
         {/each}
+        {#if unlisted > 0}
+            <div class="row unlisted">{unlisted.toLocaleString()} older calls are not shown</div>
+        {/if}
     </div>
 </div>
 
@@ -135,6 +147,11 @@
         &:hover {
             background-color: transparent;
         }
+    }
+    .unlisted {
+        justify-content: center;
+        padding: 0.3rem;
+        color: var(--secondary-text);
     }
     .separator {
         height: 1rem;

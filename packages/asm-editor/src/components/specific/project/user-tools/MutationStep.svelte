@@ -3,6 +3,7 @@
     import FaUndo from '~icons/fa-solid/undo'
     import {
         type ExecutionStep,
+        type LibraryStretch,
         type MutationOperation,
         type PokeWrite,
         type RegisterSize
@@ -36,6 +37,24 @@
         onUndo,
         onHighlight
     }: Props = $props()
+
+    /**
+     * What one Undo takes back with this row: the library function a Step ran through, the routine
+     * a Step over ran or a Step out left, and how many instructions that was. A Step over of a line
+     * that called nothing has no routine to name.
+     */
+    function stretchTitle(stretch: LibraryStretch): string {
+        const count = `${stretch.instructions.toLocaleString()} instructions`
+        if (stretch.kind === 'over')
+            return stretch.library
+                ? `Stepped over ${stretch.library}: ${count}`
+                : `Stepped over ${count}`
+        if (stretch.kind === 'out')
+            return stretch.library
+                ? `Stepped out of ${stretch.library}: ${count}`
+                : `Stepped out: ${count}`
+        return `Called ${stretch.library}: ${count}`
+    }
     //each Core records its own status register, so the bits are read with the Target's own layout
     let ccr = $derived(statusFlagsFromBits(language, step.new_ccr.bits))
 
@@ -289,20 +308,25 @@
                 <div class="stretch">Undo stops here: effects are not recorded.</div>
             {/if}
             {#if step.stretch}
-                <!-- a Step that ran through library code: one Undo takes all of it back. A C++
-                     function it called reads short, its signature and raw name in the tooltip -->
+                <!-- a Step that ran through library code, a Step over or a Step out: one Undo
+                     takes all of it back. A C++ function it called reads short, its signature and
+                     raw name in the tooltip -->
                 <div
                     class="stretch"
                     title={[
                         step.stretch.detail,
                         step.undoable === false
-                            ? 'This call includes effects Undo cannot restore'
-                            : 'One Undo takes back the call and the library code it ran'
+                            ? step.stretch.kind
+                                ? 'This step includes effects Undo cannot restore'
+                                : 'This call includes effects Undo cannot restore'
+                            : step.stretch.kind
+                              ? 'One Undo takes back the whole step'
+                              : 'One Undo takes back the call and the library code it ran'
                     ]
                         .filter(Boolean)
                         .join('\n')}
                 >
-                    Called {step.stretch.library}: {step.stretch.instructions.toLocaleString()} instructions
+                    {stretchTitle(step.stretch)}
                 </div>
             {/if}
             {#if flags.length !== 0}

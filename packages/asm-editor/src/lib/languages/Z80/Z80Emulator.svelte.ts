@@ -95,6 +95,21 @@ const CHUNK_TARGET_FRACTION = 1 / 4
 
 const NOT_INITIALIZED_ERROR = 'Interpreter not initialized'
 
+/**
+ * The block instructions that repeat themselves, one pass per Step: the CPU moves the program
+ * counter back onto the instruction until its count runs out, so a Step over runs the rest.
+ */
+const REPEATING_BLOCK_MNEMONICS = new Set([
+    'ldir',
+    'lddr',
+    'cpir',
+    'cpdr',
+    'inir',
+    'indr',
+    'otir',
+    'otdr'
+])
+
 export function Z80Emulator(source: BuildInput, options: EmulatorSettings = {}) {
     return new AsmEditorZ80Emulator(source, options)
 }
@@ -412,6 +427,40 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         return this.screenInstructions?.canUndoAfter(record.tStateCountBefore) ?? true
     }
 
+    /** The machine's history holds one record per instruction or Poke, so its length is the depth. */
+    _undoDepth(): number {
+        return this.machine?.getUndoDepth() ?? 0
+    }
+
+    /**
+     * The machine's own count of every instruction it has executed, one history record each, which
+     * only goes up: an `in` rolled back to wait for its input is not counted until it runs, and a
+     * Poke is never counted, since the Emulator records those itself.
+     */
+    _getInstructionsExecuted(): bigint {
+        return BigInt(this.machine?.getInstructionsExecuted() ?? 0)
+    }
+
+    _canUndoSteps(count: number): boolean {
+        return this._canUndoHistoryRange(0, count)
+    }
+
+    /**
+     * Whether the `count` records below the newest `skip` can be undone, the newer ones with them.
+     * The Screen journal is the one peripheral that can refuse, once it has dropped the inverse of
+     * an old drawing under its budget; the Terminal and the audio take back whatever they still
+     * hold. Undoing down to the oldest record of the range takes back every effect after the
+     * t-state it started at, so that one preflight answers for all of them.
+     */
+    _canUndoHistoryRange(skip: number, count: number): boolean {
+        const machine = this.machine
+        if (!machine || count <= 0) return count <= 0
+        if (machine.getUndoDepth() < skip + count) return false
+        const oldest = machine.getHistory(1, skip + count - 1)[0]
+        if (!oldest) return false
+        return this.screenInstructions?.canUndoAfter(oldest.tStateCountBefore) ?? true
+    }
+
     _undo(): void {
         const machine = this.requireMachine()
         const record = machine.getHistory(1)[0]
@@ -445,7 +494,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         //`ei` + `halt` parks the CPU until an interrupt arrives, and nothing in this app ever raises
         //one, so the program is over as far as the user is concerned
         if (machine.stopReason === StopReason.WAITING_FOR_INTERRUPT) return true
-        //the cliff: the PC left the assembled code, which is where the other languages stop too
+        //the cliff: the PC left the assembled code, which is where the other languages stop too. A
+        //macro's instructions belong to the line that used the macro, so a routine returning into
+        //one is not taken for the end
         return this.sourceMap?.addressToLocation(machine.z80.regs.pc) === undefined
     }
 
@@ -467,6 +518,12 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
      * The machine reports its own instruction count, so this is the one adapter whose progress is
      * exact. A stop for input is served inside the slice, as it was inside the old run loop: the
      * program is suspended on the Terminal, not on the scheduler.
+     *
+     * Every `run` call of the slice is given the request's `untilCallDepth`, since the machine tests
+     * it when each call begins and after every instruction. The request's `skipBreakpointAtPc` is
+     * given to every call until one has executed an instruction, and false after that: an `in`
+     * rolled back to wait for its input ran nothing, so the call that runs it once the input is
+     * there still passes over a Breakpoint on it (ADR 0023).
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const machine = this.requireMachine()
@@ -476,6 +533,7 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
             ...this.toBreakpointAddresses(request.breakpoints.filter(isLineBreakpoint)),
             ...this.cliffBreakpoints
         ]
+        const untilCallDepth = request.untilCallDepth
         let instructions = 0
         //the budget is spent in chunks so the wall clock can be looked at between them: a Z80
         //instruction is a fraction of a microsecond, but one `out` can clear the whole Screen and
@@ -494,7 +552,9 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 const startedAt = performance.now()
                 const result = machine.run({
                     maxInstructions: Math.min(this.sliceChunk, budget - instructions),
-                    breakpoints: stops
+                    breakpoints: stops,
+                    skipBreakpointAtPc: instructions === 0 && request.skipBreakpointAtPc,
+                    untilCallDepth
                 })
                 const spentMs = performance.now() - startedAt
                 //sized before any return: a chunk that overran the deadline is the one to shrink,
@@ -524,7 +584,13 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                     continue
                 }
                 if (result.reason === StopReason.PAUSED) continue
+                //a routine that returns past the last instruction, the call being the program's
+                //last, ends the program rather than the step
                 if (this._hasTerminated()) return { reason: 'terminated', instructions }
+                //the routine a Step over entered has returned, or the one a Step out leaves
+                if (result.reason === StopReason.CALL_DEPTH) {
+                    return { reason: 'callDepth', instructions }
+                }
                 //anything else the machine stopped for is a breakpoint: the user's, or a cliff one that
                 //`_hasTerminated` did not recognize as the end of the program
                 if (result.reason !== StopReason.INSTRUCTIONS_EXHAUSTED) {
@@ -720,16 +786,39 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
         }
     }
 
-    _getCallStack(): StackFrame[] {
+    /**
+     * The machine tracks its Call stack as the program runs: a taken `call` and an `rst` push a
+     * frame, and a frame is gone once SP is back above its return address, by a `ret` or by any
+     * other way of leaving the routine.
+     */
+    _getCallDepth(): number {
+        return this.machine?.getCallDepth() ?? 0
+    }
+
+    /**
+     * Whether the instruction at the program counter is a block instruction that repeats itself.
+     * Asked after a pass of it that left the program counter where it was, which the CPU does only
+     * while the block has more to go, so a Step over goes on to its end.
+     */
+    _repeatsInstruction(): boolean {
+        const machine = this.machine
+        if (!machine) return false
+        return REPEATING_BLOCK_MNEMONICS.has(machine.disassembleAt(machine.z80.regs.pc).mnemonic)
+    }
+
+    /** With `max`, only the newest frames are named: the machine hands back no more than those. */
+    _getCallStack(max?: number): StackFrame[] {
         const machine = this.machine
         const sourceMap = this.sourceMap
         if (!machine || !sourceMap) return []
         //`namedCallStack` hands back the innermost frame first; the call stack panel reverses the
         //list before drawing it, so it is stored outermost first, the way M68K produces it
-        return sourceMap
-            .namedCallStack(machine)
-            .reverse()
-            .map((frame, i) => ({
+        const named = sourceMap.namedCallStack(machine, max).reverse()
+        //each frame keeps the colour of its depth, whether or not the outer ones were read
+        const outer = machine.getCallDepth() - named.length
+        return named.map((frame, index) => {
+            const i = outer + index
+            return {
                 name: frame.name ?? `0x${frame.targetAddress.toString(16).padStart(4, '0')}`,
                 //the routine that is executing, and the `call` that entered it
                 address: BigInt(frame.targetAddress),
@@ -738,20 +827,29 @@ class AsmEditorZ80Emulator extends GenericEmulator<Z80Machine, Z80RegisterName> 
                 line: sourceMap.addressToLocation(frame.targetAddress)?.lineNumber ?? -1,
                 file: sourceMap.addressToLocation(frame.targetAddress)?.pathname,
                 color: makeLabelColor(i, frame.stackAddress)
-            }))
+            }
+        })
     }
 
     _getUndoHistory(max: number): ExecutionStep[] {
+        return this._getUndoHistoryRange(0, max)
+    }
+
+    /** `max` rows of the history below the newest `skip`, newest first. */
+    _getUndoHistoryRange(skip: number, max: number): ExecutionStep[] {
         const machine = this.machine
         if (!machine || max <= 0) return []
-        //oldest first, at most `max` of the most recent records
-        const records = machine.getHistory(max)
+        //oldest first, at most `max` of the records below the newest `skip`
+        const records = machine.getHistory(max, skip)
+        //the record just above the range, whose state is the one the range's newest left
+        const newer = skip > 0 ? machine.getHistory(1, skip - 1)[0] : undefined
         const steps: ExecutionStep[] = []
         for (let i = records.length - 1; i >= 0; i--) {
             const record = records[i]
             //the state the instruction produced is the state the next one found, and for the newest
             //record it is the machine as it stands now
-            const after = records[i + 1]?.stateBefore.regs ?? machine.z80.regs
+            const after =
+                records[i + 1]?.stateBefore.regs ?? newer?.stateBefore.regs ?? machine.z80.regs
             if (isPokeRecord(record)) {
                 //a Poke ran no instruction, so its row has no PC and no line to go to; what it
                 //changed is in its writes, and `f` is not among them, so the flags do not move

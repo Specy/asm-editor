@@ -98,3 +98,37 @@ it('names an exception frame by its vector and handler, above the call it interr
     const returns = [...target.querySelectorAll<HTMLButtonElement>('.return-address')]
     expect(returns.map((button) => button.textContent?.trim())).toEqual(['0x1104', '0x1008'])
 })
+
+it('says how many older frames it does not list', () => {
+    const frame = (name: string): StackFrame => ({
+        name,
+        address: 0x1000n,
+        destination: 0x2000n,
+        sp: 0x7000n,
+        line: 3,
+        color: 'red'
+    })
+    /** The line under the last frame, for a Call stack of two listed frames and `depth` in all. */
+    const unlisted = (depth: number | undefined) => {
+        const target = document.createElement('div')
+        document.body.append(target)
+        const app = mount(CallStack, {
+            target,
+            props: {
+                stack: [frame('fact'), frame('fact')],
+                depth,
+                onGoToLabel: vi.fn(),
+                onGoToInstruction: vi.fn()
+            }
+        })
+        flushSync()
+        const text = target.querySelector('.unlisted')?.textContent
+        void unmount(app)
+        target.remove()
+        return text
+    }
+    expect(unlisted(131_072)).toBe('131,070 older calls are not shown')
+    //a Call stack listed whole says nothing
+    expect(unlisted(2)).toBeUndefined()
+    expect(unlisted(undefined)).toBeUndefined()
+})

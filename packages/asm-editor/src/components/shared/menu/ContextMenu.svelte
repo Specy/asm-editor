@@ -8,6 +8,10 @@
               disabled?: boolean
               /** Drawn in red, for what cannot be taken back. */
               danger?: boolean
+              /** Drawn in the accent colour, for the one that moves things on, as the dock's Step. */
+              accent?: boolean
+              /** Its key, in the shortcut store's form (`Mod+KeyZ`), drawn at the row's end. */
+              shortcut?: string
               onSelect: () => void
           }
         | { separator: true }
@@ -29,11 +33,27 @@
      */
     import PopoverOutline from '#cmp/shared/floating/PopoverOutline.svelte'
     import { AnchoredPopover } from '#cmp/shared/floating/anchoredPopover.svelte.ts'
+    import type { Box } from '#cmp/shared/floating/floating.ts'
+    import Kbd from '#cmp/shared/misc/Kbd.svelte'
+    import { shortcutLabel } from '#stores/shortcutsStore.ts'
 
     interface Props {
         /** The point it opens at, in viewport coordinates; it moves inwards to stay on screen. */
-        x: number
-        y: number
+        x?: number
+        y?: number
+        /**
+         * A box it opens beside instead of a point, the button that opens it, in viewport
+         * coordinates, on `side` when that side has the room.
+         */
+        anchor?: Box
+        side?: 'top' | 'bottom'
+        /**
+         * Whether a pick leaves it open, for commands pressed again and again, such as the dock's
+         * Steps; it then closes only as every Popover does (Escape, Tab, a press outside it).
+         */
+        keepOpen?: boolean
+        /** The button that opens it, a press on which is not a press outside it: it toggles it. */
+        trigger?: () => Element | null | undefined
         items: readonly ContextMenuEntry[]
         label?: string
         /**
@@ -44,13 +64,27 @@
         onClose: () => void
     }
 
-    let { x, y, items, label = 'Context menu', arrow = false, onClose }: Props = $props()
+    let {
+        x = 0,
+        y = 0,
+        anchor,
+        side,
+        items,
+        label = 'Context menu',
+        arrow = false,
+        keepOpen = false,
+        trigger,
+        onClose
+    }: Props = $props()
 
     //placed, focused and closed as every Popover opened at a point is
     const popover = new AnchoredPopover({
         point: () => ({ x, y }),
+        anchor: anchor && (() => anchor),
+        side: () => side,
         arrow: () => arrow,
-        onClose: () => onClose()
+        onClose: () => onClose(),
+        trigger: () => trigger?.()
     })
     let menu: HTMLDivElement
 
@@ -60,7 +94,7 @@
 
     function pick(entry: Extract<ContextMenuEntry, { label: string }>) {
         if (entry.disabled) return
-        popover.close()
+        if (!keepOpen) popover.close()
         entry.onSelect()
     }
 
@@ -109,6 +143,7 @@
             <button
                 class="item"
                 class:danger={entry.danger}
+                class:accent={entry.accent}
                 role="menuitem"
                 disabled={entry.disabled}
                 onclick={() => pick(entry)}
@@ -117,6 +152,9 @@
                     {#if Icon}<Icon />{/if}
                 </span>
                 <span class="label ellipsis">{entry.label}</span>
+                {#if entry.shortcut}
+                    <Kbd class="shortcut">{shortcutLabel(entry.shortcut)}</Kbd>
+                {/if}
             </button>
         {/if}
     {/each}
@@ -177,6 +215,18 @@
         &.danger:not(:disabled) > span {
             color: var(--danger);
         }
+
+        &.accent:not(:disabled) > span {
+            color: var(--accent);
+        }
+    }
+
+    /* its key at the row's end, quieter than its name */
+    .item :global(.shortcut) {
+        margin-left: auto;
+        padding-left: 0.3rem;
+        opacity: 0.7;
+        font-size: 0.75rem;
     }
 
     .icon {

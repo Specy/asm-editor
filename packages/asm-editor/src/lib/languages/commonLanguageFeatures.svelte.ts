@@ -280,18 +280,36 @@ export type ExecutionStep = {
      */
     cyclesEstimate?: boolean
     /**
-     * Set on the instruction that started a Step through library code: the library function it
-     * entered (`printf`, `puts in libc.so.6`) and every instruction the Step ran, which one Undo
-     * takes back together.
+     * Set on the instruction that started a Step through library code, a Step over or a Step out:
+     * what it ran through (`printf`, `puts in libc.so.6`, `draw_sprite`) and every instruction it
+     * ran, which one Undo takes back together.
      */
     stretch?: LibraryStretch
 }
 
-/** A Step's stretch of library code, as the History names it. */
+/** How a Step over or a Step out ended. */
+export type StepOutcome = {
+    /** Whether the program has ended. */
+    terminated: boolean
+    /**
+     * Whether the step did what it was asked: the line ran and the routine it called returned, or
+     * the routine it was to leave returned. False when something else stopped it first: a
+     * Breakpoint, a Pause, the program's end, an error or the instruction limit.
+     */
+    completed: boolean
+}
+
+/** The instructions one Step, Step over or Step out ran together, as the History names them. */
 export type LibraryStretch = {
     /**
+     * Which command ran them: a Step over ("Stepped over draw_sprite") or a Step out ("Stepped out
+     * of draw_sprite"). Absent for a Step through library code ("Called printf").
+     */
+    kind?: 'over' | 'out'
+    /**
      * What the Step called: `printf`, `puts in libc.so.6`,
-     * `std::ostream::operator<< in libstdc++.so.6`.
+     * `std::ostream::operator<< in libstdc++.so.6`; the routine a Step over ran or a Step out left,
+     * as the Call stack names it; empty for a Step over of a line that called nothing.
      */
     library: string
     /**
@@ -661,7 +679,10 @@ export type BaseEmulatorState = {
      */
     termination?: Termination
     latestSteps: ExecutionStep[]
+    /** The newest frames of the Call stack, outermost first: as many as the panel shows. */
     callStack: StackFrame[]
+    /** How many frames the Call stack holds in all, which can be more than `callStack` lists. */
+    callStackDepth?: number
     line: number
     currentFile: string
     executionTime: number
@@ -688,6 +709,17 @@ export type BaseEmulatorState = {
      */
     stepWaiting?: boolean
     /**
+     * Whether a Step over or a Step out has been running for long enough to be shown as a Run: the
+     * controls then draw Pause. A short one never sets it, so its button does not flash. The gate
+     * that keeps other commands out is `GenericEmulator.stepping`, which is immediate.
+     */
+    stepRunning?: boolean
+    /**
+     * Whether there is a routine for Step out to leave: the Call stack holds a frame, counted from
+     * the routine the stop is shown in.
+     */
+    canStepOut?: boolean
+    /**
      * The cycle counter, for a Target that counts the clock cycles its processor takes: the M68K's
      * shows above the PC as "Cycles 12,345 (+8)" and ends the Log's exit line
      * ([m68k-machine.md](../../../../../docs/design/m68k-machine.md), decision 30). Undefined for
@@ -709,6 +741,12 @@ export type BaseEmulatorState = {
  */
 export type BaseEmulatorDerivedState = {
     resolveMemoryLabel(name: string): bigint | undefined
+    /**
+     * Whether a Step over or a Step out is in flight. It owns the Core until it ends, and a Step,
+     * an Undo or a Run asked for meanwhile is refused rather than queued. Immediate, and not
+     * reactive: `stepRunning` is what the controls draw.
+     */
+    readonly stepping: boolean
     readonly compilerErrors: Diagnostic[]
     readonly memoryRegions: readonly MemoryRegion[]
     readonly dataLabels: readonly DataLabel[]
@@ -873,6 +911,13 @@ export type BaseEmulatorActions = {
         signal?: AbortSignal
     ) => Promise<void>
     step: () => Promise<boolean>
+    /**
+     * Step over and Step out ([stepping-plan.md](../../../../../docs/design/stepping-plan.md)):
+     * the line with the routine it calls, and the rest of the routine the stop is shown in.
+     * `haltLimit` is the most instructions either may run, none when 0 or absent.
+     */
+    stepOver: (haltLimit?: number) => Promise<StepOutcome>
+    stepOut: (haltLimit?: number) => Promise<StepOutcome>
     run: (haltLimit: number) => Promise<InterpreterStatus>
     /**
      * A Run that also stops before any of `targets`, temporary Breakpoints kept only for it: Run

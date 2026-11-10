@@ -52,6 +52,10 @@ comes first, followed by its high byte `80`.
 At `ret`, the Z80 reads those bytes as `0x8005`, puts that address in `pc`, and restores `sp` to
 `0xFFFF`. The next instruction is `ld b, a`, so both `a` and `b` finish at `0x1E`, which is 30.
 
+**Step** on the `call` follows the program into `triple`. **Step over** on that line runs all of
+`triple` and stops at `ld b, a`. Inside `triple`, **Step out** runs the rest of it and stops at that
+same line.
+
 The `jp done` also matters. After `ld b, a`, ordinary execution would otherwise continue into
 `triple` without a call. Its `ret` would then treat unrelated bytes as an address. Arrange the
 surrounding control flow so a subroutine is entered by `call`.

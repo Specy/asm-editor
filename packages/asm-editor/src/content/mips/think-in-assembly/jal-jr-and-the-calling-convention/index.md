@@ -30,6 +30,10 @@ Before the first call, the editor shows `$ra` as 0. That is the Playground's ini
 it does not mean that `main` was called from address 0. When `jal triple` runs, `$ra` changes to the
 address of `move $s0, $v0`. The final `jr $ra` returns there.
 
+Press **Step** on `jal triple` to follow the program into `triple`. **Step over** on that line runs
+all of `triple` and stops at `move $s0, $v0`. Inside `triple`, **Step out** runs the rest of it and
+stops at that same line.
+
 `triple` is a **leaf subroutine** because it does not call another subroutine. It can leave `$ra`
 where `jal` put it.
 

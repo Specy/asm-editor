@@ -70,6 +70,22 @@
         loading: boolean
         onToggle: () => void
     }
+    /**
+     * How the dock draws Step over and Step out, when its host offers them: `normal` as two parts
+     * of the Step button, `dropdown` in a menu opened from an arrow beside Step, `none` not at all.
+     */
+    export type DockStepButtons = 'normal' | 'dropdown' | 'none'
+
+    /**
+     * The keys of Step, Step over and Step out, in the shortcut store's form (`ShiftLeft+ArrowRight`),
+     * for their tooltips and the menu. A host passes those that work in it.
+     */
+    export interface DockStepShortcuts {
+        step?: string
+        over?: string
+        out?: string
+    }
+
     /** One button of the view switch: a way the pane can show its File. */
     export interface DockView {
         id: string
@@ -108,6 +124,11 @@
     import FaPause from '~icons/fa-solid/pause'
     import FaWrench from '~icons/fa-solid/wrench'
     import FaStepForward from '~icons/fa-solid/step-forward'
+    import FaShare from '~icons/fa-solid/share'
+    import FaLevelUpAlt from '~icons/fa-solid/level-up-alt'
+    import FaAngleDown from '~icons/fa-solid/angle-down'
+    import ContextMenu, { type ContextMenuEntry } from '#cmp/shared/menu/ContextMenu.svelte'
+    import type { Box } from '#cmp/shared/floating/floating.ts'
     import FaClock from '~icons/fa-solid/clock'
     import FaStop from '~icons/fa-solid/stop'
     import FaFastBackward from '~icons/fa-solid/fast-backward'
@@ -164,6 +185,17 @@
         onPause: () => void
         onUndo: () => void
         onStep: () => void
+        /**
+         * Step over and Step out, drawn with Step when the host offers them, as `stepButtons` says
+         * ([stepping-plan.md](../../../../../../docs/design/stepping-plan.md)).
+         */
+        onStepOver?: () => void
+        onStepOut?: () => void
+        /** Whether there is a routine for Step out to leave. */
+        canStepOut?: boolean
+        /** How Step over and Step out are drawn: as parts of the Step button when left out. */
+        stepButtons?: DockStepButtons
+        stepShortcuts?: DockStepShortcuts
         onTest?: () => void
         /**
          * The dock as a picture, for a backdrop nothing can point at (the home page's): the same
@@ -201,12 +233,18 @@
         onPause,
         onUndo,
         onStep,
+        onStepOver,
+        onStepOut,
+        canStepOut = false,
+        stepButtons = 'normal',
+        stepShortcuts = {},
         onTest,
         decorative = false
     }: Props = $props()
 
-    /** A control's Tooltip, which a decorative dock leaves out. */
-    const tip = (content: TooltipContent) => !decorative && tooltip(content)
+    /** A control's Tooltip, with its key when it has one, which a decorative dock leaves out. */
+    const tip = (content: TooltipContent, shortcut?: string) =>
+        !decorative && tooltip(content, { shortcut })
 
     const hasEnd = $derived(showExecution && (hasTests || actions.length > 0 || !!sound))
     /** Whether anything precedes the view switch in its tray, which a divider then sets apart. */
@@ -216,6 +254,69 @@
     /** Whether the dock holds the view switch and nothing else, as a pane's beside the controls. */
     const switchOnly = $derived(!!views && !beforeViews && !hasEnd)
     const progress = $derived(building ? buildProgress : undefined)
+    const stepDisabled = $derived(executionDisabled || running || building)
+    /** Whether Step has Step over or Step out with it, as parts or behind its arrow. */
+    const moreSteps = $derived(stepButtons !== 'none' && (!!onStepOver || !!onStepOut))
+    /**
+     * The buttons Step is drawn as, joined in one: Step and each of Step over and Step out, or
+     * Step and its arrow; a share each in one tray across a phone's pane, the arrow's counted out.
+     */
+    const stepParts = $derived(
+        !moreSteps || stepButtons === 'dropdown'
+            ? 1
+            : 1 + (onStepOver ? 1 : 0) + (onStepOut ? 1 : 0)
+    )
+
+    /** The arrow's box while the Step menu is open, which the menu opens beside. */
+    let stepMenuAt = $state<Box | null>(null)
+    let stepMenuButton = $state<HTMLElement>()
+    function toggleStepMenu(event: MouseEvent) {
+        if (stepMenuAt) {
+            stepMenuAt = null
+            return
+        }
+        const { left, top, width, height } = (
+            event.currentTarget as HTMLElement
+        ).getBoundingClientRect()
+        stepMenuAt = { left, top, width, height }
+    }
+    //a menu left open as the Debug session ends would open again with the next one
+    $effect(() => {
+        if (!debugging || !showExecution || !moreSteps) stepMenuAt = null
+    })
+    /** The menu behind Step's arrow: Step first, in its accent, then the others the host offers. */
+    const stepMenu = $derived<ContextMenuEntry[]>([
+        {
+            label: 'Step',
+            icon: FaStepForward,
+            accent: true,
+            disabled: stepDisabled,
+            shortcut: stepShortcuts.step,
+            onSelect: onStep
+        },
+        ...(onStepOver
+            ? [
+                  {
+                      label: 'Step over',
+                      icon: FaShare,
+                      disabled: stepDisabled,
+                      shortcut: stepShortcuts.over,
+                      onSelect: onStepOver
+                  }
+              ]
+            : []),
+        ...(onStepOut
+            ? [
+                  {
+                      label: 'Step out',
+                      icon: FaLevelUpAlt,
+                      disabled: stepDisabled || !canStepOut,
+                      shortcut: stepShortcuts.out,
+                      onSelect: onStepOut
+                  }
+              ]
+            : [])
+    ])
 
     /** The program has ended and the host offers Restart, which takes Run's place. */
     const restartable = $derived(ended && !running && !!onRestart)
@@ -233,10 +334,13 @@
 
     /**
      * Hides labels while the dock is too narrow for them and only then, after the widths below have
-     * taken away what they foresee: the caller's actions' first, whose words no width can know in
-     * advance, then the rest of the far end's, then the room Run keeps for its other faces, then
-     * every one. A button without its label is still named by its tooltip and to a screen reader. It measures on every change of the dock's size and of what
-     * it holds, all at once, so a cut label is never drawn and then put right. The step is an
+     * taken away what they foresee: first it draws every button with less padding, as the widths
+     * below do, then takes the words of Step's over and out parts, leaving their icons, then the
+     * caller's actions' labels, whose words no width can know in advance, then the rest of the
+     * far end's, then the room Run keeps for its other faces, then every one, Step's with the
+     * others. A button without its label is still named by its tooltip and to a screen reader. It
+     * measures on every change of the dock's size and of what it holds, all at once, so a cut
+     * label is never drawn and then put right. The step is an
      * attribute rather than a class, which Svelte would write over with the class directives.
      */
     function fitLabels(dock: HTMLElement) {
@@ -244,7 +348,7 @@
         if (typeof ResizeObserver === 'undefined') return
         const fit = () => {
             delete dock.dataset.squeeze
-            for (const step of ['actions', 'end', 'run', 'all']) {
+            for (const step of ['tight', 'steps', 'actions', 'end', 'run', 'all']) {
                 if (dock.scrollWidth <= dock.clientWidth) return
                 dock.dataset.squeeze = step
             }
@@ -440,19 +544,98 @@
                 </Icon>
                 <span class="label">Undo</span>
             </button>
-            <button
-                type="button"
-                class="tool emphasis"
-                disabled={executionDisabled || running || building}
-                onclick={onStep}
-                {@attach tip('Run one instruction')}
-                aria-label="Step"
+            <!-- Step, Step over and Step out as one button in parts, read "Step | over | out", or
+                 Step and an arrow that opens a menu of the three. Step alone, for a host that offers
+                 neither of the others, is a tool as Undo is -->
+            <div
+                class="steps"
+                class:joined={moreSteps}
+                style:--parts={stepParts}
+                role={moreSteps ? 'group' : undefined}
+                aria-label={moreSteps ? 'Step' : undefined}
             >
-                <Icon size="small">
-                    <FaStepForward />
-                </Icon>
-                <span class="label">Step</span>
-            </button>
+                <button
+                    type="button"
+                    class="tool emphasis"
+                    disabled={stepDisabled}
+                    onclick={onStep}
+                    {@attach tip('Run one instruction', stepShortcuts.step)}
+                    aria-label="Step"
+                >
+                    <Icon size="small">
+                        <FaStepForward />
+                    </Icon>
+                    <span class="label">Step</span>
+                </button>
+                {#if moreSteps && stepButtons === 'normal'}
+                    {#if onStepOver}
+                        <button
+                            type="button"
+                            class="tool"
+                            disabled={stepDisabled}
+                            onclick={onStepOver}
+                            {@attach tip(
+                                'Run this line and any subroutine it calls',
+                                stepShortcuts.over
+                            )}
+                            aria-label="Step over"
+                        >
+                            <Icon size="small">
+                                <FaShare />
+                            </Icon>
+                            <span class="label">over</span>
+                        </button>
+                    {/if}
+                    {#if onStepOut}
+                        <button
+                            type="button"
+                            class="tool"
+                            disabled={stepDisabled || !canStepOut}
+                            onclick={onStepOut}
+                            {@attach tip(
+                                'Run the rest of this subroutine and stop in the code that called it',
+                                stepShortcuts.out
+                            )}
+                            aria-label="Step out"
+                        >
+                            <Icon size="small">
+                                <FaLevelUpAlt />
+                            </Icon>
+                            <span class="label">out</span>
+                        </button>
+                    {/if}
+                {:else if moreSteps}
+                    <!-- kept pressable while the menu is open, which it closes -->
+                    <button
+                        type="button"
+                        class="tool more"
+                        disabled={stepDisabled && !stepMenuAt}
+                        onclick={toggleStepMenu}
+                        bind:this={stepMenuButton}
+                        {@attach tip('Show Step over and Step out')}
+                        aria-label="More ways to step"
+                        aria-haspopup="menu"
+                        aria-expanded={!!stepMenuAt}
+                    >
+                        <Icon size="small">
+                            <FaAngleDown />
+                        </Icon>
+                    </button>
+                {/if}
+            </div>
+            {#if stepMenuAt && !decorative}
+                <!-- open while its Steps are pressed, so a run of them takes one opening -->
+                <ContextMenu
+                    anchor={stepMenuAt}
+                    side="top"
+                    items={stepMenu}
+                    label="Ways to step"
+                    arrow
+                    keepOpen
+                    trigger={() => stepMenuButton}
+                    onClose={() => (stepMenuAt = null)}
+                />
+            {/if}
         {/if}
         {#if views}
             {#if beforeViews}
@@ -553,6 +736,7 @@
 
 <style lang="scss">
     @use '../../shared/button/tray.scss';
+    @use '../../../styles/radius.scss' as *;
 
     /* the two ends of a bar over what it sits on: the empty middle lets the clicks through */
     .execution-controls {
@@ -637,14 +821,62 @@
         margin-left: 0.45rem;
     }
 
+    /* the padding `fitLabels` takes away first, at every one of its steps, as the dock is
+       measured too narrow for what it holds: the narrow widths' (below) */
+    .execution-controls:global([data-squeeze]) .tool {
+        padding: 0 0.6rem;
+    }
+
     /* the labels `fitLabels` takes away, as the dock is measured too narrow for them, and before
        the last of them the room Run keeps for its other faces */
+    .execution-controls:global([data-squeeze='steps']) .steps .tool + .tool .label,
+    .execution-controls:global([data-squeeze='actions']) .steps .tool + .tool .label,
+    .execution-controls:global([data-squeeze='end']) .steps .tool + .tool .label,
+    .execution-controls:global([data-squeeze='run']) .steps .tool + .tool .label,
     .execution-controls:global([data-squeeze='actions']) .action .label,
     .execution-controls:global([data-squeeze='end']) .end .label,
     .execution-controls:global([data-squeeze='run']) .end .label,
     .execution-controls:global([data-squeeze='run']) .run-face.reserved,
     .execution-controls:global([data-squeeze='all']) .label {
         display: none;
+    }
+
+    /* Step, Step over and Step out as one button in parts, "Step | over | out": one edge round
+       the three and a rule between each, every part its own hover. Step alone is a tool among the
+       others, its group no box at all */
+    .steps {
+        display: contents;
+    }
+
+    .steps.joined {
+        display: flex;
+        align-items: stretch;
+        height: 100%;
+        border: 1px solid var(--line);
+        border-radius: var(--r-control);
+
+        > .tool {
+            border-radius: 0;
+        }
+
+        > .tool + .tool {
+            border-left: 1px solid var(--line);
+        }
+
+        > .tool:first-child {
+            border-top-left-radius: nested-radius(var(--r-control), $border: 1px);
+            border-bottom-left-radius: nested-radius(var(--r-control), $border: 1px);
+        }
+
+        > .tool:last-child {
+            border-top-right-radius: nested-radius(var(--r-control), $border: 1px);
+            border-bottom-right-radius: nested-radius(var(--r-control), $border: 1px);
+        }
+    }
+
+    /* the arrow that opens the Step menu, narrower than a button with a word */
+    .steps > .more {
+        padding: 0 0.5rem;
     }
 
     /* Run, Pause and Restart in one place, the face shown centred in the room of the widest */
@@ -750,6 +982,23 @@
         .tool {
             flex: 1 1 0;
             min-width: 0;
+        }
+
+        /* a Debug session's buttons, Step's three parts among them, too many for every share to
+           hold its words: none narrower than what it holds, so a bar too narrow for them all
+           overflows, which `fitLabels` measures and drops the words for */
+        &.debugging .tool {
+            min-width: auto;
+        }
+
+        /* Step's parts one share each, as if they were apart, and its arrow as wide as it is */
+        .steps.joined {
+            flex: var(--parts) 1 0;
+            min-width: 0;
+        }
+
+        .steps > .more {
+            flex: none;
         }
 
         .optimization,

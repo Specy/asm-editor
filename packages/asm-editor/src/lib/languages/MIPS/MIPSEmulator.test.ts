@@ -2247,7 +2247,10 @@ tick:   jr      $ra
         let steps = 0
         while (emulator.pc !== BigInt(tick) && steps++ < 3000) await emulator.step()
         expect(emulator.pc).toBe(BigInt(tick))
-        const [frame] = emulator.callStack
+        //the handler the interrupt entered is a frame of its own, and the call it made the
+        //innermost one
+        expect(emulator.callStack.map((each) => each.name)).toEqual(['Interrupt handler', 'tick'])
+        const frame = emulator.callStack[emulator.callStack.length - 1]
         //where the call returns to, after the `jal` at the handler's first word
         expect(frame).toMatchObject({
             address: BigInt(tick),

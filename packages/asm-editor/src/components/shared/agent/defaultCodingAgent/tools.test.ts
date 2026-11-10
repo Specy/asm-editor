@@ -103,6 +103,10 @@ function createMockEmulator(): Emulator {
         check: vi.fn(async () => []),
         compile: vi.fn(async () => {}),
         step: vi.fn(async () => false),
+        stepOver: vi.fn(async () => ({ terminated: false, completed: true })),
+        stepOut: vi.fn(async () => ({ terminated: false, completed: true })),
+        stepping: false,
+        canStepOut: true,
         run: vi.fn(async () => InterpreterStatus.Terminated),
         undo: vi.fn(() => 1),
         pause: vi.fn(),
@@ -1500,6 +1504,80 @@ describe('DefaultCodingAgent Tools (Standard Agent Model)', () => {
                 success: true,
                 currentLine: 'main:2 |   401005:  ret'
             })
+        })
+    })
+
+    describe('step over and step out', () => {
+        it('steps over a line with the instruction limit a run has', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            const emulator = context.getEmulator()!
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.step.execute({
+                mode: 'over',
+                steps: 2
+            })) as unknown as ToolExecutionResult
+            expect(result).toMatchObject({
+                success: true,
+                mode: 'over',
+                stepsRequested: 2,
+                stepsExecuted: 2
+            })
+            expect(result.stoppedEarly).toBeUndefined()
+            expect(emulator.stepOver).toHaveBeenCalledTimes(2)
+            expect(emulator.stepOver).toHaveBeenCalledWith(1_000_000)
+            expect(emulator.step).not.toHaveBeenCalled()
+        })
+
+        it('says when a step out did not reach the return, and stops there', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            const emulator = context.getEmulator()!
+            vi.mocked(emulator.stepOut).mockResolvedValue({ terminated: false, completed: false })
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.step.execute({
+                mode: 'out',
+                steps: 3
+            })) as unknown as ToolExecutionResult
+            expect(result.success).toBe(true)
+            expect(result.stepsExecuted).toBe(1)
+            expect(result.stoppedEarly).toContain('did not finish')
+            expect(emulator.stepOut).toHaveBeenCalledTimes(1)
+        })
+
+        it('does not step out of a program with no routine to leave', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            const emulator = context.getEmulator()!
+            ;(emulator as { canStepOut: boolean }).canStepOut = false
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.step.execute({
+                mode: 'out'
+            })) as unknown as ToolExecutionResult
+            expect(result.stepsExecuted).toBe(0)
+            expect(result.stoppedEarly).toContain('no routine to step out of')
+            expect(emulator.stepOut).not.toHaveBeenCalled()
+        })
+
+        it('reports the error of a routine that failed', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            const emulator = context.getEmulator()!
+            vi.mocked(emulator.stepOver).mockImplementation(async () => {
+                ;(emulator as { errors: string[] }).errors = ['Address error at line 4']
+                return { terminated: true, completed: false }
+            })
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.step.execute({
+                mode: 'over'
+            })) as unknown as ToolExecutionResult
+            expect(result).toMatchObject({ success: false, errorKind: 'runtime_error' })
+        })
+
+        it('leaves a plain step as it was', async () => {
+            const { context } = createTestContext({ 'main.s': 'nop' })
+            const emulator = context.getEmulator()!
+            const tools = createDefaultCodingAgentTools(context)
+            const result = (await tools.step.execute({})) as unknown as ToolExecutionResult
+            expect(result.mode).toBeUndefined()
+            expect(emulator.step).toHaveBeenCalledOnce()
+            expect(emulator.stepOver).not.toHaveBeenCalled()
         })
     })
 

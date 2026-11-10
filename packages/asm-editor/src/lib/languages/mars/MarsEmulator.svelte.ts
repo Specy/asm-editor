@@ -89,6 +89,25 @@ type MarsPokeWrite =
           readonly new: number | string
       }
 
+/** What both Cores' `run` takes, each of which may be left out. */
+type MarsRunOptions = {
+    breakpoints?: number[]
+    limit?: number
+    untilCallDepth?: number
+    skipBreakpointAtPc?: boolean
+}
+
+/**
+ * One frame of either Core's Call stack: pushed by a call, or by a trap that entered the program's
+ * handler (`kind`), and returning to `returnAddress`. Addresses are the Core's signed words.
+ */
+type MarsCallFrame = {
+    readonly toAddress: number
+    readonly returnAddress: number
+    readonly sp: number
+    readonly kind: 'call' | 'exception' | 'interrupt'
+}
+
 /** One entry of the Core's undo history: an instruction with the back steps it pushed, or a Poke. */
 type MarsUndoGroup<S> =
     | {
@@ -116,7 +135,12 @@ type MarsEmulatorCore<S> = MarsCore &
         getProgramArgumentsLayout(): ArrayLike<number>
         step(): Promise<number>
         simulateWithLimit(limit: number): Promise<number>
-        simulateWithBreakpointsAndLimit(breakpoints: number[], limit: number): Promise<number>
+        /**
+         * The run call with every option, which every Core call of a slice goes through: the
+         * breakpoints, a halt limit, the Call stack depth that ends the call with `CALL_DEPTH`, and
+         * whether a breakpoint on the program counter is passed over (true when left out).
+         */
+        run(options?: MarsRunOptions): Promise<number>
         getStopReason(): number
         /**
          * The interrupt the last run call took most recently, `[pc, cause, handler]`, or empty: the
@@ -138,7 +162,10 @@ type MarsEmulatorCore<S> = MarsCore &
         getStatementsAtSourceLocation(sourcePath: string, sourceLine: number): MarsStatement[]
         getNextStatement(): MarsStatement | null
         getCompiledStatements(): MarsStatement[]
-        getCallStack(): { readonly pc: number; readonly toAddress: number; readonly sp: number }[]
+        /** The Call stack's frames, oldest first; with `max`, only the newest `max` of them. */
+        getCallStack(max?: number): ArrayLike<MarsCallFrame>
+        /** How many frames the Call stack holds, in constant time, counting past what it keeps. */
+        getCallDepth(): number
         getLabelAtAddress(address: number): string | null
         getLayoutItems(): ArrayLike<number>
         getSectionNames(): string[]
@@ -179,6 +206,7 @@ type MarsDialect<C> = {
         readonly NORMAL_TERMINATION: number
         readonly CLIFF_TERMINATION: number
         readonly PAUSE: number
+        readonly CALL_DEPTH: number
     }
     /** An assembled statement as an expansion decoration shows it, its registers named. */
     formatStatement(statement: string): string
@@ -315,8 +343,21 @@ export abstract class MarsEmulator<
      */
     protected abstract get target(): MarsTarget
 
-    /** One back step as a mutation of its instruction's row, or none for the Core's bookkeeping. */
-    protected abstract backstepToMutation(step: S): MutationOperation | null
+    /**
+     * One back step as a mutation of its instruction's row, or none for the Core's bookkeeping.
+     * `row` is what the row knows of its instruction (`rowFacts`), for the frames the Core pushed
+     * and popped in it.
+     */
+    protected abstract backstepToMutation(step: S, row: MarsRowFacts): MutationOperation | null
+
+    /**
+     * What a row's frame mutations need of its instruction, read once per row: by default the
+     * program goes on at the next word and the row is no trap entry, which a subclass that reads
+     * its Core's back steps says better.
+     */
+    protected rowFacts(pc: number, _steps: readonly S[]): MarsRowFacts {
+        return { pc, continuesAt: (pc + 4) >>> 0, trapEntry: false }
+    }
 
     /**
      * What raised the interrupt a Step took, as the Log names it, "Timer interrupt" for example:
@@ -640,24 +681,39 @@ export abstract class MarsEmulator<
         this.devices.flush()
     }
 
-    _getCallStack(): StackFrame[] {
+    /**
+     * The Core keeps its Call stack as the program runs: a call pushes a frame, and so does a trap
+     * that enters the program's handler; a return, the program arriving back at a frame's return
+     * address, and `eret` or `uret` take frames off ([stepping-plan.md](../../../../../../docs/design/stepping-plan.md)).
+     * It counts on past the frames it keeps.
+     */
+    _getCallDepth(): number {
+        return this.core?.getCallDepth() ?? 0
+    }
+
+    /**
+     * The Core's frames, outermost first; with `max`, only the newest `max`, which is all the Core
+     * copies out. A handler that no label names is called what it is, as a learner reads it.
+     */
+    _getCallStack(max?: number): StackFrame[] {
         const core = this.core
         if (!core) return []
-        return core.getCallStack().map((frame, i) => {
+        const frames = Array.from(max === undefined ? core.getCallStack() : core.getCallStack(max))
+        //each frame keeps the colour of its depth, whether or not the outer ones were read
+        const outer = Math.max(0, core.getCallDepth() - frames.length)
+        return frames.map((frame, index) => {
             const address = frame.toAddress
             const statement = this.statementAtAddress(address)
             //the Core's addresses are signed words: a MIPS handler's in `.ktext`, at 0x80000000
             //and above, is negative until it is read unsigned
             return {
                 address: BigInt(address >>> 0),
-                destination: BigInt(frame.pc >>> 0),
+                destination: BigInt(frame.returnAddress >>> 0),
                 sp: BigInt(frame.sp >>> 0),
-                name:
-                    core.getLabelAtAddress(address) ??
-                    `0x${(address >>> 0).toString(16).padStart(8, '0')}`,
+                name: core.getLabelAtAddress(address) ?? unnamedFrame(frame),
                 line: statement ? statement.sourceLine - 1 : -1,
                 file: statement?.sourcePath,
-                color: makeLabelColor(i, frame.sp)
+                color: makeLabelColor(outer + index, frame.sp)
             }
         })
     }
@@ -843,11 +899,12 @@ export abstract class MarsEmulator<
         //the Core's `pc` is a signed word: an address in MIPS's `.ktext`, a handler's, reads
         //negative until it is read unsigned, as the panels and Go to address read it
         const address = pc >>> 0
+        const row = this.rowFacts(address, steps)
         //the Core reports the back steps newest first, which is the order they are undone in;
         //a row reads as what the instruction did, so it lists them in the order they happened
         const mutations = [...steps]
             .reverse()
-            .map((step) => this.backstepToMutation(step))
+            .map((step) => this.backstepToMutation(step, row))
             .filter((mutation) => mutation !== null)
         //an interrupt taken ran no instruction: its row is the interrupt and the handler it went
         //to, "Timer interrupt → the handler at $80000180", with what taking it wrote below, so the
@@ -986,8 +1043,12 @@ export abstract class MarsEmulator<
     /**
      * One instruction. The step that runs an exit, or the program's last instruction, says so in its
      * stop reason, and an exited program runs nothing more until Undo.
+     *
+     * A step that takes an interrupt runs only the entry into the handler, before the instruction
+     * it was asked for, which has not run (`handlerEntry`): `getInterruptTaken` is not empty after
+     * exactly such a step, so a Step over runs the handler out and then the line.
      */
-    async _step(): Promise<{ terminated: boolean }> {
+    async _step(): Promise<{ terminated: boolean; handlerEntry?: boolean }> {
         const core = this.requireCore()
         this.startProgram()
         this.handlers.beginExecution()
@@ -1000,24 +1061,27 @@ export abstract class MarsEmulator<
         } finally {
             this.runningTime.stop(clock.now())
         }
-        this.noteInterrupt(core)
-        return { terminated: this.endsProgram(stop) }
+        const handlerEntry = this.noteInterrupt(core)
+        const terminated = this.endsProgram(stop)
+        return handlerEntry && !terminated ? { terminated, handlerEntry } : { terminated }
     }
 
     /**
      * Says in the Log when a Step took an interrupt, so that a person sees why the line jumped into
      * the handler: "Timer interrupt at 0x00400120 → handler at 0x80000180"
-     * ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md), decision 6).
+     * ([asmOS stage 2](../../../../../../docs/design/asmos-stage2.md), decision 6). Answers whether
+     * it did.
      */
-    private noteInterrupt(core: C): void {
+    private noteInterrupt(core: C): boolean {
         const taken = core.getInterruptTaken()
-        if (taken.length < 3) return
+        if (taken.length < 3) return false
         const hex = (address: number) => `0x${(address >>> 0).toString(16).padStart(8, '0')}`
         const handler = core.getLabelAtAddress(taken[2])
         this.addNote({
             tone: 'info',
             text: `${this.interruptName(taken[1])} at ${hex(taken[0])} → handler at ${hex(taken[2])}${handler ? ` (${handler})` : ''}`
         })
+        return true
     }
 
     /** A `RuntimeError` in MARS's or RARS's words and at the line it names; anything else as it says. */
@@ -1063,6 +1127,37 @@ export abstract class MarsEmulator<
     }
 
     /**
+     * A group of entries taken back together, a Step over's or a Step out's. The journals are
+     * keyed by the instruction's serial and each rewinds to before a serial, so one rewind to
+     * before the group's oldest instruction does what `_undo` does once per instruction, and the
+     * Core is asked to describe one entry rather than every one: its own undo of thirty thousand
+     * instructions takes milliseconds, and describing each of them took most of a second.
+     */
+    _undoEntries(count: number): void {
+        const core = this.requireCore()
+        const [oldest] = core.getUndoGroupsRange(count - 1, 1)
+        //a group that reaches back to a Poke, which has no serial to rewind the journals by, is
+        //taken back an entry at a time, as before: no step is made of one
+        if (oldest?.kind !== 'instruction') {
+            for (let i = 0; i < count; i++) this._undo()
+            return
+        }
+        const serial = oldest.serial
+        this.devices.rewind(() => {
+            for (let i = 0; i < count; i++) core.undo()
+        })
+        this.failedAt = null
+        this.fileSystemSession?.undoAfter(serial)
+        this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
+        //as in `_undo`: the sound devices first, then the Audio's own Undo, which sends what both
+        //took back, then the Input controller's events and the receiver's line
+        this.devices.undoSoundAfter(BigInt(serial) - 1n)
+        this._peripherals.audio.undoAfter(BigInt(serial) - 1n, () => this.devices.readSynthBlock())
+        this.devices.input.undoAfter(BigInt(serial) - 1n)
+        this.devices.afterUndo()
+    }
+
+    /**
      * Core calls that run the program, a step, a slice or a Testcase, which bring the bitmap
      * display up to date however they end and remember where a failure stopped them.
      */
@@ -1089,6 +1184,16 @@ export abstract class MarsEmulator<
      *
      * The bitmap display catches up once per slice, reading the blocks the Core noted as written;
      * a program that sleeps or waits for input flushes from the handler too.
+     *
+     * Every Core call of the slice is given the request's `untilCallDepth`, since the Core tests it
+     * as each call begins and after every instruction, ahead of its breakpoints, a pause and the
+     * limit: the routine a Step over entered has returned, or the one a Step out leaves, and the
+     * slice ends with `callDepth`. A sleep and the depth never fall on one instruction (an `ecall`
+     * moves no frame), and if they did the depth would win: the sleep is served inside the call by
+     * then, and the step it ends has no next frame to wait for. The request's `skipBreakpointAtPc`
+     * is given to every call until one has executed an instruction, and false after that
+     * ([ADR 0023](../../../../../../docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md)):
+     * a Breakpoint on the first instruction of a routine a Step over entered stops it there.
      */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         const core = this.requireCore()
@@ -1096,6 +1201,8 @@ export abstract class MarsEmulator<
         if (core.terminated) return { reason: 'terminated', instructions: 0 }
         const breakpoints = calculateBreakpoints(core, request.breakpoints)
         const { stopReasons } = this.dialect
+        const untilCallDepth = request.untilCallDepth
+        let skipBreakpointAtPc = request.skipBreakpointAtPc
         this.startProgram()
         this.handlers.beginExecution()
         this.slicing = true
@@ -1105,9 +1212,17 @@ export abstract class MarsEmulator<
         try {
             return await this.coreCall(() =>
                 this.pacer.run(request, this.dialect.instructionsPerMs, async (limit) => {
-                    const stop = await core.simulateWithBreakpointsAndLimit(breakpoints, limit)
+                    const stop = await core.run({
+                        breakpoints,
+                        limit,
+                        skipBreakpointAtPc,
+                        ...(untilCallDepth !== undefined ? { untilCallDepth } : {})
+                    })
                     const instructions = core.getLastRunInstructionCount()
+                    if (instructions > 0) skipBreakpointAtPc = false
                     if (this.endsProgram(stop)) return { outcome: 'terminated', instructions }
+                    if (stop === stopReasons.CALL_DEPTH)
+                        return { outcome: 'callDepth', instructions }
                     if (stop === stopReasons.BREAKPOINT)
                         return { outcome: 'breakpoint', instructions }
                     return { outcome: stop === stopReasons.PAUSE ? 'paused' : 'ran', instructions }
@@ -1153,6 +1268,13 @@ export abstract class MarsEmulator<
     }
 }
 
+/** A frame no label names: a handler by what entered it, a routine by its address. */
+function unnamedFrame(frame: MarsCallFrame): string {
+    if (frame.kind === 'exception') return 'Exception handler'
+    if (frame.kind === 'interrupt') return 'Interrupt handler'
+    return `0x${(frame.toAddress >>> 0).toString(16).padStart(8, '0')}`
+}
+
 /**
  * The status line of a `wfi` that waits, naming only what can end the wait: the timer, a key, both,
  * or, when nothing the program turned on can, what can.
@@ -1163,6 +1285,13 @@ function wfiStatus({ timer, key }: WfiWakers): string {
     if (key) return 'Waiting for a keyboard interrupt (wfi)'
     return 'No interrupt can end this wfi. Press Pause or Stop.'
 }
+
+/**
+ * What a History row knows of its instruction (`rowFacts`): its address, where the program went
+ * on from it, the address a frame it popped returned to, and whether it was the entry into a trap
+ * handler, whose frame the row says through the trap's own writes rather than as a call. Unsigned.
+ */
+export type MarsRowFacts = { pc: number; continuesAt: number; trapEntry: boolean }
 
 /** What the History row of an interrupt taken says of it (`interruptEntry`). */
 export type MarsInterruptEntry = {

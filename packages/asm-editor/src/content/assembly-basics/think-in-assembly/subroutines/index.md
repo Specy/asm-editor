@@ -57,6 +57,11 @@ Build this one and step through it. It is the C above, so there is a call inside
 program counter on the top right, and `a7`, the stack pointer, drop by 4 at every `bsr` and climb
 back at every `rts`.
 
+**Step** follows the program into each subroutine. When you only want a subroutine's result, press
+**Step over** on its `bsr` line instead: the whole subroutine runs, and the program stops on the
+line after the call. Inside a subroutine, **Step out** runs the rest of it and stops back in the
+code that called it.
+
 ```m68k|playground|pc|no-flags
     move.l #10, d0      ; x = 10
     bsr quadrupled      ; x = quadrupled(x)

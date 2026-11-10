@@ -27,6 +27,7 @@
     <CallStack
         {docked}
         stack={emulator.callStack}
+        depth={emulator.callStackDepth}
         onGoToInstruction={(address) => void session.revealAddress(address)}
         onGoToLabel={(label) => {
             if (!label.file) return

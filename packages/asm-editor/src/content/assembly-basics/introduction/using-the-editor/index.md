@@ -20,10 +20,11 @@ line the assembler does not understand is underlined in the code and Build stays
 fix it. Nothing has run yet: `d0` is still `00000000` and PC, the program counter above the
 registers, holds `00001000`, the address of the first instruction.
 
-Once it has built, four buttons take Build's place:
+Once it has built, these buttons take Build's place:
 
 - **Step** runs one instruction and pauses. Press it once: `d0` changes from `00000000` to `00000001`, and PC advances from `00001000` to `00001002`. This instruction occupies two bytes. A 68000 instruction can occupy two to ten bytes; all five in this example occupy two.
 - **Run** runs the program to the end, or to the next breakpoint. While a program is running that same button says **Pause**. Pausing makes Run, Step and Undo available, just as at a breakpoint.
+- **Step over** and **Step out** are the **over** and **out** parts of the Step button. They help in programs that call subroutines. Step over runs the line you are on, and the whole subroutine if the line calls one, then pauses on the next line. Step out runs the rest of the subroutine you are in and pauses back in the code that called it. This program calls no subroutine, so Step over does the same as Step, and Step out is disabled.
 - **Undo** takes the last instruction back, one press per instruction. The editor keeps the last 100 steps, which is a setting you can raise.
 - **Stop** throws the run away: the registers go back to zero and the only button left is **Build** again.
 
@@ -72,7 +73,8 @@ there but stepping backwards is not usable yet.
 like the editors programmers use every day: a column of icons down the left opens panels beside
 it, the code sits in the middle with each open file as a tab above it, and what the program prints
 appears under the code. **Build** floats at the bottom left of the code, and once the program is
-built it becomes **Stop**, with **Run**, **Undo** and **Step** beside it. Building also opens a
+built it becomes **Stop**, followed by **Run**, **Undo**, and **Step** with its **over** and **out**
+parts. Building also opens a
 column on the right:
 
 - **Registers** and **Memory**, side by side. Memory shows one page of bytes at a time. Type an address in its box or use the arrows to page through, drag across a few bytes to see the number they make (signed as well as unsigned), and press the text button to read them as characters instead of hexadecimal. The byte the stack pointer is on is marked.

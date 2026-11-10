@@ -7,7 +7,7 @@ import {
 
 /**
  * The slice loop of the MARS and RARS derived adapters (MIPS and RISC-V), whose Cores serve a
- * program's waits *inside* a `simulate*` call: a `sleep` syscall suspends the pending call until the
+ * program's waits *inside* a `run` call: a `sleep` syscall suspends the pending call until the
  * clock settles the handler's promise, and a read until it is answered
  * ([ADR 0007](../../../../../../docs/adr/0007-generic-emulator-run-scheduling.md),
  * [ADR 0010](../../../../../../docs/adr/0010-program-time-without-clock-pacing.md)).
@@ -27,7 +27,7 @@ import {
  * longer. A chunk is sized on what the last one cost in wall time.
  *
  * Re-entering the Core is cheap enough for this. Measured under node with the shipped undo history:
- * a `simulateWithBreakpointsAndLimit` call costs about 5 µs on MIPS, which reaches its full 1 100
+ * a `run` call (then `simulateWithBreakpointsAndLimit`) cost about 5 µs on MIPS, which reaches its full 1 100
  * instructions a millisecond from 64-instruction chunks, and the RISC-V Core spends 40 µs on every
  * instruction, so its throughput is the same at any chunk size from one instruction up.
  */
@@ -45,10 +45,12 @@ export const MAX_MARS_CHUNK_GROWTH = 2
 const MIN_MEASURABLE_CHUNK_MS = 0.01
 
 /**
- * Why one chunk came back: `ran` is the halt limit, `paused` a sleep (the handler's `pause()`).
- * Termination and breakpoints are the adapter's call, because only it can read its Core's answer.
+ * Why one chunk came back: `ran` is the halt limit, `paused` a sleep (the handler's `pause()`),
+ * `callDepth` the Call stack back at the depth a Step over or a Step out asked for. Termination,
+ * breakpoints and the depth are the adapter's call, because only it can read its Core's answer;
+ * all three end the slice with that reason.
  */
-export type MarsChunkOutcome = 'ran' | 'paused' | 'breakpoint' | 'terminated'
+export type MarsChunkOutcome = 'ran' | 'paused' | 'breakpoint' | 'terminated' | 'callDepth'
 
 /** One chunk's outcome and how many instructions the Core says it executed. */
 export type MarsChunk = { outcome: MarsChunkOutcome; instructions: number }

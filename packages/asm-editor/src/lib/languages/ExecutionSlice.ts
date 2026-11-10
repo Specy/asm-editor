@@ -40,8 +40,15 @@ export type ExecutionSliceRequest = {
      * yet, so a breakpoint on it has to stop the run; skipping it there is what made the
      * instruction after every M68K trap unbreakable.
      *
-     * An adapter whose Core checks its breakpoints *after* executing an instruction (MARS, RARS and
-     * the Z80 machine) already behaves this way and ignores it.
+     * The skip is spent by the first instruction that executes, not by the first call: a call that
+     * executed nothing, a Z80 `in` rolled back to wait for its input, leaves it for the call that
+     * runs the instruction. The scheduler keeps it set until a slice reports progress, and an
+     * adapter that re-enters its Core keeps it until the Core has executed an instruction.
+     *
+     * False on a slice that starts on an instruction which has not run yet and may be a
+     * Breakpoint's: the first of a routine a Step over has just entered. Every Core honours it,
+     * MARS, RARS and the Z80 machine with a check before their first instruction, since they check
+     * their breakpoints *after* executing one.
      */
     skipBreakpointAtPc: boolean
     /**
@@ -66,6 +73,16 @@ export type ExecutionSliceRequest = {
      * rather than every slice of the run.
      */
     speedCorrection: number
+    /**
+     * The Call stack depth that ends the slice, for a Step over or a Step out
+     * ([stepping-plan.md](../../../../../docs/design/stepping-plan.md)): the Core stops, with
+     * `callDepth`, before executing whenever its Call stack holds this many frames or fewer. It is
+     * tested when each Core call begins and after every instruction, ahead of the Breakpoints and
+     * the budget, so the adapter passes it to every call it makes in the slice, and a slice that
+     * ends on its budget never ends on the instruction that brought the depth back. Absent for a
+     * Run, which stops at no depth.
+     */
+    untilCallDepth?: number
 }
 
 /**
@@ -74,6 +91,8 @@ export type ExecutionSliceRequest = {
  *
  * - `budget`: the slice ran out of instructions or time. Nothing is wrong, run the next slice.
  * - `breakpoint`: the Core stopped on one of the requested breakpoints.
+ * - `callDepth`: the Call stack came back to the depth the request asked for (`untilCallDepth`):
+ *   the routine a Step over entered has returned, or the one a Step out leaves.
  * - `codeWrite`: the program wrote into its own code, and the person asked a Run to pause after
  *   that instruction (the M68K Preference "Pause when a program writes to its code"). It ends the
  *   run as a breakpoint does, after the instruction rather than before one; the adapter has
@@ -93,6 +112,7 @@ export type ExecutionSliceRequest = {
 export type ExecutionSliceReason =
     | 'budget'
     | 'breakpoint'
+    | 'callDepth'
     | 'codeWrite'
     | 'paused'
     | 'terminated'

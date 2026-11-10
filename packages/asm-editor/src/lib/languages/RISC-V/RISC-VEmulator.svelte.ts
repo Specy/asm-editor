@@ -19,7 +19,11 @@ import {
     RegisterSize
 } from '#lib/languages/commonLanguageFeatures.svelte.ts'
 import type { MarsTarget } from '#lib/languages/mars/marsCheck.ts'
-import { MarsEmulator, type MarsInterruptEntry } from '#lib/languages/mars/MarsEmulator.svelte.ts'
+import {
+    MarsEmulator,
+    type MarsInterruptEntry,
+    type MarsRowFacts
+} from '#lib/languages/mars/MarsEmulator.svelte.ts'
 import { memoryBackstepMutation, registerBackstepMutation } from '#lib/languages/mars/marsUndo.ts'
 import { exitStepText, randomStreamStepText } from '#lib/languages/mars/marsHandlers.ts'
 import type { BuildInput } from '#lib/projectFiles.ts'
@@ -254,10 +258,29 @@ class AsmEditorRISCVEmulator extends MarsEmulator<JsRiscV, JsBackStep, RISCVRegi
     }
 
     /**
+     * Where the program went on from a row's instruction, the address its jump set or else the next
+     * word, and whether the row is a trap's entry into the handler, an interrupt's or an
+     * exception's: the one step that writes `ucause` and `uepc` together.
+     */
+    protected rowFacts(pc: number, steps: readonly JsBackStep[]): MarsRowFacts {
+        let continuesAt = (pc + 4) >>> 0
+        let cause = false
+        let epc = false
+        for (const step of steps) {
+            if (step.action === BackStepAction.PC_RESTORE)
+                continuesAt = Number(BigInt.asUintN(32, BigInt(step.newValue)))
+            if (step.action !== BackStepAction.CONTROL_AND_STATUS_REGISTER_RESTORE) continue
+            if (step.param1 === CSR_UCAUSE) cause = true
+            else if (step.param1 === CSR_UEPC) epc = true
+        }
+        return { pc, continuesAt, trapEntry: cause && epc }
+    }
+
+    /**
      * One back step as a mutation of its instruction's row, or none for the Core's own bookkeeping.
      * Every action has a case, so a new one is a type error here rather than a row nobody chose.
      */
-    protected backstepToMutation(step: JsBackStep): MutationOperation | null {
+    protected backstepToMutation(step: JsBackStep, row: MarsRowFacts): MutationOperation | null {
         switch (step.action) {
             case BackStepAction.REGISTER_RESTORE:
                 //`registers[i].name` is `_registerNames[i]` by construction, reading the names
@@ -308,13 +331,25 @@ class AsmEditorRISCVEmulator extends MarsEmulator<JsRiscV, JsBackStep, RISCVRegi
             //the cycle and instret counters are bookkeeping the program did not ask for, which the
             //Core now takes back with each instruction's other entries rather than in an entry of
             //its own, so the action never comes; nor is the heap break the Core keeps of its
-            //layout a mutation the diff should show, nor a call or return restore, the debugger's
-            //bookkeeping of its call stack, which the Call stack panel shows
+            //layout a mutation the diff should show
             case BackStepAction.CONTROL_AND_STATUS_COUNTERS_DECREMENT:
             case BackStepAction.HEAP_RESTORE:
-            case BackStepAction.CALL_RESTORE:
-            case BackStepAction.RETURN_RESTORE:
                 return null
+            //a frame the instruction pushed, the routine it called: "Pushed call from … to …". A
+            //trap's entry says what it did through its own writes, and an interrupt's row names it
+            case BackStepAction.CALL_RESTORE:
+                if (row.trapEntry) return null
+                return {
+                    type: 'PushCallStack',
+                    value: { from: BigInt(row.pc), to: BigInt(step.param1 >>> 0) }
+                }
+            //a frame the instruction took off, one entry each when it took several, and where the
+            //program went on: a `ret`, a `uret`, or the program back at the frame's return address
+            case BackStepAction.RETURN_RESTORE:
+                return {
+                    type: 'PopCallStack',
+                    value: { from: BigInt(row.pc), to: BigInt(row.continuesAt) }
+                }
             //a store into `timecmp` arms the timer, and taking its interrupt disarms it
             case BackStepAction.TIMER_ARMED_RESTORE:
                 return { type: 'Other', value: step.param1 ? 'Timer disarmed' : 'Timer armed' }

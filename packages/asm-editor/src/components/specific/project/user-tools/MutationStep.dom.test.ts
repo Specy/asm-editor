@@ -377,6 +377,51 @@ describe('the flags of an instruction row', () => {
     })
 })
 
+describe('the row of a Step over or a Step out', () => {
+    function row(stretch: NonNullable<ExecutionStep['stretch']>) {
+        const target = document.createElement('div')
+        document.body.appendChild(target)
+        const step: ExecutionStep = {
+            kind: 'instruction',
+            mutations: [],
+            pc: 4096,
+            line: 3,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            stretch
+        }
+        const app = mount(MutationStep, { target, props: { step, flags: [], language: 'MIPS' } })
+        flushSync()
+        const element = target.querySelector<HTMLElement>('.stretch')!
+        const read = { text: element.textContent?.trim(), title: element.title }
+        void unmount(app)
+        target.remove()
+        return read
+    }
+
+    it('names the routine a Step over ran', () => {
+        expect(row({ kind: 'over', library: 'draw_sprite', instructions: 1234 })).toEqual({
+            text: 'Stepped over draw_sprite: 1,234 instructions',
+            title: 'One Undo takes back the whole step'
+        })
+    })
+
+    it('names no routine for a line that called none', () => {
+        expect(row({ kind: 'over', library: '', instructions: 3 }).text).toBe(
+            'Stepped over 3 instructions'
+        )
+    })
+
+    it('names the routine a Step out left', () => {
+        expect(row({ kind: 'out', library: 'draw_sprite', instructions: 310 }).text).toBe(
+            'Stepped out of draw_sprite: 310 instructions'
+        )
+        expect(row({ kind: 'out', library: '', instructions: 310 }).text).toBe(
+            'Stepped out: 310 instructions'
+        )
+    })
+})
+
 describe('irreversible History rows', () => {
     it('retains the row and explains why its grouped call cannot be undone', async () => {
         const target = document.createElement('div')

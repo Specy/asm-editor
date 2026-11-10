@@ -7,9 +7,9 @@ import type { ProjectDisplay } from '#lib/languages/mars/marsDisplay.ts'
 /**
  * The Call stack panel after Step back shows what it showed before the step, on MIPS and RISC-V:
  * across a call, a return, a call through a pointer, a recursion whose calls return to a branch,
- * and an interrupt whose handler calls a function of its own. The Cores journal their call frames
- * with each instruction's other restores, so an Undo puts back the frame a return popped, with the
- * registers of its own call, and takes off the one a call pushed.
+ * and an interrupt whose handler, a frame of its own, calls a function of its own. The Cores
+ * journal their call frames with each instruction's other restores, so an Undo puts back the frame
+ * a return popped, with the registers of its own call, and takes off the one a call pushed.
  */
 
 const SMALL: ProjectDisplay = {
@@ -121,18 +121,25 @@ describe.each(['MIPS', 'RISC-V'] as const)('the call stack after Step back on %s
             await emulator.step()
             shown.push(panel())
             //the History row of a call or a return lists what the program wrote, the link register
-            //and the program counter, and nothing of the frame the Core journals beside them
+            //and the program counter, the frame it pushed or popped where the Core reports one, and
+            //an interrupt's row the interrupt; nothing else of what the Core journals beside them
             if (shown.at(-1)!.length !== shown.at(-2)!.length)
                 for (const mutation of emulator.latestSteps[0].mutations)
-                    expect(mutation.type).toBe('WriteRegister')
+                    expect([
+                        'WriteRegister',
+                        'PushCallStack',
+                        'PopCallStack',
+                        'TakeException'
+                    ]).toContain(mutation.type)
         }
         expect(emulator.errors).toEqual([])
         expect(emulator.terminated).toBe(true)
         const names = shown.map((frames) => frames.map((frame) => frame.name).join(' > '))
         expect(names).toContain('a > b')
         expect(names).toContain('r > r > r > r')
-        //the handler's call, on top of the frames of the code it interrupted
-        expect(names.some((stack) => /^r( > r)* > kf$/.test(stack))).toBe(true)
+        //the handler's call, on top of the handler's own frame and the frames of the code it
+        //interrupted
+        expect(names.some((stack) => /^r( > r)* > handler > kf$/.test(stack))).toBe(true)
         expect(names.at(-1)).toBe('')
 
         for (let step = shown.length - 1; step > 0; step--) {

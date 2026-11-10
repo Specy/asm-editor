@@ -20,7 +20,8 @@ import {
     type StackFrame as CoreStackFrame,
     type SystemRegisters,
     S68k,
-    Size
+    Size,
+    StopReason
 } from '@specy/s68k'
 import { type CompileResult, type Instruction } from '#lib/languages/BaseEmulator.svelte.ts'
 import {
@@ -830,9 +831,17 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      * Its vector is where the table was when it was taken, the frame's own VBR, which a handler
      * that moves the table leaves as it was.
      */
-    _getCallStack(): StackFrame[] {
+    _getCallStack(max?: number): StackFrame[] {
+        const interpreter = this.interpreter
+        if (!interpreter) return []
+        const frames = interpreter.getCallStack(max)
+        //a frame keeps the colour of its place in the whole Call stack, which the newest `max`
+        //of a deeper one are not the first frames of
+        const first =
+            max === undefined ? 0 : Math.max(0, interpreter.getCallDepth() - frames.length)
         return (
-            this.interpreter?.getCallStack().map((frame, i) => {
+            frames.map((frame, at) => {
+                const i = first + at
                 const vector = frame.kind === 'exception' ? frame.vector : undefined
                 const handler =
                     frame.label_location === undefined
@@ -860,6 +869,11 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 }
             }) ?? []
         )
+    }
+
+    /** How many frames the Call stack holds, which a Step over and a Step out end on. */
+    _getCallDepth(): number {
+        return this.interpreter?.getCallDepth() ?? 0
     }
 
     /**
@@ -1080,10 +1094,55 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             .map((value) => BigInt(value))
     }
 
+    /**
+     * How many entries the Core's history holds, and how many it has recorded since the Build: what
+     * lets a Step over or a Step out be one group of the Undo ledger, undone whole or left as
+     * plain entries. The count is of history entries, an IRQ taken among them, where the Core's
+     * count of instructions leaves that one out.
+     */
+    _undoDepth(): number {
+        return this.interpreter?.getUndoDepth() ?? 0
+    }
+
+    _getInstructionsExecuted(): bigint {
+        return BigInt(this.interpreter?.getRecordedSteps() ?? 0)
+    }
+
+    /**
+     * Whether the `count` entries below the newest `skip` can all be taken back: the Core holds
+     * them, and neither the Screen's journal nor the FileSystem's has dropped, under its budget,
+     * what the oldest of them needs. Asked before a group is undone, so that it is undone whole or
+     * not at all.
+     */
+    _canUndoHistoryRange(skip: number, count: number): boolean {
+        const interpreter = this.interpreter
+        if (!interpreter || count <= 0) return false
+        if (interpreter.getUndoDepth() < skip + count) return false
+        //the oldest entry that hung effects on a journal: a Poke hung none
+        for (let back = skip + count - 1; back >= skip; back--) {
+            const [step] = interpreter.getUndoHistory(1, back)
+            if (!step || step.kind === 'poke') continue
+            return (
+                (this.screenInstructions?.canUndoAfter(step.id - 1) ?? true) &&
+                (this.fileSystemSession?.canUndoAfter(step.id) ?? true)
+            )
+        }
+        return true
+    }
+
+    _canUndoSteps(count: number): boolean {
+        return this._canUndoHistoryRange(0, count)
+    }
+
     _getUndoHistory(max: number): ExecutionStep[] {
+        return this._getUndoHistoryRange(0, max)
+    }
+
+    /** `max` entries of the history below the newest `skip`, newest first. */
+    _getUndoHistoryRange(skip: number, max: number): ExecutionStep[] {
         const interpreter = this.interpreter
         if (!interpreter) return []
-        const steps = interpreter.getUndoHistory(max)
+        const steps = interpreter.getUndoHistory(max, skip)
         //read only when a step ran on a line, which is when the line's own text could mislead
         const changed = steps.some((step) => step.kind === 'instruction' && step.location)
             ? this.changedCodeAt()
@@ -1328,7 +1387,7 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         )
     }
 
-    async _step(): Promise<{ terminated: boolean }> {
+    async _step(): Promise<{ terminated: boolean; handlerEntry?: boolean }> {
         const interpreter = this.requireInterpreter()
         const execution = this.executionController.capture()
         //a processor `stop` stopped runs nothing until an IRQ above its mask comes, and a Step,
@@ -1342,7 +1401,12 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
             })
             return { terminated: false }
         }
+        const executedBefore = interpreter.getExecutedInstructions()
         interpreter.step()
+        //an IRQ ready is taken instead of the instruction, as a step of its own that executes
+        //none: the line the Step was pressed on is still to run, which a Step over goes on to
+        const handlerEntry =
+            !interpreter.hasTerminated() && interpreter.getExecutedInstructions() === executedBefore
         if (interpreter.getStatus() === CoreInterpreterStatus.Interrupt) {
             const answer = this.handleInterrupt(
                 interpreter.getCurrentInterrupt(),
@@ -1354,7 +1418,10 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         }
         this.takeSynthWrites(interpreter)
         this.executionController.ensureCurrent(execution)
-        return { terminated: interpreter.hasTerminated() }
+        return {
+            terminated: interpreter.hasTerminated(),
+            ...(handlerEntry ? { handlerEntry } : {})
+        }
     }
 
     _stringifyError(error: unknown, line?: number): string {
@@ -1438,6 +1505,34 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     }
 
     /**
+     * A group of entries taken back together, a Step over's or a Step out's. The journals are
+     * keyed by step id and each rewinds to before an id, so one rewind to before the group's
+     * oldest step does what `_undo` does once per step, and the Core is asked to describe one
+     * entry rather than every one.
+     */
+    _undoEntries(count: number): void {
+        const interpreter = this.requireInterpreter()
+        //the oldest entry that hung effects on a journal; a Poke hung none, and has an id of its
+        //own that no journal knows
+        let oldest: number | undefined
+        for (let back = count - 1; back >= 0 && oldest === undefined; back--) {
+            const [step] = interpreter.getUndoHistory(1, back)
+            if (step && step.kind !== 'poke') oldest = step.id
+        }
+        //without each step being described back, which is most of what `undo()` costs
+        interpreter.undoMany(count)
+        //a timer a step set, or turned off, is as the Core now has it
+        this.irqTimers.sync(interpreter.getMachineState().autoIrqs, this._peripherals.clock.now())
+        //the Synth plays its block as the Core rewound it
+        const readSynth = () => interpreter.readMemoryBytes(SYNTH_BASE, SYNTH_BLOCK_SIZE)
+        if (oldest === undefined) return this._peripherals.audio.resyncSynth(readSynth)
+        this.screenInstructions?.undoAfter(oldest - 1)
+        this.fileSystemSession?.undoAfter(oldest)
+        this._peripherals.terminal.undoAfter(oldest - 1)
+        this._peripherals.audio.undoAfter(oldest - 1, readSynth)
+    }
+
+    /**
      * The Core counts the instructions it runs, so a slice's progress is the difference of two
      * readings whatever stopped each call: a trap, a `simhalt`, a store into the Synth's block. The
      * budget is the halt limit of every call, less what the slice has run, and an exhausted one is
@@ -1470,6 +1565,9 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         //`runWithBreakpoints` skips the instruction it starts on, and re-entering after a trap with
         //that skip on is what made the instruction after every trap unbreakable
         let startsTheRun = request.skipBreakpointAtPc
+        //a Step over's or a Step out's depth, which every call of the slice is given: the Core
+        //tests it as each begins and after every step, ahead of its Breakpoints and its limit
+        const untilCallDepth = request.untilCallDepth
         //a store into the program's own code pauses the Run after it, unless the person turned
         //that off; a Testcase and a Step never pause for it
         const stopOnCodeWrite = this.pausesOnCodeWrite
@@ -1499,9 +1597,15 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                 if (hasBreakpoints || stopOnCodeWrite) {
                     const status = interpreter.runWithBreakpoints(remaining, {
                         skipBreakpointAtPc: startsTheRun,
-                        stopOnCodeWrite
+                        stopOnCodeWrite,
+                        untilCallDepth
                     })
-                    startsTheRun = false
+                    //the skip is spent by an instruction that ran, not by a call that ran none
+                    if (ran() > 0) startsTheRun = false
+                    //the Call stack is back to the depth the step asked for
+                    if (interpreter.getStopReason() === StopReason.CallDepth) {
+                        return { reason: 'callDepth', instructions: ran() }
+                    }
                     //the instruction that wrote into code has run, and the next one has not
                     if (status === CoreInterpreterStatus.CodeWrite) {
                         return this.pauseForCodeWrite(interpreter.getCodeWrite(), ran())
@@ -1514,7 +1618,13 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
                         return { reason: 'breakpoint', instructions: ran() }
                     }
                 } else {
-                    interpreter.runWithLimit(remaining)
+                    interpreter.runWithLimit(remaining, { untilCallDepth })
+                    if (
+                        untilCallDepth !== undefined &&
+                        interpreter.getStopReason() === StopReason.CallDepth
+                    ) {
+                        return { reason: 'callDepth', instructions: ran() }
+                    }
                 }
             } catch (error) {
                 if (!isExecutionLimitError(error)) throw error

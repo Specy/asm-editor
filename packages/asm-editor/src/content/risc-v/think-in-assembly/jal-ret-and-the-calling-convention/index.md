@@ -50,6 +50,10 @@ end:
 `s0` finishes at 30. Step through the `jal`: `ra` becomes `0040000C`, the address of the `mv` after
 the call. The `ret` copies that address into the program counter, and `main` continues there.
 
+**Step** on the `jal` follows the program into `triple`. **Step over** on that line runs all of
+`triple` and stops at the `mv` after the call. Inside `triple`, **Step out** runs the rest of it and
+stops at that same `mv`.
+
 `triple` is a **leaf subroutine** because it does not call another subroutine. Its `ra` remains
 unchanged between entry and `ret`, so `triple` needs no stack frame.
 

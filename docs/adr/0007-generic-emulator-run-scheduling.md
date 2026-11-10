@@ -18,3 +18,7 @@ state and undo history, just as reaching a breakpoint does. Once Run returns, St
 available and Run continues from the current PC with a new instruction limit. No suspended Run
 promise remains. Execution commands are serialized so a quick Step followed by Run cannot enter
 the Core concurrently. A pending program wait completes before Pause releases the Core.
+
+## Update 2026-11-10: a slice can ask for a Call stack depth
+
+A slice request carries an optional `untilCallDepth`, and a slice can end with `callDepth`: the Core stopped because its Call stack came back to that depth, which is how a Step over and a Step out end ([ADR 0079](./0079-a-step-over-and-a-step-out-end-at-a-call-stack-depth.md)). The scheduler is unchanged otherwise: it passes the same number to every slice of the run, and treats `callDepth` as it treats a breakpoint. Whether the run should instead be one call to the Core that calls back every so often, so that nobody using a Core has to know about slices, was raised and left for later; what was found is in [stepping-plan.md](../design/stepping-plan.md).

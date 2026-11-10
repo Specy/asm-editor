@@ -4663,6 +4663,12 @@ export class WorkbenchSession {
      */
     async run(targets?: readonly SourceBreakpoint[]) {
         this.wakeAudio()
+        //Run's button stays Run for the first moments of a Step over or a Step out
+        //(`stepRunning`); pressed then, it is the Pause it is about to turn into
+        if (this.emulator?.stepping) {
+            this.emulator.pause()
+            return
+        }
         if (this.building || this.running || this.compiling) return
         this.running = true
         this.testcasesResult = []
@@ -4689,11 +4695,31 @@ export class WorkbenchSession {
     }
 
     async step() {
+        await this.stepWith(() => this.core.step())
+    }
+
+    /** Step over: the line the program is stopped on, with the routine it calls. */
+    async stepOver() {
+        await this.stepWith(() => this.core.stepOver())
+    }
+
+    /** Step out: the rest of the routine the stop is shown in. */
+    async stepOut() {
+        if (!this.emulator?.canStepOut) return
+        await this.stepWith(() => this.core.stepOut())
+    }
+
+    /**
+     * One of the three steps, from its button and its shortcut alike. A Step over or a Step out in
+     * flight owns the Core, and the Emulator refuses another command until it ends rather than
+     * queueing it, so a held key stops stepping when it is released.
+     */
+    private async stepWith(command: () => Promise<unknown>) {
         this.wakeAudio()
         //the Build's run to `main` owns the Core until it stops there, as a Run does
-        if (this.building || this.running) return
+        if (this.building || this.running || this.emulator?.stepping) return
         try {
-            await this.core.step()
+            await command()
             this.revealCurrentInstruction()
         } catch (e) {
             console.error(e)
@@ -4845,7 +4871,7 @@ export class WorkbenchSession {
         e.preventDefault()
         e.stopPropagation()
         this.pressedKeys.delete(e.code)
-        if (e.repeat && shortcut.type !== ShortcutAction.Step) return
+        if (e.repeat && !repeatsWhileHeld(shortcut.type)) return
         this.runShortcut(shortcut.type)
     }
 
@@ -4913,7 +4939,7 @@ export class WorkbenchSession {
         this.pressedKeys.set(e.code, true)
         const code = Array.from(this.pressedKeys.keys()).join('+')
         const shortcut = shortcutsStore.get(code)
-        if (e.repeat && shortcut?.type !== ShortcutAction.Step) return
+        if (e.repeat && !(shortcut && repeatsWhileHeld(shortcut.type))) return
         const target = e.target as HTMLElement | null
         if (
             target?.tagName === 'INPUT' ||
@@ -4956,8 +4982,9 @@ export class WorkbenchSession {
                 if (!emulator) break
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                //a Step waiting at a RISC-V `wfi` takes the Pause too, which ends the wait
-                if (this.running || emulator.stepWaiting) emulator.pause()
+                //a Step waiting at a RISC-V `wfi` takes the Pause too, which ends the wait, and so
+                //does a Step over or a Step out that is running its routine
+                if (this.running || emulator.stepWaiting || emulator.stepping) emulator.pause()
                 else void this.run()
                 break
             }
@@ -4970,17 +4997,23 @@ export class WorkbenchSession {
                 else this.clearExecution()
                 break
             }
-            case ShortcutAction.Step: {
+            case ShortcutAction.Step:
+            case ShortcutAction.StepOver:
+            case ShortcutAction.StepOut: {
                 if (!emulator) break
-                if (this.running || this.building || emulator.stepWaiting) break
+                if (this.running || this.building || emulator.stepWaiting || emulator.stepping)
+                    break
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
-                void this.step()
+                if (type === ShortcutAction.StepOver) void this.stepOver()
+                else if (type === ShortcutAction.StepOut) void this.stepOut()
+                else void this.step()
                 break
             }
             case ShortcutAction.Undo: {
                 if (!emulator) break
-                if (this.running || this.building || emulator.stepWaiting) break
+                if (this.running || this.building || emulator.stepWaiting || emulator.stepping)
+                    break
                 if (emulator.interrupt !== undefined || !emulator.canExecute || !emulator.canUndo)
                     break
                 emulator.undo()
@@ -4989,6 +5022,14 @@ export class WorkbenchSession {
             }
         }
     }
+}
+
+/**
+ * Whether a shortcut goes on running while its key is held: the two steps a person holds to walk
+ * through a program. Step out is one press, since the next would leave another routine.
+ */
+function repeatsWhileHeld(type: ShortcutAction): boolean {
+    return type === ShortcutAction.Step || type === ShortcutAction.StepOver
 }
 
 /** What the Search panel reads of a session, as it is when read. */

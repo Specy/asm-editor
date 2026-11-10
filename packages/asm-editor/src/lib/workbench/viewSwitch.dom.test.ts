@@ -164,6 +164,8 @@ describe('the view switch', () => {
             'Run',
             'Undo',
             'Step',
+            'Step over',
+            'Step out',
             'Disassemble',
             'Decompile',
             'Hex'
@@ -336,7 +338,15 @@ describe('the execution dock', () => {
         show(session, 'notes.txt')
         expect(session.controlsGroup).toBe(group)
         expect(group.hasDock(true)).toBe(true)
-        expect(read().buttons).toEqual(['Stop', 'Run', 'Undo', 'Step', 'Test'])
+        expect(read().buttons).toEqual([
+            'Stop',
+            'Run',
+            'Undo',
+            'Step',
+            'Step over',
+            'Step out',
+            'Test'
+        ])
     })
 
     it('puts the controls beside an Executable rather than a document', () => {
