@@ -62,6 +62,7 @@ function fixture(
     }
     const session = {
         emulator,
+        core: emulator,
         project: { language: options.language ?? 'X86' },
         revealAddress: vi.fn(async () => {})
     } as unknown as WorkbenchSession

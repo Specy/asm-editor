@@ -13,11 +13,16 @@ import type { ProgramSymbols } from '#lib/languages/programSymbols.ts'
 import type { BuildOutputHost } from '#lib/buildOutput.ts'
 import { WorkbenchSession, type WorkbenchSessionHost } from '../WorkbenchSession.svelte'
 
-/** Reactive emulator boundary without a Core or a language worker. */
+/**
+ * Reactive emulator boundary without a Core or a language worker. With `pendingCore`, the session
+ * is made while the Emulator's Core still loads, as the Workbench makes it, and the test lets it
+ * arrive (`arrive`) or fail to load (`failToLoad`).
+ */
 export function editorGroupsFixture(
     language: AvailableLanguages = 'RISC-V',
     data: StoredProject = {},
-    host: Partial<WorkbenchSessionHost> = {}
+    host: Partial<WorkbenchSessionHost> = {},
+    { pendingCore = false }: { pendingCore?: boolean } = {}
 ) {
     const project = makeProject({
         language,
@@ -88,18 +93,32 @@ export function editorGroupsFixture(
         setGlobalMemorySize: (_pageSize: number, _rowSize: number) => {},
         clear: () => {}
     })
+    let arrive: () => void = () => {}
+    let failToLoad: (error: unknown) => void = () => {}
+    const arrival = new Promise<Emulator>((resolve, reject) => {
+        arrive = () => resolve(emulator as unknown as Emulator)
+        failToLoad = reject
+    })
     let session!: WorkbenchSession
     const disposeEffects = $effect.root(() => {
-        session = new WorkbenchSession(project, emulator as unknown as Emulator, {
-            readonly: false,
-            canEditTestcases: true,
-            ...host
-        })
+        session = new WorkbenchSession(
+            project,
+            pendingCore ? arrival : (emulator as unknown as Emulator),
+            {
+                readonly: false,
+                canEditTestcases: true,
+                ...host
+            }
+        )
     })
     return {
         project,
         emulator,
         session,
+        /** Lets a `pendingCore` Emulator arrive; the session takes it a microtask later. */
+        arrive,
+        /** Fails a `pendingCore` Emulator's load. */
+        failToLoad,
         /** The Breakpoints the Core would run with, as the session resolves them. */
         coreBreakpoints: () => breakpointResolver?.(emulator.breakpoints) ?? emulator.breakpoints,
         /** What the session does with a linked program, as an x86 Build hands it over. */

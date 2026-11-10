@@ -30,7 +30,7 @@
         onOpenFile={(path) => session.selectFile(path)}
         editorLanguage={project.language}
         activePath={session.displayedPath}
-        emulatorInstance={session.emulator}
+        emulatorInstance={session.emulator ?? null}
         canUpdateLanguage={false}
         additionalInstructions={projectAgentInstructions(project.language)}
         workflows={PROJECT_AGENT_WORKFLOWS}

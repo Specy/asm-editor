@@ -21,7 +21,8 @@
     let { headerHeight = 0 }: Props = $props()
 
     const { session, ui } = useWorkbench()
-    const emulator = session.emulator
+    //built at the first Build, so its Core has loaded
+    const emulator = session.core
 
     /**
      * Center the 25.6px window bars on the host's top strip, leaving its navigation actions clear.

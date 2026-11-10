@@ -29,7 +29,8 @@
 
     const context = useWorkbench()
     const { session, ui } = context
-    const emulator = session.emulator
+    //built at the first Build, so its Core has loaded
+    const emulator = session.core
     //without a Settings panel (the exam's) the button keeps its own popover
     const hasSettings = $derived(context.rail.some((entry) => entry.id === 'settings'))
     //x86 reads the Screen's keys and pointer as Linux input events

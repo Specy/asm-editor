@@ -1,5 +1,6 @@
 <script lang="ts" generics="ViewZoneProps extends Record<string, unknown> = Record<string, never>">
     import Spinner from '#cmp/shared/misc/Spinner.svelte'
+    import EditorPreview from './EditorPreview.svelte'
     import { type Component, mount, onDestroy, onMount, unmount, untrack } from 'svelte'
     import type monaco from 'monaco-editor'
     import type {
@@ -1200,16 +1201,22 @@
 
 <div bind:this={mockEditor} class="mock-editor">
     {#if !editor}
-        <!-- not announced: in a playground the emulator's wait before it already was -->
-        <div class="loading">
-            <Spinner size="lg" label="Loading editor…" announce={false} />
-        </div>
+        {#if listing || pseudocode}
+            <!-- not announced: in a playground the emulator's wait before it already was -->
+            <div class="loading">
+                <Spinner size="lg" label="Loading editor…" announce={false} />
+            </div>
+        {:else}
+            <!-- the code at once, as the editor will draw it -->
+            <EditorPreview code={activeSource.value} {language} />
+        {/if}
     {/if}
 </div>
 
 <div
     bind:this={el}
     class="editor"
+    class:waiting={!editor}
     class:address-gutter={addressGutterShown}
     style:--compiled-section-border-width="{Math.max(0, SOURCE_MAP_SECTION_BORDER.width)}px"
 ></div>
@@ -1486,6 +1493,11 @@
         inset: 0;
         flex: 1;
         z-index: 2;
+
+        /* empty until Monaco is made in it: the code drawn under it is scrolled and selected */
+        &.waiting {
+            pointer-events: none;
+        }
     }
 
     .loading {

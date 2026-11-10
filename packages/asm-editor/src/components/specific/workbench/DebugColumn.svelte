@@ -56,7 +56,8 @@
     let { measuredWidth = $bindable(0) }: Props = $props()
 
     const { session, ui } = useWorkbench()
-    const emulator = session.emulator
+    //built at the first Build, so its Core has loaded
+    const emulator = session.core
     const language = $derived(session.project.language)
     const layout = workbenchLayout.values
     const hasScreen = $derived(languageHasScreen(language))

@@ -40,8 +40,11 @@
     const problemTone = $derived(
         problems === 0 || !session.worstSeverity ? 'neutral' : SEVERITY_TONES[session.worstSeverity]
     )
-    const terminal = session.emulator.peripherals.terminal
-    const interactive = $derived(session.emulator.canExecute && !session.emulator.terminated)
+    //an empty one until the Core loads, then the Emulator's, which the view below is made anew for
+    const terminal = $derived(session.terminal)
+    const interactive = $derived(
+        (session.emulator?.canExecute ?? false) && !session.emulator?.terminated
+    )
     const readWaiting = $derived(terminal.pendingRead?.source === 'terminal')
 
     //a read that starts while no console is on screen picks the Terminal's tab (the plan's decision
@@ -112,16 +115,18 @@
         role="tabpanel"
         aria-label="Terminal"
     >
-        <TerminalView
-            {terminal}
-            errors={session.errorStrings}
-            visible={session.bottomTab === 'terminal'}
-            {interactive}
-            escapes={session.project.language === 'X86'}
-            commandLine={session.commandLine}
-            onCommandLineChange={(text) => session.setProgramArguments(text)}
-            commandLineFocus={session.commandLineFocus}
-        />
+        {#key terminal}
+            <TerminalView
+                {terminal}
+                errors={session.errorStrings}
+                visible={session.bottomTab === 'terminal'}
+                {interactive}
+                escapes={session.project.language === 'X86'}
+                commandLine={session.commandLine}
+                onCommandLineChange={(text) => session.setProgramArguments(text)}
+                commandLineFocus={session.commandLineFocus}
+            />
+        {/key}
     </div>
     <div
         class="tab-body"

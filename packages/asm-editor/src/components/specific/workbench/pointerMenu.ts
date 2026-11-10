@@ -34,7 +34,7 @@ import FaMemory from '~icons/fa-solid/memory'
 export function showInMemory(session: WorkbenchSession, ui: WorkbenchUi, address: bigint) {
     if (preferencesStore.values.memoryPanelSize.value === 0)
         preferencesStore.setValue('memoryPanelSize', DEFAULT_MEMORY_PANEL_SIZE)
-    const emulator = session.emulator
+    const emulator = session.core
     const page = address - (address % BigInt(emulator.memory.global.pageSize))
     emulator.setGlobalMemoryAddress(clampBigInt(page, 0n, MEMORY_SIZE[session.project.language]))
     ui.memoryMark = { address, build: emulator.buildSources }
@@ -43,7 +43,7 @@ export function showInMemory(session: WorkbenchSession, ui: WorkbenchUi, address
 /** A move of the memory view by hand, from its address box or its page buttons: the mark goes. */
 export function moveMemoryView(session: WorkbenchSession, ui: WorkbenchUi, address: bigint) {
     ui.memoryMark = null
-    session.emulator.setGlobalMemoryAddress(address)
+    session.core.setGlobalMemoryAddress(address)
 }
 
 /** The address the memory view marks, while the Build it was read in is still the one shown. */
@@ -52,12 +52,12 @@ export function markedMemoryAddress(
     ui: WorkbenchUi
 ): bigint | undefined {
     const mark = ui.memoryMark
-    return mark && mark.build === session.emulator.buildSources ? mark.address : undefined
+    return mark && mark.build === session.emulator?.buildSources ? mark.address : undefined
 }
 
 /** Whether the program of the Debug session is an Executable, which has a Listing. */
 function runsExecutable(session: WorkbenchSession): boolean {
-    const sources = session.emulator.buildSources
+    const sources = session.emulator?.buildSources
     return !!sources && executableKind(sources.files[sources.entry]) === 'supported'
 }
 
@@ -67,7 +67,7 @@ function runsExecutable(session: WorkbenchSession): boolean {
  * program runs in them, which a menu opening must not start.
  */
 function inExecutableCode(session: WorkbenchSession, address: bigint): boolean {
-    return regionsAt(session.emulator.memoryRegions, address).some(
+    return regionsAt(session.emulator?.memoryRegions ?? [], address).some(
         (region) => region.kind === 'code'
     )
 }
@@ -75,6 +75,7 @@ function inExecutableCode(session: WorkbenchSession, address: bigint): boolean {
 /** The address stored at a memory cell, or undefined when its bytes cannot be read. */
 function pointerAt(session: WorkbenchSession, address: bigint): bigint | undefined {
     const emulator = session.emulator
+    if (!emulator) return undefined
     const width = Number(emulator.systemSize)
     try {
         const bytes = emulator.readMemoryBytes(address, width)

@@ -52,7 +52,6 @@
     const codeAreaId = $props.id()
     const workbench = useWorkbench()
     const { session, ui } = workbench
-    const emulator = session.emulator
     let dragDepth = $state(0)
     /**
      * Whether a drop would open the File in a new pane on the right rather than in this one: over
@@ -128,7 +127,9 @@
      * runs there now goes in the Build hover and on the line's mark (m68k-machine.md, decision 27).
      */
     const changedCode = $derived(
-        group.sourceView === 'snapshot' && showsFileLines ? emulator.changedCode : []
+        group.sourceView === 'snapshot' && showsFileLines
+            ? (session.emulator?.changedCode ?? [])
+            : []
     )
     /**
      * "Patch instruction…" on an instruction of the running Executable's Listing
@@ -386,7 +387,7 @@
                 library={group.displayedLibraryListing}
                 builtFrom={group.displayedBuildOutputEntry}
                 patchable={!group.displayedLibraryListing &&
-                    session.emulator.listings?.session.get(group.displayedPath) ===
+                    session.emulator?.listings?.session.get(group.displayedPath) ===
                         group.displayedListing &&
                     session.emulator.patcher !== undefined &&
                     group.sourceView === 'snapshot' &&
@@ -439,9 +440,11 @@
                 modelIdentity={group.modelIdentity}
                 sharedModels={session.models}
                 retainedModelKeys={session.retainedModelKeys}
-                buildArtifacts={group.sourceView === 'snapshot' && showsFileLines
+                buildArtifacts={group.sourceView === 'snapshot' &&
+                showsFileLines &&
+                session.emulator
                     ? withChangedCode(
-                          emulator.buildArtifacts.filter(
+                          session.emulator.buildArtifacts.filter(
                               (artifact) => artifact.file === group.displayedPath
                           ),
                           changedCode
@@ -449,11 +452,12 @@
                     : []}
                 viewZones={group.sourceView === 'snapshot' &&
                 showsFileLines &&
-                preferencesStore.values.showPseudoInstructions.value
-                    ? emulator.decorations
+                preferencesStore.values.showPseudoInstructions.value &&
+                session.emulator
+                    ? session.emulator.decorations
                           .filter(
                               (decoration) =>
-                                  (decoration.file ?? emulator.buildSources?.entry) ===
+                                  (decoration.file ?? session.emulator?.buildSources?.entry) ===
                                   group.displayedPath
                           )
                           .map((decoration) => {
@@ -468,7 +472,8 @@
                                       //`emulator.pc` is read inside the callback, not here: reading it
                                       //while building this array would rebuild every zone on every
                                       //step, remounting each component and shifting the layout
-                                      isCurrent: (address: bigint) => emulator.pc === address
+                                      isCurrent: (address: bigint) =>
+                                          session.emulator?.pc === address
                                   }
                               }
                           })
@@ -504,7 +509,7 @@
                 activeLineColors={group.activeLineColors}
                 onLinesSelect={(lines) => session.selectMappedLines(group, lines)}
                 disabled={group.editorDisabled}
-                hasError={emulator.errors.length > 0}
+                hasError={!!session.emulator?.errors.length}
             />
         {/if}
         {#if group.openPatchPrompt}

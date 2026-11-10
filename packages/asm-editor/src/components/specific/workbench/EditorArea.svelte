@@ -40,7 +40,7 @@
     <div
         class="editor-frame"
         bind:clientWidth={frameWidth}
-        class:failed={session.emulator.errors.length > 0}
+        class:failed={!!session.emulator?.errors.length}
         class:split={session.groups.length > 1}
     >
         {#each session.groups as group, index (group.id)}

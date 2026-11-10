@@ -103,6 +103,7 @@ function column({ language = 'X86', floating = true } = {}) {
     }
     const session = {
         emulator,
+        core: emulator,
         project: { language },
         pc: makeRegister('PC', 0x401000n, RegisterSize.Double),
         pokeable: false

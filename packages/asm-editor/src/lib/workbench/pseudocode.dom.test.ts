@@ -1861,7 +1861,7 @@ describe('renames and comments in the Pseudocode', () => {
         pane.openAnnotationPrompt!.input('password')
         expect(session.saveAnnotationPrompt(pane)).toBe(true)
         //the Build's record keeps its bytes; the version shown has the live File's names
-        expect(session.emulator.buildSources?.files.crackme.annotations).toBeUndefined()
+        expect(session.core.buildSources?.files.crackme.annotations).toBeUndefined()
         await shownWith(pane, 'strcmp(password,')
     })
 })

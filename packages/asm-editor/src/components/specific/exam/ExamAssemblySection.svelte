@@ -75,7 +75,11 @@
 
 {#snippet reviewPanel(context: WorkbenchPanelContext)}
     <div class="review">
-        {@render review?.(context.emulator)}
+        {#if context.emulator}
+            {@render review?.(context.emulator)}
+        {:else}
+            <Spinner size="lg" label="Loading emulator…" />
+        {/if}
     </div>
 {/snippet}
 
@@ -89,11 +93,7 @@
         searchLectures={false}
         {hostPanels}
         bind:activePanel
-    >
-        {#snippet loading()}
-            <Spinner size="lg" label="Loading emulator…" />
-        {/snippet}
-    </Workbench>
+    />
 </div>
 
 <style>

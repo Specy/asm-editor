@@ -54,6 +54,8 @@
     export interface DockBuildButton {
         label: string
         title: string
+        /** In place of Build's wrench, for a button that does something else: Reload. */
+        icon?: Component
     }
 
     /**
@@ -295,6 +297,8 @@
                             <Spinner />
                         {:else if building}
                             <FaClock />
+                        {:else if buildButton.icon}
+                            <buildButton.icon />
                         {:else}
                             <FaWrench />
                         {/if}

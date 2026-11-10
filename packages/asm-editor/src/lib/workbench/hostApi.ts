@@ -35,7 +35,8 @@ export type BuiltinPanelId =
 /** What a host panel's content is drawn with. */
 export type WorkbenchPanelContext = {
     project: Project
-    emulator: Emulator
+    /** Undefined while the Emulator's Core loads, which the Workbench does not wait for. */
+    emulator: Emulator | undefined
 }
 
 /** A rail entry of the host's own that opens a panel beside the rail. */
@@ -103,9 +104,6 @@ export interface WorkbenchProps {
     debugTools?: DebugToolsPlacement
     /** Host actions above the workspace, with access to its responsive menu state. */
     header?: Snippet<[WorkbenchUi]>
-    loading?: Snippet
-    /** Host actions offered beside Reload when the Project's emulator fails to load. */
-    failureActions?: Snippet
 }
 
 /** The sections of the Settings panel, in their order. */

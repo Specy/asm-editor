@@ -17,3 +17,7 @@ The project editor is being redesigned as an IDE-like **Workbench** that pages o
 
 - A host without a stored Project builds a temporary one. The exam session wraps each assembly section in a one-file Project and copies the Entry file's text back into its answer string. Exam sections are still not stored as Projects ([project-format.md](../design/project-format.md), Serialization and migration).
 - Saving, autosave, the unsaved-changes prompt, share links and the language theme switch move out of the editor into the host, or stay there.
+
+## Notes
+
+- 2026-11-10: the Workbench still creates the Project's Emulator, but no longer waits for it to appear ([ADR 0080](./0080-the-workbench-appears-before-its-emulator.md)).

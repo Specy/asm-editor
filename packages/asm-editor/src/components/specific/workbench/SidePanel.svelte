@@ -20,6 +20,7 @@
     import type { Processor } from '@specy/s68k'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import IconButton from '#cmp/shared/button/IconButton.svelte'
+    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { tooltip } from '#cmp/shared/floating/tooltip.svelte.ts'
     import FaTimes from '~icons/fa-solid/times'
     import FaExpand from '~icons/fa-solid/expand'
@@ -56,7 +57,6 @@
 
     const context = useWorkbench()
     const { session, ui } = context
-    const emulator = session.emulator
     const project = session.project
     const phone = $derived(ui.deviceClass === 'phone')
     const active = $derived(context.rail.find((entry) => entry.id === ui.activePanel))
@@ -230,7 +230,7 @@
                             session.openInPixelEditor(path)
                             if (ui.deviceClass === 'phone') ui.drawerOpen = false
                         }}
-                        libraryFiles={Object.keys(emulator.buildLibraryFiles ?? {})}
+                        libraryFiles={Object.keys(session.emulator?.buildLibraryFiles ?? {})}
                         buildOutputs={session.buildOutputs}
                         hints={context.documentationLinks}
                     />
@@ -259,24 +259,36 @@
                     {#if project.selected}
                         <!-- the array itself, so that a Testcase edited in place is the Program's,
                         keyed by the Program so that which one is unfolded does not carry over -->
-                        {#key project.selectedProgram}
-                            <TestcasesList
-                                bind:testcases={
-                                    () => project.selected?.testcases ?? [],
-                                    (next) => {
-                                        const selected = project.selectedProgram
-                                        if (selected !== undefined)
-                                            project.setProgramTestcases(selected, next)
+                        <!-- a Testcase's registers are the Target's, which its Core names -->
+                        {#if !session.emulator}
+                            <div class="core-loading">
+                                {#if session.coreStatus === 'loading'}
+                                    <Spinner label="Loading the emulator…" />
+                                {:else}
+                                    <p>The emulator didn't load. Reload the page to try again.</p>
+                                {/if}
+                            </div>
+                        {:else}
+                            {@const emulator = session.emulator}
+                            {#key project.selectedProgram}
+                                <TestcasesList
+                                    bind:testcases={
+                                        () => project.selected?.testcases ?? [],
+                                        (next) => {
+                                            const selected = project.selectedProgram
+                                            if (selected !== undefined)
+                                                project.setProgramTestcases(selected, next)
+                                        }
                                     }
-                                }
-                                testcasesResult={session.testcasesResult}
-                                editable={session.testcasesEditable}
-                                systemSize={emulator.systemSize}
-                                language={project.language}
-                                registers={testcaseRegisters(emulator)}
-                                style="flex: 1; min-height: 0;"
-                            />
-                        {/key}
+                                    testcasesResult={session.testcasesResult}
+                                    editable={session.testcasesEditable}
+                                    systemSize={emulator.systemSize}
+                                    language={project.language}
+                                    registers={testcaseRegisters(emulator)}
+                                    style="flex: 1; min-height: 0;"
+                                />
+                            {/key}
+                        {/if}
                     {:else}
                         <p class="no-program">{NO_PROGRAM_MESSAGE}</p>
                     {/if}
@@ -297,7 +309,7 @@
                 {:else if entry.id === 'settings'}
                     <SettingsPanel readonly={entry.access === 'readonly'} />
                 {:else if entry.content}
-                    {@render entry.content({ project, emulator })}
+                    {@render entry.content({ project, emulator: session.emulator })}
                 {/if}
             </div>
         </div>
@@ -348,6 +360,20 @@
     .program-label {
         letter-spacing: normal;
         text-transform: none;
+    }
+
+    .core-loading {
+        display: flex;
+        flex: 1;
+        justify-content: center;
+        align-items: center;
+        padding: 0.8rem;
+
+        p {
+            margin: 0;
+            font-size: var(--fs-small);
+            color: var(--hint);
+        }
     }
 
     .no-program {

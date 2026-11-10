@@ -14,9 +14,16 @@
     import { searchClient } from '#lib/search/searchClient.svelte.ts'
     import { registerDocumentationLinks } from '#lib/languages/service/navigation.ts'
     import { carriesComputerFiles } from '#lib/fileDrops.ts'
+    import { Monaco } from '#lib/monaco/Monaco.ts'
     import './workbench.css'
 
-    type Props = Omit<WorkbenchProps, 'loading'> & { emulator: Emulator }
+    type Props = WorkbenchProps & {
+        /**
+         * The Project's Emulator, or what starts loading it, called once as the Workbench is made:
+         * the Workbench is on screen while its Core loads.
+         */
+        emulator: Emulator | (() => Promise<Emulator>)
+    }
 
     let {
         project,
@@ -48,7 +55,7 @@
     //either by re-keying the component, never by changing them underneath it
     const session = untrack(
         () =>
-            new WorkbenchSession(project, emulator, {
+            new WorkbenchSession(project, typeof emulator === 'function' ? emulator() : emulator, {
                 get readonly() {
                     return readonly
                 },
@@ -114,15 +121,21 @@
 
     onMount(() => {
         // The Documentation panel is one click away, so its index and the model start loading
-        // once the Workbench has settled ([ADR 0026](../../../../../../docs/adr/0026-hybrid-search-in-the-browser-over-a-build-time-index.md)).
-        if (accessOf('documentation') !== 'off') searchClient.preload(searchScope)
+        // once the Workbench has settled ([ADR 0026](../../../../../../docs/adr/0026-hybrid-search-in-the-browser-over-a-build-time-index.md)):
+        // its Core in, so that they do not slow down the editor's and the Core's own downloads
+        if (accessOf('documentation') !== 'off')
+            void session.whenCoreSettled().then(() => searchClient.preload(searchScope))
         //a hover's link into the Documentation opens it in the panel, since the Workbench never
         //navigates; with the panel off, as an Exam may have it, the link goes nowhere, not to a tab
         const unregisterLinks = registerDocumentationLinks((href) => {
             if (accessOf('documentation') !== 'off') ui.showDocumentation(href)
             return true
         })
-        const unmount = session.mount()
+        //the language worker starts once Monaco has loaded, or the Core has settled if that comes
+        //first: started with the page's first downloads, it slowed the editor's own down
+        const unmount = session.mount({
+            languageServiceAfter: Promise.race([Monaco.load(), session.whenCoreSettled()])
+        })
         const controller = new AbortController()
         onReady?.(session, controller.signal)
         return () => {

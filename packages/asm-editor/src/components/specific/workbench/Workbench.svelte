@@ -10,18 +10,14 @@
     import { defaultEntryPath } from '#lib/Project.svelte.ts'
     import type { BuildSources } from '#lib/projectFiles.ts'
     import { NO_PROGRAM_MESSAGE } from '#lib/workbench/WorkbenchSession.svelte.ts'
-    import EmulatorLoader from '#cmp/shared/providers/EmulatorLoader.svelte'
+    import { startEmulator } from '#lib/languages/startEmulator.ts'
+    import { setAudioPreferences } from '#lib/languages/peripherals/audio/audioContext.ts'
+    import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import { resolveProjectSettings } from '#lib/projectSettings.ts'
     import type { WorkbenchProps } from '#lib/workbench/hostApi.ts'
     import WorkbenchShell from './WorkbenchShell.svelte'
 
-    let {
-        project,
-        activePanel = $bindable(null),
-        loading,
-        failureActions,
-        ...shell
-    }: WorkbenchProps = $props()
+    let { project, activePanel = $bindable(null), ...shell }: WorkbenchProps = $props()
 
     //the Emulator starts on the Selected program's Settings, Display and Entry, which the session
     //keeps up to date from then on; with no Program, on the sources the session's `sourceInput`
@@ -36,29 +32,35 @@
               }
             : { files: project.files, entry: project.selectedProgram }
     )
+
+    /**
+     * Starts loading the Project's Emulator, which the Workbench does not wait for: it is on
+     * screen at once, and what needs the Core waits for it
+     * ([workbench-loading-plan.md](../../../../../../docs/design/workbench-loading-plan.md)).
+     */
+    function makeEmulator() {
+        return startEmulator(project.language, source, {
+            automaticChecking: false,
+            display: project.selected?.display,
+            screenHistoryBudgetMb: effective.screenHistoryBudgetMb,
+            fileSystemHistoryBudgetMb: effective.fileSystemHistoryBudgetMb,
+            programArguments: effective.programArguments,
+            peripherals: { fileSystem: project.fileSystem }
+        })
+    }
+
+    //mute and volume are Preferences, which every Emulator on the page shares
+    $effect(() => {
+        setAudioPreferences({
+            enabled: preferencesStore.values.sound.value,
+            volume: preferencesStore.values.soundVolume.value
+        })
+    })
 </script>
 
 <div class="workbench-host">
     {#key project.language}
-        <EmulatorLoader
-            code={project.code}
-            {source}
-            language={project.language}
-            {loading}
-            {failureActions}
-            settings={{
-                automaticChecking: false,
-                display: project.selected?.display,
-                screenHistoryBudgetMb: effective.screenHistoryBudgetMb,
-                fileSystemHistoryBudgetMb: effective.fileSystemHistoryBudgetMb,
-                programArguments: effective.programArguments,
-                peripherals: { fileSystem: project.fileSystem }
-            }}
-        >
-            {#snippet children(emulator)}
-                <WorkbenchShell {project} {emulator} bind:activePanel {...shell} />
-            {/snippet}
-        </EmulatorLoader>
+        <WorkbenchShell {project} emulator={makeEmulator} bind:activePanel {...shell} />
     {/key}
 </div>
 

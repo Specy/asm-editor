@@ -27,7 +27,8 @@
     let { style = '', size = $bindable(RegisterSize.Word) }: Props = $props()
 
     const { session, ui } = useWorkbench()
-    const emulator = session.emulator
+    //built at the first Build, so its Core has loaded
+    const emulator = session.core
     const language = $derived(session.project.language)
     const valueMenu = (value: bigint, bytes: number) => registerValueMenu(session, ui, value, bytes)
 </script>

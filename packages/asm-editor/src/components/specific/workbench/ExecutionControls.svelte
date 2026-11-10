@@ -24,10 +24,12 @@
         type DockViews
     } from '#cmp/specific/project/ExecutionDock.svelte'
     import { DockSoundState } from '#cmp/specific/project/dockSound.svelte.ts'
+    import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { FileView } from '#lib/fileViews.ts'
     import FaTh from '~icons/fa-solid/th'
     import FaListOl from '~icons/fa-solid/list-ol'
     import FaEye from '~icons/fa-solid/eye'
+    import FaRedo from '~icons/fa-solid/redo'
     import FaPaintBrush from '~icons/fa-solid/paint-brush'
     import FaFileCode from '~icons/fa-solid/file-code'
     import FaAlignLeft from '~icons/fa-solid/align-left'
@@ -85,7 +87,15 @@
     }
 
     const { session } = useWorkbench()
-    const emulator = session.emulator
+    /**
+     * Build, where the Core did not load: Reload, which is what brings it, since nothing builds
+     * without it.
+     */
+    const RELOAD_BUTTON = $derived<DockBuildButton>({
+        label: 'Reload',
+        title: `The ${languageLabel(session.project.language)} emulator didn't load. Reload the page to try again.`,
+        icon: FaRedo
+    })
     const pane = $derived(group ?? session.controlsGroup)
     const source = $derived(!!sourceLanguage(pane.displayedPath))
     /**
@@ -94,7 +104,7 @@
      */
     const program = $derived(
         session.debugSession
-            ? emulator.buildSources?.entry
+            ? session.emulator?.buildSources?.entry
             : source
               ? undefined
               : pane.displayedProgram
@@ -173,7 +183,7 @@
         }
     })
 
-    const sound = new DockSoundState(() => emulator.audioActivity)
+    const sound = new DockSoundState(() => session.emulator?.audioActivity)
 
     function test() {
         //the session's Program, read before Stop forgets which it was
@@ -193,18 +203,27 @@
     compileOnly={!execution || source}
     showExecution={execution && (session.debugSession || program !== undefined)}
     debugging={session.debugSession && !session.building}
-    building={session.building}
-    buildProgress={{ phase: session.buildPhase, onCancel: () => session.cancelBuild() }}
-    buildButton={loadsExecutable ? DEBUG_BUTTON : undefined}
-    running={session.running || emulator.stepWaiting === true}
-    buildDisabled={session.buildDisabledFor(program)}
+    building={session.building || session.testWaitingForCore}
+    buildProgress={{
+        phase: session.buildPhase,
+        //a test run waiting for the Core ends as Stop ends it
+        onCancel: () => (session.building ? session.cancelBuild() : session.stop())
+    }}
+    buildButton={session.coreStatus === 'failed'
+        ? RELOAD_BUTTON
+        : loadsExecutable
+          ? DEBUG_BUTTON
+          : undefined}
+    running={session.running || session.emulator?.stepWaiting === true}
+    buildDisabled={session.coreStatus !== 'failed' && session.buildDisabledFor(program)}
     executionDisabled={session.executionDisabled}
-    ended={emulator.terminated}
+    ended={session.emulator?.terminated ?? false}
     undoDisabled={session.undoDisabled}
-    canUndo={emulator.canUndo}
+    canUndo={session.emulator?.canUndo ?? false}
     sound={sound.value}
     hasTests={program !== undefined && !!session.project.program(program)?.testcases.length}
-    onBuild={() => session.build(program, pane)}
+    onBuild={() =>
+        session.coreStatus === 'failed' ? location.reload() : session.build(program, pane)}
     onStop={() => session.stop()}
     onRun={() => session.run()}
     onRestart={() => void session.restart()}

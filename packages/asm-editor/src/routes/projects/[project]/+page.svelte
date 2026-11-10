@@ -1,5 +1,4 @@
 <script lang="ts">
-    import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import { page } from '$app/state'
     import {
         makeProject,
@@ -19,6 +18,7 @@
     import { toast } from '#stores/toastStore.ts'
     import Workbench from '#cmp/specific/workbench/Workbench.svelte'
     import ProjectTopBar from '#cmp/specific/workbench/ProjectTopBar.svelte'
+    import WorkbenchFrame from '#cmp/specific/workbench/WorkbenchFrame.svelte'
     import ThemeScope from '#cmp/shared/providers/ThemeScope.svelte'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
     import { Monaco } from '#lib/monaco/Monaco.ts'
@@ -532,11 +532,6 @@
     }}
 />
 
-{#snippet loadingScreen()}
-    <div class="overlay" class:overlay-hidden={status !== 'loading'}>
-        <Spinner size="lg" label="Loading…" />
-    </div>
-{/snippet}
 {#snippet projectTopBar(ui: WorkbenchUi)}
     <ProjectTopBar
         phone={ui.deviceClass === 'phone'}
@@ -573,17 +568,25 @@
                             changes += 1
                             if (openExample) checkExampleSoon()
                         }}
-                    >
-                        {#snippet loading()}
-                            {@render loadingScreen()}
-                        {/snippet}
-                        {#snippet failureActions()}
-                            <ButtonLink href={resolve('/projects')} kind="secondary">
-                                Back to projects
-                            </ButtonLink>
-                        {/snippet}
-                    </Workbench>
+                    />
                 {/key}
+            {:else if status === 'loading'}
+                <!-- the Workbench's outline while the Project is read; nothing in it works yet -->
+                <WorkbenchFrame>
+                    {#snippet header({ phone })}
+                        {#if !framed}
+                            <ProjectTopBar
+                                {phone}
+                                drawerOpen={false}
+                                onToggleMenu={() => {}}
+                                onHome={() => {}}
+                                onBack={() => {}}
+                                onDonate={() => {}}
+                                onShare={() => {}}
+                            />
+                        {/if}
+                    {/snippet}
+                </WorkbenchFrame>
             {:else if status === 'error' && failure}
                 <ErrorState
                     title={failure.title}
@@ -606,9 +609,6 @@
             {/if}
         </ThemeScope>
     </div>
-    {#if status === 'loading'}
-        {@render loadingScreen()}
-    {/if}
 </Page>
 
 <style lang="scss">
@@ -626,22 +626,5 @@
         :global(.theme-scope) {
             min-height: 0;
         }
-    }
-
-    .overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.1);
-        backdrop-filter: blur(0.5rem);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        gap: 2rem;
-        z-index: 20;
-        padding: 1rem;
     }
 </style>

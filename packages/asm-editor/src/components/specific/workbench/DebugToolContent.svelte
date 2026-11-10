@@ -18,7 +18,8 @@
     let { tool, docked = true }: Props = $props()
 
     const { session, ui } = useWorkbench()
-    const emulator = session.emulator
+    //built at the first Build, so its Core has loaded
+    const emulator = session.core
     const language = $derived(session.project.language)
 </script>
 
@@ -49,7 +50,7 @@
     />
 {:else}
     <StackPointerView
-        emulator={session.emulator}
+        {emulator}
         tab={tool.tab}
         endianess={tool.tab.endianess}
         defaultMemoryValue={DEFAULT_MEMORY_VALUE[language]}

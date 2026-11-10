@@ -46,11 +46,10 @@
 
     const context = useWorkbench()
     const { session, ui } = context
-    const emulator = session.emulator
     const language = $derived(session.project.language)
     const phone = $derived(ui.deviceClass === 'phone')
     const hasScreen = $derived(languageHasScreen(language))
-    const tools = $derived(debugTools(emulator.memory.tabs))
+    const tools = $derived(debugTools(session.emulator?.memory.tabs ?? []))
     const layout = workbenchLayout.values
     //the bottom panel is a desktop's, as tall and resized the same way, up to the room that leaves
     //the editor its least, which the CSS below works out; until that is measured it keeps its height
@@ -60,13 +59,12 @@
         bottomRoom ? Math.min(layout.bottomHeight, bottomMax) : layout.bottomHeight
     )
     //and it grows back to its default height for the program's input, as a desktop's does
-    const terminal = session.emulator.peripherals.terminal
     const programIo = growForProgramIo({
         get debugging() {
             return session.debugSession && !session.testing
         },
         get reading() {
-            return terminal.pendingRead?.source === 'terminal'
+            return session.emulator?.peripherals.terminal.pendingRead?.source === 'terminal'
         },
         get height() {
             return bottomHeight
@@ -79,7 +77,9 @@
     //the registers are as wide as the CPU file asks at the grouping picked, as in the desktop's
     //column, and never give up any of it; a single file has no tabs and asks for its content
     let registersSize = $state(RegisterSize.Word)
-    const registersWidth = $derived(registerColumnWidth(emulator.registerFiles, registersSize))
+    const registersWidth = $derived(
+        registerColumnWidth(session.emulator?.registerFiles ?? [], registersSize)
+    )
     //a page of memory, which the registers fill beside it and are no taller than under it
     let memoryBox: readonly ResizeObserverSize[] | undefined = $state()
     const memoryHeight = $derived(memoryBox?.[0]?.blockSize ?? 0)
@@ -167,7 +167,9 @@
                 onResize={resizeBottom}
             />
             <BottomPanel style="height: var(--compact-bottom-height); flex: none;" />
-            {#if debugSectionsBuilt}
+            <!-- built at the first Build, which needs the Core -->
+            {#if debugSectionsBuilt && session.emulator}
+                {@const emulator = session.emulator}
                 <div
                     class="debug-sections"
                     class:hidden={!session.debugSession && !session.restarting}

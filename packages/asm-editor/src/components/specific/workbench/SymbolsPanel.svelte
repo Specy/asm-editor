@@ -108,15 +108,15 @@
             return { mode: 'executable', selection: { ...focused.sourceSelection }, entry: false }
         const entry = project.selectedProgram
         if (entry !== undefined && session.kindAt(entry) === 'executable') {
-            const built = session.debugSession && !!session.emulator.buildSources?.files[entry]
+            const built = session.debugSession && !!session.emulator?.buildSources?.files[entry]
             return {
                 mode: 'executable',
                 selection: built ? buildSource(entry, session.buildGeneration) : liveSource(entry),
                 entry: true
             }
         }
-        const symbols = session.debugSession ? session.emulator.programSymbols : undefined
-        const path = session.emulator.buildSources?.entry
+        const symbols = session.debugSession ? session.emulator?.programSymbols : undefined
+        const path = session.emulator?.buildSources?.entry
         return symbols && path ? { mode: 'program', path, symbols } : undefined
     })
     const executable = $derived(source?.mode === 'executable' ? source : undefined)

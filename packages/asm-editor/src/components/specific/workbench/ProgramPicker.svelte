@@ -18,7 +18,7 @@
     const locked = $derived(session.programsLocked)
     //the session's Program is its Build's, which a Debug session holds the selection to
     const shown = $derived(
-        (session.debugSession ? session.emulator.buildSources?.entry : undefined) ??
+        (session.debugSession ? session.emulator?.buildSources?.entry : undefined) ??
             session.project.selectedProgram
     )
     const current = $derived(choices.find((choice) => choice.entry === shown))

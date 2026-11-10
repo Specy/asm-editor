@@ -91,13 +91,12 @@
     })
 
     //the bottom panel grows back to its default height for the program's input
-    const terminal = session.emulator.peripherals.terminal
     const programIo = growForProgramIo({
         get debugging() {
             return session.debugSession && !session.testing
         },
         get reading() {
-            return terminal.pendingRead?.source === 'terminal'
+            return session.emulator?.peripherals.terminal.pendingRead?.source === 'terminal'
         },
         get height() {
             return layout.bottomHeight

@@ -1,15 +1,14 @@
 <script lang="ts">
     import type { AvailableLanguages } from '#lib/Project.svelte.ts'
-    import { createEmulator, type Emulator } from '#lib/languages/Emulator.ts'
+    import type { Emulator } from '#lib/languages/Emulator.ts'
+    import { startEmulator } from '#lib/languages/startEmulator.ts'
     import { onDestroy, untrack, type Snippet } from 'svelte'
     import Spinner from '#cmp/shared/misc/Spinner.svelte'
     import ErrorState from '#cmp/shared/layout/ErrorState.svelte'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { EmulatorSettings } from '#lib/languages/commonLanguageFeatures.svelte.ts'
-    import { createInjectedPeripherals } from '#lib/languages/peripherals/peripheralSet.ts'
     import Column from '#cmp/shared/layout/Column.svelte'
     import type { BuildInput } from '#lib/projectFiles.ts'
-    import { createBrowserAudioOutput } from '#lib/languages/peripherals/audio/browserAudioOutput.ts'
     import { setAudioPreferences } from '#lib/languages/peripherals/audio/audioContext.ts'
     import { preferencesStore } from '#stores/preferencesStore.svelte.ts'
 
@@ -39,15 +38,6 @@
 
     let destroyed = false
 
-    //One set per emulator, created here rather than inside it so that the GUI owns the instances the
-    //Core draws on and reads from (ADR 0004); `emulator.peripherals` hands them to the children.
-    //Anything the caller already passed in `settings.peripherals` is kept.
-    const injectedPeripherals = untrack(() =>
-        createInjectedPeripherals(language, settings?.peripherals)
-    )
-    //the page's sound, which an Audio made outside a page never gets; it loads nothing until the
-    //program first sounds, so a silent program, on x86 as anywhere, costs no more than this object
-    injectedPeripherals.audio.setOutput(createBrowserAudioOutput())
     //mute and volume are Preferences, which every Emulator on the page shares
     $effect(() => {
         setAudioPreferences({
@@ -56,13 +46,9 @@
         })
     })
 
-    const emulatorPromise = untrack(() =>
-        createEmulator(language, source ?? code, {
-            ...settings,
-            language,
-            peripherals: injectedPeripherals
-        })
-    )
+    //the peripherals are the page's own, made at once, and `emulator.peripherals` hands them to
+    //the children (ADR 0004)
+    const emulatorPromise = untrack(() => startEmulator(language, source ?? code, settings))
     emulatorPromise.then(
         (emulatorInstance) => {
             if (destroyed) {

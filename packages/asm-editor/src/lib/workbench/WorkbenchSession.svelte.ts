@@ -61,10 +61,15 @@ import {
 } from '#lib/Project.svelte.ts'
 import type { Emulator } from '#lib/languages/Emulator.ts'
 import { BuildDownloadError, CompilationFailedError } from '#lib/languages/BaseEmulator.svelte.ts'
-import { ExecutionSupersededError } from '#lib/languages/ExecutionController.ts'
+import {
+    ExecutionController,
+    ExecutionSupersededError
+} from '#lib/languages/ExecutionController.ts'
+import { Terminal } from '#lib/languages/peripherals/Terminal.svelte.ts'
 import {
     isLineBreakpoint,
     makeRegister,
+    RegisterSize,
     sameBreakpoint,
     type AddressBreakpoint,
     type Diagnostic,
@@ -118,6 +123,7 @@ import {
 } from '#lib/languages/programDisplay.ts'
 import type { BuildSources } from '#lib/projectFiles.ts'
 import { favouredNames } from './favouredNames'
+import { languageLabel } from '#lib/languages/languageLabel.ts'
 import {
     buildSource,
     isCurrentBuildLocation,
@@ -321,7 +327,33 @@ type SearchMatch = { line: number; column: number; text: string; range: SearchRa
  */
 export class WorkbenchSession {
     readonly project: Project
-    readonly emulator: Emulator
+    /**
+     * The Emulator, once its Core has loaded: the Workbench is on screen before that
+     * ([workbench-loading-plan.md](../../../../../docs/design/workbench-loading-plan.md)), and what
+     * needs the Core waits for it, a Build saying so. Undefined until then, and for good when the
+     * Core did not load (`coreStatus`).
+     */
+    emulator = $state.raw<Emulator | undefined>()
+    /** Whether the Emulator's Core is still loading, has loaded, or could not be loaded. */
+    coreStatus = $state<'loading' | 'ready' | 'failed'>('loading')
+    /**
+     * A test run waits for the Core to load, which the dock shows as a Build waiting for it is
+     * shown, with Cancel; Stop and the Workbench going end the wait (`testWait`).
+     */
+    testWaitingForCore = $state(false)
+    private testWait: AbortController | undefined
+    /** Resolves with the Emulator once it is attached; rejects when its Core did not load. */
+    private readonly emulatorArrival: Promise<Emulator>
+    /** Breakpoints set before the Core loaded, which it is given as it arrives. */
+    private pendingBreakpoints = $state.raw<readonly SourceBreakpoint[]>([])
+    /** The Workbench went before its Core arrived: the Emulator is let go of as it does. */
+    private released = false
+    /** What the session sets on the Emulator as it arrives, made with the session's state. */
+    private readonly coreHooks: {
+        resolveBreakpoints: (breakpoints: readonly SourceBreakpoint[]) => SourceBreakpoint[]
+        buildOutputHost: Parameters<Emulator['setBuildOutputHost']>[0]
+        display: ReturnType<typeof programDisplay>
+    }
     readonly host: WorkbenchSessionHost
     panels: WorkbenchSessionPanels = {}
 
@@ -372,7 +404,7 @@ export class WorkbenchSession {
      * or else the one the live sources would link, once that library has loaded.
      */
     runtimeMemberFile(path: string): ProjectFile | undefined {
-        const built = this.emulator.buildLibraryFiles?.[path]
+        const built = this.emulator?.buildLibraryFiles?.[path]
         if (built) return built
         //x86 programs compiled before x86 had a Runtime library link the start unit instead
         if (path === X86_START_UNIT_PATH && this.project.language === 'X86')
@@ -397,7 +429,7 @@ export class WorkbenchSession {
     /** The ABI whose library a Runtime library path belongs to: the Build's, else the live one. */
     private runtimeAbiFor(path: string): string | undefined {
         const abi = /^@runtime\/(v\d+)\//.exec(path)?.[1]
-        return abi ?? this.emulator.buildSources?.runtimeAbi ?? this.sourceInput.runtimeAbi
+        return abi ?? this.emulator?.buildSources?.runtimeAbi ?? this.sourceInput.runtimeAbi
     }
 
     /**
@@ -436,7 +468,7 @@ export class WorkbenchSession {
      * Undefined for any other File.
      */
     listingFor(selection: ProjectSourceSelection): ListingDocument | undefined {
-        const listings = this.emulator.listings
+        const listings = this.emulator?.listings
         const path = selection.path
         if (!listings || !path) return undefined
         if (
@@ -465,7 +497,7 @@ export class WorkbenchSession {
      * decisions 20 and 22); else as the Build took it.
      */
     snapshotFile(path: string): ProjectFile | undefined {
-        const built = this.emulator.buildSources?.files[path]
+        const built = this.emulator?.buildSources?.files[path]
         const live = this.project.files[path]
         if (!built || !live || built.annotations === live.annotations) return built
         const kept = this.snapshotFiles.get(built)
@@ -495,7 +527,7 @@ export class WorkbenchSession {
 
     /** What the File at a path is, in the version a Debug session shows or else the live one. */
     kindAt(path: string): ProjectFileKind | undefined {
-        const built = this.debugSession ? this.emulator.buildSources?.files[path] : undefined
+        const built = this.debugSession ? this.emulator?.buildSources?.files[path] : undefined
         return this.fileKindOf(built ?? this.project.files[path], path)
     }
 
@@ -664,9 +696,16 @@ export class WorkbenchSession {
      */
     private appliedSelection: string | undefined
 
-    constructor(project: Project, emulator: Emulator, host: WorkbenchSessionHost) {
+    /**
+     * `emulator` is the Emulator, or the promise of one whose Core is still loading, which the
+     * session takes once it arrives (`attach`).
+     */
+    constructor(
+        project: Project,
+        emulator: Emulator | Promise<Emulator>,
+        host: WorkbenchSessionHost
+    ) {
         this.project = project
-        this.emulator = emulator
         this.host = host
         const start =
             project.activeTab ??
@@ -754,7 +793,7 @@ export class WorkbenchSession {
         })
         this.displayedPath = $derived(this.groups[0].displayedPath)
         this.sourceView = $derived<'snapshot' | 'live'>(this.groups[0].sourceView)
-        this.debugSession = $derived(this.emulator.canExecute)
+        this.debugSession = $derived(this.emulator?.canExecute ?? false)
         this.commandLine = $derived.by<CommandLineState | undefined>(() => {
             if (!languageTakesArguments(this.project.language)) return undefined
             const recorded = this.startedCommandLine
@@ -763,7 +802,7 @@ export class WorkbenchSession {
             const started =
                 recorded &&
                 (this.building ||
-                    (this.debugSession && recorded.build === this.emulator.buildSources))
+                    (this.debugSession && recorded.build === this.emulator?.buildSources))
                     ? recorded
                     : undefined
             if (started)
@@ -820,12 +859,13 @@ export class WorkbenchSession {
                           ]
                 })
             const build = buildSource('', this.buildGeneration)
+            const listings = this.emulator?.listings
             return [
                 ...keys(this.project.files, liveSource('')),
-                ...keys(this.emulator.buildSources?.files ?? {}, build),
+                ...keys(this.emulator?.buildSources?.files ?? {}, build),
                 //the libraries' Listings, kept while the session lasts so a tab comes back as left
-                ...[...(this.emulator.listings?.session.keys() ?? [])]
-                    .filter((path) => this.emulator.listings!.isLibrary(path))
+                ...[...(listings?.session.keys() ?? [])]
+                    .filter((path) => listings!.isLibrary(path))
                     .map((path) =>
                         projectSourceModelKey({
                             sessionId: this.languageSessionId,
@@ -849,7 +889,7 @@ export class WorkbenchSession {
         this.activeDiagnostics = $derived(
             this.sourceView === 'live'
                 ? this.liveViewDiagnostics
-                : this.emulator.compilerDiagnostics
+                : (this.emulator?.compilerDiagnostics ?? [])
         )
         this.liveBuildHasErrors = $derived(
             this.languageAnalysis?.diagnostics.some(
@@ -872,7 +912,7 @@ export class WorkbenchSession {
         this.documentationFavourKey = $derived.by(() => {
             const sources =
                 this.sourceView === 'snapshot'
-                    ? this.emulator.buildSources
+                    ? this.emulator?.buildSources
                     : (this.analysedSources ?? this.sourceInput)
             return favouredNames(
                 this.activeDiagnostics,
@@ -893,28 +933,39 @@ export class WorkbenchSession {
             }
             return worst
         })
-        this.configurableDisplay = $derived(this.emulator.setDisplay !== undefined)
+        //a Target's Display shows once its Core has loaded, which says whether it has one
+        this.configurableDisplay = $derived(this.emulator?.setDisplay !== undefined)
         this.currentDisplay = $derived(
             programDisplay(this.project.language, this.project.selected?.display)
         )
         this.testcasesEditable = $derived(this.host.canEditTestcases && !this.host.readonly)
         this.pokeable = $derived(
-            !this.host.readonly && !this.running && !this.building && this.emulator.canPoke
+            !this.host.readonly &&
+                !this.running &&
+                !this.building &&
+                (this.emulator?.canPoke ?? false)
         )
-        this.errorStrings = $derived(this.emulator.errors.join('\n'))
+        this.errorStrings = $derived(this.emulator?.errors.join('\n') ?? '')
         //the Log's wording, without an error's message, which the Terminal tab shows itself; and
         //while the program runs on, what it waits for on its own, as a stopped M68K does
-        this.runInfo = $derived(
-            this.emulator.terminated
-                ? terminationSummary(this.emulator.termination, this.emulator.executionTime, {
+        this.runInfo = $derived.by(() => {
+            const emulator = this.emulator
+            if (!emulator) return ''
+            return emulator.terminated
+                ? terminationSummary(emulator.termination, emulator.executionTime, {
                       errorMessage: false
                   })
-                : (this.emulator.runStatus ?? '')
-        )
+                : (emulator.runStatus ?? '')
+        })
         this.executionDisabled = $derived(
-            this.host.readonly || this.emulator.terminated || this.emulator.interrupt !== undefined
+            this.host.readonly ||
+                !this.emulator ||
+                this.emulator.terminated ||
+                this.emulator.interrupt !== undefined
         )
-        this.undoDisabled = $derived(this.host.readonly || this.emulator.interrupt !== undefined)
+        this.undoDisabled = $derived(
+            this.host.readonly || !this.emulator || this.emulator.interrupt !== undefined
+        )
         this.buildDisabled = $derived(this.buildDisabledFor(this.project.selectedProgram))
         //a Debug session runs the Build's Files, so its Breakpoints expand through the maps that
         //describe those rather than the live Files
@@ -922,7 +973,7 @@ export class WorkbenchSession {
             currentSourceMaps(
                 this.project.sourceMaps,
                 this.project.compilations,
-                this.debugSession && this.emulator.buildSources
+                this.debugSession && this.emulator?.buildSources
                     ? this.emulator.buildSources.files
                     : this.project.files,
                 this.project.language
@@ -930,27 +981,24 @@ export class WorkbenchSession {
         )
         this.mappedBreakpoints = $derived(
             //fingerprinting the Files is skipped while no Breakpoint is on a source File
-            this.emulator.breakpoints.some((item) =>
-                isSourceBreakpoint(item, this.project.language)
-            )
-                ? mappedBreakpoints(
-                      this.emulator.breakpoints,
-                      breakpointSourceMaps,
-                      this.project.language
-                  )
+            this.breakpoints.some((item) => isSourceBreakpoint(item, this.project.language))
+                ? mappedBreakpoints(this.breakpoints, breakpointSourceMaps, this.project.language)
                 : []
         )
-        emulator.setBreakpointResolver((breakpoints) =>
-            breakpoints.some((item) => isSourceBreakpoint(item, this.project.language))
-                ? coreBreakpoints(breakpoints, breakpointSourceMaps, this.project.language)
-                : [...breakpoints]
-        )
-        emulator.setBuildOutputHost({
-            claim: (path, signal) => this.claimBuildOutput(path, signal),
-            save: (sources, path, bytes, format) =>
-                this.saveBuildOutput(sources, path, bytes, format),
-            isBuildOutput: (path) => this.buildOutputs.has(path)
-        })
+        this.coreHooks = {
+            resolveBreakpoints: (breakpoints) =>
+                breakpoints.some((item) => isSourceBreakpoint(item, this.project.language))
+                    ? coreBreakpoints(breakpoints, breakpointSourceMaps, this.project.language)
+                    : [...breakpoints],
+            buildOutputHost: {
+                claim: (path, signal) => this.claimBuildOutput(path, signal),
+                save: (sources, path, bytes, format) =>
+                    this.saveBuildOutput(sources, path, bytes, format),
+                isBuildOutput: (path) => this.buildOutputs.has(path)
+            },
+            //what the host made the Emulator with, the Selected program's then
+            display: this.currentDisplay
+        }
         this.executionSourceLocation = $derived.by(() => {
             const pair = this.linePairing
             return pair?.locationAt(pair.assembly.instructionLine)
@@ -966,8 +1014,8 @@ export class WorkbenchSession {
             //Nothing to emphasize leaves every section at its default strength.
             return colors.size ? colors : undefined
         })
-        this.previousBuildSources = emulator.buildSources
-        this.pc = makeRegister('PC', emulator.pc, emulator.systemSize)
+        //set from the Emulator once it is there, by the effect below
+        this.pc = makeRegister('PC', 0n, RegisterSize.Long)
 
         //what waits on the session (a reveal for an editor still mounting) stops with it, rather
         //than reading deriveds that went inert with their owner
@@ -979,9 +1027,10 @@ export class WorkbenchSession {
         $effect(() => {
             //a hidden panel keeps the default page, so Show in memory, and the strip that brings
             //the panel back, find it in place
+            const emulator = this.emulator
             const pageSize =
                 preferencesStore.values.memoryPanelSize.value || DEFAULT_MEMORY_PANEL_SIZE
-            untrack(() => this.emulator.setGlobalMemorySize(pageSize, pageSize / 16))
+            if (emulator) untrack(() => emulator.setGlobalMemorySize(pageSize, pageSize / 16))
         })
 
         let previousPairKey = ''
@@ -1115,8 +1164,10 @@ export class WorkbenchSession {
             //`sourceInput` is read here, outside `untrack`, so the effect re-runs on every edit and
             //the Emulator's live semantic check sees the current text. Only the call is untracked, to
             //keep the state it writes from re-entering this effect.
+            //and once the Emulator arrives, it takes what was typed while its Core loaded
+            const emulator = this.emulator
             const sources = this.sourceInput
-            untrack(() => this.emulator.setSources(sources))
+            if (emulator) untrack(() => emulator.setSources(sources))
         })
 
         $effect(() => {
@@ -1136,11 +1187,11 @@ export class WorkbenchSession {
         })
 
         $effect(() => {
-            this.languageSession?.setBuild(this.buildGeneration, this.emulator.buildSources)
+            this.languageSession?.setBuild(this.buildGeneration, this.emulator?.buildSources)
         })
 
         $effect(() => {
-            this.synchronizeBuildGeneration(this.emulator.buildSources)
+            this.synchronizeBuildGeneration(this.emulator?.buildSources)
         })
 
         $effect(() => {
@@ -1169,14 +1220,16 @@ export class WorkbenchSession {
         })
 
         $effect(() => {
-            this.pc.setValue(this.emulator.pc)
-            this.pc.setSize(this.emulator.systemSize)
+            const emulator = this.emulator
+            if (!emulator) return
+            this.pc.setValue(emulator.pc)
+            this.pc.setSize(emulator.systemSize)
         })
 
         //An input wait suspends Run or Step before its usual reveal. Show the waiting
         //instruction now, including when it is in another File, without taking focus.
         $effect(() => {
-            if (this.emulator.interrupt && !untrack(() => this.testing)) {
+            if (this.emulator?.interrupt && !untrack(() => this.testing)) {
                 untrack(() => this.revealCurrentInstruction())
             }
         })
@@ -1186,21 +1239,31 @@ export class WorkbenchSession {
         //run (a missing system call, an instruction it cannot run). A Build's own entry goes
         //first: what the program did while the Build ran it to `main` follows it. A test run's
         //entry says how each Testcase went, so what its runs met is not repeated
-        let wasTerminated = untrack(() => this.emulator.terminated)
-        let lastNote = untrack(() => this.emulator.notes.at(-1)?.id ?? 0)
+        //what the Emulator had said before the session took it, read as it arrives, is not logged
+        let logged: Emulator | undefined
+        let wasTerminated = false
+        let lastNote = 0
         $effect(() => {
-            const terminated = this.emulator.terminated && this.emulator.canExecute
-            const notes = this.emulator.notes
+            const emulator = this.emulator
+            if (!emulator) return
+            const terminated = emulator.terminated && emulator.canExecute
+            const notes = emulator.notes
+            if (emulator !== logged) {
+                logged = emulator
+                wasTerminated = terminated
+                lastNote = notes.at(-1)?.id ?? 0
+                return
+            }
             if (this.building) return
             untrack(() => {
                 if (!this.testing) {
                     if (terminated && !wasTerminated)
                         this.appendLog(
                             exitEntry({
-                                executionTimeMs: this.emulator.executionTime,
-                                termination: this.emulator.termination,
-                                cycles: this.emulator.cycles?.total,
-                                cyclesEstimate: this.emulator.cycles?.estimate
+                                executionTimeMs: emulator.executionTime,
+                                termination: emulator.termination,
+                                cycles: emulator.cycles?.total,
+                                cyclesEstimate: emulator.cycles?.estimate
                             })
                         )
                     for (const note of notes)
@@ -1210,6 +1273,110 @@ export class WorkbenchSession {
             })
             wasTerminated = terminated
         })
+
+        this.emulatorArrival = Promise.resolve(emulator).then(
+            (arrived) => this.attach(arrived),
+            (error: unknown) => {
+                console.error('Could not load the emulator', error)
+                this.coreStatus = 'failed'
+                throw error
+            }
+        )
+        //an Emulator given ready is attached at once, so the session starts as one made before
+        //the Workbench could appear without it did
+        if (!(emulator instanceof Promise)) this.attach(emulator)
+        //a rejection nobody awaits yet is the session's to report, which it did above
+        this.emulatorArrival.catch(() => undefined)
+    }
+
+    /**
+     * The Emulator, where only a Debug session or something it alone shows reaches: a Build made
+     * one, so its Core has loaded.
+     */
+    get core(): Emulator {
+        if (!this.emulator) throw new Error('The emulator has not loaded yet')
+        return this.emulator
+    }
+
+    /** An empty Terminal, which nothing writes to or reads from, shown until the Core loads. */
+    private placeholderTerminal: Terminal | undefined
+
+    /**
+     * The Terminal the bottom panel shows: the Emulator's, and an empty one until its Core loads,
+     * so the panel, with the Command line on it, is on screen from the start.
+     */
+    get terminal(): Terminal {
+        return (
+            this.emulator?.peripherals.terminal ??
+            (this.placeholderTerminal ??= new Terminal({
+                executionController: new ExecutionController(() => undefined)
+            }))
+        )
+    }
+
+    /** Whether the Core did not load, read anew after a wait, whatever was read before it. */
+    private get coreFailed(): boolean {
+        return this.coreStatus === 'failed'
+    }
+
+    /** Resolves once the Core has loaded or failed to, whichever it does. */
+    whenCoreSettled(): Promise<void> {
+        return this.emulatorArrival.then(
+            () => undefined,
+            () => undefined
+        )
+    }
+
+    /**
+     * The Emulator, waiting for its Core if it is still loading: undefined once `signal` aborts,
+     * when the Core did not load, and when the Workbench went meanwhile, whose Emulator is let go
+     * of as it arrives.
+     */
+    private async waitForCore(signal: AbortSignal): Promise<Emulator | undefined> {
+        if (this.emulator) return this.emulator
+        const arrived = await untilAborted(
+            this.emulatorArrival.catch(() => undefined),
+            signal
+        )
+        return signal.aborted || this.released || this.disposed ? undefined : arrived
+    }
+
+    /** The Breakpoints, the Emulator's, or those set before its Core loaded. */
+    get breakpoints(): readonly SourceBreakpoint[] {
+        return this.emulator?.breakpoints ?? this.pendingBreakpoints
+    }
+
+    /**
+     * Takes the Emulator once its Core has loaded: gives it what the session set up for it, the
+     * Breakpoints set and the Settings and display chosen while it loaded; the sources typed
+     * meanwhile reach it through the effect that keeps them up to date. Once only.
+     */
+    private attach(emulator: Emulator): Emulator {
+        if (this.emulator === emulator) return emulator
+        if (this.disposed || this.released) {
+            emulator.dispose()
+            return emulator
+        }
+        untrack(() => {
+            emulator.setBreakpointResolver(this.coreHooks.resolveBreakpoints)
+            emulator.setBuildOutputHost(this.coreHooks.buildOutputHost)
+            this.previousBuildSources = emulator.buildSources
+            for (const breakpoint of this.pendingBreakpoints) {
+                if (isLineBreakpoint(breakpoint))
+                    emulator.toggleBreakpoint(breakpoint.line, breakpoint.file)
+                else emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
+            }
+            this.pendingBreakpoints = []
+            const settings = this.effectiveSettings
+            emulator.setScreenHistoryBudgetMb(settings.screenHistoryBudgetMb)
+            emulator.setFileSystemHistoryBudgetMb(settings.fileSystemHistoryBudgetMb)
+            emulator.setProgramArguments(settings.programArguments)
+            if (!programDisplayEquals(this.currentDisplay, this.coreHooks.display))
+                emulator.setDisplay?.(this.currentDisplay)
+        })
+        this.emulator = emulator
+        this.coreStatus = 'ready'
+        return emulator
     }
 
     // ---- derived state, assigned in the constructor once the Project and the Emulator are set
@@ -1305,36 +1472,59 @@ export class WorkbenchSession {
     // ---- lifecycle -----------------------------------------------------------------------------
 
     /** Starts what needs the page: the language worker, cross-file navigation and the shortcuts. */
-    mount(): () => void {
+    /**
+     * `languageServiceAfter`: what the language worker waits for before it starts, for a host that
+     * knows better than the Core's arrival when the page has the bandwidth for it, as the
+     * Workbench, which starts it once Monaco has loaded. Without it, the worker starts at once
+     * with an Emulator already there, else once the Core has loaded or failed to.
+     */
+    mount({ languageServiceAfter }: { languageServiceAfter?: Promise<unknown> } = {}): () => void {
         const unregisterNavigation = registerProjectNavigation(
             this.languageSessionId,
             (identity, selection, originatingEditor) =>
                 this.openResource(identity, selection, originatingEditor)
         )
-        const sources = untrack(() => this.sourceInput)
-        const session = new ProjectLanguageSession(
-            this.languageSessionId,
-            sources,
-            this.project.language
-        )
-        this.languageSession = session
-        const unsubscribeLanguageSession = session.subscribe((snapshot, pending) => {
-            // A pending revision deliberately retains the previous snapshot, so diagnostics and
-            // their Monaco ranges remain stable until their replacements are ready.
-            if (snapshot && !pending) {
-                this.languageAnalysis = snapshot
-                //an answer that is not pending is about the session's current sources
-                this.analysedSources = session.sources
-                this.liveLanguageDiagnostics = snapshot.diagnostics
-                    .filter(
-                        (diagnostic) =>
-                            editorFileLanguage(diagnostic.location.path, this.project.language) ===
-                            this.project.language
-                    )
-                    .map(languageDiagnosticToDiagnostic)
-            }
-            this.languageAnalysisPending = pending
-        })
+        let languageSession: ProjectLanguageSession | undefined
+        let unsubscribeLanguageSession: (() => void) | undefined
+        let unmounted = false
+        const startLanguageSession = () => {
+            if (unmounted) return
+            const sources = untrack(() => this.sourceInput)
+            const session = new ProjectLanguageSession(
+                this.languageSessionId,
+                sources,
+                this.project.language
+            )
+            languageSession = session
+            this.languageSession = session
+            unsubscribeLanguageSession = session.subscribe((snapshot, pending) => {
+                // A pending revision deliberately retains the previous snapshot, so diagnostics and
+                // their Monaco ranges remain stable until their replacements are ready.
+                if (snapshot && !pending) {
+                    this.languageAnalysis = snapshot
+                    //an answer that is not pending is about the session's current sources
+                    this.analysedSources = session.sources
+                    this.liveLanguageDiagnostics = snapshot.diagnostics
+                        .filter(
+                            (diagnostic) =>
+                                editorFileLanguage(
+                                    diagnostic.location.path,
+                                    this.project.language
+                                ) === this.project.language
+                        )
+                        .map(languageDiagnosticToDiagnostic)
+                }
+                this.languageAnalysisPending = pending
+            })
+        }
+        //the language worker loads the Target's tools, as the Core does: started together with
+        //the page's first downloads, it slows down the editor's own on a slow connection
+        //(workbench-loading-plan.md, Measurements); whatever it waits for, failing starts it too
+        const after =
+            languageServiceAfter ??
+            (untrack(() => this.coreStatus) === 'loading' ? this.whenCoreSettled() : undefined)
+        if (after) after.then(startLanguageSession, startLanguageSession)
+        else startLanguageSession()
         const keydown = (e: KeyboardEvent) => this.handleKeyDown(e)
         const commandKey = (e: KeyboardEvent) => this.handleCommandKey(e)
         const keyup = (e: KeyboardEvent) => {
@@ -1357,11 +1547,15 @@ export class WorkbenchSession {
             window.removeEventListener('keyup', keyup)
             window.removeEventListener('blur', blur)
             for (const type of HISTORY_EVENTS) window.removeEventListener(type, history)
-            unsubscribeLanguageSession()
+            unmounted = true
+            unsubscribeLanguageSession?.()
             unregisterNavigation()
-            session.dispose()
+            languageSession?.dispose()
             this.languageSession = undefined
-            this.emulator.dispose()
+            //a Core still loading is let go of as it arrives, and nothing waits for it any more
+            this.released = true
+            this.testWait?.abort()
+            this.emulator?.dispose()
             this.compilationController?.abort()
             this.projectSearch.dispose()
             this.pseudocode.dispose()
@@ -1520,9 +1714,10 @@ export class WorkbenchSession {
             next.programArguments !== this.project.selected?.settings.programArguments
         this.project.setProgramSettings(entry, next)
         const resolved = resolveProjectSettings(this.project.language, next)
-        this.emulator.setScreenHistoryBudgetMb(resolved.screenHistoryBudgetMb)
-        this.emulator.setFileSystemHistoryBudgetMb(resolved.fileSystemHistoryBudgetMb)
-        this.emulator.setProgramArguments(resolved.programArguments)
+        //an Emulator still loading is given them as it arrives
+        this.emulator?.setScreenHistoryBudgetMb(resolved.screenHistoryBudgetMb)
+        this.emulator?.setFileSystemHistoryBudgetMb(resolved.fileSystemHistoryBudgetMb)
+        this.emulator?.setProgramArguments(resolved.programArguments)
         //a Build the Arguments stopped says nothing about Arguments typed since
         if (
             argumentsChanged &&
@@ -1595,7 +1790,7 @@ export class WorkbenchSession {
         this.displayOrigin = rewritten !== null ? 'directive' : 'user'
         if (rewritten === null || baseChanged) this.displayBaseLabel = undefined
         //applied at once and with a re-sync from memory, as MARS does
-        this.emulator.setDisplay?.(next)
+        this.emulator?.setDisplay?.(next)
         this.changed()
     }
 
@@ -1605,7 +1800,7 @@ export class WorkbenchSession {
      * without a directive leaves everything as the user set it.
      */
     private syncDisplay(sources: BuildSources) {
-        const configured = this.emulator.getDisplay?.()
+        const configured = this.emulator?.getDisplay?.()
         if (!configured) return
         this.displayOrigin = configured.origin
         this.displayBaseLabel = configured.baseLabel
@@ -1628,10 +1823,12 @@ export class WorkbenchSession {
     private applySelection() {
         this.appliedSelection = this.project.selectedProgram
         const settings = this.effectiveSettings
-        this.emulator.setScreenHistoryBudgetMb(settings.screenHistoryBudgetMb)
-        this.emulator.setFileSystemHistoryBudgetMb(settings.fileSystemHistoryBudgetMb)
-        this.emulator.setProgramArguments(settings.programArguments)
-        this.emulator.setDisplay?.(this.currentDisplay)
+        //an Emulator still loading is given them as it arrives
+        const emulator = this.emulator
+        emulator?.setScreenHistoryBudgetMb(settings.screenHistoryBudgetMb)
+        emulator?.setFileSystemHistoryBudgetMb(settings.fileSystemHistoryBudgetMb)
+        emulator?.setProgramArguments(settings.programArguments)
+        emulator?.setDisplay?.(this.currentDisplay)
         this.displayOrigin = 'user'
         this.displayBaseLabel = undefined
         this.testcasesResult = []
@@ -1776,7 +1973,7 @@ export class WorkbenchSession {
      */
     pokeRegisters(fileId: string, writes: RegisterPoke[]) {
         try {
-            this.emulator.pokeRegisters(fileId, writes)
+            this.core.pokeRegisters(fileId, writes)
         } catch (e) {
             toast.error(getM68kErrorMessage(e))
         }
@@ -1789,7 +1986,7 @@ export class WorkbenchSession {
      */
     pokeMemory(address: bigint, bytes: Uint8Array) {
         try {
-            this.emulator.pokeMemory(address, bytes)
+            this.core.pokeMemory(address, bytes)
         } catch (e) {
             toast.error(getM68kErrorMessage(e))
         }
@@ -1805,7 +2002,7 @@ export class WorkbenchSession {
      * A library's Listing and any other line take none.
      */
     patchSite(group: EditorGroup, line: number): PatchSite | undefined {
-        const patcher = this.emulator.patcher
+        const patcher = this.emulator?.patcher
         const selection = group.sourceSelection
         if (
             !patcher ||
@@ -1823,7 +2020,7 @@ export class WorkbenchSession {
 
     /** Opens the prompt over a line that takes a patch, with its instruction to retype. */
     openPatchPrompt(group: EditorGroup, line: number): boolean {
-        const patcher = this.emulator.patcher
+        const patcher = this.emulator?.patcher
         const site = this.patchSite(group, line)
         if (!patcher || !site) return false
         group.annotationPrompt = undefined
@@ -1938,7 +2135,7 @@ export class WorkbenchSession {
 
     /** A File's Annotations changed: the running program's Listing takes them, and its tab stays. */
     private annotationsChanged(path: string) {
-        this.emulator.setExecutableAnnotations?.(path, this.project.files[path]?.annotations)
+        this.emulator?.setExecutableAnnotations?.(path, this.project.files[path]?.annotations)
         this.keepOpen(path)
     }
 
@@ -2611,9 +2808,9 @@ export class WorkbenchSession {
      */
     private existsInBuild(path: string, view?: FileView) {
         const file =
-            this.emulator.buildSources?.files[path] ?? this.emulator.buildLibraryFiles?.[path]
+            this.emulator?.buildSources?.files[path] ?? this.emulator?.buildLibraryFiles?.[path]
         if (!file)
-            return (view ?? 'listing') === 'listing' && !!this.emulator.listings?.session.has(path)
+            return (view ?? 'listing') === 'listing' && !!this.emulator?.listings?.session.has(path)
         return !view || fileViewsOf(this.fileKindOf(file, path)).includes(view)
     }
 
@@ -2747,7 +2944,7 @@ export class WorkbenchSession {
      * is left as it is.
      */
     private showBuildFile(file: string): EditorGroup | undefined {
-        const buildSources = this.emulator.buildSources
+        const buildSources = this.emulator?.buildSources
         if (!buildSources || !this.existsInBuild(file)) return undefined
         // A compile can reveal its first instruction before Svelte flushes the observer above.
         // Synchronize here as well so the selection and model URI always use the new Build.
@@ -2804,7 +3001,9 @@ export class WorkbenchSession {
      * 8), as no reveal of the program counter's does.
      */
     async revealAddress(address: bigint, { jump = false }: { jump?: boolean } = {}) {
-        let location = this.emulator.getSourceLocationFromAddress(address)
+        const emulator = this.emulator
+        if (!emulator) return
+        let location = emulator.getSourceLocationFromAddress(address)
         //before anything moves, in the pane that moves, never a Pseudocode: its Listing's line,
         //which records the Pseudocode beside it too. Other panes are left as they are
         if (jump && location) {
@@ -2812,12 +3011,12 @@ export class WorkbenchSession {
             if (pane) this.recordJump(pane)
         }
         if (location && location.line < 0) {
-            const pending = this.emulator.listings?.session.get(location.file)
+            const pending = emulator.listings?.session.get(location.file)
             if (pending?.status !== 'generating') return
             this.showBuildFile(location.file)
             await pending.ready.catch(() => undefined)
             await tick()
-            location = this.emulator.getSourceLocationFromAddress(address)
+            location = emulator.getSourceLocationFromAddress(address)
         }
         if (location && location.line >= 0)
             await this.revealSourceLocation(location.file, location.line)
@@ -2862,7 +3061,7 @@ export class WorkbenchSession {
         }
         const path =
             diagnostic.file ??
-            this.emulator.buildSources?.entry ??
+            this.emulator?.buildSources?.entry ??
             this.project.selectedProgram ??
             this.displayedPath
         const group = this.groupForFile(path)
@@ -2876,14 +3075,16 @@ export class WorkbenchSession {
     }
 
     revealCurrentInstruction() {
-        const file = this.emulator.currentFile
-        if (this.emulator.line >= 0) {
-            void this.revealSourceLocation(file, this.emulator.line)
+        const emulator = this.emulator
+        if (!emulator) return
+        const file = emulator.currentFile
+        if (emulator.line >= 0) {
+            void this.revealSourceLocation(file, emulator.line)
             return
         }
         //in a library whose Listing is still being generated: shown with its progress at once,
         //and at the current line once the Emulator has read it from the finished Listing
-        const pending = this.emulator.listings?.session.get(file)
+        const pending = emulator.listings?.session.get(file)
         if (pending?.status === 'generating') void this.revealWhenListed(file, pending)
     }
 
@@ -2891,8 +3092,9 @@ export class WorkbenchSession {
         this.showBuildFile(file)
         await document.ready.catch(() => undefined)
         await tick()
-        if (this.emulator.currentFile === file && this.emulator.line >= 0)
-            await this.revealSourceLocation(file, this.emulator.line)
+        const emulator = this.emulator
+        if (emulator?.currentFile === file && emulator.line >= 0)
+            await this.revealSourceLocation(file, emulator.line)
     }
 
     /**
@@ -2912,20 +3114,27 @@ export class WorkbenchSession {
     // ---- the Files -----------------------------------------------------------------------------
 
     private moveFileBreakpoints(from: string, to?: string) {
-        const moved = this.emulator.breakpoints.filter((breakpoint) => breakpoint.file === from)
+        const moved = this.breakpoints.filter((breakpoint) => breakpoint.file === from)
         for (const breakpoint of moved) this.toggleEmulatorBreakpoint(breakpoint)
         if (!to) return
         for (const breakpoint of moved) {
             const renamed = { ...breakpoint, file: to }
-            if (!this.emulator.breakpoints.some((candidate) => sameBreakpoint(candidate, renamed)))
+            if (!this.breakpoints.some((candidate) => sameBreakpoint(candidate, renamed)))
                 this.toggleEmulatorBreakpoint(renamed)
         }
     }
 
+    /** Sets or removes a Breakpoint; one set before the Core loaded is kept for it. */
     private toggleEmulatorBreakpoint(breakpoint: SourceBreakpoint) {
-        if (isLineBreakpoint(breakpoint))
-            this.emulator.toggleBreakpoint(breakpoint.line, breakpoint.file)
-        else this.emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
+        const emulator = this.emulator
+        if (!emulator) {
+            const kept = this.pendingBreakpoints
+            this.pendingBreakpoints = kept.some((item) => sameBreakpoint(item, breakpoint))
+                ? kept.filter((item) => !sameBreakpoint(item, breakpoint))
+                : [...kept, breakpoint]
+        } else if (isLineBreakpoint(breakpoint))
+            emulator.toggleBreakpoint(breakpoint.line, breakpoint.file)
+        else emulator.toggleAddressBreakpoint(breakpoint.address, breakpoint.file)
     }
 
     /**
@@ -3210,7 +3419,7 @@ export class WorkbenchSession {
             this.fileSystemLocked ||
             this.running ||
             this.building ||
-            (this.emulator.canExecute && !this.emulator.terminated)
+            (this.emulator?.canExecute && !this.emulator.terminated)
         )
             return
         //A File the Project no longer has is not recreated by typing into a stale model.
@@ -3224,8 +3433,9 @@ export class WorkbenchSession {
             console.error(error)
             toast.error(getM68kErrorMessage(error))
         }
-        if (this.emulator.canExecute && this.emulator.terminated && this.emulator.line >= 0) {
-            this.emulator.resetSelectedLine()
+        const emulator = this.emulator
+        if (emulator?.canExecute && emulator.terminated && emulator.line >= 0) {
+            emulator.resetSelectedLine()
         }
     }
 
@@ -3394,14 +3604,16 @@ export class WorkbenchSession {
         const atCursor =
             pane && pane.cursorLine >= 0 ? functionAtLine(listing, pane.cursorLine) : undefined
         if (atCursor) return atCursor
+        const emulator = this.emulator
         const running =
-            this.emulator.line >= 0 &&
+            emulator &&
+            emulator.line >= 0 &&
             isCurrentBuildLocation(
                 group.sourceSelection,
                 this.buildGeneration,
-                this.emulator.currentFile
+                emulator.currentFile
             )
-                ? functionAtLine(listing, this.emulator.line)
+                ? functionAtLine(listing, emulator.line)
                 : undefined
         return running ?? defaultPseudocodeFunction(listing)
     }
@@ -3478,7 +3690,8 @@ export class WorkbenchSession {
             this.disposed ||
             !fn ||
             listingPane.displayedListing !== document ||
-            isCurrentBuildLocation(selection, this.buildGeneration, this.emulator.currentFile)
+            (this.emulator &&
+                isCurrentBuildLocation(selection, this.buildGeneration, this.emulator.currentFile))
         )
             return
         await this.revealWhenShown(listingPane, fn.line, {
@@ -3598,7 +3811,7 @@ export class WorkbenchSession {
         return built &&
             this.debugSession &&
             this.existsInBuild(path) &&
-            sameFileContent(this.emulator.buildSources?.files[path], this.project.files[path])
+            sameFileContent(this.emulator?.buildSources?.files[path], this.project.files[path])
             ? buildSource(path, this.buildGeneration)
             : liveSource(path)
     }
@@ -3956,7 +4169,7 @@ export class WorkbenchSession {
         }
         const listing = group.displayedListing
         if (!listing) {
-            this.emulator.toggleBreakpoint(line, group.displayedPath)
+            this.toggleEmulatorBreakpoint({ line, file: group.displayedPath })
             return
         }
         //a Listing's Breakpoint is the address of the instruction on the line, in its Executable
@@ -3964,7 +4177,7 @@ export class WorkbenchSession {
         if (!listing.listing || group.displayedLibraryListing) return
         const address = instructionAddressAt(listing.listing, line)
         if (address !== undefined)
-            this.emulator.toggleAddressBreakpoint(address, group.displayedPath)
+            this.toggleEmulatorBreakpoint({ address, file: group.displayedPath })
     }
 
     /**
@@ -3988,7 +4201,7 @@ export class WorkbenchSession {
         const toggled = set.length
             ? set
             : pseudocodeBreakpointAddresses(map, document.listing, line)
-        for (const address of toggled) this.emulator.toggleAddressBreakpoint(address, path)
+        for (const address of toggled) this.toggleEmulatorBreakpoint({ address, file: path })
     }
 
     /**
@@ -4011,7 +4224,7 @@ export class WorkbenchSession {
             this.executionDisabled ||
             selection.sourceKind !== 'build' ||
             selection.buildGeneration !== this.buildGeneration ||
-            path !== this.emulator.buildSources?.entry
+            path !== this.emulator?.buildSources?.entry
         )
             return undefined
         let addresses: number[] = []
@@ -4288,6 +4501,8 @@ export class WorkbenchSession {
     async build(entry?: string, group?: EditorGroup) {
         this.wakeAudio()
         if (this.host.readonly || this.building || this.running || this.compiling) return
+        //nothing builds without the Core: the dock offers Reload in Build's place
+        if (this.coreStatus === 'failed') return
         if (this.fileSystemLocked) {
             //The Build button is hidden in this state, but the shortcut is not, and returning here
             //without a word left the key looking broken.
@@ -4309,7 +4524,6 @@ export class WorkbenchSession {
             program: commandLine.program,
             text: commandLine.text
         }
-        this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         const clears = this.executionClears
         const controller = new AbortController()
         this.buildController = controller
@@ -4318,7 +4532,17 @@ export class WorkbenchSession {
         try {
             this.running = false
             this.building = true
-            const compiling = this.emulator.compile(
+            //a Build pressed while the Core loads waits for it, and says so (`buildPhase`)
+            //at once with an Emulator there, as a Build always started
+            const emulator = this.emulator ?? (await this.waitForCore(controller.signal))
+            if (!emulator) {
+                //a Core that did not load, which the dock says too; Cancel while it loaded says nothing
+                if (this.coreFailed)
+                    problem = `The ${languageLabel(this.project.language)} emulator didn't load. Reload the page to try again.`
+                return
+            }
+            emulator.setProgramArguments(this.effectiveSettings.programArguments)
+            const compiling = emulator.compile(
                 undoHistorySize(this.effectiveSettings),
                 sources,
                 controller.signal
@@ -4332,7 +4556,8 @@ export class WorkbenchSession {
             if (e instanceof CompilationFailedError) failure = e.diagnostics
             //what could not be downloaded, and to Build again, as the Terminal says it too
             else problem = e instanceof BuildDownloadError ? e.message : getM68kErrorMessage(e)
-            if (clears === this.executionClears)
+            //a Core that did not load says so in the dock instead
+            if (clears === this.executionClears && !this.coreFailed)
                 toast.error(
                     e instanceof BuildDownloadError
                         ? e.message
@@ -4360,6 +4585,7 @@ export class WorkbenchSession {
      * ([reverse-engineering-ux.md](../../../../../docs/design/reverse-engineering-ux.md), decision 2).
      */
     get buildPhase(): string {
+        if (!this.emulator) return `Loading the ${languageLabel(this.project.language)} emulator…`
         return (
             this.emulator.buildPhase ??
             (this.cancelledBuild ? 'Finishing the cancelled Build…' : 'Building…')
@@ -4395,12 +4621,12 @@ export class WorkbenchSession {
         failure: Diagnostic[] | undefined,
         problem: string | undefined
     ) {
-        const ok = this.emulator.canExecute
+        const ok = this.emulator?.canExecute ?? false
         if (this.startedCommandLine)
             this.startedCommandLine = ok
-                ? { ...this.startedCommandLine, build: this.emulator.buildSources }
+                ? { ...this.startedCommandLine, build: this.emulator?.buildSources }
                 : undefined
-        const diagnostics = ok ? this.emulator.compilerDiagnostics : (failure ?? [])
+        const diagnostics = ok ? (this.emulator?.compilerDiagnostics ?? []) : (failure ?? [])
         if (!ok && diagnostics.length)
             this.failedBuild = { sources, diagnostics: $state.snapshot(diagnostics) }
         this.appendLog(
@@ -4421,8 +4647,8 @@ export class WorkbenchSession {
     private async runCode(targets?: readonly SourceBreakpoint[]) {
         try {
             //no limit: a Run is sliced, so Pause and Stop answer even in an infinite loop (ADR 0007)
-            if (targets) await this.emulator.runTo(targets, 0)
-            else await this.emulator.run(0)
+            if (targets) await this.core.runTo(targets, 0)
+            else await this.core.run(0)
         } catch (e) {
             console.error(e)
             toast.error('Error executing code. ' + getM68kErrorMessage(e))
@@ -4449,7 +4675,7 @@ export class WorkbenchSession {
     }
 
     pause() {
-        this.emulator.pause()
+        this.emulator?.pause()
     }
 
     /**
@@ -4467,7 +4693,7 @@ export class WorkbenchSession {
         //the Build's run to `main` owns the Core until it stops there, as a Run does
         if (this.building || this.running) return
         try {
-            await this.emulator.step()
+            await this.core.step()
             this.revealCurrentInstruction()
         } catch (e) {
             console.error(e)
@@ -4477,7 +4703,7 @@ export class WorkbenchSession {
 
     undo() {
         try {
-            this.emulator.undo()
+            this.core.undo()
             this.revealCurrentInstruction()
         } catch (e) {
             console.error(e)
@@ -4487,7 +4713,7 @@ export class WorkbenchSession {
 
     /** "Undo to here" in the History: `amount` steps back, Pokes counted among them. */
     undoSteps(amount: number) {
-        const undone = this.emulator.undo(amount)
+        const undone = this.core.undo(amount)
         if (undone < amount) {
             //The Screen or FileSystem journal ran out before the Core did. Saying so beats a
             //History panel that silently stops part way back.
@@ -4502,6 +4728,8 @@ export class WorkbenchSession {
     /** Ends the Debug session: the program is dropped and the editor goes back to the live Files. */
     clearExecution() {
         this.executionClears += 1
+        //a test run still waiting for the Core ends here, as one running would
+        this.testWait?.abort()
         this.startedCommandLine = undefined
         //a prompt belongs to the session it was opened in: the next Build of the same Executable
         //must not show it again, let alone write its patch
@@ -4509,8 +4737,8 @@ export class WorkbenchSession {
             group.patchPrompt?.dispose()
             group.patchPrompt = undefined
         }
-        this.emulator.clear()
-        this.emulator.setSources(this.sourceInput)
+        this.emulator?.clear()
+        this.emulator?.setSources(this.sourceInput)
         this.returnToLiveFiles()
     }
 
@@ -4528,7 +4756,7 @@ export class WorkbenchSession {
      * The Files are read-only during the session, so the Build reads what the ended one read.
      */
     async restart() {
-        const entry = this.emulator.buildSources?.entry
+        const entry = this.emulator?.buildSources?.entry
         if (entry === undefined || this.host.readonly) return
         if (this.building || this.running || this.compiling) return
         this.restarting = true
@@ -4547,6 +4775,8 @@ export class WorkbenchSession {
      */
     async test(entry?: string, group?: EditorGroup) {
         if (this.building || this.running || this.compiling) return
+        //a Core that did not load runs nothing; the dock and the Testcases panel say why
+        if (this.coreStatus === 'failed') return
         if (!this.selectForRun(entry)) return
         this.followExecutionIn(group)
         this.flushTyping()
@@ -4556,12 +4786,26 @@ export class WorkbenchSession {
         await new Promise((resolve) => setTimeout(resolve, 50))
         const started = performance.now()
         this.testing = true
-        this.emulator.setProgramArguments(this.effectiveSettings.programArguments)
         try {
             //Stop in that frame ends the run before it starts, which then has no results to show
             //and nothing to log, as a Build that Stop ends has not
             if (clears !== this.executionClears) return
-            const results = await this.emulator.test(
+            //a run started while the Core loads waits for it, until Stop or the Workbench going
+            let emulator = this.emulator
+            if (!emulator) {
+                const wait = new AbortController()
+                this.testWait = wait
+                this.testWaitingForCore = true
+                try {
+                    emulator = await this.waitForCore(wait.signal)
+                } finally {
+                    if (this.testWait === wait) this.testWait = undefined
+                    this.testWaitingForCore = false
+                }
+            }
+            if (!emulator || clears !== this.executionClears) return
+            emulator.setProgramArguments(this.effectiveSettings.programArguments)
+            const results = await emulator.test(
                 this.sourceInput,
                 $state.snapshot(this.project.selected?.testcases ?? []),
                 TESTCASE_INSTRUCTION_LIMIT,
@@ -4685,6 +4929,7 @@ export class WorkbenchSession {
     }
 
     private runShortcut(type: ShortcutAction) {
+        //Run, Step and Undo mean nothing before the Core loads; Build waits for it
         const emulator = this.emulator
         switch (type) {
             case ShortcutAction.SearchDocumentation: {
@@ -4708,6 +4953,7 @@ export class WorkbenchSession {
                 break
             }
             case ShortcutAction.RunCode: {
+                if (!emulator) break
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
                 //a Step waiting at a RISC-V `wfi` takes the Pause too, which ends the wait
@@ -4725,6 +4971,7 @@ export class WorkbenchSession {
                 break
             }
             case ShortcutAction.Step: {
+                if (!emulator) break
                 if (this.running || this.building || emulator.stepWaiting) break
                 if (emulator.terminated || emulator.interrupt !== undefined || !emulator.canExecute)
                     break
@@ -4732,6 +4979,7 @@ export class WorkbenchSession {
                 break
             }
             case ShortcutAction.Undo: {
+                if (!emulator) break
                 if (this.running || this.building || emulator.stepWaiting) break
                 if (emulator.interrupt !== undefined || !emulator.canExecute || !emulator.canUndo)
                     break
@@ -4750,7 +4998,7 @@ function searchHost(session: WorkbenchSession): ConstructorParameters<typeof Pro
             return session.project
         },
         get listings() {
-            return session.emulator.listings
+            return session.emulator?.listings
         },
         get pseudocode() {
             return session.pseudocode.search
@@ -4800,10 +5048,10 @@ const HISTORY_EVENTS = ['keydown', 'mousedown', 'mouseup', 'auxclick'] as const
  * `promise`, or nothing as soon as `signal` aborts: a cancelled Build ends at once, even while what
  * it waits for never settles, and how that settles later is dropped.
  */
-function untilAborted(promise: Promise<void>, signal: AbortSignal): Promise<void> {
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T | undefined> {
     return new Promise((resolve, reject) => {
-        if (signal.aborted) return resolve()
-        signal.addEventListener('abort', () => resolve(), { once: true })
+        if (signal.aborted) return resolve(undefined)
+        signal.addEventListener('abort', () => resolve(undefined), { once: true })
         promise.then(resolve, reject)
     })
 }

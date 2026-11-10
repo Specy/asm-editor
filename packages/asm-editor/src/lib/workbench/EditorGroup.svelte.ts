@@ -194,7 +194,7 @@ export class EditorGroup {
         const shownListing = this.listingAsShown()
         this.displayedListing = $derived(shownListing(this.requestedListing))
         this.displayedPatches = $derived.by(() => {
-            const patched = this.session.emulator.patcher?.patched
+            const patched = this.session.emulator?.patcher?.patched
             const selection = this.sourceSelection
             return patched &&
                 patched.document === this.displayedListing &&
@@ -282,7 +282,7 @@ export class EditorGroup {
      * kind's default. A library's Listing is no File and is only ever a Listing.
      */
     viewOf(path: string, kind: ProjectFileKind | undefined): FileView {
-        if (!kind && this.session.emulator.listings?.isLibrary(path)) return 'listing'
+        if (!kind && this.session.emulator?.listings?.isLibrary(path)) return 'listing'
         return resolveFileView(kind, this.views[path], this.session.project.fileViews?.[path])
     }
 
@@ -410,7 +410,7 @@ export class EditorGroup {
      * Breakpoints (decision 11); a Project File under `@lib/` is an ordinary File.
      */
     get displayedLibraryListing() {
-        return this.session.emulator.listings?.isLibrary(this.displayedPath) ?? false
+        return this.session.emulator?.listings?.isLibrary(this.displayedPath) ?? false
     }
     get displayedFile() {
         //a member of the Runtime library the Build linked: read-only, and outside the Project
@@ -608,7 +608,9 @@ export class EditorGroup {
         //a Pseudocode is the decompiler's, which no Build or check reports on
         if (this.displayedView === 'pseudocode') return []
         const diagnostics =
-            this.sourceView === 'live' ? s.liveViewDiagnostics : s.emulator.compilerDiagnostics
+            this.sourceView === 'live'
+                ? s.liveViewDiagnostics
+                : (s.emulator?.compilerDiagnostics ?? [])
         //a Diagnostic of no File belongs to whichever File is shown, except the Arguments', which
         //belong to the Command line
         return diagnostics.filter(
@@ -654,7 +656,7 @@ export class EditorGroup {
         const s = this.session
         return (
             this.sourceView === 'snapshot' || !s.fileSystemLocked || this.displayedEnvironmentHeader
-                ? s.emulator.breakpoints
+                ? s.breakpoints
                 : []
         ).filter((item) => item.file === this.displayedPath)
     }
@@ -703,10 +705,15 @@ export class EditorGroup {
         return this.displayedView === 'text' || this.displayedView === 'listing'
     }
     get instructionLine() {
-        const s = this.session
-        return this.showsInstructions &&
-            isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
-            ? s.emulator.line
+        const emulator = this.session.emulator
+        return emulator &&
+            this.showsInstructions &&
+            isCurrentBuildLocation(
+                this.sourceSelection,
+                this.session.buildGeneration,
+                emulator.currentFile
+            )
+            ? emulator.line
             : -1
     }
     /**
@@ -720,12 +727,13 @@ export class EditorGroup {
         const document = this.displayedListing
         const listing = this.displayedListingView
         const line = this.instructionLine
-        if (!document || !listing || line < 0 || !s.debugSession || s.emulator.terminated)
+        const emulator = s.emulator
+        if (!document || !listing || line < 0 || !emulator?.canExecute || emulator.terminated)
             return undefined
         if (listing.lines.kinds[line] !== LINE_KIND.instruction) return undefined
-        const offset = Number(s.emulator.pc) - (listing.lines.addresses[line] + document.base)
+        const offset = Number(emulator.pc) - (listing.lines.addresses[line] + document.base)
         if (offset <= 0 || offset >= listing.lines.sizes[line]) return undefined
-        const code = s.emulator.instructionCodeAt?.(s.emulator.pc)
+        const code = emulator.instructionCodeAt?.(emulator.pc)
         return {
             line,
             text: `running from inside this instruction, at +${offset}${code ? `: ${code}` : ''}`
@@ -743,13 +751,15 @@ export class EditorGroup {
         const s = this.session
         const document = this.displayedPseudocode
         const map = document?.map
+        const emulator = s.emulator
         if (
             !map ||
-            s.emulator.line < 0 ||
-            !isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, s.emulator.currentFile)
+            !emulator ||
+            emulator.line < 0 ||
+            !isCurrentBuildLocation(this.sourceSelection, s.buildGeneration, emulator.currentFile)
         )
             return -1
-        const address = Number(s.emulator.pc) - document.listingDocument.base
+        const address = Number(emulator.pc) - document.listingDocument.base
         return pseudocodeLineOfAddress(map, document.listing, address)
     }
     get highlightedLine() {
@@ -813,7 +823,7 @@ export class EditorGroup {
             this.displayedListing !== undefined ||
             this.displayedFile?.encoding !== 'plain' ||
             s.fileSystemLocked ||
-            (s.emulator.canExecute && !s.emulator.terminated)
+            (s.emulator?.canExecute && !s.emulator.terminated)
         )
     }
 }
