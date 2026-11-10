@@ -443,7 +443,9 @@
     }
 
     /* the tray's tint, which blurs what is beneath, under what the window shows, in the window's
-       frame, its top edge under the bar's */
+       frame, its top edge under the bar's. Unfolding, the body grows to its height, but its blur
+       and shadow are there whole from the first frame: grown with it, each frame drew them at a
+       new radius, which stalled the opening, most of all the first few times (2026-11-10) */
     .draggable-container-content {
         @include tray.surface;
         interpolate-size: allow-keywords; /* 👈 */
@@ -451,9 +453,12 @@
         border-color: $frame;
         border-radius: 0 0 $corner $corner;
         height: auto;
-        transition-property: height, background-color, border-color, box-shadow, backdrop-filter;
+        transition-property: height, background-color, border-color;
         transition-duration: var(--dur-base);
         overflow: hidden;
+        /* folded, what it holds stays built but is skipped: not laid out, not drawn, out of the
+           Tab order, and no wider than nothing, so the window is only as wide as its folded bar,
+           and so is the strip it is dragged by */
         &.hidden {
             border: 1px solid transparent;
             background-color: transparent;
@@ -461,6 +466,7 @@
             box-shadow: none;
             height: 0;
             transition: none;
+            content-visibility: hidden;
         }
         /* the body follows the pointer, not the pointer's position a fifth of a second ago */
         &.resizing {

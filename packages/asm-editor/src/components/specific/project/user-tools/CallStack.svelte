@@ -63,36 +63,26 @@
 </div>
 
 <style lang="scss">
-    @use '../../../../styles/radius.scss' as *;
-
     .call-stack,
     .call-stack-wrapper {
         display: flex;
         flex-direction: column;
     }
-    /* square under the floating window's bar, and at the bottom inside the window's 1px edge, its
-       curve parallel to the window's (DraggableContainer's `$corner`, a control's; D12), which
-       clips it */
+    /* on the floating window's own tray, which tints and blurs what is beneath, as the Stack
+       pointer is (S3-12): no fill, corner or shadow of its own, the window's body clipping it */
     .call-stack-wrapper {
-        background-color: var(--primary);
-        border-radius: 0 0 nested-radius(var(--r-control), $border: 1px)
-            nested-radius(var(--r-control), $border: 1px);
         /* the floating window's bottom edge sets it, when it has been dragged */
         max-height: var(--floating-body-max-height, 20rem);
         padding: 0.4rem;
         max-width: 12rem;
         overflow-y: auto;
-        /* the floating window's tray shadow below its bar, which casts none into it */
-        box-shadow: var(--shadow-2);
     }
     .call-stack-wrapper.docked {
         padding: 0.3rem;
         max-width: none;
         max-height: none;
-        border-radius: 0;
         background-color: var(--wb-surface, var(--secondary));
         color: var(--secondary-text);
-        box-shadow: none;
     }
     .frame {
         gap: 0.1rem;

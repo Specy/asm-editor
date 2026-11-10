@@ -36,11 +36,20 @@
     )
     const DEFAULT_LEFT: Record<string, number> = { callstack: 300, history: 500 }
     const PREVIOUS_TOPS = [5, 9, 13]
+    /**
+     * The windows whose place this page has written. A window found at one of the tops it had
+     * before the top strip moves onto the strip only until its first write, which keeps the move:
+     * moved on every read, a window dragged slowly through one of those tops (the store keeps
+     * whole pixels) was put back on the strip at each, and could not be dragged away.
+     */
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Added to only beside a store write, which is what re-reads the windows.
+    const written = new Set<string>()
 
     function windowOf(id: string, index = 0): FloatingWindowState {
         const stored = workbenchLayout.floating(id)
         const previousLeft = DEFAULT_LEFT[id] ?? 700 + index * 300
         const left = previousLeft + (headerHeight > 0 ? 60 : 0)
+        if (stored && written.has(id)) return stored
         if (stored) {
             const moveToStrip = headerHeight > 0 && PREVIOUS_TOPS.includes(stored.top)
             if (moveToStrip || stored.top === 13) {
@@ -63,6 +72,7 @@
 
     function update(id: string, index: number, change: Partial<FloatingWindowState>) {
         workbenchLayout.setFloating(id, { ...windowOf(id, index), ...change })
+        written.add(id)
     }
 </script>
 
