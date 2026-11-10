@@ -393,7 +393,11 @@ describe('Z80 Step out', () => {
 
     it('does nothing at the top level', async () => {
         const { emulator, lineOf } = await build(CALLING)
-        expect(await emulator.stepOut()).toEqual({ terminated: false, completed: false })
+        expect(await emulator.stepOut()).toEqual({
+            terminated: false,
+            completed: false,
+            refused: true
+        })
         expect(emulator.line).toBe(lineOf('ld a, 1'))
         expect(emulator.latestSteps).toEqual([])
     })

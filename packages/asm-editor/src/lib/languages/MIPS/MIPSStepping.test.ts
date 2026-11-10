@@ -333,7 +333,11 @@ describe('MIPS Step out', () => {
     it('leaves the routine the program is in, as one row of the History', async () => {
         const { emulator, lineOf } = await build(CALLING)
         expect(emulator.canStepOut).toBe(false)
-        expect(await emulator.stepOut()).toEqual({ terminated: false, completed: false })
+        expect(await emulator.stepOut()).toEqual({
+            terminated: false,
+            completed: false,
+            refused: true
+        })
 
         await emulator.step()
         await emulator.step()

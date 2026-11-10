@@ -1632,6 +1632,10 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                                     ? await emulator.stepOver(STEP_COMMAND_INSTRUCTION_LIMIT)
                                     : await emulator.stepOut(STEP_COMMAND_INSTRUCTION_LIMIT)
                             terminated = outcome.terminated
+                            if (outcome.refused) {
+                                stoppedEarly = `The step ${mode} did not start: the emulator was busy with another step or a run, or the program could not run. Nothing executed.`
+                                break
+                            }
                             stepsExecuted++
                             if (!outcome.completed && !terminated) {
                                 stoppedEarly = `The step ${mode} did not finish: the program stopped before the routine returned, at a breakpoint or after ${STEP_COMMAND_INSTRUCTION_LIMIT.toLocaleString('en-US')} instructions. currentLine says where.`

@@ -310,7 +310,11 @@ describe('M68K Step out', () => {
     it('runs the rest of the routine and is one row of the History', async () => {
         const { emulator, lineOf } = await build(CALLING)
         expect(emulator.canStepOut).toBe(false)
-        expect(await emulator.stepOut()).toEqual({ terminated: false, completed: false })
+        expect(await emulator.stepOut()).toEqual({
+            terminated: false,
+            completed: false,
+            refused: true
+        })
         expect(emulator.line).toBe(lineOf('move.l #1, d0'))
 
         await emulator.step()

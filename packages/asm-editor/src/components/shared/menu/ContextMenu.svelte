@@ -89,7 +89,11 @@
     let menu: HTMLDivElement
 
     function buttons(): HTMLButtonElement[] {
-        return Array.from(menu?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
+        return Array.from(
+            menu?.querySelectorAll<HTMLButtonElement>(
+                'button:not(:disabled):not([aria-disabled="true"])'
+            ) ?? []
+        )
     }
 
     function pick(entry: Extract<ContextMenuEntry, { label: string }>) {
@@ -145,7 +149,8 @@
                 class:danger={entry.danger}
                 class:accent={entry.accent}
                 role="menuitem"
-                disabled={entry.disabled}
+                disabled={!keepOpen && entry.disabled}
+                aria-disabled={keepOpen ? !!entry.disabled : undefined}
                 onclick={() => pick(entry)}
             >
                 <span class="icon" aria-hidden="true">
@@ -199,24 +204,27 @@
         cursor: pointer;
 
         /* the row the pointer or the arrow keys are on: the menu's text at 10% */
-        &:hover:not(:disabled),
+        &:hover:not(:disabled, [aria-disabled='true']),
         &:focus-visible {
             background-color: var(--hover-bg);
             outline: none;
         }
 
-        &:disabled {
+        /* a menu kept open marks a row unavailable rather than disabling it, so the row keeps the
+           focus while the command it ran makes it unavailable, and the menu its keys */
+        &:disabled,
+        &[aria-disabled='true'] {
             cursor: not-allowed;
             opacity: 0.5;
         }
 
         /* in the danger colour through its icon and label, the row keeping the menu's text,
            which its hover is drawn from */
-        &.danger:not(:disabled) > span {
+        &.danger:not(:disabled, [aria-disabled='true']) > span {
             color: var(--danger);
         }
 
-        &.accent:not(:disabled) > span {
+        &.accent:not(:disabled, [aria-disabled='true']) > span {
             color: var(--accent);
         }
     }

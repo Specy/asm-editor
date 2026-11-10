@@ -297,6 +297,11 @@ export type StepOutcome = {
      * Breakpoint, a Pause, the program's end, an error or the instruction limit.
      */
     completed: boolean
+    /**
+     * Set when the step did not start, so nothing ran: another Step over or Step out, a Run or a
+     * Step still owned the Core, the program could not run, or there was no routine to leave.
+     */
+    refused?: true
 }
 
 /** The instructions one Step, Step over or Step out ran together, as the History names them. */

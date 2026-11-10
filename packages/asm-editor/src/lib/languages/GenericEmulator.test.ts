@@ -2885,8 +2885,8 @@ describe('step over', () => {
         await Promise.resolve()
         expect(seen).toEqual([
             0,
-            { terminated: false, completed: false },
-            { terminated: false, completed: false },
+            { terminated: false, completed: false, refused: true },
+            { terminated: false, completed: false, refused: true },
             false,
             InterpreterStatus.Running
         ])
@@ -2983,7 +2983,7 @@ describe('step out', () => {
         const emulator = callingProgram()
         expect(emulator.canStepOut).toBeFalsy()
         const outcome = await emulator.stepOut()
-        expect(outcome).toEqual({ terminated: false, completed: false })
+        expect(outcome).toEqual({ terminated: false, completed: false, refused: true })
         expect(emulator.executed).toBe(0)
         expect(emulator.requests).toHaveLength(0)
     })

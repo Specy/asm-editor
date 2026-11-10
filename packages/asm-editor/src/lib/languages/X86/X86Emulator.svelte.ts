@@ -1580,13 +1580,20 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         const core = this.core
         if (!core) return undefined
         if (this.executable && this.objectAt(core.getPc())?.main) return undefined
-        const frames = core.getCallStack()
-        for (let i = frames.length - 1; i >= 0; i--) {
-            const returnAddress = frames[i].destination
-            if (this.isLibraryAddress(returnAddress)) continue
-            return { destination: returnAddress, index: i }
+        //the frame is a few out from the innermost, so the newest frames are read first and more
+        //only when it is not among them: a program that recurses through a library callback holds
+        //a hundred thousand, and this runs at every stop in library code
+        const depth = core.getCallDepth()
+        for (let read = 64; ; read *= 16) {
+            const frames = core.getCallStack(Math.min(read, depth))
+            const first = depth - frames.length
+            for (let i = frames.length - 1; i >= 0; i--) {
+                const returnAddress = frames[i].destination
+                if (this.isLibraryAddress(returnAddress)) continue
+                return { destination: returnAddress, index: first + i }
+            }
+            if (frames.length >= depth) return undefined
         }
-        return undefined
     }
 
     /**

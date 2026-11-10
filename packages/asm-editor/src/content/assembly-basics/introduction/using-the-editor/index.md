@@ -24,7 +24,7 @@ Once it has built, these buttons take Build's place:
 
 - **Step** runs one instruction and pauses. Press it once: `d0` changes from `00000000` to `00000001`, and PC advances from `00001000` to `00001002`. This instruction occupies two bytes. A 68000 instruction can occupy two to ten bytes; all five in this example occupy two.
 - **Run** runs the program to the end, or to the next breakpoint. While a program is running that same button says **Pause**. Pausing makes Run, Step and Undo available, just as at a breakpoint.
-- **Step over** and **Step out** are the **over** and **out** parts of the Step button. They help in programs that call subroutines. Step over runs the line you are on, and the whole subroutine if the line calls one, then pauses on the next line. Step out runs the rest of the subroutine you are in and pauses back in the code that called it. This program calls no subroutine, so Step over does the same as Step, and Step out is disabled.
+- **Step over** and **Step out** are in the menu the arrow beside Step opens. The menu stays open while you use it. They help in programs that call subroutines. Step over runs the line you are on, and the whole subroutine if the line calls one, then pauses on the next line. Step out runs the rest of the subroutine you are in and pauses back in the code that called it. This program calls no subroutine, so Step over does the same as Step, and Step out is disabled.
 - **Undo** takes the last instruction back, one press per instruction. The editor keeps the last 100 steps, which is a setting you can raise.
 - **Stop** throws the run away: the registers go back to zero and the only button left is **Build** again.
 

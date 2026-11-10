@@ -1111,23 +1111,53 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
     /**
      * Whether the `count` entries below the newest `skip` can all be taken back: the Core holds
      * them, and neither the Screen's journal nor the FileSystem's has dropped, under its budget,
-     * what the oldest of them needs. Asked before a group is undone, so that it is undone whole or
-     * not at all.
+     * what any of them needs. Asked before a group is undone, so that it is undone whole or not at
+     * all.
      */
     _canUndoHistoryRange(skip: number, count: number): boolean {
         const interpreter = this.interpreter
         if (!interpreter || count <= 0) return false
         if (interpreter.getUndoDepth() < skip + count) return false
-        //the oldest entry that hung effects on a journal: a Poke hung none
-        for (let back = skip + count - 1; back >= skip; back--) {
+        const span = this.journaledSpan(interpreter, skip, count)
+        return !span || this.canRewindJournals(span)
+    }
+
+    /**
+     * The ids of the oldest and the newest instruction among the `count` entries below the newest
+     * `skip`, the ones that can have hung effects on a journal: a Poke hung none, and has an id no
+     * journal knows. Undefined when all of them are Pokes.
+     */
+    private journaledSpan(
+        interpreter: Interpreter,
+        skip: number,
+        count: number
+    ): { oldest: number; newest: number } | undefined {
+        const instructionAt = (back: number) => {
             const [step] = interpreter.getUndoHistory(1, back)
-            if (!step || step.kind === 'poke') continue
-            return (
-                (this.screenInstructions?.canUndoAfter(step.id - 1) ?? true) &&
-                (this.fileSystemSession?.canUndoAfter(step.id) ?? true)
-            )
+            return step && step.kind !== 'poke' ? step.id : undefined
         }
-        return true
+        let oldest: number | undefined
+        for (let back = skip + count - 1; back >= skip && oldest === undefined; back--) {
+            oldest = instructionAt(back)
+        }
+        if (oldest === undefined) return undefined
+        let newest: number | undefined
+        for (let back = skip; back < skip + count && newest === undefined; back++) {
+            newest = instructionAt(back)
+        }
+        return { oldest, newest: newest ?? oldest }
+    }
+
+    /**
+     * Whether the Screen's and the FileSystem's journals still hold what every instruction from
+     * `oldest` to `newest` hung on them: the Screen's by the effects past the one before `oldest`,
+     * the FileSystem's by every frame in the range, wherever in it the File was written.
+     */
+    private canRewindJournals({ oldest, newest }: { oldest: number; newest: number }): boolean {
+        return (
+            (this.screenInstructions?.canUndoAfter(oldest - 1) ?? true) &&
+            (this.fileSystemSession?.canUndoSerialRange(BigInt(oldest), BigInt(newest)) ?? true)
+        )
     }
 
     _canUndoSteps(count: number): boolean {
@@ -1512,13 +1542,13 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
      */
     _undoEntries(count: number): void {
         const interpreter = this.requireInterpreter()
-        //the oldest entry that hung effects on a journal; a Poke hung none, and has an id of its
-        //own that no journal knows
-        let oldest: number | undefined
-        for (let back = count - 1; back >= 0 && oldest === undefined; back--) {
-            const [step] = interpreter.getUndoHistory(1, back)
-            if (step && step.kind !== 'poke') oldest = step.id
+        const span = this.journaledSpan(interpreter, 0, count)
+        //the journals cannot refuse half way through, so they are asked first, as `_undo` asks
+        //them: a refusal leaves the Core where it is rather than rewound without them
+        if (span && !this.canRewindJournals(span)) {
+            throw new Error('Undo history exhausted: the Screen or the Files cannot be put back')
         }
+        const oldest = span?.oldest
         //without each step being described back, which is most of what `undo()` costs
         interpreter.undoMany(count)
         //a timer a step set, or turned off, is as the Core now has it

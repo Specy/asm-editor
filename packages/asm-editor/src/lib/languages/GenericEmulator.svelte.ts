@@ -2627,7 +2627,11 @@ export abstract class GenericEmulator<T, R extends string>
     }
 
     private async runStepCommand(kind: StepCommand, haltLimit: number): Promise<StepOutcome> {
-        const refused = { terminated: this.state.terminated, completed: false }
+        const refused: StepOutcome = {
+            terminated: this.state.terminated,
+            completed: false,
+            refused: true
+        }
         if (!this.state.canExecute || this.state.terminated) return refused
         if (this.stepCommand || this.coreOperations > 0) return refused
         const execution = this.executionController.capture()
@@ -2663,7 +2667,8 @@ export abstract class GenericEmulator<T, R extends string>
         this.state.executionTime = -1
         const shownDepth = this.shownCallDepth()
         const target = kind === 'out' ? shownDepth - 1 : shownDepth
-        if (target < 0) return { terminated: this._hasTerminated(), completed: false }
+        if (target < 0)
+            return { terminated: this._hasTerminated(), completed: false, refused: true }
         //what the History calls the step: the routine a Step out leaves, read now, or the one a
         //Step over's line enters, read once it has
         let routine =
@@ -3420,19 +3425,25 @@ export abstract class GenericEmulator<T, R extends string>
         return this.state.runStatus
     }
 
-    /** Whether a Step waits inside its instruction, see `BaseEmulatorState.stepWaiting`. */
+    /**
+     * Whether a Step over or a Step out has run long enough to be shown as a Run, with Pause
+     * (`STEP_RUNNING_DISPLAY_MS`); `stepping` says at once whether one is in flight.
+     */
     get stepRunning() {
         return this.state.stepRunning
     }
 
+    /** Whether there is a routine for Step out to leave, see `BaseEmulatorState.canStepOut`. */
     get canStepOut() {
         return this.state.canStepOut
     }
 
+    /** How many frames the Call stack holds, past the ones the panel is given. */
     get callStackDepth() {
         return this.state.callStackDepth
     }
 
+    /** Whether a Step waits inside its instruction, see `BaseEmulatorState.stepWaiting`. */
     get stepWaiting() {
         return this.state.stepWaiting ?? false
     }

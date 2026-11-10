@@ -142,7 +142,10 @@
          * end of the execution dock floating over the bottom of the code.
          */
         dockActions?: DockAction[]
-        /** How the dock draws Step over and Step out: as parts of the Step button when left out. */
+        /**
+         * How the dock draws Step over and Step out: in a menu behind an arrow beside Step when left
+         * out, so a Playground's dock stays small; the Workbench draws them as parts of Step.
+         */
         stepButtons?: DockStepButtons
         /**
          * Called once, after the code editor is first drawn. It sits inside its emulator's loader, so
@@ -176,7 +179,7 @@
         initialRegisterFile = undefined,
         initialRegisterFormat = undefined,
         dockActions = [],
-        stepButtons = 'normal',
+        stepButtons = 'dropdown',
         onReady
     }: Props = $props()
     const session = untrack(() => (project ? new PlaygroundSession(project) : undefined))
