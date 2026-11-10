@@ -21,8 +21,10 @@
         type DockBuildButton,
         type DockCompilation,
         type DockView,
+        type DockStepButtons,
         type DockViews
     } from '#cmp/specific/project/ExecutionDock.svelte'
+    import { shortcutsStore, ShortcutAction } from '#stores/shortcutsStore.ts'
     import { DockSoundState } from '#cmp/specific/project/dockSound.svelte.ts'
     import { languageLabel } from '#lib/languages/languageLabel.ts'
     import type { FileView } from '#lib/fileViews.ts'
@@ -48,9 +50,27 @@
         attached?: boolean
         group?: EditorGroup
         execution?: boolean
+        /** How the dock draws Step over and Step out: as parts of the Step button when left out. */
+        stepButtons?: DockStepButtons
     }
 
-    let { fill = false, attached = false, group, execution = true }: Props = $props()
+    let {
+        fill = false,
+        attached = false,
+        group,
+        execution = true,
+        stepButtons = 'normal'
+    }: Props = $props()
+
+    /** The keys the three Steps are bound to, which their tooltips and the Step menu show. */
+    const stepShortcuts = $derived.by(() => {
+        const keys = new Map([...$shortcutsStore].map(([key, shortcut]) => [shortcut.type, key]))
+        return {
+            step: keys.get(ShortcutAction.Step),
+            over: keys.get(ShortcutAction.StepOver),
+            out: keys.get(ShortcutAction.StepOut)
+        }
+    })
 
     /** The view switch's button for each view a File can be switched to. */
     const VIEW_BUTTONS: Partial<Record<FileView, Omit<DockView, 'id'>>> = {
@@ -214,7 +234,9 @@
         : loadsExecutable
           ? DEBUG_BUTTON
           : undefined}
-    running={session.running || session.emulator?.stepWaiting === true}
+    running={session.running ||
+        session.emulator?.stepWaiting === true ||
+        session.emulator?.stepRunning === true}
     buildDisabled={session.coreStatus !== 'failed' && session.buildDisabledFor(program)}
     executionDisabled={session.executionDisabled}
     ended={session.emulator?.terminated ?? false}
@@ -230,5 +252,10 @@
     onPause={() => session.pause()}
     onUndo={() => session.undo()}
     onStep={() => session.step()}
+    onStepOver={() => session.stepOver()}
+    onStepOut={() => session.stepOut()}
+    canStepOut={session.emulator?.canStepOut === true}
+    {stepButtons}
+    {stepShortcuts}
     onTest={test}
 />

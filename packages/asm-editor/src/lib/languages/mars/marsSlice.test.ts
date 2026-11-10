@@ -149,6 +149,25 @@ describe('MarsSlicePacer', () => {
         })
     })
 
+    it('ends the slice where the Call stack is back at the depth asked for, charging what ran', async () => {
+        //a Step over's routine returns twelve instructions into the third chunk; one that returns
+        //before the chunk runs anything, as the Core does at a depth it starts on, ends it too
+        const core = fakeCore((_limit, index) =>
+            index === 2 ? { ms: 0, outcome: 'callDepth', executed: 12 } : { ms: 0 }
+        )
+        const pacer = new MarsSlicePacer(TARGET_MS)
+        expect(await pacer.run(request({ untilCallDepth: 1 }), 1_000, core.runChunk)).toEqual({
+            reason: 'callDepth',
+            instructions: 64 + 128 + 12
+        })
+        const atOnce = fakeCore(() => ({ ms: 0, outcome: 'callDepth', executed: 0 }))
+        expect(await pacer.run(request({ untilCallDepth: 0 }), 1_000, atOnce.runChunk)).toEqual({
+            reason: 'callDepth',
+            instructions: 0
+        })
+        expect(atOnce.limits).toHaveLength(1)
+    })
+
     it('ends a slice whose chunk ran nothing instead of spinning on it', async () => {
         const core = fakeCore(() => ({ ms: 0, executed: 0 }))
         const pacer = new MarsSlicePacer(TARGET_MS)

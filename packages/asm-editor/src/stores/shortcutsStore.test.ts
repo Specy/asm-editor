@@ -30,6 +30,13 @@ describe('command-key shortcuts', () => {
         )
     })
 
+    it('binds Step over and Step out beside Step and Undo, on the other two arrows', () => {
+        expect(shortcutsStore.get('ShiftLeft+ArrowDown')?.type).toBe(ShortcutAction.Step)
+        expect(shortcutsStore.get('ShiftLeft+ArrowRight')?.type).toBe(ShortcutAction.StepOver)
+        expect(shortcutsStore.get('ShiftLeft+ArrowLeft')?.type).toBe(ShortcutAction.StepOut)
+        expect(shortcutLabel('ShiftLeft+ArrowRight')).toBe('Shift+→')
+    })
+
     it('labels keys the way a reader writes them', () => {
         expect(shortcutLabel('Mod+KeyK')).toBe('Ctrl+K')
         expect(shortcutLabel('Mod+Shift+KeyF')).toBe('Ctrl+Shift+F')

@@ -196,6 +196,17 @@ export function formatLatestSteps(
             ...(step.disassembly === undefined ? {} : { disassembly: step.disassembly }),
             //the clock cycles it took, where the Target counts them (M68K)
             ...(step.cycles === undefined ? {} : { cycles: step.cycles }),
+            //a row that stands for more than its own instruction: a Step through library code, a
+            //Step over or a Step out, which one undo takes back together
+            ...(step.stretch === undefined
+                ? {}
+                : {
+                      ranTogether: {
+                          command: step.stretch.kind ?? 'library call',
+                          ...(step.stretch.library ? { routine: step.stretch.library } : {}),
+                          instructions: step.stretch.instructions
+                      }
+                  }),
             mutations: step.mutations.map((mutation) => {
                 switch (mutation.type) {
                     //`old` and `new` are what the Core reports of a write and nothing is

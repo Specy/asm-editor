@@ -11,7 +11,9 @@ export enum ShortcutAction {
     Step,
     Undo,
     SearchDocumentation,
-    SearchProject
+    SearchProject,
+    StepOver,
+    StepOut
 }
 type Shortcut = {
     type: ShortcutAction
@@ -38,7 +40,9 @@ const shortcutDefinitions = [
     createShortcut(ShortcutAction.Step, 'ShiftLeft+ArrowDown', 'Step', 7),
     createShortcut(ShortcutAction.Undo, 'ShiftLeft+ArrowUp', 'Undo', 8),
     createShortcut(ShortcutAction.SearchDocumentation, 'Mod+KeyK', 'Search the documentation', 9),
-    createShortcut(ShortcutAction.SearchProject, 'Mod+Shift+KeyF', 'Search the Project', 10)
+    createShortcut(ShortcutAction.SearchProject, 'Mod+Shift+KeyF', 'Search the Project', 10),
+    createShortcut(ShortcutAction.StepOver, 'ShiftLeft+ArrowRight', 'Step over', 11),
+    createShortcut(ShortcutAction.StepOut, 'ShiftLeft+ArrowLeft', 'Step out', 12)
 ]
 
 const definitionsById = new Map(shortcutDefinitions.map((shortcut) => [shortcut.id, shortcut]))

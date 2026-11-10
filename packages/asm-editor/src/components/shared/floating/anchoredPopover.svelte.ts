@@ -20,14 +20,21 @@
 import { tick, untrack } from 'svelte'
 import type { Attachment } from 'svelte/attachments'
 import { POPOVER_ARROW, popoverElevation } from '#src/styles/elevation.ts'
-import { placeCard, type Side } from './floating'
+import { placeCard, type Box, type Side } from './floating'
 
 /** The least room kept between the Popover and the viewport's edges. */
 const EDGE = 4
 
 export interface AnchoredPopoverOptions {
     /** The point it opens at, below it unless there is more room above, in viewport coordinates. */
-    point: () => { x: number; y: number }
+    point?: () => { x: number; y: number }
+    /**
+     * A box it opens beside instead of a point, such as the button that opens it, so that on
+     * either side it clears the whole button.
+     */
+    anchor?: () => Box | undefined
+    /** The side it opens on when that side has the room: below when left out. */
+    side?: () => 'top' | 'bottom' | undefined
     /**
      * Whether an arrow with its tip on the point shows what it is about; on when left out. A menu
      * about nothing in particular, such as the Explorer's for its empty space, has none.
@@ -106,19 +113,26 @@ export class AnchoredPopover {
         })
 
     /**
-     * Below the point, or above it near the bottom of the screen, its arrow as near its left end
-     * as its corner allows and slid left near the right edge, the arrow staying on the point.
+     * Below the point or the anchor, or above it near the bottom of the screen (the other way
+     * round for `side: 'top'`), its arrow as near its left end as its corner allows and slid left
+     * near the right edge, the arrow staying on the point or the anchor's middle.
      */
     #place(node: HTMLElement) {
-        const point = this.#options.point()
+        const point = this.#options.point?.() ?? { x: 0, y: 0 }
+        const target = this.#options.anchor?.() ?? {
+            left: point.x,
+            top: point.y,
+            width: 0,
+            height: 0
+        }
         const arrow = this.#options.arrow?.() ?? true
         this.width = node.offsetWidth
         this.height = node.offsetHeight
         const placed = placeCard(
-            { left: point.x, top: point.y, width: 0, height: 0 },
+            target,
             { width: this.width, height: this.height },
             {
-                side: 'bottom',
+                side: this.#options.side?.() ?? 'bottom',
                 gap: 0,
                 arrow: arrow ? POPOVER_ARROW : 0,
                 radius: popoverElevation().radius,

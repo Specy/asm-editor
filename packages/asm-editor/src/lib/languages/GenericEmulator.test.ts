@@ -2415,3 +2415,662 @@ describe('Memory region lifetime', () => {
         expect(emulator.layoutReads).toBe(2)
     })
 })
+
+/**
+ * A fake Core that runs a program, for Step over and Step out
+ * ([stepping-plan.md](../../docs/design/stepping-plan.md)): each instruction is on its own line
+ * unless it says otherwise, a `call` pushes a frame and a `ret` pops one, and a slice honours the
+ * Breakpoints, the budget and `untilCallDepth` in the order the Cores do.
+ */
+type FakeOp = {
+    op: 'nop' | 'call' | 'ret' | 'jump' | 'end' | 'fail' | 'repeat'
+    /** Where a `call` or a `jump` goes. */
+    to?: number
+    /** The source line, for two instructions of one line; its own index otherwise. */
+    line?: number
+    file?: string
+    /** How many more passes a `repeat` takes before the program moves on. */
+    passes?: number
+}
+
+type FakeFrame = { name: string; returnTo: number; site: number }
+
+class ProgramEmulator extends FakeEmulator {
+    program: FakeOp[] = []
+    at = 0
+    frames: FakeFrame[] = []
+    executed = 0
+    /** What Undo restores, newest last: the state before each instruction. */
+    trace: { pc: number; frames: FakeFrame[]; site: number; passes: (number | undefined)[] }[] = []
+    /** A handler the processor enters instead of the next instruction, as an IRQ is. */
+    pendingHandler: number | undefined
+    /** Whether entering a handler pushes a frame, which only some Cores' do. */
+    handlerFrames = true
+    /** The most instructions one slice runs, so a routine takes several. */
+    sliceSize = 1000
+    /** Whether a group can be undone whole, as a Core with an irreversible entry says it cannot. */
+    wholeUndo = true
+
+    constructor() {
+        super({ automaticChecking: false })
+    }
+
+    private instruction(index: number): Instruction {
+        const op = this.program[index]
+        return {
+            address: BigInt(index),
+            lineNumber: op?.line ?? index,
+            file: op?.file ?? 'main.s',
+            code: op?.op ?? 'nop'
+        }
+    }
+
+    private exec(): void {
+        const op = this.program[this.at]
+        this.trace.push({
+            pc: this.at,
+            frames: [...this.frames],
+            site: this.at,
+            passes: this.program.map((each) => each.passes)
+        })
+        this.executed += 1
+        this.coreSteps += 1
+        switch (op.op) {
+            case 'call':
+                this.frames.push({ name: `routine${op.to}`, returnTo: this.at + 1, site: this.at })
+                this.at = op.to!
+                return
+            case 'ret':
+                this.at = this.frames.pop()?.returnTo ?? this.program.length
+                return
+            case 'jump':
+                this.at = op.to!
+                return
+            case 'repeat':
+                if ((op.passes ?? 0) > 0) op.passes! -= 1
+                else this.at += 1
+                return
+            case 'end':
+                this.hasEnded = true
+                return
+            case 'fail':
+                throw new Error('the instruction failed')
+            default:
+                this.at += 1
+        }
+    }
+
+    override async _step(): Promise<{ terminated: boolean; handlerEntry?: boolean }> {
+        if (this.pendingHandler !== undefined) {
+            const handler = this.pendingHandler
+            this.pendingHandler = undefined
+            this.trace.push({
+                pc: this.at,
+                frames: [...this.frames],
+                site: this.at,
+                passes: this.program.map((each) => each.passes)
+            })
+            this.executed += 1
+            this.coreSteps += 1
+            if (this.handlerFrames)
+                this.frames.push({ name: 'handler', returnTo: this.at, site: this.at })
+            this.at = handler
+            return { terminated: false, handlerEntry: true }
+        }
+        this.exec()
+        return { terminated: this.hasEnded }
+    }
+
+    private atBreakpoint(request: ExecutionSliceRequest): boolean {
+        const here = this.instruction(this.at)
+        return request.breakpoints.some(
+            //by line alone: the fake's program is one File, whatever the Breakpoint names it
+            (breakpoint) => 'line' in breakpoint && breakpoint.line === here.lineNumber
+        )
+    }
+
+    override async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
+        this.requests.push(request)
+        let instructions = 0
+        const budget = Math.min(request.instructionBudget, this.sliceSize)
+        for (;;) {
+            if (
+                request.untilCallDepth !== undefined &&
+                this.frames.length <= request.untilCallDepth
+            )
+                return { reason: 'callDepth', instructions }
+            if (this.atBreakpoint(request) && !(instructions === 0 && request.skipBreakpointAtPc))
+                return { reason: 'breakpoint', instructions }
+            if (instructions >= budget) return { reason: 'budget', instructions }
+            this.exec()
+            instructions += 1
+            this.onInstruction?.()
+            if (this.hasEnded) return { reason: 'terminated', instructions }
+        }
+    }
+
+    /** Called after each instruction of a slice, for a test to press Pause or Stop from. */
+    onInstruction: (() => void) | undefined
+
+    override _getNextInstruction(): Instruction | null {
+        return this.hasEnded || this.at >= this.program.length ? null : this.instruction(this.at)
+    }
+
+    override _getPc(): bigint {
+        return BigInt(this.at)
+    }
+
+    override _getCallDepth(): number {
+        return this.frames.length
+    }
+
+    override _getCallStack(): StackFrame[] {
+        return this.frames.map((frame) => ({
+            name: frame.name,
+            address: BigInt(frame.site),
+            destination: BigInt(frame.returnTo),
+            sp: 0n,
+            line: frame.site,
+            color: ''
+        }))
+    }
+
+    override _canUndo(): boolean {
+        return this.trace.length > 0
+    }
+
+    override _undo(): void {
+        const before = this.trace.pop()!
+        this.at = before.pc
+        this.frames = before.frames
+        before.passes.forEach((passes, index) => {
+            if (passes !== undefined) this.program[index].passes = passes
+        })
+        this.hasEnded = false
+        this.coreSteps -= 1
+    }
+
+    override _undoDepth = () => this.trace.length
+
+    override _getInstructionsExecuted = () => BigInt(this.executed)
+
+    override _canUndoSteps = () => this.wholeUndo
+
+    private traceStep(index: number): ExecutionStep {
+        const { site } = this.trace[index]
+        const instruction = this.instruction(site)
+        return {
+            kind: 'instruction',
+            pc: site,
+            line: instruction.lineNumber,
+            file: instruction.file,
+            old_ccr: { bits: 0 },
+            new_ccr: { bits: 0 },
+            mutations: []
+        }
+    }
+
+    override _getUndoHistory(max: number): ExecutionStep[] {
+        return this._getUndoHistoryRange(0, max)
+    }
+
+    override _getUndoHistoryRange = (skip: number, max: number): ExecutionStep[] => {
+        const rows: ExecutionStep[] = []
+        for (let i = this.trace.length - 1 - skip; i >= 0 && rows.length < max; i--)
+            rows.push(this.traceStep(i))
+        return rows
+    }
+}
+
+/** `main` calls a routine of three instructions, then goes on: the smallest program with a call. */
+function callingProgram(): ProgramEmulator {
+    const emulator = new ProgramEmulator()
+    emulator.program = [
+        { op: 'nop' }, //0
+        { op: 'call', to: 5 }, //1
+        { op: 'nop' }, //2
+        { op: 'nop' }, //3
+        { op: 'end' }, //4
+        { op: 'nop' }, //5 routine5
+        { op: 'nop' }, //6
+        { op: 'ret' } //7
+    ]
+    return emulator
+}
+
+describe('step over', () => {
+    it('is a Step on a line that calls nothing', async () => {
+        const emulator = callingProgram()
+        const outcome = await emulator.stepOver()
+        expect(outcome).toEqual({ terminated: false, completed: true })
+        expect(emulator.at).toBe(1)
+        expect(emulator.requests).toHaveLength(0)
+        expect(emulator.line).toBe(1)
+        //one instruction is no group: it reads in the History as a Step's does
+        expect(emulator.latestSteps[0].stretch).toBeUndefined()
+        emulator.undo()
+        expect(emulator.at).toBe(0)
+    })
+
+    it('runs the routine a line calls and stops on the line after it', async () => {
+        const emulator = callingProgram()
+        await emulator.stepOver()
+        const outcome = await emulator.stepOver()
+        expect(outcome).toEqual({ terminated: false, completed: true })
+        expect(emulator.at).toBe(2)
+        expect(emulator.frames).toHaveLength(0)
+        //the routine's first instruction has not run when the run starts, so a Breakpoint on it
+        //has to stop the step
+        expect(emulator.requests.map((request) => request.skipBreakpointAtPc)).toEqual([false])
+        expect(emulator.requests[0].untilCallDepth).toBe(0)
+    })
+
+    it('is one row of the History, which one Undo takes back', async () => {
+        const emulator = callingProgram()
+        await emulator.stepOver()
+        await emulator.stepOver()
+        const [row, before] = emulator.latestSteps
+        expect(row.pc).toBe(1)
+        expect(row.stretch).toEqual({ kind: 'over', library: 'routine5', instructions: 4 })
+        expect(before.pc).toBe(0)
+        expect(emulator.canUndo).toBe(true)
+        expect(emulator.undo()).toBe(1)
+        expect(emulator.at).toBe(1)
+        expect(emulator.frames).toHaveLength(0)
+    })
+
+    it('ends at the depth it started at, not at the first return, in a routine that calls itself', async () => {
+        const emulator = new ProgramEmulator()
+        //routine2 calls itself once more while its counter says so, which the fake keeps in a
+        //`repeat`: the inner call returns to the same address as the outer one
+        emulator.program = [
+            { op: 'call', to: 2 }, //0
+            { op: 'end' }, //1
+            { op: 'repeat', passes: 0 }, //2 routine2
+            { op: 'call', to: 5 }, //3
+            { op: 'ret' }, //4
+            { op: 'call', to: 7 }, //5 routine5
+            { op: 'ret' }, //6
+            { op: 'ret' } //7 routine7
+        ]
+        emulator.sliceSize = 2
+        const outcome = await emulator.stepOver()
+        expect(outcome.completed).toBe(true)
+        expect(emulator.at).toBe(1)
+        expect(emulator.frames).toHaveLength(0)
+        //several slices, each asking for the same depth
+        expect(emulator.requests.length).toBeGreaterThan(1)
+        expect(emulator.requests.every((request) => request.untilCallDepth === 0)).toBe(true)
+    })
+
+    it('stops at a Breakpoint on the first instruction of the routine', async () => {
+        const emulator = callingProgram()
+        emulator.toggleBreakpoint(5)
+        await emulator.stepOver()
+        const outcome = await emulator.stepOver()
+        expect(outcome).toEqual({ terminated: false, completed: false })
+        expect(emulator.at).toBe(5)
+        expect(emulator.frames).toHaveLength(1)
+        //a step that stopped early is recorded as a Run is: Undo goes back one instruction
+        expect(emulator.latestSteps[0].stretch).toBeUndefined()
+        emulator.undo()
+        expect(emulator.at).toBe(1)
+    })
+
+    it('stops at a Breakpoint inside the routine, and a Step out goes on from there', async () => {
+        const emulator = callingProgram()
+        emulator.toggleBreakpoint(6)
+        await emulator.stepOver()
+        expect((await emulator.stepOver()).completed).toBe(false)
+        expect(emulator.at).toBe(6)
+        expect(emulator.canStepOut).toBe(true)
+        const outcome = await emulator.stepOut()
+        expect(outcome).toEqual({ terminated: false, completed: true })
+        expect(emulator.at).toBe(2)
+    })
+
+    it('counts a Breakpoint on the line the routine returns to as the end of the step', async () => {
+        const emulator = callingProgram()
+        emulator.toggleBreakpoint(2)
+        await emulator.stepOver()
+        const outcome = await emulator.stepOver()
+        expect(outcome.completed).toBe(true)
+        expect(emulator.at).toBe(2)
+        expect(emulator.latestSteps[0].stretch?.kind).toBe('over')
+    })
+
+    it('runs a line of several instructions as one', async () => {
+        const emulator = new ProgramEmulator()
+        emulator.program = [
+            { op: 'nop', line: 0 }, //0, as the `auipc` of a RISC-V `call` is
+            { op: 'call', to: 4, line: 0 }, //1
+            { op: 'nop', line: 1 }, //2
+            { op: 'end', line: 2 }, //3
+            { op: 'ret', line: 3 } //4
+        ]
+        const outcome = await emulator.stepOver()
+        expect(outcome.completed).toBe(true)
+        expect(emulator.at).toBe(2)
+        expect(emulator.latestSteps[0].stretch).toEqual({
+            kind: 'over',
+            library: 'routine4',
+            instructions: 3
+        })
+        emulator.undo()
+        expect(emulator.at).toBe(0)
+    })
+
+    it('ends on a jump back within the line', async () => {
+        const emulator = new ProgramEmulator()
+        emulator.program = [
+            { op: 'nop', line: 0 }, //0
+            { op: 'jump', to: 0, line: 0 }, //1
+            { op: 'end', line: 1 }
+        ]
+        await emulator.stepOver()
+        expect(emulator.at).toBe(0)
+        expect(emulator.executed).toBe(2)
+    })
+
+    it('runs an instruction that repeats itself to its end', async () => {
+        const emulator = new ProgramEmulator()
+        emulator.program = [{ op: 'repeat', passes: 4 }, { op: 'end' }]
+        emulator._repeatsInstruction = () => (emulator.program[emulator.at].passes ?? 0) >= 0
+        const outcome = await emulator.stepOver()
+        expect(outcome.completed).toBe(true)
+        expect(emulator.at).toBe(1)
+        expect(emulator.executed).toBe(5)
+        //Step stays one pass
+        emulator.undo()
+        expect(emulator.at).toBe(0)
+        await emulator.step()
+        expect(emulator.executed).toBe(6)
+        expect(emulator.at).toBe(0)
+    })
+
+    it('runs a handler the processor enters out, then the line', async () => {
+        const emulator = callingProgram()
+        emulator.program.push({ op: 'nop' }, { op: 'ret' }) //8, 9: the handler
+        emulator.pendingHandler = 8
+        const outcome = await emulator.stepOver()
+        expect(outcome.completed).toBe(true)
+        //the handler returned to instruction 0, which then ran
+        expect(emulator.at).toBe(1)
+        expect(emulator.frames).toHaveLength(0)
+        expect(emulator.executed).toBe(4)
+    })
+
+    it('stops in a handler the Core gives no frame, where a Step would', async () => {
+        const emulator = callingProgram()
+        emulator.program.push({ op: 'nop' }, { op: 'ret' })
+        emulator.pendingHandler = 8
+        emulator.handlerFrames = false
+        await emulator.stepOver()
+        expect(emulator.at).toBe(8)
+        expect(emulator.requests).toHaveLength(0)
+    })
+
+    it('ends with the program when the routine ends it', async () => {
+        const emulator = new ProgramEmulator()
+        emulator.program = [{ op: 'call', to: 2 }, { op: 'nop' }, { op: 'nop' }, { op: 'end' }]
+        const outcome = await emulator.stepOver()
+        expect(outcome).toEqual({ terminated: true, completed: false })
+        expect(emulator.terminated).toBe(true)
+        expect(emulator.latestSteps[0].stretch).toBeUndefined()
+    })
+
+    it('ends the program on the error of a routine that fails, as a Run does', async () => {
+        const emulator = new ProgramEmulator()
+        emulator.program = [{ op: 'call', to: 2 }, { op: 'end' }, { op: 'nop' }, { op: 'fail' }]
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        const outcome = await emulator.stepOver()
+        expect(outcome).toEqual({ terminated: true, completed: false })
+        expect(emulator.termination?.kind).toBe('error')
+        expect(emulator.stepping).toBe(false)
+    })
+
+    it('throws the error of its own instruction, as a Step does', async () => {
+        const emulator = new ProgramEmulator()
+        emulator.program = [{ op: 'fail' }, { op: 'end' }]
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        await expect(emulator.stepOver()).rejects.toThrow('the instruction failed')
+        expect(emulator.termination?.kind).toBe('error')
+        expect(emulator.stepping).toBe(false)
+    })
+
+    it('takes a Pause while the routine runs and stops inside it', async () => {
+        const emulator = callingProgram()
+        emulator.sliceSize = 1
+        emulator.onInstruction = () => emulator.pause()
+        await emulator.stepOver()
+        const outcome = await emulator.stepOver()
+        expect(outcome).toEqual({ terminated: false, completed: false })
+        expect(emulator.paused).toBe(true)
+        expect(emulator.at).toBe(6)
+        //and the Pause is not left for the next Run to take
+        emulator.onInstruction = undefined
+        emulator.sliceSize = 1000
+        expect(await emulator.run(0)).toBe(InterpreterStatus.Terminated)
+    })
+
+    it('stops at its instruction limit, inside the routine', async () => {
+        const emulator = callingProgram()
+        await emulator.stepOver()
+        const outcome = await emulator.stepOver(2)
+        expect(outcome).toEqual({ terminated: false, completed: false })
+        //the call, then one instruction of the routine
+        expect(emulator.at).toBe(6)
+    })
+
+    it('refuses every other command while it is in flight rather than queueing it', async () => {
+        const emulator = callingProgram()
+        await emulator.stepOver()
+        emulator.sliceSize = 1
+        const seen: unknown[] = []
+        let asked = false
+        emulator.onInstruction = () => {
+            if (asked) return
+            asked = true
+            expect(emulator.stepping).toBe(true)
+            //a held key's next repeat, a Step, a Run and an Undo, all asked for mid-step
+            void emulator.stepOver().then((outcome) => seen.push(outcome))
+            void emulator.stepOut().then((outcome) => seen.push(outcome))
+            void emulator.step().then((outcome) => seen.push(outcome))
+            void emulator.run(0).then((outcome) => seen.push(outcome))
+            seen.push(emulator.undo())
+        }
+        const outcome = await emulator.stepOver()
+        expect(outcome.completed).toBe(true)
+        //each was answered at once, and none of them ran once the step was over
+        await Promise.resolve()
+        expect(seen).toEqual([
+            0,
+            { terminated: false, completed: false, refused: true },
+            { terminated: false, completed: false, refused: true },
+            false,
+            InterpreterStatus.Running
+        ])
+        expect(emulator.at).toBe(2)
+        expect(emulator.stepping).toBe(false)
+    })
+
+    it('shows as a Run only once it has been going for a while', async () => {
+        vi.useFakeTimers()
+        onTestFinished(() => void vi.useRealTimers())
+        const emulator = callingProgram()
+        await emulator.stepOver()
+        expect(emulator.stepRunning).toBeFalsy()
+        //a routine that waits: the slice does not come back until it is woken
+        let wake!: () => void
+        const original = emulator._runSlice.bind(emulator)
+        emulator._runSlice = async (request) => {
+            await new Promise<void>((resolve) => (wake = resolve))
+            return original(request)
+        }
+        const step = emulator.stepOver()
+        await vi.advanceTimersByTimeAsync(100)
+        expect(emulator.stepRunning).toBeFalsy()
+        await vi.advanceTimersByTimeAsync(100)
+        expect(emulator.stepRunning).toBe(true)
+        wake()
+        await step
+        expect(emulator.stepRunning).toBe(false)
+    })
+
+    it('leaves a step it cannot undo whole as plain entries', async () => {
+        const emulator = callingProgram()
+        emulator.wholeUndo = false
+        await emulator.stepOver()
+        expect((await emulator.stepOver()).completed).toBe(true)
+        expect(emulator.latestSteps[0].stretch).toBeUndefined()
+        expect(emulator.canUndo).toBe(true)
+        emulator.undo()
+        //one instruction back: the routine's `ret`
+        expect(emulator.at).toBe(7)
+    })
+
+    it('goes on to program code when it ends in library code', async () => {
+        const emulator = new ProgramEmulator()
+        //main calls a library routine, which calls back into the program; the callback's `ret`
+        //lands in the library again, which a Step runs through
+        emulator.program = [
+            { op: 'call', to: 3 }, //0
+            { op: 'end' }, //1
+            { op: 'nop' }, //2
+            { op: 'call', to: 7, file: '@runtime/lib.s' }, //3
+            { op: 'nop', file: '@runtime/lib.s' }, //4
+            { op: 'ret', file: '@runtime/lib.s' }, //5
+            { op: 'nop' }, //6
+            { op: 'ret' } //7 the callback
+        ]
+        emulator.at = 7
+        emulator.frames = [
+            { name: 'routine3', returnTo: 1, site: 0 },
+            { name: 'routine7', returnTo: 4, site: 3 }
+        ]
+        const outcome = await emulator.stepOver()
+        expect(outcome.completed).toBe(true)
+        expect(emulator.at).toBe(1)
+    })
+})
+
+describe('step out', () => {
+    it('runs the rest of the routine and is one row of the History', async () => {
+        const emulator = callingProgram()
+        await emulator.step()
+        await emulator.step()
+        expect(emulator.at).toBe(5)
+        expect(emulator.canStepOut).toBe(true)
+        const outcome = await emulator.stepOut()
+        expect(outcome).toEqual({ terminated: false, completed: true })
+        expect(emulator.at).toBe(2)
+        //a Run: the instruction it starts on runs, whatever Breakpoint is on it
+        expect(emulator.requests[0].skipBreakpointAtPc).toBe(true)
+        expect(emulator.requests[0].untilCallDepth).toBe(0)
+        expect(emulator.latestSteps[0].stretch).toEqual({
+            kind: 'out',
+            library: 'routine5',
+            instructions: 3
+        })
+        expect(emulator.latestSteps[0].pc).toBe(5)
+        expect(emulator.canStepOut).toBe(false)
+        emulator.undo()
+        expect(emulator.at).toBe(5)
+        expect(emulator.canStepOut).toBe(true)
+    })
+
+    it('does nothing with no routine to leave', async () => {
+        const emulator = callingProgram()
+        expect(emulator.canStepOut).toBeFalsy()
+        //a stop a Pause made stays one: nothing ran
+        ;(emulator as unknown as { state: { paused: boolean } }).state.paused = true
+        const outcome = await emulator.stepOut()
+        expect(outcome).toEqual({ terminated: false, completed: false, refused: true })
+        expect(emulator.executed).toBe(0)
+        expect(emulator.requests).toHaveLength(0)
+        expect(emulator.paused).toBe(true)
+    })
+
+    it('leaves the routine shown, not the library function the program is in', async () => {
+        const emulator = new ProgramEmulator()
+        emulator.program = [
+            { op: 'call', to: 3 }, //0 main
+            { op: 'end' }, //1
+            { op: 'nop' }, //2
+            { op: 'call', to: 6 }, //3 routine3, the routine shown
+            { op: 'nop' }, //4
+            { op: 'ret' }, //5
+            { op: 'nop', file: '@runtime/lib.s' }, //6 the library function
+            { op: 'ret', file: '@runtime/lib.s' } //7
+        ]
+        //stopped inside the library function, which is shown at the program's call into it
+        emulator.at = 6
+        emulator.frames = [
+            { name: 'routine3', returnTo: 1, site: 0 },
+            { name: 'routine6', returnTo: 4, site: 3 }
+        ]
+        emulator._libraryCallSite = () => ({
+            address: 3n,
+            lineNumber: 3,
+            file: 'main.s',
+            code: 'call'
+        })
+        emulator._libraryCallDepth = () => 1
+        const outcome = await emulator.stepOut()
+        expect(outcome.completed).toBe(true)
+        expect(emulator.at).toBe(1)
+        expect(emulator.requests[0].untilCallDepth).toBe(0)
+        expect(emulator.latestSteps[0].stretch?.library).toBe('routine3')
+    })
+
+    it('finishes the library call on a Step over of a stop shown at that call', async () => {
+        const emulator = new ProgramEmulator()
+        emulator.program = [
+            { op: 'call', to: 3 },
+            { op: 'end' },
+            { op: 'nop' },
+            { op: 'call', to: 6 },
+            { op: 'nop' },
+            { op: 'ret' },
+            { op: 'nop', file: '@runtime/lib.s' },
+            { op: 'ret', file: '@runtime/lib.s' }
+        ]
+        emulator.at = 6
+        emulator.frames = [
+            { name: 'routine3', returnTo: 1, site: 0 },
+            { name: 'routine6', returnTo: 4, site: 3 }
+        ]
+        emulator._libraryCallSite = () => ({
+            address: 3n,
+            lineNumber: 3,
+            file: 'main.s',
+            code: 'call'
+        })
+        emulator._libraryCallDepth = () => 1
+        const outcome = await emulator.stepOver()
+        expect(outcome.completed).toBe(true)
+        expect(emulator.at).toBe(4)
+        expect(emulator.requests[0].untilCallDepth).toBe(1)
+    })
+})
+
+describe('the Breakpoint skip of a Run', () => {
+    it('is kept until an instruction has run', async () => {
+        //a slice that executed nothing, a Z80 `in` rolled back to wait for its input, has not
+        //spent the skip: the slice that runs the instruction still starts on it
+        const emulator = new FakeEmulator()
+        emulator.toggleBreakpoint(7)
+        emulator.behavior = (_request, index) =>
+            index === 0
+                ? { reason: 'wait', instructions: 0, wait: Promise.resolve() }
+                : index === 1
+                  ? { reason: 'budget', instructions: 100 }
+                  : { reason: 'terminated', instructions: 1 }
+        await emulator.run(0)
+        expect(emulator.requests.map((request) => request.skipBreakpointAtPc)).toEqual([
+            true,
+            true,
+            false
+        ])
+    })
+})

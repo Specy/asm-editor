@@ -2670,16 +2670,19 @@ target:
         //`jal` writes its link register and the program counter; the counters and the clock sample
         //are bookkeeping the program did not ask for and stay out of the row. Each write carries both
         //sides: `ra` was clear and now holds the return address, and the PC went from the address of
-        //the `jal` itself to its target
+        //the `jal` itself to its target. A call to the very next instruction is at its return
+        //address at once, so the frame it pushed is gone in the same instruction
         expect(step.mutations).toEqual([
             {
                 type: 'WriteRegister',
                 value: { register: 'ra', old: 0n, new: 0x400004n, size: RegisterSize.Long }
             },
+            { type: 'PushCallStack', value: { from: 0x400000n, to: 0x400004n } },
             {
                 type: 'WriteRegister',
                 value: { register: 'pc', old: 0x400000n, new: 0x400004n, size: RegisterSize.Long }
-            }
+            },
+            { type: 'PopCallStack', value: { from: 0x400000n, to: 0x400004n } }
         ])
     })
 

@@ -191,6 +191,18 @@ export abstract class BaseEmulator<R extends string> {
     abstract _undo(): void
 
     /**
+     * Takes back the newest `count` entries of the history together, which is how one Undo takes
+     * back a Step over, a Step out or a Step through library code. Asked only after
+     * `_canUndoSteps(count)` answered that all of them can be reversed. The Core's own undo of an
+     * entry is cheap; what costs is asking it to describe each entry and rewinding every
+     * peripheral's journal once per entry, which `_undo` does and a group of thirty thousand
+     * entries cannot afford. So the adapter reads the group's oldest entry once, undoes them all,
+     * and rewinds each journal once, to before that entry. Without it, `_undo` is called `count`
+     * times.
+     */
+    _undoEntries?(count: number): void
+
+    /**
      * How many entries (instructions or Pokes) the Core's history holds now, for Undo of a Step that
      * ran through library code: it is undone whole or not at all.
      */
@@ -256,7 +268,33 @@ export abstract class BaseEmulator<R extends string> {
     /** Preflights both the CPU record and every peripheral effect belonging to it. */
     abstract _canUndo(): boolean
 
-    abstract _step(): Promise<{ terminated: boolean }>
+    /**
+     * Runs one instruction. `handlerEntry` says the step only entered a handler the processor took
+     * on its own, an IRQ, an interrupt or a signal, so the instruction it was asked for has not run
+     * yet: a Step over then runs the handler out and steps again.
+     */
+    abstract _step(): Promise<{ terminated: boolean; handlerEntry?: boolean }>
+
+    /**
+     * How many frames the Core's Call stack holds, in constant time, which is what a Step over and
+     * a Step out end on ([stepping-plan.md](../../../../../docs/design/stepping-plan.md)).
+     * Undefined counts the frames `_getCallStack` gives.
+     */
+    _getCallDepth?(): number
+
+    /**
+     * Whether the instruction about to run is one that repeats itself, a Z80 `ldir`. Asked only
+     * after a pass that left the program counter on it, which is what says it has more to do: a
+     * Step over that has run one pass of it then runs the rest.
+     */
+    _repeatsInstruction?(): boolean
+
+    /**
+     * The Call stack depth at the program's own call into the library code it is stopped in, the
+     * frame `_libraryCallSite` reads: what a Step over and a Step out count from while the stop is
+     * shown at that call. Undefined when no frame returns to program code.
+     */
+    _libraryCallDepth?(): number | undefined
 
     abstract _writeMemoryBytes(address: bigint, data: Uint8Array): void
 
@@ -356,7 +394,12 @@ export abstract class BaseEmulator<R extends string> {
 
     abstract _getFlags(): { name: string; value: number; prev?: number }[]
 
-    abstract _getCallStack(): StackFrame[]
+    /**
+     * The Call stack's frames, outermost first; with `max`, only the newest `max` of them, still
+     * outermost first. The panels read a limited number at every stop, since a routine that calls
+     * itself without end holds a hundred thousand.
+     */
+    abstract _getCallStack(max?: number): StackFrame[]
 
     abstract _getInstructionAt(address: bigint): Instruction | null
 

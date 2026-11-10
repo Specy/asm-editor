@@ -63,11 +63,11 @@ describe('Restart', () => {
         press('Build')
         await vi.waitFor(() => expect(session.building).toBe(false))
         flushSync()
-        expect(labels()).toEqual(['Stop', 'Run', 'Undo', 'Step'])
+        expect(labels()).toEqual(['Stop', 'Run', 'Undo', 'Step', 'Step over', 'Step out'])
 
         emulator.terminated = true
         flushSync()
-        expect(labels()).toEqual(['Stop', 'Restart', 'Undo', 'Step'])
+        expect(labels()).toEqual(['Stop', 'Restart', 'Undo', 'Step', 'Step over', 'Step out'])
         const restart = button('Restart')!
         expect(restart.disabled).toBe(false)
         expect(restart.classList.contains('primary')).toBe(false)
@@ -83,7 +83,7 @@ describe('Restart', () => {
         expect(built).toEqual(['main.s', 'main.s'])
         expect(session.restarting).toBe(false)
         expect(session.debugSession).toBe(true)
-        expect(labels()).toEqual(['Stop', 'Run', 'Undo', 'Step'])
+        expect(labels()).toEqual(['Stop', 'Run', 'Undo', 'Step', 'Step over', 'Step out'])
         expect(button('Run')!.classList.contains('primary')).toBe(true)
     })
 

@@ -50,6 +50,10 @@ qword at `[rsp]` into `rip` and adds 8 to `rsp`. If `sum` pushed a value and fai
 address. A function must undo its stack allocations and pushes in the right order so that `rsp`
 points at its return address when it executes `ret`.
 
+**Step** on `call sum` follows the program into `sum`. **Step over** on that line runs all of
+`sum` and stops at `mov r12, rax`. Inside `sum`, **Step out** runs the rest of it and stops at that same
+line.
+
 ## Integer and pointer values in System V
 
 The hardware defines `call` and `ret`, but it does not assign registers to parameters or return

@@ -1262,11 +1262,11 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * ([cpp-demangling.md](../../../../../../docs/design/cpp-demangling.md), decision 11): a frame
      * of a Listing's function as the Symbols panel lists it, the signature where it has overloads.
      */
-    _getCallStack(): StackFrame[] {
+    _getCallStack(max?: number): StackFrame[] {
         const entry = this.buildSources?.entry ?? this._sources.entry
         const describe = this.describe()
         return (
-            this.core?.getCallStack().map((frame) => {
+            this.core?.getCallStack(max).map((frame) => {
                 const located = this.locate(frame.target, false)
                 if (!located) return { ...frame, file: frame.file || entry }
                 //a frame is a function: named, and gone to, as its Listing labels it, at where its
@@ -1287,6 +1287,15 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
                 }
             }) ?? []
         )
+    }
+
+    /**
+     * The Core keeps its Call stack for every instruction, whether or not Undo records: a `call`
+     * pushes a frame, and so does a signal delivered to a handler, and a frame is gone once rsp has
+     * passed its return address, or for a signal once `rt_sigreturn` puts rsp back.
+     */
+    _getCallDepth(): number {
+        return this.core?.getCallDepth() ?? 0
     }
 
     _getCompiledCode(): { decorations: EmulatorDecoration[]; code: string } {
@@ -1550,16 +1559,41 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
      * bytes, its PLT included, where a Breakpoint may be: that is shown where it is.
      */
     _libraryCallSite(): Instruction | null {
+        const frame = this.programCallIntoLibrary()
+        return frame ? this.callBefore(frame.destination) : null
+    }
+
+    /**
+     * How deep the Call stack was when the program made the call `_libraryCallSite` names: the
+     * frames below the one that call pushed, which is what a Step over and a Step out count from
+     * while the stop is shown there.
+     */
+    _libraryCallDepth(): number | undefined {
+        return this.programCallIntoLibrary()?.index
+    }
+
+    /**
+     * The innermost Call stack frame whose return address is program code, and how many frames
+     * are below it; none for a stop in the Executable's own bytes, its PLT included.
+     */
+    private programCallIntoLibrary(): { destination: bigint; index: number } | undefined {
         const core = this.core
-        if (!core) return null
-        if (this.executable && this.objectAt(core.getPc())?.main) return null
-        const frames = core.getCallStack()
-        for (let i = frames.length - 1; i >= 0; i--) {
-            const returnAddress = frames[i].destination
-            if (this.isLibraryAddress(returnAddress)) continue
-            return this.callBefore(returnAddress)
+        if (!core) return undefined
+        if (this.executable && this.objectAt(core.getPc())?.main) return undefined
+        //the frame is a few out from the innermost, so the newest frames are read first and more
+        //only when it is not among them: a program that recurses through a library callback holds
+        //a hundred thousand, and this runs at every stop in library code
+        const depth = core.getCallDepth()
+        for (let read = 64; ; read *= 16) {
+            const frames = core.getCallStack(Math.min(read, depth))
+            const first = depth - frames.length
+            for (let i = frames.length - 1; i >= 0; i--) {
+                const returnAddress = frames[i].destination
+                if (this.isLibraryAddress(returnAddress)) continue
+                return { destination: returnAddress, index: first + i }
+            }
+            if (frames.length >= depth) return undefined
         }
-        return null
     }
 
     /**
@@ -1933,7 +1967,15 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         return this.requireCore().readMemoryBytes(address, length)
     }
 
-    /** Completed guest-instruction deltas exclude tool execution and work with history disabled. */
+    /**
+     * Completed guest-instruction deltas exclude tool execution and work with history disabled.
+     * Every `run` call of the slice is given the request's `untilCallDepth`: the Core tests it as
+     * each call begins and after every instruction, and a call made after an input wait is a new
+     * call. `skipBreakpointAtPc` goes to the first call only. Nothing that call can stop for leaves
+     * the skip owed: a read or a wait it stops on is the instruction the skip let past, finished by
+     * the input or the wake rather than by the next call, and a fault the program handles goes on
+     * into the handler inside the call.
+     */
     async _runSlice(request: ExecutionSliceRequest): Promise<ExecutionSlice> {
         //paused Undo recording (startup code) only hides entries: the Core records them all the
         //same, at the same cost, so only a Build without history takes the longer slice
@@ -1950,17 +1992,23 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this.mappingsMayChange()
         let status: CoreEmulatorStatus
         try {
-            status = await this.runWithInput(budget, breakpoints, request.skipBreakpointAtPc)
+            status = await this.runWithInput(
+                budget,
+                breakpoints,
+                request.skipBreakpointAtPc,
+                request.untilCallDepth
+            )
         } finally {
             //however the slice ended, the Screen shows what it drew
             this.showFramebuffer()
         }
         const instructions = Number(core.getInstructionsExecuted() - before)
-        if (status === CoreEmulatorStatus.Running)
-            return {
-                reason: core.stopReason?.kind === 'breakpoint' ? 'breakpoint' : 'budget',
-                instructions
-            }
+        if (status === CoreEmulatorStatus.Running) {
+            const kind = core.stopReason?.kind
+            //the routine a Step over entered has returned, or the one a Step out leaves
+            if (kind === 'callDepth') return { reason: 'callDepth', instructions }
+            return { reason: kind === 'breakpoint' ? 'breakpoint' : 'budget', instructions }
+        }
         return { reason: 'terminated', instructions }
     }
 
@@ -1995,17 +2043,24 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         )
     }
 
-    async _step(): Promise<{ terminated: boolean }> {
+    /**
+     * `handlerEntry` when the step began by delivering a signal to its handler, an alarm say: the
+     * instruction it ran is the handler's first, and the one it was asked for has not run yet.
+     */
+    async _step(): Promise<{ terminated: boolean; handlerEntry?: boolean }> {
         const core = this.requireCore()
         this.mappingsMayChange()
         const execution = this.executionController.capture()
+        let stepped: { handlerEntry?: boolean }
         try {
-            await this.executionController.waitFor(execution, () => core.step())
+            stepped = await this.executionController.waitFor(execution, () => core.step())
             await this.finishBlockedInstruction(execution)
         } finally {
             this.showFramebuffer()
         }
-        return { terminated: core.hasTerminated() }
+        return stepped.handlerEntry === true
+            ? { terminated: core.hasTerminated(), handlerEntry: true }
+            : { terminated: core.hasTerminated() }
     }
 
     _undo(): void {
@@ -2025,6 +2080,39 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
         this._peripherals.audio.flush()
     }
 
+    /**
+     * A group of entries taken back together, a Step over's or a Step out's. `_undo` asks the Core
+     * to describe the newest entry before it takes each one back, which is most of what it costs;
+     * the Terminal's journal and the Random source's positions are keyed by serial, which only
+     * grows, so reading the group's oldest entry once and rewinding both to it does the same.
+     */
+    _undoEntries(count: number): void {
+        const core = this.requireCore()
+        this.mappingsMayChange()
+        const [oldest] = core.getUndoHistoryRange(count - 1, 1)
+        for (let i = 0; i < count; i++) core.undo()
+        if (oldest) {
+            const from = BigInt(oldest.serial)
+            //the Random source goes back to where the oldest instruction of the group that drew
+            //from it found it, and the positions of all of them are forgotten
+            let position: number | undefined
+            let earliest: bigint | undefined
+            for (const [serial, at] of this.randomPositions) {
+                const drawn = BigInt(serial)
+                if (drawn < from) continue
+                if (earliest === undefined || drawn < earliest) {
+                    earliest = drawn
+                    position = at
+                }
+                this.randomPositions.delete(serial)
+            }
+            if (position !== undefined) this._peripherals.random.seek(position)
+            this._peripherals.terminal.undoAfter(from - 1n)
+        }
+        this.followTerminalMode(core.hasTerminated() ? null : core.getTerminalMode())
+        this._peripherals.audio.flush()
+    }
+
     _writeMemoryBytes(address: bigint, data: Uint8Array): void {
         this.requireCore().writeMemoryBytes(address, data)
         //a Poke into the Executable's code shows on its Listing line
@@ -2040,7 +2128,8 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
     private async runWithInput(
         limit: number,
         breakpoints: X86Breakpoint[],
-        skipBreakpointAtPc = false
+        skipBreakpointAtPc = false,
+        untilCallDepth?: number
     ): Promise<CoreEmulatorStatus> {
         const core = this.requireCore()
         const execution = this.executionController.capture()
@@ -2049,7 +2138,10 @@ class AsmEditorX86Emulator extends GenericEmulator<CoreX86Emulator, X86RegisterN
             const remaining = limit - Number(core.getInstructionsExecuted() - before)
             if (remaining <= 0) return core.getStatus()
             const status = await this.executionController.waitFor(execution, () =>
-                core.run(remaining, breakpoints, { skipBreakpointAtPc })
+                core.run(remaining, breakpoints, {
+                    skipBreakpointAtPc,
+                    ...(untilCallDepth !== undefined ? { untilCallDepth } : {})
+                })
             )
             skipBreakpointAtPc = false
             if (

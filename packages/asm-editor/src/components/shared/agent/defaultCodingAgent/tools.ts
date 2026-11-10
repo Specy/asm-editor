@@ -62,6 +62,13 @@ function parseHexAddress(address: string) {
  */
 const PROGRAM_COUNTER_NAMES = ['pc', 'rip']
 
+/**
+ * The most instructions one Step over or Step out of the `step` tool runs, as `run_to_completion`
+ * limits its run: a person stepping over a routine that never returns presses Pause, and the agent
+ * cannot.
+ */
+const STEP_COMMAND_INSTRUCTION_LIMIT = 1_000_000
+
 function findRegisterFile(emulator: Emulator, fileId: string): RegisterFile | undefined {
     return (emulator.registerFiles ?? []).find((file) => file.id === fileId)
 }
@@ -1577,16 +1584,22 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
         step: tool({
             name: 'step',
             description:
-                'Steps the emulator forward by a given number of instructions. You MUST compile first before calling this tool. Use this for single-stepping or executing a few instructions at a time. Returns registers, pc, sp, status registers, stdout, current line, and latest mutations after stepping. Of the other Register files (registerFiles) it lists only the registers that are not zero and not an empty x87 stack slot, so call get_emulator_state when you need one of those files in full.',
+                "Steps the emulator forward. You MUST compile first before calling this tool. With mode 'into' (the default) each step runs one instruction and enters a routine it calls: use it for single-stepping or executing a few instructions at a time. With mode 'over' each step runs one source line and, with it, the whole routine the line calls, stopping on the line after the call. With mode 'out' each step runs until the routine the program is in returns to its caller. A step over or out stops early at a breakpoint, when the program ends, or after 1,000,000 instructions; stoppedEarly then says so and the program is left where it stopped. Returns registers, pc, sp, status registers, stdout, current line, and latest mutations after stepping. Of the other Register files (registerFiles) it lists only the registers that are not zero and not an empty x87 stack slot, so call get_emulator_state when you need one of those files in full.",
             schema: z.object({
                 steps: z
                     .number()
                     .int()
                     .min(1)
                     .optional()
-                    .describe('Number of steps to execute. Defaults to 1.')
+                    .describe('Number of steps to execute. Defaults to 1.'),
+                mode: z
+                    .enum(['into', 'over', 'out'])
+                    .optional()
+                    .describe(
+                        "How each step runs: 'into' one instruction, 'over' one line with the routine it calls, 'out' until the current routine returns. Defaults to 'into'."
+                    )
             }),
-            execute: async ({ steps = 1 }) =>
+            execute: async ({ steps = 1, mode = 'into' }) =>
                 runAgentTool(async (toolRun) => {
                     const emulator = context.getEmulator()
                     if (!emulator)
@@ -1600,13 +1613,51 @@ Use this to inspect registers, flags, call stack, breakpoints, errors, execution
                     try {
                         let terminated = false
                         let stepsExecuted = 0
+                        let stoppedEarly: string | undefined
                         for (let stepIndex = 0; stepIndex < steps && !terminated; stepIndex++) {
-                            terminated = await emulator.step()
+                            if (mode === 'into') {
+                                terminated = await emulator.step()
+                                stepsExecuted++
+                                continue
+                            }
+                            if (mode === 'out' && !emulator.canStepOut) {
+                                stoppedEarly =
+                                    'The Call stack is empty, so there is no routine to step out of.'
+                                break
+                            }
+                            //a routine that never returns would otherwise run for ever: nothing
+                            //here can press Pause
+                            const outcome =
+                                mode === 'over'
+                                    ? await emulator.stepOver(STEP_COMMAND_INSTRUCTION_LIMIT)
+                                    : await emulator.stepOut(STEP_COMMAND_INSTRUCTION_LIMIT)
+                            terminated = outcome.terminated
+                            if (outcome.refused) {
+                                stoppedEarly = `The step ${mode} did not start: the emulator was busy with another step or a run, or the program could not run. Nothing executed.`
+                                break
+                            }
                             stepsExecuted++
+                            if (!outcome.completed && !terminated) {
+                                stoppedEarly = `The step ${mode} did not finish: the program stopped before the routine returned, at a breakpoint or after ${STEP_COMMAND_INSTRUCTION_LIMIT.toLocaleString('en-US')} instructions. currentLine says where.`
+                                break
+                            }
+                        }
+                        //a routine that failed ends the program on its error without throwing,
+                        //as a run does
+                        const errors = mode === 'into' ? [] : collectEmulatorErrors(emulator)
+                        if (errors.length > 0) {
+                            return toolRun.failure('runtime_error', errors[0], {
+                                retryable: false,
+                                nextAction:
+                                    'Use get_emulator_state and latestSteps to locate the failing instruction before editing.',
+                                details: executionDetails(context, emulator)
+                            })
                         }
                         return toolRun.success({
                             stepsRequested: steps,
                             stepsExecuted,
+                            ...(mode === 'into' ? {} : { mode }),
+                            ...(stoppedEarly ? { stoppedEarly } : {}),
                             ...emulatorState(context, emulator)
                         })
                     } catch (error) {

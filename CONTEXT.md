@@ -52,7 +52,7 @@ The generic state "the Emulator is paused mid-execution waiting on the user" (e.
 
 ## IRQ
 
-An interrupt request on M68K, at a level from 1 to 7: a timer the program set with `trap #15` task 32, or a key or mouse event on the **Screen** it asked for with task 62 or 60. It is latched until the processor takes it, between two instructions, as an **Exception** through the level's autovector, `$60` + 4 × level, once it is above the interrupt mask of the status register or is level 7. Taking one is a step of its own in the History, which Undo takes back, making the request pending again. `stop` waits for one without running anything, and the status line says what it waits for. Timers run only during a Run, on **Program time**. See [ADR 0065](./docs/adr/0065-m68k-devices-deliver-irqs.md).
+An interrupt request on M68K, at a level from 1 to 7: a timer the program set with `trap #15` task 32, or a key or mouse event on the **Screen** it asked for with task 62 or 60. It is latched until the processor takes it, between two instructions, as an **Exception** through the level's autovector, `$60` + 4 × level, once it is above the interrupt mask of the status register or is level 7. Taking one is a step of its own in the History, which Undo takes back, making the request pending again, and a frame of the **Call stack**, so a **Step over** runs the handler to its return and then the line it was pressed on. `stop` waits for one without running anything, and the status line says what it waits for. Timers run only during a Run, on **Program time**. See [ADR 0065](./docs/adr/0065-m68k-devices-deliver-irqs.md).
 _Avoid_: interrupt (in code, which means an **Interrupt**), hardware interrupt
 
 ## Pause
@@ -68,6 +68,26 @@ _Avoid_: break, stop point, halt point
 
 A Run during a **Debug session** that also stops before the instruction at a line of the running **Executable**'s **Listing**, or, from a line of its **Pseudocode**, before the first instruction of each block mapped to that line, as a **Breakpoint** set there would. Those stops are a Breakpoint for that Run only, never added to the person's, and the Run still stops earlier at any Breakpoint, a **Pause** or the program's end. Like any Run it executes the instruction it starts on, so from the stopped line it runs until the program comes back to it. It is offered while the program is stopped and not waiting for input, on the running program's own Listing and Pseudocode only. See [ADR 0023](./docs/adr/0023-run-continues-past-the-breakpoint-it-is-parked-on.md).
 _Avoid_: run until, continue to here, temporary breakpoint (for the action)
+
+## Step
+
+One instruction of a **Debug session**'s program, run on its own: the program then stops on the next one, which may be the first of a routine the instruction called, or of a handler the processor entered instead of it. A line that assembles to several instructions takes a Step for each. Inside **Library code** a Step runs on to the program's own code. One Undo takes a Step back.
+_Avoid_: step into (the button and the command are Step), single step, trace
+
+## Step over
+
+A Step of the whole line the program is stopped on, together with what the line enters: a routine it calls runs to its return, and so does a handler the processor takes on the way, after which the line itself still runs. It ends when the **Call stack** is no deeper than it was, so on a line that calls nothing it is a Step, a routine that calls itself does not end it early, and a Z80 instruction that repeats itself runs to its end. The routine runs as a Run does: it stops early at a **Breakpoint**, a **Pause**, the program's end or an error, and waits for input like one. A Step over that did what it was asked is one row of the History, which one Undo takes back; one that stopped early is undone an instruction at a time. See [ADR 0079](./docs/adr/0079-a-step-over-and-a-step-out-end-at-a-call-stack-depth.md).
+_Avoid_: next, skip, step past
+
+## Step out
+
+A run to the return of the routine the stop is shown in: it ends when that routine's frame is gone from the **Call stack**, with the program back in the code that called it. It is a Run in every other way, and is not offered while the Call stack is empty. While the stop is shown at the program's call into **Library code**, the routine it leaves is the one that made the call, not the library function the program is in.
+_Avoid_: finish, return, step up, run to return
+
+## Call stack
+
+The routines and handlers the program is inside, outermost first, as the Core tracks them: one frame for each call, exception, IRQ, interrupt or signal handler that has not returned, with the routine entered, where it was called from, the address it returns to and the stack pointer at the call. Each Core decides when a frame is gone: on x86, M68K and Z80, when the stack pointer is back above the frame, whatever instruction took it there; on MIPS and RISC-V, when a return instruction runs or the program arrives at the frame's return address. Undo restores it. Its depth is what a **Step over** and a **Step out** end on. One of the **Debug tools**.
+_Avoid_: backtrace, stack trace, frames (for the panel)
 
 ## Poke
 
@@ -401,7 +421,7 @@ _Avoid_: system libraries, libc (when all five are meant), runtime
 
 ## Library code
 
-The code a Step runs through in one go rather than entering, unless the _Step into library code_ **Preference** is on: a **Runtime library**'s **Library members** and the **Start unit**, shown read-only under `@runtime/`, and the shared libraries an **Executable** loads, each shown as its **Listing** under `@lib/<soname>` (`@lib/libc.so.6`). Neither path is a **File** of the **Project**, and a library's Listing takes no **Breakpoint**. An Executable's own PLT stubs are stepped through as library code too.
+The code a **Step** runs through in one go rather than entering, unless the _Step into library code_ **Preference** is on: a **Runtime library**'s **Library members** and the **Start unit**, shown read-only under `@runtime/`, and the shared libraries an **Executable** loads, each shown as its **Listing** under `@lib/<soname>` (`@lib/libc.so.6`). Neither path is a **File** of the **Project**, and a library's Listing takes no **Breakpoint**. An Executable's own PLT stubs are stepped through as library code too. A Step stops in a library's callback into the program; a **Step over** of a call into library code runs the callbacks with it.
 _Avoid_: system code, external code, foreign code
 
 ## Displayed file

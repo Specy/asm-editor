@@ -232,6 +232,26 @@ describe('FileSystem', () => {
         }
     )
 
+    it('rolls back every step from a serial on, for a group taken back in one go', () => {
+        const fs = new FileSystem({ log: { encoding: 'plain', content: 'old' } })
+        const run = fs.beginSession()
+        const text = new TextEncoder()
+        const fd = run.performInstruction('10', () => run.open('log', 'write'))
+        run.performInstruction('11', () => run.write(fd, text.encode('one')))
+        run.performInstruction('12', () => undefined)
+        run.performInstruction('20', () => run.write(fd, text.encode('two')))
+        expect(fs.readText('log')).toBe('onetwo')
+        //a serial past every frame takes nothing back
+        run.undoFrom(21n)
+        expect(fs.readText('log')).toBe('onetwo')
+        run.undoFrom('11')
+        expect(fs.readText('log')).toBe('')
+        expect(run.canUndo('10')).toBe(true)
+        run.undoFrom(10)
+        expect(fs.readText('log')).toBe('old')
+        run.stop()
+    })
+
     it('combines file and empty callbacks of one instruction into one bounded Undo frame', () => {
         const fs = new FileSystem({ data: { encoding: 'plain', content: 'abc' } })
         const run = fs.beginSession(undefined, 1)

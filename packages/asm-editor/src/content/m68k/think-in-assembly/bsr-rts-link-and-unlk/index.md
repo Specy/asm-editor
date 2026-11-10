@@ -40,6 +40,10 @@ back up by four. The caller then copies 30 into `d1`. The `bra end` skips the su
 without it, execution would fall through from the caller into `triple` a second time, reaching
 `rts` without a matching call.
 
+Press **Step** on `bsr triple` to follow the program into `triple`. **Step over** on that line runs
+all of `triple` and stops at `move.l d0,d1`. Inside `triple`, **Step out** runs the rest of it and
+stops at that same line.
+
 The processor supplies the return-address behavior. The choice of `d0` for the input and answer is
 an agreement between these two pieces of code. So is the choice to let `triple` overwrite `d2`.
 If its caller needs the old `d2` afterward, the caller must save and restore it. Together, such

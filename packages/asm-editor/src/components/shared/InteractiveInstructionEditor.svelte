@@ -17,7 +17,8 @@
     import { toast } from '#stores/toastStore.ts'
     import ExecutionDock, {
         type DockAction,
-        type DockCompilation
+        type DockCompilation,
+        type DockStepButtons
     } from '#cmp/specific/project/ExecutionDock.svelte'
     import { DockSoundState } from '#cmp/specific/project/dockSound.svelte.ts'
     import { wakeAudio } from '#lib/languages/peripherals/audio/audioContext.ts'
@@ -142,6 +143,11 @@
          */
         dockActions?: DockAction[]
         /**
+         * How the dock draws Step over and Step out: in a menu behind an arrow beside Step when left
+         * out, so a Playground's dock stays small; the Workbench draws them as parts of Step.
+         */
+        stepButtons?: DockStepButtons
+        /**
          * Called once, after the code editor is first drawn. It sits inside its emulator's loader, so
          * by then the playground can be typed into and built.
          */
@@ -173,6 +179,7 @@
         initialRegisterFile = undefined,
         initialRegisterFormat = undefined,
         dockActions = [],
+        stepButtons = 'dropdown',
         onReady
     }: Props = $props()
     const session = untrack(() => (project ? new PlaygroundSession(project) : undefined))
@@ -536,6 +543,12 @@
      */
     async function startRun() {
         wakeSound()
+        //Run's button stays Run for the first moments of a Step over or a Step out; pressed then,
+        //it is the Pause it is about to turn into
+        if (emulator.stepping) {
+            emulator.pause()
+            return
+        }
         if (building || running || compiling) return
         running = true
         if (layout === 'fullscreen') {
@@ -552,15 +565,20 @@
         }
     }
 
-    async function stepCode() {
+    /** Step, Step over or Step out; the Emulator refuses one asked for while another runs. */
+    async function stepWith(command: () => Promise<unknown>) {
         wakeSound()
         try {
-            await emulator.step()
+            await command()
         } catch (e) {
             console.error(e)
             toast.error('Error executing code. ' + getM68kErrorMessage(e))
         }
     }
+
+    const stepCode = () => stepWith(() => emulator.step())
+    const stepOverCode = () => stepWith(() => emulator.stepOver())
+    const stepOutCode = () => stepWith(() => emulator.stepOut())
 
     function undoStep() {
         try {
@@ -693,7 +711,7 @@
                 fill={viewport.deviceClass === 'phone'}
                 debugging={built}
                 building={building || compiling}
-                running={running || emulator.stepWaiting === true}
+                running={running || emulator.stepWaiting === true || emulator.stepRunning === true}
                 {buildDisabled}
                 {compilation}
                 compileOnly={selectedIsSource}
@@ -710,6 +728,10 @@
                 onPause={() => emulator.pause()}
                 onUndo={undoStep}
                 onStep={stepCode}
+                onStepOver={stepOverCode}
+                onStepOut={stepOutCode}
+                canStepOut={emulator.canStepOut === true}
+                {stepButtons}
                 onTest={runTests}
             />
         </div>

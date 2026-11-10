@@ -1026,6 +1026,55 @@ describe('M68K file tasks', () => {
         }
     })
 
+    /** `main` calls a routine whose File task is not its first instruction. */
+    const SAVE_IN_A_ROUTINE =
+        '    bsr save\n' +
+        trap(9) +
+        'save:\n' +
+        trap(52, ['    lea name,a1']) +
+        '    rts\n' +
+        "name: dc.b 'made.txt',0\n"
+
+    it('takes back the File a Step over made with one Undo', async () => {
+        const { emulator, fileSystem } = await withFiles(SAVE_IN_A_ROUTINE)
+        try {
+            expect(await emulator.stepOver()).toEqual({ terminated: false, completed: true })
+            expect(textOf(fileSystem, 'made.txt')).toBe('')
+            expect(emulator.latestSteps[0].stretch?.kind).toBe('over')
+            expect(emulator.undo()).toBe(1)
+            expect(textOf(fileSystem, 'made.txt')).toBeUndefined()
+        } finally {
+            emulator.dispose()
+        }
+    })
+
+    it('refuses the Undo of a Step over whose File inverse was not kept, before the Core changes', async () => {
+        const code = ORG + SAVE_IN_A_ROUTINE
+        const fileSystem = new FileSystem()
+        const emulator = M68KEmulator(code, {
+            peripherals: { fileSystem },
+            fileSystemHistoryBudgetMb: 0
+        })
+        try {
+            await emulator.compile(100, code)
+            expect(await emulator.stepOver()).toEqual({ terminated: false, completed: true })
+            expect(textOf(fileSystem, 'made.txt')).toBe('')
+            //the open is not the step's oldest instruction, the `bsr` is: the step is left as
+            //plain entries, which Undo takes back one at a time as far as the open
+            expect(emulator.latestSteps[0].stretch).toBeUndefined()
+            const count = emulator._undoDepth()
+            expect(emulator._canUndoHistoryRange(0, count)).toBe(false)
+            const pc = emulator._getPc()
+            const registers = emulator._getRegisterValues()
+            expect(() => emulator._undoEntries(count)).toThrow('Undo history exhausted')
+            expect(emulator._getPc()).toBe(pc)
+            expect(emulator._getRegisterValues()).toEqual(registers)
+            expect(textOf(fileSystem, 'made.txt')).toBe('')
+        } finally {
+            emulator.dispose()
+        }
+    })
+
     const plain = (content: string) => ({ encoding: 'plain' as const, content })
 
     /** Writes `hello` to a new File, reads it back from the start, closes it and prints it. */
