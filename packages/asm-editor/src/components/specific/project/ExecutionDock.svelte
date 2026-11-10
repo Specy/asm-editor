@@ -338,19 +338,38 @@
      * below do, then takes the words of Step's over and out parts, leaving their icons, then the
      * caller's actions' labels, whose words no width can know in advance, then the rest of the
      * far end's, then the room Run keeps for its other faces, then every one, Step's with the
-     * others. A button without its label is still named by its tooltip and to a screen reader. It
-     * measures on every change of the dock's size and of what it holds, all at once, so a cut
-     * label is never drawn and then put right. The step is an
-     * attribute rather than a class, which Svelte would write over with the class directives.
+     * others. A button without its label is still named by its tooltip and to a screen reader.
+     * Where even bare buttons do not fit, a phone's narrowest, their padding goes next, by how much
+     * each matters: Stop, Undo and the far end's buttons (`minor`) narrow first, then Run and Step
+     * with them, then the minor ones again, and last all of them. It measures on every change of
+     * the dock's size and of what it holds, all at once, so a cut label is never drawn and then
+     * put right. The steps taken so far are a list in an attribute, `[data-squeeze~=…]` matching
+     * each from the step that takes it on, rather than classes, which Svelte would write over with
+     * the class directives.
      */
+    const SQUEEZE_STEPS = [
+        'tight',
+        'steps',
+        'actions',
+        'end',
+        'run',
+        'all',
+        'minor',
+        'snug',
+        'minor-bare',
+        'bare'
+    ]
+
     function fitLabels(dock: HTMLElement) {
         //jsdom lays nothing out, so there is nothing to measure
         if (typeof ResizeObserver === 'undefined') return
         const fit = () => {
             delete dock.dataset.squeeze
-            for (const step of ['tight', 'steps', 'actions', 'end', 'run', 'all']) {
+            const taken: string[] = []
+            for (const step of SQUEEZE_STEPS) {
                 if (dock.scrollWidth <= dock.clientWidth) return
-                dock.dataset.squeeze = step
+                taken.push(step)
+                dock.dataset.squeeze = taken.join(' ')
             }
         }
         const resizes = new ResizeObserver(fit)
@@ -490,7 +509,7 @@
             <!-- the narrow layouts drop the words, so each button is also named -->
             <button
                 type="button"
-                class="tool"
+                class="tool minor"
                 onclick={onStop}
                 {@attach tip('End the Debug session')}
                 aria-label="Stop"
@@ -533,7 +552,7 @@
             <span class="divider" aria-hidden="true"></span>
             <button
                 type="button"
-                class="tool"
+                class="tool minor"
                 disabled={undoDisabled || running || !canUndo}
                 onclick={onUndo}
                 {@attach tip('Undo the last step')}
@@ -672,7 +691,7 @@
             {#if sound}
                 <button
                     type="button"
-                    class="tool sound"
+                    class="tool sound minor"
                     class:playing={sound.playing && !sound.muted}
                     onclick={sound.onToggle}
                     aria-pressed={!sound.muted}
@@ -700,7 +719,7 @@
             {#if hasTests}
                 <button
                     type="button"
-                    class="tool"
+                    class="tool minor"
                     onclick={() => onTest?.()}
                     disabled={buildDisabled || building || running}
                     {@attach tip(
@@ -719,7 +738,7 @@
             {#each actions as action (action.label)}
                 <button
                     type="button"
-                    class="tool action {action.tone ?? ''}"
+                    class="tool action minor {action.tone ?? ''}"
                     onclick={action.onClick}
                     {@attach tip(action.title)}
                     aria-label={action.label}
@@ -827,18 +846,34 @@
         padding: 0 0.6rem;
     }
 
+    /* Step's arrow, already narrower, kept so */
+    .execution-controls:global([data-squeeze]) .steps > .more {
+        padding: 0 0.5rem;
+    }
+
     /* the labels `fitLabels` takes away, as the dock is measured too narrow for them, and before
-       the last of them the room Run keeps for its other faces */
-    .execution-controls:global([data-squeeze='steps']) .steps .tool + .tool .label,
-    .execution-controls:global([data-squeeze='actions']) .steps .tool + .tool .label,
-    .execution-controls:global([data-squeeze='end']) .steps .tool + .tool .label,
-    .execution-controls:global([data-squeeze='run']) .steps .tool + .tool .label,
-    .execution-controls:global([data-squeeze='actions']) .action .label,
-    .execution-controls:global([data-squeeze='end']) .end .label,
-    .execution-controls:global([data-squeeze='run']) .end .label,
-    .execution-controls:global([data-squeeze='run']) .run-face.reserved,
-    .execution-controls:global([data-squeeze='all']) .label {
+       the last of them the room Run keeps for its other faces; each from the step that takes it
+       on, which stays in the list as the next steps are taken */
+    .execution-controls:global([data-squeeze~='steps']) .steps .tool + .tool .label,
+    .execution-controls:global([data-squeeze~='actions']) .action .label,
+    .execution-controls:global([data-squeeze~='end']) .end .label,
+    .execution-controls:global([data-squeeze~='run']) .run-face.reserved,
+    .execution-controls:global([data-squeeze~='all']) .label {
         display: none;
+    }
+
+    /* and then the padding of bare buttons, the minor ones before the others: Stop, Undo and the
+       far end's give way first, Run and Step last */
+    .execution-controls:global([data-squeeze~='minor']) .minor,
+    .execution-controls:global([data-squeeze~='snug']) .tool,
+    .execution-controls:global([data-squeeze~='snug']) .steps > .more {
+        padding: 0 0.35rem;
+    }
+
+    .execution-controls:global([data-squeeze~='minor-bare']) .minor,
+    .execution-controls:global([data-squeeze~='bare']) .tool,
+    .execution-controls:global([data-squeeze~='bare']) .steps > .more {
+        padding: 0 0.15rem;
     }
 
     /* Step, Step over and Step out as one button in parts, "Step | over | out": one edge round
@@ -991,10 +1026,10 @@
             min-width: auto;
         }
 
-        /* Step's parts one share each, as if they were apart, and its arrow as wide as it is */
+        /* Step's parts one share each, as if they were apart, and its arrow as wide as it is; never
+           narrower than its parts, which would spill out of its edge */
         .steps.joined {
             flex: var(--parts) 1 0;
-            min-width: 0;
         }
 
         .steps > .more {
