@@ -1147,7 +1147,9 @@ export abstract class MarsEmulator<
             for (let i = 0; i < count; i++) core.undo()
         })
         this.failedAt = null
-        this.fileSystemSession?.undoAfter(serial)
+        //every step of the group that wrote a File, not only the oldest: the session's own
+        //`undoAfter` takes back the one step it names
+        this.fileSystemSession?.undoFrom(serial)
         this._peripherals.terminal.undoAfter(BigInt(serial) - 1n)
         //as in `_undo`: the sound devices first, then the Audio's own Undo, which sends what both
         //took back, then the Input controller's events and the receiver's line

@@ -733,6 +733,28 @@ export class FileSystemSession {
     undoAfter(id: FileSystemInstructionId) {
         if (this.history[this.history.length - 1]?.id === id) this.undo(id)
     }
+    /**
+     * Rolls back every Core step from `oldest` on, newest first: a group taken back in one go, a
+     * Step over's or a call into library code. `undoAfter` takes back only the one step it names;
+     * this takes back the frames of every step whose numeric serial is `oldest` or later, which
+     * `canUndoSerialRange` has found available.
+     */
+    undoFrom(oldest: FileSystemInstructionId) {
+        const from = BigInt(oldest)
+        const newest = this.history[this.history.length - 1]
+        if (!newest || BigInt(newest.id) < from) return
+        if (!this.canUndoSerialRange(from, BigInt(newest.id))) {
+            throw new Error('FileSystem Undo history exhausted')
+        }
+        let changed = false
+        while (
+            this.history.length > 0 &&
+            BigInt(this.history[this.history.length - 1].id) >= from
+        ) {
+            changed = this.rollBack() || changed
+        }
+        if (changed) this.flush()
+    }
     undo(id: FileSystemInstructionId) {
         if (!this.canUndo(id)) throw new Error('FileSystem Undo history exhausted')
         if (this.rollBack()) this.flush()

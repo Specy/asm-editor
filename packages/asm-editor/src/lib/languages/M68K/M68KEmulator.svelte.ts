@@ -1527,7 +1527,8 @@ class AsmEditorM68KEmulator extends GenericEmulator<Interpreter, M68KRegisterNam
         const readSynth = () => interpreter.readMemoryBytes(SYNTH_BASE, SYNTH_BLOCK_SIZE)
         if (oldest === undefined) return this._peripherals.audio.resyncSynth(readSynth)
         this.screenInstructions?.undoAfter(oldest - 1)
-        this.fileSystemSession?.undoAfter(oldest)
+        //every step of the group that wrote a File, not only the oldest
+        this.fileSystemSession?.undoFrom(oldest)
         this._peripherals.terminal.undoAfter(oldest - 1)
         this._peripherals.audio.undoAfter(oldest - 1, readSynth)
     }

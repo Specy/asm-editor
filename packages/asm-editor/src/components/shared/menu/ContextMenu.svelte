@@ -80,7 +80,7 @@
     //placed, focused and closed as every Popover opened at a point is
     const popover = new AnchoredPopover({
         point: () => ({ x, y }),
-        anchor: anchor && (() => anchor),
+        anchor: () => anchor,
         side: () => side,
         arrow: () => arrow,
         onClose: () => onClose(),

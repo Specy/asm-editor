@@ -32,7 +32,7 @@ export interface AnchoredPopoverOptions {
      * A box it opens beside instead of a point, such as the button that opens it, so that on
      * either side it clears the whole button.
      */
-    anchor?: () => Box
+    anchor?: () => Box | undefined
     /** The side it opens on when that side has the room: below when left out. */
     side?: () => 'top' | 'bottom' | undefined
     /**
