@@ -2662,13 +2662,16 @@ export abstract class GenericEmulator<T, R extends string>
         command: { pauseAsked: boolean },
         execution: ExecutionGeneration
     ): Promise<StepOutcome> {
+        //read while the stop is still the one shown: a Pause in library code is shown at the
+        //program's call, and the depth counts from there
+        const shownDepth = this.shownCallDepth()
+        const target = kind === 'out' ? shownDepth - 1 : shownDepth
+        //a step that does not start leaves the stop as it was, paused or not
+        if (target < 0)
+            return { terminated: this._hasTerminated(), completed: false, refused: true }
         this.state.paused = false
         //as for a Step: no running time is measured, so a program it ends is logged without one
         this.state.executionTime = -1
-        const shownDepth = this.shownCallDepth()
-        const target = kind === 'out' ? shownDepth - 1 : shownDepth
-        if (target < 0)
-            return { terminated: this._hasTerminated(), completed: false, refused: true }
         //what the History calls the step: the routine a Step out leaves, read now, or the one a
         //Step over's line enters, read once it has
         let routine =

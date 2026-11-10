@@ -2982,10 +2982,13 @@ describe('step out', () => {
     it('does nothing with no routine to leave', async () => {
         const emulator = callingProgram()
         expect(emulator.canStepOut).toBeFalsy()
+        //a stop a Pause made stays one: nothing ran
+        ;(emulator as unknown as { state: { paused: boolean } }).state.paused = true
         const outcome = await emulator.stepOut()
         expect(outcome).toEqual({ terminated: false, completed: false, refused: true })
         expect(emulator.executed).toBe(0)
         expect(emulator.requests).toHaveLength(0)
+        expect(emulator.paused).toBe(true)
     })
 
     it('leaves the routine shown, not the library function the program is in', async () => {
