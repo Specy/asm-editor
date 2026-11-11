@@ -73,23 +73,50 @@ const KEY_LABELS: Record<string, string> = {
     ArrowRight: '→'
 }
 
+/** An arrow key's direction, which `ShortcutKeys` draws as an icon. */
+export type ShortcutArrow = 'up' | 'down' | 'left' | 'right'
+
+const ARROWS: Record<string, ShortcutArrow> = {
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    ArrowLeft: 'left',
+    ArrowRight: 'right'
+}
+
+/** One piece of a shortcut as it reads: a key, an arrow key with its direction, or the `+`. */
+export interface ShortcutPart {
+    text: string
+    arrow?: ShortcutArrow
+}
+
+/**
+ * How a key reads, in pieces: `Mod+KeyK` as Ctrl, + and K, or ⌘ and K, `ShiftLeft+ArrowRight` as
+ * Shift, + and →, the arrow marked so that it can be drawn as an icon.
+ */
+export function shortcutParts(key: string): ShortcutPart[] {
+    const command = usesCommandKey()
+    const keys = key.split('+').map((part): ShortcutPart => {
+        if (part === 'Mod') return { text: command ? '⌘' : 'Ctrl' }
+        if (part === 'Shift') return { text: command ? '⇧' : 'Shift' }
+        if (/^Key[A-Z]$/.test(part)) return { text: part.slice(3) }
+        if (/^Digit\d$/.test(part)) return { text: part.slice(5) }
+        if (/^(Shift|Control|Alt|Meta)(Left|Right)$/.test(part)) {
+            return { text: part.replace(/(Left|Right)$/, '').replace('Control', 'Ctrl') }
+        }
+        return { text: KEY_LABELS[part] ?? part, arrow: ARROWS[part] }
+    })
+    if (command && keys[0].text === '⌘') return keys
+    return keys.flatMap((part, index) => (index ? [{ text: '+' }, part] : [part]))
+}
+
 /**
  * How a key reads: `Mod+KeyK` as Ctrl+K or ⌘K, `Mod+Shift+KeyF` as Ctrl+Shift+F or ⌘⇧F,
  * `ShiftLeft+KeyD` as Shift+D.
  */
 export function shortcutLabel(key: string): string {
-    const command = usesCommandKey()
-    const parts = key.split('+').map((part) => {
-        if (part === 'Mod') return command ? '⌘' : 'Ctrl'
-        if (part === 'Shift') return command ? '⇧' : 'Shift'
-        if (/^Key[A-Z]$/.test(part)) return part.slice(3)
-        if (/^Digit\d$/.test(part)) return part.slice(5)
-        if (/^(Shift|Control|Alt|Meta)(Left|Right)$/.test(part)) {
-            return part.replace(/(Left|Right)$/, '').replace('Control', 'Ctrl')
-        }
-        return KEY_LABELS[part] ?? part
-    })
-    return command && parts[0] === '⌘' ? parts.join('') : parts.join('+')
+    return shortcutParts(key)
+        .map((part) => part.text)
+        .join('')
 }
 
 /**

@@ -3652,15 +3652,35 @@ export class WorkbenchSession {
     }
 
     /**
+     * Whether a pane other than `group` shows the same version of its File in `view`, a Listing or
+     * a Pseudocode: the view switch's button for it is then disabled, as switching would only show
+     * the same view twice.
+     */
+    shownBeside(group: EditorGroup, view: 'listing' | 'pseudocode'): boolean {
+        return this.groups.some(
+            (other) =>
+                other !== group &&
+                other.displayedView === view &&
+                !!other.displayedFile &&
+                isSameProjectSourceSelection(other.sourceSelection, group.sourceSelection)
+        )
+    }
+
+    /**
      * The Listing beside a pane showing the Pseudocode: the other pane, switched to the Listing of
      * the same version of the File unless it shows it, or a new pane on the left when there is
-     * only one. A Listing opened here scrolls to the function the Pseudocode shows.
+     * only one. A Listing opened here scrolls to the function the Pseudocode shows. The execution
+     * controls stay on the Listing, which shows the instructions a Step steps through.
      */
     private listingBeside(group: EditorGroup): EditorGroup | undefined {
         const path = group.displayedPath
         if (!this.groups.includes(group) || !path) return undefined
-        const shown = this.listingPaneOf(group)
-        if (shown) return shown
+        const listing = this.listingPaneOf(group) ?? this.openListingBeside(group, path)
+        if (this.executionGroupId === group.id) this.executionGroupId = listing.id
+        return listing
+    }
+
+    private openListingBeside(group: EditorGroup, path: string): EditorGroup {
         const other =
             this.groups.find((candidate) => candidate !== group) ?? this.createGroup(group)
         const selection = group.sourceSelection

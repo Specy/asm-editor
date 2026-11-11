@@ -270,6 +270,19 @@ function pressDecompile(session: WorkbenchSession, group: EditorGroup) {
     flushSync()
 }
 
+/** The buttons of the view switch in a pane's dock. */
+function viewButtons(session: WorkbenchSession, group: EditorGroup) {
+    const target = document.createElement('div')
+    document.body.appendChild(target)
+    const app = mount(ExecutionControlsHarness, { target, props: { session, group } })
+    flushSync()
+    disposers.push(() => unmount(app))
+    const buttons = [
+        ...target.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="View"] button')
+    ]
+    return Object.fromEntries(buttons.map((button) => [button.getAttribute('aria-label'), button]))
+}
+
 describe('Decompile', () => {
     it("splits one pane: the Listing on the left, crackme's main Pseudocode beside it", async () => {
         const { session, project } = setup()
@@ -312,6 +325,34 @@ describe('Decompile', () => {
         //the Listing pane has the execution controls, the Pseudocode its switch
         expect(session.controlsGroup).toBe(listingPane)
         expect(pane.hasDock(true)).toBe(true)
+    })
+
+    it('disables the view the other pane already shows in each pane’s switch', async () => {
+        const { session } = setup()
+        const pane = show(session, 'crackme')
+        session.decompile(pane)
+        flushSync()
+        const [listingPane] = session.groups
+        await decompiled(pane)
+        const listingSwitch = viewButtons(session, listingPane)
+        expect(listingSwitch.Decompile.getAttribute('aria-disabled')).toBe('true')
+        expect(listingSwitch.Disassemble.hasAttribute('aria-disabled')).toBe(false)
+        expect(listingSwitch.Hex.hasAttribute('aria-disabled')).toBe(false)
+        const pseudocodeSwitch = viewButtons(session, pane)
+        expect(pseudocodeSwitch.Disassemble.getAttribute('aria-disabled')).toBe('true')
+        expect(pseudocodeSwitch.Decompile.hasAttribute('aria-disabled')).toBe(false)
+        //a press on either changes nothing
+        listingSwitch.Decompile.click()
+        pseudocodeSwitch.Disassemble.click()
+        flushSync()
+        expect(listingPane.displayedView).toBe('listing')
+        expect(pane.displayedView).toBe('pseudocode')
+        //with the Listing pane on the bytes, both views are a click away again in the other
+        listingSwitch.Hex.click()
+        flushSync()
+        expect(listingPane.displayedView).toBe('hex')
+        expect(listingSwitch.Decompile.getAttribute('aria-disabled')).toBe('true')
+        expect(pseudocodeSwitch.Disassemble.hasAttribute('aria-disabled')).toBe(false)
     })
 
     it('opens the Listing in the other pane when there are two', async () => {
@@ -1191,6 +1232,31 @@ describe('the Pseudocode in a Debug session', () => {
         session.stop()
         flushSync()
         expect(pane.highlightedLine).toBe(-1)
+    })
+
+    it('keeps the execution controls on the Listing when Decompile splits the pane', async () => {
+        const { session, emulator } = setup()
+        const pane = show(session, 'crackme')
+        await session.build()
+        await tick()
+        flushSync()
+        expect(session.controlsGroup).toBe(pane)
+        pressDecompile(session, pane)
+        const [listingPane] = session.groups
+        expect(pane.displayedView).toBe('pseudocode')
+        expect(listingPane.displayedView).toBe('listing')
+        //on the Listing at once, not only once a Step reveals the program counter there
+        expect(session.controlsGroup).toBe(listingPane)
+        await decompiled(pane)
+        const listing = listingPane.displayedListing!.listing!
+        const call = listingLine(listing, 'main', 'call strcmp@plt')
+        emulator.line = call
+        emulator.pc = BigInt(listing.lines.addresses[call] + BASE)
+        session.revealCurrentInstruction()
+        await tick()
+        flushSync()
+        expect(session.controlsGroup).toBe(listingPane)
+        expect(pane.displayedView).toBe('pseudocode')
     })
 
     it('stays where it was when the program exits, drawing no program counter', async () => {

@@ -95,6 +95,12 @@
         }
     }
 
+    /** The title of a view switch button whose view the other pane already shows. */
+    const SHOWN_BESIDE: Record<'listing' | 'pseudocode', string> = {
+        listing: 'The other pane already shows the Listing',
+        pseudocode: 'The other pane already shows the Pseudocode'
+    }
+
     /**
      * Build for a Program whose Entry file is an Executable, which nothing assembles: a Build
      * loads it and starts debugging it
@@ -178,18 +184,25 @@
     const views = $derived.by<DockViews | undefined>(() => {
         const options = pane.viewSwitch.flatMap((view) => {
             const button = VIEW_BUTTONS[view]
-            return button
-                ? [
-                      {
-                          id: view,
-                          ...button,
-                          title:
-                              view === 'hex' && pane.displayedKind === 'executable'
-                                  ? "Show the file's bytes in Hex. Changes made while debugging appear in the Memory view."
-                                  : button.title
-                      }
-                  ]
-                : []
+            if (!button) return []
+            //the Listing and the Pseudocode sit side by side: a pane does not switch to the one
+            //the other pane already shows
+            const beside =
+                (view === 'listing' || view === 'pseudocode') &&
+                pane.displayedView !== view &&
+                session.shownBeside(pane, view)
+            return [
+                {
+                    id: view,
+                    ...button,
+                    title: beside
+                        ? SHOWN_BESIDE[view]
+                        : view === 'hex' && pane.displayedKind === 'executable'
+                          ? "Show the file's bytes in Hex. Changes made while debugging appear in the Memory view."
+                          : button.title,
+                    disabled: beside
+                }
+            ]
         })
         if (options.length < 2) return undefined
         return {

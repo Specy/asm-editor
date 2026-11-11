@@ -72,6 +72,26 @@ describe('the Tooltip', () => {
         expect(shown(button)).toBe(false)
     })
 
+    it('draws a heading above the text, kept out of the description', () => {
+        const button = trigger('Step over')
+        attach(button, 'Run this line and any subroutine it calls', {
+            shortcut: 'ShiftLeft+ArrowRight',
+            heading: 'Step over'
+        })
+        const own = button.getAttribute('aria-describedby')!
+        expect(document.getElementById(own)?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+            'Run this line and any subroutine it calls, Shift+Right'
+        )
+        //the arrow key drawn as an icon, its name kept for a screen reader
+        expect(card(button)!.querySelector('.shortcut .arrow svg')).not.toBeNull()
+        const heading = card(button)!.querySelector('.heading')!
+        expect(heading.textContent).toBe('Step over')
+        expect(heading.getAttribute('aria-hidden')).toBe('true')
+        expect(heading.compareDocumentPosition(document.getElementById(own)!)).toBe(
+            Node.DOCUMENT_POSITION_FOLLOWING
+        )
+    })
+
     it('shows after the delay the pointer rests, and goes when it leaves', () => {
         const button = trigger()
         attach(button, 'Zoom out')

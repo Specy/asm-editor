@@ -24,6 +24,12 @@ export interface TooltipOptions {
     placement?: Side
     /** A key in the shortcut store's form (`Mod+KeyZ`), drawn after the text as Ctrl+Z or ⌘Z. */
     shortcut?: string
+    /**
+     * A few words in bold above the text, such as "Step over" over what that Step does, where the
+     * control's own face is too short to say which it is. Drawn only: the control's name already
+     * says it to a screen reader, so it stays out of the description.
+     */
+    heading?: string
     /** False for a control whose long press already does something: no Tooltip on touch. */
     touch?: boolean
 }
@@ -76,6 +82,7 @@ export class Tooltip {
     readonly id = `tooltip-${++nextId}`
     content = $state<string | Snippet>('')
     shortcut = $state<string | undefined>()
+    heading = $state<string | undefined>()
     placement = $state<Side>('top')
     open = $state(false)
     /** Shown without the slide and closed without the fade, as when moving between triggers. */
@@ -137,6 +144,7 @@ export class Tooltip {
     update(content: string | Snippet, options: TooltipOptions) {
         this.content = content
         this.shortcut = options.shortcut
+        this.heading = options.heading
         this.placement = options.placement ?? 'top'
         this.delay = options.delay ?? TOOLTIP_DELAY
         this.touch = options.touch ?? true

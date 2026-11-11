@@ -6,9 +6,10 @@
      * loading, so they are on their way by the time the palette opens.
      */
     import FaSearch from '~icons/fa-solid/search'
-    import { shortcutLabel, shortcutsStore, ShortcutAction } from '#stores/shortcutsStore.ts'
+    import { shortcutsStore, ShortcutAction } from '#stores/shortcutsStore.ts'
     import { openSearchPalette, warmSearch } from './paletteState.svelte'
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
+    import ShortcutKeys from '#cmp/shared/misc/ShortcutKeys.svelte'
 
     interface Props {
         placeholder?: string
@@ -52,7 +53,7 @@
     <span class="icon" aria-hidden="true"><FaSearch /></span>
     <span class="placeholder ellipsis">{placeholder}</span>
     {#if key}
-        <Kbd>{shortcutLabel(key)}</Kbd>
+        <Kbd><ShortcutKeys shortcut={key} /></Kbd>
     {/if}
 </button>
 

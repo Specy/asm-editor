@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { modShortcutKey, shortcutLabel, shortcutsStore, ShortcutAction } from './shortcutsStore'
+import {
+    modShortcutKey,
+    shortcutLabel,
+    shortcutParts,
+    shortcutsStore,
+    ShortcutAction
+} from './shortcutsStore'
 
 function keydown(init: KeyboardEventInit & { code: string }): KeyboardEvent {
     return {
@@ -42,5 +48,11 @@ describe('command-key shortcuts', () => {
         expect(shortcutLabel('Mod+Shift+KeyF')).toBe('Ctrl+Shift+F')
         expect(shortcutLabel('ShiftLeft+KeyD')).toBe('Shift+D')
         expect(shortcutLabel('ShiftLeft+ArrowDown')).toBe('Shift+↓')
+        //the arrow marked, which ShortcutKeys draws as an icon
+        expect(shortcutParts('ShiftLeft+ArrowRight')).toEqual([
+            { text: 'Shift' },
+            { text: '+' },
+            { text: '→', arrow: 'right' }
+        ])
     })
 })

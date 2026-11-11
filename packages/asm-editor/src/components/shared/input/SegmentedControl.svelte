@@ -14,7 +14,9 @@
 
     /**
      * `title` is the button's Tooltip, for a label too short to read on its own; `icon` is drawn
-     * before the label, in the colour the option gives it.
+     * before the label, in the colour the option gives it. A `disabled` option is drawn faded and
+     * cannot be picked, but still shows its Tooltip, which says why: `aria-disabled` rather than
+     * `disabled`, which would keep the pointer events the Tooltip opens on from it.
      */
     interface Option {
         id: string
@@ -22,6 +24,7 @@
         title?: string
         icon?: Component
         iconColor?: string
+        disabled?: boolean
     }
 
     interface Props {
@@ -102,10 +105,13 @@
     {#each options as option (option.id)}
         <button
             type="button"
-            onclick={() => onSelect(option.id)}
+            onclick={() => {
+                if (!option.disabled) onSelect(option.id)
+            }}
             class="segmented-control-button"
             class:segmented-control-button-selected={selected === option.id}
             aria-pressed={selected === option.id}
+            aria-disabled={option.disabled ? 'true' : undefined}
             aria-label={option.label}
             {@attach tooltip(option.title)}
         >
@@ -177,6 +183,14 @@
     .segmented-control-button-selected,
     .segmented-control-button-selected:hover {
         color: var(--accent2-text);
+    }
+
+    .segmented-control-button[aria-disabled='true']:not(.segmented-control-button-selected) {
+        &,
+        &:hover {
+            color: color-mix(in srgb, var(--text-muted) 45%, var(--primary));
+            cursor: not-allowed;
+        }
     }
 
     // until the highlight has a place, before the first layout or in a panel never shown, the

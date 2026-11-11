@@ -4,13 +4,9 @@
      * recorded from a focused input, which is what keeps the Workbench's own shortcut handler (it
      * ignores keys typed into inputs) from also running the key being bound.
      */
-    import {
-        modShortcutKey,
-        shortcutLabel,
-        shortcutRecording,
-        shortcutsStore
-    } from '#stores/shortcutsStore.ts'
+    import { modShortcutKey, shortcutRecording, shortcutsStore } from '#stores/shortcutsStore.ts'
     import Button from '#cmp/shared/button/Button.svelte'
+    import ShortcutKeys from '#cmp/shared/misc/ShortcutKeys.svelte'
     import Icon from '#cmp/shared/layout/Icon.svelte'
     import FaCheck from '~icons/fa-solid/check'
     import FaUndo from '~icons/fa-solid/undo'
@@ -88,7 +84,9 @@
                         selectedId = entry[1].id
                     }}
                 >
-                    {shortcutLabel(entry[1].id !== selectedId ? entry[0] : currentShortcut)}
+                    <ShortcutKeys
+                        shortcut={entry[1].id !== selectedId ? entry[0] : currentShortcut}
+                    />
                 </Button>
                 {#if entry[1].id === selectedId}
                     <Button

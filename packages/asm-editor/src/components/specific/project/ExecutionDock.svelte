@@ -92,6 +92,8 @@
         label: string
         title: string
         icon: Component
+        /** Shown, faded, but not picked: the title then says why. */
+        disabled?: boolean
     }
 
     /**
@@ -243,8 +245,8 @@
     }: Props = $props()
 
     /** A control's Tooltip, with its key when it has one, which a decorative dock leaves out. */
-    const tip = (content: TooltipContent, shortcut?: string) =>
-        !decorative && tooltip(content, { shortcut })
+    const tip = (content: TooltipContent, shortcut?: string, heading?: string) =>
+        !decorative && tooltip(content, { shortcut, heading })
 
     const hasEnd = $derived(showExecution && (hasTests || actions.length > 0 || !!sound))
     /** Whether anything precedes the view switch in its tray, which a divider then sets apart. */
@@ -578,7 +580,7 @@
                     class="tool emphasis"
                     disabled={stepDisabled}
                     onclick={onStep}
-                    {@attach tip('Run one instruction', stepShortcuts.step)}
+                    {@attach tip('Run one instruction', stepShortcuts.step, 'Step')}
                     aria-label="Step"
                 >
                     <Icon size="small">
@@ -595,7 +597,8 @@
                             onclick={onStepOver}
                             {@attach tip(
                                 'Run this line and any subroutine it calls',
-                                stepShortcuts.over
+                                stepShortcuts.over,
+                                'Step over'
                             )}
                             aria-label="Step over"
                         >
@@ -613,7 +616,8 @@
                             onclick={onStepOut}
                             {@attach tip(
                                 'Run the rest of this subroutine and stop in the code that called it',
-                                stepShortcuts.out
+                                stepShortcuts.out,
+                                'Step out'
                             )}
                             aria-label="Step out"
                         >

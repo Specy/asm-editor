@@ -93,7 +93,6 @@
         borderPath: string
     }
     type Bridge = Band & {
-        executing: boolean
         key: number
         colorIndex: number
         color: string
@@ -117,11 +116,12 @@
         ribbons: [],
         bridges: []
     })
-    const orderedRibbons = $derived(
-        [...geometry.ribbons].sort(
-            (a, b) => Number(isActive(a.colorIndex)) - Number(isActive(b.colorIndex))
-        )
+    const sectionRibbons = $derived(
+        geometry.ribbons
+            .filter((ribbon) => !ribbon.executing)
+            .sort((a, b) => Number(isActive(a.colorIndex)) - Number(isActive(b.colorIndex)))
     )
+    const executingRibbons = $derived(geometry.ribbons.filter((ribbon) => ribbon.executing))
 
     function connectionBand(
         editor: monaco.editor.IStandaloneCodeEditor,
@@ -210,13 +210,17 @@
             0,
             box.left - (leftBox.left + leftLayout.contentLeft + leftLayout.contentWidth)
         )
-        //Run a few pixels under the right editor, which paints above the gutter. The panes have
-        //fractional widths, so ending exactly at its edge leaves an antialiased 1px seam.
-        const overlap = 0
-        const width = box.width + inset + overlap
+        const width = box.width + inset
         const middle = inset + box.width / 2
-        //Let the SVG clip the far edge instead of antialiasing a path boundary at the join.
+        //The panes have fractional widths, so a path boundary at an editor's edge would leave an
+        //antialiased seam. Every edge lands on its line at the editor's edge, level with it, then
+        //runs flat past the SVG's own edge, which clips it.
+        const before = -1
         const end = width + 1
+        const edge = (fromX: number, fromY: number, toX: number, toY: number) =>
+            SOURCE_MAP_CONNECTION_STYLE === 'curved'
+                ? `C ${middle} ${fromY}, ${middle} ${toY}, ${toX} ${toY}`
+                : straightEdge(fromX, fromY, toX, toY)
         const ribbons: Ribbon[] = []
         const bridges: Bridge[] = []
         // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Local deduplication during geometry calculation.
@@ -228,10 +232,25 @@
             const rightBand = connectionBand(right, rightRange, rightViewport, rightScroll)
             if (!leftBand || !rightBand) continue
             const colorIndex = connection.assembly.colorIndex
+            const topEdge = edge(inset, leftBand.top, width, rightBand.top)
+            const returnEdge = edge(width, rightBand.bottom, inset, leftBand.bottom)
+            if ('executing' in connection) {
+                //The editors' highlighted line carried across: one solid shape as tall as the
+                //line at both ends, without the border and the separate bridge of a section.
+                ribbons.push({
+                    executing: true,
+                    key: -1 - connection.assembly.startLine,
+                    sourceLine: connection.source.startLine,
+                    colorIndex,
+                    color: connection.color,
+                    borderPath: '',
+                    path: `M ${before} ${leftBand.top} H ${inset} ${topEdge} H ${end} V ${rightBand.bottom} H ${width} ${returnEdge} H ${before} Z`
+                })
+                continue
+            }
             //One bridge per left-side range. With assembly on the left, one color can
             //own several disjoint ranges, so the color alone is not a unique key.
-            const executing = 'executing' in connection
-            const bridgeKey = executing ? -1 - leftRange.startLine : leftRange.startLine
+            const bridgeKey = leftRange.startLine
             if (!bridged.has(bridgeKey)) {
                 bridged.add(bridgeKey)
                 //The scrollbar bridge belongs only to visible source code, not its heading.
@@ -239,7 +258,6 @@
                 const bottom = Math.min(leftBand.bottom, leftViewport.bottom)
                 if (bottom > top)
                     bridges.push({
-                        executing,
                         key: bridgeKey,
                         top,
                         bottom,
@@ -248,20 +266,15 @@
                         borderPath: `M 0 ${leftBand.top} H ${inset} M 0 ${leftBand.bottom} H ${inset}`
                     })
             }
+            const top = `M ${inset} ${leftBand.top} ${topEdge} H ${end}`
             ribbons.push({
-                executing,
-                key: executing ? -1 - connection.assembly.startLine : connection.assembly.startLine,
+                executing: false,
+                key: connection.assembly.startLine,
                 sourceLine: connection.source.startLine,
                 colorIndex,
                 color: connection.color,
-                borderPath:
-                    SOURCE_MAP_CONNECTION_STYLE === 'curved'
-                        ? `M ${inset} ${leftBand.top} C ${middle} ${leftBand.top}, ${middle} ${rightBand.top}, ${end} ${rightBand.top} M ${inset} ${leftBand.bottom} C ${middle} ${leftBand.bottom}, ${middle} ${rightBand.bottom}, ${end} ${rightBand.bottom}`
-                        : `M ${inset} ${leftBand.top} ${straightEdge(inset, leftBand.top, end, rightBand.top)} M ${inset} ${leftBand.bottom} ${straightEdge(inset, leftBand.bottom, end, rightBand.bottom)}`,
-                path:
-                    SOURCE_MAP_CONNECTION_STYLE === 'curved'
-                        ? `M ${inset} ${leftBand.top} C ${middle} ${leftBand.top}, ${middle} ${rightBand.top}, ${end} ${rightBand.top} L ${end} ${rightBand.bottom} C ${middle} ${rightBand.bottom}, ${middle} ${leftBand.bottom}, ${inset} ${leftBand.bottom} Z`
-                        : `M ${inset} ${leftBand.top} ${straightEdge(inset, leftBand.top, end, rightBand.top)} L ${end} ${rightBand.bottom} ${straightEdge(end, rightBand.bottom, inset, leftBand.bottom)} Z`
+                borderPath: `${top} M ${inset} ${leftBand.bottom} ${edge(inset, leftBand.bottom, width, rightBand.bottom)} H ${end}`,
+                path: `${top} V ${rightBand.bottom} H ${width} ${returnEdge} Z`
             })
         }
         return {
@@ -340,20 +353,7 @@
             geometry.height - geometry.viewportBottom
         )}px 0)"
     >
-        {#each geometry.bridges as bridge (bridge.key)}
-            <rect
-                class="bridge"
-                class:active={isActive(bridge.colorIndex)}
-                class:dimmed={isDimmed(bridge.colorIndex)}
-                class:executing={bridge.executing}
-                style:color={bridge.color}
-                x="0"
-                y={bridge.top}
-                width={geometry.inset}
-                height={bridge.bottom - bridge.top}
-            />
-        {/each}
-        {#each orderedRibbons as ribbon (ribbon.key)}
+        {#snippet ribbonPath(ribbon: Ribbon)}
             <path
                 class="ribbon"
                 class:active={isActive(ribbon.colorIndex)}
@@ -370,19 +370,37 @@
                 onclick={() => onSelect(ribbon.sourceLine)}
                 onkeydown={(event) => selectWithKeyboard(event, ribbon.sourceLine)}
             />
+        {/snippet}
+        {#each geometry.bridges as bridge (bridge.key)}
+            <rect
+                class="bridge"
+                class:active={isActive(bridge.colorIndex)}
+                class:dimmed={isDimmed(bridge.colorIndex)}
+                style:color={bridge.color}
+                x="0"
+                y={bridge.top}
+                width={geometry.inset}
+                height={bridge.bottom - bridge.top}
+            />
+        {/each}
+        {#each sectionRibbons as ribbon (ribbon.key)}
+            {@render ribbonPath(ribbon)}
         {/each}
         {#if SOURCE_MAP_SECTION_BORDER.width > 0}
-            {#each [...geometry.bridges, ...orderedRibbons] as section (`${'path' in section ? 'ribbon' : 'bridge'}-${section.key}`)}
+            {#each [...geometry.bridges, ...sectionRibbons] as section (`${'path' in section ? 'ribbon' : 'bridge'}-${section.key}`)}
                 <path
                     class="section-border"
                     class:active={isActive(section.colorIndex)}
                     class:dimmed={isDimmed(section.colorIndex)}
-                    class:executing={section.executing}
                     style:color={section.color}
                     d={section.borderPath}
                 />
             {/each}
         {/if}
+        <!-- over the sections and their borders, as the highlighted line is in the editors -->
+        {#each executingRibbons as ribbon (ribbon.key)}
+            {@render ribbonPath(ribbon)}
+        {/each}
     </svg>
     {#if divider}
         <div class="divider">
@@ -442,11 +460,11 @@
         &.dimmed {
             fill-opacity: var(--source-map-dimmed-opacity);
         }
-        //The executing lines use the editors' solid highlighted-line color.
-        &.executing {
-            fill: var(--accent);
-            fill-opacity: 1;
-        }
+    }
+    //The executing lines use the editors' solid highlighted-line color.
+    .ribbon.executing {
+        fill: var(--accent);
+        fill-opacity: 1;
     }
     .ribbon {
         pointer-events: visiblePainted;
@@ -474,10 +492,6 @@
                 var(--source-map-dimmed-opacity) * var(--source-map-border-opacity)
             );
         }
-    }
-    .section-border.executing {
-        stroke: var(--accent);
-        stroke-opacity: 1;
     }
     @media (max-width: 700px) {
         .connector-gutter {

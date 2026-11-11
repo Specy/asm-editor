@@ -35,7 +35,7 @@
     import { AnchoredPopover } from '#cmp/shared/floating/anchoredPopover.svelte.ts'
     import type { Box } from '#cmp/shared/floating/floating.ts'
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
-    import { shortcutLabel } from '#stores/shortcutsStore.ts'
+    import ShortcutKeys from '#cmp/shared/misc/ShortcutKeys.svelte'
 
     interface Props {
         /** The point it opens at, in viewport coordinates; it moves inwards to stay on screen. */
@@ -158,7 +158,7 @@
                 </span>
                 <span class="label ellipsis">{entry.label}</span>
                 {#if entry.shortcut}
-                    <Kbd class="shortcut">{shortcutLabel(entry.shortcut)}</Kbd>
+                    <Kbd class="shortcut"><ShortcutKeys shortcut={entry.shortcut} /></Kbd>
                 {/if}
             </button>
         {/if}

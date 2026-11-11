@@ -7,11 +7,11 @@
      * on the side asked for), and drawn as one outline with its arrow.
      */
     import { untrack } from 'svelte'
-    import { shortcutLabel } from '#stores/shortcutsStore.ts'
     import { POPOVER_ARROW, tooltipRadius } from '#src/styles/elevation.ts'
     import { DUR_FAST, EASE_OUT, prefersLessMotion } from '#src/styles/motion.ts'
     import PopoverOutline from './PopoverOutline.svelte'
     import Kbd from '#cmp/shared/misc/Kbd.svelte'
+    import ShortcutKeys from '#cmp/shared/misc/ShortcutKeys.svelte'
     import { placeCard, type Side } from './floating'
     import type { Tooltip } from './tooltip.svelte.ts'
 
@@ -147,12 +147,15 @@
     onpointerleave={(event) => event.pointerType !== 'touch' && tooltip.leave()}
 >
     <PopoverOutline {width} {height} {side} at={arrowAt} corner="control" solid />
+    {#if tooltip.heading}
+        <span class="heading" aria-hidden="true">{tooltip.heading}</span>
+    {/if}
     <!-- the comma for the description only, which a screen reader reads as "Undo, Ctrl+Z" -->
     <span class="content" id={tooltip.contentId}
         >{#if typeof tooltip.content === 'string'}{tooltip.content}{:else}{@render tooltip.content()}{/if}{#if tooltip.shortcut}<span
                 class="visually-hidden">,</span
             >
-            <Kbd class="shortcut">{shortcutLabel(tooltip.shortcut)}</Kbd>{/if}</span
+            <Kbd class="shortcut"><ShortcutKeys shortcut={tooltip.shortcut} /></Kbd>{/if}</span
     >
 </div>
 
@@ -172,6 +175,11 @@
         text-align: left;
         white-space: pre-line;
         overflow-wrap: anywhere;
+    }
+
+    .heading {
+        display: block;
+        font-weight: 600;
     }
 
     .content :global(.shortcut) {
