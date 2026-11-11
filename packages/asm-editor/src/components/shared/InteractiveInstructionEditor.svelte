@@ -125,6 +125,13 @@
          */
         hideUntilBuilt?: boolean
         embedded?: boolean
+        /**
+         * Whether the code scrolls past its last line and the editor keeps every wheel turn
+         * (`Editor`'s own). Off, a code that fits leaves the wheel to the page. Defaults to off
+         * when `embedded`, on otherwise; an instruction's example turns it off without being
+         * embedded.
+         */
+        scrollPastEnd?: boolean
         language?: AvailableLanguages
         emulator: Emulator
         children?: Snippet
@@ -172,6 +179,7 @@
         hideUntilBuilt = false,
         testcases = $bindable([]),
         embedded = false,
+        scrollPastEnd = undefined,
         emulator = $bindable(),
         children,
         forceMemoryRight = false,
@@ -688,7 +696,7 @@
                 {changedLines}
                 {viewZones}
                 breakpointsEditable={!selectedIsSource}
-                scrollPastEnd={!embedded}
+                scrollPastEnd={scrollPastEnd ?? !embedded}
                 coveredBottom={dockHeight}
                 breakpoints={emulator.breakpoints
                     .filter(isLineBreakpoint)
