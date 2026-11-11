@@ -55,7 +55,7 @@
     import FaCircle from '~icons/fa-solid/circle'
     import FaChevronDown from '~icons/fa-solid/chevron-down'
     //the one icon from another set: fa-solid has no ring, and its dot-circle reads as a radio
-    //button or a record mark (design-system-changes.md, S4-44)
+    //button or a record mark
     import FaRegularCircle from '~icons/fa-regular/circle'
     import FaFillDrip from '~icons/fa-solid/fill-drip'
     import FaEyeDropper from '~icons/fa-solid/eye-dropper'

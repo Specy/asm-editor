@@ -81,7 +81,7 @@
         flex-direction: column;
     }
     /* on the floating window's own tray, which tints and blurs what is beneath, as the Stack
-       pointer is (S3-12): no fill, corner or shadow of its own, the window's body clipping it */
+       pointer is: no fill, corner or shadow of its own, the window's body clipping it */
     .call-stack-wrapper {
         /* the floating window's bottom edge sets it, when it has been dragged */
         max-height: var(--floating-body-max-height, 20rem);

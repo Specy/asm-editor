@@ -145,7 +145,6 @@ stepOut(limit):
 - Shortcuts: Shift+→ for Step over, Shift+← for Step out, rebindable like the others. A held Step over repeats, as Step does, and the gate above means a repeat that arrives while a step is in flight is dropped.
 - While the routine runs the dock shows Pause, as during a Run. The gate is immediate; the button is drawn as Pause only once the step has been going for 150 ms, so a short one does not flash it.
 - The coding agent's `step` tool takes a `mode` (`into`, `over`, `out`) and the limit above.
-- The dock change is a visible style change and gets its entry in [design-system-changes.md](./design-system-changes.md).
 
 ## Edge cases
 
@@ -286,7 +285,7 @@ Checked in headless Chrome on a Playground of each of the five languages: Build,
 
 - **Step over of an instruction that repeats** asks the adapter whether the instruction at the program counter is one of the Z80's eight block instructions, after a pass that left the program counter on it. The Core's `blockInstructionWillRepeat()` answers a different question and is not used by the editor.
 - **RISC-V's `ret` with any immediate** still counts as a return, as before the work.
-- **Step over and Step out are parts of the Step button**, not two buttons after it (owner, 2026-11-10: "too many buttons"). The dock draws Step, over and out in one edge with a rule between each part ([design-system-changes.md](./design-system-changes.md), O-144); each part is still its own button, with the names Step over and Step out, so the shortcuts, the tests and the lectures' **Step over** and **Step out** are unchanged. A host can instead draw them in a menu behind an arrow beside Step, which stays open as they are pressed, or not at all (`stepButtons`: `normal`, `dropdown`, `none`). The Workbench uses `normal` and every Playground `dropdown` (owner, 2026-11-10). Checking it found the phone layout's buttons running into each other, fixed in O-147.
+- **Step over and Step out are parts of the Step button**, not two buttons after it (owner, 2026-11-10: "too many buttons"). The dock draws Step, over and out in one edge with a rule between each part; each part is still its own button, with the names Step over and Step out, so the shortcuts, the tests and the lectures' **Step over** and **Step out** are unchanged. A host can instead draw them in a menu behind an arrow beside Step, which stays open as they are pressed, or not at all (`stepButtons`: `normal`, `dropdown`, `none`). The Workbench uses `normal` and every Playground `dropdown` (owner, 2026-11-10). Checking it found the phone layout's buttons running into each other, which is fixed.
 - **The home page's backdrop dock** was left as it is, with Step alone.
 - **The x86 frame holds no call site**; it is the return address less the call's length.
 - **Step out of `main` in a loaded Executable**, pressed while the program is inside a library function, leaves `main` and then goes on through libc's `exit` to the Executable's own `__do_global_dtors_aux`, which is program code, rather than ending the program.

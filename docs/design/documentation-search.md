@@ -407,7 +407,7 @@ Implemented on `feat/plain-english-search` by agents following the
   on every query; the favoured names following every keystroke; Z80 labels without a colon.
 - **For the owner:**
     - The accent colour as text is below 4.5:1 contrast in some themes (MIPS 3.3:1, a light custom
-      theme 1.6:1), the question S3-97 left open for all accent text.
+      theme 1.6:1), a question still open for all accent text.
     - Scoring a shard with its scope's statistics reaches into Orama 3.1.18's index component (its
       `relevance` object and the index's fields). An Orama upgrade can break it; the all-shards
       golden test would then fail.

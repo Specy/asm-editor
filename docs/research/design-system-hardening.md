@@ -1,6 +1,6 @@
 # Design system hardening review
 
-Written on 2026-11-08 on `feat/design-system`. Research only: nothing under `packages/` was changed. It reviews `git diff origin/main...HEAD -- packages/asm-editor/src` against [design-system.md](../design/design-system.md) (D1-D17), its [plan](../design/design-system-plan.md) and the [register](../design/design-system-changes.md), and follows each pattern into the rest of the codebase.
+Written on 2026-11-08 on `feat/design-system`. Research only: nothing under `packages/` was changed. It reviews `git diff origin/main...HEAD -- packages/asm-editor/src` against [design-system.md](../design/design-system.md) (D1-D17) and its [plan](../design/design-system-plan.md), and follows each pattern into the rest of the codebase.
 
 Paths are relative to `packages/asm-editor/src/`. HEAD moved during the review, from `62cc12b7` to `554090cf` (the copy buttons, the exam builder's title, the student's exam page). Line numbers for `routes/exam/**`, `routes/embed/+page.svelte` and `components/specific/exam/*` are at `554090cf`. Elsewhere they are at `62cc12b7`, which `554090cf` left unchanged except for `ErrorState.svelte`, `AgentDocs.svelte`, `LoggerProvider.svelte`, `WorkbenchShell.svelte` and `WorkbenchUi.svelte.ts`, whose numbers may be off by a few lines. The copy-to-clipboard buttons and the toast were left out, as asked.
 
@@ -18,7 +18,7 @@ Paths are relative to `packages/asm-editor/src/`. HEAD moved during the review, 
 ### F2. The file tab's ENTRY weight leaks into the Explorer and Symbols panel
 
 - **Where:** `components/specific/workbench/FileTabs.svelte:119-123`, the unscoped rule `:global(.badge.entry-mark.entry-mark) { font-weight: 500 }`. The same class is used at `specific/project/Explorer.svelte:1034` and `specific/workbench/SymbolsPanel.svelte:455`.
-- **What's wrong:** register O-49 asks for medium weight "in a file tab". FileTabs is always mounted in the Workbench, so the Explorer's and the Symbols panel's ENTRY marks are drawn at 500 too, not at Badge's 700 (S3-59). _Render-verified:_ the Explorer's mark computes to `font-weight: 500`. The class is doubled only to outweigh Badge's `.badge.svelte-x`.
+- **What's wrong:** the design asks for medium weight "in a file tab". FileTabs is always mounted in the Workbench, so the Explorer's and the Symbols panel's ENTRY marks are drawn at 500 too, not at Badge's 700. _Render-verified:_ the Explorer's mark computes to `font-weight: 500`. The class is doubled only to outweigh Badge's `.badge.svelte-x`.
 - **Fix:** either a `weight` prop on Badge, or a rule scoped to the tab, such as `.name ~ :global(.entry-mark)`.
 - **Visible change:** yes. The Explorer and Symbols marks go back to bold, unless the owner wants 500 everywhere, in which case the weight belongs in Badge's tone.
 - **Risk:** low. **Effort:** S.
@@ -34,15 +34,15 @@ Paths are relative to `packages/asm-editor/src/`. HEAD moved during the review, 
 
 ### F4. Callers out-weigh shared components instead of the components taking an option
 
-The register's O-70 moved Button's size rules behind `:where()`, so that any one caller class wins. The workarounds written before that, and the same pattern on other components, are still there:
+Button's size rules moved behind `:where()`, so that any one caller class wins. The workarounds written before that, and the same pattern on other components, are still there:
 
-- **`a.btn` qualifiers whose comments are now false:** `DefaultNavbar.svelte:202-209` says "`a.btn`: one more than the Button's own size rule … which otherwise ties", and `routes/+page.svelte:1658-1669,1679` says the same. Since O-70, a plain `.pill :global(.btn)` already wins. `ErrorState.svelte:~209-213`: the rule's padding equals `md`'s, so only its gap does anything.
+- **`a.btn` qualifiers whose comments are now false:** `DefaultNavbar.svelte:202-209` says "`a.btn`: one more than the Button's own size rule … which otherwise ties", and `routes/+page.svelte:1658-1669,1679` says the same. Since that move, a plain `.pill :global(.btn)` already wins. `ErrorState.svelte:~209-213`: the rule's padding equals `md`'s, so only its gap does anything.
 - **Doubled and stacked classes:** `FileTabs.svelte:133-140` (`:global(.icon-button.group-action.group-action)`) and `ScreenRenderer.svelte:781` (`:global(.btn.ghost.sm.screen-action)`). These are the only doubled-class rules in the codebase.
 - **Card's fixed column changed by qualifying its selector:** `NavigationLinkButton.svelte:24` (`a.card.navigation-link`), `InstructionIndex.svelte:92`, `AgentDocs.svelte:~104`.
 - **The full-height square IconButton, written four times:** each sets `align-self: stretch; height: auto; width: X; border-radius: Y`. The copies are `TabStrip.svelte:330-336` (`.tab-close`), `FileTabs.svelte:133-140` (`.group-action`), `DraggableContainer.svelte:409-427` (`.bar-end`) and `SearchField.svelte:156-164,205-218` (`.clear`), plus `TopBar.svelte:63-68` (`.rail-width`).
 - **EditorArea reaches into FileTabs:** `EditorArea.svelte:124-126,159-164` (`.editor-pane:last-child .group-action:last-child`) rounds the corner of a FileTabs button from outside.
 - **Fix:**
-    - Write Badge's, IconButton's and Card's looks (size, radius, colour, direction) behind `:where()`, as O-70 did for Button.
+    - Write Badge's, IconButton's and Card's looks (size, radius, colour, direction) behind `:where()`, as Button's already are.
     - Give IconButton a `fill` mode that reads `--icon-button-cell` and `--icon-button-radius`.
     - Give Card a `direction` (row) prop.
     - FileTabs reads `--group-action-corner`, which EditorArea sets.
@@ -94,8 +94,8 @@ The register's O-70 moved Button's size rules behind `:where()`, so that any one
     - `user-tools/MutationsRenderer.svelte:69`: the same
     - `user-tools/MutationStep.svelte:487-489`: `nested-radius(var(--r-overlay), $inset: 0.4rem)`, with a comment saying "parallel to the window's"
     - _Render-verified:_ the children compute to 9.6px inside the frame's 6.4px. At 3× zoom, a faint wedge of the tray's fill shows in the bottom corners of Call stack and History. At 1× it is barely visible.
-- **The Select options:** `memory/MemoryControls.svelte:505` gives the region list 0.4rem (O-07), but `Select.svelte`'s `.option` and `MemoryControls.svelte:583` still derive their radius from `--r-overlay`.
-- **The Hex byte card:** `hex/HexEditor.svelte:571` and `:1058-1064` draw it on `popoverElevation().radius` (0.6rem) with 0.2rem/0.4rem padding. The owner's change moved hover cards to the control's corner, 0.4rem with 0.3rem padding, but O-10 lists only ValueDiffer, RegisterValueCard and MemoryRenderer.
+- **The Select options:** `memory/MemoryControls.svelte:505` gives the region list 0.4rem, but `Select.svelte`'s `.option` and `MemoryControls.svelte:583` still derive their radius from `--r-overlay`.
+- **The Hex byte card:** `hex/HexEditor.svelte:571` and `:1058-1064` draw it on `popoverElevation().radius` (0.6rem) with 0.2rem/0.4rem padding. The owner's change moved hover cards to the control's corner, 0.4rem with 0.3rem padding, but that change covered only ValueDiffer, RegisterValueCard and MemoryRenderer.
 - **Why it keeps happening:** D12's `nested-radius()` holds only while each child names its parent's actual token. Here they were written by hand.
 - **Fix:** each rounded parent publishes `--surface-radius` (DraggableContainer, `.region-list`, Select's `.list`), and children use `nested-radius(var(--surface-radius), …)`. Give PopoverOutline a `corner: 'control' | 'overlay'` prop in place of a pixel number.
 - **Visible change:** yes, small: the corner wedges disappear and the Hex card takes 0.4rem (the owner confirms that one).
@@ -156,7 +156,7 @@ The register's O-70 moved Button's size rules behind `:where()`, so that any one
 
 ### F11. SearchField's clear button assumes SearchPalette's padding
 
-- **Where:** `search/SearchField.svelte:189-218` copies `.top`'s padding (`SearchPalette.svelte:422`, `0.3rem 0.5rem`) as `--band-pad-block` and `--band-pad-end`, and the palette's corner as `nested-radius(var(--r-overlay), 1px)`. It also has a `max-width: 600px` query that exists only because of the palette's phone Cancel button. Register O-74 records the assumption.
+- **Where:** `search/SearchField.svelte:189-218` copies `.top`'s padding (`SearchPalette.svelte:422`, `0.3rem 0.5rem`) as `--band-pad-block` and `--band-pad-end`, and the palette's corner as `nested-radius(var(--r-overlay), 1px)`. It also has a `max-width: 600px` query that exists only because of the palette's phone Cancel button.
 - **Fix:** `.top` declares those properties and pads itself with them, SearchField only reads them (with defaults of 0), and the media query moves into SearchPalette.
 - **Visible change:** no. **Risk:** low. **Effort:** S.
 
@@ -166,7 +166,7 @@ The register's O-70 moved Button's size rules behind `:where()`, so that any one
     - `DocumentationHome.svelte:65-68` (`line-height: 1.5; max-width: 60rem; margin: 0`). _Render-verified on `/documentation/mips`:_ the scoped rule matches but loses; the intro computes to `max-width: 840px` (70ch), `line-height: 1.65` and `margin-bottom: 32px`.
     - `routes/documentation/+page.svelte:83-85`.
 - **ChapterView:** `contentPages.css:74-79` reaches into ChapterView's markup, so `ChapterView.svelte:132-134` is dead.
-- **A tie decided by load order:** `DocumentationHome.svelte:70` `.intro :global(code)` and `InlineMarkdown.svelte:14-21` both weigh (0,2,1), so whichever stylesheet loads last decides the code chips' colours. This is the class of bug O-70 describes.
+- **A tie decided by load order:** `DocumentationHome.svelte:70` `.intro :global(code)` and `InlineMarkdown.svelte:14-21` both weigh (0,2,1), so whichever stylesheet loads last decides the code chips' colours. This is the same class of bug as Button's size ties.
 - **Duplicates:** the intro block (column, 0.8rem gap, `p` margin, accent links) is copied in `routes/donate/+page.svelte:96-107` and `routes/learn/courses/+page.svelte:170-181`. `blog.css:7-13`'s `.blog-lead` plays the same role but has drifted (1.5 against 1.65, 65ch against 70ch).
 - **Fix:**
     - Move the column, gap and accent links into `contentPages.css`.
@@ -319,11 +319,11 @@ The register's O-70 moved Button's size rules behind `:where()`, so that any one
 ### F26. Unifications that change pixels (for the owner)
 
 - **The turning chevron:** five copies with drifted opacity (0.55, 0.6, 0.7 or none) and size: `DocumentationBrowser.svelte:853-864`, `EntryRow.svelte:182-193`, `FoldToggle.svelte:53-63`, `FormPatternRow.svelte:218-226`, `CollapsibleSection.svelte:289-300`. Fix: a `DisclosureChevron.svelte`.
-- **The collapsed Debug strips:** `DebugColumn.svelte:288-325` and `MemoryStrip.svelte` hover with accent 15% rather than `--hover-bg` (D4), and their focus ring is 1px. S3-83 thinned it from 0.1rem, where every other control has 2px.
+- **The collapsed Debug strips:** `DebugColumn.svelte:288-325` and `MemoryStrip.svelte` hover with accent 15% rather than `--hover-bg` (D4), and their focus ring is 1px. It was thinned from 0.1rem, where every other control has 2px.
 - **Hint notes:** four hand-styled `--hint` notes sit beside the new EmptyState, at `SymbolsPanel.svelte:716`, `EditHistoryPanel.svelte:199`, `SearchPanel.svelte:941` and `SidePanel.svelte:347`.
 - **The donate cards:** `/donate`'s platform card (`donate/+page.svelte:71-89,126-145`) is ContentLinkCard almost line for line. The phone padding step is written three times with different breakpoints (600px against 650px), and `InstructionIndex.svelte:57-67,92-136` re-implements NavigationLinkButton.
 - **The chat page's AI toggle:** it re-implements DefaultNavbar's `aiToggle` (`routes/chat/+page.svelte:74-93,179-200`).
-- **The `.external` icon boxes:** they are at 0.7rem, off the icon scale (S4-45), in `InstructionDocumentView.svelte:412-416` and `LectureSectionCard.svelte:127-131`.
+- **The `.external` icon boxes:** they are at 0.7rem, off the icon scale, in `InstructionDocumentView.svelte:412-416` and `LectureSectionCard.svelte:127-131`.
 
 ## 2. Batches
 
@@ -349,9 +349,7 @@ The batches are grouped by file area so that the parallel ones do not touch the 
 5. **B4, the public pages, after B1, in parallel with B2 and B3.**
     - Files: `routes/+page.svelte`, `components/specific/landing/*`, `components/documentation/**`, `components/content/*`, `components/blog/*`, `routes/{learn,blog,documentation,donate,changelog,examples,chat,projects/+page.svelte}`, `MarkdownRenderer.svelte`, `TogglableSection.svelte`.
     - Work: F12, F13's callers, F14, F22, F25, and the area's quick wins.
-6. **B5, the owner's calls, last.** F2's final weight, F7's Hex card, F20's fallbacks and F26, one decision at a time, each with a register entry.
-
-Each batch adds an entry to the register for anything visible, as the register's rules ask.
+6. **B5, the owner's calls, last.** F2's final weight, F7's Hex card, F20's fallbacks and F26, one decision at a time.
 
 ## 3. Quick wins: no visible change
 
@@ -363,13 +361,13 @@ Each batch adds an entry to the register for anything visible, as the register's
     - `.slider` is left over from the removed tabs mode.
     - The global `.wrap` (`global.css:60-62`) then has no user either.
 - `global.css`: `.text-prose` (124-126), `.align-center` (168-170), `.justify-center` (172-174, which also sets `justify-items`, not `justify-content`) and `.flex-center` (178-181) are used nowhere, `src/content` included.
-- `package.json`: `@iconify-json/ic` and `@iconify-json/octicon` are imported by nothing since `ee201938`. Register S4-44 left them for the owner, because dropping them changes the lockfile.
+- `package.json`: `@iconify-json/ic` and `@iconify-json/octicon` are imported by nothing since `ee201938`. They were left for the owner, because dropping them changes the lockfile.
 - Card: the `padding` prop is passed only as `padding="0"`, a no-op (Card has no padding), at create:163, embed:370, 393, 486, exam:260 and session:982, 1032, 1175, 1215, 1408. The `gap` prop has no caller.
 - Spinner `hideLabel` and TextField `wrapperStyle` have no caller. Button and ButtonLink's `variant` prop has no caller; keep the SCSS switch, as D5 asks.
 - `variants.scss:104`: `background-image: none` is left over from the removed gradient hover.
 - `Header.svelte:20-36`: the four branches collapse to `<svelte:element this={type}>`.
 - `Footer.svelte:186-195`: `height: unset` and the repeated logo size do nothing.
-- `field.scss:2-3` still names the memory address field, which no longer uses it (O-07).
+- `field.scss:2-3` still names the memory address field, which no longer uses it.
 - `tokens.css:4-6` does not mention `--r-control`, which `elevation.test.ts` checks.
 - `tray.scss:52-55` should be `@include focus-ring($inset: true)`.
 - Focus rings identical to the global one: `Switch.svelte:65-68`, `ClampedContent.svelte:155-158`.

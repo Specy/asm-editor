@@ -550,7 +550,7 @@
        room at its left, 1rem from it. The first column never gets narrower than the outline, so
        where the room at the Card's left is too small the Card moves right of the middle, until it
        sits beside the outline and gets narrower with the window (the third column is then empty).
-       The part's words and fields start 1rem in, 0.75rem on a phone (X-13) */
+       The part's words and fields start 1rem in, 0.75rem on a phone */
     .exam-builder {
         --outline-width: 16rem;
         --outline-gap: 1rem;
@@ -567,7 +567,7 @@
         @include form-card.inset(1rem, 0.75rem, exam.$phone);
     }
     /* the title over the Card, the smaller one (PageHead's `compact`, the owner's exception for
-       this page, O-92), so that the outline and the Card start higher and the part has more of the
+       this page), so that the outline and the Card start higher and the part has more of the
        window: 0.5rem above it and 0.75rem under it */
     .exam-builder > :global(.title-room) {
         grid-area: title;

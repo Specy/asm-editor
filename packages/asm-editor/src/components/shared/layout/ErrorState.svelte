@@ -179,7 +179,7 @@
         display: flex;
         flex-direction: column;
     }
-    /* a display size, above the type scale's page title (design-system-changes.md, S4-39) */
+    /* a display size, above the type scale's page title */
     .code {
         align-self: center;
         margin-bottom: 2rem;

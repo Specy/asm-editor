@@ -138,13 +138,12 @@ const TEXT_COLORS: ThemeTextColors = {
 
 /**
  * The hint a light custom theme gets in place of the shared `#939393`, which a dark theme's
- * surfaces were picked for: 4.5:1 or more on light surfaces as dark as `#d2d7e0`
- * (design-system-changes.md, S3-97).
+ * surfaces were picked for: 4.5:1 or more on light surfaces as dark as `#d2d7e0`.
  */
 const LIGHT_THEME_HINT = '#575b61'
 /**
  * The success colour as text: on a dark theme the shared green brightened 1.6 times (`#55aa8e`,
- * the passed verdicts' colour), on a light one the green itself, which reads there (S3-69, S3-97).
+ * the passed verdicts' colour), on a light one the green itself, which reads there.
  */
 const SUCCESS_INK_ON_DARK = 'rgb(from var(--success) calc(r * 1.6) calc(g * 1.6) calc(b * 1.6))'
 

@@ -41,8 +41,7 @@ Paths are relative to `packages/asm-editor/` unless they start at the repository
   modifiers, choosing the text to embed): one exported function both call.
 - **The agents get the same search.** `search_documentation` goes through the worker, so every rule
   but the Problems boost reaches it.
-- **Visible style changes are registered** in [design-system-changes.md](./design-system-changes.md),
-  in the same change. **Text a reader sees** follows `.agents/skills/user-facing-text`.
+- **Text a reader sees** follows `.agents/skills/user-facing-text`.
 - **Subagents.** Opus for code and reviews; Haiku writes Entry questions after the pilot allows it.
 
 ## Phase 1: the engine ranks on fixed scales, with its own stemming (`engine.ts`)
@@ -155,7 +154,7 @@ only by the windows' vectors and the word-like lists (compare sizes with the mai
    hides a Tooltip for an element, used with the span; no second tooltip system.
 4. **Screen readers.** The marks' labels go in a visually hidden span beside the status; the status
    itself stays as it is, since it is visible while the model loads.
-5. **Records and checks.** An entry in `docs/design/design-system-changes.md`. A `*.dom.test.ts` for
+5. **Records and checks.** A `*.dom.test.ts` for
    the marks and the hidden words. In headless Chrome: a long query scrolled to its end, a mark under
    the pointer, the caret and a selection, both themes, a phone-width palette. Rows in
    `docs/manual-verification.md`.

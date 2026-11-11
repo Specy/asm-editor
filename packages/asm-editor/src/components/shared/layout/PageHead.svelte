@@ -6,9 +6,9 @@
      * By default the title keeps the room above it that the other pages give theirs, the line sits
      * 0.5rem under it, and the head leaves 1.5rem under itself, the room the other pages leave under
      * their titles; `centred` centres it over a centred column (the create page). `compact` is the
-     * owner's exception for a tool page whose work should start higher (the exam builder's, O-92,
-     * and the embed builder's, E-20): the title a step of the scale down (`--fs-h2`) with no room of
-     * its own above or below, the line 0.35rem under it, and the room round the head the page's.
+     * owner's exception for a tool page whose work should start higher (the exam builder's and the
+     * embed builder's): the title a step of the scale down (`--fs-h2`) with no room of its own
+     * above or below, the line 0.35rem under it, and the room round the head the page's.
      */
     import type { Snippet } from 'svelte'
     import Header from './Header.svelte'

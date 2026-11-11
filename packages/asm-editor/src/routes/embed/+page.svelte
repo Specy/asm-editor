@@ -665,7 +665,7 @@
     @use '../../styles/form-card.scss';
     @use '../../styles/tiles.scss';
 
-    /* the title, the smaller one (PageHead's `compact`, the owner's exception for this page, E-20),
+    /* the title, the smaller one (PageHead's `compact`, the owner's exception for this page),
        0.5rem down, so the Preview starts higher, and room under the cards; on the narrowest phones
        the column's gutter is halved, so that the preview's registers, 18rem at the least, still
        fit inside its Card. The Cards' heads, bodies and groups start 1.25rem in, 1rem on a phone

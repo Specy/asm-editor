@@ -251,7 +251,7 @@
        own colour over what the row sits on (`--entry-row-under`), ruled off from its body, and
        pushed up by the next expanded entry's name as its own row ends (owner, 2026-11-08). Its top
        corners are the row's; past their curve what the row sits on is painted, so the body going by
-       under the pinned name never shows round them, as on a Chapter's heading (O-54) */
+       under the pinned name never shows round them, as on a Chapter's heading */
     .in-panel.expanded > .head {
         --row-under: var(--entry-row-under, var(--background));
         position: sticky;

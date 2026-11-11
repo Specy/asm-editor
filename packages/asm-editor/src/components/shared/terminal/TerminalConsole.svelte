@@ -526,7 +526,7 @@
         font-style: italic;
     }
 
-    /* the size it had before the Terminal's text went a step smaller (O-129): 0.8em of 16px; its
+    /* the size it had before the Terminal's text went a step smaller: 0.8em of 16px; its
        room, in its own em, follows */
     .hint {
         margin-left: 0.6em;

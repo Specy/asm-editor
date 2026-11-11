@@ -59,7 +59,7 @@
 
 <style lang="scss">
     /* on the floating window's own tray, which tints and blurs what is beneath, as the Stack
-       pointer is (S3-12): no fill, corner or shadow of its own, the window's body clipping it */
+       pointer is: no fill, corner or shadow of its own, the window's body clipping it */
     .tab {
         color: var(--primary-text);
         padding: 0.4rem;
