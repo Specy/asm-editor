@@ -46,7 +46,7 @@ export type FormInput = {
     tags: InstructionTag[]
     /** Its own sentence. */
     note?: string
-    /** What the row's fact line says about it: "2 bytes · 7 cycles". */
+    /** What the row's fact line says about it: "2 bytes", "7 cycles". */
     facts?: string[]
     /** Anything that must keep it off another form's row: different cycles, different flags. */
     split?: string
@@ -72,6 +72,13 @@ export type PatternOptions = {
     tagExplanations?: Partial<Record<InstructionTag, string>>
     /** Whether a section starts closed on the page. */
     collapse?: (tags: readonly InstructionTag[]) => boolean
+    /**
+     * What the strip shows, where the language knows its usual case better than a count of rows:
+     * M68K's `move` has more rows that read or write `sr`, `ccr` or the user stack pointer than
+     * the one row that moves data, whose flags are the instruction's. A row that differs keeps its
+     * own flags.
+     */
+    stripFlags?: FlagMarks
 }
 
 /** One member a row's symbol replaced in a form, for `templateNote`. */
@@ -89,15 +96,22 @@ export type PatternResult = {
     sections: FormSection[]
 }
 
+/**
+ * What a tag means where a language says nothing of its own. MIPS and RISC-V read the first two;
+ * every language that has one of the others writes its own (`tagExplanations`), which names its
+ * manual, its privileged mode or its `opt` line.
+ */
 const DEFAULT_TAG_EXPLANATIONS: Record<InstructionTag, string> = {
-    pseudo: 'The assembler turns these into one or more real instructions.',
-    'rv64-only': 'Only on the RV64 target.',
+    pseudo: 'The processor does not have these forms. The assembler replaces each of them with one or more real instructions. Open a row to see them.',
+    'rv64-only':
+        'These forms are available on RV64, the 64-bit version of RISC-V. RV32 does not have them.',
     undocumented:
-        "Left out of the processor's manual, but the processor and this emulator run them.",
-    privileged: 'The processor reserves these for supervisor or kernel mode.',
-    '68010': 'A 68010 or a later processor has these.',
-    '68020': 'Only a 68020 has these.',
-    'opt-bit': 'A 68000 or a 68010 has these too, with `opt bit`.'
+        'The processor’s official manual does not list these forms, but the processor runs them, and so does the editor.',
+    privileged:
+        'These forms require the processor’s privileged mode, the one an operating system runs in.',
+    '68010': 'These forms require a 68010 or a 68020.',
+    '68020': 'These forms require a 68020.',
+    'opt-bit': 'These forms are also available on the 68000 and 68010 with `opt bit`.'
 }
 
 const TAG_ORDER = new Map<InstructionTag, number>(
@@ -291,20 +305,23 @@ export function buildFormPatterns(
         draft.pattern.facts = draft.pattern.facts.filter((fact) => !headerFacts.includes(fact))
     }
 
-    // The strip says what most rows do; a row that does otherwise carries its own flags.
+    // The strip says what most rows do, unless the language says; a row that does otherwise
+    // carries its own flags.
     const flagged = drafts.filter((draft) => draft.pattern.flags !== undefined)
-    let common: FlagMarks | undefined
-    let commonCount = 0
-    for (const draft of flagged) {
-        const count = flagged.filter((other) =>
-            sameFlags(other.pattern.flags, draft.pattern.flags)
-        ).length
-        if (count > commonCount) {
-            common = draft.pattern.flags
-            commonCount = count
+    let common = options.stripFlags
+    if (!common) {
+        let commonCount = 0
+        for (const draft of flagged) {
+            const count = flagged.filter((other) =>
+                sameFlags(other.pattern.flags, draft.pattern.flags)
+            ).length
+            if (count > commonCount) {
+                common = draft.pattern.flags
+                commonCount = count
+            }
         }
     }
-    const flagsVary = commonCount < flagged.length
+    const flagsVary = flagged.some((draft) => !sameFlags(draft.pattern.flags, common))
     for (const draft of drafts) {
         if (sameFlags(draft.pattern.flags, common)) draft.pattern.flags = undefined
     }

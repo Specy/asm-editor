@@ -96,15 +96,32 @@ export function resolveXedIclasses(name, available, aliases = {}) {
 }
 
 /**
- * Where XED's FLAGS field is wrong, by class, with the field that replaces it. Each was found by
- * `x86-docs-sdm-audit.mjs` and checked against Intel's manual, and `checkXedCorrections` fails
- * the run once XED agrees, so a fix upstream shows up as an entry to delete.
+ * Where XED's FLAGS field is wrong, or covers a mode a program never runs in, by class, with the
+ * field that replaces it. Each was checked against Intel's manual (most were found by
+ * `x86-docs-sdm-audit.mjs`), and `checkXedCorrections` fails the run once XED agrees, so a fix
+ * upstream shows up as an entry to delete.
  */
 export const XED_CORRECTIONS = {
     // XED has `af-u`; the manual sets AF from the result, as for `sub` and `adc`
     SBB: 'MUST [ of-mod sf-mod zf-mod af-mod pf-mod cf-tst cf-mod ]',
     // XED has no FLAGS field; INT1 is delivered like INT3, which clears TF and may clear IF
-    INT1: 'MUST [ vif-mod ac-mod vm-tst vm-mod rf-0 nt-mod iopl-tst if-mod tf-0 ]'
+    INT1: 'MUST [ vif-mod ac-mod vm-tst vm-mod rf-0 nt-mod iopl-tst if-mod tf-0 ]',
+    // XED has `if-mod`, since with virtual interrupts (VME in virtual-8086 mode, or PVI) CLI and
+    // STI change VIF and leave IF alone. Otherwise the manual says CLI sets IF to 0 and STI sets
+    // it to 1, or they fault; Linux turns on neither kind of virtual interrupt for a program
+    CLI: 'MUST [ vif-mod iopl-tst if-0 ]',
+    STI: 'MUST [ vif-mod iopl-tst if-1 ]'
+}
+
+/**
+ * Classes that load the flags from a register, which XED writes as `mod` because it has no action
+ * for it: SYSRET reloads RFLAGS from r11, where SYSCALL saved them (in legacy mode AMD's SYSRET
+ * sets IF instead, which no 64-bit program meets).
+ */
+const LOADED_FROM_REGISTER = {
+    SYSRET: 'r11',
+    SYSRET64: 'r11',
+    SYSRET_AMD: 'r11'
 }
 
 /** Throws unless every class `XED_ICLASSES` and `XED_NOTES` name is one XED has. */
@@ -112,7 +129,8 @@ export function checkXedNames(available) {
     const named = [
         ...Object.values(XED_ICLASSES).flat(),
         ...Object.keys(XED_NOTES),
-        ...Object.keys(XED_CORRECTIONS)
+        ...Object.keys(XED_CORRECTIONS),
+        ...Object.keys(LOADED_FROM_REGISTER)
     ]
     const unknown = [...new Set(named)].filter((iclass) => !available.has(iclass))
     if (unknown.length) throw new Error(`XED has no instruction class ${unknown.join(', ')}`)
@@ -153,11 +171,12 @@ const DOUBLE_COUNTED = {
 
 /**
  * Popping RFLAGS loads IF only at a privilege level that allows it (CPL at most IOPL), which a
- * Linux program never has: there the bit keeps its value and nothing faults.
+ * Linux program never has: there the bit keeps its value and nothing faults. The strip's legend
+ * already says the flags are loaded from the stack.
  */
 const PRIVILEGED_IF = {
     flags: {
-        IF: 'loaded from the stack only with the privilege to change it, which a Linux program lacks'
+        IF: 'loaded only when the program has the privilege to change it. A program in the editor does not, so IF keeps its value'
     }
 }
 
@@ -204,13 +223,15 @@ function effectOf(actions) {
     return 'unchanged'
 }
 
-/** A flag that is loaded rather than computed says from where. */
-const LOADED = { pop: 'loaded from the stack', ah: 'loaded from AH' }
+/** Where a flag XED marks with one of these actions is loaded from, rather than computed. */
+const LOADED = { pop: 'the stack', ah: 'ah' }
 
 /**
- * One mnemonic's strip: `{ xed, marks, reads, note? }`, or null when XED has no record of it.
- * `records` maps an XED class to its records from `xed-flags.txt`; `used` collects the notes
- * read, so the caller can tell which ones nothing needed.
+ * One mnemonic's strip: `{ xed, marks, reads, loadedFrom?, note? }`, or null when XED has no
+ * record of it. `loadedFrom` is where every flag it changes comes from when they are loaded rather
+ * than computed (`the stack` for `popf`), which the strip's legend says in place of "depends on the
+ * result". `records` maps an XED class to its records from `xed-flags.txt`; `used` collects the
+ * notes read, so the caller can tell which ones nothing needed.
  */
 export function flagsOf(name, iclasses, records, used = new Set()) {
     const own = iclasses.flatMap((iclass) =>
@@ -246,6 +267,8 @@ export function flagsOf(name, iclasses, records, used = new Set()) {
     }
     const marks = {}
     const reads = []
+    /** Per changed flag, where it is loaded from, or undefined when it is computed. */
+    const sources = new Map()
     let needsNote = false
     for (const flag of FLAG_ORDER) {
         const actions = variants.map((variant) => variant.actions.get(flag) ?? [])
@@ -273,13 +296,41 @@ export function flagsOf(name, iclasses, records, used = new Set()) {
                 )
             } else needsNote = true
         } else {
-            const loaded = new Set(actions.flat().filter((action) => LOADED[action]))
             const note = flagNote(flag)
             if (note) mark.note = note
-            else if (kind === 'changed' && loaded.size === 1) mark.note = LOADED[[...loaded][0]]
+        }
+        if (kind === 'changed') {
+            // where each record that writes the flag takes it from: undefined when it computes it
+            const loaded = new Set(
+                variants
+                    .map((variant) => variant.actions.get(flag) ?? [])
+                    .map((list, index) => {
+                        if (effectOf(list) === 'unchanged') return null
+                        const action = list.find((each) => LOADED[each])
+                        if (action) return LOADED[action]
+                        return list.includes('mod')
+                            ? LOADED_FROM_REGISTER[variants[index].iclass]
+                            : undefined
+                    })
+                    .filter((source) => source !== null)
+            )
+            if (loaded.size > 1) {
+                throw new Error(
+                    `${name}: XED's records (${iclasses.join(', ')}) load ${flag} from different places, or load it in one and compute it in another`
+                )
+            }
+            sources.set(flag, [...loaded][0])
         }
         marks[flag] = mark
     }
+    // The legend says where the flags come from only when that is true of every one it marks.
+    const from = new Set(sources.values())
+    if (from.size > 1) {
+        throw new Error(
+            `${name}: some of the flags it changes are loaded and others computed, or loaded from different places, which one legend cannot say`
+        )
+    }
+    const loadedFrom = [...from][0]
     // A form that writes only sometimes (a shift by `cl`) says so once for every flag.
     const note =
         needsNote || variants.some((variant) => variant.qualifier === 'MAY')
@@ -288,7 +339,13 @@ export function flagsOf(name, iclasses, records, used = new Set()) {
     if (variants.some((variant) => variant.qualifier === 'MAY') && !note) {
         throw new Error(`${name}: XED marks some of its flags MAY, and XED_NOTES does not say why`)
     }
-    return { xed: iclasses, marks, reads, ...(note ? { note } : {}) }
+    return {
+        xed: iclasses,
+        marks,
+        reads,
+        ...(loadedFrom ? { loadedFrom } : {}),
+        ...(note ? { note } : {})
+    }
 }
 
 /** Throws when a note in `XED_NOTES` or `OBSERVED` was not needed by any documented mnemonic. */

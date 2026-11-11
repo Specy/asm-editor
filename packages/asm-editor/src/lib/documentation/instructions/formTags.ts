@@ -28,11 +28,44 @@ export function riscvFormTags(
     return tags
 }
 
-/** From NASM's own flags: `UNDOC` and `PRIV`. */
-export function x86FormTags(form: Pick<X86InstructionForm, 'notes'>): InstructionTag[] {
+/**
+ * The x86 instructions the editor tags privileged although NASM does not mark them `PRIV`, since a
+ * program in the editor cannot run them: like any Linux program it runs at privilege level 3 with
+ * an I/O privilege level of 0, and these fault there, so the program ends with a signal.
+ *
+ * - `cli`, `sti`, `in`, `out` and the string forms of the last two need I/O privilege (IOPL),
+ *   which Linux does not give a program unless it runs as root and asks for port access.
+ * - `swapgs` is for the kernel only. `rdpmc` is too, unless the kernel lets a program read the
+ *   counters, which Linux does only while it has a counter of its own mapped.
+ *
+ * Each was run on 2026-11-11 in the x86 Core and natively on x86-64 Linux: every one ends the
+ * program with SIGSEGV on Linux, and in the Core with SIGSEGV (`rdpmc` SIGILL), except `swapgs`,
+ * which the Core runs, as it runs NASM's `PRIV` `wbinvd`: those two are the Core's to fix.
+ */
+const X86_PRIVILEGED_IN_THE_EDITOR = new Set([
+    'cli',
+    'sti',
+    'in',
+    'out',
+    'insb',
+    'insw',
+    'insd',
+    'outsb',
+    'outsw',
+    'outsd',
+    'swapgs',
+    'rdpmc'
+])
+
+/** From NASM's own flags, `UNDOC` and `PRIV`, and the instructions the editor tags privileged. */
+export function x86FormTags(
+    form: Pick<X86InstructionForm, 'notes'>,
+    name: string
+): InstructionTag[] {
     const tags: InstructionTag[] = []
     if (form.notes.includes('UNDOC')) tags.push('undocumented')
-    if (form.notes.includes('PRIV')) tags.push('privileged')
+    if (form.notes.includes('PRIV') || X86_PRIVILEGED_IN_THE_EDITOR.has(name.toLowerCase()))
+        tags.push('privileged')
     return tags
 }
 

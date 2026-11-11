@@ -54,7 +54,7 @@ export type FormPattern = {
     parts: SyntaxPart[]
     /** The sizes the row comes in (x86), each with the facts only its forms have. */
     chips: PatternChip[]
-    /** Facts every form of the row shares and not every row does: "2 bytes · 7 cycles". */
+    /** Facts every form of the row shares and not every row does: "2 bytes", "7 cycles". */
     facts: string[]
     /** Only when the mnemonic's rows affect the flags differently. */
     flags?: FlagMarks
@@ -91,7 +91,10 @@ export type FlagMarkKind = 'changed' | 'cleared' | 'set' | 'undefined' | 'unchan
 
 export type FlagMark = {
     kind: FlagMarkKind
-    /** A language's own word for it: "holds the signed overflow" for the Z80's P/V. */
+    /**
+     * A language's own word for it: "holds the signed overflow" for the Z80's P/V, or where a row's
+     * flags come from when they are loaded rather than computed: "loaded from the stack".
+     */
     title?: string
 }
 
@@ -102,6 +105,12 @@ export type FlagStrip = {
     order: string[]
     /** What most rows do to the flags; a row that does otherwise has its own marks. */
     marks?: FlagMarks
+    /**
+     * What a mark means on this strip where it is not what it usually means: ● is "loaded from
+     * the stack" on `popf`, whose flags are loaded rather than computed. The legend, the marks'
+     * titles, the hover and the Markdown twin all say it in place of `FLAG_MARK_MEANINGS`.
+     */
+    meanings?: Partial<Record<FlagMarkKind, string>>
     /** Whether some rows have marks of their own. */
     varies?: boolean
     /** Flags the instruction reads, such as a conditional move's condition. */
@@ -145,11 +154,19 @@ export function sectionHeading(tags: readonly InstructionTag[]): string {
 
 /** What each flag mark means, for the strip's legend. */
 export const FLAG_MARK_MEANINGS: Record<FlagMarkKind, string> = {
-    changed: 'set from the result',
+    changed: 'depends on the result',
     cleared: 'always 0',
     set: 'always 1',
-    undefined: 'undefined afterwards',
+    undefined: 'undefined (do not rely on it)',
     unchanged: 'not changed'
+}
+
+/** What a mark means on a strip: the strip's own meaning for it, or the usual one. */
+export function flagMarkMeaning(
+    kind: FlagMarkKind,
+    meanings?: Partial<Record<FlagMarkKind, string>>
+): string {
+    return meanings?.[kind] ?? FLAG_MARK_MEANINGS[kind]
 }
 
 /** The character each mark is drawn with. */

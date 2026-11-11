@@ -1,7 +1,7 @@
 import { tagLabel, type InstructionTag } from './categories'
 import {
     FLAG_MARK_GLYPHS,
-    FLAG_MARK_MEANINGS,
+    flagMarkMeaning,
     patternText,
     type FlagMarkKind,
     type InstructionDocument
@@ -87,8 +87,9 @@ function tableRow(cells: string[]): string {
 
 /**
  * The flags strip as a table, each flag over its mark, and under it what the marks it uses mean:
- * `● set from the result · – not changed`; one line for an instruction that changes none, whose
- * table would be a row of dashes. Empty without a strip.
+ * `● depends on the result · – not changed`, or the strip's own meaning (`● loaded from the stack`);
+ * one line for an instruction that changes none, whose table would be a row of dashes. Empty
+ * without a strip.
  */
 function flagsTable(document: InstructionDocument): string {
     const flags = document.flags
@@ -97,7 +98,7 @@ function flagsTable(document: InstructionDocument): string {
     if (!flags.varies && kinds.every((kind) => kind === 'unchanged'))
         return '*Leaves every flag unchanged*'
     const legend = [...new Set(kinds)]
-        .map((kind) => `${FLAG_MARK_GLYPHS[kind]} ${FLAG_MARK_MEANINGS[kind]}`)
+        .map((kind) => `${FLAG_MARK_GLYPHS[kind]} ${flagMarkMeaning(kind, flags.meanings)}`)
         .join(' · ')
     return [
         tableRow(flags.order),

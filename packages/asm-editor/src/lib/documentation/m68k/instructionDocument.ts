@@ -12,6 +12,7 @@ import { plainText, summaryOf } from '../entries'
 import { M68K_BIT_FIELD_MODE, m68kFormTags } from '../instructions/formTags'
 import {
     descriptionAfterSummary,
+    type FlagMark,
     type FlagMarkKind,
     type FlagMarks,
     type FlagStrip,
@@ -57,8 +58,38 @@ const FLAG_KINDS: Record<AffectedFlagKind, FlagMarkKind> = {
     [AffectedFlagKind.Edits]: 'changed',
     [AffectedFlagKind.ToZero]: 'cleared',
     [AffectedFlagKind.ToOne]: 'set',
-    [AffectedFlagKind.Unaffected]: 'unchanged'
+    [AffectedFlagKind.Unaffected]: 'unchanged',
+    [AffectedFlagKind.Undefined]: 'undefined'
 }
+
+/**
+ * When a flag the manual calls undefined in some cases is defined, by Documentation entry, so the
+ * strip's ? does not hide the case a program can use.
+ */
+const DIVISION_NOTE = {
+    note: 'After a division that does not overflow, N and Z describe the quotient.'
+}
+const FLAG_NOTES: Readonly<Record<string, { flags?: Record<string, string>; note?: string }>> = {
+    chk: {
+        flags: {
+            [M68KFlag.Negative]:
+                'Defined only when the CHK exception is raised: set if the register is below zero, cleared if it is above the bound.'
+        }
+    },
+    divs: DIVISION_NOTE,
+    divu: DIVISION_NOTE,
+    divsl: DIVISION_NOTE
+}
+
+/** Where an instruction loads every flag from rather than computing it, by Documentation entry. */
+const LOADED_FROM: Readonly<Record<string, string>> = {
+    rte: 'loaded from the stack',
+    rtr: 'loaded from the stack',
+    stop: 'loaded from the operand'
+}
+
+/** The modes that name the status register, the condition codes and the user stack pointer. */
+const STATUS_MODES = new Set(['sr', 'ccr', 'usp'])
 
 /** The instructions that read a flag besides their condition, by Documentation entry. */
 const READS: Readonly<Record<string, string[]>> = {
@@ -127,7 +158,7 @@ const SIZE_SUFFIXES: Record<M68KInstructionForm['sizes'][number], string> = {
 
 /** The 68000 reserves these for supervisor mode, and s68k enforces it. */
 const PRIVILEGED_EXPLANATION =
-    'These forms require supervisor mode, the mode a program starts in. In user mode they raise a privilege violation. See [user and supervisor mode](/documentation/m68k/exceptions#modes).'
+    'These forms require supervisor mode. In user mode they raise a privilege violation. See [user and supervisor mode](/documentation/m68k/exceptions#modes).'
 
 /**
  * What the forms a later processor brought need: the `opt p=` line that writes the program for it
@@ -257,11 +288,35 @@ function privilegedFromFact(form: M68KInstructionForm, dialect?: M68kDialect): s
     return [PRIVILEGED_FROM[from]]
 }
 
+/**
+ * A row's flags where they are not the instruction's. A form that writes the condition codes or the
+ * whole status register changes every flag: `move <ea>, ccr` loads them from its source, and
+ * `andi #imm, ccr` computes them. One that only reads `sr` or `ccr`, or moves the user stack
+ * pointer, changes none.
+ */
+function rowFlags(
+    entry: string | undefined,
+    form: M68KInstructionForm,
+    marks: FlagMarks
+): FlagMarks {
+    const last = form.operands.at(-1) ?? []
+    const writesStatus = last.length === 1 && (last[0] === 'ccr' || last[0] === 'sr')
+    const namesStatus = form.operands.some((modes) => modes.some((mode) => STATUS_MODES.has(mode)))
+    if (!writesStatus && !namesStatus) return marks
+    const mark: FlagMark = writesStatus
+        ? entry === 'move'
+            ? { kind: 'changed', title: 'loaded from the source operand' }
+            : { kind: 'changed' }
+        : { kind: 'unchanged' }
+    return Object.fromEntries(FLAG_ORDER.map((flag) => [flag, { ...mark }]))
+}
+
 function formInput(
     name: string,
     entry: string | undefined,
     form: M68KInstructionForm,
     defaultSize: InstructionDocumentation['defaultSize'],
+    marks: FlagMarks,
     dialect?: M68kDialect
 ): FormInput {
     const branch = entry !== undefined && BRANCHES.has(entry)
@@ -304,6 +359,7 @@ function formInput(
         facts: [...sizeFact(form, defaultSize), ...privilegedFromFact(form, dialect)],
         // Two forms with the same symbols take different modes: they stay apart.
         split: JSON.stringify([form.operands, form.sizes]),
+        flags: rowFlags(entry, form, marks),
         details
     }
 }
@@ -312,7 +368,7 @@ function flagStrip(
     name: string,
     entry: string | undefined,
     instruction: InstructionDocumentation
-): FlagStrip {
+): FlagStrip & { marks: FlagMarks } {
     const marks: FlagMarks = {}
     for (const flag of FLAG_ORDER)
         marks[flag] = { kind: FLAG_KINDS[instruction.affectsFlags[flag]] }
@@ -322,10 +378,15 @@ function flagStrip(
         const test = branchConditionsFlags.get(name.slice(start)) ?? ''
         for (const letter of test.toUpperCase().match(/[XNZVC]/g) ?? []) reads.add(letter)
     }
+    const loaded = entry === undefined ? undefined : LOADED_FROM[entry]
+    const notes = entry === undefined ? undefined : FLAG_NOTES[entry]
     return {
         order: [...FLAG_ORDER],
         marks,
-        reads: reads.size > 0 ? FLAG_ORDER.filter((flag) => reads.has(flag)) : undefined
+        ...(loaded ? { meanings: { changed: loaded } } : {}),
+        reads: reads.size > 0 ? FLAG_ORDER.filter((flag) => reads.has(flag)) : undefined,
+        ...(notes?.flags ? { notes: notes.flags } : {}),
+        ...(notes?.note ? { note: notes.note } : {})
     }
 }
 
@@ -362,11 +423,18 @@ export function m68kInstructionDocument(
     const forms = m68kDocumentForms(name, dialect)
     if (dialect && forms.length === 0) return undefined
 
+    const strip = flagStrip(name, entry, instruction)
     const result = buildFormPatterns(
         forms
             .flatMap(splitPairs)
-            .map((form) => formInput(name, entry, form, instruction.defaultSize, dialect)),
-        { tagExplanations: { privileged: PRIVILEGED_EXPLANATION, ...PROCESSOR_EXPLANATIONS } }
+            .map((form) =>
+                formInput(name, entry, form, instruction.defaultSize, strip.marks, dialect)
+            ),
+        {
+            tagExplanations: { privileged: PRIVILEGED_EXPLANATION, ...PROCESSOR_EXPLANATIONS },
+            // the hand-written flags are the instruction's own, whatever most of its rows do
+            stripFlags: strip.marks
+        }
     )
     const laterProcessor = result.tags.find(isM68kLaterProcessor)
     const processorFact = laterProcessor
@@ -413,7 +481,7 @@ export function m68kInstructionDocument(
         tags: result.tags,
         //last, since it goes on to say what to do
         headerFacts: processorFact ? [...result.headerFacts, processorFact] : result.headerFacts,
-        flags: flagStrip(name, entry, instruction),
+        flags: result.flagsVary ? { ...strip, varies: true } : strip,
         sections: result.sections,
         omitted: [],
         operands,

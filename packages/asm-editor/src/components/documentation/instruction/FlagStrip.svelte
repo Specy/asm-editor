@@ -4,9 +4,10 @@
      * the legend once ([the design record](../../../../../../docs/design/instruction-layout.md),
      * decision 5). With `marks` from one row, it is that row's compact line instead.
      */
+    import InlineMarkdown from '#cmp/documentation/entries/InlineMarkdown.svelte'
     import {
         FLAG_MARK_GLYPHS,
-        FLAG_MARK_MEANINGS,
+        flagMarkMeaning,
         type FlagMarkKind,
         type FlagMarks
     } from '#lib/documentation/instructions/document.ts'
@@ -14,6 +15,8 @@
     interface Props {
         order: readonly string[]
         marks: FlagMarks
+        /** What a mark means on this strip, where not the usual: ● "loaded from the stack". */
+        meanings?: Partial<Record<FlagMarkKind, string>>
         reads?: readonly string[]
         notes?: Record<string, string>
         note?: string
@@ -26,6 +29,7 @@
     let {
         order,
         marks,
+        meanings,
         reads = [],
         notes = {},
         note,
@@ -47,7 +51,7 @@
     function titleOf(flag: string): string {
         const mark = marks[flag]
         const kind = mark?.kind ?? 'unchanged'
-        return `${flag}: ${mark?.title ?? FLAG_MARK_MEANINGS[kind]}`
+        return `${flag}: ${mark?.title ?? flagMarkMeaning(kind, meanings)}`
     }
 </script>
 
@@ -80,12 +84,17 @@
         </div>
         <ul class="legend">
             {#if changesNothing}
-                <li class="legend-item">Changes no flag</li>
+                <!-- with rows of their own, the strip speaks for most forms, not all -->
+                <li class="legend-item">
+                    {varies
+                        ? 'Most forms leave every flag unchanged'
+                        : 'Leaves every flag unchanged'}
+                </li>
             {:else}
                 {#each used as kind (kind)}
                     <li class="legend-item">
                         <span class="glyph" data-kind={kind}>{FLAG_MARK_GLYPHS[kind]}</span>
-                        {FLAG_MARK_MEANINGS[kind]}
+                        {flagMarkMeaning(kind, meanings)}
                     </li>
                 {/each}
             {/if}
@@ -96,15 +105,15 @@
             {/if}
         </ul>
         {#if varies}
-            <p class="varies">The rows that do otherwise show their own flags.</p>
+            <p class="varies">Forms that affect the flags differently are shown in their row.</p>
         {/if}
         {#if Object.keys(notes).length > 0 || note}
             <ul class="notes">
                 {#each order.filter((flag) => notes[flag]) as flag (flag)}
-                    <li><strong>{flag}</strong> {notes[flag]}</li>
+                    <li><strong>{flag}</strong> <InlineMarkdown source={notes[flag]} /></li>
                 {/each}
                 {#if note}
-                    <li>{note}</li>
+                    <li><InlineMarkdown source={note} /></li>
                 {/if}
             </ul>
         {/if}

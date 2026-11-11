@@ -14,6 +14,7 @@
      * its row, puts each fact line under its syntax and cuts a long section by count (decision 9).
      */
     import { tick, type Snippet } from 'svelte'
+    import FaChevronRight from '~icons/fa-solid/chevron-right'
     import FaExternalLinkAlt from '~icons/fa-solid/external-link-alt'
     import type { InstructionLesson } from '#lib/content/lectureInstructions.ts'
     import MarkdownRenderer from '#cmp/shared/markdown/MarkdownRenderer.svelte'
@@ -215,6 +216,7 @@
             <FlagStrip
                 order={document.flags.order}
                 marks={document.flags.marks}
+                meanings={document.flags.meanings}
                 reads={document.flags.reads}
                 notes={document.flags.notes}
                 note={document.flags.note}
@@ -285,10 +287,15 @@
                 {:else if section.collapsed}
                     <details class="section">
                         <summary
-                            ><span class="heading">{sectionHeading(section.tags)}</span>
+                            ><span class="chevron" aria-hidden="true"><FaChevronRight /></span>
+                            <span class="heading">{sectionHeading(section.tags)}</span>
                             <span class="count">{rows} {rows === 1 ? 'row' : 'rows'}</span></summary
                         >
-                        {@render body()}
+                        <!-- the section's own gaps: a details does not lay out what it holds as
+                             a flex container in every browser -->
+                        <div class="details-body">
+                            {@render body()}
+                        </div>
                     </details>
                 {:else}
                     <section class="section">
@@ -437,22 +444,58 @@
     .panel .heading {
         font-size: var(--entry-text-size, var(--fs-small));
     }
+    /* a block, its summary's margin and the body's own flex giving the open section the gaps a
+       `.section` has, whether or not the browser lays out a details as a flex container */
+    details.section {
+        display: block;
+    }
+    details.section[open] > summary {
+        margin-bottom: 0.45rem;
+    }
+    .details-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        min-width: 0;
+    }
+    /* one line: a heading too long for it ends in an ellipsis, the chevron and the count kept
+       beside it (owner, 2026-11-11) */
     details.section > summary {
         display: flex;
-        flex-wrap: wrap;
         align-items: baseline;
+        min-width: 0;
         gap: 0.6rem;
         cursor: pointer;
         font-weight: 600;
         font-size: var(--fs-lead);
     }
+    /* a folded section's chevron, turning as it opens: FoldToggle's, which the panel's folding
+       headers draw */
+    .chevron {
+        display: flex;
+        flex: none;
+        align-self: center;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
+        opacity: 0.6;
+        transition: transform var(--dur-base) ease;
+    }
+    details.section[open] > summary .chevron {
+        transform: rotate(90deg);
+    }
     .panel details.section > summary {
         font-size: var(--entry-text-size, var(--fs-small));
     }
     details.section > summary .heading {
+        min-width: 0;
+        overflow: hidden;
         font-size: inherit;
+        white-space: nowrap;
+        text-overflow: ellipsis;
     }
     .count {
+        flex: none;
+        white-space: nowrap;
         font-size: var(--fs-small);
         font-weight: 400;
         color: var(--background-text-prose);

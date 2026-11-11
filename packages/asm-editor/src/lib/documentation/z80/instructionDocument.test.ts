@@ -54,14 +54,15 @@ describe('Z80 instruction documents', () => {
 
         const loads = row('ld', "ld r, r'")
         expect(loads.pattern.forms).toHaveLength(49)
-        expect(loads.note).toBe("The contents of `r'` are loaded into `r`.")
+        expect(loads.note).toBe("Loads `r'` into `r`.")
         expect(loads.pattern.forms.every((form) => form.note === undefined)).toBe(true)
     })
 
     it('keeps the forms that differ in size or speed on rows of their own', () => {
-        expect(row('ld', 'ld (nnnn), hl').pattern.facts).toEqual(['3 bytes · 16 cycles'])
+        expect(row('ld', 'ld (nnnn), hl').pattern.facts).toEqual(['3 bytes', '16 cycles'])
         expect(row('ld', 'ld (nnnn), rr').pattern.facts).toEqual([
-            '4 bytes · 20 cycles',
+            '4 bytes',
+            '20 cycles',
             'rr: bc de sp'
         ])
     })
@@ -116,7 +117,7 @@ describe('Z80 instruction documents', () => {
         expect(document.flags?.varies).toBe(true)
         expect(row('add', 'add a, r').pattern.flags).toBeUndefined()
         expect(row('add', 'add hl, rr').pattern.flags?.Z.kind).toBe('unchanged')
-        expect(row('add', 'add hl, rr').note).toBe('The value of `rr` is added to HL.')
+        expect(row('add', 'add hl, rr').note).toBe('Adds `rr` to HL.')
     })
 
     it('puts the flags in the header when every row agrees', () => {
@@ -159,7 +160,7 @@ describe('Z80 instruction documents', () => {
         })
         const conditional = row('jp', 'jp cc, nnnn')
         expect(conditional.pattern.forms).toHaveLength(8)
-        expect(conditional.note).toBe('If the condition `cc` is true, `nnnn` is copied to PC.')
+        expect(conditional.note).toBe('If the condition `cc` is true, jumps to `nnnn`.')
         // `jr` takes only the first four conditions, and says so
         expect(row('jr', 'jr cc, offset').pattern.facts).toContain('cc: nz z nc c')
         expect(z80InstructionDocument('jr').headerFacts).toContain(
@@ -167,13 +168,29 @@ describe('Z80 instruction documents', () => {
         )
     })
 
+    it("says where pop af and ex af, af' take every flag from, which the Core marks unchanged", () => {
+        const loaded = (title: string) =>
+            Object.fromEntries(
+                ['S', 'Z', 'H', 'P/V', 'N', 'C'].map((flag) => [flag, { kind: 'changed', title }])
+            )
+        const pop = z80InstructionDocument('pop')
+        expect(pop.flags?.varies).toBe(true)
+        expect(row('pop', 'pop af').pattern.flags).toEqual(loaded('loaded from the stack'))
+        expect(row('pop', 'pop rr').pattern.flags).toBeUndefined()
+        expect(row('ex', "ex af, af'").pattern.flags).toEqual(loaded("swapped in from af'"))
+        expect(row('ex', 'ex de, hl').pattern.flags).toBeUndefined()
+    })
+
     it('writes push, pop, inc, sub, djnz and nop as a few rows', () => {
         expect(sectionRows(z80InstructionDocument('push'))).toEqual({
             forms: ['push rr', 'push ix']
         })
-        expect(sectionRows(z80InstructionDocument('pop'))).toEqual({ forms: ['pop rr', 'pop ix'] })
+        // `pop af` loads the flags, so it has a row of its own
+        expect(sectionRows(z80InstructionDocument('pop'))).toEqual({
+            forms: ['pop rr', 'pop af', 'pop ix']
+        })
         expect(row('push', 'push rr').note).toBe(
-            'SP is decremented and the high byte of `rr` is stored into the memory location pointed to by SP. SP is decremented again and the low byte of `rr` is stored into the memory location pointed to by SP.'
+            'Decrements SP and stores the high byte of `rr` into the memory location pointed to by SP, then decrements SP again and stores the low byte of `rr` there.'
         )
         expect(
             z80InstructionDocument('push').operands.find((own) => own.symbol === 'rr')?.meaning
@@ -191,17 +208,20 @@ describe('Z80 instruction documents', () => {
         const djnz = z80InstructionDocument('djnz')
         expect(sectionRows(djnz)).toEqual({ forms: ['djnz offset'] })
         expect(djnz.headerFacts).toEqual([
-            '2 bytes · 13/8 cycles',
+            '2 bytes',
+            '13/8 cycles',
             '13 cycles when it jumps, 8 when it does not'
         ])
         const nop = z80InstructionDocument('nop')
         expect(sectionRows(nop)).toEqual({ forms: ['nop'] })
-        expect(nop.headerFacts).toEqual(['1 byte · 4 cycles'])
+        expect(nop.headerFacts).toEqual(['1 byte', '4 cycles'])
     })
 
-    it('tells the register A from the article in a templated note', () => {
+    it('tells the operand from the same letter elsewhere in a templated note', () => {
+        // `and a` reads "Sets A to the bitwise AND of A and A": only the last A is the operand
+        expect(row('and', 'and r').note).toBe('Sets A to the bitwise AND of A and `r`.')
         expect(row('in', 'in r, (c)').note).toBe(
-            'A byte from the port at the 16-bit address contained in the BC register pair is written to `r`.'
+            'Reads a byte into `r` from the port whose 16-bit address is in BC.'
         )
     })
 

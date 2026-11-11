@@ -79,11 +79,6 @@ const EXPECTED = [
         reason: 'INTO interrupts only when OF is set, and only then clears TF'
     },
     {
-        names: ['cli', 'sti'],
-        checks: ['IF'],
-        reason: 'with virtual interrupts enabled they change VIF and leave IF alone, so XED marks IF changed rather than cleared or set'
-    },
-    {
         names: ['shld', 'shrd'],
         checks: ['CF', 'PF', 'ZF', 'SF'],
         reason: 'undefined only for a 16-bit operand shifted by more than 16, which the strip says in its note'
@@ -233,7 +228,7 @@ for (const instruction of x86DocumentedInstructions) {
         )
     }
 
-    const oursLock = JSON.stringify(document).includes('takes `lock`')
+    const oursLock = JSON.stringify(document).includes('accepts the `lock` prefix')
     const intelLock = intel.some(({ iform }) => lockable(iform))
     if (oursLock !== intelLock) {
         report(

@@ -190,13 +190,19 @@ export enum AffectedFlagKind {
     ToZero = 'to-zero',
     ToOne = 'to-one',
     Edits = 'edits',
-    Unaffected = 'unaffected'
+    Unaffected = 'unaffected',
+    /**
+     * What Motorola's Programmer's Reference Manual calls undefined, in some cases or in all. The
+     * processor and s68k still leave some value there, but a program should not rely on it.
+     */
+    Undefined = 'undefined'
 }
 
 const U = AffectedFlagKind.Unaffected
 const E = AffectedFlagKind.Edits
 const Z = AffectedFlagKind.ToZero
 const O = AffectedFlagKind.ToOne
+const Q = AffectedFlagKind.Undefined
 
 const UNAFFECTED: Record<M68KFlag, AffectedFlagKind> = {
     [M68KFlag.Extend]: U,
@@ -226,11 +232,30 @@ const FLAGS_LOGIC: Record<M68KFlag, AffectedFlagKind> = {
     [M68KFlag.Overflow]: Z,
     [M68KFlag.Carry]: Z
 }
-const FLAGS_DIV: Record<M68KFlag, AffectedFlagKind> = {
+const FLAGS_MUL: Record<M68KFlag, AffectedFlagKind> = {
     [M68KFlag.Extend]: U,
     [M68KFlag.Negative]: E,
     [M68KFlag.Zero]: E,
     [M68KFlag.Overflow]: E,
+    [M68KFlag.Carry]: Z
+}
+/**
+ * A division that can overflow: the manual leaves N and Z undefined then (and after a division by
+ * zero, which raises an exception before the instruction ends, so the strip does not count it).
+ */
+const FLAGS_DIV: Record<M68KFlag, AffectedFlagKind> = {
+    [M68KFlag.Extend]: U,
+    [M68KFlag.Negative]: Q,
+    [M68KFlag.Zero]: Q,
+    [M68KFlag.Overflow]: E,
+    [M68KFlag.Carry]: Z
+}
+/** `divul`, whose 32-bit unsigned dividend always gives a quotient that fits: V is always cleared. */
+const FLAGS_DIVUL: Record<M68KFlag, AffectedFlagKind> = {
+    [M68KFlag.Extend]: U,
+    [M68KFlag.Negative]: E,
+    [M68KFlag.Zero]: E,
+    [M68KFlag.Overflow]: Z,
     [M68KFlag.Carry]: Z
 }
 const FLAGS_BIT: Record<M68KFlag, AffectedFlagKind> = {
@@ -261,18 +286,31 @@ const FLAGS_CLR: Record<M68KFlag, AffectedFlagKind> = {
     [M68KFlag.Overflow]: Z,
     [M68KFlag.Carry]: Z
 }
+/** `abcd`, `sbcd` and `nbcd`, whose N and V the manual calls undefined. */
 const FLAGS_DECIMAL: Record<M68KFlag, AffectedFlagKind> = {
     [M68KFlag.Extend]: E,
-    [M68KFlag.Negative]: U,
+    [M68KFlag.Negative]: Q,
     [M68KFlag.Zero]: E,
-    [M68KFlag.Overflow]: U,
+    [M68KFlag.Overflow]: Q,
     [M68KFlag.Carry]: E
 }
+/**
+ * The manual defines N only when `chk` raises its exception (set below zero, cleared above the
+ * bound) and calls Z, V and C undefined.
+ */
 const FLAGS_CHK: Record<M68KFlag, AffectedFlagKind> = {
     [M68KFlag.Extend]: U,
-    [M68KFlag.Negative]: E,
+    [M68KFlag.Negative]: Q,
+    [M68KFlag.Zero]: Q,
+    [M68KFlag.Overflow]: Q,
+    [M68KFlag.Carry]: Q
+}
+/** `chk2` and `cmp2`: Z says the register is a bound, C that it is outside them; N and V undefined. */
+const FLAGS_BOUNDS: Record<M68KFlag, AffectedFlagKind> = {
+    [M68KFlag.Extend]: U,
+    [M68KFlag.Negative]: Q,
     [M68KFlag.Zero]: E,
-    [M68KFlag.Overflow]: E,
+    [M68KFlag.Overflow]: Q,
     [M68KFlag.Carry]: E
 }
 
@@ -863,7 +901,7 @@ move.w d3, d5 ; d5 = remainder ($FFFE)
         'muls',
         [NO_Ad, ONE_OR_TWO_DATA_REGISTERS],
         ONLY_LONG_OR_WORD,
-        FLAGS_DIV,
+        FLAGS_MUL,
         desc.muls,
         'muls d0, d1',
         Size.Word,
@@ -883,7 +921,7 @@ muls #$100, d2 ; d2 = $10000
         'mulu',
         [NO_Ad, ONE_OR_TWO_DATA_REGISTERS],
         ONLY_LONG_OR_WORD,
-        FLAGS_DIV,
+        FLAGS_MUL,
         desc.mulu,
         'mulu d5, d2',
         Size.Word,
@@ -2049,7 +2087,7 @@ END:
         'chk2',
         [BOUNDS, ONLY_REG],
         ANY_SIZE,
-        FLAGS_CMP,
+        FLAGS_BOUNDS,
         desc.chk2,
         '    opt p=68020\n    chk2.w (a0), d0',
         Size.Word,
@@ -2078,7 +2116,7 @@ END:
         'cmp2',
         [BOUNDS, ONLY_REG],
         ANY_SIZE,
-        FLAGS_CMP,
+        FLAGS_BOUNDS,
         desc.cmp2,
         '    opt p=68020\n    cmp2.b (a0), d0',
         Size.Word,
@@ -2234,7 +2272,7 @@ divsl.l #10, d1:d2 ; d2 = -10000, and the remainder has its sign: d1 = -7
         'divul',
         [NO_Ad, [Rp]],
         ONLY_LONG,
-        FLAGS_DIV,
+        FLAGS_DIVUL,
         desc.divul,
         '    opt p=68020\n    divul.l d0, d1:d2',
         Size.Long,

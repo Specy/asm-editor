@@ -81,12 +81,18 @@ describe('the flags XED gives each documented instruction', () => {
         expect(flagsOf('mov').note).toBeUndefined()
     })
 
-    it('says where a loaded flag comes from', () => {
-        expect(flagsOf('sahf').marks.ZF).toEqual({ kind: 'changed', note: 'loaded from AH' })
-        expect(flagsOf('popf').marks.DF).toEqual({
-            kind: 'changed',
-            note: 'loaded from the stack'
-        })
+    it('says once where loaded flags come from, for the legend to say instead of the result', () => {
+        expect(flagsOf('sahf').marks.ZF).toEqual({ kind: 'changed' })
+        expect(flagsOf('sahf').loadedFrom).toBe('ah')
+        for (const name of ['popf', 'popfw', 'popfd', 'popfq', 'iret', 'iretw', 'iretd', 'iretq'])
+            expect(flagsOf(name).loadedFrom, name).toBe('the stack')
+        expect(flagsOf('popf').marks.DF).toEqual({ kind: 'changed' })
+        // only the privilege to change IF is left to say
+        expect(flagsOf('popf').marks.IF?.note).toContain('privilege')
+        // XED writes `mod` for what SYSRET reloads from r11
+        expect(flagsOf('sysret').loadedFrom).toBe('r11')
+        expect(Object.values(kinds('sysret'))).toEqual(Array(9).fill('changed'))
+        expect(flagsOf('add').loadedFrom).toBeUndefined()
         expect(flagsOf('lahf').reads).toEqual(['CF', 'PF', 'AF', 'ZF', 'SF'])
     })
 
@@ -107,7 +113,11 @@ describe('the flags XED gives each documented instruction', () => {
             }
             expect(flags.reads, name).toEqual(X86_FLAG_ORDER.filter((f) => flags.reads.includes(f)))
         }
-        expect(kinds('cli').IF).toBe('changed')
         expect(kinds('add').IF).toBeUndefined()
+    })
+
+    it('clears IF on cli and sets it on sti, which XED marks changed for virtual interrupts', () => {
+        expect(kinds('cli')).toMatchObject({ IF: 'cleared', CF: 'unchanged' })
+        expect(kinds('sti')).toMatchObject({ IF: 'set', CF: 'unchanged' })
     })
 })

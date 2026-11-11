@@ -198,8 +198,12 @@ function cycles(variant: Z80InstructionVariant): string {
     return taken === notTaken ? `${taken}` : `${taken}/${notTaken}`
 }
 
-function factLine(variant: Z80InstructionVariant): string {
-    return `${variant.bytes} ${variant.bytes === 1 ? 'byte' : 'bytes'} · ${cycles(variant)} cycles`
+/** Its size and its cycles, two facts, each drawn in a cell of its own. */
+function factsOf(variant: Z80InstructionVariant): string[] {
+    return [
+        `${variant.bytes} ${variant.bytes === 1 ? 'byte' : 'bytes'}`,
+        `${cycles(variant)} cycles`
+    ]
 }
 
 /**
@@ -212,7 +216,7 @@ const FLAG_MARKS: Record<string, FlagMark> = {
     '+': { kind: 'changed' },
     '0': { kind: 'cleared' },
     '1': { kind: 'set' },
-    '*': { kind: 'changed', title: 'changed in a way of its own, as the form says' },
+    '*': { kind: 'changed', title: 'changed as the description says' },
     ' ': { kind: 'undefined' },
     V: { kind: 'changed', title: Z80_FLAG_STRING_LEGEND.V },
     P: { kind: 'changed', title: Z80_FLAG_STRING_LEGEND.P }
@@ -228,6 +232,29 @@ function flagMarks(flags: string): FlagMarks {
             return [name, { ...(FLAG_MARKS[effect] ?? { kind: 'undefined' }) }]
         })
     )
+}
+
+/**
+ * The forms that load every flag rather than compute it, by opcode, with where the flags come
+ * from: `pop af` pops F off the stack and `ex af, af'` swaps it with the alternate F. The Core's
+ * flag strings say `------` for both, as if no flag changed, so these replace them; the fix
+ * belongs in the Core's `clr.json` too.
+ */
+const LOADED_FLAGS: Readonly<Record<string, string>> = {
+    F1: 'loaded from the stack',
+    '08': "swapped in from af'"
+}
+
+/** Where a form loads every flag from, or undefined for one that computes them or keeps them. */
+function loadedFlags(variant: Z80InstructionVariant): string | undefined {
+    return LOADED_FLAGS[variant.opcodes.toUpperCase()]
+}
+
+/** A form's marks: the Core's flag string, or where it loads every flag from. */
+function variantFlags(variant: Z80InstructionVariant): FlagMarks {
+    const loaded = loadedFlags(variant)
+    if (!loaded) return flagMarks(variant.flags)
+    return Object.fromEntries(FLAG_ORDER.map((name) => [name, { kind: 'changed', title: loaded }]))
 }
 
 /** The real forms of every mnemonic by opcode, to say what a pseudo spelling becomes. */
@@ -274,11 +301,12 @@ function draft(variant: Z80InstructionVariant): Draft {
             parts,
             tags: z80FormTags(variant),
             note: variant.description,
-            facts: [factLine(variant)],
-            // 281 of the 284 rows agree on these anyway; the three that do not are register splits
-            // that read better apart (`ld (nnnn), hl` is a byte shorter than `ld (nnnn), rr`)
-            split: `${variant.bytes}|${cycles(variant)}|${variant.flags}`,
-            flags: flagMarks(variant.flags),
+            facts: factsOf(variant),
+            // nearly every row agrees on these anyway; the few that do not are register splits
+            // that read better apart (`ld (nnnn), hl` is a byte shorter than `ld (nnnn), rr`, and
+            // `pop af` loads the flags `pop rr` leaves alone)
+            split: `${variant.bytes}|${cycles(variant)}|${loadedFlags(variant) ?? variant.flags}`,
+            flags: variantFlags(variant),
             expansion: variant.isPseudo ? expansionOf(variant) : undefined
         },
         slots
@@ -327,7 +355,8 @@ const HOLE = /\uE000(\d+)\.(\d+)\uE001/g
  * The one sentence a row's forms share once their members are the row's symbols, or undefined
  * when there is none. It is read off one form's sentence and kept only when putting each form's
  * own members back into it gives that form's sentence word for word, which is what tells the
- * register A from the article in "A byte from the port … is written to A".
+ * operand from the same letter elsewhere: in `and a`'s "Sets A to the bitwise AND of A and A.",
+ * only the last A is the operand `r`.
  */
 function rowNote(group: Draft[], varying: number[]): string | undefined {
     if (varying.length === 0) return undefined
@@ -464,14 +493,14 @@ function cyclesExplanation(
     const counts =
         pairs.length === 1 ? `${pairs[0]} cycles: ${taken}` : `Two cycle counts: ${taken}`
     const first = said ? `${taken} cycles` : counts
-    if (REPEATS.has(mnemonic)) return `${first} for a pass that repeats, ${notTaken} for the last`
+    if (REPEATS.has(mnemonic)) return `${first} each time it repeats, ${notTaken} the last time`
     const verb = mnemonic === 'call' ? 'calls' : mnemonic === 'ret' ? 'returns' : 'jumps'
     return `${first} when it ${verb}, ${notTaken} when it does not`
 }
 
 const TAG_EXPLANATIONS: Partial<Record<InstructionTag, string>> = {
-    pseudo: 'Other spellings the assembler accepts; each form shows the instruction it becomes.',
-    undocumented: "Left out of Zilog's manual, but the Z80 runs them, and so does this emulator."
+    pseudo: 'The assembler also accepts these forms, which are other ways to write Z80 instructions. Open a row to see what each form becomes.',
+    undocumented: 'Zilog’s manual does not list these forms, but the Z80 runs them.'
 }
 
 function formatList(items: string[]): string {

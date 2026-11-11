@@ -114,8 +114,20 @@ describe('documentHover', () => {
                 '| :-: | :-: | :-: | :-: | :-: |',
                 '| – | ● | ● | 0 | 0 |',
                 '',
-                '*Most forms. – not changed · ● set from the result · 0 always 0*'
+                '*Most forms. – not changed · ● depends on the result · 0 always 0*'
             ].join('\n')
+        )
+    })
+
+    it('says what ● means where the strip gives it a meaning of its own', () => {
+        const built = document([{ rows: ['popf'] }])
+        built.flags = {
+            order: ['CF', 'DF'],
+            marks: { CF: { kind: 'changed' }, DF: { kind: 'unchanged' } },
+            meanings: { changed: 'loaded from the stack' }
+        }
+        expect(documentHover(built)[2].split('\n').at(-1)).toBe(
+            '*● loaded from the stack · – not changed*'
         )
     })
 
