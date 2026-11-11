@@ -93,6 +93,21 @@ describe('x86 instruction documents', () => {
         }
     })
 
+    it('gives each spelling of movsx and movzx a widening example that assembles', () => {
+        const destination = (name: string) =>
+            x86InstructionDocument(x86InstructionMap.get(name)!).operands.find(
+                (operand) => operand.symbol === 'reg'
+            )?.meaning
+        expect(destination('movzx')).toContain('`movzx eax, bl`')
+        expect(destination('movsxb')).toContain('`movsxb eax, bl`')
+        // a word or a doubleword source: NASM rejects `movsxw eax, bl`
+        expect(destination('movsxw')).toContain('`movsxw eax, bx`')
+        expect(destination('movzxw')).toContain('`movzxw eax, bx`')
+        expect(destination('movsxd')).toContain('`movsxd rax, ecx`')
+        // and `movzxd` has no 32-bit destination in 64-bit mode
+        expect(destination('movzxd')).toContain('`movzxd rax, ecx`')
+    })
+
     it('distinguishes a 64-bit call target from its encoded displacement', () => {
         const document = x86InstructionDocument(x86InstructionMap.get('call')!)
         const target = document.operands.find((operand) => operand.symbol === 'imm64')!
@@ -110,7 +125,52 @@ describe('x86 instruction documents', () => {
                 ...pattern.forms.flatMap((form) => form.facts)
             ])
         ]
-        expect(facts).not.toContain('takes `lock`')
+        expect(facts.filter((fact) => fact.includes('`lock`'))).toEqual([])
+    })
+
+    it('names the early processors that alone ran ibts, xbts and cmpxchg486', () => {
+        const facts = (name: string) =>
+            x86InstructionDocument(x86InstructionMap.get(name)!).headerFacts
+        for (const name of ['ibts', 'xbts']) {
+            expect(facts(name), name).toEqual([
+                'Early 386 processors only',
+                'Not available in 64-bit mode'
+            ])
+        }
+        expect(facts('cmpxchg486')[0]).toBe('Early 486 processors only')
+        expect(facts('cmpxchg486')).not.toContain('removed from current processors')
+        const ibts = x86InstructionDocument(x86InstructionMap.get('ibts')!).description ?? ''
+        expect(ibts).toContain('Intel’s current manual does not describe this instruction.')
+        expect(ibts).not.toMatch(/\bI have\b/)
+    })
+
+    it('tags privileged what a program in the editor cannot run, NASM marking it or not', () => {
+        for (const name of [
+            'cli',
+            'sti',
+            'insb',
+            'insw',
+            'insd',
+            'outsb',
+            'outsw',
+            'outsd',
+            'hlt'
+        ]) {
+            const instruction = x86InstructionMap.get(name)!
+            if (!x86DocumentedInstructions.includes(instruction)) continue
+            expect(x86InstructionDocument(instruction).tags, name).toContain('privileged')
+        }
+        expect(x86InstructionDocument(x86InstructionMap.get('pushf')!).tags).toEqual([])
+    })
+
+    it('gives ● the meaning of where loaded flags come from, and no note says it again', () => {
+        const strip = (name: string) => x86InstructionDocument(x86InstructionMap.get(name)!).flags!
+        expect(strip('popf').meanings).toEqual({ changed: 'loaded from the stack' })
+        expect(strip('sahf').meanings).toEqual({ changed: 'loaded from ah' })
+        expect(strip('sysret').meanings).toEqual({ changed: 'loaded from r11' })
+        expect(strip('sahf').notes).toEqual({})
+        expect(Object.keys(strip('popf').notes ?? {})).toEqual(['IF'])
+        expect(strip('add').meanings).toBeUndefined()
     })
 
     it('explains every symbol its rows use, on every page', () => {

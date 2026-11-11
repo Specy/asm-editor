@@ -15,7 +15,7 @@ export type MarsLanguage = 'mips' | 'risc-v'
 export const MIPS_OPERAND_MEANINGS: Readonly<Record<string, string>> = {
     imm16: 'A signed 16-bit immediate, `-32768` to `32767`.',
     uimm16: 'An unsigned 16-bit immediate, `0` to `65535`.',
-    imm32: 'A 32-bit immediate, `-2147483648` to `4294967295`. Pseudoinstruction expansion may overwrite `$at`, losing its previous value.',
+    imm32: 'A 32-bit immediate, `-2147483648` to `4294967295`. A pseudo-instruction that takes one uses the register `$at` as a temporary, so `$at` loses the value it held.',
     imm5: 'An unsigned 5-bit immediate, `0` to `31`, used for values such as a shift count.',
     cc: 'A floating-point condition flag number, `0` to `7`. Comparisons set these flags; `bc1t` and `bc1f` test them.',
     label: 'A named address in the program, such as the start of a loop or a variable in `.data`.',
@@ -59,7 +59,7 @@ export function immediateMeaning(widths: readonly string[]): string {
         phrases.length > 1
             ? `${phrases.slice(0, -1).join(', ')} or ${phrases[phrases.length - 1]}`
             : (phrases[0] ?? 'a value accepted by the instruction')
-    return `An immediate value: ${listed}. The assembler chooses a supported encoding for the value and other operands; a pseudoinstruction may expand into several instructions.`
+    return `An immediate value: ${listed}. The size your value needs decides which real instructions the assembler uses. Open the row to see them for each size.`
 }
 
 export type RegisterKind = 'general' | 'float' | 'double' | 'fcsr'

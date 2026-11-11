@@ -184,7 +184,7 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
     },
     usp: {
         meaning:
-            'The user stack pointer: the `a7` a program has in user mode. Supervisor code reads and sets it through an address register, as in `move.l usp, a0`.',
+            'The user stack pointer, which is `a7` while the program runs in user mode. Supervisor code has its own `a7`, so it reads and sets the user one through an address register, as in `move.l usp, a0`.',
         href: `${MODES}#user-stack-pointer`
     },
     Rc: {
@@ -223,7 +223,7 @@ export const M68K_OPERAND_MEANINGS: Readonly<Record<string, M68KOperandLine>> = 
     },
     '{offset:width}': {
         meaning:
-            'A field of 1 to 32 bits, written immediately after the operand. Literal offsets range from 0 to 31, and literal widths from 1 to 32. Either may be a data register, as in `{d1:d2}`. See the linked section for register values, negative memory offsets and wrapping.',
+            'A bit field: `width` bits that start `offset` bits below the operand’s most significant bit, written immediately after the operand. For example, `d0{24:8}` is the low byte of `d0`. A literal offset is 0 to 31 and a literal width is 1 to 32. Either may instead be a data register, as in `{d1:d2}`.',
         href: `${MODES}#bit-fields`
     }
 }

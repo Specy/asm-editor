@@ -61,8 +61,17 @@
     .chevron.open {
         transform: rotate(90deg);
     }
+    /* one line, as the page's folded sections' headings: a long label ends in an ellipsis */
+    .label {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
     .count {
+        flex: none;
         font-weight: 400;
+        white-space: nowrap;
         color: var(--text-muted);
     }
 </style>

@@ -16,6 +16,7 @@
     import InlineMarkdown from '#cmp/documentation/entries/InlineMarkdown.svelte'
     import type { OperandSymbol } from '#lib/documentation/instructions/document.ts'
     import { resolveHref } from '#lib/hrefs.ts'
+    import FaChevronRight from '~icons/fa-solid/chevron-right'
     import FoldToggle from './FoldToggle.svelte'
 
     interface Props {
@@ -78,7 +79,8 @@
 {:else if collapsible}
     <details class="legend" class:compact aria-label="Operands" bind:open>
         <summary
-            ><h3>Operands</h3>
+            ><span class="chevron" aria-hidden="true"><FaChevronRight /></span>
+            <h3>Operands</h3>
             <span class="count">{operands.length}</span></summary
         >
         {@render lines()}
@@ -91,11 +93,13 @@
 {/if}
 
 <style>
+    /* as wide as the Forms sections above it (InstructionDocumentView's `.section`) */
     .legend {
         display: flex;
         flex-direction: column;
         gap: 0.4rem;
         min-width: 0;
+        max-width: 64rem;
     }
     /* the size of the Forms heading above it (InstructionDocumentView's `.heading`; owner,
        2026-11-08), the panel's own size in the panel */
@@ -112,6 +116,19 @@
     summary h3 {
         display: inline;
     }
+    /* turning as it opens, as a folded Forms section's (InstructionDocumentView) */
+    .chevron {
+        display: flex;
+        flex: none;
+        align-self: center;
+        width: var(--fs-micro);
+        height: var(--fs-micro);
+        opacity: 0.6;
+        transition: transform var(--dur-base) ease;
+    }
+    details[open] > summary .chevron {
+        transform: rotate(90deg);
+    }
     .count {
         font-size: var(--fs-small);
         color: var(--background-text-prose);
@@ -121,13 +138,12 @@
     .compact h3 {
         font-size: var(--entry-text-size, var(--fs-small));
     }
-    /* one line a symbol, ruled apart, the text kept to a readable measure; on the page a step
-       larger than the panel's, at --fs-body (owner, 2026-11-08) */
+    /* one line a symbol, ruled apart, the box the width of the Forms boxes above it and the text
+       kept to a readable measure inside it (owner, 2026-11-11); on the page a step larger than
+       the panel's, at --fs-body (owner, 2026-11-08) */
     dl {
         display: grid;
-        grid-template-columns: max-content minmax(0, 80ch);
-        width: fit-content;
-        max-width: 100%;
+        grid-template-columns: max-content minmax(0, 1fr);
         margin: 0;
         border: 1px solid var(--doc-rule, var(--tertiary));
         border-radius: var(--wb-radius, var(--r-control));
@@ -166,6 +182,7 @@
     }
     dd {
         min-width: 0;
+        max-width: 80ch;
         line-height: 1.5;
         overflow-wrap: anywhere;
     }
@@ -174,7 +191,6 @@
     @media (max-width: 600px) {
         dl {
             grid-template-columns: minmax(0, 1fr);
-            width: auto;
         }
         .line {
             row-gap: 0.15rem;

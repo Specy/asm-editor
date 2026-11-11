@@ -83,4 +83,4 @@ export const Z80_CARRY_CONDITION_NOTE =
 
 /** Said on the `r` line of the `ld` page, which also loads the refresh register. */
 export const Z80_REFRESH_REGISTER_NOTE =
-    'The placeholder `r` stands for an 8-bit register. In `ld a, r` and `ld r, a`, the literal `r` names the refresh register.'
+    'The rows `ld a, r` and `ld r, a` are different: there `r` is the name of the refresh register.'

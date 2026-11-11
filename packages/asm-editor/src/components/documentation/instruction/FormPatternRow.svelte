@@ -44,6 +44,31 @@
 
     let expandable = $derived(patternOpens(pattern))
     let hasFacts = $derived(pattern.facts.length > 0 || pattern.flags !== undefined)
+    /** The facts' box on a line of its own above the syntax, as a row too narrow for both has it. */
+    let stacked = $state(false)
+    // the facts' box runs the head's whole height, opened or not and with a note under it or
+    // not, so every row's box is the same height and opening one moves nothing, unless the box is
+    // on a line of its own (owner, 2026-11-11)
+    let tall = $derived(hasFacts && !compact && !stacked)
+    // closed and with no note, the row is its line alone, and the row's own rule is the box's bottom
+    let flush = $derived(tall && !expanded && !note)
+
+    /**
+     * Whether the box went onto its own line, which only its place says: the syntax starts lower
+     * than the row's top padding when the box is over it. Measured as the row's size changes.
+     */
+    function watchStacking(head: HTMLElement): () => void {
+        // a test's document without it lays nothing out to measure
+        if (typeof ResizeObserver === 'undefined') return () => {}
+        const observer = new ResizeObserver(() => {
+            const lead = head.querySelector('.lead')
+            if (!lead) return
+            const top = parseFloat(getComputedStyle(head).paddingTop)
+            stacked = lead.getBoundingClientRect().top - head.getBoundingClientRect().top > top + 2
+        })
+        observer.observe(head)
+        return () => observer.disconnect()
+    }
     let listsForms = $derived(
         pattern.forms.length > 1 ||
             pattern.forms.some(
@@ -60,44 +85,54 @@
 </script>
 
 <li class="pattern-row" class:expanded class:compact>
-    <div class="pattern-head" class:expandable>
-        {#if expandable}
-            <button
-                type="button"
-                class="toggle"
-                aria-expanded={expanded}
-                aria-label={expanded ? 'Hide the forms of this row' : 'Show the forms of this row'}
-                onclick={() => (expanded = !expanded)}
+    <div
+        class="pattern-head"
+        class:expandable
+        class:tall
+        class:flush
+        {@attach hasFacts && !compact ? watchStacking : undefined}
+    >
+        <span class="lead">
+            {#if expandable}
+                <button
+                    type="button"
+                    class="toggle"
+                    aria-expanded={expanded}
+                    aria-label={expanded
+                        ? 'Hide the forms of this row'
+                        : 'Show the forms of this row'}
+                    onclick={() => (expanded = !expanded)}
+                >
+                    <span class="chevron" aria-hidden="true"><FaChevronRight /></span>
+                </button>
+            {:else if aligned}
+                <span class="toggle-space" aria-hidden="true"></span>
+            {/if}
+            <code class="syntax"
+                >{#each pattern.parts as part, index (index)}{#if part.symbol}<button
+                            type="button"
+                            class="symbol"
+                            {@attach tooltip(meaningOf(part.text))}
+                            onclick={() => onsymbol(part.text)}>{part.text}</button
+                        >{:else}{part.text}{/if}{/each}</code
             >
-                <span class="chevron" aria-hidden="true"><FaChevronRight /></span>
-            </button>
-        {:else if aligned}
-            <span class="toggle-space" aria-hidden="true"></span>
-        {/if}
-        <code class="syntax"
-            >{#each pattern.parts as part, index (index)}{#if part.symbol}<button
-                        type="button"
-                        class="symbol"
-                        {@attach tooltip(meaningOf(part.text))}
-                        onclick={() => onsymbol(part.text)}>{part.text}</button
-                    >{:else}{part.text}{/if}{/each}</code
-        >
-        {#if pattern.chips.length > 0}
-            <span class="chips">
-                {#each pattern.chips as chip (chip.label)}
-                    <span class="chip" title={chip.title}>{chip.label}</span>
-                {/each}
-            </span>
-        {/if}
+            {#if pattern.chips.length > 0}
+                <span class="chips">
+                    {#each pattern.chips as chip (chip.label)}
+                        <span class="chip" title={chip.title}>{chip.label}</span>
+                    {/each}
+                </span>
+            {/if}
+        </span>
         {#if hasFacts}
             <span class="pattern-facts">
                 {#each pattern.facts as fact, index (index)}
-                    {#if index > 0}<span class="dot" aria-hidden="true">·</span>{/if}
                     <span class="fact"><InlineMarkdown source={fact} /></span>
                 {/each}
                 {#if pattern.flags}
-                    {#if pattern.facts.length > 0}<span class="dot" aria-hidden="true">·</span>{/if}
-                    <FlagStrip order={flagOrder} marks={pattern.flags} compact />
+                    <span class="fact"
+                        ><FlagStrip order={flagOrder} marks={pattern.flags} compact /></span
+                    >
                 {/if}
             </span>
         {/if}
@@ -160,18 +195,31 @@
         list-style: none;
         min-width: 0;
     }
+    /* The syntax at the left, the facts' box in the top right corner. A row too narrow for both
+       puts the box on a line of its own above the syntax (`wrap-reverse`), so it stays in the
+       corner. */
     .pattern-head {
         position: relative;
         display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
+        flex-wrap: wrap-reverse;
+        align-items: start;
         column-gap: 0.6rem;
         row-gap: 0.1rem;
         min-width: 0;
         padding: 0.3rem 0.8rem 0.3rem 0.5rem;
     }
     .compact .pattern-head {
+        flex-wrap: wrap;
         padding: 0.25rem 0.5rem 0.25rem 0.3rem;
+    }
+    .lead {
+        display: flex;
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 0.6rem;
+        row-gap: 0.1rem;
+        min-width: 0;
     }
     .pattern-head.expandable:hover {
         background-color: var(--hover-bg);
@@ -276,28 +324,96 @@
     .chip[title] {
         cursor: help;
     }
+    /* the facts in a box drawn with the row's rules, flush with its top and right edges, its
+       bottom left corner rounded as the row's box is; a rule between each fact; their text muted
+       (owner, 2026-11-11) */
     .pattern-facts {
-        display: inline-flex;
+        display: flex;
         flex-wrap: wrap;
         align-items: baseline;
-        gap: 0.1rem 0.4rem;
-        margin-left: auto;
+        max-width: calc(100% + 0.8rem);
+        margin: -0.3rem -0.8rem 0 auto;
+        border-left: 1px solid var(--doc-rule, var(--tertiary));
+        border-bottom: 1px solid var(--doc-rule, var(--tertiary));
+        border-bottom-left-radius: var(--wb-radius, var(--r-control));
+        overflow: hidden;
         font-size: var(--fs-body);
-        color: var(--background-text-prose);
+        color: var(--text-muted);
     }
-    /* In the narrow panel the fact line sits under the syntax, past the toggle */
+    /* Each fact is ruled on its left and its top, a pixel outside its place, and the box clips
+       the rules on its own edges: a fact that starts a line shows only the box's left rule, and a
+       box too narrow for its facts on one line has a rule between its lines, its facts growing to
+       fill each line so that the rule spans the box (owner, 2026-11-11) */
+    .fact {
+        flex-grow: 1;
+        margin: -1px 0 0 -1px;
+        padding: 0.25rem 0.7rem 0.2rem;
+        border-top: 1px solid var(--doc-rule, var(--tertiary));
+        border-left: 1px solid var(--doc-rule, var(--tertiary));
+        line-height: 1.3;
+    }
+    /* The box runs from the head's top edge to its bottom one, its left rule and the rules
+       between its facts edge to edge, its facts centred, which sets them on the syntax's
+       baseline. Over a note or an opened row's forms it draws its bottom rule and corner; on a
+       closed row with no note, the row's own rule stands for them, the box's bottom rule kept but
+       transparent so that the box is the same size either way (owner, 2026-11-11) */
+    .tall .pattern-facts {
+        align-self: stretch;
+        align-items: stretch;
+        margin-bottom: -0.3rem;
+    }
+    .tall .fact {
+        display: flex;
+        align-items: center;
+    }
+    .flush .pattern-facts {
+        border-bottom-color: transparent;
+        border-bottom-left-radius: 0;
+    }
+    /* In the narrow panel the fact line sits under the syntax, past the toggle, with no box,
+       its facts still ruled apart */
     .compact .pattern-facts {
         flex-basis: 100%;
-        margin-left: 1.8rem;
+        max-width: none;
+        margin: 0 0 0 1.8rem;
+        border: none;
+        border-radius: 0;
         font-size: var(--entry-text-size, var(--fs-small));
     }
-    .dot {
-        color: var(--text-muted);
+    /* the rule in the gap before each fact, the box clipping the one before a line's first fact,
+       so every line starts at the same edge; the pointer passes through to the row's toggle, as
+       it did before the facts had a place of their own */
+    .compact .pattern-facts {
+        column-gap: 1rem;
+    }
+    .compact .fact {
+        position: relative;
+        flex-grow: 0;
+        margin: 0;
+        padding: 0;
+        border: none;
+        line-height: inherit;
+        pointer-events: none;
+    }
+    .compact .fact::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: calc(-0.5rem - 0.5px);
+        border-left: 1px solid var(--doc-rule, var(--tertiary));
     }
     .row-note {
         margin: -0.15rem 0.8rem 0.35rem 2.3rem;
         font-size: var(--fs-body);
         color: var(--background-text-prose);
+    }
+    /* on a phone the note starts under the head's padding, not tucked into it (owner,
+       2026-11-11), at the phone width OperandLegend uses */
+    @media (max-width: 600px) {
+        .row-note {
+            margin-top: 0;
+        }
     }
     .body {
         display: flex;

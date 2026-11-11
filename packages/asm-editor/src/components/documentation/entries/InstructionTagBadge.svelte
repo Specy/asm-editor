@@ -3,10 +3,11 @@
 
     /** What each tag means, on hover; neutral enough for every language that has it. */
     const TAG_TITLES: Record<InstructionTag, string> = {
-        pseudo: "Not the processor's own syntax: the assembler translates it into real instructions",
-        'rv64-only': 'Only on the RV64 target',
-        undocumented: "Left out of the processor's manual",
-        privileged: 'The processor reserves it for supervisor or kernel mode',
+        pseudo: 'A shorthand that the assembler replaces with one or more real instructions. Open a row to see them.',
+        'rv64-only': 'Available on RV64, the 64-bit version of RISC-V. RV32 does not have it.',
+        undocumented: 'The processor’s official manual does not list it.',
+        privileged:
+            'Requires the processor’s privileged mode, the one an operating system runs in.',
         '68010':
             'Requires a 68010 or 68020. Select the processor with opt p=68010 or opt p=68020 before any code or data.',
         '68020': 'Requires a 68020. Write opt p=68020 before any code or data.',

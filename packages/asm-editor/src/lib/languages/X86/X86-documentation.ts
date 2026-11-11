@@ -608,7 +608,10 @@ The plain form returns to 32-bit compatibility-mode code using \`ecx\`, with \`c
  * `bswap ax` as older instructions, files `cmpxchg` under the Pentium because the first 486s
  * used another opcode, gives `syscall` the P6 level of AMD's K6 although no Intel processor had
  * it before x86-64, and tags `movbe` and `movrs` with a generation where they have a CPUID
- * feature of their own.
+ * feature of their own. For the three that only the first steppings of one processor ran, it names
+ * those processors instead: `ibts` and `xbts` were gone from the 386 before long, and the early
+ * 486s' `cmpxchg` opcode, which NASM spells `cmpxchg486`, moved to the one every later processor
+ * uses (which is also why the page leaves out NASM's "removed from current processors").
  */
 export const X86_FIRST_PROCESSOR: Readonly<Record<string, string>> = {
     movsx: '386 and later',
@@ -623,7 +626,10 @@ export const X86_FIRST_PROCESSOR: Readonly<Record<string, string>> = {
     sysexit: 'Pentium II and later',
     movbe: 'Atom, and Haswell and later',
     movrs: 'Processors with the MOVRS extension',
-    jmpe: 'Itanium only'
+    jmpe: 'Itanium only',
+    ibts: 'Early 386 processors only',
+    xbts: 'Early 386 processors only',
+    cmpxchg486: 'Early 486 processors only'
 }
 
 /** Corrected visible one-line summaries where the imported assembler text has obvious typos. */

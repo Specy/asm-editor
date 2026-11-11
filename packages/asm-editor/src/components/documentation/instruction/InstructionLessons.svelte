@@ -65,7 +65,7 @@
 <style>
     /* closed, a line of text like the header's other facts */
     .lessons {
-        max-width: 80ch;
+        max-width: 82ch;
         min-width: 0;
         font-size: var(--fs-small);
         line-height: 1.5;
@@ -81,7 +81,7 @@
         display: inline;
     }
     li + li::before {
-        content: '·' / '';
+        content: '-' / '';
         padding: 0 0.4em;
     }
     .long:not(.open) .extra {

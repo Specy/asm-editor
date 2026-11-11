@@ -127,7 +127,7 @@ function instructions(): Chapter {
             return withInstructionCategory(
                 entry,
                 x86InstructionCategories[instruction.name],
-                instruction.forms.map(x86FormTags)
+                instruction.forms.map((form) => x86FormTags(form, instruction.name))
             )
         })
     return {

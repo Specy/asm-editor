@@ -4,7 +4,7 @@ import { DOCUMENTATION_LANGUAGES, type DocumentationLanguage } from '#lib/search
 import { documentationFor, entriesOf } from './documentation'
 import { documentationProblems, type DocumentationEntry, type EntryView } from './entries'
 import { documentPatterns, patternText } from './instructions/document'
-import { mipsFormTags, riscvFormTags, z80FormTags } from './instructions/formTags'
+import { mipsFormTags, riscvFormTags, x86FormTags, z80FormTags } from './instructions/formTags'
 import { DOCUMENTATION_SITES } from './site'
 
 /** The route file a documentation href is served by. */
@@ -174,6 +174,15 @@ describe('instruction categories and tags', { timeout: 60_000 }, () => {
         expect(mov.tags).toBeUndefined()
         const sections = viewOf(mov, 'instruction').document.sections
         expect(sections.map((section) => section.tags)).toEqual([[], ['privileged']])
+    })
+
+    it('tags x86 privileged what NASM does not mark but a program in the editor cannot run', async () => {
+        //they need I/O privilege, or are for the kernel only
+        for (const name of ['cli', 'sti', 'in', 'out', 'insb', 'outsd', 'swapgs', 'rdpmc'])
+            expect(x86FormTags({ notes: [] }, name), name).toEqual(['privileged'])
+        expect(x86FormTags({ notes: [] }, 'pushf')).toEqual([])
+        expect(x86FormTags({ notes: ['PRIV'] }, 'hlt')).toEqual(['privileged'])
+        expect((await instruction('x86', 'cli')).tags).toEqual(['privileged'])
     })
 
     it('tags a Z80 pseudo spelling apart from an undocumented opcode', async () => {

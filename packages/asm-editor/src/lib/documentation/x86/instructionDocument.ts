@@ -9,6 +9,7 @@ import {
     type X86InstructionForm
 } from '#lib/languages/X86/X86-documentation.ts'
 import { plainText, summaryOf } from '../entries'
+import type { InstructionTag } from '../instructions/categories'
 import { x86FormTags } from '../instructions/formTags'
 import { X86_FLAG_ORDER, X86_INSTRUCTION_FLAGS } from '#lib/languages/X86/generated/x86Flags.ts'
 import {
@@ -47,9 +48,20 @@ const WRITTEN_DECORATORS = new Set(['short', 'near', 'far'])
 
 /** What a form's NASM notes say on its row; `LONG` goes, the list being 64-bit already. */
 const NOTE_FACTS: Record<string, string> = {
-    LOCK: 'takes `lock`',
-    LOCK1: 'takes `lock`',
-    OBSOLETE: 'removed from the architecture'
+    LOCK: 'accepts the `lock` prefix with a memory operand',
+    LOCK1: 'accepts the `lock` prefix with a memory operand',
+    OBSOLETE: 'removed from current processors'
+}
+
+/**
+ * What a section's tags mean on x86: NASM's `UNDOC` forms are the ones Intel's manual leaves out,
+ * and its `PRIV` forms need ring 0, which a program here never has, since it runs as a Linux
+ * program (the Core ends it with SIGILL at a `mov` to or from a control or debug register).
+ */
+const TAG_EXPLANATIONS: Partial<Record<InstructionTag, string>> = {
+    undocumented: 'Intel’s manual does not list these forms, but the processor runs them.',
+    privileged:
+        'These forms require kernel mode, the mode an operating system runs in. A program in the editor runs in user mode, as any Linux program does, so running one of them ends the program with a signal.'
 }
 
 // These NASM operand-size restrictions are not carried by the table's NOLONG flag.
@@ -74,6 +86,17 @@ function availableIn64BitMode(name: string, form: X86InstructionForm): boolean {
     return true
 }
 
+/**
+ * A widening move that a spelling of `movsx` or `movzx` assembles. One that ends in `w` or `d`
+ * takes a word or a doubleword source (`movsxw eax, bl` is an error), and `movzxd` has no 32-bit
+ * destination in 64-bit mode.
+ */
+function wideningExample(name: string): string {
+    if (name.endsWith('d')) return `${name} rax, ecx`
+    if (name.endsWith('w')) return `${name} eax, bx`
+    return `${name} eax, bl`
+}
+
 function operandMeaning(name: string, symbol: string): string | undefined {
     const branch = /^(?:call|jmp|j[a-z]+|loop[a-z]*)$/.test(name)
     if (branch && /^imm(?:8|16|32|64)?$/.test(symbol)) {
@@ -89,10 +112,13 @@ function operandMeaning(name: string, symbol: string): string | undefined {
         return `${target} NASM selects a short or near encoding according to the target’s reach and any size constraint.`
     }
     if (/^mov(?:sx|zx)/.test(name)) {
+        // "usually": NASM also takes spellings that do not widen, such as `movzx ax, bx`
         if (symbol === 'reg')
-            return 'The destination register. Its width is selected independently of the source width; widening uses a larger destination.'
+            return `The destination register, usually wider than the source, as in \`${wideningExample(name)}\`.`
         if (symbol === 'r/m')
-            return 'The source register or memory value, whose width may differ from the destination’s. For example, a byte source can be extended to a 64-bit register. High-byte registers such as `ah` cannot be used with a REX prefix.'
+            return name === 'movsxd'
+                ? 'The source register or memory location, usually narrower than the destination.'
+                : 'The source register or memory location, usually narrower than the destination. The high-byte registers `ah`, `bh`, `ch` and `dh` cannot be used when the destination is a 64-bit register or one of `r8` to `r15` at any size.'
     }
     if (name === 'push' && symbol === 'imm') {
         return 'A value to push. A default 64-bit push encodes a signed 8-bit or 32-bit immediate and sign-extends it to 64 bits. Use `word` for a 16-bit push. A full 64-bit immediate cannot be encoded.'
@@ -166,7 +192,7 @@ function formInput(name: string, form: X86InstructionForm): FormInput {
             )
         ]
     ]
-    return { code, parts, tags: x86FormTags(form), facts }
+    return { code, parts, tags: x86FormTags(form, name), facts }
 }
 
 /** An operand written as itself, `cl`, `1` or `fs`, rather than a symbol or a keyword. */
@@ -190,7 +216,10 @@ function rank(pattern: Pick<FormPattern, 'parts'>): number {
     return pattern.parts.slice(1).some((part) => !part.symbol && isFixedOperand(part.text)) ? 1 : 0
 }
 
-/** The strip, from XED; none for the three instructions it has no record of. */
+/**
+ * The strip, from XED; none for the three instructions it has no record of. Flags loaded rather
+ * than computed (`popf`, `sahf`, `sysret`) give ● the meaning of where they come from.
+ */
 function flagStrip(name: string): FlagStrip | undefined {
     const flags = X86_INSTRUCTION_FLAGS[name]
     if (!flags) return undefined
@@ -202,7 +231,14 @@ function flagStrip(name: string): FlagStrip | undefined {
         marks[flag] = { kind: mark.kind }
         if (mark.note) notes[flag] = capitalize(mark.note)
     }
-    return { order, marks, reads: flags.reads, notes, note: flags.note }
+    return {
+        order,
+        marks,
+        ...(flags.loadedFrom ? { meanings: { changed: `loaded from ${flags.loadedFrom}` } } : {}),
+        reads: flags.reads,
+        notes,
+        note: flags.note
+    }
 }
 
 function capitalize(text: string): string {
@@ -260,7 +296,7 @@ export function x86InstructionDocument(instruction: X86Instruction): Instruction
     const longName = names?.longName ?? x86InstructionTitle(name)
     const summary = names?.summary ?? summaryOf(described)
 
-    const result = buildFormPatterns(unique, { rank })
+    const result = buildFormPatterns(unique, { rank, tagExplanations: TAG_EXPLANATIONS })
 
     const headerFacts = [...result.headerFacts]
     const since = X86_FIRST_PROCESSOR[name] ?? `${formatX86Cpu(instruction.cpu)} and later`
@@ -268,8 +304,14 @@ export function x86InstructionDocument(instruction: X86Instruction): Instruction
     if (level === -1) headerFacts.unshift(since)
     else if (name in X86_FIRST_PROCESSOR) headerFacts[level] = since
     // A row's processor says something only when it is newer than the instruction's, and never
-    // "x86-64": every 64-bit form needs it, which its size already says.
+    // "x86-64": every 64-bit form needs it, which its size already says. An instruction only some
+    // early processors ran ("Early 386 processors only") already says current ones lack it.
     const trivial = new Set([since, `${formatX86Cpu('X86_64')} and later`])
+    if (since.endsWith(' only')) {
+        trivial.add(NOTE_FACTS.OBSOLETE)
+        const removed = headerFacts.indexOf(NOTE_FACTS.OBSOLETE)
+        if (removed !== -1) headerFacts.splice(removed, 1)
+    }
     for (const section of result.sections) {
         for (const group of section.groups) {
             for (const pattern of group.patterns) {

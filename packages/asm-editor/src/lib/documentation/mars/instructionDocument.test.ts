@@ -129,7 +129,7 @@ describe('MIPS instruction documents', () => {
         expect(imm.forms[2].expansion).toEqual(['lui $at, hi(imm)', 'lw $t1, lo(imm)($at)'])
         // the names table's summary; MARS's own first sentence is left out of the description
         expect(document.summary).toBe(
-            'Loads the 32-bit word at the address $t2 plus an offset into $t1; the address must be word-aligned.'
+            'Loads the 32-bit word at the address in the second register plus an offset into the first; the address must be word-aligned.'
         )
         expect(document.description).toMatch(/^The address must be word-aligned/)
     })

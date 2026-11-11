@@ -184,7 +184,7 @@ describe('M68K instruction documents', () => {
         expect(document('move').operands.find((operand) => operand.symbol === 'usp')).toEqual({
             symbol: 'usp',
             meaning:
-                'The user stack pointer: the `a7` a program has in user mode. Supervisor code reads and sets it through an address register, as in `move.l usp, a0`.',
+                'The user stack pointer, which is `a7` while the program runs in user mode. Supervisor code has its own `a7`, so it reads and sets the user one through an address register, as in `move.l usp, a0`.',
             href: '/documentation/m68k/addressing-mode#user-stack-pointer'
         })
     })
@@ -296,6 +296,65 @@ describe('M68K instruction documents', () => {
         })
         expect(document('clr').flags?.marks?.Z).toEqual({ kind: 'set' })
         expect(document('addx').flags?.reads).toEqual(['X'])
+    })
+
+    it('marks undefined every flag the manual calls undefined, and says when one is defined', () => {
+        const kinds = (name: string) =>
+            Object.values(document(name).flags?.marks ?? {})
+                .map((mark) => mark.kind)
+                .join(' ')
+        for (const name of ['abcd', 'sbcd', 'nbcd'])
+            expect(kinds(name), name).toBe('changed undefined changed undefined changed')
+        expect(kinds('chk')).toBe('unchanged undefined undefined undefined undefined')
+        expect(document('chk').flags?.notes?.N).toContain('below zero')
+        for (const name of ['chk2', 'cmp2'])
+            expect(kinds(name), name).toBe('unchanged undefined changed undefined changed')
+        for (const name of ['divs', 'divu', 'divsl']) {
+            expect(kinds(name), name).toBe('unchanged undefined undefined changed cleared')
+            expect(document(name).flags?.note, name).toContain('does not overflow')
+        }
+        //a 32-bit unsigned dividend leaves no quotient too large, so nothing is left undefined
+        expect(kinds('divul')).toBe('unchanged changed changed cleared cleared')
+        expect(document('divul').flags?.note).toBeUndefined()
+        //a multiplication defines every flag it changes
+        expect(kinds('muls')).toBe('unchanged changed changed changed cleared')
+    })
+
+    it('says where rte, rtr and stop load the flags from, and move to ccr or sr on its row', () => {
+        expect(document('rte').flags?.meanings).toEqual({ changed: 'loaded from the stack' })
+        expect(document('rtr').flags?.meanings).toEqual({ changed: 'loaded from the stack' })
+        expect(document('stop').flags?.meanings).toEqual({ changed: 'loaded from the operand' })
+        expect(document('add').flags?.meanings).toBeUndefined()
+
+        const move = document('move')
+        //the strip stays the one of the row that moves data
+        expect(move.flags?.marks?.V).toEqual({ kind: 'cleared' })
+        expect(move.flags?.varies).toBe(true)
+        const own = (name: string) =>
+            Object.fromEntries(
+                documentPatterns(document(name)).map((pattern) => [
+                    patternText(pattern),
+                    pattern.flags && Object.values(pattern.flags)
+                ])
+            )
+        const loaded = Array(5).fill({ kind: 'changed', title: 'loaded from the source operand' })
+        const none = Array(5).fill({ kind: 'unchanged' })
+        expect(own('move')).toEqual({
+            'move <ea>, <ea>': undefined,
+            'move <ea>, ccr': loaded,
+            'move sr, <ea>': none,
+            'move <ea>, sr': loaded,
+            'move usp, An': none,
+            'move An, usp': none,
+            'move ccr, <ea>': none
+        })
+        //andi, ori and eori compute the new condition codes
+        expect(own('andi')).toEqual({
+            'andi #imm, <ea>': undefined,
+            'andi #imm, ccr': Array(5).fill({ kind: 'changed' }),
+            'andi #imm, sr': Array(5).fill({ kind: 'changed' })
+        })
+        expect(document('add').flags?.varies).toBeUndefined()
     })
 
     it('names a set of modes only when it is exactly one of the 68000 classes', () => {

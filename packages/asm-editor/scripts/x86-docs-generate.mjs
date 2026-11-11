@@ -433,6 +433,32 @@ for (const instruction of instructions) {
     descriptions[instruction.name] = { title: entry.title, description: entry.description }
 }
 
+/**
+ * Sentences of the appendix replaced on the way in, each with its reason. A sentence the appendix
+ * no longer has fails the run, so a NASM update that rewords one shows up as an entry to delete.
+ */
+const DESCRIPTION_FIXES = [
+    {
+        names: ['ibts', 'xbts'],
+        // the appendix's author speaks in the first person here; the page says the fact plainly
+        from: 'This instruction is very poorly documented, and I have been unable to find any official source of documentation on it.',
+        to: 'Intel’s current manual does not describe this instruction.'
+    }
+]
+
+for (const fix of DESCRIPTION_FIXES) {
+    // the appendix wraps its lines anywhere, so any run of whitespace matches a space
+    const words = fix.from.split(' ').map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const sentence = new RegExp(words.join('\\s+'))
+    for (const name of fix.names) {
+        const entry = descriptions[name]
+        if (!entry || !sentence.test(entry.description)) {
+            throw new Error(`${name}'s description no longer has "${fix.from}"`)
+        }
+        descriptions[name] = { ...entry, description: entry.description.replace(sentence, fix.to) }
+    }
+}
+
 // --- flags ---------------------------------------------------------------------------------------
 
 if (xedCheckout) {
@@ -611,14 +637,14 @@ writeFileSync(
 export type X86FlagName = ${FLAG_ORDER.map((flag) => `'${flag}'`).join(' | ')}
 
 /**
- * What an instruction does to one flag: \`changed\` by its result (or loaded, which the note says),
- * \`cleared\` to 0, \`set\` to 1, left \`undefined\`, or \`unchanged\`.
+ * What an instruction does to one flag: \`changed\` by its result (or loaded, which
+ * \`loadedFrom\` says), \`cleared\` to 0, \`set\` to 1, left \`undefined\`, or \`unchanged\`.
  */
 export type X86FlagKind = 'changed' | 'cleared' | 'set' | 'undefined' | 'unchanged'
 
 export type X86FlagMark = {
     kind: X86FlagKind
-    /** When the mark needs qualifying, e.g. \`defined only for a count of 1\`, \`loaded from AH\`. */
+    /** When the mark needs qualifying, e.g. \`defined only for a count of 1\`. */
     note?: string
 }
 
@@ -632,6 +658,11 @@ export type X86InstructionFlags = {
     marks: X86FlagMarks
     /** The flags it reads, in \`X86_FLAG_ORDER\`: \`cmovle\` reads ZF, SF and OF. */
     reads: X86FlagName[]
+    /**
+     * Where every flag it changes is loaded from, when they are loaded rather than computed:
+     * \`the stack\` for \`popf\`, \`ah\` for \`sahf\`, \`r11\` for \`sysret\`.
+     */
+    loadedFrom?: string
     /** What holds for the instruction as a whole, e.g. that a count of 0 changes nothing. */
     note?: string
 }

@@ -52,7 +52,9 @@ const SVELTE = /\.svelte(\.ts|\.js)?$/
 const args = process.argv.slice(2)
 const sinceAt = args.indexOf('--since')
 const since = sinceAt === -1 ? undefined : args[sinceAt + 1]
-const steps = args.filter((arg, index) => index !== sinceAt && index !== sinceAt + 1)
+// without `--since`, sinceAt + 1 is 0, which would drop the first step
+const steps =
+    sinceAt === -1 ? args : args.filter((arg, index) => index !== sinceAt && index !== sinceAt + 1)
 for (const step of steps) {
     if (!['format', 'lint', 'test'].includes(step)) {
         console.error(`changed: unknown step '${step}', expected format, lint or test`)

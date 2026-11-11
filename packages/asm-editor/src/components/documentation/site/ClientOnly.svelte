@@ -87,6 +87,7 @@
                     showScreen={false}
                     hideUntilBuilt
                     forceMemoryRight
+                    scrollPastEnd={false}
                     dockActions={[
                         {
                             label: 'Try in the editor',

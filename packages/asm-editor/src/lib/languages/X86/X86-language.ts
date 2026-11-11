@@ -356,7 +356,9 @@ export function createX86HoverProvider(monacoInstance: MonacoType): monaco.langu
                 // The tags come from every form NASM lists, not just the few the hover shows.
                 const unsupported = x86SupportNote(instruction)
                 const kind = instructionHoverLine(
-                    mnemonicTags(instruction.forms.map(x86FormTags)),
+                    mnemonicTags(
+                        instruction.forms.map((form) => x86FormTags(form, instruction.name))
+                    ),
                     since ? `${since}${extensions}` : ''
                 )
                 contents.push({

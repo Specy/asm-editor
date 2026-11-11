@@ -11,9 +11,11 @@ import {
     DOCUMENTATION_SITES
 } from '#lib/documentation/site.ts'
 import {
-    FLAG_MARK_MEANINGS,
+    flagMarkMeaning,
     patternText,
     sectionHeading,
+    type FlagMark,
+    type FlagMarkKind,
     type FlagMarks,
     type FlagStrip,
     type FormPattern,
@@ -70,23 +72,32 @@ function fieldList(fields: EntryField[], rewrite: LinkRewriter): string {
         .join('\n')
 }
 
-/** What one flag does, as the flag strip's legend says it. */
-function flagEffects(marks: FlagMarks, notes?: Record<string, string>): string[] {
-    return Object.entries(marks).map(([flag, mark]) => {
-        const note = notes?.[flag] ? ` ${notes[flag]}` : ''
-        return `${flag}: ${mark.title ?? FLAG_MARK_MEANINGS[mark.kind]}${note}`
-    })
+/**
+ * What one flag does, as the flag strip's legend says it, and then its note, a sentence of its own:
+ * `undefined (do not rely on it). Defined only for a count of 1.`
+ */
+function flagEffect(
+    mark: FlagMark,
+    meanings?: Partial<Record<FlagMarkKind, string>>,
+    note?: string
+): string {
+    const meaning = mark.title ?? flagMarkMeaning(mark.kind, meanings)
+    return note ? `${meaning}. ${note}` : meaning
+}
+
+/** What each flag of a row does, as the row's own marks say. */
+function flagEffects(marks: FlagMarks): string[] {
+    return Object.entries(marks).map(([flag, mark]) => `${flag}: ${flagEffect(mark)}`)
 }
 
 function flagsSection(flags: FlagStrip | undefined): string | undefined {
     if (!flags?.marks) return undefined
     const rows = flags.order
         .filter((flag) => flags.marks?.[flag])
-        .map((flag) => {
-            const mark = flags.marks![flag]
-            const note = flags.notes?.[flag] ? ` ${flags.notes[flag]}` : ''
-            return `| ${flag} | ${mark.title ?? FLAG_MARK_MEANINGS[mark.kind]}${note} |`
-        })
+        .map(
+            (flag) =>
+                `| ${flag} | ${flagEffect(flags.marks![flag], flags.meanings, flags.notes?.[flag])} |`
+        )
     return blocks(
         '## Flags',
         ['| Flag | Effect |', '| --- | --- |', ...rows].join('\n'),
