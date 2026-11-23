@@ -49,6 +49,7 @@ const sources = normalizeBuildInput({
     files: {
         'a.m68k': { encoding: 'plain', content: '    include "lib/b.m68k"\n    simhalt' },
         'lib/b.m68k': { encoding: 'plain', content: 'target: dc.w 1' },
+        'lib/c.m68k': { encoding: 'plain', content: '    nop' },
         'c.m68k': { encoding: 'plain', content: 'unused: move.w target,d0' }
     }
 })
@@ -223,26 +224,38 @@ describe('M68K Project providers', () => {
         scoped()
     })
 
-    it('completes and links include paths using Project resolution rules', async () => {
-        const completionText = '    include "li'
+    it.each([
+        ['li', 'a.m68k', 'lib/b.m68k', 'lib/b.m68k'],
+        ['/c', 'lib/b.m68k', 'c.m68k', '/c.m68k'],
+        ['./c', 'lib/b.m68k', 'lib/c.m68k', './c.m68k'],
+        ['..\\c', 'lib/b.m68k', 'c.m68k', '../c.m68k']
+    ])('completes %s from %s', async (prefix, source, target, inserted) => {
+        const completionText = `    include "${prefix}`
         const completions = await createM68kProjectCompletionProvider(
             monacoStub
         ).provideCompletionItems(
-            model('a.m68k', completionText) as never,
+            model(source, completionText) as never,
             { lineNumber: 1, column: completionText.length + 1 } as never,
             {} as never,
             {} as never
         )
         expect(completions?.suggestions).toContainEqual(
-            expect.objectContaining({ label: 'lib/b.m68k', insertText: 'lib/b.m68k' })
+            expect.objectContaining({ label: target, insertText: inserted })
         )
+    })
 
+    it('links include and incbin paths using the selected base', async () => {
         const links = await createM68kDocumentLinkProvider(monacoStub).provideLinks(
-            model('a.m68k', sources.files['a.m68k'].content) as never,
+            model(
+                'lib/b.m68k',
+                '    include "/c.m68k"\n    include "./c.m68k"\n    incbin "../c.m68k"\n    include "./a.m68k"'
+            ) as never,
             {} as never
         )
-        expect(links?.links).toContainEqual(
-            expect.objectContaining({ url: expect.objectContaining({ path: '/live/lib/b.m68k' }) })
-        )
+        expect(links?.links.map(({ url }) => (url as { path: string }).path)).toEqual([
+            '/live/c.m68k',
+            '/live/lib/c.m68k',
+            '/live/c.m68k'
+        ])
     })
 })

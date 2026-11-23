@@ -46,7 +46,7 @@ export function m68kAssemblyFiles(sources: BuildSources): Record<string, string 
                 //the span counts Unicode scalars, and the line is sliced in UTF-16 code units
                 const start = s68kColumnToUtf16(line, field.span.start)
                 const end = s68kColumnToUtf16(line, field.span.end)
-                return `${line.slice(0, start)}"${alias}"${line.slice(end)}`
+                return `${line.slice(0, start)}"/${alias}"${line.slice(end)}`
             })
             .join('\n')
     }
@@ -63,17 +63,23 @@ export function m68kWrittenPath(field: string): string {
     return trimmed
 }
 
-/** Resolves includes with S68K's beside-the-containing-File, then Project-root order. */
+/** Resolves paths with the same explicit prefixes and fallback as S68K. */
 export function resolveM68kFile(
     sourcePath: string,
     written: string,
     sources: BuildSources
 ): string | null {
+    const path = written.replaceAll('\\', '/')
+    if (path.startsWith('/')) {
+        const root = joinM68kPath('', path)
+        return root in sources.files ? root : null
+    }
     const slash = sourcePath.lastIndexOf('/')
     const directory = slash < 0 ? '' : sourcePath.slice(0, slash)
-    const beside = joinM68kPath(directory, written)
+    const beside = joinM68kPath(directory, path)
     if (beside in sources.files) return beside
-    const root = joinM68kPath('', written)
+    if (path.startsWith('./') || path.startsWith('../')) return null
+    const root = joinM68kPath('', path)
     return root in sources.files ? root : null
 }
 
@@ -122,7 +128,7 @@ export function m68kReachableFiles(sources: BuildSources): Set<string> {
 
 function joinM68kPath(base: string, written: string): string {
     const parts: string[] = []
-    for (const part of [...base.split('/'), ...written.split(/[\\/]/)]) {
+    for (const part of [...base.split('/'), ...written.split('/')]) {
         if (!part || part === '.') continue
         if (part === '..') parts.pop()
         else parts.push(part)

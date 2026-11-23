@@ -108,7 +108,7 @@ export function createM68kProjectCompletionProvider(
     monaco: MonacoType
 ): monaco.languages.CompletionItemProvider {
     return {
-        triggerCharacters: ['/', '"', "'"],
+        triggerCharacters: ['/', '\\', '"', "'"],
         provideCompletionItems(model, position) {
             const context = modelSources(model)
             if (!context) return { suggestions: [] }
@@ -125,7 +125,9 @@ export function createM68kProjectCompletionProvider(
 
             const pathMatch = /\b(?:include|incbin)\s+["']?([^"']*)$/i.exec(prefix)
             if (pathMatch) {
-                const typed = pathMatch[1]
+                const typed = pathMatch[1].replaceAll('\\', '/')
+                const fromRoot = typed.startsWith('/')
+                const relativePrefix = typed.startsWith('./') ? './' : ''
                 const range = new monaco.Range(
                     position.lineNumber,
                     position.column - typed.length,
@@ -136,7 +138,9 @@ export function createM68kProjectCompletionProvider(
                     suggestions: Object.keys(context.sources.files)
                         .map((path) => ({
                             path,
-                            inserted: relativePath(context.identity.path, path)
+                            inserted: fromRoot
+                                ? `/${path}`
+                                : `${relativePrefix}${relativePath(context.identity.path, path)}`
                         }))
                         .filter(({ inserted }) => inserted.startsWith(typed))
                         .map(({ path, inserted }) => ({

@@ -146,33 +146,41 @@ describe('M68K processor dialects', () => {
 })
 
 describe('M68K Project Files', () => {
-    it('assembles included source with its own file identity', async () => {
+    it.each([
+        ['lib/helper.m68k', 'src/lib/helper.m68k', 7n],
+        ['./lib/helper.m68k', 'src/lib/helper.m68k', 7n],
+        ['/lib/helper.m68k', 'lib/helper.m68k', 8n]
+    ] as const)('assembles %s with the identity of %s', async (written, expectedFile, value) => {
         const sources = {
             entry: 'src/main.m68k',
             files: {
                 'src/main.m68k': {
                     encoding: 'plain' as const,
-                    content: '    org $1000\n    include "lib/helper.m68k"\n'
+                    content: `    org $1000\n    include "${written}"\n`
                 },
                 'src/lib/helper.m68k': {
                     encoding: 'plain' as const,
                     content: '    moveq #7,d0\n'
+                },
+                'lib/helper.m68k': {
+                    encoding: 'plain' as const,
+                    content: '    moveq #8,d0\n'
                 }
             }
         }
         const emulator = M68KEmulator(sources)
         await emulator.compile(0, sources)
-        expect(emulator.currentFile).toBe('src/lib/helper.m68k')
+        expect(emulator.currentFile).toBe(expectedFile)
         expect(emulator.buildArtifacts).toEqual([
             {
-                file: 'src/lib/helper.m68k',
+                file: expectedFile,
                 line: 0,
                 address: 0x1000n,
-                opcode: '70 07'
+                opcode: `70 0${value}`
             }
         ])
         await emulator.step()
-        expect(registerOf(emulator, 'D0')).toBe(7n)
+        expect(registerOf(emulator, 'D0')).toBe(value)
         emulator.dispose()
     })
 
@@ -182,18 +190,20 @@ describe('M68K Project Files', () => {
             { encoding: 'base64' as const, content: 'w6g=' }
         ]) {
             const sources = {
-                entry: 'main.m68k',
+                entry: 'src/main.m68k',
                 files: {
-                    'main.m68k': {
+                    'src/main.m68k': {
                         encoding: 'plain' as const,
-                        content: '    org $1000\n    incbin "note.txt"\n'
+                        content: '    org $1000\n    incbin "/note.txt"\n    incbin "./note.txt"\n'
                     },
+                    'src/.asm-editor-incbin/0': { encoding: 'plain' as const, content: '?' },
+                    'src/note.txt': { encoding: 'plain' as const, content: '!' },
                     'note.txt': note
                 }
             }
             const emulator = M68KEmulator(sources)
             await emulator.compile(0, sources)
-            expect(emulator.readMemoryBytes(0x1000n, 2)).toEqual(new Uint8Array([0xc3, 0xa8]))
+            expect(emulator.readMemoryBytes(0x1000n, 3)).toEqual(new Uint8Array([0xc3, 0xa8, 0x21]))
             emulator.dispose()
         }
     })

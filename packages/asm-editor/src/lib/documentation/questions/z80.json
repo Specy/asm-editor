@@ -852,6 +852,7 @@
     "z80/instructions/djnz": {
         "hash": "5cca69f1260267a5",
         "questions": [
+            "how do I decrement b and jump if b is still nonzero",
             "how do I repeat something ten times",
             "how do I make a loop that counts down",
             "what does djnz do"
